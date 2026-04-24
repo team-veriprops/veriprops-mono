@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.py$|^d\")",
+      "Bash(python -c ' *)",
+      "Bash(pip install *)",
+      "Bash(pip check *)",
+      "Bash(pnpm --version)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm build *)",
+      "Bash(export appodus_active_env=local)",
+      "Bash(mkdir -p .claude/skills)",
+      "Bash(cp -r * .claude/skills*)",
+      "Bash(npx -y skills add https://github.com/getsentry/skills --skill security-review -y -g)",
+      "Bash(python -c \"import sys; print\\(sys.version\\)\")",
+      "Bash(python -c \"from main.app.config.bootstrap import DiBootstrap; print\\('Bootstrap import OK'\\)\")",
+      "PowerShell(cd frontend; $env:CI = \"true\"; pnpm install *)",
+      "PowerShell(cd frontend; $env:CI = \"true\"; pnpm add *)"
+    ]
+  }
+}

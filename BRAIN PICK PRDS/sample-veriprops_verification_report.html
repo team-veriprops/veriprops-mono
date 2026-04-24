@@ -1,0 +1,292 @@
+
+<style>
+.vp { font-family: var(--font-sans); max-width: 680px; }
+.vp-hdr { display: flex; align-items: flex-start; justify-content: space-between; padding: 1.25rem 0 1rem; border-bottom: 0.5px solid var(--color-border-tertiary); margin-bottom: 1.25rem; }
+.vp-logo { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+.vp-logo em { font-style: normal; color: var(--color-text-info); }
+.vp-badge-warn { font-size: 11px; padding: 3px 10px; border-radius: var(--border-radius-md); background: var(--color-background-warning); color: var(--color-text-warning); border: 0.5px solid var(--color-border-warning); font-weight: 500; }
+.vp-id-btn { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-info); background: none; border: none; cursor: pointer; padding: 0; margin-top: 4px; display: block; text-decoration: underline; text-underline-offset: 2px; }
+.vp-meta { font-size: 11px; color: var(--color-text-tertiary); text-align: right; margin-top: 5px; }
+.vp-prop { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+.vp-addr { font-size: 15px; font-weight: 500; margin: 0 0 3px; }
+.vp-coord { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-secondary); }
+.vp-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.vp-tag { font-size: 11px; padding: 2px 9px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); color: var(--color-text-secondary); }
+.vp-score-row { display: grid; grid-template-columns: 96px 1fr; gap: 1.25rem; align-items: center; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem; margin-bottom: 1.25rem; background: var(--color-background-primary); }
+.vp-verdict { font-size: 17px; font-weight: 500; color: var(--color-text-warning); margin: 0 0 6px; }
+.vp-verdict-desc { font-size: 13px; color: var(--color-text-secondary); line-height: 1.6; margin: 0; }
+.vp-score-legend { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.vp-leg { font-size: 10px; display: flex; align-items: center; gap: 4px; color: var(--color-text-tertiary); }
+.vp-leg-dot { width: 7px; height: 7px; border-radius: 50%; }
+.vp-finds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1.25rem; }
+.vp-find { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; }
+.vp-find-label { font-size: 10px; color: var(--color-text-tertiary); margin-bottom: 5px; }
+.vp-find-val { font-size: 13px; font-weight: 500; }
+.ok { color: var(--color-text-success); }
+.warn { color: var(--color-text-warning); }
+.bad { color: var(--color-text-danger); }
+.vp-flag { padding: 10px 14px; border-radius: var(--border-radius-md); margin-bottom: 8px; }
+.vp-flag-danger { background: var(--color-background-danger); border: 0.5px solid var(--color-border-danger); }
+.vp-flag-warn { background: var(--color-background-warning); border: 0.5px solid var(--color-border-warning); }
+.vp-flag-title { font-size: 13px; font-weight: 500; }
+.vp-flag-danger .vp-flag-title { color: var(--color-text-danger); }
+.vp-flag-warn .vp-flag-title { color: var(--color-text-warning); }
+.vp-flag-body { font-size: 12px; color: var(--color-text-secondary); margin-top: 3px; line-height: 1.55; }
+.vp-tabs { display: flex; border-bottom: 0.5px solid var(--color-border-tertiary); margin: 1.25rem 0 1rem; gap: 0; }
+.vp-tab { font-size: 12px; padding: 7px 13px; border: none; background: none; color: var(--color-text-secondary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -0.5px; }
+.vp-tab.act { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); font-weight: 500; }
+.vp-sec { display: none; }
+.vp-sec.act { display: block; }
+.vp-sh { font-size: 10px; font-weight: 500; color: var(--color-text-secondary); letter-spacing: 0.6px; text-transform: uppercase; margin: 0 0 10px; }
+.vp-row { display: flex; gap: 12px; align-items: flex-start; padding: 11px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.vp-row:last-child { border-bottom: none; }
+.vp-icon { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; }
+.icon-ok { background: var(--color-background-success); color: var(--color-text-success); }
+.icon-warn { background: var(--color-background-warning); color: var(--color-text-warning); }
+.icon-bad { background: var(--color-background-danger); color: var(--color-text-danger); }
+.vp-row-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 2px; }
+.vp-row-desc { font-size: 12px; color: var(--color-text-secondary); line-height: 1.55; }
+.vp-ev-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.vp-ev { aspect-ratio: 1; border-radius: var(--border-radius-md); background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; }
+.vp-ev-lbl { font-size: 9px; color: var(--color-text-tertiary); }
+.vp-agents { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 1.25rem; }
+.vp-agent { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; }
+.vp-a-role { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-tertiary); margin-bottom: 3px; }
+.vp-a-name { font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 3px; }
+.vp-a-badge { font-size: 10px; color: var(--color-text-success); }
+.vp-rec { border: 0.5px solid var(--color-border-warning); background: var(--color-background-warning); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+.vp-rec-title { font-size: 12px; font-weight: 500; color: var(--color-text-warning); margin-bottom: 10px; }
+.vp-rec-item { font-size: 12px; color: var(--color-text-secondary); padding: 3px 0; display: flex; gap: 8px; line-height: 1.55; }
+.vp-actions { display: flex; gap: 8px; margin-bottom: 1.25rem; }
+.vp-btn { flex: 1; padding: 8px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: none; font-size: 12px; font-weight: 500; color: var(--color-text-primary); cursor: pointer; }
+.vp-btn:hover { background: var(--color-background-secondary); }
+.vp-btn-primary { background: var(--color-text-primary); color: var(--color-background-primary); border-color: var(--color-text-primary); }
+.vp-btn-primary:hover { opacity: 0.85; }
+.vp-disc { font-size: 10px; color: var(--color-text-tertiary); line-height: 1.65; border-top: 0.5px solid var(--color-border-tertiary); padding-top: 1rem; }
+.tl-item { display: flex; gap: 10px; margin-bottom: 12px; position: relative; }
+.tl-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; z-index: 1; }
+.tl-label { font-size: 12px; font-weight: 500; color: var(--color-text-primary); }
+.tl-date { font-size: 10px; color: var(--color-text-tertiary); margin-top: 1px; }
+</style>
+
+<div class="vp">
+
+  <div class="vp-hdr">
+    <div>
+      <div class="vp-logo">Veri<em>props</em></div>
+      <button class="vp-id-btn" onclick="cpId()">VRP-2025-LAG-00847 — click to copy</button>
+    </div>
+    <div style="text-align:right;">
+      <span class="vp-badge-warn">Caution</span>
+      <div class="vp-meta">Version v2 &nbsp;·&nbsp; Completed 15 Apr 2025</div>
+      <div class="vp-meta">Standard verification &nbsp;·&nbsp; Report by Veriprops</div>
+    </div>
+  </div>
+
+  <div class="vp-prop">
+    <p class="vp-addr">Plot 14, Abia Crescent, Lekki Phase 2</p>
+    <p style="font-size:13px;color:var(--color-text-secondary);margin:0;">Lagos, Lagos State, Nigeria &nbsp;·&nbsp; <span class="vp-coord">6.4281° N, 3.5852° E</span></p>
+    <div class="vp-tags">
+      <span class="vp-tag">Residential land</span>
+      <span class="vp-tag">600 sqm</span>
+      <span class="vp-tag">C-of-O title</span>
+      <span class="vp-tag">Submitted 12 Apr 2025</span>
+    </div>
+  </div>
+
+  <div class="vp-score-row">
+    <div>
+      <svg width="96" height="96" viewBox="0 0 96 96">
+        <circle cx="48" cy="48" r="40" fill="none" stroke="var(--color-border-tertiary)" stroke-width="7"/>
+        <circle cx="48" cy="48" r="40" fill="none" stroke="#BA7517" stroke-width="7"
+          stroke-dasharray="186 251" transform="rotate(-90 48 48)" stroke-linecap="round"/>
+        <text x="48" y="43" text-anchor="middle" font-size="22" font-weight="500" fill="var(--color-text-primary)" font-family="var(--font-sans)">74</text>
+        <text x="48" y="60" text-anchor="middle" font-size="10" fill="var(--color-text-secondary)" font-family="var(--font-sans)">trust score</text>
+      </svg>
+      <div class="vp-score-legend">
+        <span class="vp-leg"><span class="vp-leg-dot" style="background:#3B6D11"></span>90+ safe</span>
+        <span class="vp-leg"><span class="vp-leg-dot" style="background:#BA7517"></span>60 caution</span>
+        <span class="vp-leg"><span class="vp-leg-dot" style="background:#A32D2D"></span>0 risk</span>
+      </div>
+    </div>
+    <div>
+      <p class="vp-verdict">Caution advised</p>
+      <p class="vp-verdict-desc">Registry records are clear and the title is authentic, but an active court injunction and an unresolved co-owner situation present material transactional risk. Do not pay any consideration until these are resolved.</p>
+    </div>
+  </div>
+
+  <div class="vp-finds">
+    <div class="vp-find"><div class="vp-find-label">Registry search</div><div class="vp-find-val ok">✓ Clear</div></div>
+    <div class="vp-find"><div class="vp-find-label">Title document</div><div class="vp-find-val ok">✓ Valid</div></div>
+    <div class="vp-find"><div class="vp-find-label">Ownership</div><div class="vp-find-val warn">⚠ Ambiguity</div></div>
+    <div class="vp-find"><div class="vp-find-label">Physical inspection</div><div class="vp-find-val ok">✓ Passed</div></div>
+    <div class="vp-find"><div class="vp-find-label">Boundaries</div><div class="vp-find-val warn">⚠ Minor gap</div></div>
+    <div class="vp-find"><div class="vp-find-label">Encumbrances</div><div class="vp-find-val bad">✗ Found</div></div>
+  </div>
+
+  <div class="vp-flag vp-flag-danger">
+    <div class="vp-flag-title">Active court injunction (Suit No. LD/5603/2022)</div>
+    <div class="vp-flag-body">A Lagos High Court order restricts alienation of this parcel pending resolution of a family estate dispute. Any sale during this period may be voided at law.</div>
+  </div>
+  <div class="vp-flag vp-flag-warn" style="margin-bottom:1.25rem;">
+    <div class="vp-flag-title">Co-ownership not fully resolved</div>
+    <div class="vp-flag-body">C-of-O lists two joint holders. One (Adeyemi Balogun) was unreachable during the verification window. A transfer without joint consent is legally invalid in Nigeria.</div>
+  </div>
+
+  <div class="vp-tabs">
+    <button class="vp-tab act" onclick="showTab('ov',this)">Overview</button>
+    <button class="vp-tab" onclick="showTab('ph',this)">Physical inspection</button>
+    <button class="vp-tab" onclick="showTab('le',this)">Legal & title</button>
+    <button class="vp-tab" onclick="showTab('su',this)">Survey & boundary</button>
+  </div>
+
+  <div class="vp-sec act" id="tab-ov">
+    <p class="vp-sh">Verification timeline</p>
+    <div style="position:relative;padding-left:18px;" id="tl"></div>
+    <p class="vp-sh" style="margin-top:1.25rem;">Property background</p>
+    <p style="font-size:13px;color:var(--color-text-secondary);line-height:1.65;margin:0;">
+      Plot 14 is a 600 sqm residential parcel within Lekki Phase 2, Lagos, held under C-of-O No. LG/CAD/2008/003847. The title is registered and has not been revoked or acquired by government. Registry records are clean. However, an active civil injunction and an unreachable co-owner are material risks that must be resolved before any transaction proceeds.
+    </p>
+  </div>
+
+  <div class="vp-sec" id="tab-ph">
+    <p class="vp-sh">Field inspection findings</p>
+    <div class="vp-row">
+      <div class="vp-icon icon-ok">✓</div>
+      <div><div class="vp-row-title">Site access confirmed</div><div class="vp-row-desc">Property was physically accessible. No illegal structures, squatters, or occupation disputes observed.</div></div>
+    </div>
+    <div class="vp-row">
+      <div class="vp-icon icon-ok">✓</div>
+      <div><div class="vp-row-title">Plot condition: good</div><div class="vp-row-desc">Terrain is flat and cleared. No visible flooding evidence. Perimeter road has drainage infrastructure.</div></div>
+    </div>
+    <div class="vp-row">
+      <div class="vp-icon icon-ok">✓</div>
+      <div><div class="vp-row-title">Infrastructure access</div><div class="vp-row-desc">Road frontage confirmed. Electricity poles present. Borehole water available on adjacent plots.</div></div>
+    </div>
+    <div class="vp-row">
+      <div class="vp-icon icon-warn">!</div>
+      <div><div class="vp-row-title">Eastern boundary marker displaced</div><div class="vp-row-desc">Neighbouring Plot 15 owner verbally disputed the eastern boundary. Marker appears to have been moved. A fresh survey is recommended.</div></div>
+    </div>
+    <p class="vp-sh" style="margin-top:1.25rem;">Site evidence</p>
+    <div class="vp-ev-grid">
+      <div class="vp-ev"><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="var(--color-text-tertiary)" stroke-width="1.2"/><circle cx="10" cy="10" r="3" stroke="var(--color-text-tertiary)" stroke-width="1.2"/></svg><span class="vp-ev-lbl">Front view</span></div>
+      <div class="vp-ev"><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="var(--color-text-tertiary)" stroke-width="1.2"/><circle cx="10" cy="10" r="3" stroke="var(--color-text-tertiary)" stroke-width="1.2"/></svg><span class="vp-ev-lbl">East side</span></div>
+      <div class="vp-ev"><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="var(--color-text-tertiary)" stroke-width="1.2"/><circle cx="10" cy="10" r="3" stroke="var(--color-text-tertiary)" stroke-width="1.2"/></svg><span class="vp-ev-lbl">Interior</span></div>
+      <div class="vp-ev"><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="var(--color-text-tertiary)" stroke-width="1.2"/><circle cx="10" cy="10" r="3" stroke="var(--color-text-tertiary)" stroke-width="1.2"/></svg><span class="vp-ev-lbl">Street access</span></div>
+    </div>
+    <p style="font-size:11px;color:var(--color-text-tertiary);">Captured 13 Apr 2025 · 10:42 AM WAT · GPS: 6.4281° N, 3.5852° E · Tunde Afolabi (Field agent)</p>
+  </div>
+
+  <div class="vp-sec" id="tab-le">
+    <p class="vp-sh">Title & document review</p>
+    <div class="vp-row">
+      <div class="vp-icon icon-ok">✓</div>
+      <div><div class="vp-row-title">Certificate of Occupancy confirmed authentic</div><div class="vp-row-desc">C-of-O No. LG/CAD/2008/003847 verified with Lagos State Land Bureau. Active, unrevoked.</div></div>
+    </div>
+    <div class="vp-row">
+      <div class="vp-icon icon-bad">✗</div>
+      <div><div class="vp-row-title">Court injunction — Suit No. LD/5603/2022</div><div class="vp-row-desc">Lagos High Court order restricts alienation pending resolution of an estate dispute among the original grantor's family. Any sale during this period may be voided at law.</div></div>
+    </div>
+    <div class="vp-row">
+      <div class="vp-icon icon-warn">!</div>
+      <div><div class="vp-row-title">Co-owner consent unresolved</div><div class="vp-row-desc">C-of-O lists Chukwuemeka Okafor and Adeyemi Balogun as joint holders. Balogun could not be contacted within the SLA window. Nigerian law requires consent from all title holders for a valid transfer.</div></div>
+    </div>
+    <div class="vp-row">
+      <div class="vp-icon icon-ok">✓</div>
+      <div><div class="vp-row-title">No government acquisition or revocation</div><div class="vp-row-desc">No notice found in the Lagos State Official Gazette relevant to this parcel as at the verification date.</div></div>
+    </div>
+    <div class="vp-row">
+      <div class="vp-icon icon-ok">✓</div>
+      <div><div class="vp-row-title">No registered mortgage or charge</div><div class="vp-row-desc">Lands Registry search returned no registered mortgage, charge, or lien against this title as at verification date.</div></div>
+    </div>
+    <p style="font-size:11px;color:var(--color-text-tertiary);margin-top:1rem;">Legal opinion: Adaeze Nwosu (LL.B, BL) · Bar No. NBA/LG/2019/07341 · Veriprops verified lawyer</p>
+  </div>
+
+  <div class="vp-sec" id="tab-su">
+    <p class="vp-sh">Survey & boundary confirmation</p>
+    <div class="vp-row">
+      <div class="vp-icon icon-ok">✓</div>
+      <div><div class="vp-row-title">Survey plan authenticated</div><div class="vp-row-desc">Plan No. LA/08/2008/1047 confirmed with the Office of the Surveyor General of Lagos State as genuine and consistent with C-of-O.</div></div>
+    </div>
+    <div class="vp-row">
+      <div class="vp-icon icon-ok">✓</div>
+      <div><div class="vp-row-title">3 of 4 beacon markers confirmed intact</div><div class="vp-row-desc">Northern, western, and southern beacons verified on-site at expected coordinates. Eastern beacon position is in dispute.</div></div>
+    </div>
+    <div class="vp-row">
+      <div class="vp-icon icon-warn">!</div>
+      <div><div class="vp-row-title">Eastern boundary discrepancy: ~0.8 m</div><div class="vp-row-desc">GPS measurement places the eastern boundary approximately 0.8 metres inside the plan boundary. Likely caused by beacon displacement. A fresh survey with beacon re-planting is recommended before purchase.</div></div>
+    </div>
+    <div class="vp-row">
+      <div class="vp-icon icon-ok">✓</div>
+      <div><div class="vp-row-title">Not in flood zone or government setback</div><div class="vp-row-desc">Property does not fall within any designated government setback, road expansion zone, or flood-prone area per Lagos State data.</div></div>
+    </div>
+    <p style="font-size:11px;color:var(--color-text-tertiary);margin-top:1rem;">Survey: Olumide Fashola (R.S., NIS) · Reg. No. 5083 · Veriprops verified surveyor</p>
+  </div>
+
+  <div style="height:0.5px;background:var(--color-border-tertiary);margin:1.25rem 0;"></div>
+
+  <p class="vp-sh">Verified agents on this report</p>
+  <div class="vp-agents">
+    <div class="vp-agent"><div class="vp-a-role">Field agent</div><div class="vp-a-name">Tunde Afolabi</div><div class="vp-a-badge">✓ Verified · 4.9★</div></div>
+    <div class="vp-agent"><div class="vp-a-role">Surveyor</div><div class="vp-a-name">Olumide Fashola</div><div class="vp-a-badge">✓ Verified · 4.8★</div></div>
+    <div class="vp-agent"><div class="vp-a-role">Registry agent</div><div class="vp-a-name">Ngozi Eze</div><div class="vp-a-badge">✓ Verified · 4.7★</div></div>
+    <div class="vp-agent"><div class="vp-a-role">Legal counsel</div><div class="vp-a-name">Adaeze Nwosu</div><div class="vp-a-badge">✓ Verified · 5.0★</div></div>
+  </div>
+
+  <div class="vp-rec">
+    <div class="vp-rec-title">Recommended actions before any purchase</div>
+    <div class="vp-rec-item"><span>1.</span><span>Obtain a certified copy of Suit No. LD/5603/2022 and confirm the injunction's current status with an independent Nigerian solicitor.</span></div>
+    <div class="vp-rec-item"><span>2.</span><span>Locate Adeyemi Balogun or apply to court for an order dispensing with consent before executing any transfer instrument.</span></div>
+    <div class="vp-rec-item"><span>3.</span><span>Commission a fresh survey to resolve the 0.8 m eastern boundary discrepancy and have displaced beacons officially re-planted.</span></div>
+    <div class="vp-rec-item"><span>4.</span><span>Pay no purchase consideration until all three items above are fully resolved and documented.</span></div>
+  </div>
+
+  <div class="vp-actions">
+    <button class="vp-btn" onclick="sendPrompt('Show me share options for report VRP-2025-LAG-00847')">Share report ↗</button>
+    <button class="vp-btn" onclick="sendPrompt('How do I resolve the court injunction on VRP-2025-LAG-00847?')">Ask about this ↗</button>
+    <button class="vp-btn vp-btn-primary">Download PDF</button>
+  </div>
+
+  <div class="vp-disc">
+    This report constitutes a professional verification opinion prepared by independent agents coordinated through Veriprops. It is not a guarantee of title and does not constitute legal advice. Veriprops and its agents accept no liability for any loss arising from reliance on this report without independent legal counsel. All findings are based on information available as at 15 April 2025. This report is subject to the Veriprops Terms of Service and applicable Nigerian law. Agents are independent contributors; their opinions are their own. All communications made through Veriprops are recorded for quality and security. "This property has been assessed by Veriprops" — Verification ID: VRP-2025-LAG-00847 | v2.
+  </div>
+
+</div>
+
+<script>
+function showTab(id, btn) {
+  document.querySelectorAll('.vp-sec').forEach(s => s.classList.remove('act'));
+  document.querySelectorAll('.vp-tab').forEach(t => t.classList.remove('act'));
+  document.getElementById('tab-' + id).classList.add('act');
+  btn.classList.add('act');
+}
+
+function cpId() {
+  try { navigator.clipboard.writeText('VRP-2025-LAG-00847'); } catch(e){}
+  const b = document.querySelector('.vp-id-btn');
+  b.textContent = 'VRP-2025-LAG-00847 — copied!';
+  setTimeout(()=>{ b.textContent = 'VRP-2025-LAG-00847 — click to copy'; }, 1800);
+}
+
+const steps = [
+  { d:'12 Apr, 9:14 AM', t:'Verification submitted', ok:true },
+  { d:'12 Apr, 11:00 AM', t:'Agents assigned', ok:true },
+  { d:'13 Apr, 10:42 AM', t:'Field inspection completed', ok:true },
+  { d:'13 Apr, 3:20 PM', t:'Registry search completed', ok:true },
+  { d:'14 Apr, 9:00 AM', t:'Survey completed', ok:true },
+  { d:'14 Apr, 5:10 PM', t:'Legal review completed', ok:true },
+  { d:'15 Apr, 10:00 AM', t:'Admin review — report released', ok:true },
+];
+
+const tl = document.getElementById('tl');
+const line = document.createElement('div');
+line.style.cssText = 'position:absolute;left:5px;top:6px;bottom:20px;width:0.5px;background:var(--color-border-tertiary);';
+tl.appendChild(line);
+
+steps.forEach(s => {
+  const el = document.createElement('div');
+  el.className = 'tl-item';
+  el.innerHTML = `<div class="tl-dot" style="background:${s.ok?'var(--color-background-success)':'var(--color-background-secondary)'};border:0.5px solid ${s.ok?'var(--color-border-success)':'var(--color-border-tertiary)'};"></div><div><div class="tl-label">${s.t}</div><div class="tl-date">${s.d} WAT</div></div>`;
+  tl.appendChild(el);
+});
+</script>

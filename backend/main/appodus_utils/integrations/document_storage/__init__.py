@@ -1,0 +1,2 @@
+from main.appodus_utils.integrations.document_storage.interface import IDocumentStorageProvider
+from main.appodus_utils.integrations.document_storage.s3.s3_storage import S3DocumentStorageProvider

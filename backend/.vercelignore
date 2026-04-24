@@ -1,0 +1,36 @@
+# Virtual Environments & Caches
+.venv/
+venv/
+__pycache__/
+
+# Git & Node
+.git
+node_modules
+
+# Dev Tools & Build Files
+test/
+notebooks/
+*.md
+*.ipynb
+poetry.lock
+poetry.toml
+
+# Data / Media / Models
+*.csv
+*.zip
+*.tar.gz
+*.pt
+*.onnx
+*.pb
+*.h5
+models/
+media/
+
+# AWS & Cloud SDKs
+.boto
+boto3*
+botocore*
+google-cloud-*
+firebase-*
+gradio*
+huggingface*
