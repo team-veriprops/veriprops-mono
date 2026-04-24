@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#beead1",
+                    "surface-tint": "#4a5f81",
+                    "secondary-fixed-dim": "#a5d0b9",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary": "#3f6653",
+                    "on-primary-fixed-variant": "#324768",
+                    "on-surface": "#191c1d",
+                    "on-error": "#ffffff",
+                    "surface": "#f8f9fa",
+                    "outline": "#74777e",
+                    "on-secondary-fixed-variant": "#274e3d",
+                    "on-background": "#191c1d",
+                    "tertiary-fixed-dim": "#e9c349",
+                    "surface-container-low": "#f3f4f5",
+                    "on-tertiary-container": "#4e3d00",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#574500",
+                    "primary-fixed-dim": "#b2c7ef",
+                    "on-error-container": "#93000a",
+                    "surface-container-highest": "#e1e3e4",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#d9dadb",
+                    "surface-variant": "#e1e3e4",
+                    "on-secondary-container": "#436b58",
+                    "surface-container-high": "#e7e8e9",
+                    "on-tertiary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "primary": "#000d22",
+                    "inverse-on-surface": "#f0f1f2",
+                    "surface-container": "#edeeef",
+                    "on-primary-fixed": "#021c3a",
+                    "tertiary-container": "#cba72f",
+                    "primary-fixed": "#d5e3ff",
+                    "on-secondary-fixed": "#002114",
+                    "on-primary-container": "#768baf",
+                    "on-surface-variant": "#44474e",
+                    "inverse-surface": "#2e3132",
+                    "inverse-primary": "#b2c7ef",
+                    "outline-variant": "#c4c6cf",
+                    "tertiary-fixed": "#ffe088",
+                    "tertiary": "#735c00",
+                    "on-tertiary-fixed": "#241a00",
+                    "background": "#f8f9fa",
+                    "surface-bright": "#f8f9fa",
+                    "secondary-fixed": "#c1ecd4",
+                    "primary-container": "#0a2342",
+                    "on-primary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, h4 { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .signature-gradient {
+            background: linear-gradient(135deg, #000d22 0%, #0a2342 100%);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col">
+<!-- Top Navigation Bar -->
+<header class="bg-white/80 dark:bg-[#000d22]/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-sm dark:shadow-none">
+<nav class="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
+<div class="text-2xl font-bold tracking-tight text-[#000d22] dark:text-white">Veriprops</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] hover:bg-slate-50 dark:hover:bg-white/5 transition-all" href="#">Dashboard</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] hover:bg-slate-50 dark:hover:bg-white/5 transition-all" href="#">Verifications</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] hover:bg-slate-50 dark:hover:bg-white/5 transition-all" href="#">Agent Portal</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] hover:bg-slate-50 dark:hover:bg-white/5 transition-all" href="#">Pricing</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="signature-gradient text-on-primary px-6 py-2.5 rounded-lg font-semibold scale-95 active:scale-90 duration-200">Submit Property</button>
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container-high">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="professional headshot of a business executive in a dark navy suit against a neutral studio background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQHJK8kSyn_6B-WCEvCzSSlV1u4YfSZGk_dziUz4wj_o306RSYnhQThwAlDH-wP6E_QUNsKw85ycMULG_arBlATlReCIxAENiUMLRvfZeU4BbkbkGT0qXuW8NcF4hgTn6plE6qC43s5Jirfeddrc-UCtLjrVN-knhySddm5www_pTWo4tUXiXa5u5lGRBYpiEovS2gRktTJgbc4eqbCOb66wOEI-NpCSNeaqhry-7BiUJr4hsHqs2SC1LdZkerp2NYOJEGlOX-gRw"/>
+</div>
+</div>
+</nav>
+</header>
+<main class="flex-grow max-w-7xl mx-auto w-full px-8 py-12">
+<!-- Progress Stepper -->
+<div class="max-w-4xl mx-auto mb-16">
+<div class="flex items-center justify-between relative">
+<!-- Connector Line Base -->
+<div class="absolute top-1/2 left-0 w-full h-[2px] bg-surface-container-highest -translate-y-1/2 z-0"></div>
+<!-- Connector Line Active (Partial) -->
+<div class="absolute top-1/2 left-0 w-1/3 h-[2px] bg-secondary -translate-y-1/2 z-0"></div>
+<!-- Step 1: Active -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center ring-4 ring-secondary-container">
+<span class="material-symbols-outlined text-xl">description</span>
+</div>
+<span class="mt-3 font-bold text-[#000d22] text-sm font-label">Property Details</span>
+</div>
+<!-- Step 2: Inactive -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-xl">workspace_premium</span>
+</div>
+<span class="mt-3 font-medium text-slate-500 text-sm font-label">Choose Tier</span>
+</div>
+<!-- Step 3: Inactive -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-xl">payments</span>
+</div>
+<span class="mt-3 font-medium text-slate-500 text-sm font-label">Payment</span>
+</div>
+</div>
+</div>
+<!-- Main Form Canvas -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+<!-- Instructions/Context Panel -->
+<div class="lg:col-span-4 space-y-8">
+<div class="bg-surface-container-low p-8 rounded-xl">
+<h1 class="text-3xl font-extrabold text-[#000d22] tracking-tight mb-4">Start Your Verification</h1>
+<p class="text-slate-600 leading-relaxed mb-6">Our verification process is architected to provide absolute certainty for your cross-border investment.</p>
+<div class="space-y-6">
+<div class="flex gap-4">
+<div class="text-secondary">
+<span class="material-symbols-outlined" data-weight="fill">verified_user</span>
+</div>
+<div>
+<h4 class="font-bold text-[#000d22]">Title Accuracy</h4>
+<p class="text-sm text-slate-500">Provide the exact name as it appears on official deeds for faster processing.</p>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="text-secondary">
+<span class="material-symbols-outlined" data-weight="fill">location_on</span>
+</div>
+<div>
+<h4 class="font-bold text-[#000d22]">Precise Location</h4>
+<p class="text-sm text-slate-500">Include local landmarks or coordinates if the formal address is newly developed.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="relative rounded-xl overflow-hidden h-64 shadow-lg group">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="architectural rendering of a modern minimalist luxury villa with large glass panels and clean lines at dusk" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpD5TJoLNQHRcr7vW3te3I1lnggPMrUPBs9l77skm4D9ECXYF0AKHg6dooQ_0kJidcGTV1QOGBO--HrF8hYoVKrWQC-B1f5SAVmbzg20WVC5vkXFwEphf4nQRbargV9vYH1zbjNB88dld2jnatpEgoYl1wDbiM0wr6pv8DERzjWlqi3FuYSXeJTLB2nR7-BJpgvY9iafv_BvvSVN-1XsmDuwfKkt1Kjx7FHbd_fG97SgGfpyyK0V19SC1RC1dyorZiiK373GsM4Js"/>
+<div class="absolute inset-0 bg-gradient-to-t from-[#000d22]/80 to-transparent flex items-end p-6">
+<p class="text-white text-sm italic font-medium">"Ensuring the integrity of every square meter of Nigerian soil."</p>
+</div>
+</div>
+</div>
+<!-- Input Section -->
+<div class="lg:col-span-8">
+<div class="bg-white p-8 md:p-12 rounded-xl shadow-sm border border-outline-variant/15">
+<form class="space-y-8">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- Property Title -->
+<div class="md:col-span-2">
+<label class="block text-sm font-bold text-[#000d22] mb-2 uppercase tracking-wider font-label">Property Title</label>
+<input class="w-full px-4 py-4 rounded-lg bg-surface border-none ring-1 ring-outline-variant/30 focus:ring-2 focus:ring-secondary outline-none transition-all placeholder:text-slate-400" placeholder="e.g. 5-Bedroom Detached Duplex in Lekki Phase 1" type="text"/>
+</div>
+<!-- Location/Address -->
+<div class="md:col-span-2">
+<label class="block text-sm font-bold text-[#000d22] mb-2 uppercase tracking-wider font-label">Location / Full Address</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">map</span>
+<input class="w-full pl-12 pr-4 py-4 rounded-lg bg-surface border-none ring-1 ring-outline-variant/30 focus:ring-2 focus:ring-secondary outline-none transition-all placeholder:text-slate-400" placeholder="House number, street name, LGA, State" type="text"/>
+</div>
+</div>
+<!-- Property Type -->
+<div>
+<label class="block text-sm font-bold text-[#000d22] mb-2 uppercase tracking-wider font-label">Property Type</label>
+<select class="w-full px-4 py-4 rounded-lg bg-surface border-none ring-1 ring-outline-variant/30 focus:ring-2 focus:ring-secondary outline-none transition-all appearance-none cursor-pointer">
+<option>Residential Land</option>
+<option>Commercial Property</option>
+<option>Finished Building</option>
+<option>Unfinished Structure</option>
+<option>Agricultural Land</option>
+</select>
+</div>
+<!-- Listing URL -->
+<div>
+<label class="block text-sm font-bold text-[#000d22] mb-2 uppercase tracking-wider font-label">Listing URL (Optional)</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">link</span>
+<input class="w-full pl-12 pr-4 py-4 rounded-lg bg-surface border-none ring-1 ring-outline-variant/30 focus:ring-2 focus:ring-secondary outline-none transition-all placeholder:text-slate-400" placeholder="https://propertypro.ng/..." type="url"/>
+</div>
+</div>
+</div>
+<div class="pt-8 border-t border-slate-100 flex items-center justify-between">
+<div class="flex items-center gap-2 text-slate-500">
+<span class="material-symbols-outlined text-lg">info</span>
+<span class="text-xs font-medium">Fields with official data yield higher trust scores.</span>
+</div>
+<button class="signature-gradient text-on-primary px-8 py-4 rounded-lg font-bold flex items-center gap-3 scale-100 active:scale-95 transition-all shadow-xl shadow-primary/10" type="button">
+                                Next: Choose Verification Tier
+                                <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-[#f3f4f5] dark:bg-[#0a2342] w-full py-12 border-t border-slate-200 dark:border-slate-800">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-8 px-8 max-w-7xl mx-auto">
+<div class="col-span-1 md:col-span-1">
+<div class="text-lg font-bold text-[#000d22] dark:text-white mb-4">Veriprops</div>
+<p class="text-slate-600 dark:text-slate-400 text-sm font-inter leading-relaxed">
+                    © 2024 Veriprops. The Sovereign Curator of Real Estate Verification.
+                </p>
+</div>
+<div>
+<h5 class="text-sm font-bold uppercase tracking-widest text-[#000d22] dark:text-white mb-4">Company</h5>
+<ul class="space-y-2">
+<li><a class="text-slate-600 dark:text-slate-400 text-sm hover:underline decoration-[#3f6653]" href="#">Privacy Policy</a></li>
+<li><a class="text-slate-600 dark:text-slate-400 text-sm hover:underline decoration-[#3f6653]" href="#">Terms of Service</a></li>
+</ul>
+</div>
+<div>
+<h5 class="text-sm font-bold uppercase tracking-widest text-[#000d22] dark:text-white mb-4">Standards</h5>
+<ul class="space-y-2">
+<li><a class="text-slate-600 dark:text-slate-400 text-sm hover:underline decoration-[#3f6653]" href="#">Certification Standards</a></li>
+<li><a class="text-slate-600 dark:text-slate-400 text-sm hover:underline decoration-[#3f6653]" href="#">Trust Scoring</a></li>
+</ul>
+</div>
+<div>
+<h5 class="text-sm font-bold uppercase tracking-widest text-[#000d22] dark:text-white mb-4">Support</h5>
+<ul class="space-y-2">
+<li><a class="text-slate-600 dark:text-slate-400 text-sm hover:underline decoration-[#3f6653]" href="#">Contact Support</a></li>
+<li><a class="text-slate-600 dark:text-slate-400 text-sm hover:underline decoration-[#3f6653]" href="#">Agent Portal</a></li>
+</ul>
+</div>
+</div>
+</footer>
+</body></html>

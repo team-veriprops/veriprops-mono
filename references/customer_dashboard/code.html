@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dashboard | Veriprops</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-container": "#beead1",
+                        "surface-tint": "#4a5f81",
+                        "secondary-fixed-dim": "#a5d0b9",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#3f6653",
+                        "on-primary-fixed-variant": "#324768",
+                        "on-surface": "#191c1d",
+                        "on-error": "#ffffff",
+                        "surface": "#f8f9fa",
+                        "outline": "#74777e",
+                        "on-secondary-fixed-variant": "#274e3d",
+                        "on-background": "#191c1d",
+                        "tertiary-fixed-dim": "#e9c349",
+                        "surface-container-low": "#f3f4f5",
+                        "on-tertiary-container": "#4e3d00",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#574500",
+                        "primary-fixed-dim": "#b2c7ef",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#e1e3e4",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#d9dadb",
+                        "surface-variant": "#e1e3e4",
+                        "on-secondary-container": "#436b58",
+                        "surface-container-high": "#e7e8e9",
+                        "on-tertiary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "primary": "#000d22",
+                        "inverse-on-surface": "#f0f1f2",
+                        "surface-container": "#edeeef",
+                        "on-primary-fixed": "#021c3a",
+                        "tertiary-container": "#cba72f",
+                        "primary-fixed": "#d5e3ff",
+                        "on-secondary-fixed": "#002114",
+                        "on-primary-container": "#768baf",
+                        "on-surface-variant": "#44474e",
+                        "inverse-surface": "#2e3132",
+                        "inverse-primary": "#b2c7ef",
+                        "outline-variant": "#c4c6cf",
+                        "tertiary-fixed": "#ffe088",
+                        "tertiary": "#735c00",
+                        "on-tertiary-fixed": "#241a00",
+                        "background": "#f8f9fa",
+                        "surface-bright": "#f8f9fa",
+                        "secondary-fixed": "#c1ecd4",
+                        "primary-container": "#0a2342",
+                        "on-primary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .signature-gradient {
+            background: linear-gradient(135deg, #000d22 0%, #0a2342 100%);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(24px);
+        }
+        .security-pattern {
+            background-image: radial-gradient(#3f6653 0.5px, transparent 0.5px);
+            background-size: 12px 12px;
+            opacity: 0.05;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface">
+<!-- TopNavBar -->
+<nav class="bg-white/80 dark:bg-[#000d22]/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-sm dark:shadow-none">
+<div class="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
+<div class="text-2xl font-bold tracking-tight text-[#000d22] dark:text-white">Veriprops</div>
+<div class="hidden md:flex items-center space-x-8">
+<a class="text-[#000d22] dark:text-white font-bold border-b-2 border-[#3f6653] pb-1" href="#">Dashboard</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] hover:bg-slate-50 dark:hover:bg-white/5 transition-all" href="#">Verifications</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] hover:bg-slate-50 dark:hover:bg-white/5 transition-all" href="#">Agent Portal</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] hover:bg-slate-50 dark:hover:bg-white/5 transition-all" href="#">Pricing</a>
+</div>
+<div class="flex items-center space-x-6">
+<button class="signature-gradient text-on-primary px-6 py-2.5 rounded-lg text-sm font-semibold tracking-wide hover:scale-95 active:scale-90 transition-all duration-200">
+                    Submit Property
+                </button>
+<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden">
+<img alt="User profile" data-alt="professional portrait of a confident real estate investor in a clean studio setting with soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBu0NP3BrFybYgfp3K_UfNnf6iLefde7zkBVwBRbULTeiGiFtJRiMCpvBx0yGKX3IHog590UhlfZcqXVg0ZYvFVigo_obhivaqJO50AvVTMfpkhm1xZK5bPX401mGHnjiKoaI4rvjkQWXnKH7qcwfX4L0iWJJXD3pfaM6ULuxrmBJ7Yzc-2QZqhg5XZWv08Dhb83BAlnekPYZutTrXmfwdXJhj9Z6kFhV2UUOWP-RMVvlYu0dozqY-SLLhF58B7Bj3cN1faZjbSdSE"/>
+</div>
+</div>
+</div>
+</nav>
+<main class="max-w-7xl mx-auto px-8 py-12">
+<!-- Hero Section & CTA -->
+<header class="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-8">
+<div class="max-w-2xl">
+<span class="text-secondary font-bold uppercase tracking-widest text-xs mb-4 block">Sovereign Curator Dashboard</span>
+<h1 class="text-5xl font-extrabold tracking-tight text-primary leading-tight">Welcome back, Victor.</h1>
+<p class="text-on-surface-variant text-lg mt-4 leading-relaxed">Oversee your property portfolio verifications with architectural precision. Secure your investments with the gold standard of Nigerian real estate certification.</p>
+</div>
+<button class="signature-gradient text-on-primary px-8 py-4 rounded-lg flex items-center gap-3 shadow-xl hover:scale-95 active:scale-90 transition-all">
+<span class="material-symbols-outlined">add_circle</span>
+<span class="font-bold tracking-wide">New Verification Request</span>
+</button>
+</header>
+<!-- Summary Stats Bento Grid -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+<div class="bg-surface-container-low p-8 rounded-xl flex flex-col justify-between min-h-[180px] relative overflow-hidden">
+<div class="security-pattern absolute inset-0"></div>
+<span class="text-slate-500 font-medium text-sm tracking-wide z-10">Total Verifications</span>
+<div class="flex items-baseline gap-2 z-10">
+<span class="text-5xl font-extrabold text-primary">24</span>
+<span class="text-secondary font-bold text-sm">+3 this month</span>
+</div>
+<div class="absolute right-[-20px] bottom-[-20px] opacity-10">
+<span class="material-symbols-outlined text-9xl">inventory</span>
+</div>
+</div>
+<div class="bg-white p-8 rounded-xl flex flex-col justify-between min-h-[180px] border border-outline-variant/10 shadow-sm relative">
+<span class="text-slate-500 font-medium text-sm tracking-wide">Active Requests</span>
+<div class="flex items-baseline gap-2">
+<span class="text-5xl font-extrabold text-primary">06</span>
+<span class="text-tertiary font-bold text-sm">Processing</span>
+</div>
+<div class="w-full bg-surface-container h-1.5 rounded-full mt-4 overflow-hidden">
+<div class="bg-tertiary-container h-full w-[65%]"></div>
+</div>
+</div>
+<div class="bg-secondary-container p-8 rounded-xl flex flex-col justify-between min-h-[180px] relative">
+<span class="text-on-secondary-container font-medium text-sm tracking-wide">Certified Reports</span>
+<div class="flex items-baseline gap-2">
+<span class="text-5xl font-extrabold text-on-secondary-container">18</span>
+<span class="material-symbols-outlined text-on-secondary-container" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+</div>
+<p class="text-on-secondary-container/80 text-sm italic">All documents secured in ledger</p>
+</div>
+</section>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-12">
+<!-- Active Verifications List -->
+<section class="lg:col-span-2 space-y-8">
+<div class="flex items-center justify-between">
+<h2 class="text-2xl font-bold text-primary">Active Verifications</h2>
+<button class="text-secondary font-semibold text-sm hover:underline">View All</button>
+</div>
+<div class="space-y-4">
+<!-- Item 1 -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/10 hover:bg-surface-container-low transition-all group">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-surface-container overflow-hidden flex-shrink-0">
+<img alt="Property thumbnail" data-alt="architectural rendering of a modern luxury villa in Lagos with clean lines and palm trees" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAbEF06fiOamACLKdpfiCNhZ5vMMgFvvM6H31Zh0Xh18im1g9Mu-lRaeQkKmpkJ3sODfzjDVMLYwsXdo9vrVwdGF53rXsE7RdmB67j-OjAf46xY55bRPrtcJRAO_UFr8nn7T8JBcMm7roMwoUu0g91z6abryjX2q06w9r-DxlATQQgwob3Nh3iTZna7_DdOnMxAfGhej2MAyyq_IkeDEm7VTBW_7jvQ9XpECPFgRYhdoAEyMumta2-CGmSCX1jK_KRgZAOgsZ6Z96w"/>
+</div>
+<div>
+<h3 class="font-bold text-lg text-primary">Eko Atlantic Horizon - Phase 2</h3>
+<span class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Commercial Development</span>
+</div>
+</div>
+<div class="flex-1 max-w-xs">
+<div class="flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+<span>Progress</span>
+<span class="text-secondary">On-Site Inspection</span>
+</div>
+<div class="flex items-center gap-1">
+<div class="h-1.5 flex-1 rounded-full bg-secondary"></div>
+<div class="h-1.5 flex-1 rounded-full bg-secondary"></div>
+<div class="h-1.5 flex-1 rounded-full bg-secondary relative">
+<div class="absolute -right-1 -top-1 w-3 h-3 bg-secondary-container border-2 border-secondary rounded-full animate-pulse"></div>
+</div>
+<div class="h-1.5 flex-1 rounded-full bg-surface-container"></div>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-secondary/5 px-4 py-2 rounded-full border border-secondary/10">
+<div class="text-right">
+<div class="text-[10px] font-bold text-secondary uppercase">Trust Score</div>
+<div class="text-xl font-extrabold text-secondary">88<span class="text-xs">/100</span></div>
+</div>
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/10 hover:bg-surface-container-low transition-all">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-surface-container overflow-hidden flex-shrink-0">
+<img alt="Property thumbnail" data-alt="high-angle shot of a suburban neighborhood with modern white houses and manicured lawns" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXpbSAi0j0ps1lnbNygt2_SM15UzOh3onV9fXNDesBOTZirl74uRKn2yQ-UUy1npahxfpSuQOoYkmS-IgnDh6pG9CzvljZCtopTwzU1w0ovqc9kTbqnroFWh3p2nQg9dJwb_QNT57L2hSQnWE7P7l7rjkIhIChvBniLI3lSRR_5NiIc1klaMKOd6vh2kNbYWT6CqCanXckrW-8aajZd1qP3vERgekjvv5qjy1lLsWY5sFn9RukXxYuQmK_itFGqFTDct61uxWppkg"/>
+</div>
+<div>
+<h3 class="font-bold text-lg text-primary">Lekki Palms Residency</h3>
+<span class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Residential Plot</span>
+</div>
+</div>
+<div class="flex-1 max-w-xs">
+<div class="flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+<span>Progress</span>
+<span class="text-tertiary">Document Audit</span>
+</div>
+<div class="flex items-center gap-1">
+<div class="h-1.5 flex-1 rounded-full bg-secondary"></div>
+<div class="h-1.5 flex-1 rounded-full bg-tertiary relative">
+<div class="absolute -right-1 -top-1 w-3 h-3 bg-tertiary-fixed border-2 border-tertiary rounded-full"></div>
+</div>
+<div class="h-1.5 flex-1 rounded-full bg-surface-container"></div>
+<div class="h-1.5 flex-1 rounded-full bg-surface-container"></div>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-tertiary/5 px-4 py-2 rounded-full border border-tertiary/10">
+<div class="text-right">
+<div class="text-[10px] font-bold text-tertiary uppercase">Trust Score</div>
+<div class="text-xl font-extrabold text-tertiary">--</div>
+</div>
+<span class="material-symbols-outlined text-tertiary">pending_actions</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Recent Reports Sidebar -->
+<section class="space-y-8">
+<div class="flex items-center justify-between">
+<h2 class="text-2xl font-bold text-primary">Recent Reports</h2>
+<span class="material-symbols-outlined text-slate-400">file_download</span>
+</div>
+<div class="bg-surface-container-low rounded-xl p-2 space-y-1">
+<a class="flex items-center gap-4 p-4 rounded-lg bg-white shadow-sm hover:bg-primary hover:text-white transition-all group" href="#">
+<div class="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center group-hover:bg-white/20">
+<span class="material-symbols-outlined text-secondary group-hover:text-white">picture_as_pdf</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="font-bold text-sm truncate">Banana Island Plot 42-C</p>
+<p class="text-[10px] text-slate-400 group-hover:text-slate-300">Certified 2 days ago • 4.2 MB</p>
+</div>
+<span class="material-symbols-outlined text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">download</span>
+</a>
+<a class="flex items-center gap-4 p-4 rounded-lg hover:bg-primary hover:text-white transition-all group" href="#">
+<div class="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center group-hover:bg-white/20">
+<span class="material-symbols-outlined text-secondary group-hover:text-white">picture_as_pdf</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="font-bold text-sm truncate">Ikeja GRA Office Complex</p>
+<p class="text-[10px] text-slate-400 group-hover:text-slate-300">Certified 1 week ago • 5.1 MB</p>
+</div>
+<span class="material-symbols-outlined text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">download</span>
+</a>
+<a class="flex items-center gap-4 p-4 rounded-lg hover:bg-primary hover:text-white transition-all group" href="#">
+<div class="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center group-hover:bg-white/20">
+<span class="material-symbols-outlined text-secondary group-hover:text-white">picture_as_pdf</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="font-bold text-sm truncate">Abuja District 7 Survey</p>
+<p class="text-[10px] text-slate-400 group-hover:text-slate-300">Certified 2 weeks ago • 3.8 MB</p>
+</div>
+<span class="material-symbols-outlined text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">download</span>
+</a>
+</div>
+<!-- Premium Upsell -->
+<div class="signature-gradient rounded-xl p-8 relative overflow-hidden group">
+<div class="security-pattern absolute inset-0 opacity-10"></div>
+<h3 class="text-white font-bold text-xl mb-2 relative z-10">Go Pro. Verified Faster.</h3>
+<p class="text-white/70 text-sm mb-6 relative z-10">Get priority on-site inspections and 24-hour document audits with our Premium Tier.</p>
+<button class="bg-tertiary text-on-tertiary font-bold text-sm px-6 py-3 rounded-lg hover:bg-tertiary-fixed transition-colors relative z-10">
+                        Upgrade Account
+                    </button>
+<span class="material-symbols-outlined absolute right-[-10px] bottom-[-10px] text-7xl text-white/5 group-hover:scale-110 transition-transform">workspace_premium</span>
+</div>
+</section>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-[#f3f4f5] dark:bg-[#0a2342] w-full py-12 border-t border-slate-200 dark:border-slate-800 mt-20">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-8 px-8 max-w-7xl mx-auto">
+<div class="col-span-1 md:col-span-1">
+<div class="text-lg font-bold text-[#000d22] dark:text-white mb-4">Veriprops</div>
+<p class="text-slate-600 dark:text-slate-400 text-sm font-inter tracking-wide leading-relaxed">
+                    © 2024 Veriprops. The Sovereign Curator of Real Estate Verification.
+                </p>
+</div>
+<div class="flex flex-col space-y-3">
+<span class="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400 mb-2">Legal</span>
+<a class="text-slate-600 dark:text-slate-400 text-sm hover:underline decoration-[#3f6653]" href="#">Privacy Policy</a>
+<a class="text-slate-600 dark:text-slate-400 text-sm hover:underline decoration-[#3f6653]" href="#">Terms of Service</a>
+</div>
+<div class="flex flex-col space-y-3">
+<span class="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400 mb-2">Platform</span>
+<a class="text-slate-600 dark:text-slate-400 text-sm hover:underline decoration-[#3f6653]" href="#">Certification Standards</a>
+<a class="text-slate-600 dark:text-slate-400 text-sm hover:underline decoration-[#3f6653]" href="#">Contact Support</a>
+</div>
+<div class="flex flex-col space-y-3">
+<span class="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400 mb-2">Newsletter</span>
+<div class="flex">
+<input class="bg-white border-none text-sm px-4 py-2 w-full rounded-l-md focus:ring-1 focus:ring-secondary" placeholder="Your email" type="email"/>
+<button class="bg-secondary text-white px-4 py-2 rounded-r-md">
+<span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</footer>
+</body></html>

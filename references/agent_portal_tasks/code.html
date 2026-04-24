@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#beead1",
+                    "surface-tint": "#4a5f81",
+                    "secondary-fixed-dim": "#a5d0b9",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary": "#3f6653",
+                    "on-primary-fixed-variant": "#324768",
+                    "on-surface": "#191c1d",
+                    "on-error": "#ffffff",
+                    "surface": "#f8f9fa",
+                    "outline": "#74777e",
+                    "on-secondary-fixed-variant": "#274e3d",
+                    "on-background": "#191c1d",
+                    "tertiary-fixed-dim": "#e9c349",
+                    "surface-container-low": "#f3f4f5",
+                    "on-tertiary-container": "#4e3d00",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#574500",
+                    "primary-fixed-dim": "#b2c7ef",
+                    "on-error-container": "#93000a",
+                    "surface-container-highest": "#e1e3e4",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#d9dadb",
+                    "surface-variant": "#e1e3e4",
+                    "on-secondary-container": "#436b58",
+                    "surface-container-high": "#e7e8e9",
+                    "on-tertiary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "primary": "#000d22",
+                    "inverse-on-surface": "#f0f1f2",
+                    "surface-container": "#edeeef",
+                    "on-primary-fixed": "#021c3a",
+                    "tertiary-container": "#cba72f",
+                    "primary-fixed": "#d5e3ff",
+                    "on-secondary-fixed": "#002114",
+                    "on-primary-container": "#768baf",
+                    "on-surface-variant": "#44474e",
+                    "inverse-surface": "#2e3132",
+                    "inverse-primary": "#b2c7ef",
+                    "outline-variant": "#c4c6cf",
+                    "tertiary-fixed": "#ffe088",
+                    "tertiary": "#735c00",
+                    "on-tertiary-fixed": "#241a00",
+                    "background": "#f8f9fa",
+                    "surface-bright": "#f8f9fa",
+                    "secondary-fixed": "#c1ecd4",
+                    "primary-container": "#0a2342",
+                    "on-primary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, .headline { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(24px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased">
+<!-- TopNavBar -->
+<nav class="bg-white/80 dark:bg-[#000d22]/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-sm dark:shadow-none">
+<div class="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
+<div class="text-2xl font-bold tracking-tight text-[#000d22] dark:text-white">Veriprops</div>
+<div class="hidden md:flex items-center space-x-8">
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] transition-all" href="#">Dashboard</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] transition-all" href="#">Verifications</a>
+<a class="text-[#000d22] dark:text-white font-bold border-b-2 border-[#3f6653] pb-1 transition-all" href="#">Agent Portal</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] transition-all" href="#">Pricing</a>
+</div>
+<div class="flex items-center space-x-4">
+<button class="bg-gradient-to-br from-[#000d22] to-[#0a2342] text-white px-6 py-2.5 rounded-lg font-medium text-sm hover:scale-95 active:scale-90 transition-all duration-200">
+                    Submit Property
+                </button>
+<div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant/30">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="professional portrait of a confident field surveyor in front of a modern architectural structure" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcIfi_m8mCcjOalmsCUFo8nBw5XCxcFyGJVy8faQPOm5JylShup7n-mNi3UgeQ5-dXMuQMw8nAZsBEtfLnKgoJy7BsoWCRrge7EQ2NFyZxAZ_XubY2Rq_UnnIB7BMpo0r6c02evkfzw5rJTmwPoOs9_yeVm4u2q7sZoNnt1dU33C4N5bkDyUGN5jpQAsQ--Cnfy9IcfKIqw1NUJHFgvWX-MZMVwMefcR2yAis2-ZyQMAzO-lxXZ_xElldcjboz5Ywhf2x5dz6gRuI"/>
+</div>
+</div>
+</div>
+</nav>
+<main class="max-w-7xl mx-auto px-8 py-10">
+<!-- Header Section -->
+<header class="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div class="max-w-2xl">
+<p class="text-secondary font-semibold tracking-widest text-xs uppercase mb-2">OPERATIONAL OVERVIEW</p>
+<h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-primary leading-tight">Agent Portal</h1>
+<p class="text-on-surface-variant mt-4 text-lg leading-relaxed">Manage your verification portfolio, track task progression, and monitor your earnings across all active property dossiers.</p>
+</div>
+<!-- Earnings Overview Bento -->
+<div class="grid grid-cols-2 gap-4 w-full md:w-auto">
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-[0px_24px_48px_rgba(0,13,34,0.06)] border-l-4 border-secondary">
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Monthly Earnings</p>
+<p class="text-2xl font-extrabold text-primary">₦1,240,000</p>
+<div class="flex items-center text-secondary text-xs mt-2 font-semibold">
+<span class="material-symbols-outlined text-sm mr-1">trending_up</span>
+<span>+12% vs last month</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-[0px_24px_48px_rgba(0,13,34,0.06)] border-l-4 border-tertiary">
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Active Bonus</p>
+<p class="text-2xl font-extrabold text-primary">₦45,000</p>
+<div class="flex items-center text-tertiary text-xs mt-2 font-semibold">
+<span class="material-symbols-outlined text-sm mr-1">verified</span>
+<span>Tier 1 Elite Status</span>
+</div>
+</div>
+</div>
+</header>
+<!-- Task Management Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+<!-- Column: Assigned Tasks -->
+<div class="space-y-6">
+<div class="flex items-center justify-between border-b border-outline-variant/30 pb-4">
+<h3 class="text-lg font-bold text-primary flex items-center">
+<span class="w-2 h-2 rounded-full bg-slate-400 mr-3"></span>
+                        Assigned Tasks
+                    </h3>
+<span class="px-3 py-1 bg-surface-container-highest text-primary text-xs font-bold rounded-full">3</span>
+</div>
+<div class="space-y-4">
+<!-- Task Card -->
+<div class="bg-surface-container-lowest p-6 rounded-lg shadow-sm border border-outline-variant/10 hover:shadow-md transition-all group">
+<div class="flex justify-between items-start mb-4">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">ID: VP-992-LAG</span>
+<span class="text-secondary font-bold text-sm">₦15,000</span>
+</div>
+<h4 class="font-bold text-primary mb-1">Lekki Phase 1 Survey</h4>
+<p class="text-xs text-on-surface-variant mb-4">Physical Inspection &amp; Boundary Check</p>
+<div class="flex items-center text-xs text-error font-medium mb-6">
+<span class="material-symbols-outlined text-sm mr-1">schedule</span>
+                            Due: Tomorrow, 4:00 PM
+                        </div>
+<div class="flex flex-wrap gap-2 pt-4 border-t border-slate-50">
+<button class="flex-1 text-center py-2 text-xs font-bold text-primary bg-surface-container-low hover:bg-secondary hover:text-white transition-colors rounded">Accept</button>
+<button class="p-2 text-slate-400 hover:text-primary transition-colors rounded bg-surface-container-low"><span class="material-symbols-outlined text-sm">more_vert</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Column: In Progress -->
+<div class="space-y-6">
+<div class="flex items-center justify-between border-b border-outline-variant/30 pb-4">
+<h3 class="text-lg font-bold text-primary flex items-center">
+<span class="w-2 h-2 rounded-full bg-secondary mr-3 animate-pulse"></span>
+                        In Progress
+                    </h3>
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">2</span>
+</div>
+<div class="space-y-4">
+<!-- Task Card Active -->
+<div class="bg-surface-container-lowest p-6 rounded-lg shadow-[0px_16px_32px_rgba(0,13,34,0.04)] border border-secondary/20 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-3">
+<span class="material-symbols-outlined text-secondary/20 text-4xl">pending_actions</span>
+</div>
+<div class="flex justify-between items-start mb-4">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">ID: VP-104-ABJ</span>
+<span class="text-secondary font-bold text-sm">₦32,500</span>
+</div>
+<h4 class="font-bold text-primary mb-1">Maitama Estate Verification</h4>
+<p class="text-xs text-on-surface-variant mb-4">Structural Integrity Assessment</p>
+<!-- Progress Bar -->
+<div class="w-full bg-surface-container-high h-1.5 rounded-full mb-6 overflow-hidden">
+<div class="bg-secondary h-full w-[65%]"></div>
+</div>
+<div class="grid grid-cols-2 gap-2">
+<button class="flex items-center justify-center gap-2 py-2.5 text-xs font-bold text-white bg-gradient-to-br from-primary to-primary-container rounded hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-sm">upload_file</span>
+                                Upload Report
+                            </button>
+<button class="flex items-center justify-center gap-2 py-2.5 text-xs font-bold text-primary border border-outline-variant/40 rounded hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-sm">chat_bubble</span>
+                                Message
+                            </button>
+</div>
+</div>
+<!-- Another Task Card -->
+<div class="bg-surface-container-lowest p-6 rounded-lg shadow-sm border border-outline-variant/10">
+<div class="flex justify-between items-start mb-4">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">ID: VP-211-ENU</span>
+<span class="text-secondary font-bold text-sm">₦12,000</span>
+</div>
+<h4 class="font-bold text-primary mb-1">Independence Layout Title Search</h4>
+<p class="text-xs text-on-surface-variant mb-4">Land Registry Documentation</p>
+<button class="w-full py-2.5 text-xs font-bold text-primary bg-surface-container-low hover:bg-surface-container-high transition-colors rounded">Update Status</button>
+</div>
+</div>
+</div>
+<!-- Column: Completed -->
+<div class="space-y-6">
+<div class="flex items-center justify-between border-b border-outline-variant/30 pb-4">
+<h3 class="text-lg font-bold text-primary flex items-center">
+<span class="w-2 h-2 rounded-full bg-tertiary mr-3"></span>
+                        Completed
+                    </h3>
+<span class="px-3 py-1 bg-surface-container-highest text-primary text-xs font-bold rounded-full">14</span>
+</div>
+<div class="space-y-4 opacity-75 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+<!-- Task Card Completed -->
+<div class="bg-surface-container-low p-6 rounded-lg border border-transparent">
+<div class="flex justify-between items-start mb-4">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">ID: VP-088-PHC</span>
+<div class="flex items-center text-secondary">
+<span class="material-symbols-outlined text-sm mr-1" data-weight="fill">check_circle</span>
+<span class="text-xs font-bold">Verified</span>
+</div>
+</div>
+<h4 class="font-bold text-primary mb-1">Trans-Amadi Industrial Survey</h4>
+<p class="text-xs text-on-surface-variant mb-4">Topographical Mapping</p>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/20">
+<span class="text-xs font-medium text-slate-500">Paid: Oct 24, 2023</span>
+<span class="text-sm font-extrabold text-primary">₦22,000</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-[#f3f4f5] dark:bg-[#0a2342] w-full py-12 border-t border-slate-200 dark:border-slate-800 mt-20">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-8 px-8 max-w-7xl mx-auto font-inter text-sm tracking-wide">
+<div class="col-span-1 md:col-span-1">
+<div class="text-lg font-bold text-[#000d22] dark:text-white mb-4">Veriprops</div>
+<p class="text-slate-600 dark:text-slate-400 leading-relaxed">The Sovereign Curator of Real Estate Verification. Securing the Diaspora's investment future.</p>
+</div>
+<div>
+<h4 class="font-bold text-primary dark:text-white mb-4 uppercase text-xs tracking-widest">Platform</h4>
+<ul class="space-y-2">
+<li><a class="text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Certification Standards</a></li>
+<li><a class="text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Agent Portal</a></li>
+<li><a class="text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Property Index</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold text-primary dark:text-white mb-4 uppercase text-xs tracking-widest">Legal</h4>
+<ul class="space-y-2">
+<li><a class="text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Privacy Policy</a></li>
+<li><a class="text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Terms of Service</a></li>
+<li><a class="text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Compliance</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold text-primary dark:text-white mb-4 uppercase text-xs tracking-widest">Support</h4>
+<p class="text-slate-600 dark:text-slate-400 mb-4">Need assistance with your field verification?</p>
+<a class="text-[#3f6653] font-bold hover:underline" href="#">Contact Support</a>
+</div>
+</div>
+<div class="max-w-7xl mx-auto px-8 mt-12 pt-8 border-t border-slate-200 dark:border-slate-800">
+<p class="text-slate-500 text-xs text-center">© 2024 Veriprops. The Sovereign Curator of Real Estate Verification.</p>
+</div>
+</footer>
+</body></html>

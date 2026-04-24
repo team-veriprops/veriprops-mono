@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Veriprops | Secure Nigerian Real Estate Verification</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#beead1",
+                    "surface-tint": "#4a5f81",
+                    "secondary-fixed-dim": "#a5d0b9",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary": "#3f6653",
+                    "on-primary-fixed-variant": "#324768",
+                    "on-surface": "#191c1d",
+                    "on-error": "#ffffff",
+                    "surface": "#f8f9fa",
+                    "outline": "#74777e",
+                    "on-secondary-fixed-variant": "#274e3d",
+                    "on-background": "#191c1d",
+                    "tertiary-fixed-dim": "#e9c349",
+                    "surface-container-low": "#f3f4f5",
+                    "on-tertiary-container": "#4e3d00",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#574500",
+                    "primary-fixed-dim": "#b2c7ef",
+                    "on-error-container": "#93000a",
+                    "surface-container-highest": "#e1e3e4",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#d9dadb",
+                    "surface-variant": "#e1e3e4",
+                    "on-secondary-container": "#436b58",
+                    "surface-container-high": "#e7e8e9",
+                    "on-tertiary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "primary": "#000d22",
+                    "inverse-on-surface": "#f0f1f2",
+                    "surface-container": "#edeeef",
+                    "on-primary-fixed": "#021c3a",
+                    "tertiary-container": "#cba72f",
+                    "primary-fixed": "#d5e3ff",
+                    "on-secondary-fixed": "#002114",
+                    "on-primary-container": "#768baf",
+                    "on-surface-variant": "#44474e",
+                    "inverse-surface": "#2e3132",
+                    "inverse-primary": "#b2c7ef",
+                    "outline-variant": "#c4c6cf",
+                    "tertiary-fixed": "#ffe088",
+                    "tertiary": "#735c00",
+                    "on-tertiary-fixed": "#241a00",
+                    "background": "#f8f9fa",
+                    "surface-bright": "#f8f9fa",
+                    "secondary-fixed": "#c1ecd4",
+                    "primary-container": "#0a2342",
+                    "on-primary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .signature-gradient {
+            background: linear-gradient(135deg, #000d22 0%, #0a2342 100%);
+        }
+        .editorial-spacing {
+            letter-spacing: -0.02em;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa;
+            color: #191c1d;
+        }
+        h1, h2, h3 {
+            font-family: 'Manrope', sans-serif;
+        }
+    </style>
+</head>
+<body class="antialiased">
+<!-- TopNavBar -->
+<nav class="bg-white/80 dark:bg-[#000d22]/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-sm dark:shadow-none">
+<div class="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
+<div class="text-2xl font-bold tracking-tight text-[#000d22] dark:text-white">Veriprops</div>
+<div class="hidden md:flex space-x-8 items-center">
+<a class="text-[#000d22] dark:text-white font-bold border-b-2 border-[#3f6653] pb-1" href="#">Dashboard</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] hover:bg-slate-50 dark:hover:bg-white/5 transition-all" href="#">Verifications</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] hover:bg-slate-50 dark:hover:bg-white/5 transition-all" href="#">Agent Portal</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#000d22] hover:bg-slate-50 dark:hover:bg-white/5 transition-all" href="#">Pricing</a>
+</div>
+<div class="flex items-center gap-6">
+<button class="material-symbols-outlined text-on-surface-variant hover:scale-95 transition-all duration-200">search</button>
+<button class="signature-gradient text-on-primary px-8 py-3 rounded-lg font-semibold hover:scale-95 active:scale-90 transition-all duration-200">Submit Property</button>
+</div>
+</div>
+</nav>
+<main>
+<!-- Hero Section -->
+<section class="relative min-h-[921px] flex items-center overflow-hidden bg-white">
+<div class="max-w-7xl mx-auto px-8 w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+<div class="z-10">
+<div class="inline-flex items-center gap-2 bg-secondary-container/30 px-4 py-2 rounded-full mb-8">
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
+<span class="text-secondary font-semibold text-xs tracking-widest uppercase">Trusted by Global Diaspora</span>
+</div>
+<h1 class="text-6xl md:text-7xl font-extrabold editorial-spacing text-primary leading-[1.1] mb-6">
+                        Secure Your Real Estate Future in Nigeria
+                    </h1>
+<p class="text-xl text-on-surface-variant max-w-lg mb-10 leading-relaxed">
+                        Eliminate fraud and uncertainty with verified property data for the Diaspora. Protect wealth &amp; family with the sovereign standard of due diligence.
+                    </p>
+<div class="flex flex-col sm:flex-row gap-4">
+<button class="signature-gradient text-on-primary px-10 py-5 rounded-lg text-lg font-bold shadow-xl hover:scale-95 transition-all">
+                            Start Verification
+                        </button>
+<button class="bg-surface-container-low text-primary border border-outline-variant/15 px-10 py-5 rounded-lg text-lg font-bold hover:bg-surface-container-high transition-all">
+                            View Sample Report
+                        </button>
+</div>
+</div>
+<div class="relative">
+<div class="aspect-[4/5] rounded-xl overflow-hidden shadow-2xl">
+<img class="w-full h-full object-cover" data-alt="Modern architectural luxury villa in Lagos Nigeria with clean lines and floor to ceiling windows at sunset" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAO_Eq5vDmcaofv3N4Q_Amj9Crd55fK23KCGojQWeOYWjNv8tbaDH1Eh5IiOCHtVPoFcbLFPYKsVIoU77rFIw31qIl5eSxg5YHpRMXtT7oX4G80w2QOJ6vGmf__Cq3MGpaHjqZ3Zk-N-zwPdd733mz5gtwLmtI-cHIWtvojaAxkg3ALvtbBI2aFrImZY3bBO1DA-78_UxBkgswpTwgebrzSxqUUHvl3WFpY12gpF3PFkt1KQF8vY0T7QF8iKRTGmk4aVtwukfYFs3U"/>
+</div>
+<!-- Trust Score Floating Card -->
+<div class="absolute -bottom-10 -left-10 bg-white/90 backdrop-blur-xl p-8 rounded-xl shadow-2xl border border-outline-variant/10 max-w-xs">
+<div class="flex items-center gap-4 mb-4">
+<div class="w-16 h-16 rounded-full border-4 border-secondary flex items-center justify-center">
+<span class="text-xl font-bold text-primary">98%</span>
+</div>
+<div>
+<p class="text-xs uppercase tracking-tighter text-secondary font-bold">Trust Score</p>
+<p class="text-sm text-slate-500">Authenticated Data</p>
+</div>
+</div>
+<div class="flex gap-1">
+<div class="h-1 flex-1 bg-secondary rounded-full"></div>
+<div class="h-1 flex-1 bg-secondary rounded-full"></div>
+<div class="h-1 flex-1 bg-secondary rounded-full"></div>
+<div class="h-1 flex-1 bg-secondary rounded-full"></div>
+<div class="h-1 flex-1 bg-surface-container-highest rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Features Bento Grid -->
+<section class="py-24 bg-surface-container-low">
+<div class="max-w-7xl mx-auto px-8">
+<div class="mb-16">
+<h2 class="text-4xl font-bold editorial-spacing text-primary">The Verification Ecosystem</h2>
+<div class="h-1 w-24 bg-secondary mt-4"></div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<!-- Feature Card 1 -->
+<div class="bg-white p-10 rounded-xl shadow-sm hover:shadow-md transition-shadow border border-outline-variant/5">
+<div class="w-14 h-14 bg-secondary-container/20 rounded-lg flex items-center justify-center mb-8">
+<span class="material-symbols-outlined text-secondary text-3xl">analytics</span>
+</div>
+<h3 class="text-2xl font-bold mb-4">Trust Score</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                            Our proprietary algorithm calculates risk based on historical registry records, encumbrances, and ground inspection.
+                        </p>
+</div>
+<!-- Feature Card 2 -->
+<div class="bg-white p-10 rounded-xl shadow-sm hover:shadow-md transition-shadow border border-outline-variant/5">
+<div class="w-14 h-14 bg-secondary-container/20 rounded-lg flex items-center justify-center mb-8">
+<span class="material-symbols-outlined text-secondary text-3xl">fingerprint</span>
+</div>
+<h3 class="text-2xl font-bold mb-4">Verification ID</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                            A unique, immutable digital identity for every verified property, allowing for instant stakeholder cross-referencing.
+                        </p>
+</div>
+<!-- Feature Card 3 -->
+<div class="bg-white p-10 rounded-xl shadow-sm hover:shadow-md transition-shadow border border-outline-variant/5">
+<div class="w-14 h-14 bg-secondary-container/20 rounded-lg flex items-center justify-center mb-8">
+<span class="material-symbols-outlined text-secondary text-3xl">verified_user</span>
+</div>
+<h3 class="text-2xl font-bold mb-4">Certified Report</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                            A comprehensive architectural editorial document signed by legal and site experts, admissible for institutional financing.
+                        </p>
+</div>
+</div>
+</div>
+</section>
+<!-- How It Works - Stepper -->
+<section class="py-24 bg-white">
+<div class="max-w-7xl mx-auto px-8">
+<div class="text-center max-w-2xl mx-auto mb-20">
+<h2 class="text-4xl font-bold editorial-spacing text-primary mb-4">A Rigorous Methodology</h2>
+<p class="text-on-surface-variant">Our 5-step sovereign verification process ensures absolute certainty for your offshore investment.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+<div class="relative flex flex-col items-center text-center">
+<div class="w-12 h-12 rounded-full signature-gradient text-white flex items-center justify-center font-bold mb-6 z-10">1</div>
+<h4 class="font-bold text-primary mb-2">Submit Details</h4>
+<p class="text-sm text-slate-500">Provide property coordinates and documentation.</p>
+<div class="hidden md:block absolute top-6 left-[50%] w-full h-[2px] bg-surface-container-highest"></div>
+</div>
+<div class="relative flex flex-col items-center text-center">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest text-primary flex items-center justify-center font-bold mb-6 z-10">2</div>
+<h4 class="font-bold text-primary mb-2">Cross-Check</h4>
+<p class="text-sm text-slate-500">Validate against local registry and survey records.</p>
+<div class="hidden md:block absolute top-6 left-[50%] w-full h-[2px] bg-surface-container-highest"></div>
+</div>
+<div class="relative flex flex-col items-center text-center">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest text-primary flex items-center justify-center font-bold mb-6 z-10">3</div>
+<h4 class="font-bold text-primary mb-2">Check Encumbrances</h4>
+<p class="text-sm text-slate-500">Identify liens, caveats, or pending litigations.</p>
+<div class="hidden md:block absolute top-6 left-[50%] w-full h-[2px] bg-surface-container-highest"></div>
+</div>
+<div class="relative flex flex-col items-center text-center">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest text-primary flex items-center justify-center font-bold mb-6 z-10">4</div>
+<h4 class="font-bold text-primary mb-2">Risk Analysis</h4>
+<p class="text-sm text-slate-500">Assessment of area zoning and title history.</p>
+<div class="hidden md:block absolute top-6 left-[50%] w-full h-[2px] bg-surface-container-highest"></div>
+</div>
+<div class="relative flex flex-col items-center text-center">
+<div class="w-12 h-12 rounded-full border-2 border-secondary text-secondary flex items-center justify-center font-bold mb-6 z-10">5</div>
+<h4 class="font-bold text-primary mb-2">Get Report</h4>
+<p class="text-sm text-slate-500">Receive your final high-authority digital certificate.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Tier Pricing Section -->
+<section class="py-24 bg-surface-container-low">
+<div class="max-w-7xl mx-auto px-8">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-0">
+<!-- Basic Card -->
+<div class="bg-surface-container-lowest p-12 rounded-l-xl border-y border-l border-outline-variant/10">
+<h3 class="text-xl font-bold mb-8">Basic</h3>
+<div class="text-4xl font-extrabold editorial-spacing mb-8 text-primary">₦150k</div>
+<ul class="space-y-4 mb-12">
+<li class="flex items-center gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary text-lg">check_circle</span> Title Validation
+                            </li>
+<li class="flex items-center gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary text-lg">check_circle</span> Ownership History
+                            </li>
+<li class="flex items-center gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary text-lg">check_circle</span> Registry Search
+                            </li>
+</ul>
+<button class="w-full py-4 border border-outline font-bold rounded-lg hover:bg-surface-container-low transition-all">Select Basic</button>
+</div>
+<!-- Standard Card (Popped) -->
+<div class="bg-white p-12 shadow-2xl relative z-20 scale-105 rounded-xl border border-secondary/20">
+<div class="absolute top-0 right-12 transform -translate-y-1/2 bg-secondary text-white px-4 py-1 text-xs font-bold rounded-full uppercase tracking-widest">Most Popular</div>
+<h3 class="text-xl font-bold mb-8">Standard</h3>
+<div class="text-4xl font-extrabold editorial-spacing mb-8 text-primary">₦350k</div>
+<ul class="space-y-4 mb-12">
+<li class="flex items-center gap-3 text-sm font-semibold">
+<span class="material-symbols-outlined text-secondary text-lg">add</span> Everything in Basic
+                            </li>
+<li class="flex items-center gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary text-lg">check_circle</span> Site Inspection
+                            </li>
+<li class="flex items-center gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary text-lg">check_circle</span> Boundary Survey
+                            </li>
+<li class="flex items-center gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary text-lg">check_circle</span> Neighborhood Profile
+                            </li>
+</ul>
+<button class="w-full py-4 signature-gradient text-on-primary font-bold rounded-lg hover:scale-95 transition-all">Start Standard</button>
+</div>
+<!-- Premium Card -->
+<div class="bg-surface-container-lowest p-12 rounded-r-xl border-y border-r border-outline-variant/10">
+<h3 class="text-xl font-bold mb-8">Premium</h3>
+<div class="text-4xl font-extrabold editorial-spacing mb-8 text-primary">₦750k</div>
+<ul class="space-y-4 mb-12">
+<li class="flex items-center gap-3 text-sm font-semibold">
+<span class="material-symbols-outlined text-secondary text-lg">add</span> Everything in Standard
+                            </li>
+<li class="flex items-center gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary text-lg">check_circle</span> Legal Opinion
+                            </li>
+<li class="flex items-center gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary text-lg">check_circle</span> Risk Analysis
+                            </li>
+<li class="flex items-center gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary text-lg">check_circle</span> Tax Compliance Check
+                            </li>
+</ul>
+<button class="w-full py-4 border border-tertiary-container font-bold text-tertiary rounded-lg hover:bg-tertiary-fixed/10 transition-all">Go Premium</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Emotional Trust / Final CTA -->
+<section class="py-24 relative">
+<div class="max-w-7xl mx-auto px-8">
+<div class="relative bg-primary-container rounded-3xl overflow-hidden p-16 md:p-24 flex flex-col md:flex-row items-center gap-16">
+<div class="md:w-3/5 z-10">
+<h2 class="text-4xl md:text-5xl font-bold text-white mb-8 leading-tight">Your legacy is too valuable to risk on hearsay.</h2>
+<p class="text-on-primary-container text-xl mb-12 leading-relaxed">
+                            Veriprops provides the sovereign certainty required to build generational wealth in Nigeria from anywhere in the world. Protect your family's future today.
+                        </p>
+<button class="bg-secondary text-on-secondary px-12 py-5 rounded-lg text-lg font-bold hover:bg-secondary/90 transition-all">
+                            Secure My Property Now
+                        </button>
+</div>
+<div class="md:w-2/5 relative">
+<div class="bg-white/5 backdrop-blur-sm p-4 rounded-xl rotate-3 border border-white/10">
+<img class="rounded-lg shadow-xl grayscale contrast-125" data-alt="Detail of a gold embossed legal document seal on textured parchment paper with warm professional lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDAzT0RF86o0JCWWPkqyHXN0DGOopcZbVVUYctptQvmkbkuFhNXew4QAaZ0BQdAM_SWpcrsp655z3YuB_NtMgHCWL4ZiWGPVUHZopCbzS0vrMvVxuzlVAejgXgfciWCLHm9z-DTncEgjt_kKd4Sh15jtL2XabKiX-mSmuPFEAatEVOY82sXvHR1Y_luyfv8ck9BVrlnnT0ABzftJav2VfEr2MUG1tDdxjfGvsK15f62YMR0duW99YjmtKsfU57XbMk2Cc2yWdRE56Y"/>
+</div>
+<div class="absolute -top-10 -right-10 w-40 h-40 bg-secondary/20 rounded-full blur-3xl"></div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-[#f3f4f5] dark:bg-[#0a2342] w-full py-12 border-t border-slate-200 dark:border-slate-800">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-8 px-8 max-w-7xl mx-auto">
+<div class="col-span-1 md:col-span-1">
+<div class="text-lg font-bold text-[#000d22] dark:text-white mb-4">Veriprops</div>
+<p class="text-sm font-inter tracking-wide text-slate-600 dark:text-slate-400">
+                    The Sovereign Curator of Real Estate Verification.
+                </p>
+</div>
+<div>
+<h4 class="font-bold text-primary mb-6">Resources</h4>
+<div class="flex flex-col space-y-4">
+<a class="text-sm font-inter tracking-wide text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Certification Standards</a>
+<a class="text-sm font-inter tracking-wide text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Verification Process</a>
+</div>
+</div>
+<div>
+<h4 class="font-bold text-primary mb-6">Company</h4>
+<div class="flex flex-col space-y-4">
+<a class="text-sm font-inter tracking-wide text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Privacy Policy</a>
+<a class="text-sm font-inter tracking-wide text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Terms of Service</a>
+<a class="text-sm font-inter tracking-wide text-slate-600 dark:text-slate-400 hover:underline decoration-[#3f6653]" href="#">Contact Support</a>
+</div>
+</div>
+<div>
+<h4 class="font-bold text-primary mb-6">Stay Certified</h4>
+<div class="flex gap-2">
+<input class="bg-white border-outline-variant/20 rounded px-4 py-2 w-full text-sm" placeholder="Email Address" type="email"/>
+<button class="signature-gradient text-white p-2 rounded">
+<span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+<div class="max-w-7xl mx-auto px-8 mt-12 pt-8 border-t border-slate-200 dark:border-slate-800 text-center">
+<p class="text-sm font-inter tracking-wide text-slate-600 dark:text-slate-400">
+                © 2024 Veriprops. The Sovereign Curator of Real Estate Verification.
+            </p>
+</div>
+</footer>
+</body></html>
