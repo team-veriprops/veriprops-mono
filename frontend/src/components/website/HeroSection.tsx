@@ -117,64 +117,21 @@ export default function HeroSection() {
 
         {/* Right — Property Visual */}
         <div className="relative hidden lg:block animate-fade-up stagger-2">
-          {/* Main card — abstract property plot */}
+          {/* Main card — building photo */}
           <div
             className="relative rounded-2xl overflow-hidden"
             style={{
               aspectRatio: "4/5",
-              background: "linear-gradient(145deg, #0c1f2e 0%, #1a3a2e 35%, #2d5a45 65%, #1a3020 100%)",
               boxShadow: "0 40px 80px -20px rgba(0,13,34,0.4), 0 20px 40px -10px rgba(0,13,34,0.2)",
             }}
           >
-            {/* Grid overlay — land plot lines */}
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `
-                  linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
-                  linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)
-                `,
-                backgroundSize: "48px 48px",
-              }}
+            {/* Building photo */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAO_Eq5vDmcaofv3N4Q_Amj9Crd55fK23KCGojQWeOYWjNv8tbaDH1Eh5IiOCHtVPoFcbLFPYKsVIoU77rFIw31qIl5eSxg5YHpRMXtT7oX4G80w2QOJ6vGmf__Cq3MGpaHjqZ3Zk-N-zwPdd733mz5gtwLmtI-cHIWtvojaAxkg3ALvtbBI2aFrImZY3bBO1DA-78_UxBkgswpTwgebrzSxqUUHvl3WFpY12gpF3PFkt1KQF8vY0T7QF8iKRTGmk4aVtwukfYFs3U"
+              alt="Modern luxury property in Lagos Nigeria"
+              className="w-full h-full object-cover"
             />
-
-            {/* Diagonal accent line */}
-            <div
-              className="absolute top-0 right-0 w-px h-full origin-top-right"
-              style={{
-                background: "linear-gradient(to bottom, rgba(63,102,83,0.4), transparent)",
-                transform: "rotate(-12deg) translateX(80px)",
-                width: "1px",
-                height: "200%",
-              }}
-            />
-
-            {/* Central geometric plot marker */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="relative">
-                {/* Outer pulse ring */}
-                <div
-                  className="absolute -inset-8 rounded-full animate-pulse-soft"
-                  style={{ background: "rgba(63,102,83,0.12)", border: "1px solid rgba(63,102,83,0.2)" }}
-                />
-                {/* Inner ring */}
-                <div
-                  className="absolute -inset-4 rounded-full"
-                  style={{ border: "1px solid rgba(63,102,83,0.3)" }}
-                />
-                {/* Verification badge */}
-                <div
-                  className="w-20 h-20 rounded-full flex items-center justify-center"
-                  style={{
-                    background: "rgba(63,102,83,0.25)",
-                    border: "2px solid rgba(63,102,83,0.5)",
-                    backdropFilter: "blur(8px)",
-                  }}
-                >
-                  <CheckCircle2 className="w-9 h-9 text-white" strokeWidth={1.5} />
-                </div>
-              </div>
-            </div>
 
             {/* Top-left: property ID chip */}
             <div
@@ -210,8 +167,8 @@ export default function HeroSection() {
                 background: "linear-gradient(to top, rgba(0,13,34,0.7) 0%, transparent 100%)",
               }}
             >
-              <div className="text-white/60 text-xs font-medium mb-1">Lekki Phase 1, Lagos</div>
-              <div className="text-white text-sm font-semibold">2,400 sqm · C of O Verified</div>
+              {/* <div className="text-white/60 text-xs font-medium mb-1">Lekki Phase 1, Lagos</div>
+              <div className="text-white text-sm font-semibold">2,400 sqm · C of O Verified</div> */}
             </div>
           </div>
 

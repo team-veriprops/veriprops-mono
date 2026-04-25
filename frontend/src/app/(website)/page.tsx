@@ -10,7 +10,7 @@ import LandingFooter from "@components/website/LandingFooter";
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#fff" }}>
+    <div className="min-h-screen bg-background">
       <LandingNav />
       <main>
         <HeroSection />

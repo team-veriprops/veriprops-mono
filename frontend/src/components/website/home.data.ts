@@ -245,9 +245,11 @@ export const footerLinks = {
     { label: "Become an Agent", href: "/auth?intent=agent" },
   ] as FooterLink[],
   socials: [
+    { label: "Facebook", href: "#" },
     { label: "Twitter", href: "#" },
     { label: "LinkedIn", href: "#" },
     { label: "Instagram", href: "#" },
+    { label: "YouTube", href: "#" },
   ] as FooterLink[],
 };
 

@@ -39,4 +39,5 @@ pnpm start
 
 ## Notes
 
-1. Always use 'frontend-design' skill when doing all ui/ux tasks.
+1. Always use 'frontend-design' and 'tailwind-design-system ' skills when doing all ui/ux tasks.
+
