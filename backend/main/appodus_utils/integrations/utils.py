@@ -1,4 +1,8 @@
-from logging import Logger
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 from kink import di
 from starlette.requests import Request
 from main.appodus_utils.db.redis_utils import RedisUtils

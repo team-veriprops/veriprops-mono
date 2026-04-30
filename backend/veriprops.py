@@ -1,11 +1,16 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
+
 from contextlib import asynccontextmanager
-from logging import Logger
 
 from libre_fastapi_jwt.exceptions import AuthJWTException
 from starlette import status
 
-from main.app.config.settings import settings
-from main.app.config.bootstrap import DiBootstrap
+from main.app.config.settings import settings # noqa: F401
+from main.appodus_utils.config.bootstrap import BaseDiBootstrap # noqa: F401
 from main.app.db.seeder import DataSeeder
 from main.appodus_utils.integrations.webhook import webhook_router
 from main.appodus_utils.config.client_manager import ClientStateManager

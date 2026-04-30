@@ -46,6 +46,29 @@ class Utils:
     pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
     @staticmethod
+    def parse_fullname(fullname: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+        if not fullname or not fullname.strip():
+            return None, None, None
+
+        parts = fullname.strip().split()
+
+        if len(parts) == 1:
+            # Only one name provided
+            return parts[0], None, None
+
+        elif len(parts) == 2:
+            # First + Last
+            first, last = parts
+            return first, None, last
+
+        else:
+            # First + Middle(s) + Last
+            first = parts[0]
+            last = parts[-1]
+            middle = " ".join(parts[1:-1])
+            return first, middle, last
+
+    @staticmethod
     def create_redirect(redirect_url: str, response: Response) -> RedirectResponse:
         redirect = RedirectResponse(
             url=redirect_url,

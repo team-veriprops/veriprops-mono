@@ -2,104 +2,155 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+FastAPI service for Veriprops. Async SQLAlchemy, Alembic migrations, Kink DI, MySQL.
+
 ## Commands
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
 
-# Set active environment (local | dev | staging | prod)
-export appodus_active_env=local
+# Active env selects which .env.{name} file is loaded at import time.
+# Valid names: local, test, dev, staging, prod.
+export appodus_active_env=local        # bash
+$env:appodus_active_env="local"        # PowerShell
+set appodus_active_env=local           # cmd
 
-# Run dev server
-python veriprops.py
+python veriprops.py                    # dev server, http://localhost:8000 (docs at /docs)
 
-# Database migrations
-alembic upgrade head               # Apply all pending migrations
-alembic downgrade -1               # Roll back one migration
-alembic revision --autogenerate -m "describe change"  # Generate migration
+# Tests — pytest auto-loads conftest.py which defaults appodus_active_env=test.
+# Force the test env explicitly when running migrations against the test DB.
+set appodus_active_env=test && alembic upgrade head && pytest
+pytest test/unit/app/path/to/test_file.py::test_name   # single test
+
+# Alembic
+alembic upgrade head                                          # apply
+alembic downgrade -1                                          # roll back one
+alembic revision --autogenerate -m "describe change"          # generate
 ```
 
-Environment config is loaded from `.env.{appodus_active_env}` at startup. FastAPI docs available at `http://localhost:8000/docs`.
-
----
+`appodus_active_env` is read at module import (see [conftest.py](conftest.py) and [appodus_utils/config/settings.py](main/appodus_utils/config/settings.py) `set_env_vars()`). It must be set before any `main.*` import — that's why `conftest.py` defaults it before importing settings.
 
 ## Architecture
 
-### Domain-Driven Design
+### Two-layer Python package
 
-Each business domain lives under `main/app/domain/{entity}/` and follows this structure:
+- [main/app/](main/app/) — Veriprops-specific business code (domains, settings, seeder, jobs).
+- [main/appodus_utils/](main/appodus_utils/) — reusable framework/library code (DI bootstrap, generic repo, transactional decorator, integrations, middleware, exceptions). Treat as a vendored library: prefer extending via subclass over editing in place. App-side `DiBootstrap` in [main/app/config/bootstrap.py](main/app/config/bootstrap.py) subclasses `BaseDiBootstrap` to inject app-specific deps (Redis).
 
-| File | Responsibility |
-|---|---|
-| `models.py` | SQLAlchemy ORM model + Pydantic DTOs (`CreateDto`, `UpdateDto`, `QueryDto`, `SearchDto`) |
-| `repo.py` | Data access — extends `GenericRepo` |
-| `service.py` | Business logic — methods decorated with `@transactional` |
-| `controller.py` | FastAPI router/routes |
-| `validator.py` | Input validation and business rule checks |
+### Domain module shape
 
-New domains must be registered in `domain/__init__.py`.
+Each domain must live in its **own package** and encapsulate all domain concerns. Related child domains must be **grouped and contained within their parent domain package**.
 
-### Dependency Injection (Kink)
+| File            | Responsibility                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------- |
+| `models.py`     | SQLAlchemy ORM model + Pydantic DTOs (`CreateDto`, `UpdateDto`, `QueryDto`, `SearchDto`) |
+| `repo.py`       | Data access layer — extends `GenericRepo`                                                |
+| `service.py`    | Business logic — service methods decorated with `@transactional`                         |
+| `controller.py` | FastAPI router (only when the domain exposes HTTP endpoints)                             |
+| `validator.py`  | Input validation + business-rule validation                                              |
 
-Classes decorated with `@inject` are registered in and resolved from the DI container. Bootstrap runs in `config/bootstrap.py` on startup (initializes logger, DB session, Redis, registers custom types).
+### Domain registration convention
 
-```python
-@inject
-class BankService:
-    def __init__(self, bank_repo: BankRepo, bank_validator: BankValidator): ...
-```
+New domains must be wired into the **domain package hierarchy**.
 
-### Transaction Management
+* Every domain package must be **imported and exposed by its parent domain package**.
+* Root parent domains must be imported and exposed in `main/app/domain/__init__.py`.
+* `main.app.domain` is the **single aggregation point** imported by Alembic, so every domain must be reachable through this package hierarchy for autogenerate to discover all models.
 
-Three session policies available on `@transactional`:
+### Routing convention
 
-- `USE_IF_PRESENT` — joins existing session (default)
-- `ALWAYS_NEW` — isolated new session
-- `FALLBACK_NEW` — uses context session if available, otherwise creates one
+* Domains that expose HTTP endpoints should define a `controller.py` router.
+* Child domain routers must be mounted in their **parent domain router**.
+* Root parent domain routers must be mounted in `main/app/domain/__init__.py`.
+* Domains without HTTP endpoints do **not** need a router, but must still be wired into the package hierarchy.
 
-### Generic Repository
+### Non-negotiable rule
 
-`GenericRepo[Model, Create, Update, Query, Search]` provides CRUD, pagination (`get_page`), and soft-delete-aware queries out of the box. All entities inherit from `BaseEntity` which adds `id` (UUID), `created_at`, `updated_at`, `version` (optimistic locking), and `deleted` (soft delete flag).
+A domain is **not considered complete** until:
 
-### Exception Handling
+* its package is created,
+* it is exposed through the parent domain package hierarchy,
+* and, where applicable, its router is mounted in the appropriate parent router (or root router in `main/app/domain/__init__.py`).
 
-All exceptions inherit from `AppodusBaseException`. They carry structured context (user_id, resource, email, etc.) and map to HTTP status codes via handlers in `exception/exception_handlers.py`.
 
-### Key Middleware
+### Database conventions:
 
-- `DBSessionMiddleware` — per-request async SQLAlchemy session
-- `RequestLoggingMiddleware` — logs all requests/responses
-- `CORSMiddleware` — allowed origins from settings
+* SQLAlchemy + Alembic
+* No database foreign keys
+* No cascade constraints
+* No ON DELETE / ON UPDATE constraints
+* Use application-enforced references
+* Reference IDs are normal indexed columns
+* Alembic migrations must never emit ALTER TABLE ... ADD FOREIGN KEY
 
-### Data Seeding
 
-`DataSeeder.run_data_seed()` is called during the FastAPI lifespan startup event (`db/seeder.py`).
+### Generic repository
 
----
+`GenericRepo[Model, Create, Update, Query, Search]` ([appodus_utils/db/repo.py](main/appodus_utils/db/repo.py)) provides CRUD, pagination, and soft-delete-aware queries. Entities inherit from `BaseEntity` which adds `id` (UUID), `created_at`, `updated_at`, `version` (optimistic locking), `deleted` (soft-delete flag) — never `DELETE` rows by hand; flip `deleted`.
+
+### Transaction management
+
+`@transactional(session_policy=...)` ([appodus_utils/decorators/transactional.py](main/appodus_utils/decorators/transactional.py)) wraps async functions:
+
+- `USE_IF_PRESENT` (default) — joins the request's session set by `DBSessionMiddleware`. Raises if no session is in context.
+- `ALWAYS_NEW` — opens an isolated session/transaction (use for jobs/seeders running outside a request).
+- `FALLBACK_NEW` — joins context if present, else opens new.
+
+Inside a transactional service method, get the session via `get_db_session_from_context()` — don't accept a session parameter.
+
+### Dependency injection (Kink)
+
+Bootstrap runs once at import: importing settings → importing bootstrap → registers `logger`, `Redis`, `AuthJWTBearer`, `AsyncClient` in `di`. Services/repos resolve via `di[T]`. New cross-cutting deps go into a `DiBootstrap` override, not into module-level globals.
+
+### Request lifecycle
+
+[veriprops.py](veriprops.py) wires the FastAPI app:
+
+- `DBSessionMiddleware` — opens an async session per request, stores it in a `ContextVar` so `@transactional` can find it.
+- `RequestLoggingMiddleware` — request/response logs.
+- Exception handlers map `AppodusBaseException` and friends to structured HTTP responses (`exception/exception_handlers.py`). All custom exceptions inherit from `AppodusBaseException` and carry context (`user_id`, `resource`, etc.) — raise these, don't `raise HTTPException` directly.
+- Lifespan: `ClientStateManager` opens external clients (HTTPX, Redis), then `DataSeeder.run_data_seed()` seeds reference data.
+
+Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhooks`) via `webhook_router`.
+
+### API serialization
+
+Pydantic DTOs use `to_camel` alias_generator → JSON is camelCase, Python stays snake_case. Frontend consumes camelCase directly; don't add a translation layer.
+
+### Serverless-aware DB engine
+
+[appodus_utils/db/session.py](main/appodus_utils/db/session.py) picks `NullPool` when `DEPLOYMENT_IS_SERVERLESS=true` (Vercel) and a real pool otherwise. Don't cache engines or sessions across requests in serverless.
+
+## Settings
+
+`Settings` ([main/app/config/settings.py](main/app/config/settings.py)) extends `AppodusBaseSettings` and is loaded from `.env.{appodus_active_env}` at import. Notable knobs:
+
+- `ACTIVE_DB`, `SQLALCHEMY_DATABASE_URI` — DB selection (MySQL or Postgres; async drivers).
+- `ACTIVE_PAYMENT_METHOD` — `FLUTTERWAVE` or `PAYSTACK`.
+- `ALLOWED_ORIGINS` — comma-separated CORS origins.
+- `ENABLE_OUT_MESSAGING`, `ALLOW_AUTH_BYPASS`, `DISABLE_RATE_LIMITING` — gate side effects in non-prod.
+- `GOOGLE_SERVICE_ACCOUNT_FILE` — path resolved via `get_absolute_path` (walks up out of `test/`, `main/`, or `appodus_utils/`).
 
 ## Integrations
 
-| Purpose | Provider(s) |
+Provider-agnostic interfaces in [appodus_utils/integrations/](main/appodus_utils/integrations/) — pick implementation via settings:
+
+| Purpose | Providers |
 |---|---|
-| File storage | AWS S3 (`veriprops-documents` bucket) |
-| Document signing | Zoho DocSign (webhook callbacks stored in `domain/webhook/`) |
-| File collaboration | Google Drive (service account auth) |
-| Payments | Flutterwave, Paystack (toggle via `ACTIVE_PAYMENT_METHOD`) |
+| File storage | AWS S3 (`veriprops-documents`), R2 |
+| Document signing | Zoho DocSign (webhook in `domain/webhook/`) |
+| File collaboration | Google Drive (service-account auth) |
+| Payments | Flutterwave, Paystack |
 | Email | SendGrid, Mailjet |
 | SMS | Twilio, Termii |
-| Push notifications | Firebase, Web Push |
+| WhatsApp | Meta Business API |
+| Push | Firebase, Web Push |
 
-Email templates use Jinja2 and live in `resources/templates/`.
+Webhook receivers live under `appodus_utils/integrations/.../webhook.py` and are mounted via the shared `webhook_router`.
 
----
+## Tests
 
-## Key Settings
-
-Loaded from `.env.{appodus_active_env}`. Notable variables:
-
-- `ACTIVE_DB` — `MYSQL` or `POSTGRES`
-- `AUTHJWT_SECRET_KEY` — JWT signing secret
-- `ACTIVE_PAYMENT_METHOD` — `FLUTTERWAVE` or `PAYSTACK`
-- `ALLOWED_ORIGINS` — comma-separated CORS origins
-- `AWS_S3_PRESIGNED_URL_EXPIRES` — default 900s (15 min)
+- `test/unit/` — fast, in-memory; mirrors `main/app/` structure.
+- `test/e2e/` — integration tests (e.g. messaging service) — require external creds.
+- `test/utils/` — `mock_circuit_breaker.py`, shared fixtures.
+- `pytest.ini` sets `asyncio_mode = auto`, so async tests need no decorator.

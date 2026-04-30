@@ -130,6 +130,7 @@ class Settings(AppodusBaseSettings):
 
     # Super Admin
     SUPER_ADMIN_PASSWORD: Optional[str] = None
+    SUPER_ADMIN_EMAIL: Optional[str] = None
 
 
 settings = Settings()

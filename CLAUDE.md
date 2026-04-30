@@ -1,50 +1,35 @@
-# CLAUDE.md - Real Estate Property Verification
+# CLAUDE.md
 
-Root-level guide for agents working on this repository. For full product requirements see [PRD.md](./PRD.md).
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+Veriprops is a property verification platform. Monorepo with two deployable apps that talk over HTTP:
 
-Veriprops is a property verification and management platform. The repo is a monorepo with a FastAPI backend (`backend/`) and a Next.js frontend (`frontend/`).
+- [backend/](backend/) — FastAPI service (Python 3.12, MySQL, async SQLAlchemy, Alembic). See [backend/CLAUDE.md](backend/CLAUDE.md).
+- [frontend/](frontend/) — Next.js 16 App Router, React 19, TypeScript. See [frontend/CLAUDE.md](frontend/CLAUDE.md).
 
-See [backend/CLAUDE.md](backend/CLAUDE.md) for backend-specific guidance and [frontend/CLAUDE.md](frontend/CLAUDE.md) for frontend-specific guidance.
+Product context lives in [PRD.md](PRD.md) — read the relevant section before designing features that touch verification, agent onboarding, or reports.
 
-## How to Run
+## Running both ends
 
-**Full stack (recommended):**
+The frontend rewrites `/api/*` to the backend (see [frontend/next.config.ts](frontend/next.config.ts)), so for any feature that crosses the boundary, run both:
+
 ```bash
-docker-compose up
+# terminal 1 — backend on :8000
+cd backend && python veriprops.py
+
+# terminal 2 — frontend on :3000
+cd frontend && pnpm dev
 ```
 
-**Backend only:**
-```bash
-cd backend
-uvicorn veriprops:app --reload
-```
+Frontend reads `API_BASE_URL` (server-only) from its env to build the proxy target. If you change ports, update both ends.
 
-**Frontend only:**
-```bash
-cd frontend
-pnpm dev
-```
+## Cross-cutting conventions
 
+- **API casing.** Backend Pydantic models serialize as camelCase (via `to_camel` alias generator in [appodus_utils/db/models.py](backend/main/appodus_utils/db/models.py)) but Python code stays snake_case. Frontend types are camelCase — don't add a transformation layer.
+- **Auth contract.** The auth controller at [backend/main/app/domain/user/auth/controller.py](backend/main/app/domain/user/auth/controller.py) is the source of truth for endpoints the frontend's `auth-service.ts` ([frontend/src/components/website/auth/libs/auth-service.ts](frontend/src/components/website/auth/libs/auth-service.ts)) calls. URL shape is `/api/users/auth/...`. When adding/renaming an endpoint, change both files in the same PR.
+- **Package managers.** Frontend is `pnpm` (lockfile committed); never use `npm` or `yarn`. Backend is plain `pip` against `requirements.txt`.
+- **Path handling.** Memory rule: use `path.join` / `pathlib` / POSIX-safe APIs — never hardcode `\` or `/` separators.
 
-## Reference Docs
+## Workflow
 
-- **[PRD.md](./PRD.md)** — Full product requirements.
-- **[backend/CLAUDE.md](./backend/CLAUDE.md)** — for backend-specific guidance.
-- **[frontend/CLAUDE.md](./frontend/CLAUDE.md)** — for frontend-specific guidance.
-
-
-
-## Workflow for new Features
-1. Write a plan and confirm with user before coding.
-2. Write tests first (Test Driven Development - TDD).
-3. Implement the Feature.
-4. Run test and confirm all passing.
-5. Update the appropriate CLAUDE.md if new patterns emerge.
-
-## Notes
-
-1. Always use 'test-driven-development' skill when making changes, and observe the following:
-1.1. Adapt all npm to pnpm
-1.2. Write jest and pytest tests based on their best practices.
+When adding a feature, write a short plan and confirm with the user before coding, write tests first (the `test-driven-development` skill enforces this), then implement. Update the relevant `CLAUDE.md` if a new pattern emerges that future agents would otherwise have to re-derive.

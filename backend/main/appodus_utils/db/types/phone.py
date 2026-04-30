@@ -8,8 +8,9 @@ class PhoneNumber(Object):
     number: str
 
     @property
-    def internation_number(self)-> str:
-        return f"{self.dial_code}{self.number}"
+    def international_number(self)-> str:
+        digits = "".join(c for c in (self.dial_code + self.number) if c.isdigit())
+        return f"+{digits}"
 
     @field_validator('number', mode='before')
     def normalize_number(cls, v: str) -> str:

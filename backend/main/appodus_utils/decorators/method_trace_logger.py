@@ -1,8 +1,12 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 import functools
 import inspect
 import traceback
 from typing import Callable, Awaitable, Any
-from logging import Logger
 from kink import di
 
 AsyncCallable = Callable[..., Awaitable[Any]]

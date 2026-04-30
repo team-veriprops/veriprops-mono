@@ -1,5 +1,9 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 from datetime import datetime
-from logging import Logger
 
 from fastapi import HTTPException
 from kink import di, inject

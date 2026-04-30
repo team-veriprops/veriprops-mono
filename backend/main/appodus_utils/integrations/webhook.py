@@ -1,4 +1,8 @@
-from logging import Logger
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 from fastapi import APIRouter, Request, HTTPException
 from kink import di

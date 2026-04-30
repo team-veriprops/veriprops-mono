@@ -1,7 +1,10 @@
-import json
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 import os
 import traceback
-from logging import Logger
 
 from fastapi import Request
 from fastapi.exception_handlers import (

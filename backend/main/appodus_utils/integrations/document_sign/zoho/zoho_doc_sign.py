@@ -1,6 +1,10 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 import json
 import uuid
-from logging import Logger
 from typing import Optional, Dict, List, Union
 
 from httpx import AsyncClient, Timeout, Limits

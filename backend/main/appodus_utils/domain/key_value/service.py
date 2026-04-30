@@ -1,7 +1,11 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 import datetime
 import pickle
 from datetime import timedelta
-from logging import Logger
 from typing import Any
 
 from main.appodus_utils import Utils

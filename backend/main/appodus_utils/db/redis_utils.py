@@ -1,5 +1,9 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 from datetime import timedelta
-from logging import Logger
 from typing import Any
 
 from kink import di
@@ -34,5 +38,16 @@ class RedisUtils:
                 return await redis.get(key).decode("utf-8")
             else:
                 return await key_value_service.get(key)
+        except Exception as exc:
+            print(exc)
+
+    @staticmethod
+    async def delete(key: str) -> Any:
+        try:
+            if redis:
+                logger.debug("Connected to Redis Server to delete")
+                return await redis.delete(key)
+            else:
+                return await key_value_service.delete(key)
         except Exception as exc:
             print(exc)

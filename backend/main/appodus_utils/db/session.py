@@ -1,7 +1,10 @@
-import os
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 from contextlib import asynccontextmanager
 from contextvars import ContextVar, Token
-from logging import Logger
 from typing import AsyncGenerator, Optional
 
 from kink import di

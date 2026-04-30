@@ -21,7 +21,7 @@ class LogLevel(str, enum.Enum):
 class LoggerFactory:
 
     def __init__(self):
-        self._app_name = Utils.get_from_env_fail_if_not_exists("APP_NAME")
+        self._app_name = Utils.get_from_env_fail_if_not_exists("BRAND")
         self._log_level = Utils.get_from_env_fail_if_not_exists("LOG_LEVEL")
         self._logger_file_name = Utils.get_from_env_fail_if_not_exists("LOGGER_FILE")
         self._logger_file_path = Utils.get_from_env_fail_if_not_exists("LOGGER_FILE_PATH")

@@ -82,14 +82,20 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
 
         return self._db_utils.build_page(response_rows, total, page, page_size)
 
-    # @handle_exceptions
+
     @transactional()
-    async def create(self, obj_in: CreateSchemaType) -> SuccessResponse[QuerySchemaType]:
-        obj_in_data = jsonable_encoder(obj_in, by_alias=False)
+    async def create_return_model(self, obj_in: CreateSchemaType) -> ModelType:
+        obj_in_data = obj_in.model_dump(by_alias=False)
         db_obj = self._model(**obj_in_data)
         db_obj.id = self._ensure_uuid(db_obj.id)
         db_obj.version = 1
         self._session.add(db_obj)
+        return db_obj
+
+    # @handle_exceptions
+    @transactional()
+    async def create(self, obj_in: CreateSchemaType) -> SuccessResponse[QuerySchemaType]:
+        db_obj = await self.create_return_model(obj_in=obj_in)
         return self._db_utils.build_row_response(db_obj)
 
     # @handle_exceptions
@@ -97,7 +103,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
     async def create_all(self, objs_in: List[CreateSchemaType]) -> List[QuerySchemaType]:
         db_objs = []
         for obj_in in objs_in:
-            obj_in_data = jsonable_encoder(obj_in, by_alias=False)
+            obj_in_data = obj_in.model_dump(by_alias=False)
             db_obj = self._model(**obj_in_data)
             db_obj.id = self._ensure_uuid(db_obj.id)
             db_obj.version = 1

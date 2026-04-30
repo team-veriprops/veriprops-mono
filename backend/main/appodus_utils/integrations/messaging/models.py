@@ -14,6 +14,24 @@ from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.integrations.exception.exceptions import IntegrationValidationException
 from main.appodus_utils.integrations.messaging.templating.models import AvailableTemplate
 
+class MessageContext(str, Enum):
+    OTP = "OTP"
+    LINK = "LINK"
+    EMAIL = "EMAIL"
+    PHONE = "PHONE"
+    FIRST_NAME = "FIRST_NAME"
+    LAST_NAME = "LAST_NAME"
+    FULL_NAME = "FULL_NAME"
+    VALIDITY = "VALIDITY"
+    CATEGORIES = "CATEGORIES"
+
+    # GLOBAL
+    TODAY = "TODAY"
+    BRAND = "BRAND"
+    BRAND_SUPPORT_EMAIL = "BRAND_SUPPORT_EMAIL"
+    BRAND_SUPPORT_PHONE = "BRAND_SUPPORT_PHONE"
+
+
 class PushProviderType(str, Enum):
     FIREBASE = "firebase"
     APNS = "apns"  # Apple Push Notification Service
@@ -498,7 +516,7 @@ class PushToken(Object):
 
 class EmailRecipient(Object):
     email: str
-    fullname: str
+    fullname: Optional[str] = None
 
 # class PhoneNumber(Object):
 #     dial_code: str
@@ -509,7 +527,7 @@ class EmailRecipient(Object):
 #     number: str
 #
 #     @property
-#     def internation_number(self)-> str:
+#     def international_number(self)-> str:
 #         return f"{self.dial_code}{self.number}"
 #
 #     @field_validator('number', mode='before')
@@ -530,7 +548,7 @@ class MessageRequestRecipient(Object):
     """ This represents a user recipient, with possible multiple channels"""
 
     user_id: Optional[str] = None
-    fullname: str
+    fullname: Optional[str] = None
     email: Optional[EmailRecipient] = None
     phone: Optional[PhoneNumber] = None
     ios_push_token: Optional[List[dict]] = None
@@ -829,3 +847,13 @@ class MessageRequest(Object):
     def builder() -> MessageRequestBuilder:
         """Create a new MessageRequestBuilder instance"""
         return MessageRequestBuilder()
+
+class UserContactDto(Object):
+    email: str
+    phone: PhoneNumber
+    first_name: str
+    last_name: str
+    full_name: str
+    web_push_token: List[PushToken] = []
+    ios_push_token: List[PushToken] = []
+    android_push_token: List[PushToken] = []

@@ -51,7 +51,10 @@ class TemplatingEngine(str, enum.Enum):
 
 
 class AppodusBaseSettings(BaseSettings):
-    APP_NAME: str = "appodus"
+    BRAND: str = "appodus"
+    BRAND_SUPPORT_EMAIL: str = "kingsley.ezenwwere@gmail.com"
+    BRAND_SUPPORT_PHONE: str = "2347039018727"
+
     ENVIRONMENT: Environment = Environment.DEVELOPMENT
     ALLOW_AUTH_BYPASS: bool = False  # Optional
     ENABLE_OUT_MESSAGING: bool = False
@@ -79,11 +82,17 @@ class AppodusBaseSettings(BaseSettings):
     # ACTIVES
     ACTIVE_TEMPLATING_ENGINE: TemplatingEngine = TemplatingEngine.JINJA2
 
+    # AUTH SESSION
+    AUTH_LOCKOUT_THRESHOLD: int = 7
+    AUTH_LOCKOUT_MINUTES: int = 15
+
     # TOKEN
+    ACCESS_TOKEN_TTL_SECONDS: int = 60 * 15  # 15 mins
+    REFRESH_TOKEN_TTL_SECONDS: int = 60 * 60 * 24 * 30  # 30 days
+    PASSWORD_RESET_TTL_SECONDS: int = 60 * 60  # 1 hour
+
     OTP_TOKEN_EXPIRE_SECONDS: Optional[int] = 60 * 5 # 5 mins
     EMAIL_OTP_TOKEN_EXPIRE_SECONDS: Optional[int] = 60 * 30 # 30 mins
-    ACCESS_TOKEN_EXPIRE_SECONDS: Optional[int] = 60 * 60 * 24 * 8 # 8 days
-    REFRESH_TOKEN_EXPIRE_SECONDS: Optional[int] = 60 * 60 * 24 * 8 # 8 days
     CACHE_DATA_EXPIRES_SECONDS: Optional[int] = 60 * 60 * 24 * 8 # Redis Default
 
     # WEBHOOK

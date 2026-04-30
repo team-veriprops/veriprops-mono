@@ -4,6 +4,7 @@ import hmac
 import ipaddress
 import json
 from typing import List, Optional, Union
+from urllib.parse import urlparse, urlunparse
 
 from cryptography.fernet import Fernet
 from starlette.requests import Request
@@ -12,7 +13,7 @@ from main.appodus_utils.common.commons import Utils
 from main.appodus_utils.common.utils_settings import utils_settings
 from main.appodus_utils.exception.exceptions import ForbiddenException, UnauthorizedException
 
-client_secret_encryption_key = utils_settings.APPODUS_CLIENT_SECRET_ENCRYPTION_KEY
+client_secret_encryption_key = utils_settings.APPODUS_CLIENT_SECRET_ENCRYPTION_KEY or ""
 client_request_expires_seconds = utils_settings.APPODUS_CLIENT_REQUEST_EXPIRES_SECONDS or 300
 fernet = Fernet(client_secret_encryption_key)
 
@@ -35,6 +36,24 @@ class ClientUtils:
             return any(client_ip == ipaddress.ip_address(allowed) for allowed in allowed_ips)
         except ValueError:
             return False
+
+    @staticmethod
+    def get_user_agent(request: Request) -> Optional[str]:
+        return request.headers.get("user-agent")
+
+    @staticmethod
+    def get_referer_domain(request: Request) -> str:
+        referer_url = request.headers.get("referer")
+        parsed_referer_url = urlparse(referer_url)
+
+        return urlunparse((
+            parsed_referer_url.scheme,
+            parsed_referer_url.netloc,
+            "",
+            "",
+            "",
+            ""
+        ))
 
     @staticmethod
     def extract_domain_from_referer_or_origin(origin: Optional[str]) -> Optional[str]:

@@ -1,5 +1,9 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 import functools
-from logging import Logger
 from typing import Callable
 
 from fastapi import HTTPException

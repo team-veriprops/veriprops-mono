@@ -1,4 +1,8 @@
-from logging import Logger
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 from typing import Optional
 
 from main.appodus_utils import Utils

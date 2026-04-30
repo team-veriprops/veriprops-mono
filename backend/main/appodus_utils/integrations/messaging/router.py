@@ -225,10 +225,13 @@
 #             message_id=message.id,
 #             timestamp=Utils.datetime_now()
 #         ))
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from loguru import Logger
 from decimal import Decimal
 from datetime import datetime, timezone
-from logging import Logger
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
@@ -275,7 +278,7 @@ base_di_bootstrap.register_all_subclasses(IMessageProvider)
 
 @inject
 class MessageRouter:
-    def __init__(self, providers: List[IMessageProvider]):
+    def __init__(self, providers: List[IMessageProvider] = di[List[IMessageProvider]]):
         # Keyed by channel for channel-scoped routing.
         self.providers: Dict[str, List[ProviderRoute]] = {}
         # Flat index for O(1) lookup by provider name across all channels.

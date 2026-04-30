@@ -1,3 +1,8 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 import asyncio
 import enum
 import functools
@@ -8,8 +13,6 @@ from kink import di
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Callable, Concatenate, ParamSpec
-
-from logging import Logger
 
 from main.appodus_utils.exception.exceptions import AppodusBaseException
 

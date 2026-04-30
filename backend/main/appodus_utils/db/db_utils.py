@@ -1,4 +1,8 @@
-from logging import Logger
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 from typing import Type, List, Optional, Dict, Any, Union
 
 from fastapi.encoders import jsonable_encoder

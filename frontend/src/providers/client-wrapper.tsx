@@ -6,6 +6,7 @@ import { LoadScript } from "@react-google-maps/api";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { useState, useEffect } from "react";
+import ConsentReacceptanceModal from "@components/website/auth/ConsentReacceptanceModal";
 
 export function ClientWrapperProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState<boolean>(false);
@@ -43,6 +44,9 @@ export function ClientWrapperProvider({ children }: { children: React.ReactNode 
           libraries={googleLibraries}
         > */}
         {children}
+        {/* The modal is auto-suppressed when there's no session, so it costs
+            nothing on public pages. PRD §3.2: re-acceptance after a version bump. */}
+        <ConsentReacceptanceModal />
         {/* </LoadScript> */}
       </QueryClientProvider>
       <Toaster />

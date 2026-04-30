@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TypeVar, Optional, Generic, List, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import Column, Boolean, UUID, TIMESTAMP, Integer, String
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr, DeclarativeBase
@@ -10,44 +10,122 @@ from sqlalchemy.orm import declared_attr, DeclarativeBase
 from main.appodus_utils import Utils
 
 
-class AutoRepr(object):
-    def __repr__(self):
-        items = ("%s = %r" % (k, v) for k, v in self.__dict__.items())
-        return "<%s: {%s}>" % (self.__class__.__name__, ', '.join(items))
+class AutoRepr:
+    """
+    Lightweight mixin that provides a helpful string representation
+    for debugging and structured logs.
+
+    Example:
+        class User(AutoRepr):
+            ...
+
+        User(name="Kingsley", email="k@example.com")
+        -> <User: {name='Kingsley', email='k@example.com'}>
+    """
+
+    def __repr__(self) -> str:
+        items = (f"{key}={value!r}" for key, value in self.__dict__.items())
+        return f"<{self.__class__.__name__}: {{{', '.join(items)}}}>"
 
 
 def to_camel(field_name: str) -> str:
     """
-    Convert a snake_case field_name to camelCase.
+    Convert a Python snake_case field name to camelCase.
 
-    Used by Pydantic to expose camelCase JSON keys while keeping
-    snake_case field names internally in Python.
+    This function is used by Pydantic's `alias_generator` so our API can:
+
+    - Keep Python code idiomatic with snake_case fields
+    - Expose JSON payloads in camelCase (frontend-friendly)
+    - Accept incoming requests in camelCase while mapping them
+      correctly to snake_case model attributes
+
+    Examples:
+        >>> to_camel("first_name")
+        'firstName'
+
+        >>> to_camel("country_code")
+        'countryCode'
+
+        >>> to_camel("email")
+        'email'
+
+    Args:
+        field_name:
+            Internal Python field name in snake_case.
+
+    Returns:
+        camelCase representation of the field name.
     """
-    
-    parts = field_name.split('_')
-    return parts[0] + ''.join(word.capitalize() for word in parts[1:])
+    parts = field_name.split("_")
+    return parts[0] + "".join(word.capitalize() for word in parts[1:])
 
 
 class CamelModel(BaseModel):
     """
-    Base model that maps snake_case (Python) ↔ camelCase (JSON).
+    Base Pydantic model for all API DTOs.
 
-    - Serializes responses as camelCase
-    - Accepts camelCase requests and populates snake_case fields
+    Provides automatic snake_case ↔ camelCase mapping.
+
+    Why:
+        Backend Python code should remain idiomatic (snake_case),
+        while API contracts are typically camelCase for frontend/mobile clients.
+
+    Behavior:
+        Serialization:
+            country_code -> countryCode
+
+        Validation:
+            Accepts:
+                {"countryCode": "NG"}
+            and maps to:
+                model.country_code == "NG"
+
+        Population by field name:
+            Also accepts:
+                {"country_code": "NG"}
+
+    Extra fields:
+        Unknown incoming fields are ignored rather than raising validation errors.
+        This makes request handling more resilient to harmless client-side additions.
+
+    Example:
+        class UserDto(CamelModel):
+            first_name: str
+            phone_number: str
+
+        UserDto(firstName="Kingsley", phoneNumber="080...")
+        -> UserDto(first_name="Kingsley", phone_number="080...")
+
+        model_dump(by_alias=True)
+        -> {
+            "firstName": "Kingsley",
+            "phoneNumber": "080..."
+        }
     """
 
-    class Config:
-        # Automatically generates camelCase aliases for all fields
-        alias_generator = to_camel
-
-        # Allows population of fields using either snake_case
-        # or their generated camelCase aliases (critical for input handling)
-        populate_by_name = True
-
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="ignore",
+    )
 
 
 class Object(CamelModel, AutoRepr):
-    model_config = {"extra": "ignore"}  # ignore unknown fields
+    """
+    Project-wide base DTO.
+
+    Combines:
+
+    - CamelModel:
+        Automatic snake_case ↔ camelCase mapping
+        for request/response payloads.
+
+    - AutoRepr:
+        Useful object representation for debugging/logging.
+
+    All application DTOs should inherit from this class.
+    """
+    pass
 
 
 # class CustomDateTime(TypeDecorator):
@@ -151,8 +229,8 @@ class BaseQueryDto(Object):
     version: Optional[int] = Field(None, description='The current version number of the record')
 
 
-
 T = TypeVar('T', bound=Union[BaseQueryDto, bool, str, Object])
+
 
 class SuccessResponse(Object, Generic[T]):
     """
@@ -164,6 +242,7 @@ class SuccessResponse(Object, Generic[T]):
     trace_id: Optional[str] = None
 
     data: Optional[T] = None
+
 
 class PaginationMeta(Object):
     page: int = 0

@@ -13,7 +13,6 @@ class AvailableTemplate(str, Enum):
     NEW_NORMAL_USER_INVITE = "new_normal_user_invite" # Email
     NEW_BUYER_WELCOME = "new_buyer_welcome"  # Email, WhatsApp, Mobile push
     NEW_AGENT_WELCOME = "new_agent_welcome"  # Email, WhatsApp, Mobile push
-    NEW_USER_EMAIL_VERIFICATION = "new_user_email_verification"  # Email
     EMAIL_VERIFICATION = "email_verification"  # Email
     PHONE_VERIFICATION = "phone_verification"  # SMS, WhatsApp
     NAME_UPDATE_SUCCESS= "name_update_success" # Email
