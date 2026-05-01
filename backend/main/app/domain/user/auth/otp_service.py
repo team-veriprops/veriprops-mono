@@ -28,9 +28,13 @@ from main.appodus_utils.exception.exceptions import (
 logger: Logger = di["logger"]
 
 OTP_TTL = timedelta(minutes=10)
-MAX_RESENDS = 30
+MAX_RESENDS = 3
 RESEND_LOCKOUT = timedelta(minutes=30)
-MAX_FAILURES = 50
+MAX_FAILURES = 5
+# After a successful OTP verification we mint a short-lived "verified" marker
+# so the signup endpoint can confirm the user actually completed the OTP step.
+# 30 minutes lets the user finish a multi-step wizard without re-verifying.
+OTP_VERIFIED_TTL = timedelta(minutes=30)
 
 
 def _to_recipient_str(recipient: Union[EmailRecipient, PhoneNumber]) -> str:
@@ -49,6 +53,10 @@ def _resend_key(channel: OtpChannel, recipient: Union[EmailRecipient, PhoneNumbe
 
 def _failure_key(channel: OtpChannel, recipient: Union[EmailRecipient, PhoneNumber]) -> str:
     return f"otp_fail:{channel.value}:{_to_recipient_str(recipient)}"
+
+
+def _verified_key(channel: OtpChannel, recipient_str: str) -> str:
+    return f"otp_verified:{channel.value}:{recipient_str.lower()}"
 
 
 @inject
@@ -117,9 +125,22 @@ class OtpService:
             )
             raise InvalidTokenException("Invalid or expired verification code.")
 
-        # Clear keys on success.
+        # Clear keys on success and mint a short-lived verified marker so the
+        # signup endpoint can confirm the user actually completed this OTP.
         await self._kv.delete(_otp_key(channel, recipient))
         await self._kv.delete(f_key)
+        await self._kv.set(
+            _verified_key(channel, _to_recipient_str(recipient)),
+            OTP_VERIFIED_TTL,
+            "1",
+        )
+
+    async def is_recently_verified(self, channel: OtpChannel, recipient_str: str) -> bool:
+        marker = await self._kv.get(_verified_key(channel, recipient_str))
+        return bool(marker)
+
+    async def consume_verified_marker(self, channel: OtpChannel, recipient_str: str) -> None:
+        await self._kv.delete(_verified_key(channel, recipient_str))
 
 
 def recipient_for(channel: OtpChannel, *, email: Optional[str], dial_code: Optional[str], phone: Optional[str],

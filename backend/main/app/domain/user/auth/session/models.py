@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional, List
 
 from pydantic import EmailStr
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String
+from sqlalchemy import Boolean, Column, DateTime, Index, String
 
 from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
@@ -23,6 +23,7 @@ class UserPersona(str, enum.Enum):
 class SecurityEventType(str, enum.Enum):
     LOGIN_SUCCESS = "LOGIN_SUCCESS"
     LOGIN_FAILURE = "LOGIN_FAILURE"
+    LOGIN_FAILURE_WARNING = "LOGIN_FAILURE_WARNING"
     OTP_SENT = "OTP_SENT"
     OTP_FAILURE = "OTP_FAILURE"
     PASSWORD_CHANGED = "PASSWORD_CHANGED"

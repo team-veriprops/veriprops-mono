@@ -1,4 +1,8 @@
 {
+  "autocompact_percentage_override": 75,
+  "env": {
+    "BASH_MAX_OUTPUT_LENGTH": "150000"
+  },
   "permissions": {
     "allow": [
       "Bash(grep -E \"\\\\.py$|^d\")",
@@ -15,7 +19,20 @@
       "Bash(python -c \"import sys; print\\(sys.version\\)\")",
       "Bash(python -c \"from main.app.config.bootstrap import DiBootstrap; print\\('Bootstrap import OK'\\)\")",
       "PowerShell(cd frontend; $env:CI = \"true\"; pnpm install *)",
-      "PowerShell(cd frontend; $env:CI = \"true\"; pnpm add *)"
+      "PowerShell(cd frontend; $env:CI = \"true\"; pnpm add *)",
+      "Read(node_modules/next/dist/docs/**)",
+      "Read(frontend/node_modules/next/dist/docs/**)"
+    ],
+    "deny": [
+      "Read(node_modules/**)",
+      "Read(frontend/node_modules/**)",
+      "Read(.next/**)",
+      "Read(frontend/.next/**)",
+      "Read(**/__pycache__/**)",
+      "Read(**/.venv/**)",
+      "Read(frontend/dist/**)",
+      "Read(frontend/coverage/**)",
+      "Read(**/*.egg-info/**)"
     ]
   }
 }

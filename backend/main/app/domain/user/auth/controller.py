@@ -31,6 +31,8 @@ from main.app.domain.user.auth.service import AuthService
 from main.app.domain.user.auth.session.controller import session_router
 from main.app.domain.user.auth.session.models import AuthSessionDto
 from main.app.domain.user.auth.session.service import SessionService
+from main.app.domain.user.auth.signup_draft.controller import signup_draft_router
+from main.app.domain.user.auth.signup_draft.service import SignupDraftService
 from main.appodus_utils import RouterUtils, Utils
 from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.db.models import SuccessResponse
@@ -39,6 +41,7 @@ from main.appodus_utils.integrations.messaging.models import MessageRequestRecip
 auth_service: AuthService = di[AuthService]
 # consent_service: ConsentService = di[ConsentService]
 session_service: SessionService = di[SessionService]
+signup_draft_service: SignupDraftService = di[SignupDraftService]
 # otp_delivery: OtpDeliveryService = di[OtpDeliveryService]
 # kv: KeyValueService = di[KeyValueService]
 
@@ -47,7 +50,8 @@ auth_router = APIRouter(prefix="/auth", tags=["Auths"])
 RouterUtils.add_routers(auth_router, [
     consent_router,
     oauth_router,
-    session_router
+    session_router,
+    signup_draft_router,
 ])
 
 logger: Logger = di["logger"]
@@ -62,6 +66,11 @@ async def signup(req: SignupRequestDto, request: Request, authorize: AuthJWT = D
         user, authorize, ip_address=ClientUtils.get_client_ip(request),
         device=ClientUtils.get_user_agent(request), device_fingerprint=req.device_fingerprint,
     )
+    # Server-side signup draft is no longer needed once the account is created.
+    try:
+        await signup_draft_service.discard(req.email)
+    except Exception:
+        logger.warning("Could not discard signup draft after successful signup", exc_info=True)
     return SuccessResponse[AuthSessionDto](data=session)
 
 
@@ -125,7 +134,7 @@ async def forgot_password(req: ForgotPasswordDto, request: Request):
                     MessageContext.FIRST_NAME: firstname,
                     MessageContext.LAST_NAME: lastname,
                     MessageContext.LINK: link,
-                    MessageContext.VALIDITY: "10 minutes",
+                    MessageContext.VALIDITY: "1 hour",
                 }
             )
         except Exception:

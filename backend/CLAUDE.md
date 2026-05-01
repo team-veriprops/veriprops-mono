@@ -84,6 +84,7 @@ A domain is **not considered complete** until:
 * Alembic migrations must never emit ALTER TABLE ... ADD FOREIGN KEY
 
 
+
 ### Generic repository
 
 `GenericRepo[Model, Create, Update, Query, Search]` ([appodus_utils/db/repo.py](main/appodus_utils/db/repo.py)) provides CRUD, pagination, and soft-delete-aware queries. Entities inherit from `BaseEntity` which adds `id` (UUID), `created_at`, `updated_at`, `version` (optimistic locking), `deleted` (soft-delete flag) — never `DELETE` rows by hand; flip `deleted`.
@@ -112,10 +113,6 @@ Bootstrap runs once at import: importing settings → importing bootstrap → re
 - Lifespan: `ClientStateManager` opens external clients (HTTPX, Redis), then `DataSeeder.run_data_seed()` seeds reference data.
 
 Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhooks`) via `webhook_router`.
-
-### API serialization
-
-Pydantic DTOs use `to_camel` alias_generator → JSON is camelCase, Python stays snake_case. Frontend consumes camelCase directly; don't add a translation layer.
 
 ### Serverless-aware DB engine
 

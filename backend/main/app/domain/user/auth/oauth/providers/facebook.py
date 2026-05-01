@@ -3,12 +3,17 @@ from typing import Optional
 from httpx import AsyncClient
 from kink import di, inject
 from main.app.domain.user.auth.oauth.interface import ISocialAuthProvider
-from main.app.domain.user.auth.oauth.providers.models import OAuthCallbackRequestDto, SocialAuthProvider, \
-    SocialLoginUserInfoDto
+from main.app.domain.user.auth.oauth.providers.models import (
+    OAuthCallbackRequestDto,
+    OAuthFlowMode,
+    SocialAuthProvider,
+    SocialLoginUserInfoDto,
+)
 from main.app.domain.user.auth.oauth.providers.utils import OauthUtils
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
+from main.appodus_utils.exception.exceptions import AppodusBaseException
 from starlette.requests import Request
 
 httpx_client: AsyncClient = di[AsyncClient]
@@ -26,13 +31,29 @@ class FacebookAuthProvider(ISocialAuthProvider):
     def platform(self):
         return SocialAuthProvider.FACEBOOK
 
-    async def initialize(self, request: Request, intent: Optional[str] = None) -> str:
-        scope = "openid email profile"
+    async def initialize(
+        self,
+        request: Request,
+        intent: Optional[str] = None,
+        mode: OAuthFlowMode = OAuthFlowMode.AUTH,
+        link_user_id: Optional[str] = None,
+    ) -> str:
+        # Facebook does not support the OIDC `profile` scope reliably; request
+        # `email` (and `public_profile` is implicit) and read fields via /me.
+        scope = "email"
 
-        return await OauthUtils.init_0auth(platform=self.platform, request=request, base_url=self._auth_base_url, client_id=self._client_id, scope=scope, intent=intent)
+        return await OauthUtils.init_0auth(
+            platform=self.platform,
+            request=request,
+            base_url=self._auth_base_url,
+            client_id=self._client_id,
+            scope=scope,
+            intent=intent,
+            mode=mode,
+            link_user_id=link_user_id,
+        )
 
     async def verify(self, payload: OAuthCallbackRequestDto, request: Request) -> SocialLoginUserInfoDto:
-        # Exchange code for token
         token_response = await httpx_client.get(
             "https://graph.facebook.com/v22.0/oauth/access_token",
             params={
@@ -45,7 +66,6 @@ class FacebookAuthProvider(ISocialAuthProvider):
         )
         token_response.raise_for_status()
 
-        # Get user info
         user_response = await httpx_client.get(
             "https://graph.facebook.com/me",
             params={
@@ -56,11 +76,17 @@ class FacebookAuthProvider(ISocialAuthProvider):
         user_response.raise_for_status()
         user_info = user_response.json()
 
+        email = user_info.get("email")
+        if not email:
+            # Facebook may omit email if the user denied the scope or signed up
+            # via phone-only. We require email for account creation.
+            raise AppodusBaseException(message="Facebook did not return an email. Please grant email access and try again.")
+
         return SocialLoginUserInfoDto(
             provider=self.platform,
             id=user_info["id"],
-            email_verified=user_info["email_verified"],
-            email=user_info["email"],
-            firstname=Utils.upper_first(user_info["first_name"]),
-            lastname=Utils.upper_first(user_info["last_name"]),
+            email=email,
+            email_verified=True,  # Facebook only returns emails it has verified.
+            firstname=Utils.upper_first(user_info.get("first_name", "")),
+            lastname=Utils.upper_first(user_info.get("last_name", "")),
         )

@@ -282,7 +282,7 @@ All failed login and OTP attempts are tracked at the backend:
 
 ### 4.3 OAuth Authentication
 
-**Supported Providers (Phase 1):** Google  
+**Supported Providers (Phase 1):** Google, 
 **Additional providers (Phase 2):** Apple, Facebook
 
 #### Flow Architecture

@@ -32,4 +32,7 @@ Frontend reads `API_BASE_URL` (server-only) from its env to build the proxy targ
 
 ## Workflow
 
-When adding a feature, write a short plan and confirm with the user before coding, write tests first (the `test-driven-development` skill enforces this), then implement. Update the relevant `CLAUDE.md` if a new pattern emerges that future agents would otherwise have to re-derive.
+When adding a feature, write a short plan and confirm with the user before coding, write tests first, then implement. Update the relevant `CLAUDE.md` if a new pattern emerges that future agents would otherwise have to re-derive.
+
+### Non-negotiable rule
+1. No Frontend/Backend duplicate implementations. 

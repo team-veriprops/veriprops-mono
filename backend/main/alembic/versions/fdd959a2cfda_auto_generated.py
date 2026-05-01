@@ -55,6 +55,33 @@ def _base_audit_columns():
     ]
 
 
+def _create_signup_drafts():
+    op.create_table(
+        "signup_drafts",
+        sa.Column("email", sa.String(length=254), nullable=False),
+        sa.Column("step", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("payload", sa.Text(), nullable=False, server_default="{}"),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        *_base_audit_columns(),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("email", name="uq_signup_drafts_email"),
+    )
+    op.create_index("ix_signup_drafts_id", "signup_drafts", ["id"], unique=True)
+    op.create_index("ix_signup_drafts_email", "signup_drafts", ["email"], unique=False)
+    op.create_index("ix_signup_drafts_expires_at", "signup_drafts", ["expires_at"], unique=False)
+    op.create_index(
+        "ix_signup_drafts_email_active", "signup_drafts", ["email", "expires_at"], unique=False,
+    )
+
+
+def _drop_signup_drafts():
+    op.drop_index("ix_signup_drafts_email_active", table_name="signup_drafts")
+    op.drop_index("ix_signup_drafts_expires_at", table_name="signup_drafts")
+    op.drop_index("ix_signup_drafts_email", table_name="signup_drafts")
+    op.drop_index("ix_signup_drafts_id", table_name="signup_drafts")
+    op.drop_constraint("uq_signup_drafts_email", "signup_drafts", type_="unique")
+    op.drop_table("signup_drafts")
+
 def _create_users():
     op.create_table(
         "users",
@@ -407,6 +434,8 @@ def upgrade() -> None:
         _create_security_events()
     if not _table_exists('password_reset_tokens'):
         _create_password_reset_tokens()
+    if not _table_exists("signup_drafts"):
+        _create_signup_drafts()
 
     # Data seeds belong here, not in app-level seeders.
     if not _table_exists('consent_documents'):
@@ -432,3 +461,5 @@ def downgrade() -> None:
         _drop_oauth_identities()
     if not _table_exists('users'):
         _drop_users()
+    if _table_exists("signup_drafts"):
+        _drop_signup_drafts()

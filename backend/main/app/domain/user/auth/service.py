@@ -22,6 +22,8 @@ from main.app.domain.user.auth.models import (
     SignupRequestDto,
 )
 from main.app.domain.user.auth.otp_service import OtpService, recipient_for
+from main.appodus_utils.db.types.phone import PhoneNumber
+from main.appodus_utils.integrations.messaging.models import EmailRecipient
 from main.app.domain.user.auth.consent.models import ConsentDocumentType
 from main.app.domain.user.auth.consent.service import ConsentService
 from main.app.domain.user.auth.session.models import (
@@ -85,13 +87,29 @@ class AuthService:
         if existing:
             raise UserAlreadyExistsException(email=req.email)
 
-        password_hash = Utils.get_password_hash(req.password)
         # Ensure both consents are present.
         consent_types = {c.document_type for c in req.consents}
         required = {ConsentDocumentType.PLATFORM_TERMS, ConsentDocumentType.PRIVACY_POLICY}
         if not required.issubset(consent_types):
             raise ValidationException(message="Both Platform Terms and Privacy Policy must be accepted.")
 
+        # Server-side OTP gate — the user must have completed an OTP for both
+        # email and phone within the last 30 minutes (see OtpService.OTP_VERIFIED_TTL).
+        # Reject the signup otherwise; FE keeps the wizard on the verify step.
+        email_recipient = EmailRecipient(email=req.email.lower())
+        phone_recipient = PhoneNumber(dial_code=req.dial_code, number=req.phone)
+        email_ok = await self._otp_service.is_recently_verified(
+            OtpChannel.EMAIL, email_recipient.email,
+        )
+        phone_ok = await self._otp_service.is_recently_verified(
+            OtpChannel.PHONE, phone_recipient.international_number,
+        )
+        if not email_ok or not phone_ok:
+            raise ValidationException(
+                message="Please verify your email and phone before creating your account.",
+            )
+
+        password_hash = Utils.get_password_hash(req.password)
         intent_persona = UserPersona.AGENT if req.intent == "agent" else UserPersona.CUSTOMER
 
         user = await self._user_service.create_user(CreateUserDto(
@@ -106,9 +124,14 @@ class AuthService:
             phone_country_code=req.country_code,
             phone_dial_code=req.dial_code,
             personas=[intent_persona],
-            email_verified=True,  # Frontend gated by OTP step, TODO: Fix by confirming stored OTP against user entered values
+            email_verified=True,
             phone_verified=True,
         ))
+
+        # Verified markers are single-use — drop them so a future signup attempt
+        # with the same recipient must re-verify.
+        await self._otp_service.consume_verified_marker(OtpChannel.EMAIL, email_recipient.email)
+        await self._otp_service.consume_verified_marker(OtpChannel.PHONE, phone_recipient.international_number)
 
         for consent in req.consents:
             await self._consent_service.record_user_consent(

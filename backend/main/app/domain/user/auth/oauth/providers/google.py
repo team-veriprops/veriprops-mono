@@ -5,8 +5,12 @@ from jose import jwt
 from kink import di, inject
 from starlette.requests import Request
 
-from main.app.domain.user.auth.oauth.providers.models import OAuthCallbackRequestDto, SocialAuthProvider, \
-    SocialLoginUserInfoDto
+from main.app.domain.user.auth.oauth.providers.models import (
+    OAuthCallbackRequestDto,
+    OAuthFlowMode,
+    SocialAuthProvider,
+    SocialLoginUserInfoDto,
+)
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
@@ -27,10 +31,25 @@ class GoogleAuthProvider(ISocialAuthProvider):
     def platform(self):
         return SocialAuthProvider.GOOGLE
 
-    async def initialize(self, request: Request, intent: Optional[str] = None) -> str:
+    async def initialize(
+        self,
+        request: Request,
+        intent: Optional[str] = None,
+        mode: OAuthFlowMode = OAuthFlowMode.AUTH,
+        link_user_id: Optional[str] = None,
+    ) -> str:
         scope = "openid email profile"
 
-        return await OauthUtils.init_0auth(platform=self.platform, request=request, base_url=self._auth_base_url, client_id=self._client_id, scope=scope, intent=intent)
+        return await OauthUtils.init_0auth(
+            platform=self.platform,
+            request=request,
+            base_url=self._auth_base_url,
+            client_id=self._client_id,
+            scope=scope,
+            intent=intent,
+            mode=mode,
+            link_user_id=link_user_id,
+        )
 
     async def verify(self, payload: OAuthCallbackRequestDto, request: Request) -> SocialLoginUserInfoDto:
         token_response = await httpx_client.post(

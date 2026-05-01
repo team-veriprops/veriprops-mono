@@ -395,33 +395,86 @@ Only **Admin** approves/rejects; only **Agent** accepts/declines/submits.
 
 ### 2.1 Features
 
-- **Signup (email/password)** with expanded fields: first/last name, email (OTP), phone (OTP, country flag), country of residence, timezone (auto-suggested from country), preferred currency.
-- **Login (email/password)** with "forgot password" and "create account" links. Rate limiting: warning at 5, lockout at 7 (15 min).
-- **OAuth (Google, Phase 2)** — backend-initiated, frontend never handles tokens. Scenarios: first-time user → profile completion modal (phone + country + timezone + currency mandatory); returning → direct login; email collision → prompt login and link.
-- **OTP flow** — 6 digits, auto-advance, paste support, 10-min timer, resend after expiry, max 3 resends then 30-min lockout.
-- **Forgot / reset password** — tokenised email link (1 hr, single-use). On reset: all sessions invalidated.
+- **Signup (email/password)** with expanded fields: first/last name, email (OTP), phone (OTP, country flag), country of residence, timezone (auto-suggested from country), preferred currency. Server enforces a recently-verified OTP marker (30-min TTL) for both email and phone before completing signup; markers are single-use and consumed on success.
+- **Login (email/password)** with "forgot password" and "create account" links. Rate limiting: warning at 5 (`LOGIN_FAILURE_WARNING` event surfaced in Security Activity Log), lockout at 7 (15 min).
+- **OAuth (Google, Apple, Facebook)** — popup-based flow with `postMessage` bridge and HttpOnly JWT cookie session (see §2.2 OAuth Specification).
+- **OTP flow** — 6 digits, auto-advance, paste support, 10-min timer (MM:SS), resend after expiry, max 3 resends then 30-min lockout. UI surfaces remaining resends.
+- **Forgot / reset password** — tokenised email link (1 hr, single-use). On reset: all sessions invalidated. Email copy must state the correct validity ("1 hour").
 - **Set password** (OAuth-only users can add password login later).
 - **Failed attempt tracking** — all failed logins & OTPs logged with timestamp, IP, device fingerprint; visible in Security Activity Log; fed into fraud detection.
 - **Connected devices** — list active sessions (device, browser, location, last active); revoke individual; "log out all".
-- **Linked OAuth accounts** — link/unlink with password-existence guard.
-- **Resume partial signup** — server-side draft keyed on email; restore to last completed step.
-- **Versioned consent on signup** — Platform Terms + Privacy Policy checkboxes with explicit version in label.
+- **Linked OAuth accounts** — list / link / unlink with password-existence guard. Linking from an authenticated session uses the OAuth popup with `mode=link`; unlinking is rejected if the user has no password set.
+- **Resume partial signup** — server-side draft (`signup_drafts` table) keyed on normalised email, 7-day TTL, soft-deleted on successful signup. Frontend wizard syncs every step and prefers the server copy on resume; `localStorage` mirror provides offline-friendly resume on the same device.
+- **Versioned consent on signup** — Platform Terms + Privacy Policy checkboxes with explicit version in label; consent record captures user_id, document_type, version, accepted_at, IP, device fingerprint.
 - **Auth gate** — shared interstitial for "Verify a Property" / "Become an Agent" CTAs, preserves `intent` query param through auth.
-- **Post-auth redirect logic** — by role priority (Admin → Agent → Customer), preserving any pending `intent`.
+- **Centralised route protection** — Next.js Proxy (`proxy.ts`) gates `/portal/*`, `/admin/*`, `/agent[s]/*`, `/account/*` on access-token cookie presence; redirects unauthenticated users to `/auth/login?redirect=<original>`; redirects authenticated users away from guest-only routes (`/auth`, `/auth/login`, `/auth/signup`). Proxy performs cookie-presence checks only — actual session validity is enforced server-side on every API call.
+- **Post-auth redirect logic** — by role priority (Admin → Agent → Customer), preserving any pending `intent`. Computed client-side from the persona list returned by `GET /users/auth/sessions/current`.
 - **Customer persona default** — signup via "Verify a Property" auto-adds `CUSTOMER` persona; landing at Customer portal dashboard (or resumable verification draft if present).
 
-### 2.2 Deferred to later phases
+### 2.2 OAuth Specification — Popup + HttpOnly Cookie
+
+**Authoritative for the OAuth implementation. Supersedes the OAuth bullet in §2.1.**
+
+#### 2.2.1 Flow
+
+1. Frontend fetches `GET /api/users/auth/oauth/{provider}/start?intent=<intent>&mode=auth|link` and receives `{authorizationUrl}`.
+2. Frontend opens a synchronous, click-triggered, centred popup (`window.open` invoked from the click handler before the fetch resolves, then navigated once the URL is available).
+3. User completes provider consent in the popup.
+4. Provider redirects (or `form_post`s, for Apple) the popup to `GET|POST {BACKEND_PUBLIC_ORIGIN}/api/users/auth/oauth/{provider}/callback`.
+5. Backend validates state + PKCE, exchanges the authorization code, fetches the user profile, and:
+   - **AUTH mode, existing identity** → log in.
+   - **AUTH mode, new email** → auto-create user (CUSTOMER persona unless `intent=agent`); first-time profile completion modal collects phone + country + timezone + currency.
+   - **AUTH mode, email collision (existing password account, provider not linked)** → REJECT with the exact message: *"Account exists. Please log in and link this provider explicitly."* No session is issued.
+   - **LINK mode** → attach the provider identity to the user_id captured at `/start` (JWT-required).
+6. Backend issues the JWT session as an **HttpOnly, Secure, SameSite-appropriate** cookie on the same response.
+7. Backend returns a minimal HTML page that calls `window.opener.postMessage({type:"oauth_result", success, message?}, validatedTargetOrigin)` and self-closes. A visible fallback ("If this window did not close automatically…") is shown for browsers that block `window.close()`.
+
+#### 2.2.2 `postMessage` Contract
+
+- Success: `{ type: "oauth_result", success: true }`
+- Failure: `{ type: "oauth_result", success: false, message: <string> }`
+- The popup parent MUST validate `event.origin === window.location.origin` AND `event.data.type === "oauth_result"` before acting; all other messages are silently dropped.
+
+#### 2.2.3 Security Requirements
+
+- **Signed state** parameter (CSRF protection); single-use; deleted from Redis on first read.
+- **PKCE** (S256) required for all providers.
+- **Strict redirect URI validation** — registered with each provider as `${BACKEND_PUBLIC_ORIGIN}/api/users/auth/oauth/{provider}/callback`. Frontend never receives or constructs it.
+- **`postMessage` targetOrigin** — selected at `/start` from a settings allowlist (`OAUTH_FRONTEND_ORIGINS`) by matching the request `Referer`/`Origin`. Never `*`.
+- **Replay protection** — short-lived state TTL; one-time use enforced by Redis delete-on-read.
+- **Apple specifics** — `response_mode=form_post`; `scope=name email`; `id_token` validated against Apple's published JWKS (RS256, `iss=https://appleid.apple.com`, `aud=client_id`).
+- **Facebook specifics** — `email` scope required; reject if the provider does not return an email.
+- **Email-ownership guard** — an OAuth flow never silently merges into an existing password account.
+- **Cookie flags** — HttpOnly, Secure, SameSite appropriate for popup-cross-site origin handling. Frontend never reads or stores tokens.
+
+#### 2.2.4 Frontend UX Rules
+
+- **Popup blocked** → show inline fallback: *"Popups are blocked. [Continue here →]"* — clicking does a full-page redirect to the same `authorizationUrl`. The fallback landing (`/auth/oauth/{provider}/callback`) refreshes the session via `currentSession()` and routes by role priority.
+- **Popup closed before completion** → silent cancellation; no toast, no error log.
+- **Timeout** (default 5 min) → show retryable error toast.
+- **Provider error** → toast with the message from the failure popup; default copy: *"Login failed. Please try another method."*
+- **No blocking confirmations** during the OAuth flow.
+- **No duplicate account creation** and **no silent linking** of existing accounts.
+- On success, frontend refreshes authenticated user state and redirects to the originally requested protected route (or the role-priority default).
+
+#### 2.2.5 Required Settings
+
+- Backend: `BACKEND_PUBLIC_ORIGIN`, `OAUTH_FRONTEND_ORIGINS` (comma-separated allowlist), per-provider client credentials.
+- Frontend: per-provider enable flag (`NEXT_PUBLIC_OAUTH_{GOOGLE|APPLE|FACEBOOK}_DISABLED`) so a provider can be hidden in production without a code change while developer-console approval is pending.
+
+### 2.3 Deferred to later phases
 
 - Agent KYC wizard → Phase 3
 - Admin invites → Phase 4
 - Trust-status elevation → Phase 5 (customer first-payment) / Phase 7 (agent first-submission)
 
-### 2.3 Exit Criteria
+### 2.4 Exit Criteria
 
 - All auth flows work end-to-end on mobile + desktop.
-- Security Activity Log renders correctly.
+- Security Activity Log renders correctly, including `LOGIN_FAILURE_WARNING` events.
 - No password, token, or PII leak in logs or responses.
 - `intent`-preserving redirects verified with Cypress/E2E tests.
+- OAuth E2E covers: first-time signup with profile completion, returning user direct login, email collision rejected without session, popup-blocked fallback redirect, popup-closed cancellation, link-from-account-settings happy path, unlink password guard.
 
 ---
 

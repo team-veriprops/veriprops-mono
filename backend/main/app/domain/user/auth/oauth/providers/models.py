@@ -10,14 +10,25 @@ class SocialAuthProvider(str, enum.Enum):
     GOOGLE = "google"
 
 
+class OAuthFlowMode(str, enum.Enum):
+    AUTH = "auth"   # signup / login
+    LINK = "link"   # link to currently authenticated account
+
+
 class OAuthRequestStoredState(Object):
     code_verifier: str
     intent: str
+    frontend_origin: str
+    mode: OAuthFlowMode = OAuthFlowMode.AUTH
+    # Set when mode=LINK so the callback can attach the identity to the right
+    # user even if cookies are stripped by the provider's redirect chain.
+    link_user_id: Optional[str] = None
 
 
 class OAuthCallbackRequestDto(Object):
     code: str
     code_verifier: str
+    redirect_uri: str
 
 
 class SocialLoginUserInfoDto(Object):

@@ -5,29 +5,9 @@ allowed-tools: Read, Grep, Glob, Bash, Task
 license: LICENSE
 ---
 
-<!--
-Reference material based on OWASP Cheat Sheet Series (CC BY-SA 4.0)
-https://cheatsheetseries.owasp.org/
--->
+# Security Review
 
-# Security Review Skill
-
-Identify exploitable security vulnerabilities in code. Report only **HIGH CONFIDENCE** findings—clear vulnerable patterns with attacker-controlled input.
-
-## Scope: Research vs. Reporting
-
-**CRITICAL DISTINCTION:**
-
-- **Report on**: Only the specific file, diff, or code provided by the user
-- **Research**: The ENTIRE codebase to build confidence before reporting
-
-Before flagging any issue, you MUST research the codebase to understand:
-- Where does this input actually come from? (Trace data flow)
-- Is there validation/sanitization elsewhere?
-- How is this configured? (Check settings, config files, middleware)
-- What framework protections exist?
-
-**Do NOT report issues based solely on pattern matching.** Investigate first, then report only what you're confident is exploitable.
+Identify exploitable security vulnerabilities. Report only **HIGH CONFIDENCE** findings — vulnerable patterns with attacker-controlled input confirmed. Before flagging anything, research the full codebase to trace data flow, check for upstream validation, and confirm the input is not server-controlled. Never report based on pattern matching alone.
 
 ## Confidence Levels
 
@@ -39,59 +19,21 @@ Before flagging any issue, you MUST research the codebase to understand:
 
 ## Do Not Flag
 
-### General Rules
-- Test files (unless explicitly reviewing test security)
-- Dead code, commented code, documentation strings
-- Patterns using **constants** or **server-controlled configuration**
-- Code paths that require prior authentication to reach (note the auth requirement instead)
+- Test files, dead code, commented code, documentation strings
+- Patterns using constants or server-controlled config (`settings.X`, `os.environ.get('X')`, config files, hardcoded values, signed session data)
+- Code paths that require prior authentication to reach
 
-### Server-Controlled Values (NOT Attacker-Controlled)
+**Framework-mitigated patterns** — check language guide before flagging:
 
-These are configured by operators, not controlled by attackers:
-
-| Source | Example | Why It's Safe |
-|--------|---------|---------------|
-| Django settings | `settings.API_URL`, `settings.ALLOWED_HOSTS` | Set via config/env at deployment |
-| Environment variables | `os.environ.get('DATABASE_URL')` | Deployment configuration |
-| Config files | `config.yaml`, `app.config['KEY']` | Server-side files |
-| Framework constants | `django.conf.settings.*` | Not user-modifiable |
-| Hardcoded values | `BASE_URL = "https://api.internal"` | Compile-time constants |
-
-**SSRF Example - NOT a vulnerability:**
-```python
-# SAFE: URL comes from Django settings (server-controlled)
-response = requests.get(f"{settings.SEER_AUTOFIX_URL}{path}")
-```
-
-**SSRF Example - IS a vulnerability:**
-```python
-# VULNERABLE: URL comes from request (attacker-controlled)
-response = requests.get(request.GET.get('url'))
-```
-
-### Framework-Mitigated Patterns
-Check language guides before flagging. Common false positives:
-
-| Pattern | Why It's Usually Safe |
-|---------|----------------------|
-| Django `{{ variable }}` | Auto-escaped by default |
-| React `{variable}` | Auto-escaped by default |
-| Vue `{{ variable }}` | Auto-escaped by default |
-| `User.objects.filter(id=input)` | ORM parameterizes queries |
-| `cursor.execute("...%s", (input,))` | Parameterized query |
-| `innerHTML = "<b>Loading...</b>"` | Constant string, no user input |
-
-**Only flag these when:**
-- Django: `{{ var|safe }}`, `{% autoescape off %}`, `mark_safe(user_input)`
-- React: `dangerouslySetInnerHTML={{__html: userInput}}`
-- Vue: `v-html="userInput"`
-- ORM: `.raw()`, `.extra()`, `RawSQL()` with string interpolation
+| Pattern | Usually Safe Because | Only Flag When |
+|---------|---------------------|----------------|
+| Django `{{ var }}` / React `{var}` / Vue `{{ var }}` | Auto-escaped | `\|safe`, `mark_safe(user_input)`, `dangerouslySetInnerHTML={user}`, `v-html="user"` |
+| `Model.objects.filter(id=input)` | ORM parameterizes | `.raw()`, `.extra()`, `RawSQL()` with string interpolation |
+| `cursor.execute("...%s", (val,))` | Parameterized | String formatting inside the query |
 
 ## Review Process
 
-### 1. Detect Context
-
-What type of code am I reviewing?
+### 1. Detect Context → Load References
 
 | Code Type | Load These References |
 |-----------|----------------------|
@@ -109,8 +51,6 @@ What type of code am I reviewing?
 | Audit, logging | `logging.md` |
 
 ### 2. Load Language Guide
-
-Based on file extension or imports:
 
 | Indicators | Guide |
 |------------|-------|
@@ -130,58 +70,18 @@ Based on file extension or imports:
 | GitHub Actions, `.gitlab-ci.yml` | `infrastructure/ci-cd.md` |
 | AWS/GCP/Azure configs, IAM | `infrastructure/cloud.md` |
 
-### 4. Research Before Flagging
+### 4. Verify Exploitability
 
-**For each potential issue, research the codebase to build confidence:**
-
-- Where does this value actually come from? Trace the data flow.
-- Is it configured at deployment (settings, env vars) or from user input?
-- Is there validation, sanitization, or allowlisting elsewhere?
-- What framework protections apply?
-
-Only report issues where you have HIGH confidence after understanding the broader context.
-
-### 5. Verify Exploitability
-
-For each potential finding, confirm:
-
-**Is the input attacker-controlled?**
-
-| Attacker-Controlled (Investigate) | Server-Controlled (Usually Safe) |
-|-----------------------------------|----------------------------------|
-| `request.GET`, `request.POST`, `request.args` | `settings.X`, `app.config['X']` |
-| `request.json`, `request.data`, `request.body` | `os.environ.get('X')` |
-| `request.headers` (most headers) | Hardcoded constants |
-| `request.cookies` (unsigned) | Internal service URLs from config |
-| URL path segments: `/users/<id>/` | Database content from admin/system |
-| File uploads (content and names) | Signed session data |
-| Database content from other users | Framework settings |
-| WebSocket messages | |
-
-**Does the framework mitigate this?**
-- Check language guide for auto-escaping, parameterization
-- Check for middleware/decorators that sanitize
-
-**Is there validation upstream?**
-- Input validation before this code
-- Sanitization libraries (DOMPurify, bleach, etc.)
-
-### 6. Report HIGH Confidence Only
-
-Skip theoretical issues. Report only what you've confirmed is exploitable after research.
-
----
+Trace each potential finding: confirm input comes from `request.GET/POST/body/headers/cookies`, URL segments, file uploads, or other-user DB content — not from settings, env vars, or hardcoded values. Check for framework auto-escaping/parameterization and upstream sanitization. Report only HIGH confidence findings.
 
 ## Severity Classification
 
 | Severity | Impact | Examples |
 |----------|--------|----------|
-| **Critical** | Direct exploit, severe impact, no auth required | RCE, SQL injection to data, auth bypass, hardcoded secrets |
+| **Critical** | Direct exploit, no auth required | RCE, SQL injection, auth bypass, hardcoded secrets |
 | **High** | Exploitable with conditions, significant impact | Stored XSS, SSRF to metadata, IDOR to sensitive data |
 | **Medium** | Specific conditions required, moderate impact | Reflected XSS, CSRF on state-changing actions, path traversal |
 | **Low** | Defense-in-depth, minimal direct impact | Missing headers, verbose errors, weak algorithms in non-critical context |
-
----
 
 ## Quick Patterns Reference
 
@@ -215,30 +115,16 @@ AWS_SECRET_ACCESS_KEY = "..."
 private_key = "-----BEGIN"
 ```
 
-### Check Context First (MUST Investigate Before Flagging)
+### Check Context First
 ```
-# SSRF - ONLY if URL is from user input, NOT from settings/config
-requests.get(request.GET['url'])     # FLAG: User-controlled URL
-requests.get(settings.API_URL)       # SAFE: Server-controlled config
-requests.get(f"{settings.BASE}/{x}") # CHECK: Is 'x' user input?
-
-# Path traversal - ONLY if path is from user input
-open(request.GET['file'])            # FLAG: User-controlled path
-open(settings.LOG_PATH)              # SAFE: Server-controlled config
-open(f"{BASE_DIR}/{filename}")       # CHECK: Is 'filename' user input?
-
-# Open redirect - ONLY if URL is from user input
-redirect(request.GET['next'])        # FLAG: User-controlled redirect
-redirect(settings.LOGIN_URL)         # SAFE: Server-controlled config
-
-# Weak crypto - ONLY if used for security purposes
-hashlib.md5(file_content)            # SAFE: File checksums, caching
-hashlib.md5(password)                # FLAG: Password hashing
-random.random()                      # SAFE: Non-security uses (UI, sampling)
-random.random() for token            # FLAG: Security tokens need secrets module
+requests.get(request.GET['url'])     # FLAG: user-controlled URL (SSRF)
+requests.get(settings.API_URL)       # SAFE: server-controlled
+open(request.GET['file'])            # FLAG: user-controlled path (traversal)
+open(f"{BASE_DIR}/{filename}")       # CHECK: is 'filename' user input?
+redirect(request.GET['next'])        # FLAG: user-controlled redirect
+hashlib.md5(password)                # FLAG: password hashing
+random.random() for token            # FLAG: use secrets module instead
 ```
-
----
 
 ## Output Format
 
@@ -271,42 +157,3 @@ random.random() for token            # FLAG: Security tokens need secrets module
 ```
 
 If no vulnerabilities found, state: "No high-confidence vulnerabilities identified."
-
----
-
-## Reference Files
-
-### Core Vulnerabilities (`references/`)
-| File | Covers |
-|------|--------|
-| `injection.md` | SQL, NoSQL, OS command, LDAP, template injection |
-| `xss.md` | Reflected, stored, DOM-based XSS |
-| `authorization.md` | Authorization, IDOR, privilege escalation |
-| `authentication.md` | Sessions, credentials, password storage |
-| `cryptography.md` | Algorithms, key management, randomness |
-| `deserialization.md` | Pickle, YAML, Java, PHP deserialization |
-| `file-security.md` | Path traversal, uploads, XXE |
-| `ssrf.md` | Server-side request forgery |
-| `csrf.md` | Cross-site request forgery |
-| `data-protection.md` | Secrets exposure, PII, logging |
-| `api-security.md` | REST, GraphQL, mass assignment |
-| `business-logic.md` | Race conditions, workflow bypass |
-| `modern-threats.md` | Prototype pollution, LLM injection, WebSocket |
-| `misconfiguration.md` | Headers, CORS, debug mode, defaults |
-| `error-handling.md` | Fail-open, information disclosure |
-| `supply-chain.md` | Dependencies, build security |
-| `logging.md` | Audit failures, log injection |
-
-### Language Guides (`languages/`)
-- `python.md` - Django, Flask, FastAPI patterns
-- `javascript.md` - Node, Express, React, Vue, Next.js
-- `go.md` - Go-specific security patterns
-- `rust.md` - Rust unsafe blocks, FFI security
-- `java.md` - Spring, Java EE patterns
-
-### Infrastructure (`infrastructure/`)
-- `docker.md` - Container security
-- `kubernetes.md` - K8s RBAC, secrets, policies
-- `terraform.md` - IaC security
-- `ci-cd.md` - Pipeline security
-- `cloud.md` - AWS/GCP/Azure security

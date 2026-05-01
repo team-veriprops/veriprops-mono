@@ -115,6 +115,10 @@ class SessionService:
         if not valid:
             if user:
                 count = await user_service.increment_failed_login(user)
+                # Two attempts before lockout (5 of 7 by default) trigger a
+                # WARNING event so the Security Activity Log can highlight an
+                # in-progress brute-force attempt.
+                warn_at = max(1, settings.AUTH_LOCKOUT_THRESHOLD - 2)
                 if count >= settings.AUTH_LOCKOUT_THRESHOLD:
                     until = now + timedelta(minutes=settings.AUTH_LOCKOUT_MINUTES)
                     await user_service.lock_user_until(user, until)
@@ -123,6 +127,14 @@ class SessionService:
                         f"Account locked for {settings.AUTH_LOCKOUT_MINUTES} minutes",
                         user_id=str(user.id),
                         ip_address=ip_address,
+                    )
+                elif count >= warn_at:
+                    await self.record_event(
+                        SecurityEventType.LOGIN_FAILURE_WARNING,
+                        f"Repeated invalid credentials ({count}/{settings.AUTH_LOCKOUT_THRESHOLD})",
+                        user_id=str(user.id),
+                        ip_address=ip_address,
+                        device_fingerprint=req.device_fingerprint,
                     )
                 else:
                     await self.record_event(

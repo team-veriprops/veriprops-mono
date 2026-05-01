@@ -1,8 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider, \
-    OAuthCallbackRequestDto, SocialLoginUserInfoDto
+from main.app.domain.user.auth.oauth.providers.models import (
+    OAuthCallbackRequestDto,
+    OAuthFlowMode,
+    SocialAuthProvider,
+    SocialLoginUserInfoDto,
+)
 from starlette.requests import Request
 
 
@@ -13,7 +17,13 @@ class ISocialAuthProvider(ABC):
         pass
 
     @abstractmethod
-    async def initialize(self, request: Request, intent: Optional[str] = None) -> str:
+    async def initialize(
+        self,
+        request: Request,
+        intent: Optional[str] = None,
+        mode: OAuthFlowMode = OAuthFlowMode.AUTH,
+        link_user_id: Optional[str] = None,
+    ) -> str:
         pass
 
     @abstractmethod

@@ -47,6 +47,16 @@ class Settings(AppodusBaseSettings):
     https://*.veriprops.ng,
     """
 
+    # OAuth — popup flow
+    # Public origin of *this* backend service. Used to build the OAuth redirect_uri
+    # registered with each provider. Must match the value configured in the
+    # Google/Apple/Facebook developer consoles.
+    BACKEND_PUBLIC_ORIGIN: str = "http://localhost:8000"
+    # Allowlist of frontend origins permitted to receive postMessage from the
+    # OAuth popup callback. The Referer at /start must match one of these
+    # exactly (scheme + host + port). Comma-separated.
+    OAUTH_FRONTEND_ORIGINS: str = "http://localhost:3000,https://veriprops.ng,https://www.veriprops.ng,https://staging.veriprops.ng,https://dev.veriprops.ng"
+
     # PAYMENT
     PAYMENT_REDIRECT_PATH: str = "/redirect"
     PAYMENT_FRONTEND_REDIRECT_PATH: str = "/payment/redirect"
