@@ -12,8 +12,7 @@ import { Checkbox } from "@3rdparty/ui/checkbox";
 import AuthShell from "../AuthShell";
 import AuthHeading from "../AuthHeading";
 import SocialAuthButtons, { AuthDivider } from "../SocialAuthButtons";
-import { useLinkPendingOauthMutation, useLoginMutation } from "../libs/useAuthQueries";
-import { SocialProvider } from "@components/website/auth/models";
+import { useLoginMutation } from "../libs/useAuthQueries";
 import {
   loginSchema,
   type LoginValues,
@@ -60,7 +59,6 @@ export default function LoginContainer() {
   const intent = isAuthIntent(intentParam) ? intentParam : "default";
   const tier = searchParams.get("tier");
   const redirect = searchParams.get("redirect");
-  const linkProvider = searchParams.get("link"); // e.g. "google" — pending OAuth merge
 
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -69,7 +67,6 @@ export default function LoginContainer() {
   const tickRef = useRef<NodeJS.Timeout | null>(null);
 
   const loginMutation = useLoginMutation();
-  const linkPending = useLinkPendingOauthMutation();
 
   // Hydrate lockout from storage on mount.
   useEffect(() => {
@@ -111,15 +108,6 @@ export default function LoginContainer() {
       // Reset attempts on success.
       writeLockoutState({ count: 0 });
       setLockout({ count: 0 });
-
-      // If the user got here from an OAuth collision flow, finish linking.
-      if (linkProvider) {
-        try {
-          await linkPending.mutateAsync(linkProvider as SocialProvider);
-        } catch {
-          // Non-fatal — they can link again from /account/linked
-        }
-      }
 
       const user = res.data?.user;
       const dest = user

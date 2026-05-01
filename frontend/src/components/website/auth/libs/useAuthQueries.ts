@@ -145,14 +145,6 @@ export function useUnlinkProviderMutation() {
   });
 }
 
-export function useLinkPendingOauthMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (provider: SocialProvider) => authService.linkPendingOauth(provider),
-    onSuccess: () => qc.invalidateQueries({ queryKey: authKeys.linked }),
-  });
-}
-
 export const authConsentKeys = {
   missing: ["auth", "consents", "missing"] as const,
 };

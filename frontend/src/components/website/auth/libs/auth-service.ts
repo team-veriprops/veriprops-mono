@@ -1,6 +1,6 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { SuccessResponse } from "@/types/models";
-import { AuthSession, DeviceSession, OtpChannel, SecurityEvent, SignupDraft, SocialProvider, UserConsent } from "@components/website/auth/models";
+import { AuthSession, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, SocialProvider, UserConsent } from "@components/website/auth/models";
 /**
  * Frontend-facing auth API. Endpoint paths follow the convention used elsewhere
  * in the app (`/users/auth/...` — see FetchHttpClient.refreshToken). Backend is
@@ -106,11 +106,20 @@ export class AuthService {
     return this.http.post(`${this.base}/password/set`, payload);
   }
 
-  startOauth(provider: SocialProvider, intent?: string): string {
+  /**
+   * Returns the provider's authorization URL for the popup to navigate to.
+   * Backend builds and signs the state, persists PKCE, and validates the
+   * caller's origin against the allowlist before responding.
+   */
+  startOauth(
+    provider: SocialProvider,
+    opts?: { intent?: string; mode?: OAuthFlowMode },
+  ): Promise<SuccessResponse<{ authorizationUrl: string }>> {
     const search = new URLSearchParams();
-    if (intent) search.set("intent", intent);
+    if (opts?.intent) search.set("intent", opts.intent);
+    if (opts?.mode) search.set("mode", opts.mode);
     const qs = search.toString();
-    return `/api${this.base}/oauth/${provider}/start${qs ? `?${qs}` : ""}`;
+    return this.http.get(`${this.base}/oauth/${provider}/start${qs ? `?${qs}` : ""}`);
   }
 
   completeProfile(payload: ProfileCompletionRequest): Promise<SuccessResponse<AuthSession>> {
@@ -137,15 +146,6 @@ export class AuthService {
     return this.http.get(`${this.base}/oauth/links`);
   }
 
-  /**
-   * Confirms a pending OAuth link after the user has signed in with the
-   * password account that owns the colliding email. Backend looks up the
-   * cached pending profile keyed on `(user_id, provider)`.
-   */
-  linkPendingOauth(provider: SocialProvider): Promise<SuccessResponse<null>> {
-    return this.http.post(`${this.base}/oauth/links/link`, { provider });
-  }
-
   unlinkProvider(provider: SocialProvider): Promise<SuccessResponse<null>> {
     return this.http.delete(`${this.base}/oauth/links/${provider}`);
   }
@@ -164,8 +164,12 @@ export class AuthService {
   }
 
   // ── Resumable signup draft (server-side keyed on email) ─────────
-  saveSignupDraft(payload: SignupDraft): Promise<SuccessResponse<null>> {
-    return this.http.put(`${this.base}/signup/draft`, payload);
+  saveSignupDraft(payload: SignupDraft): Promise<SuccessResponse<SignupDraft>> {
+    return this.http.put(`${this.base}/signup/draft`, {
+      email: payload.email,
+      step: payload.step,
+      payload: payload.payload,
+    });
   }
 
   getSignupDraft(email: string): Promise<SuccessResponse<SignupDraft | null>> {
@@ -173,7 +177,7 @@ export class AuthService {
     return this.http.get(`${this.base}/signup/draft?${qs}`);
   }
 
-  discardSignupDraft(email: string): Promise<SuccessResponse<null>> {
+  discardSignupDraft(email: string): Promise<SuccessResponse<boolean>> {
     const qs = new URLSearchParams({ email }).toString();
     return this.http.delete(`${this.base}/signup/draft?${qs}`);
   }

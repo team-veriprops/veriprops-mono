@@ -1,22 +1,24 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Loader2, Link2, AlertTriangle } from "lucide-react";
 import AccountShell from "./AccountShell";
 import { Button } from "@3rdparty/ui/button";
 import {
-  authService,
   useLinkedProvidersQuery,
   useUnlinkProviderMutation,
 } from "@components/website/auth/libs/useAuthQueries";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
-import { SocialProvider } from "@components/website/auth/models";
+import { OAuthFlowMode, SocialProvider } from "@components/website/auth/models";
+import { startOauthPopup } from "@components/website/auth/libs/auth/oauthPopup";
 import { ROUTES } from "@lib/routes";
 import { toast } from "sonner";
 
 const PROVIDERS: { id: SocialProvider; name: string; available: boolean }[] = [
-  { id: SocialProvider.GOOGLE, name: "Google", available: true },
-  { id: SocialProvider.APPLE,  name: "Apple",  available: false },
+  { id: SocialProvider.GOOGLE,   name: "Google",   available: true },
+  { id: SocialProvider.APPLE,    name: "Apple",    available: true },
+  { id: SocialProvider.FACEBOOK, name: "Facebook", available: true },
 ];
 
 export default function LinkedAccountsContainer() {
@@ -25,6 +27,28 @@ export default function LinkedAccountsContainer() {
   const linked = linkedQuery.data ?? [];
   const session = useAuthStore((s) => s.session);
   const hasPassword = session?.user?.hasPassword ?? false;
+  const [linkPending, setLinkPending] = useState<SocialProvider | null>(null);
+
+  const startLink = (provider: SocialProvider, name: string) => {
+    setLinkPending(provider);
+    startOauthPopup(provider, {
+      mode: OAuthFlowMode.LINK,
+      onSuccess: () => {
+        setLinkPending(null);
+        toast.success(`Linked ${name}.`);
+        linkedQuery.refetch();
+      },
+      onCancel: () => setLinkPending(null),
+      onError: (err) => {
+        setLinkPending(null);
+        if (err.code === "popup_blocked") {
+          toast.error("Popup blocked. Allow popups and try again.");
+          return;
+        }
+        toast.error(err.message ?? `Could not link ${name}.`);
+      },
+    });
+  };
 
   return (
     <AccountShell
@@ -109,11 +133,10 @@ export default function LinkedAccountsContainer() {
                   ) : (
                     <Button
                       size="sm"
-                      onClick={() => {
-                        window.location.href = authService.startOauth(p.id);
-                      }}
+                      disabled={linkPending !== null}
+                      onClick={() => startLink(p.id, p.name)}
                     >
-                      Link account
+                      {linkPending === p.id ? "Opening…" : "Link account"}
                     </Button>
                   ))}
               </li>

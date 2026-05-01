@@ -18,8 +18,6 @@ pnpm test         # vitest run
 pnpm test:watch
 ```
 
-Use **pnpm only** — `pnpm-lock.yaml` is the source of truth. Don't run `npm` or `yarn`.
-
 Single test:
 
 ```bash
@@ -30,6 +28,18 @@ pnpm vitest run -t "test name pattern"
 ## API proxy
 
 `/api/*` requests are rewritten to `${API_BASE_URL}/api/*` by [next.config.ts](next.config.ts). `API_BASE_URL` is server-only (read from [src/lib/config/server.ts](src/lib/config/server.ts), which throws if imported on the client). Public env vars (`NEXT_PUBLIC_*`) live in [src/lib/config/public.ts](src/lib/config/public.ts) — keep them split.
+
+## Auth Guard
+
+- Use Next.js `proxy.ts` to control access to protected routes.
+
+  * Centralize route protection in `proxy.ts` rather than duplicating auth checks across pages or layouts.
+  * Validate authentication state (session, token, or cookie) in `proxy.ts` before allowing access to protected routes.
+  * Redirect unauthenticated users to the sign-in page.
+  * Redirect authenticated users away from guest-only routes (for example: sign-in, sign-up) when appropriate.
+  * Keep route matching explicit and maintainable by clearly defining protected, public, and guest-only route groups.
+  * `proxy.ts` should handle **access control only**; page-level authorization and business rules should remain in the application layer.
+
 
 ## Layout
 
@@ -51,18 +61,9 @@ pnpm vitest run -t "test name pattern"
 
 Defined in both [tsconfig.json](tsconfig.json) and [vitest.config.ts](vitest.config.ts) — keep them in sync. Available: `@/*`, `@app/*`, `@components/*`, `@3rdparty/*`, `@lib/*`, `@hooks/*`, `@stores/*`, `@styles/*`, `@icons/*`, `@app-types/*`, `@context/*`, `@assets/*`.
 
-## API contract
-
-Backend types are camelCase already (Pydantic alias_generator on the Python side). Don't add transformation; mirror types in `src/types/models.ts`.
-
-The auth surface in [components/website/auth/libs/auth-service.ts](src/components/website/auth/libs/auth-service.ts) is the canonical mapping to backend `/api/users/auth/...`. When the backend's auth controller changes, update this file in lock-step.
-
 ## Testing
 
 Vitest + jsdom. Tests sit beside the module they cover (`*.test.ts(x)`) — see [components/ui/schemas.test.ts](src/components/ui/schemas.test.ts), [lib/routes.test.ts](src/lib/routes.test.ts), [components/website/home.data.test.ts](src/components/website/home.data.test.ts). Vitest `globals: false` — import `describe`, `it`, `expect` explicitly.
 
 When working on UI/UX, use the `frontend-design` skill. When implementing features, follow the `test-driven-development` skill (write the test first).
 
-## Next.js 16 caveat
-
-Per [AGENTS.md](AGENTS.md): this Next.js version has breaking changes. Before writing routing/data-fetching/server-action code, check `node_modules/next/dist/docs/` for the current API instead of relying on prior knowledge.

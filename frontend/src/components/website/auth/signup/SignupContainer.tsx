@@ -11,7 +11,7 @@ import AccountBasicsStep from "./AccountBasicsStep";
 import VerifyEmailPhoneStep from "./VerifyEmailPhoneStep";
 import ResidenceStep from "./ResidenceStep";
 import ConsentStep from "./ConsentStep";
-import { useSignupMutation } from "../libs/useAuthQueries";
+import { authService, useSignupMutation } from "../libs/useAuthQueries";
 import type { VerifyStepValues } from "./VerifyEmailPhoneStep";
 import {
   SignupStep1Values,
@@ -51,37 +51,60 @@ export default function SignupContainer() {
 
   const signupMutation = useSignupMutation();
 
-  // Restore draft on mount.
+  // Restore draft on mount: server takes precedence (cross-device), with
+  // localStorage as the offline mirror.
   useEffect(() => {
-    const draft = loadActiveLocalDraft();
-    if (!draft) return;
-    const payload = draft.payload as DraftPayload;
-    if (payload.email) {
-      setStep1({
-        firstName: payload.firstName ?? "",
-        lastName: payload.lastName ?? "",
-        email: payload.email,
-        password: payload.password ?? "",
-      } as SignupStep1Values);
-    }
-    if (payload.emailVerified && payload.phoneVerified) {
-      setStep2({
-        countryCode: payload.countryCode ?? "NG",
-        dialCode: payload.dialCode ?? "+234",
-        phone: payload.phone ?? "",
-        emailVerified: true,
-        phoneVerified: true,
-      });
-    }
-    if (payload.countryOfResidence) {
-      setStep3({
-        countryOfResidence: payload.countryOfResidence,
-        timezone: payload.timezone!,
-        preferredCurrency: payload.preferredCurrency!,
-      });
-    }
-    setStep(Math.max(0, Math.min(STEPS.length - 1, draft.step)));
-    setResumed(true);
+    let cancelled = false;
+    const applyDraft = (draft: SignupDraft) => {
+      const payload = draft.payload as DraftPayload;
+      if (payload.email) {
+        setStep1({
+          firstName: payload.firstName ?? "",
+          lastName: payload.lastName ?? "",
+          email: payload.email,
+          password: payload.password ?? "",
+        } as SignupStep1Values);
+      }
+      if (payload.emailVerified && payload.phoneVerified) {
+        setStep2({
+          countryCode: payload.countryCode ?? "NG",
+          dialCode: payload.dialCode ?? "+234",
+          phone: payload.phone ?? "",
+          emailVerified: true,
+          phoneVerified: true,
+        });
+      }
+      if (payload.countryOfResidence) {
+        setStep3({
+          countryOfResidence: payload.countryOfResidence,
+          timezone: payload.timezone!,
+          preferredCurrency: payload.preferredCurrency!,
+        });
+      }
+      setStep(Math.max(0, Math.min(STEPS.length - 1, draft.step)));
+      setResumed(true);
+    };
+
+    const localDraft = loadActiveLocalDraft();
+    (async () => {
+      // Try server first when we know the email (from a local mirror). If the
+      // server has a fresher copy, apply that; otherwise fall back to local.
+      if (localDraft?.email) {
+        try {
+          const res = await authService.getSignupDraft(localDraft.email);
+          const remote = res.data;
+          if (cancelled) return;
+          if (remote && remote.updatedAt >= localDraft.updatedAt) {
+            applyDraft(remote);
+            return;
+          }
+        } catch {
+          // Server unavailable — local mirror is the next-best thing.
+        }
+        if (!cancelled) applyDraft(localDraft);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const persistDraft = (next: { step: number; payload: DraftPayload }) => {
@@ -93,6 +116,11 @@ export default function SignupContainer() {
       updatedAt: new Date().toISOString(),
     };
     saveLocalDraft(draft);
+    // Fire-and-forget server sync. Non-fatal: localStorage is sufficient for
+    // resume-on-same-device, server adds cross-device resume.
+    authService
+      .saveSignupDraft(draft)
+      .catch(() => { /* tolerate offline / first-load */ });
   };
 
   const handleStep1 = (values: SignupStep1Values) => {
@@ -150,6 +178,7 @@ export default function SignupContainer() {
       });
 
       clearLocalDraft(step1.email);
+      authService.discardSignupDraft(step1.email).catch(() => undefined);
 
       const user = result.data?.user;
       const dest = user

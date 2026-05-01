@@ -36,6 +36,12 @@ export enum OtpChannel {
 export enum SocialProvider {
   GOOGLE = "google",
   APPLE = "apple",
+  FACEBOOK = "facebook",
+}
+
+export enum OAuthFlowMode {
+  AUTH = "auth",
+  LINK = "link",
 }
 
 /** @deprecated Use {@link SocialProvider}. Retained for backward compat. */
@@ -86,6 +92,7 @@ export interface DeviceSession {
 export enum SecurityEventType {
   LOGIN_SUCCESS = "LOGIN_SUCCESS",
   LOGIN_FAILURE = "LOGIN_FAILURE",
+  LOGIN_FAILURE_WARNING = "LOGIN_FAILURE_WARNING",
   OTP_SENT = "OTP_SENT",
   OTP_FAILURE = "OTP_FAILURE",
   PASSWORD_CHANGED = "PASSWORD_CHANGED",

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Loader2, AlertTriangle, Mail } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import AuthShell from "../AuthShell";
 import AuthHeading from "../AuthHeading";
 import { Button } from "@3rdparty/ui/button";
@@ -16,15 +16,23 @@ interface Props {
   provider: string;
 }
 
+/**
+ * Fallback landing for browsers that block OAuth popups. The popup flow lives
+ * entirely on the backend (HTML page that postMessages and self-closes); this
+ * page is only reached when the user has explicitly clicked the
+ * "Continue here →" link from {@link SocialAuthButtons} and the auth was
+ * completed in a full-page redirect. The backend will already have set the
+ * HttpOnly session cookie before redirecting here, so we just refresh the
+ * session and route the user to their portal.
+ */
 export default function OAuthCallbackContainer({ provider }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const intentParam = searchParams.get("intent");
   const intent = isAuthIntent(intentParam) ? intentParam : "default";
   const errorCode = searchParams.get("error");
-  const collisionEmail = searchParams.get("collision_email");
 
-  const sessionQuery = useCurrentSession(!errorCode && !collisionEmail);
+  const sessionQuery = useCurrentSession(!errorCode);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
   const user = sessionQuery.data?.user;
@@ -39,14 +47,13 @@ export default function OAuthCallbackContainer({ provider }: Props) {
   }, [user]);
 
   useEffect(() => {
-    if (errorCode || collisionEmail) return;
-    if (!user) return;
+    if (errorCode || !user) return;
     if (profileIncomplete) {
       setShowProfileModal(true);
     } else {
       router.replace(resolvePostAuthRedirect(user, { intent }));
     }
-  }, [user, profileIncomplete, errorCode, collisionEmail, router, intent]);
+  }, [user, profileIncomplete, errorCode, router, intent]);
 
   if (errorCode) {
     return (
@@ -82,38 +89,6 @@ export default function OAuthCallbackContainer({ provider }: Props) {
             </Button>
           </Link>
         </div>
-      </AuthShell>
-    );
-  }
-
-  if (collisionEmail) {
-    return (
-      <AuthShell>
-        <AuthHeading
-          eyebrow="Account already exists"
-          title="That email is already registered."
-          subtitle="Sign in with your password — once you're in, you can link your social account from Account → Linked accounts."
-        />
-        <div
-          className="p-4 rounded-xl flex items-start gap-3 mb-6"
-          style={{
-            backgroundColor: "rgba(0,13,34,0.04)",
-            border: "1px solid rgba(196,198,207,0.4)",
-          }}
-        >
-          <Mail className="w-5 h-5 shrink-0 mt-0.5" style={{ color: "var(--brand-viridian)" }} />
-          <div className="text-sm leading-relaxed" style={{ color: "var(--brand-on-surface)" }}>
-            We found an existing account for{" "}
-            <strong>{collisionEmail}</strong>. Sign in with your password to continue.
-          </div>
-        </div>
-        <Link
-          href={`${ROUTES.AUTH.LOGIN}?email=${encodeURIComponent(collisionEmail)}&link=${provider}`}
-        >
-          <Button className="w-full" size="lg">
-            Sign in with password and link {provider}
-          </Button>
-        </Link>
       </AuthShell>
     );
   }

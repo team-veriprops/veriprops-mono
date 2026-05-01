@@ -18,20 +18,33 @@ interface VerificationModalProps {
 }
 
 const OTP_LENGTH = 6;
+const OTP_TIMER_SECONDS = 10 * 60; // PRD §2: 10-minute OTP validity
+const MAX_RESENDS = 3;             // PRD §2: 3 resends → 30-min lockout
+const LOCKOUT_MINUTES = 30;
+
+const formatCountdown = (secs: number) => {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+};
 
 const VerificationModal = ({ open, onClose, onVerified, type, onSendVerificationMessage, onValidateVerificationOtp }: VerificationModalProps) => {
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
-  const [countdown, setCountdown] = useState(30);
+  const [countdown, setCountdown] = useState(OTP_TIMER_SECONDS);
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
+  const [resendCount, setResendCount] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
   const resetState = useCallback(() => {
     setOtp(Array(OTP_LENGTH).fill(""));
-    setCountdown(30);
+    setCountdown(OTP_TIMER_SECONDS);
     setVerifying(false);
     setOtpError(null);
+    setResendCount(0);
+    setLockedUntil(null);
   }, []);
 
   useEffect(() => {
@@ -99,20 +112,27 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
   };
 
   const handleResend = async() => {
+    if (resendCount >= MAX_RESENDS) {
+      const until = Date.now() + LOCKOUT_MINUTES * 60_000;
+      setLockedUntil(until);
+      setOtpError(`Too many resends. Try again in ${LOCKOUT_MINUTES} minutes.`);
+      return;
+    }
     setResending(true);
 
     onSendVerificationMessage({
       type: type,
       onSuccess: () => {
-        setOtpError(null)
+        setOtpError(null);
         setResending(false);
-        setCountdown(30);
+        setCountdown(OTP_TIMER_SECONDS);
+        setResendCount((c) => c + 1);
         setOtp(Array(OTP_LENGTH).fill(""));
         inputsRef.current[0]?.focus();
         toast("Verification code resent", { description: `A new code has been sent to your ${type.toLowerCase()}.` });
       },
       onError: (errorMessage) => {
-        setCountdown(30);
+        setCountdown(OTP_TIMER_SECONDS);
         setOtpError(errorMessage)
         setResending(false);
         setOtp(Array(OTP_LENGTH).fill(""));
@@ -120,6 +140,12 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
       }
     })
   };
+
+  // `lockedUntil` is set once (Date.now() + LOCKOUT) when the user exhausts
+  // their resends; the modal's open-effect clears it on next open, so
+  // checking `!== null` is sufficient and pure (no Date.now() during render).
+  const isLocked = lockedUntil !== null;
+  const resendsRemaining = Math.max(0, MAX_RESENDS - resendCount);
 
   return (
     <Dialog open={open} onOpenChange={(newOpen) => {
@@ -176,16 +202,26 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
           )}
         </AnimatePresence>
 
-        <div className="text-center text-sm text-muted-foreground min-h-8 flex items-center justify-center">
+        <div className="text-center text-sm text-muted-foreground min-h-8 flex flex-col items-center justify-center gap-1">
           <AnimatePresence mode="wait">
-            {countdown > 0 ? (
+            {isLocked ? (
+              <motion.span
+                key="locked"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-destructive"
+              >
+                Too many attempts. Try again later.
+              </motion.span>
+            ) : countdown > 0 ? (
               <motion.span
                 key="countdown"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                Resend in {countdown}s
+                Code expires in {formatCountdown(countdown)}
               </motion.span>
             ) : (
               <motion.div
@@ -196,7 +232,13 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
                 whileHover={{ scale: resending ? 1 : 1.05 }}
                 whileTap={{ scale: resending ? 1 : 0.95 }}
               >
-                <Button variant="link" size="sm" onClick={handleResend} disabled={resending} className="text-primary p-0 h-auto">
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={handleResend}
+                  disabled={resending || resendsRemaining === 0}
+                  className="text-primary p-0 h-auto"
+                >
                   <AnimatePresence mode="wait">
                     {resending ? (
                       <motion.span key="resending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="inline-flex items-center gap-1.5">
@@ -213,6 +255,9 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
               </motion.div>
             )}
           </AnimatePresence>
+          {!isLocked && resendsRemaining < MAX_RESENDS && (
+            <span className="text-xs">{resendsRemaining} of {MAX_RESENDS} resends remaining</span>
+          )}
         </div>
 
         <div className="flex gap-3 mt-2">

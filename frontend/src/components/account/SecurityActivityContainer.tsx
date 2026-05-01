@@ -9,6 +9,7 @@ import { formatDistanceToNow } from "date-fns";
 const ICONS: Record<SecurityEventType, React.ComponentType<{ className?: string }>> = {
   [SecurityEventType.LOGIN_SUCCESS]:           ShieldCheck,
   [SecurityEventType.LOGIN_FAILURE]:           ShieldAlert,
+  [SecurityEventType.LOGIN_FAILURE_WARNING]:   ShieldAlert,
   [SecurityEventType.OTP_SENT]:                Mail,
   [SecurityEventType.OTP_FAILURE]:             ShieldAlert,
   [SecurityEventType.PASSWORD_CHANGED]:        ShieldCheck,
@@ -22,6 +23,7 @@ const ICONS: Record<SecurityEventType, React.ComponentType<{ className?: string 
 const TONES: Record<SecurityEventType, "ok" | "warn" | "info"> = {
   [SecurityEventType.LOGIN_SUCCESS]:           "ok",
   [SecurityEventType.LOGIN_FAILURE]:           "warn",
+  [SecurityEventType.LOGIN_FAILURE_WARNING]:   "warn",
   [SecurityEventType.OTP_SENT]:                "info",
   [SecurityEventType.OTP_FAILURE]:             "warn",
   [SecurityEventType.PASSWORD_CHANGED]:        "ok",
