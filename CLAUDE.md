@@ -29,6 +29,7 @@ Frontend reads `API_BASE_URL` (server-only) from its env to build the proxy targ
 - **Auth contract.** The auth controller at [backend/main/app/domain/user/auth/controller.py](backend/main/app/domain/user/auth/controller.py) is the source of truth for endpoints the frontend's `auth-service.ts` ([frontend/src/components/website/auth/libs/auth-service.ts](frontend/src/components/website/auth/libs/auth-service.ts)) calls. URL shape is `/api/users/auth/...`. When adding/renaming an endpoint, change both files in the same PR.
 - **Package managers.** Frontend is `pnpm` (lockfile committed); never use `npm` or `yarn`. Backend is plain `pip` against `requirements.txt`.
 - **Path handling.** Memory rule: use `path.join` / `pathlib` / POSIX-safe APIs — never hardcode `\` or `/` separators.
+- **Real-time channel**: SSE (live dashboard updates, notifications, metrics counters, audit feed), WS (collaborative workflow,chat,presence,two-way realtime commands).
 
 ## Workflow
 

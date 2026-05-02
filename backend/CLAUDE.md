@@ -123,7 +123,7 @@ Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhoo
 
 `Settings` ([main/app/config/settings.py](main/app/config/settings.py)) extends `AppodusBaseSettings` and is loaded from `.env.{appodus_active_env}` at import. Notable knobs:
 
-- `ACTIVE_DB`, `SQLALCHEMY_DATABASE_URI` — DB selection (MySQL or Postgres; async drivers).
+- `ACTIVE_DB`, `SQLALCHEMY_DATABASE_URI` — DB selection (MySQL; async drivers).
 - `ACTIVE_PAYMENT_METHOD` — `FLUTTERWAVE` or `PAYSTACK`.
 - `ALLOWED_ORIGINS` — comma-separated CORS origins.
 - `ENABLE_OUT_MESSAGING`, `ALLOW_AUTH_BYPASS`, `DISABLE_RATE_LIMITING` — gate side effects in non-prod.
