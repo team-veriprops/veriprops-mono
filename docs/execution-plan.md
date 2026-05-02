@@ -1,3 +1,9 @@
+---
+skill: prd-orchestrator
+skill_version: 2.2.0
+last_updated: 2026-05-02
+---
+
 # Execution Plan
 
 > Slice-based plan to bring [requirements-matrix.md](requirements-matrix.md) from current state to **all green** through Phase 10 (MVP cut line) and then 11–19. Each slice is sized per the PRD orchestrator's batch rules:

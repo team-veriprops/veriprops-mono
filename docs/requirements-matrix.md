@@ -1,3 +1,9 @@
+---
+skill: prd-orchestrator
+skill_version: 2.2.0
+last_updated: 2026-05-02
+---
+
 # Requirements Traceability Matrix
 
 > One row per discrete, testable requirement extracted from [PRD.md](../PRD.md).
@@ -17,8 +23,8 @@
 | R0.8 | 0 | Env-based config via `appodus_active_env` (`local/test/dev/staging/prod`) | none | app/config | no | no | medium | low | low | All envs load without import errors | smoke | done |
 | R0.9 | 0 | Integration shells (S3, Paystack, Flutterwave, SendGrid, Mailjet, Twilio, Termii, Firebase, Google Drive, Zoho DocSign) | R0.7 | appodus_utils/integrations | no | yes (webhooks) | medium | medium | medium | Stubs callable; webhook routes mounted | integration | in_progress |
 | R0.10 | 0 | `AuditLog` entity + writer hook on every state transition | R0.2 | app/domain/audit | yes | no | high | medium | high | Every transition produces an AuditLog row | unit + integration | pending |
-| R0.11 | 0 | Reusable state-machine validator | none | appodus_utils/state | no | no | high | medium | high | Verification, Task, Report all consume it | unit | pending |
-| R0.12 | 0 | `ConsentDocument` + `UserConsent` entities + version bump triggers re-consent | R0.2 | app/domain/user/auth/consent | yes | yes | high | medium | high | Records (user_id, doc_type, version, accepted_at, ip, fingerprint) | unit + integration | in_progress |
+| R0.11 | 0 | Reusable state-machine validator | none | appodus_utils/state | no | no | high | medium | high | Verification, Task, Report all consume it | unit | done |
+| R0.12 | 0 | `ConsentDocument` + `UserConsent` entities + version bump triggers re-consent | R0.2 | app/domain/user/auth/consent | yes | yes | high | medium | high | Records (user_id, doc_type, version, accepted_at, ip, fingerprint) | unit + integration | done |
 | R0.13 | 0 | Frontend design system (Radix + Tailwind v4 tokens; form/field/input/toast/modal/wizard) | none | frontend/components/ui | no | no | low | medium | low | All listed components present and storybook'd | visual + unit | done |
 | R0.14 | 0 | JWT auth wiring (HttpOnly cookie 15-min/30-day, silent refresh, Next.js proxy guards) | R0.7 | backend auth + frontend proxy | yes | yes | high | medium | high | Cookie set/cleared correctly; proxy redirects | E2E | done |
 | R0.15 | 0 | Verification + Task + Report state machines authoritatively defined | R0.11 | app/domain/verification/state_machine | no | no | high | high | high | Transition tables match PRD §0.2; rejected illegal moves | unit | in_progress |
@@ -36,8 +42,8 @@
 | R1.9 | 1 | Footer (4-column + newsletter signup) | R1.1 | frontend/components/website | no | no | low | low | low | All four columns + newsletter form | visual + unit | done |
 | R1.10 | 1 | SEO meta correctly set; `noindex` only on phase-13 lookup unless completed+public | R1.1 | frontend/app | no | no | low | low | low | Public pages crawlable; lookup logic correct | unit | done |
 | **— Phase 2 — Auth shell —** | | | | | | | | | | | | |
-| R2.1 | 2 | Email/password signup with first/last/email/phone/country/timezone/currency, OTP markers (30-min TTL, single-use) | R0.12 | user/auth/service | yes | yes | high | medium | high | Both OTP markers required; consumed on success | unit + E2E | in_progress |
-| R2.2 | 2 | Email/password login with rate limit (warn@5, lockout@7 for 15 min) | R2.1 | user/auth/service | yes | yes | high | medium | high | Lockout + LOGIN_FAILURE_WARNING surfaced | unit + E2E | in_progress |
+| R2.1 | 2 | Email/password signup with first/last/email/phone/country/timezone/currency, OTP markers (30-min TTL, single-use) | R0.12 | user/auth/service | yes | yes | high | medium | high | Both OTP markers required; consumed on success | unit + E2E | done |
+| R2.2 | 2 | Email/password login with rate limit (warn@5, lockout@7 for 15 min) | R2.1 | user/auth/service | yes | yes | high | medium | high | Lockout + LOGIN_FAILURE_WARNING surfaced | unit + E2E | done |
 | R2.3 | 2 | OAuth — Google/Apple/Facebook popup + HttpOnly cookie + postMessage bridge | R2.1 | user/auth/oauth | yes | yes | high | high | high | All §2.2 security requirements met (state, PKCE, redirect, etc.) | E2E | in_progress |
 | R2.4 | 2 | OTP flow (6 digits, 10-min TTL, max 3 resends, 30-min lockout) | R2.1 | user/auth/otp_service | yes | yes | high | medium | medium | All caps enforced server-side | unit + E2E | done |
 | R2.5 | 2 | Forgot/reset password (1-hr token, single-use, all sessions invalidated on reset) | R2.1 | user/auth/service | yes | yes | high | medium | medium | Sessions revoked; email copy correct | unit + E2E | in_progress |
@@ -45,37 +51,37 @@
 | R2.7 | 2 | Failed-attempt logging (timestamp, IP, fingerprint) → Security Activity Log | R2.1 | user/auth/service | yes | yes | medium | medium | medium | All failures logged + visible | unit + E2E | in_progress |
 | R2.8 | 2 | Connected devices list + revoke (individual / all) | R2.1 | user/auth/session | yes | yes | high | medium | medium | Sessions surfaced; revoke works | E2E | in_progress |
 | R2.9 | 2 | Linked OAuth accounts list / link / unlink (with password-existence guard) | R2.3 | user/auth/oauth | yes | yes | high | medium | medium | Unlink rejected if no password | E2E | in_progress |
-| R2.10 | 2 | Resume partial signup — server-side `signup_drafts` (7-day TTL) + localStorage mirror | R2.1 | user/auth/signup_draft | yes | yes | medium | medium | medium | Server prefers; localStorage fallback | unit + E2E | in_progress |
-| R2.11 | 2 | Versioned consent on signup (Platform Terms + Privacy Policy) | R0.12 | user/auth/consent | yes | yes | high | low | medium | Records carry version, ip, fingerprint | unit | in_progress |
+| R2.10 | 2 | Resume partial signup — server-side `signup_drafts` (7-day TTL) + localStorage mirror | R2.1 | user/auth/signup_draft | yes | yes | medium | medium | medium | Server prefers; localStorage fallback | unit + E2E | done |
+| R2.11 | 2 | Versioned consent on signup (Platform Terms + Privacy Policy) | R0.12 | user/auth/consent | yes | yes | high | low | medium | Records carry version, ip, fingerprint | unit | done |
 | R2.12 | 2 | Auth gate interstitial preserving `intent` query param | R2.1 | frontend/auth | no | no | low | low | low | `?intent=verify`/`?intent=agent` round-trips | E2E | in_progress |
 | R2.13 | 2 | Centralised route protection in Next.js `proxy.ts` for /portal/* /admin/* /agent[s]/* /account/* | R0.14 | frontend/proxy | no | no | high | low | medium | Cookie-presence redirects work both ways | E2E | done |
 | R2.14 | 2 | Post-auth redirect by role priority (Admin → Agent → Customer) preserving intent | R2.1, R2.12 | frontend | no | no | medium | low | medium | All role combos route correctly | E2E | in_progress |
 | R2.15 | 2 | Customer persona auto-add on "Verify a Property" signup flow | R2.1 | user/auth/service | no | yes | medium | low | medium | CUSTOMER persona present after | unit | in_progress |
 | **— Phase 3 — Agent onboarding + KYC —** | | | | | | | | | | | | |
-| R3.1 | 3 | Agent application wizard step 1 — type selection (Field / Surveyor / Registry / Lawyer multi-select) | R2.* | user/agent | yes | yes | medium | low | low | Multi-select persisted | unit | in_progress |
-| R3.2 | 3 | KYC step — BVN with live verification OR ID upload + selfie match | R3.1 | user/agent/kyc | yes | yes | high | high | high | Vendor integration verified; encrypted storage | unit + integration | **blocked (Q15, Q16)** |
-| R3.3 | 3 | Professional credentials — Surveyor licence, NBA licence, coverage areas, bio | R3.1 | user/agent | yes | yes | medium | medium | medium | Conditional fields enforced | unit | in_progress |
+| R3.1 | 3 | Agent application wizard step 1 — type selection (Field / Surveyor / Registry / Lawyer multi-select) | R2.* | user/agent | yes | yes | medium | low | low | Multi-select persisted | unit | done |
+| R3.2 | 3 | KYC step — BVN with live verification OR ID upload + selfie match | R3.1 | user/agent/kyc | yes | yes | high | high | high | Vendor integration verified; encrypted storage | unit + integration | in_progress |
+| R3.3 | 3 | Professional credentials — Surveyor licence, NBA licence, coverage areas, bio | R3.1 | user/agent | yes | yes | medium | medium | medium | Conditional fields enforced | unit | done |
 | R3.4 | 3 | Review & submit — versioned Agent Terms + truthfulness checkbox | R0.12, R3.1 | user/agent | yes | yes | high | low | medium | Consent record captured | unit | in_progress |
 | R3.5 | 3 | Approval Status Dashboard (PENDING / APPROVED / REJECTED with reason) | R3.4 | frontend/agents/onboarding/status | no | yes | low | low | low | All three states render | unit + E2E | done |
 | R3.6 | 3 | KYC docs encrypted in S3 with per-user access | R3.2 | integrations/storage | no | yes | high | medium | high | Encryption at rest verified; access enforced | integration | pending |
-| R3.7 | 3 | Resumable wizard (re-enter on tab close) | R3.1 | user/agent | yes | yes | low | medium | low | Step preserved server-side | unit + E2E | in_progress |
+| R3.7 | 3 | Resumable wizard (re-enter on tab close) | R3.1 | user/agent | yes | yes | low | medium | low | Step preserved server-side | unit + E2E | done |
 | **— Phase 4 — Admin invites + RBAC —** | | | | | | | | | | | | |
-| R4.1 | 4 | Admin invite (Super Admin sends, sub-role: Super / Operations / Finance) | R2.* | user/admin_invitation | yes | yes | high | low | medium | Invite token issued | unit + E2E | in_progress |
-| R4.2 | 4 | Invite email tokenised, 72-hr validity | R4.1 | user/admin_invitation | no | yes | medium | low | medium | Expired tokens rejected | unit | in_progress |
-| R4.3 | 4 | Invite acceptance — three scenarios (new user / existing / already admin) | R4.1 | user/admin_invitation | yes | yes | high | medium | high | All three branches tested | unit + E2E | in_progress |
-| R4.4 | 4 | RBAC matrix (invite admins, approve agents, assign agents, approve payouts, configure pricing, resolve disputes, release reports) | R0.7 | user/auth/utils/permissions | no | yes | high | high | high | Every admin endpoint guarded | unit | in_progress |
-| R4.5 | 4 | Admin team management (list, deactivate, change sub-role) | R4.4 | user/admin | no | yes | high | low | medium | Audit logs on changes | E2E | in_progress |
-| R4.6 | 4 | Seed first Super Admin via alembic data migration or CLI | R4.4 | alembic | yes | no | high | low | low | First admin exists post-deploy | smoke | pending |
+| R4.1 | 4 | Admin invite (Super Admin sends, sub-role: Super / Operations / Finance) | R2.* | user/admin_invitation | yes | yes | high | low | medium | Invite token issued | unit + E2E | done |
+| R4.2 | 4 | Invite email tokenised, 72-hr validity | R4.1 | user/admin_invitation | no | yes | medium | low | medium | Expired tokens rejected | unit | done |
+| R4.3 | 4 | Invite acceptance — three scenarios (new user / existing / already admin) | R4.1 | user/admin_invitation | yes | yes | high | medium | high | All three branches tested | unit + E2E | done |
+| R4.4 | 4 | RBAC matrix (invite admins, approve agents, assign agents, approve payouts, configure pricing, resolve disputes, release reports) | R0.7 | user/auth/utils/permissions | no | yes | high | high | high | Every admin endpoint guarded | unit | done |
+| R4.5 | 4 | Admin team management (list, deactivate, change sub-role) | R4.4 | user/admin | no | yes | high | low | medium | Audit logs on changes | E2E | done |
+| R4.6 | 4 | Seed first Super Admin via alembic data migration or CLI | R4.4 | alembic | yes | no | high | low | low | First admin exists post-deploy | smoke | done |
 | **— Phase 5 — Customer submission + payment —** | | | | | | | | | | | | |
-| R5.1 | 5 | Property submission wizard with VID assignment at Step 1 (`VP-YYYY-XXXXXX`) | R2.* | verification/property | yes | yes | medium | medium | medium | VID generated + persisted | unit + E2E | in_progress |
+| R5.1 | 5 | Property submission wizard with VID assignment at Step 1 (`VP-YYYY-XXXXXX`) | R2.* | verification/property | yes | yes | medium | medium | medium | VID generated + persisted | unit + E2E | done |
 | R5.2 | 5 | Listing-URL parser (PropertyPro, Nigeria Property Centre; manual fallback) | R5.1 | verification | no | yes | low | medium | medium | URL → fields populated | integration | **blocked (Q17)** |
 | R5.3 | 5 | Property type / location / details forms (conditional Land vs Building) | R5.1 | verification/property | yes | yes | low | medium | low | All conditional fields | unit | in_progress |
 | R5.4 | 5 | Optional document upload + seller info | R5.1 | verification/property | yes | yes | medium | low | medium | Files in S3; seller info captured | unit | in_progress |
 | R5.5 | 5 | Pricing transparency UI (tier cards, comparison modal, line-item breakdown, currency toggle, recommendation banner) | R5.1 | verification/pricing | yes | yes | low | medium | medium | All views render | unit + visual | in_progress |
 | R5.6 | 5 | First-time + referral discount auto-applied | R5.5 | verification/pricing | yes | yes | medium | low | medium | Discount visible in breakdown | unit | pending |
-| R5.7 | 5 | Price lock on Continue to Payment (24 hrs default) | R5.5 | verification | yes | yes | medium | medium | medium | Lock window enforced | unit | in_progress |
-| R5.8 | 5 | Five versioned consent items pre-payment (no pre-check) | R0.12 | verification | yes | yes | high | low | medium | All five recorded | unit | **blocked (Q28)** |
-| R5.9 | 5 | Payment methods — Card (Paystack/Flutterwave), Bank transfer (NGN virtual account 24-hr), International wire (USD/GBP/EUR + proof + admin confirm) | R5.5 | payment | yes | yes | high | high | high | All three paths complete | E2E | **blocked (Q13, Q21)** |
+| R5.7 | 5 | Price lock on Continue to Payment (24 hrs default) | R5.5 | verification | yes | yes | medium | medium | medium | Lock window enforced | unit | done |
+| R5.8 | 5 | Five versioned consent items pre-payment (no pre-check) | R0.12 | verification | yes | yes | high | low | medium | All five recorded | unit | **blocked (D19 — legal copy required)** |
+| R5.9 | 5 | Payment methods — Card (Paystack/Flutterwave), Bank transfer (NGN virtual account 24-hr), International wire (USD/GBP/EUR + proof + admin confirm) | R5.5 | payment | yes | yes | high | high | high | All three paths complete | E2E | in_progress |
 | R5.10 | 5 | Payment status UI with plain-language messaging | R5.9 | payment | no | yes | low | medium | low | Never raw gateway codes | unit | in_progress |
 | R5.11 | 5 | Retry flow (preserve price lock; log failures; support after 3 failures) | R5.9 | payment | yes | yes | medium | medium | medium | Retry preserves lock | E2E | pending |
 | R5.12 | 5 | Receipt — instant generation, emailed, contains VID + line items + FX rate | R5.9 | payment | yes | yes | medium | low | low | PDF receipt arrives | integration | pending |
@@ -189,12 +195,23 @@
 
 ## Status Summary
 
+*Updated 2026-05-02 by Slice S0 audit — reconciled against live `main` branch.*
+
 | Status | Count |
 |---|---|
-| `done` | 22 |
-| `in_progress` | 41 |
-| `blocked` | 12 |
-| `pending` | 65 |
+| `done` | 40 |
+| `in_progress` | 27 |
+| `blocked` | 11 |
+| `pending` | 62 |
 | **Total** | **140** |
 
-The orchestrator's first job: an **audit slice** to confirm `done`/`in_progress` against the live code. See [execution-plan.md](execution-plan.md) → Slice S0.
+**Key S0 audit findings:**
+- R0.11 verified done: `verification/state_machine/__init__.py` has full `StateMachine` class with `assert_can_transition()`.
+- R0.12 verified done: `consent/models.py` has `ConsentDocument` + `UserConsent` with version, ip_address, device_fingerprint.
+- R2.1/R2.2 verified done: signup OTP 30-min gate enforced; login warn@5/lockout@7 implemented.
+- R2.10/R2.11 verified done: `signup_drafts` 7-day TTL + consent records on signup.
+- R3.1/R3.3/R3.7 verified done: agent types JSON array, conditional credential fields, resumable wizard on main AgentApplication row.
+- R4.1–R4.6 verified done: full admin invitation flow, three acceptance branches, RBAC permission matrix, super-admin seed migration.
+- R5.1/R5.7 verified done: VP-YYYY-XXXXXX VID generation, 24-hr price lock enforced.
+- **Critical gaps still pending:** R0.10 (AuditLog entity — no code exists), R0.16 (state derivation layer), R5.6 (first-time/referral discounts), payment webhooks (R5.9 stubs).
+- **No test suite found** — zero test files in backend.

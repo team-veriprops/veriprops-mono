@@ -1,43 +1,12 @@
 # PRD Orchestrator Skill
 
-A **Claude Code skill** that turns a `PRD.md` (phased requirements) into a fully implemented system using structured analysis, autonomous execution, clarification loops, and continuous self-audits.
+A Claude Code skill for turning a `PRD.md` into a fully implemented system through structured planning, autonomous execution, clarification loops, self-audits, and recovery-first resume.
 
-Built for use with **Claude Code** by Anthropic.
+## Commands
 
----
+### Initialize
 
-## 🚀 What it does
-
-* Analyzes your PRD end-to-end
-* Generates architecture + execution plan
-* Implements in safe, optimal slices
-* Asks for clarification when needed
-* Self-audits after every run
-* Produces a final audit report
-
----
-
-## 📁 Setup
-
-Place in your repo:
-
-```
-.claude/skills/prd-orchestrator/
-```
-
-Ensure:
-
-* `PRD.md` exists in repo root
-* `/docs` folder is writable
-* Git is initialized (recommended)
-
----
-
-## ⚙️ Commands
-
-### 1. Initialize (once)
-
-```
+```bash
 /skill prd-orchestrator initialize
 ```
 
@@ -49,123 +18,116 @@ Generates:
 * `docs/architecture-spec.md`
 * `docs/execution-plan.md`
 * `docs/progress.md`
+* `docs/runtime-state.yaml`
+* `socs/upgrade-log.md`
 
-May pause for **clarifications**.
+May stop for clarification.
 
 ---
 
-### 2. Run (start execution)
+### Run
 
-```
+```bash
 /skill prd-orchestrator run
 ```
 
-* Selects optimal work batch
-* Implements code + tests
-* Self-audits
-* Updates docs
-* Stops at safe checkpoint
+The skill:
+
+* selects optimal slice(s)
+* implements
+* tests
+* self-audits
+* checkpoints safely
 
 ---
 
-### 3. Resume (continue anytime)
+### Resume
 
-```
+```bash
 /skill prd-orchestrator resume
 ```
 
-* Recovers state from docs + git
-* Continues unfinished or next slice
-* Safe after interruptions/timeouts
+Recovery-first:
+
+1. restore interrupted in-flight state
+2. finish pending work
+3. complete self-audit
+4. surface pending clarification
+5. checkpoint safely
+6. continue execution
 
 ---
 
-### 4. Final Audit
+### Upgrade
 
+```bash
+/skill prd-orchestrator upgrade
 ```
+
+Run when the skill version changes.
+
+Safely migrates generated docs/state without losing progress.
+
+### Audit
+
+```bash
 /skill prd-orchestrator audit
 ```
 
-Generates:
+Produces:
 
 * `docs/final-audit.md`
 
 ---
 
-## 🔁 Workflow
+## Workflow
 
-```
-initialize → review → commit
-run        → review → commit
-resume     → review → commit
-...repeat...
-audit      → fix → done
-```
-
----
-
-## 🧠 Key Features
-
-### Clarification-first
-
-Stops and asks when requirements are ambiguous.
-
-### Autonomous slicing
-
-Chooses how much work to do per run (no micromanagement).
-
-### Self-auditing
-
-Every run validates:
-
-* PRD compliance
-* architecture integrity
-* security
-* test coverage
-
-### Deterministic resume
-
-All state stored in `/docs`, not chat memory.
-
----
-
-## 📌 Rules
-
-* Always review and commit after each run/resume
-* Never ignore clarification prompts
-* Do not manually bypass architecture or decision logs
-
----
-
-## ✅ Completion Criteria
-
-A PRD is complete when:
-
-* All requirements implemented
-* No blockers remain
-* Final audit passes
-
----
-
-## 💡 Mental Model
-
-> **Initialize once → Run/Resume until done → Audit at the end**
-
----
-
-## ⚠️ Tip
-
-Commit after every cycle:
-
-```
-git add .
-git commit -m "feat: implement slice"
+```text
+initialize
+run
+(interrupted?)
+resume
+(skill updated?)
+upgrade
+resume
+...
+audit
 ```
 
-This ensures safe recovery and clean progress.
+---
+
+## Rules
+
+* Review and commit after each cycle
+* Answer clarification prompts
+* Do not bypass architecture or decision logs
+* Resume interrupted work before starting new work
 
 ---
 
-## 📄 License
+## Completion
 
-Internal use / customize per project.
+Done when:
+
+* all requirements implemented
+* no blockers remain
+* runtime state is checkpointed/idle
+* final audit passes
+
+---
+
+## Commit Behavior
+
+The skill does NOT automatically commit.
+
+It operates in one of three modes:
+
+- advisory (default): suggests commits
+- strict: requires commits before execution
+- disabled: ignores git entirely
+
+Configure via:
+
+.claude/skills/prd-orchestrator/config.yaml
+
+Recommended: advisory

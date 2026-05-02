@@ -1,3 +1,9 @@
+---
+skill: prd-orchestrator
+skill_version: 2.2.0
+last_updated: 2026-05-02
+---
+
 # Decision Log
 
 > Binding decisions for Veriprops PRD execution. Every entry is `proposed` (orchestrator's default — may be overridden by user) or `confirmed` (user-approved). The orchestrator MUST NOT proceed past a phase whose blocking decisions are still `proposed` for any user-input-required item.
@@ -146,7 +152,7 @@ Diaspora customers receive SMS at international numbers (Twilio); Nigerian agent
 
 ## Decision: D6 — BVN verification provider
 
-**Status:** **BLOCKING — REQUIRES USER INPUT** (Open Q15)
+**Status:** confirmed (2026-05-02)
 
 ### Context
 Phase 3 KYC requires live BVN verification. Mono / Dojah / Okra are the three commonly-cited Nigerian providers. They differ on price, latency, fraud-detection extras, and selfie-match availability.
@@ -157,11 +163,14 @@ Phase 3 KYC requires live BVN verification. Mono / Dojah / Okra are the three co
 3. **Okra** — financial data leader; less KYC-bundled.
 
 ### Chosen Option
-*Cannot proceed without user input.* Provisional recommendation: **Dojah** — KYC-bundled simplifies vendor management and addresses Q16 (selfie match) at the same time.
+**Dojah** — user-confirmed 2026-05-02.
+
+### Rationale
+One vendor, one webhook, one billing relationship. Bundles BVN + selfie match, eliminating the need for a separate D7 vendor.
 
 ### Tradeoffs
-- Pros (Dojah): one vendor, one webhook, one billing relationship.
-- Cons (Dojah): BVN-only price arguably higher; less mature financial-data side.
+- Pros: one vendor, one webhook, one billing relationship.
+- Cons: BVN-only price arguably higher; less mature financial-data side.
 
 ### Revisit Conditions
 - If false-rejection rate > 3% in pilot.
@@ -170,7 +179,7 @@ Phase 3 KYC requires live BVN verification. Mono / Dojah / Okra are the three co
 
 ## Decision: D7 — Selfie match technology
 
-**Status:** **BLOCKING — REQUIRES USER INPUT** (Open Q16)
+**Status:** confirmed (2026-05-02)
 
 ### Context
 Phase 3 selfie match against BVN photo or uploaded ID. Build vs buy.
@@ -181,10 +190,10 @@ Phase 3 selfie match against BVN photo or uploaded ID. Build vs buy.
 3. In-house (face-recognition lib + ML pipeline) — defer.
 
 ### Chosen Option
-Provisional: vendor-bundled with the BVN provider (D6).
+**Vendor-bundled with D6 (Dojah)** — user-confirmed 2026-05-02.
 
 ### Rationale
-Build is out of scope for MVP. Vendor accuracy is good enough; costs are predictable.
+Build is out of scope for MVP. Dojah bundles BVN + selfie in the same SDK call; no second vendor needed.
 
 ### Revisit Conditions
 - If vendor pricing shifts; if false-match rate > 0.1%.
@@ -240,7 +249,7 @@ Provisional: Option 2.
 
 ## Decision: D10 — Real-time channel for live dashboard
 
-**Status:** **REQUIRES USER INPUT** (Open Q22)
+**Status:** confirmed (2026-05-02)
 
 ### Context
 Phase 9 customer dashboard needs real-time status updates. WebSocket vs SSE.
@@ -251,19 +260,20 @@ Phase 9 customer dashboard needs real-time status updates. WebSocket vs SSE.
 3. Polling-only (60-sec) — already required as fallback per PRD.
 
 ### Chosen Option
-Provisional: **SSE**.
+**Dual-channel** — user-confirmed 2026-05-02:
+- **SSE** for one-way push: live dashboard updates, notifications, metrics counters, audit feed.
+- **WebSocket** for two-way: collaborative workflow, chat, presence, real-time commands.
 
 ### Rationale
-- One-way channel is sufficient — clients only consume status updates.
-- Plays nicer with serverless deploy targets (Vercel) than long-lived WebSockets.
-- Polling fallback remains for SSE-incompatible browsers.
+Different use cases require different transports. SSE is simpler and sufficient for server-push-only flows. WebSocket is required for Phase 11 chat and agent collaboration features that need duplex communication.
 
-### Tradeoffs
-- Pros: simpler infra; fewer connection-management failure modes.
-- Cons: no client → server duplex; if we add agent live-typing later we'll add WebSockets.
+### Constraints Introduced
+- Phase 9 (S33) uses SSE with 60-sec polling fallback.
+- Phase 11 (S37) uses WebSocket for messaging/presence.
+- Both are admin-configurable in terms of timeouts/reconnect behaviour.
 
 ### Revisit Conditions
-- If we add live messaging (Phase 11) with typing indicators.
+- If SSE connection limits become a scaling constraint at >1000 concurrent users.
 
 ---
 
@@ -298,7 +308,7 @@ PRD-quoted values where stated; conservative defaults elsewhere. All knobs are a
 
 ## Decision: D12 — FX rate source
 
-**Status:** **REQUIRES USER INPUT** (Open Q11)
+**Status:** confirmed (2026-05-02)
 
 ### Context
 Currency toggle needs live or near-live FX. Two paths: live API or admin-set table updated daily.
@@ -306,18 +316,26 @@ Currency toggle needs live or near-live FX. Two paths: live API or admin-set tab
 ### Options Considered
 1. Live API (e.g., openexchangerates.org or fixer.io) with 5-min cache.
 2. Admin-set rate table refreshed daily by Finance Admin.
-3. Hybrid — API source with admin override capability.
+3. Hybrid — Flutterwave FX rates API with configurable cache + admin override table.
 
 ### Chosen Option
-Provisional: **Option 3**.
+**Option 3 — Flutterwave FX rates API** — user-confirmed 2026-05-02.
+- Primary source: Flutterwave `/rates` API endpoint.
+- Cache TTL: 5 minutes (admin-configurable via `FX_CACHE_TTL_MINUTES` setting).
+- Admin override table: Finance Admin can pin a rate that supersedes the live rate.
+- Stale-warning shown to customer at 30 min (per PRD §5.2).
+- All FX settings configurable by Finance Admin in Phase 18 UI.
 
 ### Rationale
-- Live API is essential for diaspora-facing pricing accuracy.
-- Admin override is a safety net for rate spikes / API outages.
-- Stale-warning at 30 min (per PRD §5.2) covers the failure mode.
+Flutterwave is already integrated for payments; using their FX rates avoids a second API dependency and ensures rate consistency with the payment gateway.
+
+### Constraints Introduced
+- `currency_rates` table stores Flutterwave-sourced rates + admin overrides.
+- `FX_CACHE_TTL_MINUTES` setting (default 5, admin-configurable).
+- Stale warning fires if last_refreshed > 30 min.
 
 ### Revisit Conditions
-- After first FX-API outage — may move to admin-only.
+- After first Flutterwave rate API outage — may add openexchangerates.org as fallback.
 
 ---
 
@@ -433,13 +451,16 @@ Most cases auto-resolve. Admin attention reserved for vendor's "uncertain" tier.
 
 ## Decision: D19 — Verification Disclaimer copy
 
-**Status:** **BLOCKING — REQUIRES USER INPUT** (Open Q28)
+**Status:** confirmed-placeholder (2026-05-02)
 
 ### Context
 Phase 5 cannot ship pre-payment without legally-signed-off Verification Disclaimer copy. The five consent items (PRD §5.3) need final wording.
 
-### Required Action
-Legal sign-off on:
+### Chosen Option
+**Proceed with placeholder text** — user-confirmed 2026-05-02. Placeholder copy will be seeded in the migration; final legal copy must be swapped in before Phase 5 production launch.
+
+### Required Action (pre-launch)
+Legal sign-off still required on final wording for:
 1. Verification Disclaimer
 2. Findings & Opinion Acknowledgement
 3. Jurisdiction & Platform-Only Transactions

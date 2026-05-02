@@ -16,6 +16,8 @@ from typing import Any, Dict, List, Optional
 
 from kink import di, inject
 
+from main.app.domain.audit.models import AuditActionType
+from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.auth.consent.models import (
     ConsentDocumentType,
 )
@@ -83,12 +85,14 @@ class VerificationService:
         validator: VerificationValidator,
         pricing_service: PricingService,
         consent_service: ConsentService,
+        audit: AuditLogService,
     ):
         self._repo = repo
         self._property_repo = property_repo
         self._validator = validator
         self._pricing = pricing_service
         self._consent_service = consent_service
+        self._audit = audit
 
     # ── Reads ─────────────────────────────────────────────────────
 
@@ -204,15 +208,26 @@ class VerificationService:
             property_id=property_id,
             submitted_at=Utils.datetime_now(),
         ))
+        self._audit.schedule(
+            AuditActionType.VERIFICATION_SUBMITTED,
+            resource_type="Verification",
+            resource_id=verification_id,
+            actor_id=customer_id,
+            from_state=VerificationStatus.DRAFT.value,
+            to_state=VerificationStatus.SUBMITTED.value,
+            ip_address=ip_address,
+        )
         return await self._to_dto(await self._repo.get_model(verification_id))
 
     async def transition(
         self, verification_id: str, target: VerificationStatus,
+        actor_id: Optional[str] = None,
     ) -> VerificationDto:
         """Internal-only. Used by PaymentService and admin actions."""
         row = await self._repo.get_model(verification_id)
         if row is None:
             raise ResourceNotFoundException(resource="Verification")
+        from_state = row.status
         self._validator.assert_can_transition(row.status, target.value)
         update = UpdateVerificationDto(status=target)
         if target == VerificationStatus.PAID:
@@ -220,6 +235,14 @@ class VerificationService:
         elif target == VerificationStatus.COMPLETED:
             update.completed_at = Utils.datetime_now()
         await self._repo.update(verification_id, update)
+        self._audit.schedule(
+            AuditActionType.VERIFICATION_STATE_CHANGED,
+            resource_type="Verification",
+            resource_id=verification_id,
+            actor_id=actor_id,
+            from_state=from_state,
+            to_state=target.value,
+        )
         return await self._to_dto(await self._repo.get_model(verification_id))
 
     # ── Helpers ───────────────────────────────────────────────────

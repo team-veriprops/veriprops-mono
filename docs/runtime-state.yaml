@@ -1,0 +1,32 @@
+session_id: null
+command: null
+
+status: idle
+phase: idle
+
+current_slice: null
+current_subtask: null
+
+modified_files: []
+created_files: []
+
+tests:
+  written: false
+  executed: false
+  passing: false
+
+self_audit:
+  started: false
+  completed: false
+  findings: []
+
+clarification_needed: []
+
+git:
+  branch: main
+  dirty: true
+
+next_action: "run S2 — Reusable state-machine validator (R0.11/R0.15)"
+
+started_at: null
+last_checkpoint: "2026-05-02"

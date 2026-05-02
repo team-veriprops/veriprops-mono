@@ -1,3 +1,9 @@
+---
+skill: prd-orchestrator
+skill_version: 2.2.0
+last_updated: 2026-05-02
+---
+
 # Architecture Specification
 
 > Authoritative architecture for Veriprops MVP through Phase 19. Cross-references [PRD.md](../PRD.md), [decision-log.md](decision-log.md), and per-app guidance in [backend/CLAUDE.md](../backend/CLAUDE.md) and [frontend/CLAUDE.md](../frontend/CLAUDE.md).

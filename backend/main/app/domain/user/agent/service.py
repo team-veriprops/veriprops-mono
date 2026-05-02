@@ -14,6 +14,8 @@ from typing import List, Optional
 from kink import di, inject
 
 from main.app.config.settings import settings
+from main.app.domain.audit.models import AuditActionType
+from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.agent.kyc.interface import (
     BvnVerificationResult,
     KycProvider,
@@ -76,6 +78,7 @@ class AgentApplicationService:
         user_service: UserService,
         session_service: SessionService,
         kyc_provider: KycProvider,
+        audit: AuditLogService,
     ):
         self._repo = repo
         self._validator = validator
@@ -83,6 +86,7 @@ class AgentApplicationService:
         self._user_service = user_service
         self._session_service = session_service
         self._kyc = kyc_provider
+        self._audit = audit
 
     # ── Reads ──────────────────────────────────────────────────────
 
@@ -244,6 +248,15 @@ class AgentApplicationService:
             type_=SecurityEventType.AGENT_APPLICATION_SUBMITTED,
             description=f"submitted application {row.id}",
         )
+        self._audit.schedule(
+            AuditActionType.AGENT_APPLICATION_SUBMITTED,
+            resource_type="AgentApplication",
+            resource_id=str(row.id),
+            actor_id=user_id,
+            from_state=AgentApplicationStatus.DRAFT.value,
+            to_state=AgentApplicationStatus.PENDING.value,
+            ip_address=ip_address,
+        )
         return self._to_public_dto(await self._repo.get_by_user_id(user_id))
 
     # ── Admin actions ──────────────────────────────────────────────
@@ -267,6 +280,14 @@ class AgentApplicationService:
             type_=SecurityEventType.AGENT_APPLICATION_APPROVED,
             description=f"approved by admin {admin_id}",
         )
+        self._audit.schedule(
+            AuditActionType.AGENT_APPLICATION_APPROVED,
+            resource_type="AgentApplication",
+            resource_id=application_id,
+            actor_id=admin_id,
+            from_state=AgentApplicationStatus.PENDING.value,
+            to_state=AgentApplicationStatus.APPROVED.value,
+        )
         return self._to_public_dto(await self._repo.get_model(application_id))
 
     async def reject(self, application_id: str, admin_id: str, reason: str) -> AgentApplicationDto:
@@ -286,6 +307,15 @@ class AgentApplicationService:
             user_id=row.user_id,
             type_=SecurityEventType.AGENT_APPLICATION_REJECTED,
             description=f"rejected by admin {admin_id}: {reason[:120]}",
+        )
+        self._audit.schedule(
+            AuditActionType.AGENT_APPLICATION_REJECTED,
+            resource_type="AgentApplication",
+            resource_id=application_id,
+            actor_id=admin_id,
+            from_state=AgentApplicationStatus.PENDING.value,
+            to_state=AgentApplicationStatus.REJECTED.value,
+            meta={"reason": reason},
         )
         return self._to_public_dto(await self._repo.get_model(application_id))
 
