@@ -36,3 +36,4 @@ When adding a feature, write a short plan and confirm with the user before codin
 
 ### Non-negotiable rule
 1. No Frontend/Backend duplicate implementations. 
+2. As much as possible, deliver all implementation as full vertical slices (backend domains + Alembic migrations + tests + frontend ) so each phase ships demoably end-to-end.

@@ -65,14 +65,14 @@ export default function LandingNav() {
         {/* Desktop CTAs */}
         <div className="hidden md:flex items-center gap-3">
           <Link
-            href="/auth"
+            href="/auth/login"
             className="px-5 py-2.5 text-sm font-semibold rounded-lg transition-all duration-150 hover:bg-gray-50"
             style={{ color: "var(--brand-navy)" }}
           >
             Log in
           </Link>
           <Link
-            href="/auth?intent=verify"
+            href="/auth/login?intent=verify"
             className="signature-gradient text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 hover:opacity-90 hover:scale-[0.98] active:scale-95"
             style={{ boxShadow: "0 4px 14px -3px rgba(0,13,34,0.35)" }}
           >
@@ -115,7 +115,7 @@ export default function LandingNav() {
             ))}
             <div className="mt-4 pt-4 flex flex-col gap-3" style={{ borderTop: "1px solid rgba(196,198,207,0.3)" }}>
               <Link
-                href="/auth"
+                href="/auth/login"
                 onClick={() => setMenuOpen(false)}
                 className="py-3 px-4 text-center text-sm font-semibold rounded-lg border transition-colors"
                 style={{ color: "var(--brand-navy)", borderColor: "rgba(196,198,207,0.4)" }}
@@ -123,7 +123,7 @@ export default function LandingNav() {
                 Log in
               </Link>
               <Link
-                href="/auth?intent=verify"
+                href="/auth/login?intent=verify"
                 onClick={() => setMenuOpen(false)}
                 className="signature-gradient text-white py-3 px-4 text-center text-sm font-semibold rounded-lg"
               >

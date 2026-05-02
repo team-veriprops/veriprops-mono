@@ -138,7 +138,7 @@ export default function VerifiedAgents() {
             Are you a field agent, surveyor, registry official, or property lawyer in Nigeria?
           </div>
           <Link
-            href="/auth?intent=agent"
+            href="/auth/login?intent=agent"
             className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 hover:opacity-90 hover:scale-[0.98] group"
             style={{
               color: "var(--brand-viridian)",

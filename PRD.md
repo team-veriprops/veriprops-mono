@@ -1066,11 +1066,11 @@ Merged from both detailed PRDs. Resolve before or during the owning phase.
 
 | # | Question | Phase |
 |---|---|---|
-| 1 | Cancellation surcharge percentage | 5 |
+| 1 | Cancellation surcharge percentage (allow admin to set it, defaults to 5%) | 5 |
 | 2 | Exact pricing per tier + per line-item | 5 / 18 |
-| 3 | Service fee percentage | 5 |
-| 4 | First-time discount percentage | 17 |
-| 5 | Referral credit + invitee discount amounts | 17 |
+| 3 | Service fee percentage (allow admin to set it, defaults to 10%) | 5 |
+| 4 | First-time discount percentage (allow admin to set it, defaults to 5%) | 17 |
+| 5 | Referral credit + invitee discount amounts (allow admin to set it, defaults to 5%) | 17 |
 | 6 | Max combined discount cap | 17 |
 | 7 | Re-check pricing model (flat / per-agent / %) | 14 |
 | 8 | Trust score weighting formula per role | 8 |

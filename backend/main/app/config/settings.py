@@ -142,6 +142,18 @@ class Settings(AppodusBaseSettings):
     SUPER_ADMIN_PASSWORD: Optional[str] = None
     SUPER_ADMIN_EMAIL: Optional[str] = None
 
+    # KYC (PRD Open Q #15 / #16) — STUB | MONO | DOJAH
+    KYC_PROVIDER: Optional[str] = "STUB"
+
+    # Verification pricing & FX
+    PRICING_FX_PROVIDER: Optional[str] = "STUB"  # STUB | OPENEXCHANGERATES
+    PRICING_FX_CACHE_SECONDS: int = 5 * 60          # 5 min cache
+    PRICING_FX_STALE_AFTER_SECONDS: int = 30 * 60   # 30 min => stale-warning
+    PRICE_LOCK_TTL_HOURS: int = 24
+
+    # Admin invitations
+    ADMIN_INVITE_TTL_HOURS: int = 72
+
 
 settings = Settings()
 settings.set_env_vars() # Set the env vars in os.environ

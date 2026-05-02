@@ -177,11 +177,14 @@ class SessionService:
         ) -> AuthSessionDto:
 
         # Persist server-side device session keyed on a hash of the refresh token.
+        from typing import cast, Any
+        sub_role_value: Any = cast(Any, user).admin_sub_role
         token_hash = JwtAuthUtils.set_access_token(
                 user_id=str(user.id),
                 user_type=user.user_type,
                 user_personas=user.personas,
                 authorize=authorize,
+                admin_sub_role=str(sub_role_value) if sub_role_value else None,
             )
         await self.create_device_session(CreateDeviceSessionDto(
                 user_id=str(user.id),

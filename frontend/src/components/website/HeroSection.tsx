@@ -95,7 +95,7 @@ export default function HeroSection() {
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row gap-4">
             <Link
-              href="/auth?intent=verify"
+              href="/auth/login?intent=verify"
               className="group inline-flex items-center justify-center gap-2.5 signature-gradient text-white px-8 py-4 rounded-xl text-base font-bold transition-all duration-200 hover:opacity-90 hover:scale-[0.98] active:scale-95"
               style={{ boxShadow: "0 8px 24px -4px rgba(0,13,34,0.35)" }}
             >

@@ -49,8 +49,8 @@ class OauthUtils:
         """Build the provider authorization URL, persist signed state + PKCE
         verifier in Redis, and return the URL for the popup to navigate to."""
         code_challenge, code_verifier, state = JwtAuthUtils.generate_pkce()
-        redirect_uri = OauthUtils.callback_redirect_uri(platform)
-        frontend_origin = OauthUtils.resolve_frontend_origin(request)
+        redirect_uri = await OauthUtils.callback_redirect_uri(platform)
+        frontend_origin = await OauthUtils.resolve_frontend_origin(request)
 
         params = {
             "client_id": client_id,

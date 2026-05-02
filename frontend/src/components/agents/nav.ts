@@ -1,23 +1,8 @@
 import { NavItem } from "@components/nav/PortalSidebar";
-import {
-  LayoutDashboard,
-  FileCheck,
-  ClipboardList,
-  AlertTriangle,
-  MessageSquare,
-  CreditCard,
-  Settings,
-  HelpCircle,
-} from "lucide-react";
+import { LayoutDashboard, ClipboardList, UserCog } from "lucide-react";
 
-
-export const portalNavItems: NavItem[] = [
-  { title: "Dashboard", href: "/portal/dashboard", icon: LayoutDashboard, has_separator_after: false },
-  { title: "My Verifications", href: "/portal/verifications", icon: FileCheck, has_separator_after: false },
-  { title: "Payments", href: "/portal/payments", icon: CreditCard, has_separator_after: false },
-  { title: "Chats", href: "/portal/chats", icon: MessageSquare, has_separator_after: false },
-  { title: "Disputes", href: "/portal/disputes", icon: AlertTriangle, has_separator_after: false },
-  { title: "Tasks", href: "/portal/tasks", icon: ClipboardList, has_separator_after: true },
-  { title: "Settings", href: "/portal/settings", icon: Settings, has_separator_after: false },
-  { title: "Support & Help", href: "/portal/support", icon: HelpCircle, has_separator_after: false },
+export const agentNavItems: NavItem[] = [
+  { title: "Dashboard", href: "/agents/dashboard", icon: LayoutDashboard, has_separator_after: false },
+  { title: "Onboarding", href: "/agents/onboarding", icon: ClipboardList, has_separator_after: true },
+  { title: "Account", href: "/account", icon: UserCog, has_separator_after: false },
 ];

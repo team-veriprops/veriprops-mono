@@ -82,7 +82,7 @@ export default function CTASection() {
               {/* CTAs */}
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
-                  href="/auth?intent=verify"
+                  href="/auth/login?intent=verify"
                   className="group inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:opacity-90 hover:scale-[0.98]"
                   style={{
                     backgroundColor: "var(--brand-viridian)",
@@ -94,7 +94,7 @@ export default function CTASection() {
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <Link
-                  href="/auth?intent=agent"
+                  href="/auth/login?intent=agent"
                   className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:bg-white/10"
                   style={{
                     color: "#fff",

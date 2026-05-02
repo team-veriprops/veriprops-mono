@@ -1,7 +1,6 @@
-export default function Agent() {
-  return (
-    <div className="min-h-screen bg-background">
-        Agent
-    </div>
-  );
+import { redirect } from "next/navigation";
+import { ROUTES } from "@lib/routes";
+
+export default function AgentsPage() {
+  redirect(ROUTES.AGENT.ONBOARDING);
 }

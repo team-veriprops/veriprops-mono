@@ -139,7 +139,14 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
     .catch((err) => {
       if (resolved) return;
       resolved = true;
-      cleanup();
+      window.removeEventListener("message", onMessage);
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      if (closedPollId !== null) clearInterval(closedPollId);
+      try {
+        if (popup && !popup.closed) {
+          popup.location.href = `${window.location.origin}/auth/oauth/error`;
+        }
+      } catch { /* ignore */ }
       onError({ code: "provider", message: err?.message });
     });
 

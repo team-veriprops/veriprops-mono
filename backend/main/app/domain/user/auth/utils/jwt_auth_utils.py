@@ -1,14 +1,18 @@
+from __future__ import annotations
+
 import base64
 import hashlib
 import secrets
 from datetime import timedelta
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from pydantic import BaseModel
 
 from main.app.config.settings import settings
-from main.app.domain.user.auth.session.models import UserType, UserPersona
 from main.appodus_utils import Utils
+
+if TYPE_CHECKING:
+    from main.app.domain.user.auth.session.models import UserType, UserPersona
 from fastapi.params import Depends
 from fastapi.security import OAuth2PasswordBearer
 from libre_fastapi_jwt import AuthJWT
@@ -61,11 +65,22 @@ class JwtAuthUtils:
         return True
 
     @staticmethod
-    def set_access_token(user_id: str, user_type: UserType, user_personas: List[UserPersona], authorize: AuthJWT) -> str:
+    def set_access_token(
+            user_id: str,
+            user_type: UserType,
+            user_personas: List[UserPersona],
+            authorize: AuthJWT,
+            *,
+            admin_sub_role: str | None = None,
+    ) -> str:
 
         refresh_token_expires = timedelta(seconds=utils_settings.REFRESH_TOKEN_TTL_SECONDS)
 
-        user_claims = {"user_type": user_type, "personas": list(user_personas or [])}
+        user_claims = {
+            "user_type": user_type,
+            "personas": list(user_personas or []),
+            "admin_sub_role": admin_sub_role,
+        }
 
         try:
 

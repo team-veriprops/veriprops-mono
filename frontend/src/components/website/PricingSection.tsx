@@ -187,7 +187,7 @@ export default function PricingSection() {
 
                 {/* CTA button */}
                 <Link
-                  href={`/auth?intent=verify&tier=${tier.name.toLowerCase()}`}
+                  href={`/auth/login?intent=verify&tier=${tier.name.toLowerCase()}`}
                   className="block text-center py-4 rounded-xl font-bold text-sm transition-all duration-200 hover:scale-[0.98] active:scale-95"
                   style={
                     tier.ctaStyle === "gradient"

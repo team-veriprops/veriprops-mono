@@ -7,9 +7,7 @@ from typing import List, Optional
 
 from pydantic import EmailStr, Field
 from sqlalchemy import Boolean, Column, DateTime, Index, String, Integer, JSON
-from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.mutable import MutableList
-from sqlalchemy.orm import relationship
 
 from main.app.domain.user.auth.session.models import UserType, UserPersona
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
@@ -83,6 +81,7 @@ class CreateUserDto(UserBaseDto):
     admin_sub_role: Optional[AdminSubRole] = None
     email_verified: bool = False
     phone_verified: bool = False
+
 
 class _CreateUserDto(CreateUserDto):
     user_type: UserType = UserType.USER

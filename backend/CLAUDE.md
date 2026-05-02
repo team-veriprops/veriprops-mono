@@ -44,7 +44,7 @@ Each domain must live in its **own package** and encapsulate all domain concerns
 | File            | Responsibility                                                                           |
 | --------------- | ---------------------------------------------------------------------------------------- |
 | `models.py`     | SQLAlchemy ORM model + Pydantic DTOs (`CreateDto`, `UpdateDto`, `QueryDto`, `SearchDto`) |
-| `repo.py`       | Data access layer — extends `GenericRepo`                                                |
+| `repo.py`       | Data access layer — extends `GenericRepo`, should never call the session object directly                                                |
 | `service.py`    | Business logic — service methods decorated with `@transactional`                         |
 | `controller.py` | FastAPI router (only when the domain exposes HTTP endpoints)                             |
 | `validator.py`  | Input validation + business-rule validation                                              |
@@ -82,6 +82,7 @@ A domain is **not considered complete** until:
 * Use application-enforced references
 * Reference IDs are normal indexed columns
 * Alembic migrations must never emit ALTER TABLE ... ADD FOREIGN KEY
+* Don't create duplicate indexes, prefer UniqueConstraint to create_index.
 
 
 

@@ -121,11 +121,15 @@ class FlutterwaveWebhookHandler(BaseWebhookHandler):
     # === Handlers (Stub Implementations) ===
 
     async def handle_charge_completed(self, data: WebhookData):
-        print("Payment successful", data)
-
-        paid_amount = Money(value=Decimal(data.amount), currency=data.currency)
-        authorization_dict = {}
-        await self._transaction_service.finalize_transaction(ext_ref=data.reference, payment_channel=data.channel, paid_amount=paid_amount, extra_data=authorization_dict)
+        # Bridge Flutterwave webhook → veriprops PaymentService.
+        from main.app.domain.payment.service import PaymentService
+        from main.app.domain.payment.models import PaymentStatus
+        payment_service: PaymentService = di[PaymentService]
+        await payment_service.record_provider_event(
+            provider_ref=data.reference,
+            status=PaymentStatus.SUCCEEDED.value,
+            payload=data.model_dump() if hasattr(data, "model_dump") else dict(data.__dict__),
+        )
 
     async def handle_transfer_completed(self, data: WebhookData):
         print("Transfer completed", data)

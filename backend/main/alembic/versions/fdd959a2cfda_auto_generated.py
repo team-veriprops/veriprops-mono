@@ -60,7 +60,7 @@ def _create_signup_drafts():
         "signup_drafts",
         sa.Column("email", sa.String(length=254), nullable=False),
         sa.Column("step", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("payload", sa.Text(), nullable=False, server_default="{}"),
+        sa.Column("payload", sa.Text(), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         *_base_audit_columns(),
         sa.PrimaryKeyConstraint("id"),

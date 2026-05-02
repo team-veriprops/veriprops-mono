@@ -20,12 +20,21 @@ export const ROUTES = {
 
   PORTAL: {
     DASHBOARD: '/portal/dashboard',
+    VERIFICATIONS_NEW: '/portal/verifications/new',
+    VERIFICATION_DETAIL: (id: string) => `/portal/verifications/${id}`,
+    VERIFICATION_CONFIRMED: (id: string) => `/portal/verifications/${id}/confirmed`,
+    VERIFICATION_PAY: (id: string) => `/portal/verifications/${id}/pay`,
   },
   AGENT: {
-    DASHBOARD: '/agent/dashboard',
+    DASHBOARD: '/agents/dashboard',
+    ONBOARDING: '/agents/onboarding',
+    ONBOARDING_STATUS: '/agents/onboarding/status',
   },
   ADMIN: {
     DASHBOARD: '/admin/dashboard',
+    TEAM: '/admin/team',
+    AGENT_APPLICATIONS: '/admin/agents/applications',
+    INVITE_ACCEPT: (token: string) => `/auth/admin-invite/${token}`,
   },
 
   ABOUT: '/about',
