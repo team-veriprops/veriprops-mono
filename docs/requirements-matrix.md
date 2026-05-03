@@ -22,12 +22,12 @@ last_updated: 2026-05-02
 | R0.7 | 0 | Kink DI bootstrap (logger, Redis, JWT bearer, AsyncClient) | none | appodus_utils/config | no | no | low | low | low | `di[T]` resolves; app-side override works | unit | done |
 | R0.8 | 0 | Env-based config via `appodus_active_env` (`local/test/dev/staging/prod`) | none | app/config | no | no | medium | low | low | All envs load without import errors | smoke | done |
 | R0.9 | 0 | Integration shells (S3, Paystack, Flutterwave, SendGrid, Mailjet, Twilio, Termii, Firebase, Google Drive, Zoho DocSign) | R0.7 | appodus_utils/integrations | no | yes (webhooks) | medium | medium | medium | Stubs callable; webhook routes mounted | integration | in_progress |
-| R0.10 | 0 | `AuditLog` entity + writer hook on every state transition | R0.2 | app/domain/audit | yes | no | high | medium | high | Every transition produces an AuditLog row | unit + integration | pending |
+| R0.10 | 0 | `AuditLog` entity + writer hook on every state transition | R0.2 | app/domain/audit | yes | no | high | medium | high | Every transition produces an AuditLog row | unit + integration | done |
 | R0.11 | 0 | Reusable state-machine validator | none | appodus_utils/state | no | no | high | medium | high | Verification, Task, Report all consume it | unit | done |
 | R0.12 | 0 | `ConsentDocument` + `UserConsent` entities + version bump triggers re-consent | R0.2 | app/domain/user/auth/consent | yes | yes | high | medium | high | Records (user_id, doc_type, version, accepted_at, ip, fingerprint) | unit + integration | done |
 | R0.13 | 0 | Frontend design system (Radix + Tailwind v4 tokens; form/field/input/toast/modal/wizard) | none | frontend/components/ui | no | no | low | medium | low | All listed components present and storybook'd | visual + unit | done |
 | R0.14 | 0 | JWT auth wiring (HttpOnly cookie 15-min/30-day, silent refresh, Next.js proxy guards) | R0.7 | backend auth + frontend proxy | yes | yes | high | medium | high | Cookie set/cleared correctly; proxy redirects | E2E | done |
-| R0.15 | 0 | Verification + Task + Report state machines authoritatively defined | R0.11 | app/domain/verification/state_machine | no | no | high | high | high | Transition tables match PRD §0.2; rejected illegal moves | unit | in_progress |
+| R0.15 | 0 | Verification + Task + Report state machines authoritatively defined | R0.11 | appodus_utils/state/machine.py | no | no | high | high | high | Transition tables match PRD §0.2; rejected illegal moves | unit | done |
 | R0.16 | 0 | Derived global state rules (PRD §0.3) | R0.15 | verification/state_machine | no | no | high | high | high | Global state derives from task states deterministically | unit | pending |
 | R0.17 | 0 | `alembic upgrade head` clean on local/test/dev/staging/prod | R0.2 | alembic | yes | no | low | low | low | CI green on all envs | smoke | in_progress |
 | **— Phase 1 — Marketing site —** | | | | | | | | | | | | |

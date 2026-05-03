@@ -7,7 +7,7 @@ from sqlalchemy import (Column,
                         String,
                         Text,
                         Integer,
-                        DateTime)
+                        DateTime, JSON)
 
 from main.appodus_utils import BaseEntity, PageRequest, BaseQueryDto, Object
 from main.appodus_utils.integrations.messaging.models import (MessageChannel,

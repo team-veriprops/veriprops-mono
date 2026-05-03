@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 FastAPI service for Veriprops. Async SQLAlchemy, Alembic migrations, Kink DI, MySQL.
 
 ## Commands

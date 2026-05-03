@@ -400,6 +400,17 @@ class Utils:
 
     @staticmethod
     def get_otp_code(prefix: str = None, suffix: str = None):
+
+        # RETURN TEST OTP WHEN NOT IN PROD
+        ENVIRONMENT = Utils.get_from_env_fail_if_not_exists(env_key="ENVIRONMENT")
+        TEST_OTP = Utils.get_from_env_fail_if_not_exists(env_key="TEST_OTP")
+
+        if (
+                ENVIRONMENT in ["Environment.LOCAL", "Environment.DEVELOPMENT", "Environment.TEST",
+                                "Environment.STAGING"]
+        ):
+            return TEST_OTP
+
         otp = random.randint(100000, 999999)
         if prefix:
             otp = prefix + '-' + str(otp)

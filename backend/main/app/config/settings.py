@@ -154,6 +154,9 @@ class Settings(AppodusBaseSettings):
     # Admin invitations
     ADMIN_INVITE_TTL_HOURS: int = 72
 
+    # TEST CONFIG
+    TEST_OTP: int = 654123
+
 
 settings = Settings()
 settings.set_env_vars() # Set the env vars in os.environ

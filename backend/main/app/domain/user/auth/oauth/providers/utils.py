@@ -80,14 +80,14 @@ class OauthUtils:
         return f"{base_url}?{query_string}"
 
     @staticmethod
-    def callback_redirect_uri(platform: SocialAuthProvider) -> str:
+    async def callback_redirect_uri(platform: SocialAuthProvider) -> str:
         """The OAuth redirect_uri registered with each provider. Must point at
         this backend (not the frontend) — the popup loads the backend HTML
         callback page, which then postMessages the parent frame and closes."""
         return f"{settings.BACKEND_PUBLIC_ORIGIN.rstrip('/')}/api/users/auth/oauth/{platform.value}/callback"
 
     @staticmethod
-    def resolve_frontend_origin(request: Request) -> str:
+    async def resolve_frontend_origin(request: Request) -> str:
         """Pick the frontend origin that opened the popup. Validated against
         the allowlist so we can later use it as a `postMessage` targetOrigin
         without spoofing risk. Falls back to the first allowlisted origin if
@@ -125,7 +125,7 @@ class OauthUtils:
         return stored
 
     @staticmethod
-    def popup_response(
+    async def popup_response(
         *,
         success: bool,
         target_origin: str,

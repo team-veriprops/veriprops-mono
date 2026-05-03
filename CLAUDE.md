@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 Veriprops is a property verification platform. Monorepo with two deployable apps that talk over HTTP:
 
 - [backend/](backend/) — FastAPI service (Python 3.12, MySQL, async SQLAlchemy, Alembic). See [backend/CLAUDE.md](backend/CLAUDE.md).

@@ -26,7 +26,7 @@ git:
   branch: main
   dirty: true
 
-next_action: "run S2 — Reusable state-machine validator (R0.11/R0.15)"
+next_action: "run S3 — Derived global state rules (R0.16)"
 
 started_at: null
 last_checkpoint: "2026-05-02"

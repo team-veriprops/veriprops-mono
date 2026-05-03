@@ -63,7 +63,7 @@ class SignupDraftService:
         if existing:
             # Soft-delete via GenericRepo; deleted rows are excluded by
             # `get_active_by_email` so a fresh signup will create a new draft.
-            await self._repo.delete(str(existing.id))
+            await self._repo.soft_delete(str(existing.id))
 
     @staticmethod
     def _to_dto(row: Optional[SignupDraft]) -> Optional[SignupDraftDto]:

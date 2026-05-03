@@ -10,13 +10,13 @@ last_updated: 2026-05-02
 
 ---
 
-**status:** S1 complete — ready for S2
+**status:** S2 complete — ready for S3
 
-**next_slice:** S2 (Reusable state-machine validator — R0.11/R0.15)
+**next_slice:** S3 (Derived global state rules — R0.16)
 
 **current_slice:** —
 
-**completion %:** 30% (41 done / 140 total — R0.10 delivered by S1)
+**completion %:** 31% (43 done / 140 total — R0.11 + R0.15 delivered by S2)
 
 ---
 
@@ -26,10 +26,11 @@ last_updated: 2026-05-02
 |---|---|---|
 | S0 | Audit & reconcile current state against requirements matrix | 2026-05-02 |
 | S1 | Audit log primitive — `AuditLog` model, repo, service, ContextVar queue, `@transactional` drain, Alembic migration, tests | 2026-05-02 |
+| S2 | Reusable state-machine validator — `appodus_utils/state/machine.py`, `IllegalStateTransitionException`, Verification + Task + Report machines, 101 unit tests | 2026-05-02 |
 
 ## Current Slice
 
-S1 complete. Next: S2 — Reusable state-machine validator (see [execution-plan.md](execution-plan.md)).
+S2 complete. Next: S3 — Derived global state rules (see [execution-plan.md](execution-plan.md)).
 
 ## Pending Slices
 
@@ -39,11 +40,11 @@ S1 → S2 → S3 → S4 → S5 → … → S58 (full sequence in [execution-plan
 
 ## Runtime State
 
-idle — S1 checkpointed, no slice in-flight. Awaiting `run` to begin S2.
+idle — S2 checkpointed, no slice in-flight. Awaiting `run` to begin S3.
 
 ## Pending Recovery
 
-none — S1 completed cleanly; no interrupted work detected.
+none — S2 completed cleanly; no interrupted work detected.
 
 ---
 
