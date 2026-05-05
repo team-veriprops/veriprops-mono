@@ -150,3 +150,36 @@ Webhook receivers live under `appodus_utils/integrations/.../webhook.py` and are
 - `test/e2e/` — integration tests (e.g. messaging service) — require external creds.
 - `test/utils/` — `mock_circuit_breaker.py`, shared fixtures.
 - `pytest.ini` sets `asyncio_mode = auto`, so async tests need no decorator.
+
+## Automation determinism (permanent rules — do not remove)
+
+### OTP_MODE contract
+- `OTP_MODE=deterministic` → `Utils.get_otp_code()` always returns `str(TEST_OTP)` (654123).
+- `OTP_MODE=random` → generates a real random 6-digit code.
+- `ENVIRONMENT=test` **requires** `OTP_MODE=deterministic`; startup fails otherwise.
+- `ENVIRONMENT=prod` **requires** `OTP_MODE=random`; startup fails otherwise.
+- Never compare `ENVIRONMENT` string to select OTP behaviour — always read `OTP_MODE` env var directly.
+
+### /dev/* endpoints
+- `POST /dev/reset` — drops + recreates all SQLAlchemy tables; clears OTP/OAuth keys via `RedisUtils.delete_by_prefix`. Idempotent. Returns `{"ok": true}`.
+- `POST /dev/seed` — inserts 4 deterministic test users (see table below). Idempotent (skips existing). Returns created emails + `test_otp`.
+- Both endpoints are gated by `_require_non_prod()` (returns 404 in production) AND the router is only mounted when `ENVIRONMENT != prod`.
+- **Never remove either guard.**
+
+| Email | Role | email_verified | phone_verified |
+|---|---|---|---|
+| `test.verified@veriprops.test` | CUSTOMER | yes | yes |
+| `test.unverified@veriprops.test` | CUSTOMER | no | no |
+| `test.admin@veriprops.test` | ADMIN | yes | yes |
+| `test.agent@veriprops.test` | AGENT+CUSTOMER | yes | yes |
+
+All seed users share password `TestPass123!` and stable UUIDs `00000000-0000-0000-0000-00000000000{1-4}`.
+
+### Mailpit SMTP (email capture in dev/test)
+- `SmtpEmailProvider` auto-routes all email in environments that are **not** production or staging. No setting required — routing is conditional in `MessageRouter._load_routing_rules()`.
+- `SmtpEmailProvider.send_message()` raises `ValueError` in production or staging (hard defence-in-depth guard).
+- Default config: `SMTP_HOST=localhost`, `SMTP_PORT=1025` (Mailpit defaults). No auth needed for Mailpit.
+- Do not introduce an `EMAIL_PROVIDER` setting — the routing condition `ENVIRONMENT not in {PRODUCTION, STAGING}` is the switch.
+
+### Production safety pattern
+- Any integration that must not fire in production must carry a hard-fail guard (raise, not log) inside its `send_message()` / equivalent. Configuration alone is not sufficient.

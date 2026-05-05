@@ -35,7 +35,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
   const verifyOtp = useVerifyOtpMutation();
 
   return (
-    <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+    <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="verify-form">
       <p
         className="text-sm leading-relaxed"
         style={{ color: "var(--brand-on-surface-variant)" }}
@@ -114,7 +114,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
       />
 
       <div className="flex gap-3 pt-2">
-        <Button type="button" variant="outline" className="flex-1" onClick={onBack} size="lg">
+        <Button type="button" variant="outline" className="flex-1" onClick={onBack} size="lg" data-testid="verify-back">
           Back
         </Button>
         <Button
@@ -122,6 +122,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
           className="flex-1"
           size="lg"
           disabled={!form.watch("emailVerified") || !form.watch("phoneVerified")}
+          data-testid="verify-submit"
         >
           Continue
         </Button>

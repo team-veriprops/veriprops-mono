@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
+import { isAutomationEnvironment } from "@lib/automation";
 import { AuthService } from "./auth-service";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import type {
@@ -32,6 +33,13 @@ export function useCurrentSession(enabled = true) {
     queryFn: async () => {
       const res = await authService.currentSession();
       if (res.data) setSession(res.data);
+      if (isAutomationEnvironment()) {
+        (window as any).__auth_snapshot__ = {
+          isAuthenticated: !!res.data,
+          userId: res.data?.user?.id ?? null,
+          personas: res.data?.user?.personas ?? [],
+        };
+      }
       return res.data ?? null;
     },
     retry: false,

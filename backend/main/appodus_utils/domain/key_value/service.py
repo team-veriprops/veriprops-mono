@@ -47,5 +47,8 @@ class KeyValueService:
     async def delete(self, key: str):
         await self._key_value_repo.delete(key)
 
+    async def delete_by_prefix(self, prefix: str) -> int:
+        return await self._key_value_repo.delete_by_prefix(prefix)
+
     async def cleanup_expired(self):
         await self._key_value_repo.cleanup_expired()

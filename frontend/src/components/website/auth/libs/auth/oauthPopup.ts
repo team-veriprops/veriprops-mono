@@ -16,6 +16,7 @@
  * else is silently dropped.
  */
 
+import { isAutomationEnvironment } from "@lib/automation";
 import { authService } from "@components/website/auth/libs/useAuthQueries";
 import { OAuthFlowMode, SocialProvider } from "@components/website/auth/models";
 
@@ -38,6 +39,12 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_POLL_MS = 500;
 const POPUP_NAME = "veriprops_oauth";
 
+function signalOauthComplete(status: "success" | "failed"): void {
+  if (!isAutomationEnvironment()) return;
+  (window as any).__oauth_complete__ = status;
+  window.dispatchEvent(new CustomEvent("__oauth_complete__", { detail: { status } }));
+}
+
 export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOptions): { cancel: () => void } {
   const {
     intent,
@@ -48,6 +55,10 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
     onCancel,
     onError,
   } = opts;
+
+  if (isAutomationEnvironment()) {
+    (window as any).__oauth_complete__ = null;
+  }
 
   // Synchronously open the popup. Browsers count this as a direct response to
   // the user gesture; deferring until after the fetch trips popup-blockers.
@@ -75,14 +86,20 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
     if (!isOauthResult(data)) return;
     resolved = true;
     cleanup();
-    if (data.success) onSuccess();
-    else onError({ code: "provider", message: data.message ?? undefined, authorizationUrl: lastAuthorizationUrl });
+    if (data.success) {
+      signalOauthComplete("success");
+      onSuccess();
+    } else {
+      signalOauthComplete("failed");
+      onError({ code: "provider", message: data.message ?? undefined, authorizationUrl: lastAuthorizationUrl });
+    }
   };
 
   const cancel = () => {
     if (resolved) return;
     resolved = true;
     cleanup();
+    signalOauthComplete("failed");
     onCancel?.();
   };
 
@@ -91,9 +108,11 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
     // fetch the authorizationUrl so the fallback can use it directly.
     authService.startOauth(provider, { intent, mode })
       .then((res) => {
+        signalOauthComplete("failed");
         onError({ code: "popup_blocked", authorizationUrl: res.data?.authorizationUrl });
       })
       .catch(() => {
+        signalOauthComplete("failed");
         onError({ code: "popup_blocked" });
       });
     return { cancel: () => undefined };
@@ -111,6 +130,7 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
     if (resolved) return;
     resolved = true;
     cleanup();
+    signalOauthComplete("failed");
     onError({ code: "timeout" });
   }, timeoutMs);
 
@@ -121,6 +141,7 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
       if (!url) {
         resolved = true;
         cleanup();
+        signalOauthComplete("failed");
         onError({ code: "provider", message: "OAuth start did not return an authorization URL." });
         return;
       }
@@ -132,6 +153,7 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
         if (!resolved) {
           resolved = true;
           cleanup();
+          signalOauthComplete("failed");
           onError({ code: "provider", message: "Could not navigate the popup window." });
         }
       }
@@ -147,6 +169,7 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
           popup.location.href = `${window.location.origin}/auth/oauth/error`;
         }
       } catch { /* ignore */ }
+      signalOauthComplete("failed");
       onError({ code: "provider", message: err?.message });
     });
 

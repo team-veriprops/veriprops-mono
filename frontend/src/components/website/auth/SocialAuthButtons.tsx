@@ -159,6 +159,7 @@ export default function SocialAuthButtons({
             disabled={pendingProvider !== null}
             className="group inline-flex items-center justify-center gap-2.5 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-150 disabled:opacity-60"
             style={brandStyle}
+            data-testid={`oauth-${provider.toLowerCase()}`}
           >
             {glyph}
             {pendingProvider === provider ? "Opening…" : `${verb} ${label}`}

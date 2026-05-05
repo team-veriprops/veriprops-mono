@@ -186,7 +186,7 @@ export default function LoginContainer() {
         </div>
       )}
 
-      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="login-form">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
             Email
@@ -196,6 +196,7 @@ export default function LoginContainer() {
             autoComplete="email"
             placeholder="you@example.com"
             disabled={isLockedNow}
+            data-testid="login-email"
             {...form.register("email")}
           />
           {form.formState.errors.email && (
@@ -225,6 +226,7 @@ export default function LoginContainer() {
               placeholder="Your password"
               disabled={isLockedNow}
               className="pr-10"
+              data-testid="login-password"
               {...form.register("password")}
             />
             <button
@@ -233,6 +235,7 @@ export default function LoginContainer() {
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-[var(--brand-surface-low)]"
               onClick={() => setShowPassword((v) => !v)}
               tabIndex={-1}
+              data-testid="login-password-toggle"
             >
               {showPassword ? (
                 <EyeOff className="w-4 h-4" style={{ color: "var(--brand-on-surface-variant)" }} />
@@ -277,6 +280,7 @@ export default function LoginContainer() {
           className="w-full"
           size="lg"
           disabled={isLockedNow || loginMutation.isPending}
+          data-testid="login-submit"
         >
           {loginMutation.isPending ? "Signing in…" : "Sign in"}
         </Button>

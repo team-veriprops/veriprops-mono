@@ -31,12 +31,13 @@ export default function AccountBasicsStep({ defaultValues, onSubmit }: Props) {
   const password = form.watch("password");
 
   return (
-    <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+    <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="signup-basics-form">
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="First name" error={form.formState.errors.firstName?.message}>
           <Input
             autoComplete="given-name"
             placeholder="Adaeze"
+            data-testid="signup-first-name"
             {...form.register("firstName")}
           />
         </Field>
@@ -44,6 +45,7 @@ export default function AccountBasicsStep({ defaultValues, onSubmit }: Props) {
           <Input
             autoComplete="family-name"
             placeholder="Williams"
+            data-testid="signup-last-name"
             {...form.register("lastName")}
           />
         </Field>
@@ -54,6 +56,7 @@ export default function AccountBasicsStep({ defaultValues, onSubmit }: Props) {
           type="email"
           autoComplete="email"
           placeholder="you@example.com"
+          data-testid="signup-email"
           {...form.register("email")}
         />
       </Field>
@@ -64,6 +67,7 @@ export default function AccountBasicsStep({ defaultValues, onSubmit }: Props) {
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             placeholder="Create a strong password"
+            data-testid="signup-password"
             {...form.register("password")}
             className="pr-10"
           />
@@ -83,7 +87,7 @@ export default function AccountBasicsStep({ defaultValues, onSubmit }: Props) {
         <PasswordStrengthMeter password={password ?? ""} className="mt-2" />
       </Field>
 
-      <Button type="submit" className="w-full" size="lg">
+      <Button type="submit" className="w-full" size="lg" data-testid="signup-basics-submit">
         Continue
       </Button>
     </form>

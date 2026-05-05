@@ -80,6 +80,8 @@ class MessageProviderName(str, Enum):
     TWILIO_SMS = "TWILIO_SMS"
     SENDGRID_EMAIL = "SENDGRID_EMAIL"
     MAILJET = "MAILJET"
+    SMTP = "SMTP"       # Dev/test email capture via Mailpit
+    MOCK_SMS = "MOCK_SMS"  # Dev/test SMS suppression (no real SMS sent)
 
 
 class MessageStatus(str, Enum):

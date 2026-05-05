@@ -65,3 +65,31 @@ Vitest + jsdom. Tests sit beside the module they cover (`*.test.ts(x)`) — see 
 
 When working on UI/UX, use the `frontend-design` skill. When implementing features, follow the `test-driven-development` skill (write the test first).
 
+## Automation determinism (permanent rules — do not remove)
+
+### data-testid policy
+Auth form elements carry stable `data-testid` selectors for Playwright automation. **Never remove them.** Naming scheme:
+
+| Component | Selector |
+|---|---|
+| Login form | `login-form`, `login-email`, `login-password`, `login-password-toggle`, `login-submit` |
+| Signup step 1 | `signup-basics-form`, `signup-first-name`, `signup-last-name`, `signup-email`, `signup-password`, `signup-basics-submit` |
+| Signup stepper | `signup-stepper` |
+| Verify step | `verify-form`, `verify-submit`, `verify-back` |
+| OAuth buttons | `oauth-google`, `oauth-apple`, `oauth-facebook` |
+
+When adding new auth-related forms, follow the same `{flow}-{element}` pattern.
+
+### Window hooks contract
+These properties are set in automation environments only. Guards **must** use `isAutomationEnvironment()` from [`src/lib/automation.ts`](src/lib/automation.ts) — **never** `NODE_ENV` checks. Do not remove them. Do not gate them on feature flags.
+
+**Environment detection rule:** `NEXT_PUBLIC_ENVIRONMENT=local|development|test` → hooks active. `staging|production` → hooks inactive. `NODE_ENV` is not a reliable signal (staging deployments may use `NODE_ENV=production`).
+
+- `window.__app_ready__` — set to `true` once in `ClientWrapperProvider.useEffect`. Indicates the React tree is mounted and hydrated.
+- `window.__TEST_MODE__` — set to `true` in the same `ClientWrapperProvider.useEffect` as `__app_ready__`. Canonical test-mode signal for automation. Always set alongside `__app_ready__`.
+- `window.__auth_snapshot__` — set after every `useCurrentSession` query resolves. Shape: `{ isAuthenticated: boolean, userId: string|null, personas: string[] }`.
+- `window.__oauth_complete__` — strict per-attempt lifecycle: `null` (pending, reset at the top of every `startOauthPopup` call) → `"success"` (provider confirmed) or `"failed"` (any non-success terminal outcome). A `CustomEvent("__oauth_complete__", { detail: { status } })` is dispatched on every terminal transition. Never stays `null` after an attempt resolves. Never use `true` or `false`.
+
+### Auth hydration
+`ClientWrapperProvider` must **not** return null while waiting for client mount. Do not add `if (!mounted) return null` — it causes a blank render flash and breaks Playwright's `waitForLoadState`. Use `suppressHydrationWarning` on wrapper elements if needed instead.
+

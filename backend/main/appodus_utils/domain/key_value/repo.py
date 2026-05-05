@@ -61,6 +61,12 @@ class KeyValueRepo:
         await self._session.execute(stmt)
         await self._session.commit()
 
+    async def delete_by_prefix(self, prefix: str) -> int:
+        stmt = delete(KeyValue).where(KeyValue.key.like(f"{prefix}%"))
+        result = await self._session.execute(stmt)
+        await self._session.commit()
+        return result.rowcount or 0
+
     async def cleanup_expired(self):
         stmt = delete(KeyValue).where(KeyValue.expires_at != None).where(KeyValue.expires_at <= Utils.datetime_now())
         await self._session.execute(stmt)

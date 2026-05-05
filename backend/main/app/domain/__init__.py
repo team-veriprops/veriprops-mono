@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from main.app.config.settings import settings  # noqa: F401
 from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
+from main.appodus_utils.config.settings import Environment
 # Importing these modules registers their ORM models with SQLAlchemy's metadata
 from main.app.domain.audit import models as _audit_models  # noqa: F401
 from main.app.domain.user.controller import user_router
@@ -14,3 +15,8 @@ router = APIRouter()
 router.include_router(user_router)
 router.include_router(verification_router)
 router.include_router(payment_router)
+
+# Dev/test-only endpoints — never mounted in production
+if settings.ENVIRONMENT != Environment.PRODUCTION:
+    from main.app.domain.dev.controller import dev_router
+    router.include_router(dev_router)

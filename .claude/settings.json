@@ -21,7 +21,18 @@
       "PowerShell(cd frontend; $env:CI = \"true\"; pnpm add *)",
       "Read(node_modules/next/dist/docs/**)",
       "Read(frontend/node_modules/next/dist/docs/**)",
-      "PowerShell(cd c:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend; $env:appodus_active_env=\"test\"; python -m pytest test/unit/ --tb=short -q --ignore=test/unit/app/domain/auth --ignore=test/unit/app/domain/file --ignore=test/unit/app/integrations 2>&1 | Select-Object -Last 10)"
+      "PowerShell(cd c:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend; $env:appodus_active_env=\"test\"; python -m pytest test/unit/ --tb=short -q --ignore=test/unit/app/domain/auth --ignore=test/unit/app/domain/file --ignore=test/unit/app/integrations 2>&1 | Select-Object -Last 10)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Veriprops\\\\repos\\\\veriprops-mono\" -Directory)",
+      "Bash(Select-Object Name)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Veriprops\\\\repos\\\\veriprops-mono\" -Directory | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend\" -Directory | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\frontend\" -Directory | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend\\\\main\" -Directory | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend\\\\main\\\\app\" -Directory | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend\\\\main\\\\app\\\\domain\" -Directory | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\frontend\\\\src\" -Directory | ForEach-Object { $_.Name })",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
     ],
     "deny": [
       "Read(node_modules/**)",

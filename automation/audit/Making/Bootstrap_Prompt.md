@@ -1,296 +1,359 @@
-
-You are an elite Principal Engineer responsible for transforming this codebase into a fully deterministic, automation-ready system for autonomous QA using Playwright and Claude Code.
+You are an elite Principal Engineer responsible for transforming and maintaining this codebase as a fully deterministic, automation-ready system for autonomous QA using Playwright and Claude Code.
 
 This is NOT feature development.
 
-This is SYSTEM TESTABILITY ENGINEERING.
+This is SYSTEM TESTABILITY + AUTOMATION STABILITY ENGINEERING.
 
----
+Your first responsibility is to preserve determinism, repeatability, observability, and safety.
 
-# CONTEXT
+You must inspect existing implementation first, then improve weak areas, fill missing contracts, and document rules permanently in CLAUDE.md files.
+
+====================================================================
+SYSTEM CONTEXT
+====================================================================
 
 Architecture:
-- Backend: FastAPI (JWT cookie auth + CSRF double submit)
-- Frontend: NextJS 16 App Router (reverse proxy to FastAPI)
-- OAuth: popup + postMessage flow
-- Email: Mailpit in test/local environments
-- Phone OTP: deterministic override in test mode
-- Database: PostgreSQL with Alembic migrations
+- Backend: FastAPI
+- ORM: SQLAlchemy
+- Migrations: Alembic
+- Frontend: NextJS 16 App Router
+- Frontend state: React Query + Zustand
+- Forms: React Hook Form + Zod
+- Styling: Tailwind CSS
+- Auth:
+  - JWT stored in httpOnly cookie
+  - CSRF double-submit cookie
+  - OAuth popup + postMessage
+- OAuth providers:
+  - Google
+  - Apple
+  - Facebook
 
-Goal:
-Enable fully autonomous end-to-end testing using Playwright and Claude Code.
+Reverse proxy:
+Browser -> NextJS -> FastAPI
 
----
+====================================================================
+ENVIRONMENT CONTRACT (CANONICAL)
+====================================================================
 
-# PHASE 1 — BACKEND TEST DETERMINISM
+Backend:
+ENVIRONMENT=local|development|test|staging|production
 
-## 1. SYSTEM RESET CONTRACT (MANDATORY)
+Frontend:
+NEXT_PUBLIC_ENVIRONMENT=local|development|test|staging|production
 
-Create or refactor:
+Automation environments:
+- local
+- development
+- test
+
+Non-automation environments:
+- staging
+- production
+
+Frontend must use a single canonical helper:
+
+isAutomationEnvironment()
+
+Never use:
+- process.env.NODE_ENV
+for automation hooks.
+
+====================================================================
+OTP CONTRACT (CANONICAL)
+====================================================================
+
+Configuration:
+OTP_MODE=deterministic|random
+TEST_OTP=654123
+
+Rules:
+
+If ENVIRONMENT in:
+- local
+- development
+- test
+
+Then:
+OTP_MODE MUST be deterministic
+
+If ENVIRONMENT in:
+- staging
+- production
+
+Then:
+OTP_MODE MUST be random
+
+Startup must hard fail if configuration violates contract.
+
+Deterministic OTP applies uniformly to:
+- email verification OTP
+- phone verification OTP
+- password reset OTP (if OTP-based)
+
+Single shared OTP service only.
+No duplicate OTP generation paths.
+
+====================================================================
+MAIL CONTRACT (CANONICAL)
+====================================================================
+
+Automation environments:
+- route ALL email to Mailpit SMTP only
+- NO fallback providers
+- fail loudly if Mailpit unavailable
+
+Non-automation environments:
+- use external providers
+- normal fallback chains allowed
+
+Mailpit is used for:
+- admin invites
+- password reset links
+- notifications
+- operational emails
+
+Mailpit must never be used in staging/production.
+
+====================================================================
+SMS CONTRACT (CANONICAL)
+====================================================================
+
+Automation environments:
+- provider MUST be MOCK_SMS only
+- NO fallback chains
+- single deterministic execution path
+
+Non-automation environments:
+- use normal provider routing + fallback
+
+Automation mode must never invoke external SMS providers.
+
+====================================================================
+BACKEND RESET CONTRACT (MANDATORY)
+====================================================================
 
 POST /dev/reset
 
-Must:
-- drop or truncate all database state
-- re-run Alembic migrations
-- reset Redis/cache/session storage
-- reset OTP storage
-- reset OAuth state storage
+Requirements:
+- idempotent
+- non-production only
+- fully reset database
+- use Alembic migration path:
+    downgrade/drop schema
+    upgrade head
+- clear OTP state
+- clear OAuth state
+- clear sessions
+- clear CSRF state
+- clear rate-limit state
+- clear invite tokens
+- clear password reset tokens
+- clear any volatile auth/cache state
 
-Constraints:
-- MUST be idempotent
-- MUST be safe to run repeatedly
-- MUST be disabled in production via strict ENV guard (ENV=local/test only)
+No hidden state may survive reset.
 
----
-
-## 2. SYSTEM SEED CONTRACT (MANDATORY)
-
-Create or refactor:
+====================================================================
+BACKEND SEED CONTRACT (MANDATORY)
+====================================================================
 
 POST /dev/seed
 
-Must seed deterministic data:
+Must seed deterministic fixtures with stable IDs.
 
-- fixed test users (no randomness)
-- email/password login user
-- OAuth-linked test users
-- phone-enabled test user
+Required matrix:
+- verified user
+- unverified user
 - admin user
+- agent user
+- email verified / phone unverified
+- email unverified / phone verified
+- locked user
+- suspended user
+- invited user
+- partially onboarded user
 
-Constraints:
-- no time-based IDs
-- no UUID randomness for core test entities
-- must be identical across runs
+OAuth fixtures:
+- Google verified-email user
+- Google partially onboarded user
+- Apple verified-email user
+- Apple partial onboarding user
+- Facebook partial trust/onboarding user
 
----
+Rules:
+- deterministic emails
+- deterministic phones
+- deterministic IDs
+- deterministic password
+- deterministic OTP
 
-## 3. EMAIL TESTING VIA MAILPIT
+No randomness.
 
-Integrate Mailpit for test/local environments:
+====================================================================
+FRONTEND AUTOMATION CONTRACT
+====================================================================
 
-- all outgoing emails in test/local must route to Mailpit
-- verification emails must be accessible for automated retrieval
-- email verification links must be usable by Playwright
+Stable selectors:
+Every critical interactive element must have:
+data-testid
 
-Must NOT affect production email provider.
-
----
-
-## 4. DETERMINISTIC PHONE OTP SYSTEM
-
-Implement:
-
-Config:
-- PHONE_OTP_MODE=test
-- PHONE_TEST_OTP=123456
-
-Behavior:
-- In test mode, OTP generation is deterministic
-- In production mode, OTP must remain secure and random
-
-HARD SAFETY RULE:
-- deterministic OTP MUST NEVER be enabled in production
-
----
-
-## 5. ENVIRONMENT SAFETY GUARDS
-
-Ensure:
-- /dev/* endpoints are disabled in production
-- OTP override disabled in production
-- Mailpit only active in test/local
-- reset/seed endpoints cannot execute outside test environment
-
----
-
-# PHASE 2 — FRONTEND AUTOMATION STABILITY (NEXTJS)
-
-## 6. STABLE SELECTOR SYSTEM (MANDATORY)
-
-In NextJS frontend:
-
-Add stable automation attributes:
-
-- data-testid for all critical elements
-
-Required coverage:
-- signup form fields
-- login form fields
-- OTP input fields (email + phone)
+Coverage:
+- signup
+- signin
+- OTP flows
+- phone verification
+- email verification
 - OAuth buttons
-- submit buttons
-- navigation elements
-- logout button
+- onboarding
+- logout
+- navigation
+- account management
 
-RULE:
-Playwright must NOT rely on CSS classes or text content for critical flows.
+Never rely on:
+- CSS selectors
+- text selectors
+for critical automation.
 
----
+====================================================================
+FRONTEND OBSERVABILITY CONTRACT
+====================================================================
 
-## 7. AUTH STATE DETERMINISM
+Automation environments only:
 
-Ensure frontend auth state is stable:
+window.__TEST_MODE__ = true
 
-- React Query cache invalidation on login/logout must be correct
-- Zustand state must not drift from backend session state
-- refresh must reconstruct auth state from cookies correctly
-- no ghost-auth UI states
+window.__app_ready__ = true
+(after hydration complete)
 
-Fix:
-- stale user session after logout
-- inconsistent protected route rendering
+window.__auth_snapshot__
+(non-sensitive only)
 
----
+Shape:
+{
+  authenticated: boolean,
+  onboardingStage: string | null
+}
 
-## 8. OAUTH POPUP STABILITY
+Never expose:
+- IDs
+- tokens
+- secrets
+- PII
 
-Ensure OAuth flow is deterministic:
+====================================================================
+OAUTH AUTOMATION CONTRACT
+====================================================================
 
-- postMessage listener initialized BEFORE popup opens
-- window.opener must be validated
-- add explicit signal:
+Before popup open:
+window.__oauth_complete__ = null
 
-  window.__oauth_complete__ = true
+On success:
+window.__oauth_complete__ = "success"
 
-Playwright must be able to reliably detect completion.
+On failure:
+window.__oauth_complete__ = "failed"
 
----
+Dispatch event:
 
-## 9. ROUTING + HYDRATION STABILITY
+window.dispatchEvent(
+  new CustomEvent("__oauth_complete__", {
+    detail: { status: "success" | "failed" }
+  })
+)
 
-Ensure NextJS App Router behaves deterministically:
+Listener must be attached BEFORE popup open.
 
-- no auth flicker during route transitions
-- loading states are stable and testable
-- no UI rendering before auth resolution
-- prevent hydration mismatches in auth-critical flows
+Validate origin strictly.
 
----
+Repeated attempts must be deterministic.
 
-## 10. FORM STABILITY (React Hook Form + Zod)
+====================================================================
+AUTH STATE CONTRACT
+====================================================================
 
-Ensure:
-- all forms have deterministic validation behavior
-- submit buttons disabled during submission
-- duplicate submission is impossible
-- error states are stable and consistent
+React Query:
+- auth cache invalidates correctly on login/logout
+- auth retries disabled in automation env
+- no stale auth cache
 
----
+Zustand:
+- must mirror backend session state
+- no drift
+- no ghost-auth UI
 
-## 11. REACT QUERY STABILITY
+Refresh:
+- reconstruct auth state from cookies deterministically
 
-Ensure TanStack Query behavior is deterministic:
+No auth flicker.
 
-- auth-related cache is invalidated correctly
-- no stale user data after login/logout
-- no retry loops causing flaky tests
-- test mode disables non-deterministic retries
+No hydration mismatch in auth-critical flows.
 
----
+====================================================================
+TEST MODE UI CONTRACT
+====================================================================
 
-## 12. TEST OBSERVABILITY HOOKS
+When isAutomationEnvironment():
 
-Expose ONLY in test mode:
+Enable:
+- deterministic timing
+- stable rendering order
+- observable hooks
 
-- window.__test_mode__ = true
-- window.__app_ready__ = true after hydration
-- window.__auth_snapshot__ (non-sensitive)
+Disable:
+- animations
+- nondeterministic retries
+- unstable suspense behavior
+- race-condition-prone optimistic transitions
 
-These are strictly for automation only.
+====================================================================
+PRODUCTION SAFETY CONTRACT
+====================================================================
 
----
+Must never exist in staging/production:
+- /dev/reset
+- /dev/seed
+- deterministic OTP
+- Mailpit routing
+- MOCK_SMS routing
+- automation browser hooks
 
-## 13. REMOVE FLAKINESS SOURCES
+Startup must fail fast on invalid configuration.
 
-Eliminate:
-- unstable keys in lists
-- uncontrolled suspense boundaries in auth flows
-- race conditions in route transitions
-- UI rendering before state resolution
+====================================================================
+GOVERNANCE (MANDATORY)
+====================================================================
 
----
-
-# PHASE 3 — GOVERNANCE LAYER (MANDATORY)
-
-You MUST create and update the following files:
-
----
-
-## 14. ROOT CLAUDE.md (REQUIRED)
-
-Create or update:
+Create / maintain:
 
 /CLAUDE.md
-
-Must include:
-- system architecture overview
-- test determinism rules
-- reset/seed contract
-- Mailpit + OTP rules
-- frontend stability requirements
-- Playwright automation constraints
-- "no external dependency assumption" rule for tests
-
----
-
-## 15. BACKEND CLAUDE.md (REQUIRED)
-
-Create or update:
-
 /backend/CLAUDE.md
-
-Must include:
-- FastAPI auth architecture
-- reset/seed endpoints contract
-- OTP rules
-- Redis/session handling rules
-- OAuth flow specification
-- production safety constraints
-
----
-
-## 16. FRONTEND CLAUDE.md (REQUIRED)
-
-Create or update:
-
 /frontend/CLAUDE.md
 
-Must include:
-- NextJS App Router constraints
-- auth state handling rules
-- data-testid requirement policy
-- OAuth popup rules
-- React Query + Zustand state rules
-- Playwright stability requirements
+These are permanent engineering contracts.
 
----
+Future development MUST comply.
 
-# STRICT RULES
+Reject implementations that violate determinism.
 
-- DO NOT implement Playwright yet
-- DO NOT implement autonomous QA system yet
-- DO NOT introduce unrelated refactors
-- ONLY build determinism + testability foundation
-- ALL changes must improve automation reliability
+====================================================================
+OUTPUT REQUIRED
+====================================================================
 
----
+Produce:
 
-# SUCCESS CRITERIA
+1. /automation/audit/Making/CHANGES_SUMMARY.md
+2. /automation/audit/Making/DEV_RESET_SPEC.md
+3. /automation/audit/Making/TEST_SEED_SPEC.md
+4. /automation/audit/Making/OTP_SERVICE_SPEC.md
+5. /automation/audit/Making/MAIL_ROUTING_SPEC.md
+6. /automation/audit/Making/SMS_ROUTING_SPEC.md
+7. /automation/audit/Making/FRONTEND_AUTOMATION_SPEC.md
+8. /automation/audit/Making/OAUTH_AUTOMATION_SPEC.md
+9. /automation/audit/Making/AUTH_STATE_SPEC.md
+10. /automation/audit/Making/CLAUDE_GOVERNANCE_SPEC.md
 
-System is ready for Phase 3 when:
+Do NOT implement Playwright in this phase.
 
-Backend:
-- reset/seed fully deterministic
-- OTP is deterministic in test mode
-- Mailpit is integrated
-- system can be restarted identically
+Do NOT implement autonomous QA loop in this phase.
 
-Frontend:
-- stable selectors everywhere
-- no auth flicker
-- OAuth is observable and deterministic
-- no UI race conditions in auth flows
-
-Repo:
-- CLAUDE.md files exist and enforce rules across backend + frontend + root
+Only establish and preserve deterministic backend + automation-stable frontend foundation.

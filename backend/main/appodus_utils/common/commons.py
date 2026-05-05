@@ -400,22 +400,20 @@ class Utils:
 
     @staticmethod
     def get_otp_code(prefix: str = None, suffix: str = None):
+        # OTP_MODE is set as an env var by settings.set_env_vars() at startup.
+        # deterministic → return TEST_OTP (stable, predictable, required in test env)
+        # random        → generate a cryptographically random 6-digit code (required in prod)
+        otp_mode = os.environ.get("OTP_MODE", "deterministic").lower()
 
-        # RETURN TEST OTP WHEN NOT IN PROD
-        ENVIRONMENT = Utils.get_from_env_fail_if_not_exists(env_key="ENVIRONMENT")
-        TEST_OTP = Utils.get_from_env_fail_if_not_exists(env_key="TEST_OTP")
-
-        if (
-                ENVIRONMENT in ["Environment.LOCAL", "Environment.DEVELOPMENT", "Environment.TEST",
-                                "Environment.STAGING"]
-        ):
-            return TEST_OTP
+        if otp_mode == "deterministic":
+            test_otp = Utils.get_from_env_fail_if_not_exists(env_key="TEST_OTP")
+            return str(test_otp)
 
         otp = random.randint(100000, 999999)
         if prefix:
             otp = prefix + '-' + str(otp)
         if suffix:
-            otp = otp + suffix
+            otp = str(otp) + suffix
 
         return str(otp)
 
