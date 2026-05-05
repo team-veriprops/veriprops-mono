@@ -32,7 +32,8 @@
       "PowerShell(Get-ChildItem -Path \"C:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend\\\\main\\\\app\\\\domain\" -Directory | ForEach-Object { $_.Name })",
       "PowerShell(Get-ChildItem -Path \"C:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\frontend\\\\src\" -Directory | ForEach-Object { $_.Name })",
       "Bash(grep -E \"\\\\.py$\")",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "PowerShell($env:appodus_active_env=\"test\"; Set-Location \"c:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend\"; python -m pytest test/unit/app/domain/verification/test_derive.py -v 2>&1)"
     ],
     "deny": [
       "Read(node_modules/**)",

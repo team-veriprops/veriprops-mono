@@ -10,13 +10,13 @@ last_updated: 2026-05-05
 
 ---
 
-**status:** S3 complete — ready for S4
+**status:** S4 complete — ready for S5
 
-**next_slice:** S4 (Marketing site final polish — Phase 1)
+**next_slice:** S5 (Auth shell completeness audit — Phase 2)
 
 **current_slice:** —
 
-**completion %:** 32% (44 done / 140 total — R0.16 delivered by S3)
+**completion %:** 39% (54 done / 140 total — R1.1–R1.10 fully verified by S4)
 
 ---
 
@@ -28,10 +28,11 @@ last_updated: 2026-05-05
 | S1 | Audit log primitive — `AuditLog` model, repo, service, ContextVar queue, `@transactional` drain, Alembic migration, tests | 2026-05-02 |
 | S2 | Reusable state-machine validator — `appodus_utils/state/machine.py`, `IllegalStateTransitionException`, Verification + Task + Report machines, 101 unit tests | 2026-05-02 |
 | S3 | Derived global state rules — `derive_status()` pure function (PRD §0.3 rules 1–8), `VerificationService.derive_global_state()`, 31 unit tests | 2026-05-05 |
+| S4 | Marketing site final polish — CTA URL fix (6 locations `/auth/login?intent=` → `/auth?intent=`); `formatPrice` extracted to `home.data.ts`; 14 new unit tests (43 total, all passing); PRD §1.12 exit criteria all met | 2026-05-05 |
 
 ## Current Slice
 
-S3 complete. Next: S4 — Marketing site final polish (see [execution-plan.md](execution-plan.md)).
+S4 complete. Next: S5 — Auth shell completeness audit (see [execution-plan.md](execution-plan.md)).
 
 ## Pending Slices
 
@@ -105,7 +106,7 @@ The next message to the user surfaces these as a CLARIFICATION REQUIRED block.
 
 Branch: `main`. Most recent commit: `41b0caf implement S3: derived global state rules (R0.16)`.
 
-Working tree is clean.
+Working tree: S4 changes uncommitted (6 component files + home.data.ts + home.data.test.ts).
 
 ---
 

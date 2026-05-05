@@ -259,3 +259,18 @@ export const fxRates: Record<string, { symbol: string; rate: number }> = {
   GBP: { symbol: "£", rate: 0.00052 },
   EUR: { symbol: "€", rate: 0.00060 },
 };
+
+export const currencies = ["NGN", "USD", "GBP", "EUR"] as const;
+export type Currency = (typeof currencies)[number];
+
+export function formatPrice(priceNGN: number, currency: Currency): string {
+  const { symbol, rate } = fxRates[currency];
+  const amount = priceNGN * rate;
+  if (currency === "NGN") {
+    return `${symbol}${(amount / 1000).toFixed(0)}k`;
+  }
+  return `${symbol}${amount.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+}
+
+export const CTA_VERIFY_HREF = "/auth?intent=verify";
+export const CTA_AGENT_HREF = "/auth?intent=agent";

@@ -1,7 +1,7 @@
 ---
 skill: prd-orchestrator
 skill_version: 2.2.0
-last_updated: 2026-05-02
+last_updated: 2026-05-05
 ---
 
 # Requirements Traceability Matrix

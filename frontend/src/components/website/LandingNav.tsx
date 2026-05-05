@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Menu, X, CheckCircle2 } from "lucide-react";
-import { navLinks } from "./home.data";
+import { navLinks, CTA_VERIFY_HREF } from "./home.data";
 
 export default function LandingNav() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -72,7 +72,7 @@ export default function LandingNav() {
             Log in
           </Link>
           <Link
-            href="/auth/login?intent=verify"
+            href={CTA_VERIFY_HREF}
             className="signature-gradient text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 hover:opacity-90 hover:scale-[0.98] active:scale-95"
             style={{ boxShadow: "0 4px 14px -3px rgba(0,13,34,0.35)" }}
           >
@@ -123,7 +123,7 @@ export default function LandingNav() {
                 Log in
               </Link>
               <Link
-                href="/auth/login?intent=verify"
+                href={CTA_VERIFY_HREF}
                 onClick={() => setMenuOpen(false)}
                 className="signature-gradient text-white py-3 px-4 text-center text-sm font-semibold rounded-lg"
               >
