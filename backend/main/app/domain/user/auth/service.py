@@ -232,6 +232,10 @@ class AuthService:
     async def complete_profile(
             self, user_id: str, dto: ProfileCompletionDto,
     ) -> User:
+        e164 = _phone_e164(dto.dial_code, dto.phone)
+        existing = await self._user_service.get_user_by_phone_e164(e164)
+        if existing and str(existing.id) != user_id:
+            raise ValidationException(message="An account with this phone number already exists.")
         await self._user_service.update_user(user_id, UpdateUserDto(
             phone_country_code=dto.country_code,
             phone_dial_code=dto.dial_code,
@@ -303,6 +307,16 @@ class AuthService:
             ip_address: Optional[str] = None,
             fullname: Optional[str] = None,
     ) -> int:
+        # During signup / profile completion (no authenticated user), reject if the
+        # contact already belongs to an existing account before issuing the OTP.
+        if user_id is None:
+            if channel == OtpChannel.EMAIL and email:
+                if await self._user_service.get_user_by_email(email):
+                    raise UserAlreadyExistsException(email=email)
+            elif channel == OtpChannel.PHONE and dial_code and phone:
+                e164 = _phone_e164(dial_code, phone)
+                if await self._user_service.get_user_by_phone_e164(e164):
+                    raise ValidationException(message="An account with this phone number already exists.")
         recipient = recipient_for(channel, email=email, dial_code=dial_code, phone=phone, fullname=fullname)
         return await self._otp_service.send_otp(
             channel, recipient, user_id=user_id, ip_address=ip_address,
