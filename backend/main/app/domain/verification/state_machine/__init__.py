@@ -11,10 +11,12 @@ from main.app.state.machine import (  # noqa: F401
     VERIFICATION_TERMINAL,
     verification_state_machine,
 )
+from main.app.domain.verification.state_machine.derive import derive_status  # noqa: F401
 
 __all__ = [
     "StateMachine",
     "VERIFICATION_TRANSITIONS",
     "VERIFICATION_TERMINAL",
     "verification_state_machine",
+    "derive_status",
 ]

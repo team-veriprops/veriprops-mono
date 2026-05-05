@@ -44,6 +44,7 @@ from main.app.domain.verification.property.models import (
 from main.app.domain.verification.property.repo import PropertyRepo
 from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.state_machine import verification_state_machine
+from main.app.domain.verification.state_machine.derive import derive_status
 from main.app.domain.verification.validator import VerificationValidator
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -218,6 +219,27 @@ class VerificationService:
             ip_address=ip_address,
         )
         return await self._to_dto(await self._repo.get_model(verification_id))
+
+    async def derive_global_state(
+        self, verification_id: str, task_statuses: list[str],
+    ) -> VerificationStatus:
+        """Apply PRD §0.3 rules and transition if the derived state differs.
+
+        Called from any task-state mutation path. Phase 7 (TaskService) will
+        invoke this after every task transition.
+
+        Args:
+            verification_id: The verification to re-evaluate.
+            task_statuses: Full list of TaskStatus string values for this verification.
+        """
+        row = await self._repo.get_model(verification_id)
+        if row is None:
+            raise ResourceNotFoundException(resource="Verification")
+        current = VerificationStatus(row.status)
+        derived = derive_status(current, task_statuses)
+        if derived != current:
+            await self.transition(verification_id, derived, actor_id=None)
+        return derived
 
     async def transition(
         self, verification_id: str, target: VerificationStatus,
