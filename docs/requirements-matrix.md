@@ -28,7 +28,7 @@ last_updated: 2026-05-02
 | R0.13 | 0 | Frontend design system (Radix + Tailwind v4 tokens; form/field/input/toast/modal/wizard) | none | frontend/components/ui | no | no | low | medium | low | All listed components present and storybook'd | visual + unit | done |
 | R0.14 | 0 | JWT auth wiring (HttpOnly cookie 15-min/30-day, silent refresh, Next.js proxy guards) | R0.7 | backend auth + frontend proxy | yes | yes | high | medium | high | Cookie set/cleared correctly; proxy redirects | E2E | done |
 | R0.15 | 0 | Verification + Task + Report state machines authoritatively defined | R0.11 | appodus_utils/state/machine.py | no | no | high | high | high | Transition tables match PRD §0.2; rejected illegal moves | unit | done |
-| R0.16 | 0 | Derived global state rules (PRD §0.3) | R0.15 | verification/state_machine | no | no | high | high | high | Global state derives from task states deterministically | unit | pending |
+| R0.16 | 0 | Derived global state rules (PRD §0.3) | R0.15 | verification/state_machine | no | no | high | high | high | Global state derives from task states deterministically | unit | done |
 | R0.17 | 0 | `alembic upgrade head` clean on local/test/dev/staging/prod | R0.2 | alembic | yes | no | low | low | low | CI green on all envs | smoke | in_progress |
 | **— Phase 1 — Marketing site —** | | | | | | | | | | | | |
 | R1.1 | 1 | Sticky glassmorphism nav with brand + links + CTAs (intent preserve) | R0.13 | frontend/components/website | no | no | low | low | low | All nav items present; mobile overlay works | visual + unit | done |
@@ -213,5 +213,5 @@ last_updated: 2026-05-02
 - R3.1/R3.3/R3.7 verified done: agent types JSON array, conditional credential fields, resumable wizard on main AgentApplication row.
 - R4.1–R4.6 verified done: full admin invitation flow, three acceptance branches, RBAC permission matrix, super-admin seed migration.
 - R5.1/R5.7 verified done: VP-YYYY-XXXXXX VID generation, 24-hr price lock enforced.
-- **Critical gaps still pending:** R0.10 (AuditLog entity — no code exists), R0.16 (state derivation layer), R5.6 (first-time/referral discounts), payment webhooks (R5.9 stubs).
+- **Critical gaps still pending:** R5.6 (first-time/referral discounts), payment webhooks (R5.9 stubs). R0.10 delivered by S1. R0.16 delivered by S3.
 - **No test suite found** — zero test files in backend.

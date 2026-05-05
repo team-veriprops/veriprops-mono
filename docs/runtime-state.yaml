@@ -11,9 +11,9 @@ modified_files: []
 created_files: []
 
 tests:
-  written: false
-  executed: false
-  passing: false
+  written: true
+  executed: true
+  passing: true
 
 self_audit:
   started: false
@@ -24,9 +24,9 @@ clarification_needed: []
 
 git:
   branch: main
-  dirty: true
+  dirty: false
 
-next_action: "run S3 — Derived global state rules (R0.16)"
+next_action: "run S4 — Marketing site final polish (Phase 1)"
 
 started_at: null
-last_checkpoint: "2026-05-02"
+last_checkpoint: "2026-05-05"

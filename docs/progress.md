@@ -1,7 +1,7 @@
 ---
 skill: prd-orchestrator
 skill_version: 2.2.0
-last_updated: 2026-05-02
+last_updated: 2026-05-05
 ---
 
 # Progress Tracker
@@ -10,13 +10,13 @@ last_updated: 2026-05-02
 
 ---
 
-**status:** S2 complete — ready for S3
+**status:** S3 complete — ready for S4
 
-**next_slice:** S3 (Derived global state rules — R0.16)
+**next_slice:** S4 (Marketing site final polish — Phase 1)
 
 **current_slice:** —
 
-**completion %:** 31% (43 done / 140 total — R0.11 + R0.15 delivered by S2)
+**completion %:** 32% (44 done / 140 total — R0.16 delivered by S3)
 
 ---
 
@@ -27,10 +27,11 @@ last_updated: 2026-05-02
 | S0 | Audit & reconcile current state against requirements matrix | 2026-05-02 |
 | S1 | Audit log primitive — `AuditLog` model, repo, service, ContextVar queue, `@transactional` drain, Alembic migration, tests | 2026-05-02 |
 | S2 | Reusable state-machine validator — `appodus_utils/state/machine.py`, `IllegalStateTransitionException`, Verification + Task + Report machines, 101 unit tests | 2026-05-02 |
+| S3 | Derived global state rules — `derive_status()` pure function (PRD §0.3 rules 1–8), `VerificationService.derive_global_state()`, 31 unit tests | 2026-05-05 |
 
 ## Current Slice
 
-S2 complete. Next: S3 — Derived global state rules (see [execution-plan.md](execution-plan.md)).
+S3 complete. Next: S4 — Marketing site final polish (see [execution-plan.md](execution-plan.md)).
 
 ## Pending Slices
 
@@ -40,7 +41,7 @@ S1 → S2 → S3 → S4 → S5 → … → S58 (full sequence in [execution-plan
 
 ## Runtime State
 
-idle — S2 checkpointed, no slice in-flight. Awaiting `run` to begin S3.
+idle — S3 checkpointed, no slice in-flight. Awaiting `run` to begin S4.
 
 ## Pending Recovery
 
@@ -102,9 +103,9 @@ The next message to the user surfaces these as a CLARIFICATION REQUIRED block.
 
 ## Last Commit
 
-Branch: `main`. Most recent commit: `c5e9796 implement auth`.
+Branch: `main`. Most recent commit: `41b0caf implement S3: derived global state rules (R0.16)`.
 
-Working tree has uncommitted modifications across backend (auth, consent, oauth, session, payment), frontend (admin/portal/agents pages, auth components), and untracked Phase 3/4/5 code. See `git status` for full list.
+Working tree is clean.
 
 ---
 
