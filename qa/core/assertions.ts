@@ -1,0 +1,1 @@
+export function assert(v:boolean,m:string){ if(!v) throw new Error(m);}

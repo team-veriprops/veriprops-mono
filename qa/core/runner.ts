@@ -1,0 +1,1 @@
+export type QARunMode='api'|'browser'; export interface RunOptions{mode:QARunMode;domain:string;flow:string;baseUrl:string;}

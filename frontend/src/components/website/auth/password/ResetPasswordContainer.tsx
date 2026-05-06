@@ -77,7 +77,7 @@ export default function ResetPasswordContainer({ token }: Props) {
         </p>
       </div>
 
-      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="reset-password-form">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
             New password
@@ -88,6 +88,7 @@ export default function ResetPasswordContainer({ token }: Props) {
               autoComplete="new-password"
               placeholder="At least 8 characters"
               className="pr-10"
+              data-testid="reset-password-password"
               {...form.register("password")}
             />
             <button

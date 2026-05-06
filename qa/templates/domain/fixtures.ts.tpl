@@ -1,0 +1,1 @@
+// template: fixtures.ts.tpl
