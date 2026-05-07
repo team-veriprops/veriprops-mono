@@ -1,1 +1,0 @@
-# Adapters\nBackend, browser, mail, storage adapters live here.

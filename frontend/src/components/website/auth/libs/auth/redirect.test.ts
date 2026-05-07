@@ -42,12 +42,12 @@ describe("resolvePostAuthRedirect", () => {
     expect(dest).toBe("/admin/dashboard");
   });
 
-  it("agent + customer lands on /agent (default toggle)", () => {
+  it("agent + customer lands on /agents/dashboard (default toggle)", () => {
     const dest = resolvePostAuthRedirect({
       ...baseUser,
       personas: [UserPersona.AGENT, UserPersona.CUSTOMER],
     });
-    expect(dest).toBe("/agent/dashboard");
+    expect(dest).toBe("/agents/dashboard");
   });
 
   it("customer only lands on /portal", () => {
@@ -62,7 +62,7 @@ describe("resolvePostAuthRedirect", () => {
 
   it("intent=agent for non-agent customer routes to onboarding", () => {
     const dest = resolvePostAuthRedirect(baseUser, { intent: "agent" });
-    expect(dest).toBe("/agent/onboarding");
+    expect(dest).toBe("/agents/onboarding");
   });
 
   it("explicit redirect param overrides defaults", () => {

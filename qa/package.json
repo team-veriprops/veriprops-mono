@@ -1,0 +1,33 @@
+{
+  "name": "@repo/qa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Domain-agnostic QA platform for monorepo integration testing",
+  "type": "module",
+  "scripts": {
+    "qa:init": "tsx cli/index.ts init",
+    "qa:run": "tsx cli/index.ts run",
+    "qa:run:parallel": "tsx cli/index.ts run --parallel",
+    "qa:validate": "tsx cli/index.ts validate",
+    "qa:validate:fix": "tsx cli/index.ts validate --fix",
+    "qa:report": "tsx cli/index.ts report",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --pretty"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.44.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "tsx": "^4.11.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.1.0"
+}

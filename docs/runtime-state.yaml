@@ -7,8 +7,28 @@ phase: idle
 current_slice: null
 current_subtask: null
 
-modified_files: []
-created_files: []
+modified_files:
+  - backend/main/app/domain/user/auth/otp_service.py
+  - backend/main/app/domain/user/auth/oauth/__init__.py
+  - backend/main/app/domain/user/auth/oauth/providers/google.py
+  - backend/main/app/domain/user/auth/oauth/providers/apple.py
+  - backend/main/app/domain/user/auth/oauth/providers/utils.py
+  - backend/main/app/domain/user/models.py
+  - backend/test/unit/app/domain/auth/test_otp_helpers.py
+  - backend/test/unit/app/domain/auth/test_signup_validation.py
+  - frontend/src/components/website/auth/libs/auth/redirect.ts
+  - frontend/src/components/website/auth/libs/auth/redirect.test.ts
+  - docs/requirements-matrix.md
+  - docs/runtime-state.yaml
+  - docs/progress.md
+
+created_files:
+  - backend/test/unit/app/domain/auth/test_forgot_reset_password.py
+  - backend/test/unit/app/domain/auth/test_oauth_account_management.py
+  - backend/test/unit/app/domain/auth/test_persona_assignment.py
+  - backend/test/unit/app/domain/auth/test_security_events.py
+  - backend/test/unit/app/domain/auth/test_session_management.py
+  - backend/test/unit/app/domain/auth/test_oauth_security.py
 
 tests:
   written: true
@@ -24,9 +44,9 @@ clarification_needed: []
 
 git:
   branch: main
-  dirty: false
+  dirty: true
 
-next_action: "run S5 — Auth shell completeness audit (Phase 2)"
+next_action: "run S7 — Agent application wizard backend (R3.2 KYC stub gated on Dojah, R3.4 agent terms consent)"
 
 started_at: null
-last_checkpoint: "2026-05-05"
+last_checkpoint: "2026-05-07"

@@ -9,6 +9,7 @@ from pydantic import EmailStr, Field
 from sqlalchemy import Boolean, Column, DateTime, Index, String, Integer, JSON
 from sqlalchemy.ext.mutable import MutableList
 
+from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
 from main.app.domain.user.auth.session.models import UserType, UserPersona
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
 from main.appodus_utils.db.types.money import TransactionCurrency

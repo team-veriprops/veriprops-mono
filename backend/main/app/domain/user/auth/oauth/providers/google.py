@@ -1,7 +1,9 @@
+import json
+from datetime import timedelta
 from typing import Optional
 
 from httpx import AsyncClient
-from jose import jwt
+from jose import jwt, exceptions as jose_exceptions
 from kink import di, inject
 from starlette.requests import Request
 
@@ -12,12 +14,58 @@ from main.app.domain.user.auth.oauth.providers.models import (
     SocialLoginUserInfoDto,
 )
 from main.appodus_utils import Utils
+from main.appodus_utils.db.redis_utils import RedisUtils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.app.domain.user.auth.oauth.interface import ISocialAuthProvider
 from main.app.domain.user.auth.oauth.providers.utils import OauthUtils
 
+_GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+_GOOGLE_JWKS_CACHE_KEY = "oauth:jwks:google"
+_GOOGLE_VALID_ISSUERS = frozenset({"accounts.google.com", "https://accounts.google.com"})
+
 httpx_client: AsyncClient = di[AsyncClient]
+
+
+async def _get_google_jwks() -> dict:
+    raw = await RedisUtils.get_redis(_GOOGLE_JWKS_CACHE_KEY)
+    if raw:
+        return json.loads(raw)
+    return await _fetch_and_cache_google_jwks()
+
+
+async def _fetch_and_cache_google_jwks() -> dict:
+    response = await httpx_client.get(_GOOGLE_JWKS_URL)
+    response.raise_for_status()
+    jwks = response.json()
+    await RedisUtils.set_redis(_GOOGLE_JWKS_CACHE_KEY, json.dumps(jwks), time_to_live=timedelta(minutes=5))
+    return jwks
+
+
+def _decode_with_google_jwks(id_token: str, jwks: dict, client_id: str) -> dict:
+    claims = jwt.decode(
+        id_token,
+        key=jwks,
+        algorithms=["RS256"],
+        audience=client_id,
+        options={"verify_iss": False},
+    )
+    # Google issues tokens with either short or full HTTPS issuer form.
+    if claims.get("iss") not in _GOOGLE_VALID_ISSUERS:
+        raise jose_exceptions.JWTClaimsError("Invalid issuer")
+    return claims
+
+
+async def _verify_google_id_token(id_token: str, client_id: str) -> dict:
+    jwks = await _get_google_jwks()
+    try:
+        return _decode_with_google_jwks(id_token, jwks, client_id)
+    except jose_exceptions.JWKError:
+        # Known key not in cached JWKS — provider rotated keys; invalidate and retry once.
+        await RedisUtils.delete(_GOOGLE_JWKS_CACHE_KEY)
+        jwks = await _fetch_and_cache_google_jwks()
+        return _decode_with_google_jwks(id_token, jwks, client_id)
+
 
 @inject
 @decorate_all_methods(method_trace_logger)
@@ -39,7 +87,6 @@ class GoogleAuthProvider(ISocialAuthProvider):
         link_user_id: Optional[str] = None,
     ) -> str:
         scope = "openid email profile"
-
         return await OauthUtils.init_0auth(
             platform=self.platform,
             request=request,
@@ -67,11 +114,7 @@ class GoogleAuthProvider(ISocialAuthProvider):
         tokens = token_response.json()
 
         id_token = tokens["id_token"]
-        claims = jwt.get_unverified_claims(id_token)
-
-        if claims["aud"] != self._client_id:
-            raise ValueError("Invalid audience")
-
+        claims = await _verify_google_id_token(id_token, self._client_id)
         return SocialLoginUserInfoDto(
             provider=self.platform,
             id=claims["sub"],

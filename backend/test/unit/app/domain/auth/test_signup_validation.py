@@ -2,7 +2,7 @@
 import pytest
 
 from main.app.domain.user.auth.models import SignupRequestDto, UserConsentInputDto
-from main.app.domain.user.consent.models import ConsentDocumentType
+from main.app.domain.user.auth.consent.models import ConsentDocumentType
 from main.appodus_utils import Utils
 
 
@@ -21,12 +21,12 @@ def _valid_payload() -> dict:
         "consents": [
             {
                 "document_type": ConsentDocumentType.PLATFORM_TERMS.value,
-                "version": "1.0.0",
+                "consent_version": "1.0.0",
                 "accepted_at": Utils.datetime_now().isoformat(),
             },
             {
                 "document_type": ConsentDocumentType.PRIVACY_POLICY.value,
-                "version": "1.0.0",
+                "consent_version": "1.0.0",
                 "accepted_at": Utils.datetime_now().isoformat(),
             },
         ],
@@ -68,8 +68,8 @@ class TestUserConsentInputDto:
     def test_round_trip(self):
         dto = UserConsentInputDto.model_validate({
             "documentType": ConsentDocumentType.PLATFORM_TERMS.value,
-            "version": "1.0.0",
+            "consentVersion": "1.0.0",
             "acceptedAt": Utils.datetime_now().isoformat(),
         })
         assert dto.document_type == ConsentDocumentType.PLATFORM_TERMS
-        assert dto.version == "1.0.0"
+        assert dto.consent_version == "1.0.0"

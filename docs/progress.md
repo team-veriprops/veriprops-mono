@@ -1,7 +1,7 @@
 ---
 skill: prd-orchestrator
 skill_version: 2.2.0
-last_updated: 2026-05-05
+last_updated: 2026-05-07
 ---
 
 # Progress Tracker
@@ -10,13 +10,13 @@ last_updated: 2026-05-05
 
 ---
 
-**status:** S4 complete — ready for S5
+**status:** S6 complete — ready for S7
 
-**next_slice:** S5 (Auth shell completeness audit — Phase 2)
+**next_slice:** S7 (Agent application wizard backend — R3.2 KYC stub, R3.4 agent terms consent)
 
 **current_slice:** —
 
-**completion %:** 39% (54 done / 140 total — R1.1–R1.10 fully verified by S4)
+**completion %:** 47% (65 done / 140 total — R2.3 now done by S6)
 
 ---
 
@@ -29,20 +29,22 @@ last_updated: 2026-05-05
 | S2 | Reusable state-machine validator — `appodus_utils/state/machine.py`, `IllegalStateTransitionException`, Verification + Task + Report machines, 101 unit tests | 2026-05-02 |
 | S3 | Derived global state rules — `derive_status()` pure function (PRD §0.3 rules 1–8), `VerificationService.derive_global_state()`, 31 unit tests | 2026-05-05 |
 | S4 | Marketing site final polish — CTA URL fix (6 locations `/auth/login?intent=` → `/auth?intent=`); `formatPrice` extracted to `home.data.ts`; 14 new unit tests (43 total, all passing); PRD §1.12 exit criteria all met | 2026-05-05 |
+| S5 | Auth shell completeness audit — R2.5–R2.15 all verified; 59 backend unit tests + 24 frontend tests passing; `make_oauth_state`/`normalise_provider` helpers added to oauth package; `_phone_e164` added to otp_service; `models.ts` frontend enum file verified; `resolvePostAuthRedirect` route corrected to `/agents/*` | 2026-05-07 |
+| S6 | OAuth security hardening — Google ID token JWKS-based signature verification (replaced `get_unverified_claims`); Apple + Google JWKS cached in Redis with 5-min TTL + key-rotation fallback; OAuth state stored with explicit 10-min TTL; `resolve_frontend_origin` rejects unlisted origins (ForbiddenException) instead of silently falling back; 11 new unit tests; 70 auth tests passing | 2026-05-07 |
 
 ## Current Slice
 
-S4 complete. Next: S5 — Auth shell completeness audit (see [execution-plan.md](execution-plan.md)).
+S6 complete. Next: S7 — Agent application wizard backend (see [execution-plan.md](execution-plan.md)).
 
 ## Pending Slices
 
-S1 → S2 → S3 → S4 → S5 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
+S6 → S7 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
 
 ---
 
 ## Runtime State
 
-idle — S3 checkpointed, no slice in-flight. Awaiting `run` to begin S4.
+idle — S6 checkpointed, no slice in-flight. Awaiting `run` to begin S7.
 
 ## Pending Recovery
 

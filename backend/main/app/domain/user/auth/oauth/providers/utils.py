@@ -5,6 +5,7 @@ if TYPE_CHECKING:
     from loguru import Logger
 import json
 import urllib.parse
+from datetime import timedelta
 from typing import Optional, Tuple
 from urllib.parse import urlparse
 
@@ -74,7 +75,7 @@ class OauthUtils:
             link_user_id=link_user_id,
         )
 
-        await RedisUtils.set_redis(f"oauth:state:{state}", oauth_request_payload)
+        await RedisUtils.set_redis(f"oauth:state:{state}", oauth_request_payload, time_to_live=timedelta(minutes=10))
 
         query_string = urllib.parse.urlencode(params)
         return f"{base_url}?{query_string}"
@@ -103,14 +104,19 @@ class OauthUtils:
                 candidates.append(f"{parsed.scheme}://{parsed.netloc}")
 
         allowed = _allowed_frontend_origins()
+        if not allowed:
+            raise ForbiddenException(message="No OAuth frontend origin allowlist configured.")
+
         for c in candidates:
             normalised = c.rstrip("/")
             if normalised in allowed:
                 return normalised
 
-        if not allowed:
-            raise ForbiddenException(message="No OAuth frontend origin allowlist configured.")
-        # No referer/origin (server-to-server or test). Default to first allowlisted.
+        # Request supplied an explicit origin/referer that is not on the allowlist — reject.
+        if candidates:
+            raise ForbiddenException(message="OAuth origin not permitted.")
+
+        # No origin/referer header (server-to-server or unit test). Default to first allowlisted.
         return allowed[0]
 
     @staticmethod

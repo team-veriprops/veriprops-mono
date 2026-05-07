@@ -1,8 +1,9 @@
+import json
 from datetime import timedelta
 from typing import Optional
 
 from httpx import AsyncClient
-from jose import jwt
+from jose import jwt, exceptions as jose_exceptions
 from kink import di, inject
 from starlette.requests import Request
 
@@ -13,12 +14,55 @@ from main.app.domain.user.auth.oauth.providers.models import (
     SocialLoginUserInfoDto,
 )
 from main.appodus_utils import Utils
+from main.appodus_utils.db.redis_utils import RedisUtils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.app.domain.user.auth.oauth.interface import ISocialAuthProvider
 from main.app.domain.user.auth.oauth.providers.utils import OauthUtils
 
+_APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
+_APPLE_JWKS_CACHE_KEY = "oauth:jwks:apple"
+
 httpx_client: AsyncClient = di[AsyncClient]
+
+
+async def _get_apple_jwks() -> dict:
+    raw = await RedisUtils.get_redis(_APPLE_JWKS_CACHE_KEY)
+    if raw:
+        return json.loads(raw)
+    return await _fetch_and_cache_apple_jwks()
+
+
+async def _fetch_and_cache_apple_jwks() -> dict:
+    response = await httpx_client.get(_APPLE_JWKS_URL)
+    response.raise_for_status()
+    jwks = response.json()
+    await RedisUtils.set_redis(_APPLE_JWKS_CACHE_KEY, json.dumps(jwks), time_to_live=timedelta(minutes=5))
+    return jwks
+
+
+async def _decode_apple_id_token(id_token: str, client_id: str) -> dict:
+    jwks = await _get_apple_jwks()
+    try:
+        return jwt.decode(
+            id_token,
+            key=jwks,
+            algorithms=["RS256"],
+            audience=client_id,
+            issuer="https://appleid.apple.com",
+        )
+    except jose_exceptions.JWKError:
+        # Key not in cached JWKS — Apple rotated keys; invalidate and retry once.
+        await RedisUtils.delete(_APPLE_JWKS_CACHE_KEY)
+        jwks = await _fetch_and_cache_apple_jwks()
+        return jwt.decode(
+            id_token,
+            key=jwks,
+            algorithms=["RS256"],
+            audience=client_id,
+            issuer="https://appleid.apple.com",
+        )
+
 
 @inject
 @decorate_all_methods(method_trace_logger)
@@ -86,16 +130,7 @@ class AppleAuthProvider(ISocialAuthProvider):
         token_response.raise_for_status()
 
         id_token = token_response.json()["id_token"]
-        # Verify the id_token signature against Apple's published JWKS.
-        jwks_response = await httpx_client.get("https://appleid.apple.com/auth/keys")
-        jwks_response.raise_for_status()
-        claims = jwt.decode(
-            id_token,
-            key=jwks_response.json(),
-            algorithms=["RS256"],
-            audience=self._client_id,
-            issuer="https://appleid.apple.com",
-        )
+        claims = await _decode_apple_id_token(id_token, self._client_id)
 
         return SocialLoginUserInfoDto(
             provider=self.platform,

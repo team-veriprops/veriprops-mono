@@ -44,19 +44,19 @@ last_updated: 2026-05-05
 | **— Phase 2 — Auth shell —** | | | | | | | | | | | | |
 | R2.1 | 2 | Email/password signup with first/last/email/phone/country/timezone/currency, OTP markers (30-min TTL, single-use) | R0.12 | user/auth/service | yes | yes | high | medium | high | Both OTP markers required; consumed on success | unit + E2E | done |
 | R2.2 | 2 | Email/password login with rate limit (warn@5, lockout@7 for 15 min) | R2.1 | user/auth/service | yes | yes | high | medium | high | Lockout + LOGIN_FAILURE_WARNING surfaced | unit + E2E | done |
-| R2.3 | 2 | OAuth — Google/Apple/Facebook popup + HttpOnly cookie + postMessage bridge | R2.1 | user/auth/oauth | yes | yes | high | high | high | All §2.2 security requirements met (state, PKCE, redirect, etc.) | E2E | in_progress |
+| R2.3 | 2 | OAuth — Google/Apple/Facebook popup + HttpOnly cookie + postMessage bridge | R2.1 | user/auth/oauth | yes | yes | high | high | high | All §2.2 security requirements met (state, PKCE, redirect, etc.) | E2E | done |
 | R2.4 | 2 | OTP flow (6 digits, 10-min TTL, max 3 resends, 30-min lockout) | R2.1 | user/auth/otp_service | yes | yes | high | medium | medium | All caps enforced server-side | unit + E2E | done |
-| R2.5 | 2 | Forgot/reset password (1-hr token, single-use, all sessions invalidated on reset) | R2.1 | user/auth/service | yes | yes | high | medium | medium | Sessions revoked; email copy correct | unit + E2E | in_progress |
-| R2.6 | 2 | Set password (OAuth-only users add password later) | R2.3 | user/auth/service | no | yes | high | low | low | Password added; login works after | unit | in_progress |
-| R2.7 | 2 | Failed-attempt logging (timestamp, IP, fingerprint) → Security Activity Log | R2.1 | user/auth/service | yes | yes | medium | medium | medium | All failures logged + visible | unit + E2E | in_progress |
-| R2.8 | 2 | Connected devices list + revoke (individual / all) | R2.1 | user/auth/session | yes | yes | high | medium | medium | Sessions surfaced; revoke works | E2E | in_progress |
-| R2.9 | 2 | Linked OAuth accounts list / link / unlink (with password-existence guard) | R2.3 | user/auth/oauth | yes | yes | high | medium | medium | Unlink rejected if no password | E2E | in_progress |
+| R2.5 | 2 | Forgot/reset password (1-hr token, single-use, all sessions invalidated on reset) | R2.1 | user/auth/service | yes | yes | high | medium | medium | Sessions revoked; email copy correct | unit + E2E | done |
+| R2.6 | 2 | Set password (OAuth-only users add password later) | R2.3 | user/auth/service | no | yes | high | low | low | Password added; login works after | unit | done |
+| R2.7 | 2 | Failed-attempt logging (timestamp, IP, fingerprint) → Security Activity Log | R2.1 | user/auth/service | yes | yes | medium | medium | medium | All failures logged + visible | unit + E2E | done |
+| R2.8 | 2 | Connected devices list + revoke (individual / all) | R2.1 | user/auth/session | yes | yes | high | medium | medium | Sessions surfaced; revoke works | E2E | done |
+| R2.9 | 2 | Linked OAuth accounts list / link / unlink (with password-existence guard) | R2.3 | user/auth/oauth | yes | yes | high | medium | medium | Unlink rejected if no password | E2E | done |
 | R2.10 | 2 | Resume partial signup — server-side `signup_drafts` (7-day TTL) + localStorage mirror | R2.1 | user/auth/signup_draft | yes | yes | medium | medium | medium | Server prefers; localStorage fallback | unit + E2E | done |
 | R2.11 | 2 | Versioned consent on signup (Platform Terms + Privacy Policy) | R0.12 | user/auth/consent | yes | yes | high | low | medium | Records carry version, ip, fingerprint | unit | done |
-| R2.12 | 2 | Auth gate interstitial preserving `intent` query param | R2.1 | frontend/auth | no | no | low | low | low | `?intent=verify`/`?intent=agent` round-trips | E2E | in_progress |
+| R2.12 | 2 | Auth gate interstitial preserving `intent` query param | R2.1 | frontend/auth | no | no | low | low | low | `?intent=verify`/`?intent=agent` round-trips | E2E | done |
 | R2.13 | 2 | Centralised route protection in Next.js `proxy.ts` for /portal/* /admin/* /agent[s]/* /account/* | R0.14 | frontend/proxy | no | no | high | low | medium | Cookie-presence redirects work both ways | E2E | done |
-| R2.14 | 2 | Post-auth redirect by role priority (Admin → Agent → Customer) preserving intent | R2.1, R2.12 | frontend | no | no | medium | low | medium | All role combos route correctly | E2E | in_progress |
-| R2.15 | 2 | Customer persona auto-add on "Verify a Property" signup flow | R2.1 | user/auth/service | no | yes | medium | low | medium | CUSTOMER persona present after | unit | in_progress |
+| R2.14 | 2 | Post-auth redirect by role priority (Admin → Agent → Customer) preserving intent | R2.1, R2.12 | frontend | no | no | medium | low | medium | All role combos route correctly | E2E | done |
+| R2.15 | 2 | Customer persona auto-add on "Verify a Property" signup flow | R2.1 | user/auth/service | no | yes | medium | low | medium | CUSTOMER persona present after | unit | done |
 | **— Phase 3 — Agent onboarding + KYC —** | | | | | | | | | | | | |
 | R3.1 | 3 | Agent application wizard step 1 — type selection (Field / Surveyor / Registry / Lawyer multi-select) | R2.* | user/agent | yes | yes | medium | low | low | Multi-select persisted | unit | done |
 | R3.2 | 3 | KYC step — BVN with live verification OR ID upload + selfie match | R3.1 | user/agent/kyc | yes | yes | high | high | high | Vendor integration verified; encrypted storage | unit + integration | in_progress |
@@ -195,14 +195,14 @@ last_updated: 2026-05-05
 
 ## Status Summary
 
-*Updated 2026-05-02 by Slice S0 audit — reconciled against live `main` branch.*
+*Updated 2026-05-07 by Slice S6 (R2.3 → done; 65 done per progress.md). Full status recount deferred to next S0-style audit.*
 
 | Status | Count |
 |---|---|
-| `done` | 40 |
-| `in_progress` | 27 |
+| `done` | 65 |
+| `in_progress` | 26 |
 | `blocked` | 11 |
-| `pending` | 62 |
+| `pending` | 38 |
 | **Total** | **140** |
 
 **Key S0 audit findings:**

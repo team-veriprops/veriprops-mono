@@ -30,7 +30,7 @@ export function resolvePostAuthRedirect(
     return "/portal/verifications/new";
   }
   if (options.intent === "agent" && !isAgent) {
-    return "/agent/onboarding";
+    return ROUTES.AGENT.ONBOARDING;
   }
 
   if (isAgent) return ROUTES.AGENT.DASHBOARD;
