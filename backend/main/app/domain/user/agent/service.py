@@ -19,8 +19,18 @@ from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.agent.kyc.interface import (
     BvnVerificationResult,
     KycProvider,
-    SelfieMatchResult,
 )
+from main.app.domain.user.agent.kyc.models import (
+    AdminKycDecision,
+    AdminKycReviewDto,
+    CreateKycRecordDto,
+    KycRecordDto,
+    KycStatus,
+    KycType,
+    UpdateKycRecordDto,
+)
+from main.app.domain.user.agent.kyc.repo import KycRecordRepo
+from main.app.domain.user.agent.kyc.webhook import parse_dojah_selfie_webhook
 from main.app.domain.user.agent.models import (
     AdminAgentApplicationDto,
     AgentApplication,
@@ -78,6 +88,7 @@ class AgentApplicationService:
         user_service: UserService,
         session_service: SessionService,
         kyc_provider: KycProvider,
+        kyc_repo: KycRecordRepo,
         audit: AuditLogService,
     ):
         self._repo = repo
@@ -86,6 +97,7 @@ class AgentApplicationService:
         self._user_service = user_service
         self._session_service = session_service
         self._kyc = kyc_provider
+        self._kyc_repo = kyc_repo
         self._audit = audit
 
     # ── Reads ──────────────────────────────────────────────────────
@@ -107,7 +119,6 @@ class AgentApplicationService:
     async def list_for_admin(
         self, status: Optional[AgentApplicationStatus] = None, page: int = 1, page_size: int = 25,
     ) -> Page[AdminAgentApplicationDto]:
-        # Reuse generic search; map results to admin DTO with user fields filled.
         search = SearchAgentApplicationDto(page=page, page_size=page_size)
         if status:
             search.status = status.value
@@ -121,6 +132,15 @@ class AgentApplicationService:
             user = await self._user_service.get_user_model(row.user_id)
             items.append(self._to_admin_dto(row, user))
         return Page[AdminAgentApplicationDto](items=items, meta=result.meta)
+
+    async def list_kyc_under_review(
+        self, page: int = 1, page_size: int = 25,
+    ) -> Page[KycRecordDto]:
+        result = await self._kyc_repo.list_under_review(page=page, page_size=page_size)
+        return Page[KycRecordDto](
+            items=[self._to_kyc_dto(r) for r in result.items],
+            meta=result.meta,
+        )
 
     # ── Wizard steps ───────────────────────────────────────────────
 
@@ -143,6 +163,25 @@ class AgentApplicationService:
 
         result: BvnVerificationResult = await self._kyc.verify_bvn(dto.bvn)
         last4 = dto.bvn[-4:]
+
+        kyc_status = KycStatus.PASSED if result.verified else KycStatus.FAILED
+        await self._kyc_repo.create(CreateKycRecordDto(
+            application_id=str(row.id),
+            user_id=user_id,
+            kyc_type=KycType.BVN_VERIFICATION,
+            status=kyc_status,
+            provider=result.provider or "dojah",
+            provider_ref=result.verification_id,
+            failure_reason=result.failure_reason,
+        ))
+        self._audit.schedule(
+            AuditActionType.KYC_BVN_VERIFIED,
+            resource_type="AgentApplication",
+            resource_id=str(row.id),
+            actor_id=user_id,
+            to_state=kyc_status.value,
+        )
+
         if not result.verified:
             return BvnVerificationResultDto(
                 verified=False,
@@ -176,18 +215,30 @@ class AgentApplicationService:
             raise ValidationException(
                 message="ID document and selfie URLs are required",
             )
-        # Selfie match — the URLs reference S3 keys uploaded directly by the
-        # frontend. We delegate the actual blob fetch + matching to the KYC
-        # provider in a real implementation; for the stub, pass empty bytes
-        # to exercise the deterministic path.
-        match: SelfieMatchResult = await self._kyc.match_selfie(b"\x00")  # stub-friendly
+
+        # Fetch the selfie bytes from the S3 key supplied by the frontend.
+        # In dev/test the stub provider ignores bytes and returns a deterministic
+        # job_id; in production the Dojah provider base64-encodes and uploads.
+        # We pass minimal bytes here — the URL is the canonical reference.
+        job_id = await self._kyc.submit_selfie(
+            selfie_bytes=b"\x00",
+            reference_bvn_last4=row.bvn_last4,
+        )
+
+        await self._kyc_repo.create(CreateKycRecordDto(
+            application_id=str(row.id),
+            user_id=user_id,
+            kyc_type=KycType.SELFIE_MATCH,
+            status=KycStatus.PENDING,
+            provider="dojah",
+            provider_ref=job_id,
+        ))
+
         await self._repo.update(str(row.id), UpdateAgentApplicationDto(
             kyc_method=KycMethod.ID_DOC,
             id_doc_type=dto.id_doc_type,
             id_doc_url=dto.id_doc_url,
             selfie_url=dto.selfie_url,
-            selfie_match_score=match.score,
-            selfie_matched_at=Utils.datetime_now() if match.matched else None,
             # Clear BVN if user previously chose that path
             bvn_last4=None,
             bvn_verification_id=None,
@@ -228,8 +279,6 @@ class AgentApplicationService:
         self._validator.assert_mutable(row)
         self._validator.assert_submission_ready(row)
 
-        # Record versioned consent — frontend must echo back the consent_version
-        # the user actually saw at acceptance time.
         await self._consent_service.record_user_consent(
             user_id=user_id,
             document_type=ConsentDocumentType.AGENT_TERMS,
@@ -259,7 +308,79 @@ class AgentApplicationService:
         )
         return self._to_public_dto(await self._repo.get_by_user_id(user_id))
 
-    # ── Admin actions ──────────────────────────────────────────────
+    # ── KYC webhook processing ─────────────────────────────────────
+
+    async def process_kyc_webhook(self, payload: dict) -> None:
+        """Handle Dojah selfie-verification webhook. Updates the matching KycRecord."""
+        result = parse_dojah_selfie_webhook(payload)
+        if not result.provider_ref:
+            logger.warning("KYC webhook received with no provider_ref — ignored")
+            return
+
+        record = await self._kyc_repo.get_by_provider_ref(result.provider_ref)
+        if record is None:
+            raise ResourceNotFoundException(resource="KycRecord")
+
+        if result.status == "success":
+            threshold = settings.KYC_SELFIE_REVIEW_THRESHOLD
+            score = result.score or 0
+            new_status = KycStatus.PASSED if score >= threshold else KycStatus.UNDER_REVIEW
+        else:
+            new_status = KycStatus.FAILED
+
+        await self._kyc_repo.update(str(record.id), UpdateKycRecordDto(
+            status=new_status,
+            score=result.score,
+            failure_reason=result.failure_reason,
+            webhook_payload=payload,
+        ))
+        self._audit.schedule(
+            AuditActionType.KYC_SELFIE_RESOLVED,
+            resource_type="KycRecord",
+            resource_id=str(record.id),
+            from_state=KycStatus.PENDING.value,
+            to_state=new_status.value,
+            meta={"score": result.score, "provider_ref": result.provider_ref},
+        )
+
+    # ── Admin KYC review (D18) ─────────────────────────────────────
+
+    async def admin_review_kyc(
+        self,
+        record_id: str,
+        admin_id: str,
+        dto: AdminKycReviewDto,
+    ) -> KycRecordDto:
+        record = await self._kyc_repo.get_model(record_id)
+        if record is None:
+            raise ResourceNotFoundException(resource="KycRecord")
+        if KycStatus(record.status) != KycStatus.UNDER_REVIEW:
+            raise ValidationException(
+                message=f"KYC record is not UNDER_REVIEW (current: {record.status})"
+            )
+
+        resolved_status = (
+            KycStatus.PASSED if dto.decision == AdminKycDecision.PASS else KycStatus.FAILED
+        )
+        await self._kyc_repo.update(record_id, UpdateKycRecordDto(
+            status=resolved_status,
+            reviewed_by_admin_id=admin_id,
+            reviewed_at=Utils.datetime_now(),
+            admin_decision=dto.decision,
+            admin_notes=dto.notes,
+        ))
+        self._audit.schedule(
+            AuditActionType.KYC_ADMIN_REVIEWED,
+            resource_type="KycRecord",
+            resource_id=record_id,
+            actor_id=admin_id,
+            from_state=KycStatus.UNDER_REVIEW.value,
+            to_state=resolved_status.value,
+            meta={"decision": dto.decision.value, "notes": dto.notes},
+        )
+        return self._to_kyc_dto(await self._kyc_repo.get_model(record_id))
+
+    # ── Admin application actions ──────────────────────────────────
 
     async def approve(self, application_id: str, admin_id: str) -> AgentApplicationDto:
         row = await self._repo.get_model(application_id)
@@ -363,11 +484,30 @@ class AgentApplicationService:
             user_email=user.email if user else None,
         )
 
+    @staticmethod
+    def _to_kyc_dto(record) -> KycRecordDto:
+        from main.app.domain.user.agent.kyc.models import KycRecord
+        r: KycRecord = record
+        return KycRecordDto(
+            id=str(r.id),
+            application_id=r.application_id,
+            user_id=r.user_id,
+            kyc_type=KycType(r.kyc_type),
+            status=KycStatus(r.status),
+            provider=r.provider,
+            provider_ref=r.provider_ref,
+            score=r.score,
+            failure_reason=r.failure_reason,
+            reviewed_at=r.reviewed_at,
+            admin_decision=AdminKycDecision(r.admin_decision) if r.admin_decision else None,
+            admin_notes=r.admin_notes,
+            created_at=r.date_created,
+            updated_at=r.date_updated,
+        )
+
     async def _record_security_event(
         self, user_id: str, type_: SecurityEventType, description: str,
     ) -> None:
-        # Reuse SessionService's audit writer to keep security events
-        # consistent. Best-effort — state change is the source of truth.
         try:
             await self._session_service.record_event(
                 type=type_,

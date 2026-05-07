@@ -12,7 +12,9 @@ class IDocumentStorageProvider(ABC):
         pass
 
     @abstractmethod
-    async def upload(self, key: str, bucket: str, file_bytes: BinaryIO, metadata: dict) -> str:
+    async def upload(
+        self, key: str, bucket: str, file_bytes: BinaryIO, metadata: dict, encrypted: bool = False
+    ) -> str:
         pass
 
     @abstractmethod

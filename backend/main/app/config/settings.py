@@ -144,6 +144,12 @@ class Settings(AppodusBaseSettings):
 
     # KYC (PRD Open Q #15 / #16) — STUB | MONO | DOJAH
     KYC_PROVIDER: Optional[str] = "STUB"
+    # Dojah credentials (required when KYC_PROVIDER=DOJAH)
+    DOJAH_APP_ID: str = ""
+    DOJAH_PRIVATE_KEY: str = ""
+    DOJAH_WEBHOOK_SECRET: str = ""
+    # Selfie scores below this threshold route to admin UNDER_REVIEW queue (D18)
+    KYC_SELFIE_REVIEW_THRESHOLD: int = 80
 
     # Verification pricing & FX
     PRICING_FX_PROVIDER: Optional[str] = "STUB"  # STUB | OPENEXCHANGERATES

@@ -39,6 +39,10 @@ class AuditActionType(str, enum.Enum):
     TASK_STATE_CHANGED = "TASK_STATE_CHANGED"
     TASK_ASSIGNED      = "TASK_ASSIGNED"
     TASK_REASSIGNED    = "TASK_REASSIGNED"
+    # ── KYC ────────────────────────────────────────────────────────
+    KYC_BVN_VERIFIED    = "KYC_BVN_VERIFIED"
+    KYC_SELFIE_RESOLVED = "KYC_SELFIE_RESOLVED"
+    KYC_ADMIN_REVIEWED  = "KYC_ADMIN_REVIEWED"
 
 
 # ─── ORM ──────────────────────────────────────────────────────────────────────

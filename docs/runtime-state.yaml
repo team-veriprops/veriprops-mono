@@ -18,6 +18,17 @@ modified_files:
   - backend/test/unit/app/domain/auth/test_signup_validation.py
   - frontend/src/components/website/auth/libs/auth/redirect.ts
   - frontend/src/components/website/auth/libs/auth/redirect.test.ts
+  - backend/main/app/config/settings.py
+  - backend/main/app/domain/audit/models.py
+  - backend/main/app/domain/user/agent/kyc/interface.py
+  - backend/main/app/domain/user/agent/kyc/__init__.py
+  - backend/main/app/domain/user/agent/kyc/providers/stub.py
+  - backend/main/app/domain/user/agent/kyc/providers/dojah.py
+  - backend/main/app/domain/user/agent/service.py
+  - backend/main/app/domain/user/agent/controller.py
+  - backend/main/appodus_utils/integrations/document_storage/interface.py
+  - backend/main/appodus_utils/integrations/document_storage/s3/s3_storage.py
+  - backend/test/unit/app/domain/agent/test_agent_application.py
   - docs/requirements-matrix.md
   - docs/runtime-state.yaml
   - docs/progress.md
@@ -31,12 +42,19 @@ created_files:
   - backend/test/unit/app/domain/auth/test_oauth_security.py
   - backend/test/unit/app/domain/agent/__init__.py
   - backend/test/unit/app/domain/agent/test_agent_application.py
+  - backend/main/app/domain/user/agent/kyc/models.py
+  - backend/main/app/domain/user/agent/kyc/repo.py
+  - backend/main/app/domain/user/agent/kyc/webhook.py
+  - backend/main/alembic/versions/d3e4f5a6b7c8_add_kyc_records_s8.py
+  - backend/test/unit/app/domain/agent/test_kyc_dojah_provider.py
+  - backend/test/unit/app/domain/agent/test_kyc_webhook.py
+  - backend/test/unit/app/domain/agent/test_kyc_service_s8.py
 
 tests:
   written: true
   executed: true
   passing: true
-  last_run: "2026-05-07 — 86 backend unit tests passing (16 agent + 70 auth)"
+  last_run: "2026-05-07 — 108 backend unit tests passing (38 agent + 70 auth)"
 
 self_audit:
   started: false
@@ -49,7 +67,7 @@ git:
   branch: main
   dirty: true
 
-next_action: "run S8 — KYC BVN + selfie integration (Dojah, D6+D7 confirmed)"
+next_action: "run S9 — Agent onboarding frontend (depends on S7 + S8)"
 
 started_at: null
 last_checkpoint: "2026-05-07"

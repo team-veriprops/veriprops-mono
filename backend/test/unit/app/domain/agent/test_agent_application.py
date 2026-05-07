@@ -99,6 +99,7 @@ def _make_service():
     svc._user_service = AsyncMock()
     svc._session_service = AsyncMock()
     svc._kyc = AsyncMock()
+    svc._kyc_repo = AsyncMock()
     svc._audit = MagicMock()
     return svc
 

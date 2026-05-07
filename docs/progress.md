@@ -10,13 +10,13 @@ last_updated: 2026-05-07
 
 ---
 
-**status:** S7 complete — ready for S8
+**status:** S8 complete — ready for S9
 
-**next_slice:** S8 (KYC: BVN + selfie integration — Dojah, D6+D7 confirmed)
+**next_slice:** S9 (Agent onboarding frontend — wizard UI for S7 + S8)
 
 **current_slice:** —
 
-**completion %:** 47% (66 done / 140 total — R3.4 now done by S7)
+**completion %:** 49% (68 done / 140 total — R3.2 + R3.6 now done by S8)
 
 ---
 
@@ -32,20 +32,21 @@ last_updated: 2026-05-07
 | S5 | Auth shell completeness audit — R2.5–R2.15 all verified; 59 backend unit tests + 24 frontend tests passing; `make_oauth_state`/`normalise_provider` helpers added to oauth package; `_phone_e164` added to otp_service; `models.ts` frontend enum file verified; `resolvePostAuthRedirect` route corrected to `/agents/*` | 2026-05-07 |
 | S6 | OAuth security hardening — Google ID token JWKS-based signature verification (replaced `get_unverified_claims`); Apple + Google JWKS cached in Redis with 5-min TTL + key-rotation fallback; OAuth state stored with explicit 10-min TTL; `resolve_frontend_origin` rejects unlisted origins (ForbiddenException) instead of silently falling back; 11 new unit tests; 70 auth tests passing | 2026-05-07 |
 | S7 | Agent application wizard tests — verified full backend implementation in `user/agent/` (models, repo, service, validator, controller, KYC subdomain, migration); wrote 16 unit tests in `test/unit/app/domain/agent/` covering R3.1 (multi-select types), R3.3 (conditional credentials), R3.4 (AGENT_TERMS consent recording, PENDING transition, truthfulness gate), R3.7 (idempotent get_or_create, wizard state preservation), plus approve/reject paths; 86 backend unit tests total passing | 2026-05-07 |
+| S8 | KYC BVN + selfie integration (Dojah) — `DojahKycProvider` (sync BVN via `/kyc/bvn/advance`, async selfie via `/kyc/selfie`); `KycRecord` ORM + repo + Alembic migration `d3e4f5a6b7c8`; `kyc/webhook.py` HMAC-SHA256 validation + `parse_dojah_selfie_webhook`; D18: selfie score < `KYC_SELFIE_REVIEW_THRESHOLD` (80) routes to UNDER_REVIEW admin queue; S3 `upload(encrypted=True)` adds SSE-AES256; service updated with `process_kyc_webhook` + `admin_review_kyc`; controller adds `POST /agents/kyc/webhook` + admin review endpoints; 3 new audit action types; 22 new unit tests (108 total passing) | 2026-05-07 |
 
 ## Current Slice
 
-S7 complete. Next: S8 — KYC BVN + selfie integration via Dojah (see [execution-plan.md](execution-plan.md)).
+S8 complete. Next: S9 — Agent onboarding frontend (wizard UI + KYC upload + status dashboard).
 
 ## Pending Slices
 
-S6 → S7 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
+S9 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
 
 ---
 
 ## Runtime State
 
-idle — S7 checkpointed, no slice in-flight. Awaiting `run` to begin S8.
+idle — S8 checkpointed, no slice in-flight. Awaiting `run` to begin S9.
 
 ## Pending Recovery
 
@@ -74,7 +75,7 @@ The following decisions in [decision-log.md](decision-log.md) are **REQUIRES USE
 | D15 | Conflict-detection initial rule set | S29 (Phase 8 conflicts) |
 | D16 | Wire-proof reconciliation | S16 (Phase 5 payment) |
 | D17 | Admin SLAs | S21 (Phase 7), S50 (Phase 16) |
-| D18 | KYC document review path | S8 (Phase 3 KYC) |
+| ~~D18~~ | ~~KYC document review path~~ | ~~S8~~ — **confirmed: admin reviews low-confidence only (score < KYC_SELFIE_REVIEW_THRESHOLD=80)** |
 | ~~D19~~ | ~~Verification Disclaimer copy~~ | ~~S15~~ — **confirmed-placeholder: proceed, swap before launch** |
 | D20 | Trust-status visibility | S49 (Phase 16) |
 | D21 | Area Insights content owner | S55 (Phase 18) |
