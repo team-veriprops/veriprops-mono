@@ -1,11 +1,13 @@
-from typing import Optional, Type
+from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.user.auth.session.device.models import Device
+from main.app.domain.user.auth.session.models import UserType
 from main.app.domain.user.models import (
+    AdminSubRole,
     QueryUserDto,
     SearchUserDto,
     UpdateUserDto,
@@ -34,6 +36,22 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def list_admins(self, sub_role_filter: Optional[AdminSubRole] = None) -> List[User]:
+        conditions = [User.deleted.is_(False), User.user_type == UserType.ADMIN.value]
+        if sub_role_filter is not None:
+            conditions.append(User.admin_sub_role == sub_role_filter.value)
+        stmt = select(User).where(*conditions)
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def demote_to_user(self, user_id: str) -> None:
+        stmt = (
+            sa_update(User)
+            .where(User.id == user_id, User.deleted.is_(False))
+            .values(user_type=UserType.USER.value, admin_sub_role=None)
+        )
+        await self._session.execute(stmt)
 
     async def get_by_phone_e164(self, phone_e164: str) -> Optional[User]:
         stmt = select(User).where(

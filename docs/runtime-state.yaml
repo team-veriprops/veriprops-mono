@@ -72,7 +72,7 @@ tests:
   written: true
   executed: true
   passing: true
-  last_run: "2026-05-07 — 201 frontend tests passing (8 admin-service + 25 agent + 168 other) + 268 backend"
+  last_run: "2026-05-07 — 201 frontend tests passing (8 admin-service + 25 agent + 168 other) + 329 backend (268 prior + 61 S11: 49 permission-matrix + 12 admin-team)"
 
 self_audit:
   started: false
@@ -85,7 +85,7 @@ git:
   branch: main
   dirty: true
 
-next_action: "run S11 — RBAC enforcement (R4.4, R4.5): verify Permission matrix + require_permission() guards on every admin endpoint; write unit tests for all role/permission combos; verify admin team management (list, deactivate, change sub-role) + audit log on changes"
+next_action: "run S12 — Property submission backend (R5.1, R5.3, R5.4): Property + Verification models, VID generation (VP-YYYY-XXXXXX), DRAFT→SUBMITTED transition, property type/location/details forms (conditional Land vs Building), optional doc upload + seller info"
 
 started_at: null
-last_checkpoint: "2026-05-07 S10"
+last_checkpoint: "2026-05-07 S11"

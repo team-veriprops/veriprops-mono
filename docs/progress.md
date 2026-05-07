@@ -10,13 +10,13 @@ last_updated: 2026-05-07
 
 ---
 
-**status:** S10 complete — ready for S11
+**status:** S11 complete — ready for S12
 
-**next_slice:** S11 (RBAC enforcement — R4.4, R4.5)
+**next_slice:** S12 (Property submission backend — R5.1, R5.3, R5.4)
 
 **current_slice:** —
 
-**completion %:** 51% (71 done / 140 total — R4.1–R4.3/R4.6 were already done; S10 delivered tests + bugfix)
+**completion %:** 51% (71 done / 140 total — R4.4/R4.5 implementations confirmed; S11 delivered admin_team domain + permission matrix tests)
 
 ---
 
@@ -35,24 +35,25 @@ last_updated: 2026-05-07
 | S8 | KYC BVN + selfie integration (Dojah) — `DojahKycProvider` (sync BVN via `/kyc/bvn/advance`, async selfie via `/kyc/selfie`); `KycRecord` ORM + repo + Alembic migration `d3e4f5a6b7c8`; `kyc/webhook.py` HMAC-SHA256 validation + `parse_dojah_selfie_webhook`; D18: selfie score < `KYC_SELFIE_REVIEW_THRESHOLD` (80) routes to UNDER_REVIEW admin queue; S3 `upload(encrypted=True)` adds SSE-AES256; service updated with `process_kyc_webhook` + `admin_review_kyc`; controller adds `POST /agents/kyc/webhook` + admin review endpoints; 3 new audit action types; 22 new unit tests (108 total passing) | 2026-05-07 |
 | S9 | Agent onboarding frontend — confirmed all 6 wizard components (`TypeSelectionStep`, `KycStep`, `CredentialsStep`, `ReviewStep`, `ApprovalStatusCard`, `AgentOnboardingContainer`) + service layer + TanStack Query hooks; added stable `data-testid` selectors (`agent-wizard-*`, `agent-status-*`) to all interactive elements; extracted `deriveResumeStep` + `validateCredentialsStep` pure functions into `wizardUtils.ts`; wrote 25 Vitest tests (18 wizard logic + 7 service HTTP); route protection confirmed in `proxy.ts`; 193 frontend tests total passing | 2026-05-07 |
 | S10 | Admin invite + acceptance — verified complete backend (`admin_invitation/` service, repo, controller, migration in `b1f2c3d4e5f6`), frontend (`admin-service.ts`, `useAdminQueries.ts`, `/auth/admin-invite/[token]/page.tsx`), and Super Admin seed migration; wrote 17 backend unit tests (all 4 acceptance branches, expired-token gate, revoke, `attach_admin_role_to_new_user`) + 8 frontend service HTTP tests; fixed `UpdateUserDto` missing `user_type` field (silent Pydantic drop bug — user was never promoted to ADMIN); 268 backend + 201 frontend tests passing | 2026-05-07 |
+| S11 | RBAC enforcement (R4.4, R4.5) — confirmed JWT claims already embed `admin_sub_role`; created `user/admin_team/` domain (`service.py`, `controller.py`, `models.py`) with list/deactivate/change-sub-role endpoints all guarded by `require_permission(INVITE_ADMIN)`; added `ADMIN_DEACTIVATED` to `SecurityEventType`; added `list_admins()` + `demote_to_user()` to `UserRepo`; mounted `admin_team_router` in `user/controller.py`; wrote 61 new unit tests (12 team management + 49 permission matrix); 329 backend tests passing, 0 regressions | 2026-05-07 |
 
 ## Current Slice
 
-S10 complete. Next: S11 — RBAC enforcement (R4.4, R4.5).
+S11 complete. Next: S12 — Property submission backend (R5.1, R5.3, R5.4).
 
 ## Pending Slices
 
-S10 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
+S12 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
 
 ---
 
 ## Runtime State
 
-idle — S9 checkpointed, no slice in-flight. Awaiting `run` to begin S10.
+idle — S11 complete, no slice in-flight. Awaiting `run` to begin S12.
 
 ## Pending Recovery
 
-none — S2 completed cleanly; no interrupted work detected.
+none — S11 completed cleanly; no interrupted work detected.
 
 ---
 
