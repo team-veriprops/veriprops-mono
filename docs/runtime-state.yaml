@@ -6,6 +6,7 @@ phase: idle
 
 current_slice: null
 current_subtask: null
+last_completed_slices: [S13, S14, S15, S16, S17]
 
 modified_files:
   - backend/main/app/domain/user/auth/otp_service.py
@@ -78,7 +79,7 @@ tests:
   written: true
   executed: true
   passing: true
-  last_run: "2026-05-07 — 201 frontend tests passing + 371 backend (329 prior + 42 S12: 31 service + 11 validator)"
+  last_run: "2026-05-07 — 201 frontend tests passing + 410 backend (371 prior + 22 S13 parser + 17 S16 payment)"
 
 self_audit:
   started: false
@@ -91,7 +92,7 @@ git:
   branch: main
   dirty: true
 
-next_action: "run S13 — Listing-URL parser (R5.2): PropertyPro + Nigeria Property Centre scrapers, POST /api/verifications/{id}/parse-listing, graceful fallback to manual on parse failure"
+next_action: "run S18 — Phase 6 Admin verification control panel (R6.1–R6.7)"
 
 started_at: null
-last_checkpoint: "2026-05-07 S12"
+last_checkpoint: "2026-05-07 S13-S17"

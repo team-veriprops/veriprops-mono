@@ -7,7 +7,6 @@ import hashlib
 import hmac
 from typing import Dict, Optional
 
-from asyncmy.converters import Decimal
 from fastapi import HTTPException
 from httpx import QueryParams
 from kink import di, inject
@@ -15,11 +14,9 @@ from starlette import status
 from starlette.responses import Response, RedirectResponse
 
 from main.app.config.settings import IntegratedPlatform, settings
-# from main.app.domain.payment.transaction.service import TransactionService
 from main.app.domain.webhook.callback.model import QueryCallbackDto
 from main.app.domain.webhook.callback.service import CallbackService
 from main.appodus_utils import Utils
-from main.appodus_utils.db.types.money import Money
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
 from main.appodus_utils.integrations.payment.gateway.paystack.models import PaystackWebhookPayload, PaystackEventType, \
     ChargeSuccessData, TransferData, RefundData
@@ -108,11 +105,14 @@ class PaystackWebhookHandler(BaseWebhookHandler):
 
     # === Event-specific Handlers ===
     async def handle_charge_success(self, data: ChargeSuccessData):
-        print(f"[charge.success] Payment received: {data.amount} from {data.customer.email}")
-
-        paid_amount = Money(value=Decimal(ChargeSuccessData.to_naira(data.amount)), currency=data.currency)
-        authorization_dict = data.authorization.model_dump(exclude_none=True)
-        await self._transaction_service.finalize_transaction(ext_ref=data.reference, payment_channel=data.channel, paid_amount=paid_amount, extra_data=authorization_dict)
+        from main.app.domain.payment.service import PaymentService
+        from main.app.domain.payment.models import PaymentStatus
+        payment_service: PaymentService = di[PaymentService]
+        await payment_service.record_provider_event(
+            provider_ref=data.reference,
+            status=PaymentStatus.SUCCEEDED.value,
+            payload=data.model_dump(),
+        )
 
     async def handle_transfer_success(self, data: TransferData):
         print(f"[transfer.success] Transfer to {data.recipient} successful. Ref: {data.reference}")

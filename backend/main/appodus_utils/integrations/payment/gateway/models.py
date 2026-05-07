@@ -10,7 +10,7 @@ from main.appodus_utils.db.types.money import TransactionCurrency
 class GenericPaymentGatewayResponse(Object):
     status: str | bool | None
     message: str
-    data: Optional[Dict[str, str]]  # e.g., {"link": "https://checkout.flutterwave.com/..."}
+    data: Optional[Dict[str, Any]] = None  # e.g., {"link": "..."} or nested objects
 
 
 # initialize_payment – Create Payment Session

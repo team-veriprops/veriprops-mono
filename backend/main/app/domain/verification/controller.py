@@ -22,6 +22,8 @@ from main.app.domain.verification.models import (
     VerificationTier,
     WizardStepDto,
 )
+from main.app.domain.verification.parser.models import ParseListingRequest, ParseResultDto
+from main.app.domain.verification.parser.service import ListingParserService
 from main.app.domain.verification.pricing.service import PricingService
 from main.app.domain.verification.service import VerificationService
 from main.appodus_utils.common.client_utils import ClientUtils
@@ -31,6 +33,7 @@ logger: Logger = di["logger"]
 
 verification_service: VerificationService = di[VerificationService]
 pricing_service: PricingService = di[PricingService]
+listing_parser_service: ListingParserService = di[ListingParserService]
 
 verification_router = APIRouter(prefix="/verifications", tags=["Verifications"])
 
@@ -125,6 +128,33 @@ async def upload_property_document(
         user_id, verification_id, file_bytes, file.filename or "upload", document_type.value,
     )
     return SuccessResponse[DocumentUploadResponseDto](data=dto)
+
+
+# ── Listing-URL parser (R5.2) ─────────────────────────────────────
+
+
+@verification_router.post(
+    "/{verification_id}/parse-listing",
+    response_model=SuccessResponse[ParseResultDto],
+)
+async def parse_listing_url(
+    verification_id: str, req: ParseListingRequest, authorize: AuthJWT = Depends(),
+):
+    """Fetch and parse a property listing URL, returning pre-filled fields.
+
+    Always returns HTTP 200 — failures are surfaced as ParseResultDto(success=False)
+    so the wizard can gracefully fall back to manual entry.
+    """
+    authorize.jwt_required()
+    user_id = authorize.get_jwt_subject()
+    # Ownership + draft guard via service (raises on ownership mismatch or non-draft).
+    from main.app.domain.verification.models import VerificationStatus
+    from main.appodus_utils.exception.exceptions import ValidationException
+    dto = await verification_service.get(verification_id, user_id)
+    if dto.status != VerificationStatus.DRAFT:
+        raise ValidationException(message="Verification is no longer a draft")
+    result = await listing_parser_service.parse(req.url)
+    return SuccessResponse[ParseResultDto](data=result)
 
 
 # ── Pricing endpoints (public quote, no auth) ───────────────────

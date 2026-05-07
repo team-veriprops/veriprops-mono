@@ -10,11 +10,13 @@ from main.app.domain.verification import models as _verification_models  # noqa:
 from main.app.domain.verification.controller import verification_router
 from main.app.domain.payment import models as _payment_models  # noqa: F401
 from main.app.domain.payment.controller import payment_router
+from main.appodus_utils.integrations.webhook import webhook_router
 
 router = APIRouter()
 router.include_router(user_router)
 router.include_router(verification_router)
 router.include_router(payment_router)
+router.include_router(webhook_router)
 
 # Dev/test-only endpoints — never mounted in production
 if settings.ENVIRONMENT != Environment.PRODUCTION:

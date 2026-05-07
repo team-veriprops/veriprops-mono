@@ -10,13 +10,13 @@ last_updated: 2026-05-07
 
 ---
 
-**status:** S12 complete — ready for S13
+**status:** S13–S16 complete — S15/S17 were already done
 
-**next_slice:** S13 (Listing-URL parser — R5.2)
+**next_slice:** S18 (Phase 6 — Admin verification control panel)
 
 **current_slice:** —
 
-**completion %:** 53% (74 done / 140 total — R5.3, R5.4, R5.14 closed; S12 added document upload endpoint + 42 new verification tests)
+**completion %:** 58% (81 done / 140 total — R5.2, R5.9, R5.15 closed; S13 added listing parser + 22 tests; S16 wired real payment gateways + 17 tests; 410 backend tests passing)
 
 ---
 
@@ -38,24 +38,29 @@ last_updated: 2026-05-07
 | S11 | RBAC enforcement (R4.4, R4.5) — confirmed JWT claims already embed `admin_sub_role`; created `user/admin_team/` domain (`service.py`, `controller.py`, `models.py`) with list/deactivate/change-sub-role endpoints all guarded by `require_permission(INVITE_ADMIN)`; added `ADMIN_DEACTIVATED` to `SecurityEventType`; added `list_admins()` + `demote_to_user()` to `UserRepo`; mounted `admin_team_router` in `user/controller.py`; wrote 61 new unit tests (12 team management + 49 permission matrix); 329 backend tests passing, 0 regressions | 2026-05-07 |
 
 | S12 | Property submission backend (R5.3, R5.4, R5.14) — audited full verification domain (models, service, validator, controller, pricing, state machine all confirmed); added `PropertyDocumentType` enum + `DocumentUploadResponseDto` to `models.py`; added `upload_document()` to `VerificationService` (injecting `DocumentStorageProviderFactory`, SSE-AES256 encrypted S3 upload); added `POST /verifications/{id}/documents` multipart route; wrote 31 service unit tests + 11 validator unit tests (42 total); 371 backend tests passing, 0 regressions | 2026-05-07 |
+| S13 | Listing-URL parser (R5.2) — built `verification/parser/` module (interface, models, service, PropertyPro + NPC providers using httpx + BeautifulSoup4); added `POST /verifications/{id}/parse-listing` endpoint (jwt_required, assert_owner, assert_draft, graceful fallback); fixture HTML files for both parsers; 22 unit tests covering extraction, service routing, unknown-domain fallback, parse-error fallback | 2026-05-07 |
+| S14 | Pricing validation — confirmed config.py already correct (BASIC=₦150k, STANDARD=₦350k, PREMIUM=₦750k in kobo); no code changes needed; D11 confirmed | 2026-05-07 |
+| S15 | Pre-payment consent — already complete (ConsentService.record_user_consent() persists ip_address + device_fingerprint + consent_version; ConsentStep.tsx exists in wizard); no changes | 2026-05-07 |
+| S16 | Payment gateway integration (R5.9, R5.15) — replaced stub initiate() with real gateway calls: CARD→Flutterwave /payments (returns checkout_url + stores provider_ref), BANK_TRANSFER→Paystack /charge virtual account (returns bank/account/expiry instructions + stores provider_ref), WIRE→settings.WIRE_* static values; added WIRE_BENEFICIARY_BANK/SWIFT/IBAN/BENEFICIARY settings; fixed Paystack webhook handle_charge_success() (was calling broken _transaction_service); fixed Flutterwave webhook verif-hash header (was verif_hash); mounted webhook_router in domain/__init__.py; 17 payment service unit tests; 410 backend tests passing, 0 regressions | 2026-05-07 |
+| S17 | Post-payment portal — already complete (confirmed/page.tsx shows VID + ETA + SLA countdown + "Track" CTA; VerificationWizardContainer redirects to confirmed after onPaid()); no changes | 2026-05-07 |
 
 ## Current Slice
 
-S12 complete. Next: S13 — Listing-URL parser (R5.2).
+S13–S17 complete. Phase 5 (Customer submission + payment) fully demoable end-to-end.
 
 ## Pending Slices
 
-S13 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
+S18 → … (Phase 6 — Admin verification control panel) per [execution-plan.md](execution-plan.md).
 
 ---
 
 ## Runtime State
 
-idle — S12 complete, no slice in-flight. Awaiting `run` to begin S13.
+idle — S13–S17 complete; 410 backend tests passing; no slice in-flight.
 
 ## Pending Recovery
 
-none — S11 completed cleanly; no interrupted work detected.
+none — S13–S17 completed cleanly.
 
 ---
 

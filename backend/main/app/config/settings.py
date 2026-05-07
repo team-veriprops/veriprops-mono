@@ -160,6 +160,12 @@ class Settings(AppodusBaseSettings):
     # Admin invitations
     ADMIN_INVITE_TTL_HOURS: int = 72
 
+    # Wire transfer beneficiary details
+    WIRE_BENEFICIARY_BANK: str = "Stanbic IBTC Bank"
+    WIRE_SWIFT: str = "SBICNGLX"
+    WIRE_IBAN: str = ""
+    WIRE_BENEFICIARY: str = "Veriprops Operations Ltd"
+
 
 settings = Settings()
 settings.set_env_vars() # Set the env vars in os.environ

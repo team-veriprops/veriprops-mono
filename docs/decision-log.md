@@ -102,7 +102,7 @@ Live visibility creates an incentive to optimise toward the score rather than th
 
 ## Decision: D4 — Payment gateway selection
 
-**Status:** **REQUIRES USER INPUT** (Open Q13)
+**Status:** confirmed (2026-05-07) — Flutterwave (card + multi-currency) + Paystack (NGN bank transfer via /charge virtual account); wire = static SWIFT/IBAN from settings
 
 ### Context
 Both Paystack and Flutterwave SDKs are wired in `appodus_utils/integrations/payment/`. Which is primary for NGN cards? Which handles multi-currency + international wires?
@@ -279,7 +279,7 @@ Different use cases require different transports. SSE is simpler and sufficient 
 
 ## Decision: D11 — Pricing defaults
 
-**Status:** **REQUIRES USER INPUT** (Open Q1, Q2, Q3, Q4, Q5, Q6, Q10)
+**Status:** confirmed (2026-05-07) — PRD values: ₦150k / ₦350k / ₦750k (verified correct in config.py)
 
 ### Context
 PRD §1.7 quotes ₦150k / ₦350k / ₦750k for Basic / Standard / Premium. Other knobs (cancellation surcharge, service fee, discounts, price lock) have suggested defaults but no signed-off values.
@@ -341,7 +341,7 @@ Flutterwave is already integrated for payments; using their FX rates avoids a se
 
 ## Decision: D13 — Listing-URL parser supported sites
 
-**Status:** **REQUIRES USER INPUT** (Open Q17)
+**Status:** confirmed (2026-05-07) — PropertyPro.ng + NigeriaPropertyCentre.com for MVP; manual fallback for unknown domains
 
 ### Context
 PRD §5.1 names PropertyPro and Nigeria Property Centre. Are others required for MVP?
