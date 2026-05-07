@@ -10,13 +10,13 @@ last_updated: 2026-05-07
 
 ---
 
-**status:** S8 complete — ready for S9
+**status:** S9 complete — ready for S10
 
-**next_slice:** S9 (Agent onboarding frontend — wizard UI for S7 + S8)
+**next_slice:** S10 (Admin invite + acceptance — R4.1, R4.2, R4.3, R4.6)
 
 **current_slice:** —
 
-**completion %:** 49% (68 done / 140 total — R3.2 + R3.6 now done by S8)
+**completion %:** 51% (71 done / 140 total — R3.5 frontend now done by S9)
 
 ---
 
@@ -33,20 +33,21 @@ last_updated: 2026-05-07
 | S6 | OAuth security hardening — Google ID token JWKS-based signature verification (replaced `get_unverified_claims`); Apple + Google JWKS cached in Redis with 5-min TTL + key-rotation fallback; OAuth state stored with explicit 10-min TTL; `resolve_frontend_origin` rejects unlisted origins (ForbiddenException) instead of silently falling back; 11 new unit tests; 70 auth tests passing | 2026-05-07 |
 | S7 | Agent application wizard tests — verified full backend implementation in `user/agent/` (models, repo, service, validator, controller, KYC subdomain, migration); wrote 16 unit tests in `test/unit/app/domain/agent/` covering R3.1 (multi-select types), R3.3 (conditional credentials), R3.4 (AGENT_TERMS consent recording, PENDING transition, truthfulness gate), R3.7 (idempotent get_or_create, wizard state preservation), plus approve/reject paths; 86 backend unit tests total passing | 2026-05-07 |
 | S8 | KYC BVN + selfie integration (Dojah) — `DojahKycProvider` (sync BVN via `/kyc/bvn/advance`, async selfie via `/kyc/selfie`); `KycRecord` ORM + repo + Alembic migration `d3e4f5a6b7c8`; `kyc/webhook.py` HMAC-SHA256 validation + `parse_dojah_selfie_webhook`; D18: selfie score < `KYC_SELFIE_REVIEW_THRESHOLD` (80) routes to UNDER_REVIEW admin queue; S3 `upload(encrypted=True)` adds SSE-AES256; service updated with `process_kyc_webhook` + `admin_review_kyc`; controller adds `POST /agents/kyc/webhook` + admin review endpoints; 3 new audit action types; 22 new unit tests (108 total passing) | 2026-05-07 |
+| S9 | Agent onboarding frontend — confirmed all 6 wizard components (`TypeSelectionStep`, `KycStep`, `CredentialsStep`, `ReviewStep`, `ApprovalStatusCard`, `AgentOnboardingContainer`) + service layer + TanStack Query hooks; added stable `data-testid` selectors (`agent-wizard-*`, `agent-status-*`) to all interactive elements; extracted `deriveResumeStep` + `validateCredentialsStep` pure functions into `wizardUtils.ts`; wrote 25 Vitest tests (18 wizard logic + 7 service HTTP); route protection confirmed in `proxy.ts`; 193 frontend tests total passing | 2026-05-07 |
 
 ## Current Slice
 
-S8 complete. Next: S9 — Agent onboarding frontend (wizard UI + KYC upload + status dashboard).
+S9 complete. Next: S10 — Admin invite + acceptance (R4.1, R4.2, R4.3, R4.6).
 
 ## Pending Slices
 
-S9 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
+S10 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
 
 ---
 
 ## Runtime State
 
-idle — S8 checkpointed, no slice in-flight. Awaiting `run` to begin S9.
+idle — S9 checkpointed, no slice in-flight. Awaiting `run` to begin S10.
 
 ## Pending Recovery
 

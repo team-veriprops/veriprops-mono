@@ -32,6 +32,13 @@ modified_files:
   - docs/requirements-matrix.md
   - docs/runtime-state.yaml
   - docs/progress.md
+  # S9 — frontend wizard
+  - frontend/src/components/agents/onboarding/TypeSelectionStep.tsx
+  - frontend/src/components/agents/onboarding/KycStep.tsx
+  - frontend/src/components/agents/onboarding/CredentialsStep.tsx
+  - frontend/src/components/agents/onboarding/ReviewStep.tsx
+  - frontend/src/components/agents/onboarding/ApprovalStatusCard.tsx
+  - frontend/src/components/agents/onboarding/AgentOnboardingContainer.tsx
 
 created_files:
   - backend/test/unit/app/domain/auth/test_forgot_reset_password.py
@@ -49,12 +56,16 @@ created_files:
   - backend/test/unit/app/domain/agent/test_kyc_dojah_provider.py
   - backend/test/unit/app/domain/agent/test_kyc_webhook.py
   - backend/test/unit/app/domain/agent/test_kyc_service_s8.py
+  # S9 — frontend tests + utility
+  - frontend/src/components/agents/onboarding/wizardUtils.ts
+  - frontend/src/components/agents/onboarding/wizardUtils.test.ts
+  - frontend/src/components/agents/libs/agent-service.test.ts
 
 tests:
   written: true
   executed: true
   passing: true
-  last_run: "2026-05-07 — 108 backend unit tests passing (38 agent + 70 auth)"
+  last_run: "2026-05-07 — 193 frontend tests passing (25 agent: 18 wizardUtils + 7 agent-service) + 108 backend"
 
 self_audit:
   started: false
@@ -67,7 +78,7 @@ git:
   branch: main
   dirty: true
 
-next_action: "run S9 — Agent onboarding frontend (depends on S7 + S8)"
+next_action: "run S10 — Admin invite + acceptance (R4.1, R4.2, R4.3, R4.6 — backend likely already implemented per S0 audit; confirm coverage + add any missing tests)"
 
 started_at: null
 last_checkpoint: "2026-05-07"

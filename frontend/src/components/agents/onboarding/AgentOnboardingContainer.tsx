@@ -17,6 +17,7 @@ import {
 } from "../libs/useAgentApplicationQueries";
 import type { AgentType } from "../libs/agent-service";
 import { getErrorMessage } from "@lib/utils";
+import { deriveResumeStep } from "./wizardUtils";
 
 const STEPS = ["Roles", "KYC", "Credentials", "Review"];
 
@@ -34,16 +35,7 @@ export default function AgentOnboardingContainer() {
   // Resume the wizard at the right step based on persisted server state.
   useEffect(() => {
     if (!application) return;
-    if (application.status !== "DRAFT") return;
-    let resumeAt = 0;
-    if (application.types.length > 0) resumeAt = 1;
-    if (
-      (application.kycMethod === "BVN" && application.bvnVerifiedAt) ||
-      (application.kycMethod === "ID_DOC" && application.idDocUploaded && application.selfieUploaded)
-    ) {
-      resumeAt = 2;
-    }
-    if (application.coverageStates.length > 0) resumeAt = 3;
+    const resumeAt = deriveResumeStep(application);
     setStep((s) => (s === 0 ? resumeAt : s));
   }, [application]);
 

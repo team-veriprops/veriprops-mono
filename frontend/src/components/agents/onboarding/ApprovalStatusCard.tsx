@@ -13,6 +13,7 @@ export default function ApprovalStatusCard({ application, onEdit }: Props) {
   if (application.status === "APPROVED") {
     return (
       <Card
+        testId="agent-status-approved"
         accent="var(--success)"
         accentBg="rgba(58,154,106,0.08)"
         icon={<CheckCircle2 className="w-7 h-7" />}
@@ -25,6 +26,7 @@ export default function ApprovalStatusCard({ application, onEdit }: Props) {
   if (application.status === "REJECTED") {
     return (
       <Card
+        testId="agent-status-rejected"
         accent="var(--destructive)"
         accentBg="rgba(186,26,26,0.06)"
         icon={<XCircle className="w-7 h-7" />}
@@ -39,6 +41,7 @@ export default function ApprovalStatusCard({ application, onEdit }: Props) {
   }
   return (
     <Card
+      testId="agent-status-pending"
       accent="var(--brand-gold)"
       accentBg="var(--brand-gold-xlight)"
       icon={<Clock className="w-7 h-7" />}
@@ -56,6 +59,7 @@ function Card({
   title,
   body,
   cta,
+  testId,
 }: {
   accent: string;
   accentBg: string;
@@ -63,9 +67,11 @@ function Card({
   title: string;
   body: string;
   cta?: { label: string; href?: string; onClick?: () => void };
+  testId?: string;
 }) {
   return (
     <div
+      data-testid={testId ?? "agent-status-card"}
       className="rounded-2xl p-8 text-center max-w-md mx-auto space-y-5"
       style={{
         backgroundColor: "var(--brand-surface-card)",
