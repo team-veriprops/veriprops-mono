@@ -32,6 +32,8 @@ modified_files:
   - docs/requirements-matrix.md
   - docs/runtime-state.yaml
   - docs/progress.md
+  # S10 — admin invitation tests + bugfix
+  - backend/main/app/domain/user/models.py  # added user_type to UpdateUserDto
   # S9 — frontend wizard
   - frontend/src/components/agents/onboarding/TypeSelectionStep.tsx
   - frontend/src/components/agents/onboarding/KycStep.tsx
@@ -61,11 +63,16 @@ created_files:
   - frontend/src/components/agents/onboarding/wizardUtils.test.ts
   - frontend/src/components/agents/libs/agent-service.test.ts
 
+created_files_s10:
+  - backend/test/unit/app/domain/admin/__init__.py
+  - backend/test/unit/app/domain/admin/test_admin_invitation.py
+  - frontend/src/components/admin/libs/admin-service.test.ts
+
 tests:
   written: true
   executed: true
   passing: true
-  last_run: "2026-05-07 — 193 frontend tests passing (25 agent: 18 wizardUtils + 7 agent-service) + 108 backend"
+  last_run: "2026-05-07 — 201 frontend tests passing (8 admin-service + 25 agent + 168 other) + 268 backend"
 
 self_audit:
   started: false
@@ -78,7 +85,7 @@ git:
   branch: main
   dirty: true
 
-next_action: "run S10 — Admin invite + acceptance (R4.1, R4.2, R4.3, R4.6 — backend likely already implemented per S0 audit; confirm coverage + add any missing tests)"
+next_action: "run S11 — RBAC enforcement (R4.4, R4.5): verify Permission matrix + require_permission() guards on every admin endpoint; write unit tests for all role/permission combos; verify admin team management (list, deactivate, change sub-role) + audit log on changes"
 
 started_at: null
-last_checkpoint: "2026-05-07"
+last_checkpoint: "2026-05-07 S10"

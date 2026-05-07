@@ -105,6 +105,7 @@ class UpdateUserDto(Object):
     country_of_residence: Optional[str] = None
     timezone: Optional[str] = None
     preferred_currency: Optional[str] = None
+    user_type: Optional[str] = None
     personas: Optional[List[str]] = None
     admin_sub_role: Optional[str] = None
     trust_status: Optional[str] = None
