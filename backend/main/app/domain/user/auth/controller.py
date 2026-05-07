@@ -6,10 +6,10 @@ URL shape: `/users/auth/...`
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from main.app.domain.user.auth.consent.controller import consent_router
-
 if TYPE_CHECKING:
     from loguru import Logger
+
+from main.app.domain.user.auth.consent.controller import consent_router
 
 from http import HTTPStatus
 

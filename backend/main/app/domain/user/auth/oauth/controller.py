@@ -12,6 +12,13 @@ Email-collision policy: REJECT. The user must log in with their existing
 account, then use the explicit "Link account" button (which starts an OAuth
 round-trip in `mode=LINK` with their JWT cookie attached).
 """
+
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
+
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
@@ -42,6 +49,8 @@ auth_service: AuthService = di[AuthService]
 oauth_identity_service: OAuthIdentityService = di[OAuthIdentityService]
 session_service: SessionService = di[SessionService]
 
+
+logger: Logger = di["logger"]
 
 class OAuthStartResponseDto:
     authorization_url: str
@@ -119,7 +128,8 @@ async def auth_callback(
 
     try:
         user_info = await auth_provider.verify(payload, request)
-    except Exception:
+    except Exception as e:
+        logger.error("Error verifying Oauth callback request: {}", e)
         return await OauthUtils.popup_response(
             success=False, target_origin=target_origin,
             message="Could not complete sign-in with the provider. Please try again.",
