@@ -41,6 +41,10 @@ modified_files:
   - frontend/src/components/agents/onboarding/ReviewStep.tsx
   - frontend/src/components/agents/onboarding/ApprovalStatusCard.tsx
   - frontend/src/components/agents/onboarding/AgentOnboardingContainer.tsx
+  # S12 — verification service + controller
+  - backend/main/app/domain/verification/models.py
+  - backend/main/app/domain/verification/service.py
+  - backend/main/app/domain/verification/controller.py
 
 created_files:
   - backend/test/unit/app/domain/auth/test_forgot_reset_password.py
@@ -62,17 +66,19 @@ created_files:
   - frontend/src/components/agents/onboarding/wizardUtils.ts
   - frontend/src/components/agents/onboarding/wizardUtils.test.ts
   - frontend/src/components/agents/libs/agent-service.test.ts
-
-created_files_s10:
+  # S10
   - backend/test/unit/app/domain/admin/__init__.py
   - backend/test/unit/app/domain/admin/test_admin_invitation.py
   - frontend/src/components/admin/libs/admin-service.test.ts
+  # S12
+  - backend/test/unit/app/domain/verification/test_verification_service.py
+  - backend/test/unit/app/domain/verification/test_verification_validator.py
 
 tests:
   written: true
   executed: true
   passing: true
-  last_run: "2026-05-07 — 201 frontend tests passing (8 admin-service + 25 agent + 168 other) + 329 backend (268 prior + 61 S11: 49 permission-matrix + 12 admin-team)"
+  last_run: "2026-05-07 — 201 frontend tests passing + 371 backend (329 prior + 42 S12: 31 service + 11 validator)"
 
 self_audit:
   started: false
@@ -85,7 +91,7 @@ git:
   branch: main
   dirty: true
 
-next_action: "run S12 — Property submission backend (R5.1, R5.3, R5.4): Property + Verification models, VID generation (VP-YYYY-XXXXXX), DRAFT→SUBMITTED transition, property type/location/details forms (conditional Land vs Building), optional doc upload + seller info"
+next_action: "run S13 — Listing-URL parser (R5.2): PropertyPro + Nigeria Property Centre scrapers, POST /api/verifications/{id}/parse-listing, graceful fallback to manual on parse failure"
 
 started_at: null
-last_checkpoint: "2026-05-07 S11"
+last_checkpoint: "2026-05-07 S12"

@@ -75,8 +75,8 @@ last_updated: 2026-05-07
 | **— Phase 5 — Customer submission + payment —** | | | | | | | | | | | | |
 | R5.1 | 5 | Property submission wizard with VID assignment at Step 1 (`VP-YYYY-XXXXXX`) | R2.* | verification/property | yes | yes | medium | medium | medium | VID generated + persisted | unit + E2E | done |
 | R5.2 | 5 | Listing-URL parser (PropertyPro, Nigeria Property Centre; manual fallback) | R5.1 | verification | no | yes | low | medium | medium | URL → fields populated | integration | **blocked (Q17)** |
-| R5.3 | 5 | Property type / location / details forms (conditional Land vs Building) | R5.1 | verification/property | yes | yes | low | medium | low | All conditional fields | unit | in_progress |
-| R5.4 | 5 | Optional document upload + seller info | R5.1 | verification/property | yes | yes | medium | low | medium | Files in S3; seller info captured | unit | in_progress |
+| R5.3 | 5 | Property type / location / details forms (conditional Land vs Building) | R5.1 | verification/property | yes | yes | low | medium | low | All conditional fields — LAND/BUILDING payload stored via draft_payload; `_materialise_property()` + validator confirmed; 31 service tests | unit | done |
+| R5.4 | 5 | Optional document upload + seller info | R5.1 | verification/property | yes | yes | medium | low | medium | `POST /verifications/{id}/documents` multipart endpoint; SSE-AES256 S3 upload; URL returned for frontend to store in draft; seller_info via draft_payload.sellerInfo | unit | done |
 | R5.5 | 5 | Pricing transparency UI (tier cards, comparison modal, line-item breakdown, currency toggle, recommendation banner) | R5.1 | verification/pricing | yes | yes | low | medium | medium | All views render | unit + visual | in_progress |
 | R5.6 | 5 | First-time + referral discount auto-applied | R5.5 | verification/pricing | yes | yes | medium | low | medium | Discount visible in breakdown | unit | pending |
 | R5.7 | 5 | Price lock on Continue to Payment (24 hrs default) | R5.5 | verification | yes | yes | medium | medium | medium | Lock window enforced | unit | done |
@@ -86,7 +86,7 @@ last_updated: 2026-05-07
 | R5.11 | 5 | Retry flow (preserve price lock; log failures; support after 3 failures) | R5.9 | payment | yes | yes | medium | medium | medium | Retry preserves lock | E2E | pending |
 | R5.12 | 5 | Receipt — instant generation, emailed, contains VID + line items + FX rate | R5.9 | payment | yes | yes | medium | low | low | PDF receipt arrives | integration | pending |
 | R5.13 | 5 | Post-payment confirmation page (VID, ETA, SLA countdown, "Track" CTA) | R5.9 | frontend/portal | no | yes | low | low | low | All shown | E2E | done |
-| R5.14 | 5 | DRAFT → SUBMITTED → PAYMENT_PENDING → PAID transitions deterministic | R0.15, R5.9 | verification/state_machine | no | yes | high | high | high | All transitions audit-logged | unit + E2E | in_progress |
+| R5.14 | 5 | DRAFT → SUBMITTED → PAYMENT_PENDING → PAID transitions deterministic | R0.15, R5.9 | verification/state_machine | no | yes | high | high | high | DRAFT→SUBMITTED: `submit()` validated + 31 service tests; PAYMENT_PENDING→PAID: `transition()` tested with paid_at timestamp; all transitions audit-logged | unit + E2E | done |
 | R5.15 | 5 | Customer upgraded to `trusted` on first successful payment | R5.9 | user/service | yes | yes | medium | low | low | Trust flag flips | unit | pending |
 | **— Phase 6 — Admin verification control panel —** | | | | | | | | | | | | |
 | R6.1 | 6 | Verifications list filterable (status, tier, SLA, state/LGA, date) | R5.* | admin | no | yes | medium | medium | medium | All filters work | unit + E2E | pending |

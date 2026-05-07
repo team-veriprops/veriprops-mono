@@ -9,13 +9,17 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loguru import Logger
 
+import io
 import json
 import secrets
+import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from kink import di, inject
 
+from main.app.config.settings import settings
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.auth.consent.models import (
@@ -25,7 +29,9 @@ from main.app.domain.user.auth.consent.service import ConsentService
 from main.app.domain.verification.models import (
     ConsentRecordDto,
     CreateVerificationDto,
+    DocumentUploadResponseDto,
     PricingSnapshotDto,
+    PropertyDocumentType,
     SearchVerificationDto,
     UpdateVerificationDto,
     Verification,
@@ -54,6 +60,7 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+from main.appodus_utils.integrations.document_storage.factory import DocumentStorageProviderFactory
 
 logger: Logger = di["logger"]
 
@@ -87,6 +94,7 @@ class VerificationService:
         pricing_service: PricingService,
         consent_service: ConsentService,
         audit: AuditLogService,
+        storage_factory: DocumentStorageProviderFactory,
     ):
         self._repo = repo
         self._property_repo = property_repo
@@ -94,6 +102,7 @@ class VerificationService:
         self._pricing = pricing_service
         self._consent_service = consent_service
         self._audit = audit
+        self._storage_factory = storage_factory
 
     # ── Reads ─────────────────────────────────────────────────────
 
@@ -219,6 +228,35 @@ class VerificationService:
             ip_address=ip_address,
         )
         return await self._to_dto(await self._repo.get_model(verification_id))
+
+    async def upload_document(
+        self,
+        customer_id: str,
+        verification_id: str,
+        file_bytes: bytes,
+        filename: str,
+        document_type: str,
+    ) -> DocumentUploadResponseDto:
+        row = await self._repo.get_model(verification_id)
+        if row is None:
+            raise ResourceNotFoundException(resource="Verification")
+        self._validator.assert_owner(row, customer_id)
+        self._validator.assert_draft(row)
+
+        ext = Path(filename).suffix.lower() or ".bin"
+        key = f"verifications/{verification_id}/documents/{uuid.uuid4()}{ext}"
+        storage = self._storage_factory.get_active_provider()
+        url = await storage.upload(
+            key=key,
+            bucket=settings.AWS_S3_BUCKET,
+            file_bytes=io.BytesIO(file_bytes),
+            metadata={"verification_id": verification_id, "document_type": document_type},
+            encrypted=True,
+        )
+        return DocumentUploadResponseDto(
+            url=url,
+            document_type=PropertyDocumentType(document_type),
+        )
 
     async def derive_global_state(
         self, verification_id: str, task_statuses: list[str],

@@ -8,13 +8,15 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loguru import Logger
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
 from main.app.domain.verification.models import (
     ConsentsAcceptedDto,
+    DocumentUploadResponseDto,
     PricingSnapshotDto,
+    PropertyDocumentType,
     TierSelectionDto,
     VerificationDto,
     VerificationTier,
@@ -104,6 +106,25 @@ async def list_my_verifications(
     authorize.jwt_required()
     user_id = authorize.get_jwt_subject()
     return await verification_service.list_for_customer(user_id, page=page, page_size=page_size)
+
+
+@verification_router.post(
+    "/{verification_id}/documents",
+    response_model=SuccessResponse[DocumentUploadResponseDto],
+)
+async def upload_property_document(
+    verification_id: str,
+    file: UploadFile,
+    document_type: PropertyDocumentType = Form(PropertyDocumentType.OTHER),
+    authorize: AuthJWT = Depends(),
+):
+    authorize.jwt_required()
+    user_id = authorize.get_jwt_subject()
+    file_bytes = await file.read()
+    dto = await verification_service.upload_document(
+        user_id, verification_id, file_bytes, file.filename or "upload", document_type.value,
+    )
+    return SuccessResponse[DocumentUploadResponseDto](data=dto)
 
 
 # ── Pricing endpoints (public quote, no auth) ───────────────────

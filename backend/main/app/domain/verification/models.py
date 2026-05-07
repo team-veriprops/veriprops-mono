@@ -5,6 +5,13 @@ import enum
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+
+class PropertyDocumentType(str, enum.Enum):
+    SURVEY_PLAN = "SURVEY_PLAN"
+    TITLE_DOCUMENT = "TITLE_DOCUMENT"
+    PURCHASE_AGREEMENT = "PURCHASE_AGREEMENT"
+    OTHER = "OTHER"
+
 from sqlalchemy import Column, DateTime, Index, Integer, String, Text
 
 from main.app.domain.verification.property.models import PropertyDto, PropertyType, PropertySource
@@ -151,3 +158,8 @@ class VerificationDto(Object):
     updated_at: Optional[datetime] = None
     draft_step: int = 0
     draft_payload: Optional[Dict[str, Any]] = None
+
+
+class DocumentUploadResponseDto(Object):
+    url: str
+    document_type: PropertyDocumentType

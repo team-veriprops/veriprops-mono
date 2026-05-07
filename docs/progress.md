@@ -10,13 +10,13 @@ last_updated: 2026-05-07
 
 ---
 
-**status:** S11 complete — ready for S12
+**status:** S12 complete — ready for S13
 
-**next_slice:** S12 (Property submission backend — R5.1, R5.3, R5.4)
+**next_slice:** S13 (Listing-URL parser — R5.2)
 
 **current_slice:** —
 
-**completion %:** 51% (71 done / 140 total — R4.4/R4.5 implementations confirmed; S11 delivered admin_team domain + permission matrix tests)
+**completion %:** 53% (74 done / 140 total — R5.3, R5.4, R5.14 closed; S12 added document upload endpoint + 42 new verification tests)
 
 ---
 
@@ -37,19 +37,21 @@ last_updated: 2026-05-07
 | S10 | Admin invite + acceptance — verified complete backend (`admin_invitation/` service, repo, controller, migration in `b1f2c3d4e5f6`), frontend (`admin-service.ts`, `useAdminQueries.ts`, `/auth/admin-invite/[token]/page.tsx`), and Super Admin seed migration; wrote 17 backend unit tests (all 4 acceptance branches, expired-token gate, revoke, `attach_admin_role_to_new_user`) + 8 frontend service HTTP tests; fixed `UpdateUserDto` missing `user_type` field (silent Pydantic drop bug — user was never promoted to ADMIN); 268 backend + 201 frontend tests passing | 2026-05-07 |
 | S11 | RBAC enforcement (R4.4, R4.5) — confirmed JWT claims already embed `admin_sub_role`; created `user/admin_team/` domain (`service.py`, `controller.py`, `models.py`) with list/deactivate/change-sub-role endpoints all guarded by `require_permission(INVITE_ADMIN)`; added `ADMIN_DEACTIVATED` to `SecurityEventType`; added `list_admins()` + `demote_to_user()` to `UserRepo`; mounted `admin_team_router` in `user/controller.py`; wrote 61 new unit tests (12 team management + 49 permission matrix); 329 backend tests passing, 0 regressions | 2026-05-07 |
 
+| S12 | Property submission backend (R5.3, R5.4, R5.14) — audited full verification domain (models, service, validator, controller, pricing, state machine all confirmed); added `PropertyDocumentType` enum + `DocumentUploadResponseDto` to `models.py`; added `upload_document()` to `VerificationService` (injecting `DocumentStorageProviderFactory`, SSE-AES256 encrypted S3 upload); added `POST /verifications/{id}/documents` multipart route; wrote 31 service unit tests + 11 validator unit tests (42 total); 371 backend tests passing, 0 regressions | 2026-05-07 |
+
 ## Current Slice
 
-S11 complete. Next: S12 — Property submission backend (R5.1, R5.3, R5.4).
+S12 complete. Next: S13 — Listing-URL parser (R5.2).
 
 ## Pending Slices
 
-S12 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
+S13 → … → S58 (full sequence in [execution-plan.md](execution-plan.md)).
 
 ---
 
 ## Runtime State
 
-idle — S11 complete, no slice in-flight. Awaiting `run` to begin S12.
+idle — S12 complete, no slice in-flight. Awaiting `run` to begin S13.
 
 ## Pending Recovery
 
