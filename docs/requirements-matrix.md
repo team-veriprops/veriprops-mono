@@ -1,7 +1,7 @@
 ---
 skill: prd-orchestrator
 skill_version: 2.2.0
-last_updated: 2026-05-05
+last_updated: 2026-05-07
 ---
 
 # Requirements Traceability Matrix
@@ -61,7 +61,7 @@ last_updated: 2026-05-05
 | R3.1 | 3 | Agent application wizard step 1 — type selection (Field / Surveyor / Registry / Lawyer multi-select) | R2.* | user/agent | yes | yes | medium | low | low | Multi-select persisted | unit | done |
 | R3.2 | 3 | KYC step — BVN with live verification OR ID upload + selfie match | R3.1 | user/agent/kyc | yes | yes | high | high | high | Vendor integration verified; encrypted storage | unit + integration | in_progress |
 | R3.3 | 3 | Professional credentials — Surveyor licence, NBA licence, coverage areas, bio | R3.1 | user/agent | yes | yes | medium | medium | medium | Conditional fields enforced | unit | done |
-| R3.4 | 3 | Review & submit — versioned Agent Terms + truthfulness checkbox | R0.12, R3.1 | user/agent | yes | yes | high | low | medium | Consent record captured | unit | in_progress |
+| R3.4 | 3 | Review & submit — versioned Agent Terms + truthfulness checkbox | R0.12, R3.1 | user/agent | yes | yes | high | low | medium | Consent record captured | unit | done |
 | R3.5 | 3 | Approval Status Dashboard (PENDING / APPROVED / REJECTED with reason) | R3.4 | frontend/agents/onboarding/status | no | yes | low | low | low | All three states render | unit + E2E | done |
 | R3.6 | 3 | KYC docs encrypted in S3 with per-user access | R3.2 | integrations/storage | no | yes | high | medium | high | Encryption at rest verified; access enforced | integration | pending |
 | R3.7 | 3 | Resumable wizard (re-enter on tab close) | R3.1 | user/agent | yes | yes | low | medium | low | Step preserved server-side | unit + E2E | done |

@@ -10,13 +10,13 @@ last_updated: 2026-05-07
 
 ---
 
-**status:** S6 complete — ready for S7
+**status:** S7 complete — ready for S8
 
-**next_slice:** S7 (Agent application wizard backend — R3.2 KYC stub, R3.4 agent terms consent)
+**next_slice:** S8 (KYC: BVN + selfie integration — Dojah, D6+D7 confirmed)
 
 **current_slice:** —
 
-**completion %:** 47% (65 done / 140 total — R2.3 now done by S6)
+**completion %:** 47% (66 done / 140 total — R3.4 now done by S7)
 
 ---
 
@@ -31,10 +31,11 @@ last_updated: 2026-05-07
 | S4 | Marketing site final polish — CTA URL fix (6 locations `/auth/login?intent=` → `/auth?intent=`); `formatPrice` extracted to `home.data.ts`; 14 new unit tests (43 total, all passing); PRD §1.12 exit criteria all met | 2026-05-05 |
 | S5 | Auth shell completeness audit — R2.5–R2.15 all verified; 59 backend unit tests + 24 frontend tests passing; `make_oauth_state`/`normalise_provider` helpers added to oauth package; `_phone_e164` added to otp_service; `models.ts` frontend enum file verified; `resolvePostAuthRedirect` route corrected to `/agents/*` | 2026-05-07 |
 | S6 | OAuth security hardening — Google ID token JWKS-based signature verification (replaced `get_unverified_claims`); Apple + Google JWKS cached in Redis with 5-min TTL + key-rotation fallback; OAuth state stored with explicit 10-min TTL; `resolve_frontend_origin` rejects unlisted origins (ForbiddenException) instead of silently falling back; 11 new unit tests; 70 auth tests passing | 2026-05-07 |
+| S7 | Agent application wizard tests — verified full backend implementation in `user/agent/` (models, repo, service, validator, controller, KYC subdomain, migration); wrote 16 unit tests in `test/unit/app/domain/agent/` covering R3.1 (multi-select types), R3.3 (conditional credentials), R3.4 (AGENT_TERMS consent recording, PENDING transition, truthfulness gate), R3.7 (idempotent get_or_create, wizard state preservation), plus approve/reject paths; 86 backend unit tests total passing | 2026-05-07 |
 
 ## Current Slice
 
-S6 complete. Next: S7 — Agent application wizard backend (see [execution-plan.md](execution-plan.md)).
+S7 complete. Next: S8 — KYC BVN + selfie integration via Dojah (see [execution-plan.md](execution-plan.md)).
 
 ## Pending Slices
 
@@ -44,7 +45,7 @@ S6 → S7 → … → S58 (full sequence in [execution-plan.md](execution-plan.m
 
 ## Runtime State
 
-idle — S6 checkpointed, no slice in-flight. Awaiting `run` to begin S7.
+idle — S7 checkpointed, no slice in-flight. Awaiting `run` to begin S8.
 
 ## Pending Recovery
 

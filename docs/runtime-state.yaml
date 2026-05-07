@@ -29,11 +29,14 @@ created_files:
   - backend/test/unit/app/domain/auth/test_security_events.py
   - backend/test/unit/app/domain/auth/test_session_management.py
   - backend/test/unit/app/domain/auth/test_oauth_security.py
+  - backend/test/unit/app/domain/agent/__init__.py
+  - backend/test/unit/app/domain/agent/test_agent_application.py
 
 tests:
   written: true
   executed: true
   passing: true
+  last_run: "2026-05-07 — 86 backend unit tests passing (16 agent + 70 auth)"
 
 self_audit:
   started: false
@@ -46,7 +49,7 @@ git:
   branch: main
   dirty: true
 
-next_action: "run S7 — Agent application wizard backend (R3.2 KYC stub gated on Dojah, R3.4 agent terms consent)"
+next_action: "run S8 — KYC BVN + selfie integration (Dojah, D6+D7 confirmed)"
 
 started_at: null
 last_checkpoint: "2026-05-07"
