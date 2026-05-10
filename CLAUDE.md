@@ -26,9 +26,10 @@ Frontend reads `API_BASE_URL` (server-only) from its env to build the proxy targ
 ## Cross-cutting conventions
 
 - **API casing.** Backend Pydantic models serialize as camelCase (via `to_camel` alias generator in [appodus_utils/db/models.py](backend/main/appodus_utils/db/models.py)) but Python code stays snake_case. Frontend types are camelCase — don't add a transformation layer.
-- **Auth contract.** The auth controller at [backend/main/app/domain/user/auth/controller.py](backend/main/app/domain/user/auth/controller.py) is the source of truth for endpoints the frontend's `auth-service.ts` ([frontend/src/components/website/auth/libs/auth-service.ts](frontend/src/components/website/auth/libs/auth-service.ts)) calls. URL shape is `/api/users/auth/...`. When adding/renaming an endpoint, change both files in the same PR.
-- **Package managers.** Frontend is `pnpm` (lockfile committed); never use `npm` or `yarn`. Backend is plain `pip` against `requirements.txt`.
+- **Backend API and Frontend Service Contract** Every call to the backend is proxied through Nextjs reverse proxy, no call reaches the backend directly. The backend API and the frontend services consuming the APIs should be maintained always in synch. When refactoring/adding/renaming an endpoint/service class, change both files in the same PR. 
+- **Package managers.** Frontend is `pnpm` (lockfile committed); never use `npm` or `yarn`. Backend is plain `pip` against `requirements.txt`, but `test-requirements.txt` during test as it included extra test dependencies.
 - **Path handling.** Memory rule: use `path.join` / `pathlib` / POSIX-safe APIs — never hardcode `\` or `/` separators.
+- **Session Propagation.** The auth session is propagated through a HttpOnly JWT cookie created by the backend.
 
 ## Workflow
 

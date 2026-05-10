@@ -149,6 +149,7 @@ Webhook receivers live under `appodus_utils/integrations/.../webhook.py` and are
 ## Tests
 
 - `test/unit/` — fast, in-memory; mirrors `main/app/` structure.
-- `test/e2e/` — integration tests (e.g. messaging service) — require external creds.
 - `test/utils/` — `mock_circuit_breaker.py`, shared fixtures.
 - `pytest.ini` sets `asyncio_mode = auto`, so async tests need no decorator.
+- `Mailpit` is used for email during tests
+- ``
