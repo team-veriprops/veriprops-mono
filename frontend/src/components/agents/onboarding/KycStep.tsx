@@ -100,6 +100,7 @@ export default function KycStep({
       >
         <button
           type="button"
+          data-testid="agent-wizard-kyc-method-bvn"
           onClick={() => setMethod("BVN")}
           className="rounded-md py-2 text-sm font-medium transition-colors"
           style={{
@@ -112,6 +113,7 @@ export default function KycStep({
         </button>
         <button
           type="button"
+          data-testid="agent-wizard-kyc-method-id-doc"
           onClick={() => setMethod("ID_DOC")}
           className="rounded-md py-2 text-sm font-medium transition-colors"
           style={{
@@ -137,6 +139,7 @@ export default function KycStep({
               inputMode="numeric"
               maxLength={11}
               placeholder="••••••••••"
+              data-testid="agent-wizard-bvn-input"
               value={bvn}
               onChange={(e) => setBvn(e.target.value.replace(/\D/g, ""))}
               disabled={bvnDone}
@@ -158,6 +161,7 @@ export default function KycStep({
           ) : (
             <Button
               type="button"
+              data-testid="agent-wizard-bvn-verify"
               onClick={handleVerify}
               disabled={bvn.length !== 11 || bvnVerifying}
               className="w-full"
@@ -190,6 +194,7 @@ export default function KycStep({
             </span>
             <select
               value={idDocType}
+              data-testid="agent-wizard-id-doc-type"
               onChange={(e) => setIdDocType(e.target.value as IdDocType)}
               className="w-full rounded-md py-2.5 px-3 text-sm"
               style={{
@@ -254,10 +259,10 @@ export default function KycStep({
       )}
 
       <div className="flex justify-between pt-2">
-        <Button type="button" variant="outline" onClick={onBack}>
+        <Button type="button" variant="outline" data-testid="agent-wizard-kyc-back" onClick={onBack}>
           Back
         </Button>
-        <Button type="button" disabled={!canContinue || pending} onClick={onContinue}>
+        <Button type="button" data-testid="agent-wizard-kyc-continue" disabled={!canContinue || pending} onClick={onContinue}>
           Continue
         </Button>
       </div>

@@ -12,6 +12,13 @@ Email-collision policy: REJECT. The user must log in with their existing
 account, then use the explicit "Link account" button (which starts an OAuth
 round-trip in `mode=LINK` with their JWT cookie attached).
 """
+
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
+
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
@@ -42,6 +49,8 @@ auth_service: AuthService = di[AuthService]
 oauth_identity_service: OAuthIdentityService = di[OAuthIdentityService]
 session_service: SessionService = di[SessionService]
 
+
+logger: Logger = di["logger"]
 
 class OAuthStartResponseDto:
     authorization_url: str
@@ -95,17 +104,17 @@ async def auth_callback(
     # If state is missing or unknown we cannot trust the Referer for the
     # postMessage target — fail closed using the first allowlisted origin.
     target_origin = stored_state.frontend_origin if stored_state else (
-        OauthUtils.resolve_frontend_origin(request)
+        await OauthUtils.resolve_frontend_origin(request)
     )
 
     if error or not code or not state:
-        return OauthUtils.popup_response(
+        return await OauthUtils.popup_response(
             success=False, target_origin=target_origin,
             message="Sign-in was cancelled or the request was invalid.",
         )
     if not stored_state or not stored_state.code_verifier:
-        return OauthUtils.popup_response(
-            success=False, target_origin=target_origin,
+        return await OauthUtils.popup_response(
+            success=False, target_origin=target_origin, state=str(state),
             message="Sign-in session expired. Please try again.",
         )
 
@@ -114,20 +123,21 @@ async def auth_callback(
     payload = OAuthCallbackRequestDto(
         code=code,
         code_verifier=stored_state.code_verifier,
-        redirect_uri=OauthUtils.callback_redirect_uri(provider),
+        redirect_uri= await OauthUtils.callback_redirect_uri(provider),
     )
 
     try:
         user_info = await auth_provider.verify(payload, request)
-    except Exception:
-        return OauthUtils.popup_response(
-            success=False, target_origin=target_origin,
+    except Exception as e:
+        logger.error("Error verifying Oauth callback request: {}", e)
+        return await OauthUtils.popup_response(
+            success=False, target_origin=target_origin, state=str(state),
             message="Could not complete sign-in with the provider. Please try again.",
         )
 
     if not user_info.email or not user_info.id:
-        return OauthUtils.popup_response(
-            success=False, target_origin=target_origin,
+        return await OauthUtils.popup_response(
+            success=False, target_origin=target_origin, state=str(state),
             message="Provider did not return enough information to sign you in.",
         )
 
@@ -142,11 +152,11 @@ async def auth_callback(
                 raw_profile=user_info.model_dump(),
             )
         except Exception:
-            return OauthUtils.popup_response(
-                success=False, target_origin=target_origin,
+            return await OauthUtils.popup_response(
+                success=False, target_origin=target_origin, state=str(state),
                 message="Could not link this account. It may already be linked to another user.",
             )
-        return OauthUtils.popup_response(success=True, target_origin=target_origin)
+        return await OauthUtils.popup_response(success=True, target_origin=target_origin, state=str(state))
 
     # ── AUTH mode: signup or login ──────────────────────────────────────────
     try:
@@ -162,8 +172,8 @@ async def auth_callback(
         )
     except UserAlreadyExistsException:
         # Email exists with a password account, no link yet → REJECT per spec.
-        return OauthUtils.popup_response(
-            success=False, target_origin=target_origin,
+        return await OauthUtils.popup_response(
+            success=False, target_origin=target_origin, state=str(state),
             message="Account exists. Please log in and link this provider explicitly.",
         )
 
@@ -175,7 +185,7 @@ async def auth_callback(
         ip_address=ClientUtils.get_client_ip(request),
         device=ClientUtils.get_user_agent(request),
     )
-    return OauthUtils.popup_response(success=True, target_origin=target_origin)
+    return await OauthUtils.popup_response(success=True, target_origin=target_origin, state=str(state))
 
 
 @oauth_router.get("/links", response_model=SuccessResponse[List[str]])

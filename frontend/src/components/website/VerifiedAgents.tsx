@@ -1,7 +1,7 @@
 import type { ComponentType, CSSProperties } from "react";
 import Link from "next/link";
 import { MapPin, Ruler, FileText, Scale, CheckCircle2, ArrowRight } from "lucide-react";
-import { agentTypes } from "./home.data";
+import { agentTypes, CTA_AGENT_HREF } from "./home.data";
 
 const iconMap: Record<string, ComponentType<{ className?: string; strokeWidth?: number; style?: CSSProperties }>> = {
   MapPin,
@@ -138,7 +138,7 @@ export default function VerifiedAgents() {
             Are you a field agent, surveyor, registry official, or property lawyer in Nigeria?
           </div>
           <Link
-            href="/auth/login?intent=agent"
+            href={CTA_AGENT_HREF}
             className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 hover:opacity-90 hover:scale-[0.98] group"
             style={{
               color: "var(--brand-viridian)",

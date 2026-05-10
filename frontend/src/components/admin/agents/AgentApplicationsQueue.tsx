@@ -42,7 +42,7 @@ export default function AgentApplicationsQueue() {
       await approve.mutateAsync(selected.id);
       closeDrawer();
     } catch (e) {
-      setError(getErrorMessage(e));
+      setError(getErrorMessage(e as Error));
     }
   };
 
@@ -56,7 +56,7 @@ export default function AgentApplicationsQueue() {
       await reject.mutateAsync({ id: selected.id, reason });
       closeDrawer();
     } catch (e) {
-      setError(getErrorMessage(e));
+      setError(getErrorMessage(e as Error));
     }
   };
 

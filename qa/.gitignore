@@ -1,0 +1,21 @@
+node_modules/
+dist/
+
+# Artifact runs — keep the directory, ignore run output
+artifacts/runs/
+artifacts/*.zip
+
+# Local env — never commit secrets
+.env
+
+# Cache — local only
+.qa-cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/settings.json
+*.swp

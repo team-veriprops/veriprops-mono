@@ -51,3 +51,29 @@ class RedisUtils:
                 return await key_value_service.delete(key)
         except Exception as exc:
             print(exc)
+
+    @staticmethod
+    async def delete_by_prefix(prefix: str) -> int:
+        """Delete all keys whose names start with *prefix*.
+
+        Redis path: SCAN + batched DELETE (non-blocking, cursor-based).
+        Fallback path (no Redis): delegates to KeyValueService which issues a
+        SQL DELETE WHERE key LIKE '{prefix}%'.
+        """
+        try:
+            if redis:
+                count = 0
+                cursor = 0
+                while True:
+                    cursor, keys = await redis.scan(cursor, match=f"{prefix}*", count=200)
+                    if keys:
+                        await redis.delete(*keys)
+                        count += len(keys)
+                    if cursor == 0:
+                        break
+                return count
+            else:
+                return await key_value_service.delete_by_prefix(prefix)
+        except Exception as exc:
+            print(exc)
+            return 0

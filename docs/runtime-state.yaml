@@ -1,0 +1,98 @@
+session_id: null
+command: null
+
+status: idle
+phase: idle
+
+current_slice: null
+current_subtask: null
+last_completed_slices: [S13, S14, S15, S16, S17]
+
+modified_files:
+  - backend/main/app/domain/user/auth/otp_service.py
+  - backend/main/app/domain/user/auth/oauth/__init__.py
+  - backend/main/app/domain/user/auth/oauth/providers/google.py
+  - backend/main/app/domain/user/auth/oauth/providers/apple.py
+  - backend/main/app/domain/user/auth/oauth/providers/utils.py
+  - backend/main/app/domain/user/models.py
+  - backend/test/unit/app/domain/auth/test_otp_helpers.py
+  - backend/test/unit/app/domain/auth/test_signup_validation.py
+  - frontend/src/components/website/auth/libs/auth/redirect.ts
+  - frontend/src/components/website/auth/libs/auth/redirect.test.ts
+  - backend/main/app/config/settings.py
+  - backend/main/app/domain/audit/models.py
+  - backend/main/app/domain/user/agent/kyc/interface.py
+  - backend/main/app/domain/user/agent/kyc/__init__.py
+  - backend/main/app/domain/user/agent/kyc/providers/stub.py
+  - backend/main/app/domain/user/agent/kyc/providers/dojah.py
+  - backend/main/app/domain/user/agent/service.py
+  - backend/main/app/domain/user/agent/controller.py
+  - backend/main/appodus_utils/integrations/document_storage/interface.py
+  - backend/main/appodus_utils/integrations/document_storage/s3/s3_storage.py
+  - backend/test/unit/app/domain/agent/test_agent_application.py
+  - docs/requirements-matrix.md
+  - docs/runtime-state.yaml
+  - docs/progress.md
+  # S10 — admin invitation tests + bugfix
+  - backend/main/app/domain/user/models.py  # added user_type to UpdateUserDto
+  # S9 — frontend wizard
+  - frontend/src/components/agents/onboarding/TypeSelectionStep.tsx
+  - frontend/src/components/agents/onboarding/KycStep.tsx
+  - frontend/src/components/agents/onboarding/CredentialsStep.tsx
+  - frontend/src/components/agents/onboarding/ReviewStep.tsx
+  - frontend/src/components/agents/onboarding/ApprovalStatusCard.tsx
+  - frontend/src/components/agents/onboarding/AgentOnboardingContainer.tsx
+  # S12 — verification service + controller
+  - backend/main/app/domain/verification/models.py
+  - backend/main/app/domain/verification/service.py
+  - backend/main/app/domain/verification/controller.py
+
+created_files:
+  - backend/test/unit/app/domain/auth/test_forgot_reset_password.py
+  - backend/test/unit/app/domain/auth/test_oauth_account_management.py
+  - backend/test/unit/app/domain/auth/test_persona_assignment.py
+  - backend/test/unit/app/domain/auth/test_security_events.py
+  - backend/test/unit/app/domain/auth/test_session_management.py
+  - backend/test/unit/app/domain/auth/test_oauth_security.py
+  - backend/test/unit/app/domain/agent/__init__.py
+  - backend/test/unit/app/domain/agent/test_agent_application.py
+  - backend/main/app/domain/user/agent/kyc/models.py
+  - backend/main/app/domain/user/agent/kyc/repo.py
+  - backend/main/app/domain/user/agent/kyc/webhook.py
+  - backend/main/alembic/versions/d3e4f5a6b7c8_add_kyc_records_s8.py
+  - backend/test/unit/app/domain/agent/test_kyc_dojah_provider.py
+  - backend/test/unit/app/domain/agent/test_kyc_webhook.py
+  - backend/test/unit/app/domain/agent/test_kyc_service_s8.py
+  # S9 — frontend tests + utility
+  - frontend/src/components/agents/onboarding/wizardUtils.ts
+  - frontend/src/components/agents/onboarding/wizardUtils.test.ts
+  - frontend/src/components/agents/libs/agent-service.test.ts
+  # S10
+  - backend/test/unit/app/domain/admin/__init__.py
+  - backend/test/unit/app/domain/admin/test_admin_invitation.py
+  - frontend/src/components/admin/libs/admin-service.test.ts
+  # S12
+  - backend/test/unit/app/domain/verification/test_verification_service.py
+  - backend/test/unit/app/domain/verification/test_verification_validator.py
+
+tests:
+  written: true
+  executed: true
+  passing: true
+  last_run: "2026-05-07 — 201 frontend tests passing + 410 backend (371 prior + 22 S13 parser + 17 S16 payment)"
+
+self_audit:
+  started: false
+  completed: false
+  findings: []
+
+clarification_needed: []
+
+git:
+  branch: main
+  dirty: true
+
+next_action: "run S18 — Phase 6 Admin verification control panel (R6.1–R6.7)"
+
+started_at: null
+last_checkpoint: "2026-05-07 S13-S17"

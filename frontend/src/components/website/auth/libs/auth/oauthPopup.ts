@@ -16,6 +16,7 @@
  * else is silently dropped.
  */
 
+import { isAutomationEnvironment } from "@lib/automation";
 import { authService } from "@components/website/auth/libs/useAuthQueries";
 import { OAuthFlowMode, SocialProvider } from "@components/website/auth/models";
 
@@ -34,9 +35,15 @@ export interface OauthPopupOptions {
   onError: (err: { code: "popup_blocked" | "timeout" | "provider"; message?: string; authorizationUrl?: string }) => void;
 }
 
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5mins
 const DEFAULT_POLL_MS = 500;
 const POPUP_NAME = "veriprops_oauth";
+
+function signalOauthComplete(status: "success" | "failed"): void {
+  if (!isAutomationEnvironment()) return;
+  (window as any).__oauth_complete__ = status;
+  window.dispatchEvent(new CustomEvent("__oauth_complete__", { detail: { status } }));
+}
 
 export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOptions): { cancel: () => void } {
   const {
@@ -49,6 +56,10 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
     onError,
   } = opts;
 
+  if (isAutomationEnvironment()) {
+    (window as any).__oauth_complete__ = null;
+  }
+
   // Synchronously open the popup. Browsers count this as a direct response to
   // the user gesture; deferring until after the fetch trips popup-blockers.
   const features = popupFeatures(520, 620);
@@ -58,6 +69,13 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let closedPollId: ReturnType<typeof setInterval> | null = null;
   let lastAuthorizationUrl: string | undefined;
+  let expectedState: string | null;
+
+  // TODO: fetch this values dynamically from the backend
+  const allowedOrigins = new Set([
+  "http://localhost:8000",
+  "https://auth.veriprops.com"
+]);
 
   const cleanup = () => {
     window.removeEventListener("message", onMessage);
@@ -69,20 +87,29 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
   };
 
   const onMessage = (event: MessageEvent) => {
+    console.log("event: ", event)
     if (resolved) return;
-    if (event.origin !== window.location.origin) return;
+    if (!allowedOrigins.has(event.origin)) return;
+    
     const data = event.data as unknown;
     if (!isOauthResult(data)) return;
+    if (data.state !== expectedState) return;
     resolved = true;
     cleanup();
-    if (data.success) onSuccess();
-    else onError({ code: "provider", message: data.message ?? undefined, authorizationUrl: lastAuthorizationUrl });
+    if (data.success) {
+      signalOauthComplete("success");
+      onSuccess();
+    } else {
+      signalOauthComplete("failed");
+      onError({ code: "provider", message: data.message ?? undefined, authorizationUrl: lastAuthorizationUrl });
+    }
   };
 
   const cancel = () => {
     if (resolved) return;
     resolved = true;
     cleanup();
+    signalOauthComplete("failed");
     onCancel?.();
   };
 
@@ -91,9 +118,11 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
     // fetch the authorizationUrl so the fallback can use it directly.
     authService.startOauth(provider, { intent, mode })
       .then((res) => {
+        signalOauthComplete("failed");
         onError({ code: "popup_blocked", authorizationUrl: res.data?.authorizationUrl });
       })
       .catch(() => {
+        signalOauthComplete("failed");
         onError({ code: "popup_blocked" });
       });
     return { cancel: () => undefined };
@@ -111,6 +140,7 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
     if (resolved) return;
     resolved = true;
     cleanup();
+    signalOauthComplete("failed");
     onError({ code: "timeout" });
   }, timeoutMs);
 
@@ -121,17 +151,22 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
       if (!url) {
         resolved = true;
         cleanup();
+        signalOauthComplete("failed");
         onError({ code: "provider", message: "OAuth start did not return an authorization URL." });
         return;
       }
       lastAuthorizationUrl = url;
+      const parsedUrl = new URL(lastAuthorizationUrl);
+      expectedState = parsedUrl.searchParams.get("state");
       try {
-        popup.location.href = url;
+        popup.location.replace(url);
+        popup.focus();
       } catch {
         // Some browsers throw if the popup was already navigated away.
         if (!resolved) {
           resolved = true;
           cleanup();
+          signalOauthComplete("failed");
           onError({ code: "provider", message: "Could not navigate the popup window." });
         }
       }
@@ -147,6 +182,7 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
           popup.location.href = `${window.location.origin}/auth/oauth/error`;
         }
       } catch { /* ignore */ }
+      signalOauthComplete("failed");
       onError({ code: "provider", message: err?.message });
     });
 
@@ -160,7 +196,7 @@ function popupFeatures(width: number, height: number): string {
   return `popup=yes,width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes,noopener=no,noreferrer=no`;
 }
 
-function isOauthResult(data: unknown): data is { type: "oauth_result"; success: boolean; message?: string } {
+function isOauthResult(data: unknown): data is { type: "oauth_result"; success: boolean; state?: string, message?: string } {
   if (!data || typeof data !== "object") return false;
   const d = data as Record<string, unknown>;
   return d.type === "oauth_result" && typeof d.success === "boolean";

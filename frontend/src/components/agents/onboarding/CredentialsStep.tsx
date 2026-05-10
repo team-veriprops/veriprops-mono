@@ -10,6 +10,7 @@ import type {
   AgentType,
   CredentialsStepRequest,
 } from "../libs/agent-service";
+import { validateCredentialsStep } from "./wizardUtils";
 
 interface Props {
   application: AgentApplication;
@@ -73,20 +74,16 @@ export default function CredentialsStep({ application, pending, onBack, onSubmit
 
   const handleSubmit = () => {
     setError(null);
-    if (needsSurveyor && (!surveyorLicenceNo || !surveyorLicenceUrl)) {
-      setError("Surveyor licence number and document are required.");
-      return;
-    }
-    if (needsLawyer && (!nbaLicenceNo || !nbaLicenceUrl)) {
-      setError("NBA licence number and document are required.");
-      return;
-    }
-    if (coverageStates.length === 0) {
-      setError("Select at least one coverage state.");
-      return;
-    }
-    if (bio.length > 300) {
-      setError("Bio must not exceed 300 characters.");
+    const validation = validateCredentialsStep(types, {
+      surveyorLicenceNo,
+      surveyorLicenceUrl,
+      nbaLicenceNo,
+      nbaLicenceUrl,
+      coverageStates,
+      bio,
+    });
+    if (!validation.valid) {
+      setError(validation.error);
       return;
     }
     onSubmit({
@@ -120,6 +117,7 @@ export default function CredentialsStep({ application, pending, onBack, onSubmit
           <div className="grid sm:grid-cols-2 gap-3">
             <Input
               placeholder="Licence number"
+              data-testid="agent-wizard-surveyor-licence"
               value={surveyorLicenceNo}
               onChange={(e) => setSurveyorLicenceNo(e.target.value)}
             />
@@ -137,6 +135,7 @@ export default function CredentialsStep({ application, pending, onBack, onSubmit
           <div className="grid sm:grid-cols-2 gap-3">
             <Input
               placeholder="NBA call number"
+              data-testid="agent-wizard-nba-licence"
               value={nbaLicenceNo}
               onChange={(e) => setNbaLicenceNo(e.target.value)}
             />
@@ -154,6 +153,7 @@ export default function CredentialsStep({ application, pending, onBack, onSubmit
           <Input
             inputMode="numeric"
             placeholder="Years of experience"
+            data-testid="agent-wizard-experience"
             value={yearsOfExperience}
             onChange={(e) => setYearsOfExperience(e.target.value.replace(/\D/g, ""))}
           />
@@ -161,6 +161,7 @@ export default function CredentialsStep({ application, pending, onBack, onSubmit
         <textarea
           rows={4}
           maxLength={300}
+          data-testid="agent-wizard-bio"
           placeholder="Tell us a bit about you (max 300 chars)…"
           className="w-full rounded-md p-3 text-sm"
           style={{
@@ -248,10 +249,10 @@ export default function CredentialsStep({ application, pending, onBack, onSubmit
       )}
 
       <div className="flex justify-between pt-2">
-        <Button type="button" variant="outline" onClick={onBack}>
+        <Button type="button" variant="outline" data-testid="agent-wizard-credentials-back" onClick={onBack}>
           Back
         </Button>
-        <Button type="button" disabled={pending} onClick={handleSubmit}>
+        <Button type="button" data-testid="agent-wizard-credentials-continue" disabled={pending} onClick={handleSubmit}>
           {pending ? "Saving…" : "Continue"}
         </Button>
       </div>

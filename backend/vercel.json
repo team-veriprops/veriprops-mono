@@ -1,10 +1,19 @@
 {
   "installCommand": "pip install -r requirements.txt",
-  "buildCommand": "export veriprops_active_env=staging && alembic upgrade head && gunicorn -w 4 -k uvicorn.workers.UvicornWorker  veriprops:app",
+  "buildCommand": "export veriprops_active_env=local && alembic upgrade head && gunicorn -w 4 -k uvicorn.workers.UvicornWorker veriprops:app",
   "builds": [
-    {"src": "/veriprops.py", "use": "@vercel/python"}
+    {
+      "src": "/veriprops.py",
+      "use": "@vercel/python",
+      "config": {
+        "pythonVersion": "3.12"
+      }
+    }
   ],
   "routes": [
-    {"src": "/(.*)", "dest": "veriprops.py"}
+    {
+      "src": "/(.*)",
+      "dest": "veriprops.py"
+    }
   ]
 }

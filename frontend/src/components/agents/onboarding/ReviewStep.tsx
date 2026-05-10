@@ -81,11 +81,13 @@ export default function ReviewStep({ application, pending, onBack, onSubmit }: P
         <ConsentRow
           checked={truthful}
           onChange={setTruthful}
+          testId="agent-wizard-review-truthful"
           label="I confirm that all information provided is accurate and complete to the best of my knowledge."
         />
         <ConsentRow
           checked={agentTerms}
           onChange={setAgentTerms}
+          testId="agent-wizard-review-terms"
           label={
             <>
               I have read and accept the{" "}
@@ -118,10 +120,10 @@ export default function ReviewStep({ application, pending, onBack, onSubmit }: P
       )}
 
       <div className="flex justify-between pt-2">
-        <Button type="button" variant="outline" onClick={onBack}>
+        <Button type="button" variant="outline" data-testid="agent-wizard-review-back" onClick={onBack}>
           Back
         </Button>
-        <Button type="button" disabled={pending} onClick={submit}>
+        <Button type="button" data-testid="agent-wizard-review-submit" disabled={pending} onClick={submit}>
           {pending ? "Submitting…" : "Submit application"}
         </Button>
       </div>
@@ -158,14 +160,17 @@ function ConsentRow({
   checked,
   onChange,
   label,
+  testId,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label: React.ReactNode;
+  testId?: string;
 }) {
   return (
     <label
       className="flex items-start gap-3 rounded-md p-3 cursor-pointer"
+      data-testid={testId}
       style={{ backgroundColor: "var(--brand-surface-low)" }}
     >
       <Checkbox checked={checked} onCheckedChange={(v) => onChange(v === true)} className="mt-0.5" />

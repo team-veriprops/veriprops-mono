@@ -93,7 +93,7 @@ class SessionService:
         user_service: UserService = di[UserService]
 
         user = await user_service.get_user_by_email(req.email)
-        now = datetime.now(timezone.utc)
+        now = Utils.datetime_now()
 
         if user and user.locked_until and user.locked_until > now:
             await self.record_event(
@@ -292,7 +292,7 @@ class SessionService:
         token = await self._reset_repo.get_by_token_hash(token_hash)
         if not token:
             return None
-        if token.expires_at and token.expires_at <= datetime.now(timezone.utc):
+        if token.expires_at and token.expires_at <= Utils.datetime_now():
             return None
         await self._reset_repo.update(
             str(token.id), UpdatePasswordResetTokenDto(consumed_at=Utils.datetime_now()),

@@ -49,6 +49,15 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+from main.appodus_utils.integrations.factory import PaymentGatewayFactory
+from main.appodus_utils.integrations.payment.gateway.models import (
+    CustomerInfo,
+    Customizations,
+    PaymentInitRequest,
+)
+from main.appodus_utils.integrations.payment.gateway.paystack.models import PaystackBankTransferChargeRequest
+from main.appodus_utils.integrations.payment.gateway.paystack.payment import PaystackPaymentGateway
+from main.app.config.settings import IntegratedPlatform, settings
 
 logger: Logger = di["logger"]
 
@@ -65,6 +74,7 @@ class PaymentService:
         verification_service: VerificationService,
         session_service: SessionService,
         user_repo: UserRepo,
+        gateway_factory: PaymentGatewayFactory,
     ):
         self._payment_repo = payment_repo
         self._attempt_repo = attempt_repo
@@ -72,6 +82,7 @@ class PaymentService:
         self._verification_service = verification_service
         self._session_service = session_service
         self._user_repo = user_repo
+        self._gateway_factory = gateway_factory
 
     # ── Initiation ────────────────────────────────────────────────
 
@@ -98,10 +109,19 @@ class PaymentService:
             )
         snapshot = PricingSnapshotDto.model_validate(json.loads(verification.pricing_snapshot))
 
+        user = await self._user_repo.get_model(customer_id)
+        if user is None:
+            raise ResourceNotFoundException(resource="User")
+
+        provider = (
+            PaymentProvider.PAYSTACK
+            if dto.method == PaymentMethod.BANK_TRANSFER
+            else PaymentProvider.FLUTTERWAVE
+        )
         status = self._initial_status_for_method(dto.method)
         await self._payment_repo.create(CreatePaymentDto(
             verification_id=str(verification.id),
-            provider=PaymentProvider.FLUTTERWAVE,
+            provider=provider,
             amount_minor=snapshot.total_amount_minor,
             currency=snapshot.currency,
             method=dto.method,
@@ -130,30 +150,61 @@ class PaymentService:
             user_id=customer_id,
         )
 
+        tx_ref = f"vp_{payment.id}"
+        customer_info = CustomerInfo(
+            email=user.email,
+            phonenumber=user.phone_e164 or f"{user.phone_dial_code}{user.phone}",
+            name=f"{user.first_name} {user.last_name}",
+        )
+
         instructions: Optional[Dict[str, Any]] = None
         checkout_url: Optional[str] = None
+
         if dto.method == PaymentMethod.CARD:
-            checkout_url = self._build_flutterwave_checkout_url(
-                payment_id=payment.id,
-                amount_minor=snapshot.total_amount_minor,
+            flw_gw = self._gateway_factory.get_gateway(IntegratedPlatform.FLUTTERWAVE)
+            checkout_url = await flw_gw.initialize_payment(PaymentInitRequest(
+                tx_ref=tx_ref,
+                amount=snapshot.total_amount_minor / 100,
                 currency=snapshot.currency,
-                redirect_url=dto.redirect_url,
-            )
+                redirect_url=dto.redirect_url or settings.FLUTTERWAVE_REDIRECT_URL or "",
+                customer=customer_info,
+                customizations=Customizations(
+                    title="Veriprops Property Verification",
+                    description=f"Verification payment for {verification.vid}",
+                ),
+            ))
+            await self._payment_repo.update(str(payment.id), UpdatePaymentDto(
+                provider_ref=tx_ref,
+            ))
+
         elif dto.method == PaymentMethod.BANK_TRANSFER:
+            paystack_gw: PaystackPaymentGateway = self._gateway_factory.get_gateway(IntegratedPlatform.PAYSTACK)  # type: ignore[assignment]
+            expiry = Utils.datetime_now_plus(hours=24)
+            charge_result = await paystack_gw.charge_bank_transfer(PaystackBankTransferChargeRequest(
+                email=user.email,
+                amount=snapshot.total_amount_minor,
+                reference=tx_ref,
+                bank_transfer={"account_expires_at": expiry.isoformat()},
+            ))
+            await self._payment_repo.update(str(payment.id), UpdatePaymentDto(
+                provider_ref=charge_result.reference,
+            ))
             instructions = {
-                "virtualAccountBank": "Wema Bank (sandbox)",
-                "virtualAccountNumber": f"99{str(payment.id).replace('-', '')[:8]}",
-                "expiresAt": Utils.datetime_now_plus(hours=24).isoformat(),
+                "virtualAccountBank": charge_result.bank,
+                "virtualAccountNumber": charge_result.account_number,
+                "accountName": charge_result.account_name,
+                "expiresAt": charge_result.expiry_date or expiry.isoformat(),
                 "amountMinor": snapshot.total_amount_minor,
                 "currency": snapshot.currency,
             }
+
         else:  # WIRE
             instructions = {
-                "beneficiaryBank": "Stanbic IBTC Bank",
-                "swift": "SBICNGLX",
-                "iban": "NG89 0000 0000 0000 0000 0000",
-                "beneficiary": "Veriprops Operations Ltd",
-                "reference": f"{verification.vid}",
+                "beneficiaryBank": settings.WIRE_BENEFICIARY_BANK,
+                "swift": settings.WIRE_SWIFT,
+                "iban": settings.WIRE_IBAN,
+                "beneficiary": settings.WIRE_BENEFICIARY,
+                "reference": verification.vid,
                 "amountMinor": snapshot.total_amount_minor,
                 "currency": snapshot.currency,
                 "uploadProofTo": f"/api/payments/{payment.id}/wire-proof",
@@ -253,23 +304,6 @@ class PaymentService:
         if method == PaymentMethod.BANK_TRANSFER:
             return PaymentStatus.PENDING_TRANSFER
         return PaymentStatus.INITIATED
-
-    @staticmethod
-    def _build_flutterwave_checkout_url(
-        *,
-        payment_id: str,
-        amount_minor: int,
-        currency: str,
-        redirect_url: Optional[str],
-    ) -> str:
-        # Production wiring belongs in `appodus_utils/integrations/payment/flutterwave/`.
-        # Returning a placeholder lets the frontend complete UX without a real key.
-        suffix = f"&redirect={redirect_url}" if redirect_url else ""
-        return (
-            f"https://checkout.flutterwave.com/v3/hosted/pay?"
-            f"tx_ref=vp_{payment_id}&amount={amount_minor / 100}"
-            f"&currency={currency}{suffix}"
-        )
 
     async def _on_payment_succeeded(self, payment: Payment) -> None:
         verification = await self._verification_repo.get_model(payment.verification_id)

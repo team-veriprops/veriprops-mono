@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 @AGENTS.md
 
 Next.js 16 (App Router) + React 19 + TypeScript. Tailwind v4, Radix UI primitives, Zustand, TanStack Query, React Hook Form + Zod.
@@ -40,6 +38,11 @@ pnpm vitest run -t "test name pattern"
   * Keep route matching explicit and maintainable by clearly defining protected, public, and guest-only route groups.
   * `proxy.ts` should handle **access control only**; page-level authorization and business rules should remain in the application layer.
 
+## Route Definition
+* All routes in the application should be declared in `frontend\src\lib\routes.ts` grouped by their surface.
+* All Portal Menu Sidebars are grouped and maintained here `frontend\src\components\portal\nav.ts`,
+Admin here `frontend\src\components\admin\nav.ts` and Agents here `frontend\src\components\agents\nav.ts`.
+* **Compulsorily**: Make sure all routes in the app is declared and that various Menu sidebars are up to date.
 
 ## Layout
 
@@ -66,4 +69,22 @@ Defined in both [tsconfig.json](tsconfig.json) and [vitest.config.ts](vitest.con
 Vitest + jsdom. Tests sit beside the module they cover (`*.test.ts(x)`) — see [components/ui/schemas.test.ts](src/components/ui/schemas.test.ts), [lib/routes.test.ts](src/lib/routes.test.ts), [components/website/home.data.test.ts](src/components/website/home.data.test.ts). Vitest `globals: false` — import `describe`, `it`, `expect` explicitly.
 
 When working on UI/UX, use the `frontend-design` skill. When implementing features, follow the `test-driven-development` skill (write the test first).
+
+## Automation determinism (permanent rules — do not remove)
+
+### data-testid policy
+Auth form elements carry stable `data-testid` selectors for Playwright automation. **Never remove them.** Naming scheme:
+
+| Component | Selector |
+|---|---|
+| Login form | `login-form`, `login-email`, `login-password`, `login-password-toggle`, `login-submit` |
+| Signup step 1 | `signup-basics-form`, `signup-first-name`, `signup-last-name`, `signup-email`, `signup-password`, `signup-basics-submit` |
+| Signup stepper | `signup-stepper` |
+| Verify step | `verify-form`, `verify-submit`, `verify-back` |
+| OAuth buttons | `oauth-google`, `oauth-apple`, `oauth-facebook` |
+
+When adding new forms, follow the same `{flow}-{element}` pattern.
+
+### Auth hydration
+`ClientWrapperProvider` must **not** return null while waiting for client mount. Do not add `if (!mounted) return null` — it causes a blank render flash and breaks Playwright's `waitForLoadState`. Use `suppressHydrationWarning` on wrapper elements if needed instead.
 

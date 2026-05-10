@@ -52,7 +52,7 @@ export default function SetPasswordContainer() {
         subtitle="You signed up with a social account. Adding a password is optional but recommended."
       />
 
-      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="set-password-form">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
             New password
@@ -63,6 +63,7 @@ export default function SetPasswordContainer() {
               autoComplete="new-password"
               placeholder="At least 8 characters"
               className="pr-10"
+              data-testid="set-password-input"
               {...form.register("password")}
             />
             <button
@@ -95,6 +96,7 @@ export default function SetPasswordContainer() {
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             placeholder="Type it again"
+            data-testid="set-password-confirm-input"
             {...form.register("confirmPassword")}
           />
           {form.formState.errors.confirmPassword && (
@@ -124,6 +126,7 @@ export default function SetPasswordContainer() {
             variant="outline"
             className="flex-1"
             size="lg"
+            data-testid="set-password-skip"
             onClick={() => router.push(ROUTES.ACCOUNT.ROOT)}
           >
             Skip for now
@@ -132,6 +135,7 @@ export default function SetPasswordContainer() {
             type="submit"
             className="flex-1"
             size="lg"
+            data-testid="set-password-submit"
             disabled={setPasswordMutation.isPending}
           >
             {setPasswordMutation.isPending ? "Saving…" : "Save password"}

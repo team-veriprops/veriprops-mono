@@ -8,7 +8,12 @@ from main.appodus_utils.integrations.payment.gateway.models import (PaymentInitR
                                                           BankTransferResponse, GenericPaymentGatewayResponse,
                                                           TransferFeeResponse, CountryBanksResponse, TransferFeeRequest)
 from main.appodus_utils.integrations.payment.gateway.paystack.mapper import PaystackMapper
-from main.appodus_utils.integrations.payment.gateway.paystack.models import CreateRecipientRequest, CreateRecipientResponse
+from main.appodus_utils.integrations.payment.gateway.paystack.models import (
+    CreateRecipientRequest,
+    CreateRecipientResponse,
+    PaystackBankTransferChargeRequest,
+    PaystackBankTransferResult,
+)
 
 httpx_client: AsyncClient = di[AsyncClient]
 
@@ -245,6 +250,31 @@ class PaystackPaymentGateway(IPaymentGateway):
         """
         # TODO: calc using API cost documentation
         raise NotImplementedException("Feature not natively available in Paystack client.")
+
+    async def charge_bank_transfer(
+        self,
+        payload: PaystackBankTransferChargeRequest,
+    ) -> PaystackBankTransferResult:
+        """Create a one-time virtual account for NGN bank transfer via POST /charge.
+
+        Returns bank name, account number, and expiry so the frontend can
+        display transfer instructions without redirecting to a checkout page.
+        """
+        payload_dict = payload.model_dump(exclude_none=True)
+        response = await httpx_client.post(
+            f"{self.base_url}/charge",
+            headers=self.headers,
+            json=payload_dict,
+        )
+        response.raise_for_status()
+        data = response.json().get("data", {})
+        return PaystackBankTransferResult(
+            reference=data.get("reference", payload.reference or ""),
+            bank=data.get("bank", ""),
+            account_number=data.get("account_number", ""),
+            account_name=data.get("account_name"),
+            expiry_date=data.get("expiry_date"),
+        )
 
     async def get_all_country_banks(self, country_code: str) -> CountryBanksResponse:
         """

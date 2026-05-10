@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CheckCircle2, ArrowRight, TrendingUp } from "lucide-react";
+import { CTA_VERIFY_HREF } from "./home.data";
 
 export default function HeroSection() {
   return (
@@ -95,7 +96,7 @@ export default function HeroSection() {
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row gap-4">
             <Link
-              href="/auth/login?intent=verify"
+              href={CTA_VERIFY_HREF}
               className="group inline-flex items-center justify-center gap-2.5 signature-gradient text-white px-8 py-4 rounded-xl text-base font-bold transition-all duration-200 hover:opacity-90 hover:scale-[0.98] active:scale-95"
               style={{ boxShadow: "0 8px 24px -4px rgba(0,13,34,0.35)" }}
             >

@@ -6,10 +6,10 @@ URL shape: `/users/auth/...`
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from main.app.domain.user.auth.consent.controller import consent_router
-
 if TYPE_CHECKING:
     from loguru import Logger
+
+from main.app.domain.user.auth.consent.controller import consent_router
 
 from http import HTTPStatus
 
@@ -114,10 +114,6 @@ async def forgot_password(req: ForgotPasswordDto, request: Request):
     raw_token, fullname = await auth_service.request_password_reset(req.email, ip_address=ClientUtils.get_client_ip(request))
     if raw_token:
         try:
-            from sendgrid import SendGridAPIClient
-            from sendgrid.helpers.mail import Mail
-            from main.app.config.settings import settings as _settings
-
             from main.app.domain.user.user_messages import AccountSecurityMessages
             account_security_messages = di[AccountSecurityMessages]
 
@@ -125,7 +121,7 @@ async def forgot_password(req: ForgotPasswordDto, request: Request):
             link = f"{domain}/auth/reset-password/{raw_token}"
             firstname, _, lastname = Utils.parse_fullname(fullname)
 
-            await account_security_messages.send_password_reset_request_message(
+            await account_security_messages.send_direct_password_reset_request_message(
                 recipient=MessageRequestRecipient(
                     email=EmailRecipient(email=req.email, fullname=fullname)
                 ),
@@ -137,8 +133,8 @@ async def forgot_password(req: ForgotPasswordDto, request: Request):
                     MessageContext.VALIDITY: "1 hour",
                 }
             )
-        except Exception:
-            logger.warning("Could not send password reset email", exc_info=True)
+        except Exception as e:
+            logger.warning("Could not send password reset email: {}", e, exc_info=True)
     return SuccessResponse[bool](data=True)
 
 
@@ -152,5 +148,6 @@ async def reset_password(req: ResetPasswordDto, authorize: AuthJWT = Depends()):
 @auth_router.post("/password/set", response_model=SuccessResponse[bool])
 async def set_password(req: SetPasswordDto, authorize: AuthJWT = Depends()):
     authorize.jwt_required()
-    await auth_service.set_password(authorize.get_jwt_subject(), req.password)
+    user_id = str(authorize.get_jwt_subject())
+    await auth_service.set_password(user_id, req.password)
     return SuccessResponse[bool](data=True)

@@ -6,11 +6,12 @@ from datetime import datetime
 from typing import List, Optional
 
 from pydantic import EmailStr, Field
-from sqlalchemy import Boolean, Column, DateTime, Index, String, Integer, JSON
+from sqlalchemy import Boolean, Column, Index, String, Integer, JSON
 from sqlalchemy.ext.mutable import MutableList
 
 from main.app.domain.user.auth.session.models import UserType, UserPersona
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils.db.models import UTCDateTime
 from main.appodus_utils.db.types.money import TransactionCurrency
 
 
@@ -54,7 +55,7 @@ class User(BaseEntity):
 
     password_hash = Column(String(255), nullable=True)  # nullable for OAuth-only users
     avatar_url = Column(String(512), nullable=True)
-    locked_until = Column(DateTime(timezone=True), nullable=True)
+    locked_until = Column(UTCDateTime, nullable=True)
     failed_login_count = Column(Integer(), nullable=False, server_default="0")
 
     __table_args__ = (
@@ -104,6 +105,7 @@ class UpdateUserDto(Object):
     country_of_residence: Optional[str] = None
     timezone: Optional[str] = None
     preferred_currency: Optional[str] = None
+    user_type: Optional[str] = None
     personas: Optional[List[str]] = None
     admin_sub_role: Optional[str] = None
     trust_status: Optional[str] = None

@@ -7,8 +7,7 @@ from sqlalchemy import (Column,
                         String,
                         Text,
                         Integer,
-                        DateTime)
-from sqlalchemy.dialects.postgresql import JSONB
+                        DateTime, JSON)
 
 from main.appodus_utils import BaseEntity, PageRequest, BaseQueryDto, Object
 from main.appodus_utils.integrations.messaging.models import (MessageChannel,
@@ -27,8 +26,8 @@ from main.appodus_utils.integrations.messaging.models import (MessageRecipient,
 class Message(BaseEntity):
     __tablename__ = 'messages'
     channel = Column(String(20), nullable=False)
-    to = Column(JSONB, nullable=False)
-    payload = Column(JSONB, nullable=False)
+    to = Column(JSON, nullable=False)
+    payload = Column(JSON, nullable=False)
     status = Column(String(20), nullable=False, default=MessageStatus.PENDING)
     provider = Column(String(50))
     provider_id = Column(String(255))  # Provider's message ID
@@ -38,7 +37,7 @@ class Message(BaseEntity):
     scheduled_at = Column(DateTime(), nullable=True)
     sent_at = Column(DateTime(), nullable=True)
     delivered_at = Column(DateTime(), nullable=True)
-    extras = Column(JSONB, default={})
+    extras = Column(JSON, default={})
     callback_url = Column(String(100))
 
 

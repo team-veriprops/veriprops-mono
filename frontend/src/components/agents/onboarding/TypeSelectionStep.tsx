@@ -105,6 +105,7 @@ export default function TypeSelectionStep({ defaultValue, pending, onSubmit }: P
               type="button"
               onClick={() => toggle(opt.type)}
               aria-pressed={isOn}
+              data-testid={`agent-wizard-type-${opt.type.toLowerCase()}`}
               className="text-left rounded-xl p-4 transition-all"
               style={{
                 backgroundColor: isOn ? "var(--brand-viridian-xlight)" : "var(--brand-surface-card)",
@@ -171,6 +172,7 @@ export default function TypeSelectionStep({ defaultValue, pending, onSubmit }: P
       <div className="flex justify-end pt-2">
         <Button
           type="button"
+          data-testid="agent-wizard-types-continue"
           disabled={!canContinue || pending}
           onClick={() => onSubmit(list)}
         >

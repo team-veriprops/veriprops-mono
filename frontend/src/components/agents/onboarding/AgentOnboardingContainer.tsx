@@ -17,6 +17,7 @@ import {
 } from "../libs/useAgentApplicationQueries";
 import type { AgentType } from "../libs/agent-service";
 import { getErrorMessage } from "@lib/utils";
+import { deriveResumeStep } from "./wizardUtils";
 
 const STEPS = ["Roles", "KYC", "Credentials", "Review"];
 
@@ -34,16 +35,7 @@ export default function AgentOnboardingContainer() {
   // Resume the wizard at the right step based on persisted server state.
   useEffect(() => {
     if (!application) return;
-    if (application.status !== "DRAFT") return;
-    let resumeAt = 0;
-    if (application.types.length > 0) resumeAt = 1;
-    if (
-      (application.kycMethod === "BVN" && application.bvnVerifiedAt) ||
-      (application.kycMethod === "ID_DOC" && application.idDocUploaded && application.selfieUploaded)
-    ) {
-      resumeAt = 2;
-    }
-    if (application.coverageStates.length > 0) resumeAt = 3;
+    const resumeAt = deriveResumeStep(application);
     setStep((s) => (s === 0 ? resumeAt : s));
   }, [application]);
 
@@ -68,7 +60,7 @@ export default function AgentOnboardingContainer() {
       await saveTypes.mutateAsync({ types });
       setStep(1);
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 
@@ -78,7 +70,7 @@ export default function AgentOnboardingContainer() {
       const res = await verifyBvn.mutateAsync({ bvn });
       return res.data ?? null;
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
       return null;
     }
   };
@@ -92,7 +84,7 @@ export default function AgentOnboardingContainer() {
       setErrorMessage(null);
       await uploadDocs.mutateAsync(req);
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 
@@ -104,7 +96,7 @@ export default function AgentOnboardingContainer() {
       await saveCredentials.mutateAsync(req);
       setStep(3);
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 
@@ -117,7 +109,7 @@ export default function AgentOnboardingContainer() {
       await submitApp.mutateAsync(req);
       // Status flips to PENDING — the rendered branch above will switch.
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 

@@ -87,7 +87,7 @@ export default function ForgotPasswordContainer() {
           </div>
         </div>
       ) : (
-        <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+        <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="forgot-form">
           <div className="space-y-1.5">
             <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
               Email
@@ -102,6 +102,7 @@ export default function ForgotPasswordContainer() {
                 autoComplete="email"
                 placeholder="you@example.com"
                 className="pl-9"
+                data-testid="forgot-email"
                 {...form.register("email")}
               />
             </div>
@@ -117,6 +118,7 @@ export default function ForgotPasswordContainer() {
             className="w-full"
             size="lg"
             disabled={forgotMutation.isPending}
+            data-testid="forgot-submit"
           >
             {forgotMutation.isPending ? "Sending…" : "Send reset link"}
           </Button>

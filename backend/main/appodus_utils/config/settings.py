@@ -10,7 +10,7 @@ from typing import ClassVar, Optional, Any, Dict, List
 from uuid import UUID
 
 from fastapi.encoders import jsonable_encoder
-from pydantic import Field, field_validator, ValidationInfo
+from pydantic import Field, field_validator, ValidationInfo, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -158,6 +158,37 @@ class AppodusBaseSettings(BaseSettings):
     MESSAGING_PRIORITY: int = 2
     MESSAGING_SANDBOX_MODE: bool = False
     MESSAGING_CATEGORIES: List[str] = []
+
+    # SMTP (Mailpit in dev/test — auto-selected when ENVIRONMENT is not prod/staging)
+    SMTP_HOST: Optional[str] = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_USE_TLS: bool = False
+
+    # TEST CONFIG — canonical test OTP returned when OTP_MODE=deterministic
+    TEST_OTP: int = 654123
+
+    # OTP determinism contract
+    # deterministic → always return TEST_OTP (required in test, allowed in dev/local/staging)
+    # random        → always generate a random 6-digit code (required in production)
+    OTP_MODE: str = "deterministic"
+
+    @model_validator(mode="after")
+    def _enforce_otp_mode_policy(self) -> "AppodusBaseSettings":
+        env = self.ENVIRONMENT
+        mode = self.OTP_MODE
+        if env == Environment.TEST and mode != "deterministic":
+            raise ValueError(
+                f"ENVIRONMENT=test requires OTP_MODE=deterministic, got '{mode}'. "
+                "Set OTP_MODE=deterministic in .env.test."
+            )
+        if env == Environment.PRODUCTION and mode != "random":
+            raise ValueError(
+                f"ENVIRONMENT=prod requires OTP_MODE=random, got '{mode}'. "
+                "Deterministic OTP is forbidden in production."
+            )
+        return self
 
     # REDIS
     REDIS_ENABLED: Optional[bool] = False

@@ -54,7 +54,7 @@ export default function TeamManagement() {
       const res = await inviteMutation.mutateAsync({ email, subRole });
       setInviteResult(res.data ?? null);
     } catch (e) {
-      setError(getErrorMessage(e));
+      setError(getErrorMessage(e as Error));
     }
   };
 

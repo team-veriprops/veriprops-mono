@@ -32,10 +32,12 @@ class StubKycProvider(KycProvider):
                 verified=False,
                 verification_id=None,
                 failure_reason="BVN could not be verified",
+                provider="stub",
             )
         return BvnVerificationResult(
             verified=True,
             verification_id=f"stub-{uuid.uuid4()}",
+            provider="stub",
         )
 
     async def match_selfie(
@@ -47,3 +49,10 @@ class StubKycProvider(KycProvider):
             return SelfieMatchResult(matched=False, score=0, failure_reason="empty selfie payload")
         # Deterministic dev outcome.
         return SelfieMatchResult(matched=True, score=92)
+
+    async def submit_selfie(
+        self,
+        selfie_bytes: bytes,
+        reference_bvn_last4: Optional[str] = None,
+    ) -> str:
+        return f"stub-selfie-{uuid.uuid4()}"

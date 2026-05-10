@@ -10,7 +10,7 @@ interface StepperProps {
 
 export default function Stepper({ steps, current, className }: StepperProps) {
   return (
-    <ol className={className} aria-label="Signup progress">
+    <ol className={className} aria-label="Signup progress" data-testid="signup-stepper">
       <div className="flex items-center gap-2">
         {steps.map((label, i) => {
           const state: "complete" | "current" | "upcoming" =

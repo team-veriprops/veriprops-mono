@@ -7,7 +7,7 @@ import { startOauthPopup } from "./libs/auth/oauthPopup";
 import { useCurrentSession } from "./libs/useAuthQueries";
 import { OAuthFlowMode, SocialProvider } from "@components/website/auth/models";
 import { resolvePostAuthRedirect } from "./libs/auth/redirect";
-import { AuthIntent, isAuthIntent } from "@lib/routes";
+import { AuthIntent, isAuthIntent, ROUTES } from "@lib/routes";
 
 interface SocialAuthButtonsProps {
   /** Hint text — "Sign in with" or "Sign up with". */
@@ -120,10 +120,10 @@ export default function SocialAuthButtons({
           const user = res.data?.user;
           const dest = user
             ? resolvePostAuthRedirect(user, { intent: resolvedIntent, redirect })
-            : "/portal/dashboard";
+            : ROUTES.AUTH.LOGIN_SUCCESS_REDIRECT;
           router.replace(dest);
         } catch {
-          router.replace("/portal/dashboard");
+          router.replace(ROUTES.AUTH.LOGIN_SUCCESS_REDIRECT);
         }
       },
       onCancel: () => {
@@ -159,6 +159,7 @@ export default function SocialAuthButtons({
             disabled={pendingProvider !== null}
             className="group inline-flex items-center justify-center gap-2.5 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-150 disabled:opacity-60"
             style={brandStyle}
+            data-testid={`oauth-${provider.toLowerCase()}`}
           >
             {glyph}
             {pendingProvider === provider ? "Opening…" : `${verb} ${label}`}

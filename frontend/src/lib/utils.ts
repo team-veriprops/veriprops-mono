@@ -278,7 +278,7 @@ export function capitalizeFirst(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-export function getErrorMessage(error: Error, defaultMessage: string): string {
+export function getErrorMessage(error: Error, defaultMessage?: string): string {
   return (
     error?.message || defaultMessage ||
     "Something went wrong"

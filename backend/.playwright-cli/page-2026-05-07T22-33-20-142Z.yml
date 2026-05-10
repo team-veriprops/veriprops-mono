@@ -1,0 +1,437 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - navigation [ref=e3]:
+      - generic [ref=e4]:
+        - link "Veriprops" [ref=e5] [cursor=pointer]:
+          - /url: /
+          - img [ref=e7]
+          - generic [ref=e10]: Veriprops
+        - generic [ref=e11]:
+          - link "How It Works" [ref=e12] [cursor=pointer]:
+            - /url: "#how-it-works"
+          - link "Pricing" [ref=e13] [cursor=pointer]:
+            - /url: "#pricing"
+          - link "Agents" [ref=e14] [cursor=pointer]:
+            - /url: "#agents"
+          - link "Resources" [ref=e15] [cursor=pointer]:
+            - /url: "#resources"
+        - generic [ref=e16]:
+          - link "Log in" [ref=e17] [cursor=pointer]:
+            - /url: /auth/login
+          - link "Verify a Property" [ref=e18] [cursor=pointer]:
+            - /url: /auth?intent=verify
+    - main [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]:
+            - generic [ref=e23]:
+              - img [ref=e24]
+              - text: Trusted by Global Diaspora
+            - heading "Secure Your Nigerian Real Estate Future" [level=1] [ref=e27]:
+              - text: Secure Your
+              - generic [ref=e28]: Nigerian
+              - text: Real Estate Future
+            - paragraph [ref=e30]: Eliminate fraud and uncertainty with rigorously verified property data. Protect your family's wealth from anywhere in the world — we verify before you pay.
+            - generic [ref=e31]:
+              - generic [ref=e32]:
+                - generic [ref=e33]: 2,400+
+                - generic [ref=e34]: Properties Verified
+              - generic [ref=e35]:
+                - generic [ref=e36]: 98%
+                - generic [ref=e37]: Accuracy Rate
+              - generic [ref=e38]:
+                - generic [ref=e39]: 4 Roles
+                - generic [ref=e40]: Certified Agents
+            - generic [ref=e41]:
+              - link "Start Verification" [ref=e42] [cursor=pointer]:
+                - /url: /auth?intent=verify
+                - text: Start Verification
+                - img [ref=e43]
+              - link "View Sample Report" [ref=e45] [cursor=pointer]:
+                - /url: "#sample"
+          - generic [ref=e46]:
+            - generic [ref=e47]:
+              - img "Modern luxury property in Lagos Nigeria" [ref=e48]
+              - generic [ref=e49]: VP-2025-LAG-00847
+              - generic [ref=e50]:
+                - img [ref=e51]
+                - text: Verified
+            - generic [ref=e55]:
+              - generic [ref=e56]:
+                - generic [ref=e57]:
+                  - img [ref=e58]
+                  - generic [ref=e61]: "92"
+                - generic [ref=e62]:
+                  - generic [ref=e63]: Trust Score
+                  - generic [ref=e64]: Property Safe
+              - generic [ref=e71]:
+                - img [ref=e72]
+                - generic [ref=e75]: Above caution threshold
+            - generic [ref=e76]: Report in 5–7 days
+        - generic:
+          - img
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - generic [ref=e81]: Platform Primitives
+          - heading "The Verification Ecosystem" [level=2] [ref=e82]
+        - generic [ref=e84]:
+          - generic [ref=e85]:
+            - img [ref=e87]
+            - generic [ref=e89]: "01"
+            - heading "Trust Score" [level=3] [ref=e90]
+            - paragraph [ref=e91]: Our proprietary weighted algorithm calculates risk from registry records, encumbrances, and ground inspection. 90+ is Safe — 60–89 is Caution — 0–59 is High Risk.
+          - generic [ref=e92]:
+            - img [ref=e94]
+            - generic [ref=e103]: "02"
+            - heading "Verification ID" [level=3] [ref=e104]
+            - paragraph [ref=e105]: A unique, immutable public identifier (VP-YYYY-XXXXXX) for every verified property. Share it — anyone can cross-reference findings without exposing your private data.
+          - generic [ref=e106]:
+            - img [ref=e108]
+            - generic [ref=e111]: "03"
+            - heading "Certified Report" [level=3] [ref=e112]
+            - paragraph [ref=e113]: A comprehensive signed document from legal and site experts. Structured, versioned (v1, v2…), downloadable as PDF, and admissible for institutional financing.
+      - generic [ref=e115]:
+        - generic [ref=e116]:
+          - generic [ref=e117]: Our Process
+          - heading "A Rigorous Methodology" [level=2] [ref=e118]
+          - paragraph [ref=e119]: Our 5-step sovereign verification process ensures absolute certainty for your offshore investment — no shortcuts, no assumptions.
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - generic [ref=e123]: "1"
+            - img [ref=e125]
+            - heading "Submit Details" [level=4] [ref=e128]
+            - paragraph [ref=e129]: Provide property coordinates, upload documents, and select your verification tier.
+          - generic [ref=e130]:
+            - generic [ref=e132]: "2"
+            - img [ref=e134]
+            - heading "Cross-Check Records" [level=4] [ref=e137]
+            - paragraph [ref=e138]: We validate ownership against official registry and survey records with certified agents.
+          - generic [ref=e139]:
+            - generic [ref=e141]: "3"
+            - img [ref=e143]
+            - heading "Check Encumbrances" [level=4] [ref=e145]
+            - paragraph [ref=e146]: Identify liens, caveats, pending litigations, or any outstanding claims on the property.
+          - generic [ref=e147]:
+            - generic [ref=e149]: "4"
+            - img [ref=e151]
+            - heading "Run Risk Analysis" [level=4] [ref=e154]
+            - paragraph [ref=e155]: Assessment of area zoning, title history, fraud indicators, and surrounding property context.
+          - generic [ref=e156]:
+            - generic [ref=e157]: "5"
+            - img [ref=e159]
+            - heading "Get Certified Report" [level=4] [ref=e162]
+            - paragraph [ref=e163]: Receive your high-authority digital report with Trust Score, Verification ID, and agent sign-offs.
+        - generic [ref=e164]:
+          - generic [ref=e165]:
+            - generic [ref=e166]: Ready to verify your property?
+            - paragraph [ref=e167]: Get started in under 5 minutes. Your Verification ID is assigned instantly.
+          - link "Start Your Verification" [ref=e168] [cursor=pointer]:
+            - /url: /auth?intent=verify
+      - generic [ref=e170]:
+        - generic [ref=e171]:
+          - generic [ref=e172]:
+            - generic [ref=e173]: Certified Network
+            - heading "Verified Agents" [level=2] [ref=e174]
+          - paragraph [ref=e176]: Every verification is handled by KYC-approved independent professionals. All agents are screened, licensed where applicable, and performance-rated.
+        - generic [ref=e177]:
+          - generic [ref=e178]:
+            - generic: "01"
+            - img [ref=e180]
+            - heading "Field Agent" [level=3] [ref=e183]
+            - paragraph [ref=e184]: Physical on-site inspection and property condition assessment.
+            - list [ref=e185]:
+              - listitem [ref=e186]:
+                - img [ref=e187]
+                - text: Site access & condition check
+              - listitem [ref=e190]:
+                - img [ref=e191]
+                - text: GPS-stamped photo documentation
+              - listitem [ref=e194]:
+                - img [ref=e195]
+                - text: Neighbourhood profile
+              - listitem [ref=e198]:
+                - img [ref=e199]
+                - text: Occupancy & usage status
+          - generic [ref=e203]:
+            - generic: "02"
+            - img [ref=e205]
+            - heading "Surveyor" [level=3] [ref=e211]
+            - paragraph [ref=e212]: Boundary confirmation and precision land measurement.
+            - list [ref=e213]:
+              - listitem [ref=e214]:
+                - img [ref=e215]
+                - text: Boundary survey & confirmation
+              - listitem [ref=e218]:
+                - img [ref=e219]
+                - text: Coordinate & GPS mapping
+              - listitem [ref=e222]:
+                - img [ref=e223]
+                - text: Survey plan review
+              - listitem [ref=e226]:
+                - img [ref=e227]
+                - text: Land size accuracy check
+          - generic [ref=e231]:
+            - generic: "03"
+            - img [ref=e233]
+            - heading "Registry Agent" [level=3] [ref=e236]
+            - paragraph [ref=e237]: Official document search and registry verification.
+            - list [ref=e238]:
+              - listitem [ref=e239]:
+                - img [ref=e240]
+                - text: Land registry search
+              - listitem [ref=e243]:
+                - img [ref=e244]
+                - text: Title document verification
+              - listitem [ref=e247]:
+                - img [ref=e248]
+                - text: Ownership chain tracing
+              - listitem [ref=e251]:
+                - img [ref=e252]
+                - text: Document authenticity check
+          - generic [ref=e256]:
+            - generic: "04"
+            - img [ref=e258]
+            - heading "Lawyer" [level=3] [ref=e262]
+            - paragraph [ref=e263]: Legal opinion, encumbrance check, and risk assessment.
+            - list [ref=e264]:
+              - listitem [ref=e265]:
+                - img [ref=e266]
+                - text: Legal opinion letter
+              - listitem [ref=e269]:
+                - img [ref=e270]
+                - text: Encumbrance identification
+              - listitem [ref=e273]:
+                - img [ref=e274]
+                - text: Fraud & risk assessment
+              - listitem [ref=e277]:
+                - img [ref=e278]
+                - text: Jurisdiction-specific advice
+        - generic [ref=e282]:
+          - generic [ref=e283]: Are you a field agent, surveyor, registry official, or property lawyer in Nigeria?
+          - link "Become a Verified Agent" [ref=e284] [cursor=pointer]:
+            - /url: /auth?intent=agent
+            - text: Become a Verified Agent
+            - img [ref=e285]
+      - generic [ref=e288]:
+        - generic [ref=e289]:
+          - generic [ref=e290]: Transparent Pricing
+          - heading "Simple. Transparent. Certain." [level=2] [ref=e291]
+          - paragraph [ref=e292]: Price locked at checkout. No hidden fees. No surprises. Your Verification ID is assigned the moment you submit.
+          - generic [ref=e293]:
+            - button "NGN" [ref=e294]
+            - button "USD" [ref=e295]
+            - button "GBP" [ref=e296]
+            - button "EUR" [ref=e297]
+        - generic [ref=e298]:
+          - generic [ref=e299]:
+            - generic [ref=e300]:
+              - heading "Basic" [level=3] [ref=e301]
+              - generic [ref=e302]: ₦150k
+              - generic [ref=e303]:
+                - img [ref=e304]
+                - text: 3–5 business days
+            - paragraph [ref=e307]: Document and registry verification. Ideal for preliminary due diligence.
+            - list [ref=e308]:
+              - listitem [ref=e309]:
+                - img [ref=e310]
+                - text: Registry Search
+              - listitem [ref=e313]:
+                - img [ref=e314]
+                - text: Title Document Verification
+              - listitem [ref=e317]:
+                - img [ref=e318]
+                - text: Ownership Confirmation
+            - link "Select Basic" [ref=e321] [cursor=pointer]:
+              - /url: /auth?intent=verify&tier=basic
+          - generic [ref=e322]:
+            - generic [ref=e323]: Most Popular
+            - generic [ref=e324]:
+              - heading "Standard" [level=3] [ref=e325]
+              - generic [ref=e326]: ₦350k
+              - generic [ref=e327]:
+                - img [ref=e328]
+                - text: 5–7 business days
+            - paragraph [ref=e331]: Full on-the-ground verification. The recommended tier for serious buyers.
+            - list [ref=e332]:
+              - listitem [ref=e333]:
+                - img [ref=e334]
+                - text: Everything in Basic
+              - listitem [ref=e335]:
+                - img [ref=e336]
+                - text: Physical Site Inspection
+              - listitem [ref=e339]:
+                - img [ref=e340]
+                - text: Boundary & Location Survey
+              - listitem [ref=e343]:
+                - img [ref=e344]
+                - text: Neighbourhood Profile
+            - link "Start Standard" [ref=e347] [cursor=pointer]:
+              - /url: /auth?intent=verify&tier=standard
+          - generic [ref=e348]:
+            - generic [ref=e349]:
+              - heading "Premium" [level=3] [ref=e350]
+              - generic [ref=e351]: ₦750k
+              - generic [ref=e352]:
+                - img [ref=e353]
+                - text: 7–10 business days
+            - paragraph [ref=e356]: Complete verification with legal opinion. For high-value transactions.
+            - list [ref=e357]:
+              - listitem [ref=e358]:
+                - img [ref=e359]
+                - text: Everything in Standard
+              - listitem [ref=e360]:
+                - img [ref=e361]
+                - text: Legal Opinion Letter
+              - listitem [ref=e364]:
+                - img [ref=e365]
+                - text: Encumbrances & Fraud Assessment
+              - listitem [ref=e368]:
+                - img [ref=e369]
+                - text: Risk Analysis & Recommendation
+            - link "Go Premium" [ref=e372] [cursor=pointer]:
+              - /url: /auth?intent=verify&tier=premium
+        - paragraph [ref=e373]: All prices are exclusive of VAT. We reduce uncertainty — we do not eliminate it. Reports are professional opinions, not legal guarantees. First-time discount applied automatically.
+      - generic [ref=e375]:
+        - generic [ref=e376]:
+          - generic [ref=e377]: Client Stories
+          - heading "Trusted by Nigerians Worldwide" [level=2] [ref=e378]
+        - generic [ref=e379]:
+          - generic [ref=e380]:
+            - img [ref=e381]
+            - paragraph [ref=e384]: “I was about to wire £65,000 for a property in Lekki. Veriprops found three competing ownership claims before I paid a penny. This service saved my family's financial future.”
+            - generic [ref=e385]:
+              - generic [ref=e386]:
+                - generic [ref=e387]: EO
+                - generic [ref=e388]:
+                  - generic [ref=e389]: Emeka Okafor
+                  - generic [ref=e390]: London, UK
+              - generic [ref=e391]: Premium
+          - generic [ref=e392]:
+            - img [ref=e393]
+            - paragraph [ref=e396]: “The Standard report was thorough — GPS-stamped photos, boundary survey, full registry search — all delivered within 6 days. Exactly what I needed from 7,000 miles away.”
+            - generic [ref=e397]:
+              - generic [ref=e398]:
+                - generic [ref=e399]: AW
+                - generic [ref=e400]:
+                  - generic [ref=e401]: Adaeze Williams
+                  - generic [ref=e402]: Houston, TX
+              - generic [ref=e403]: Standard
+          - generic [ref=e404]:
+            - img [ref=e405]
+            - paragraph [ref=e408]: “The Trust Score concept is genius. I now only consider properties scoring above 80. It has fundamentally changed how I approach Nigerian real estate investment.”
+            - generic [ref=e409]:
+              - generic [ref=e410]:
+                - generic [ref=e411]: CN
+                - generic [ref=e412]:
+                  - generic [ref=e413]: Chukwudi Nwosu
+                  - generic [ref=e414]: Toronto, Canada
+              - generic [ref=e415]: Basic
+        - generic [ref=e416]:
+          - generic [ref=e417]:
+            - generic [ref=e418]: 2,400+
+            - generic [ref=e419]: Properties verified
+          - generic [ref=e420]:
+            - generic [ref=e421]: 98%
+            - generic [ref=e422]: Client satisfaction rate
+          - generic [ref=e423]:
+            - generic [ref=e424]: £65k+
+            - generic [ref=e425]: Avg. transaction protected
+      - generic [ref=e429]:
+        - generic [ref=e430]:
+          - generic [ref=e431]:
+            - img [ref=e432]
+            - text: ✅ Veriprops Verified
+          - heading "Your legacy is too valuable to risk on hearsay." [level=2] [ref=e435]
+          - paragraph [ref=e436]: Veriprops provides the sovereign certainty required to build generational wealth in Nigeria — from anywhere in the world. Verify everything. Trust nothing blindly.
+          - generic [ref=e437]: We reduce uncertainty. We do not eliminate it. Reports represent professional opinions at the time of verification — not legal guarantees.
+          - generic [ref=e438]:
+            - link "Verify a Property Now" [ref=e439] [cursor=pointer]:
+              - /url: /auth?intent=verify
+              - text: Verify a Property Now
+              - img [ref=e440]
+            - link "Become an Agent" [ref=e442] [cursor=pointer]:
+              - /url: /auth?intent=agent
+        - generic [ref=e443]:
+          - generic [ref=e444]:
+            - img [ref=e446]
+            - generic [ref=e448]:
+              - generic [ref=e449]: Process Integrity
+              - generic [ref=e450]: Qualified agents, required steps per tier — we are accountable for every verification.
+          - generic [ref=e451]:
+            - img [ref=e453]
+            - generic [ref=e456]:
+              - generic [ref=e457]: Accurate Findings
+              - generic [ref=e458]: Reports reflect exactly what agents submitted — nothing distorted.
+          - generic [ref=e459]:
+            - img [ref=e461]
+            - generic [ref=e466]:
+              - generic [ref=e467]: All Communications On-Platform
+              - generic [ref=e468]: Every message, every document — recorded, auditable, secure.
+    - contentinfo [ref=e469]:
+      - generic [ref=e470]:
+        - generic [ref=e471]:
+          - generic [ref=e472]:
+            - link "Veriprops" [ref=e473] [cursor=pointer]:
+              - /url: /
+              - img [ref=e475]
+              - generic [ref=e478]: Veriprops
+            - paragraph [ref=e479]: The Sovereign Curator of Real Estate Verification. We reduce uncertainty. We do not eliminate it.
+            - generic [ref=e480]:
+              - link "Facebook" [ref=e481] [cursor=pointer]:
+                - /url: "#"
+                - img [ref=e482]
+              - link "Twitter" [ref=e484] [cursor=pointer]:
+                - /url: "#"
+                - img [ref=e485]
+              - link "LinkedIn" [ref=e487] [cursor=pointer]:
+                - /url: "#"
+                - img [ref=e488]
+              - link "Instagram" [ref=e490] [cursor=pointer]:
+                - /url: "#"
+                - img [ref=e491]
+              - link "YouTube" [ref=e493] [cursor=pointer]:
+                - /url: "#"
+                - img [ref=e494]
+          - generic [ref=e496]:
+            - heading "Resources" [level=4] [ref=e497]
+            - list [ref=e498]:
+              - listitem [ref=e499]:
+                - link "Certification Standards" [ref=e500] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=e501]:
+                - link "Verification Process" [ref=e502] [cursor=pointer]:
+                  - /url: "#how-it-works"
+              - listitem [ref=e503]:
+                - link "Trust Score Guide" [ref=e504] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=e505]:
+                - link "Sample Report" [ref=e506] [cursor=pointer]:
+                  - /url: "#"
+          - generic [ref=e507]:
+            - heading "Company" [level=4] [ref=e508]
+            - list [ref=e509]:
+              - listitem [ref=e510]:
+                - link "Privacy Policy" [ref=e511] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=e512]:
+                - link "Terms of Service" [ref=e513] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=e514]:
+                - link "Contact Support" [ref=e515] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=e516]:
+                - link "Become an Agent" [ref=e517] [cursor=pointer]:
+                  - /url: /auth?intent=agent
+          - generic [ref=e518]:
+            - heading "Stay Informed" [level=4] [ref=e519]
+            - paragraph [ref=e520]: Get updates on market insights, new features, and diaspora property trends.
+            - generic [ref=e521]:
+              - textbox "Email address" [ref=e522]
+              - button [ref=e523]:
+                - img [ref=e524]
+        - generic [ref=e526]:
+          - paragraph [ref=e527]: "© 2026 Veriprops. Jurisdiction: Nigeria. All communications are recorded for quality and security."
+          - paragraph [ref=e528]: “We reduce uncertainty. We do not eliminate it.”
+  - region "Notifications (F8)":
+    - list
+  - alert [ref=e529]

@@ -29,7 +29,7 @@ export default function AdminInviteAcceptPage({
         const res = await accept.mutateAsync(p.token);
         if (!cancelled) setResult(res.data ?? null);
       } catch (e) {
-        if (!cancelled) setError(getErrorMessage(e));
+        if (!cancelled) setError(getErrorMessage(e as Error));
       }
     });
     return () => {

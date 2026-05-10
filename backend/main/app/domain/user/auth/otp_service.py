@@ -37,21 +37,28 @@ MAX_FAILURES = 5
 OTP_VERIFIED_TTL = timedelta(minutes=30)
 
 
-def _to_recipient_str(recipient: Union[EmailRecipient, PhoneNumber]) -> str:
-    recipient_str = recipient.email.lower() if isinstance(recipient,
-                                                      EmailRecipient) else recipient.international_number.lower()
-    return recipient_str
+def _phone_e164(dial_code: str, phone: str) -> str:
+    digits = "".join(c for c in (dial_code + phone) if c.isdigit())
+    return f"+{digits}"
 
 
-def _otp_key(channel: OtpChannel, recipient: Union[EmailRecipient, PhoneNumber]) -> str:
+def _to_recipient_str(recipient: Union[str, EmailRecipient, PhoneNumber]) -> str:
+    if isinstance(recipient, str):
+        return recipient.lower()
+    if isinstance(recipient, EmailRecipient):
+        return recipient.email.lower()
+    return recipient.international_number.lower()
+
+
+def _otp_key(channel: OtpChannel, recipient: Union[str, EmailRecipient, PhoneNumber]) -> str:
     return f"otp:{channel.value}:{_to_recipient_str(recipient)}"
 
 
-def _resend_key(channel: OtpChannel, recipient: Union[EmailRecipient, PhoneNumber]) -> str:
+def _resend_key(channel: OtpChannel, recipient: Union[str, EmailRecipient, PhoneNumber]) -> str:
     return f"otp_resend:{channel.value}:{_to_recipient_str(recipient)}"
 
 
-def _failure_key(channel: OtpChannel, recipient: Union[EmailRecipient, PhoneNumber]) -> str:
+def _failure_key(channel: OtpChannel, recipient: Union[str, EmailRecipient, PhoneNumber]) -> str:
     return f"otp_fail:{channel.value}:{_to_recipient_str(recipient)}"
 
 

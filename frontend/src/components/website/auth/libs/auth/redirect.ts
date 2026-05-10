@@ -27,10 +27,10 @@ export function resolvePostAuthRedirect(
   const isCustomer = user.personas.includes(UserPersona.CUSTOMER);
 
   if (options.intent === "verify" && isCustomer) {
-    return "/portal/verifications/new";
+    return ROUTES.PORTAL.VERIFICATIONS_NEW;
   }
   if (options.intent === "agent" && !isAgent) {
-    return "/agent/onboarding";
+    return ROUTES.AGENT.ONBOARDING;
   }
 
   if (isAgent) return ROUTES.AGENT.DASHBOARD;

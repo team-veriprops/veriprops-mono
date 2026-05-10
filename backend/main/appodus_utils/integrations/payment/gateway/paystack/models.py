@@ -234,3 +234,22 @@ class RefundData(Object):
 class PaystackWebhookPayload(Object):
     event: PaystackEventType
     data: Union[Optional[RefundData], Optional[TransferData], Optional[ChargeSuccessData], Optional[AuthorizationData], Optional[CustomerData]]
+
+
+# ── Bank transfer collection (POST /charge with bank_transfer field) ──
+
+
+class PaystackBankTransferChargeRequest(Object):
+    email: str
+    amount: int = Field(..., description="Amount in kobo")
+    bank_transfer: Dict[str, Any] = Field(default_factory=dict)
+    currency: str = "NGN"
+    reference: Optional[str] = None
+
+
+class PaystackBankTransferResult(Object):
+    reference: str
+    bank: str
+    account_number: str
+    account_name: Optional[str] = None
+    expiry_date: Optional[str] = None

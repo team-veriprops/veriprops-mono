@@ -215,18 +215,6 @@ class Utils:
         return datetime.now(timezone.utc)
 
     @staticmethod
-    def datetime_to_db(date: datetime) -> datetime:
-        return date.replace(tzinfo=None)
-
-    @staticmethod
-    def datetime_now_to_db() -> datetime:
-        return Utils.datetime_to_db(Utils.datetime_now())
-
-    @staticmethod
-    def datetime_from_db(date: datetime) -> datetime:
-        return date.replace(tzinfo=timezone.utc)
-
-    @staticmethod
     def datetime_now_plus(*, seconds: int = 0, minutes: int = 0, hours: int = 0, days: int = 0) -> datetime:
         delta = timedelta(seconds=seconds, minutes=minutes, hours=hours, days=days)
         return Utils.datetime_now() + delta
@@ -400,11 +388,20 @@ class Utils:
 
     @staticmethod
     def get_otp_code(prefix: str = None, suffix: str = None):
+        # OTP_MODE is set as an env var by settings.set_env_vars() at startup.
+        # deterministic → return TEST_OTP (stable, predictable, required in test env)
+        # random        → generate a cryptographically random 6-digit code (required in prod)
+        otp_mode = os.environ.get("OTP_MODE", "deterministic").lower()
+
+        if otp_mode == "deterministic":
+            test_otp = Utils.get_from_env_fail_if_not_exists(env_key="TEST_OTP")
+            return str(test_otp)
+
         otp = random.randint(100000, 999999)
         if prefix:
             otp = prefix + '-' + str(otp)
         if suffix:
-            otp = otp + suffix
+            otp = str(otp) + suffix
 
         return str(otp)
 

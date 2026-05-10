@@ -41,7 +41,7 @@ class FlutterwaveWebhookHandler(BaseWebhookHandler):
         return IntegratedPlatform.FLUTTERWAVE
 
     async def validate_signature(self, body: bytes, headers: Dict) -> bool:
-        received_signature = headers.get("verif_hash")
+        received_signature = headers.get("verif-hash")
         if not received_signature:
             return False
 
