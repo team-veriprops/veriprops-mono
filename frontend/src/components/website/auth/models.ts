@@ -7,6 +7,16 @@
 
 import { TransactionCurrency } from "@/types/models";
 
+export interface JwtPayload {
+  sub?: string
+  email?: string
+  exp?: number
+  iat?: number
+  role?: string
+  user_type: UserType
+  personas: UserPersona[];
+}
+
 export enum UserType {
   USER = "USER",
   ADMIN = "ADMIN",

@@ -48,7 +48,7 @@ export default function PaymentStep({ verification, onPaid }: Props) {
         window.location.href = res.data.checkoutUrl;
       }
     } catch (e) {
-      setError(getErrorMessage(e));
+      setError(getErrorMessage(e as Error));
     }
   };
 
@@ -60,7 +60,7 @@ export default function PaymentStep({ verification, onPaid }: Props) {
       await paymentService.uploadWireProof(result.payment.id, { proofUrl });
       onPaid(result.payment.id);
     } catch (e) {
-      setError(getErrorMessage(e));
+      setError(getErrorMessage(e as Error));
     } finally {
       setProofSaving(false);
     }

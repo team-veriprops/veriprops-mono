@@ -3,16 +3,41 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CheckCircle2, LogOut, Menu, X } from "lucide-react";
+import {
+  LayoutDashboard,
+  UserCog,
+  ClipboardList,
+  AlertTriangle,
+  MessageSquare,
+  UserRoundKey,
+  Settings,
+  HelpCircle,
+  FileCheck,
+  CreditCard,
+  CheckCircle2, LogOut, Menu, X
+} from "lucide-react";
 import { useLogoutMutation } from "@components/website/auth/libs/useAuthQueries";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
-import { NavItem } from "@components/nav/PortalSidebar";
+import { NavItem } from "@/components/nav/MenuSidebar";
 import { ROUTES } from "@lib/routes";
 
 interface AppShellProps {
   navItems: NavItem[];
   children: React.ReactNode;
 }
+
+const iconMap = {
+  dashboard: LayoutDashboard,
+  userCog: UserCog,
+  clipboardList: ClipboardList,
+  alertTriangle: AlertTriangle,
+  messageSquare: MessageSquare,
+  userRoundKey: UserRoundKey,
+  settings: Settings,
+  helpCircle: HelpCircle,
+  fileCheck: FileCheck,
+  creditCard: CreditCard,
+} as const;
 
 export default function AppShell({ navItems, children }: AppShellProps) {
   const pathname = usePathname();
@@ -48,7 +73,10 @@ export default function AppShell({ navItems, children }: AppShellProps) {
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const Icon = item.icon;
+          const Icon = iconMap[item.icon];
+
+          if (!Icon) return null;
+          
           return (
             <div key={item.href}>
               <Link

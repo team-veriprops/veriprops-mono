@@ -215,18 +215,6 @@ class Utils:
         return datetime.now(timezone.utc)
 
     @staticmethod
-    def datetime_to_db(date: datetime) -> datetime:
-        return date.replace(tzinfo=None)
-
-    @staticmethod
-    def datetime_now_to_db() -> datetime:
-        return Utils.datetime_to_db(Utils.datetime_now())
-
-    @staticmethod
-    def datetime_from_db(date: datetime) -> datetime:
-        return date.replace(tzinfo=timezone.utc)
-
-    @staticmethod
     def datetime_now_plus(*, seconds: int = 0, minutes: int = 0, hours: int = 0, days: int = 0) -> datetime:
         delta = timedelta(seconds=seconds, minutes=minutes, hours=hours, days=days)
         return Utils.datetime_now() + delta

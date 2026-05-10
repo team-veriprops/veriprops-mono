@@ -14,6 +14,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from main.appodus_utils.db.models import UTCDateTime
+
 revision: str = "d3e4f5a6b7c8"
 down_revision: Union[str, None] = "c2d3e4f5a6b7"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -24,8 +26,8 @@ def upgrade() -> None:
     op.create_table(
         "kyc_records",
         sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("date_updated", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("date_created", UTCDateTime, nullable=False),
+        sa.Column("date_updated", UTCDateTime, nullable=True),
         sa.Column("version", sa.Integer, nullable=False, default=1),
         sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         # Domain fields
@@ -39,7 +41,7 @@ def upgrade() -> None:
         sa.Column("failure_reason", sa.Text, nullable=True),
         sa.Column("webhook_payload", sa.JSON, nullable=True),
         sa.Column("reviewed_by_admin_id", sa.String(36), nullable=True),
-        sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("reviewed_at", UTCDateTime, nullable=True),
         sa.Column("admin_decision", sa.String(8), nullable=True),
         sa.Column("admin_notes", sa.Text, nullable=True),
     )

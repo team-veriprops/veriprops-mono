@@ -135,13 +135,14 @@ class OauthUtils:
         *,
         success: bool,
         target_origin: str,
+        state: Optional[str] = None,
         message: Optional[str] = None,
         extra_headers: Optional[dict] = None,
     ) -> HTMLResponse:
         """Minimal HTML returned by the OAuth callback. It posts a single
         `oauth_result` message to the popup opener and self-closes. The parent
         validates `event.origin` and `event.data.type` before acting."""
-        payload = {"type": "oauth_result", "success": bool(success)}
+        payload = {"type": "oauth_result", "success": bool(success), "state": state}
         if message:
             payload["message"] = message
         payload_json = json.dumps(payload)

@@ -112,7 +112,7 @@ export default function LoginContainer() {
       const user = res.data?.user;
       const dest = user
         ? resolvePostAuthRedirect(user, { intent, redirect })
-        : ROUTES.PORTAL.DASHBOARD;
+        : ROUTES.AUTH.LOGIN_SUCCESS_REDIRECT;
       router.push(dest);
     } catch (err) {
       const next: LockoutState = { count: lockout.count + 1 };

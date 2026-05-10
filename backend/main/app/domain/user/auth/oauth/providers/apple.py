@@ -41,7 +41,7 @@ async def _fetch_and_cache_apple_jwks() -> dict:
     return jwks
 
 
-async def _decode_apple_id_token(id_token: str, client_id: str) -> dict:
+async def _decode_apple_id_token(id_token: str, access_token: str, client_id: str) -> dict:
     jwks = await _get_apple_jwks()
     try:
         return jwt.decode(
@@ -49,6 +49,7 @@ async def _decode_apple_id_token(id_token: str, client_id: str) -> dict:
             key=jwks,
             algorithms=["RS256"],
             audience=client_id,
+            access_token=access_token,
             issuer="https://appleid.apple.com",
         )
     except jose_exceptions.JWKError:
@@ -128,9 +129,11 @@ class AppleAuthProvider(ISocialAuthProvider):
             },
         )
         token_response.raise_for_status()
+        tokens = token_response.json()
 
-        id_token = token_response.json()["id_token"]
-        claims = await _decode_apple_id_token(id_token, self._client_id)
+        id_token = tokens["id_token"]
+        access_token = tokens["access_token"]
+        claims = await _decode_apple_id_token(id_token, access_token, self._client_id)
 
         return SocialLoginUserInfoDto(
             provider=self.platform,

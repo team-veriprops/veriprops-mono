@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Dict, List
 
-from kink import di
+from kink import di, inject
 
 from main.app.config.settings import settings
 from main.app.domain.message.models import UpsertMessageDto
@@ -19,7 +19,7 @@ from main.appodus_utils.integrations.messaging.providers.models import IMessageP
 
 logger = di["logger"]
 
-
+@inject
 class MockSmsProvider(IMessageProvider):
     """Test/dev SMS provider — logs and suppresses. Never sends real SMS.
 

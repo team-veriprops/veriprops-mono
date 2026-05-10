@@ -38,6 +38,11 @@ pnpm vitest run -t "test name pattern"
   * Keep route matching explicit and maintainable by clearly defining protected, public, and guest-only route groups.
   * `proxy.ts` should handle **access control only**; page-level authorization and business rules should remain in the application layer.
 
+## Route Definition
+* All routes in the application should be declared in `frontend\src\lib\routes.ts` grouped by their surface.
+* All Portal Menu Sidebars are grouped and maintained here `frontend\src\components\portal\nav.ts`,
+Admin here `frontend\src\components\admin\nav.ts` and Agents here `frontend\src\components\agents\nav.ts`.
+* **Compulsorily**: Make sure all routes in the app is declared and that various Menu sidebars are up to date.
 
 ## Layout
 
@@ -78,7 +83,7 @@ Auth form elements carry stable `data-testid` selectors for Playwright automatio
 | Verify step | `verify-form`, `verify-submit`, `verify-back` |
 | OAuth buttons | `oauth-google`, `oauth-apple`, `oauth-facebook` |
 
-When adding new auth-related forms, follow the same `{flow}-{element}` pattern.
+When adding new forms, follow the same `{flow}-{element}` pattern.
 
 ### Auth hydration
 `ClientWrapperProvider` must **not** return null while waiting for client mount. Do not add `if (!mounted) return null` — it causes a blank render flash and breaks Playwright's `waitForLoadState`. Use `suppressHydrationWarning` on wrapper elements if needed instead.

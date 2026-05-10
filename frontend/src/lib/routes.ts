@@ -9,6 +9,7 @@ export const ROUTES = {
     RESET_PASSWORD: (token: string) => `/auth/reset-password/${token}`,
     SET_PASSWORD: '/auth/set-password',
     OAUTH_CALLBACK: (provider: string) => `/auth/oauth/${provider}/callback`,
+    LOGIN_SUCCESS_REDIRECT: "/auth/login/success-redirect"
   },
 
   ACCOUNT: {
@@ -19,6 +20,7 @@ export const ROUTES = {
   },
 
   PORTAL: {
+    GATE: '/portal',
     DASHBOARD: '/portal/dashboard',
     VERIFICATIONS_NEW: '/portal/verifications/new',
     VERIFICATION_DETAIL: (id: string) => `/portal/verifications/${id}`,
@@ -26,11 +28,13 @@ export const ROUTES = {
     VERIFICATION_PAY: (id: string) => `/portal/verifications/${id}/pay`,
   },
   AGENT: {
+    GATE: '/agents',
     DASHBOARD: '/agents/dashboard',
     ONBOARDING: '/agents/onboarding',
     ONBOARDING_STATUS: '/agents/onboarding/status',
   },
   ADMIN: {
+    GATE: '/admin',
     DASHBOARD: '/admin/dashboard',
     TEAM: '/admin/team',
     AGENT_APPLICATIONS: '/admin/agents/applications',

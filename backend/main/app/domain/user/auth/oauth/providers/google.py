@@ -42,12 +42,13 @@ async def _fetch_and_cache_google_jwks() -> dict:
     return jwks
 
 
-def _decode_with_google_jwks(id_token: str, jwks: dict, client_id: str) -> dict:
+def _decode_with_google_jwks(id_token: str, access_token: str,  jwks: dict, client_id: str) -> dict:
     claims = jwt.decode(
         id_token,
         key=jwks,
         algorithms=["RS256"],
         audience=client_id,
+        access_token=access_token,
         options={"verify_iss": False},
     )
     # Google issues tokens with either short or full HTTPS issuer form.
@@ -56,15 +57,15 @@ def _decode_with_google_jwks(id_token: str, jwks: dict, client_id: str) -> dict:
     return claims
 
 
-async def _verify_google_id_token(id_token: str, client_id: str) -> dict:
+async def _verify_google_id_token(id_token: str, access_token: str, client_id: str) -> dict:
     jwks = await _get_google_jwks()
     try:
-        return _decode_with_google_jwks(id_token, jwks, client_id)
+        return _decode_with_google_jwks(id_token, access_token, jwks, client_id)
     except jose_exceptions.JWKError:
         # Known key not in cached JWKS — provider rotated keys; invalidate and retry once.
         await RedisUtils.delete(_GOOGLE_JWKS_CACHE_KEY)
         jwks = await _fetch_and_cache_google_jwks()
-        return _decode_with_google_jwks(id_token, jwks, client_id)
+        return _decode_with_google_jwks(id_token, access_token, jwks, client_id)
 
 
 @inject
@@ -114,7 +115,8 @@ class GoogleAuthProvider(ISocialAuthProvider):
         tokens = token_response.json()
 
         id_token = tokens["id_token"]
-        claims = await _verify_google_id_token(id_token, self._client_id)
+        access_token = tokens["access_token"]
+        claims = await _verify_google_id_token(id_token, access_token, self._client_id)
         return SocialLoginUserInfoDto(
             provider=self.platform,
             id=claims["sub"],

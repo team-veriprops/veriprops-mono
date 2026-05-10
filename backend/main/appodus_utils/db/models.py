@@ -1,9 +1,9 @@
 import uuid
-from datetime import datetime
-from typing import TypeVar, Optional, Generic, List, Union
+from datetime import datetime, timezone
+from typing import TypeVar, Optional, Generic, List, Union, Any
 
 from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import Column, Boolean, UUID, TIMESTAMP, Integer, String
+from sqlalchemy import Column, Boolean, UUID, TIMESTAMP, Integer, String, DateTime, TypeDecorator
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr, DeclarativeBase
 
@@ -135,6 +135,30 @@ class Object(CamelModel, AutoRepr):
 #         return str_to_datetime(value)
 
 
+class UTCDateTime(TypeDecorator[datetime]):
+    """
+    SQLAlchemy DateTime that assumes DB values are stored in UTC
+    and returns timezone-aware UTC datetime objects.
+    """
+
+    impl = DateTime
+    cache_ok = True  # important for SQLAlchemy 2.x performance
+
+    def process_result_value(
+        self,
+        value: Optional[datetime],
+        dialect: Any,
+    ) -> Optional[datetime]:
+        if value is None:
+            return None
+
+        # Ensure timezone safety
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+
+        # Normalize everything to UTC (safe even if DB sends tz-aware)
+        return value.astimezone(timezone.utc)
+
 class Base(DeclarativeBase):
     pass
 
@@ -162,8 +186,8 @@ class BaseEntity(Base, AutoRepr):
 
     # Optimized timestamp columns
     date_created = Column(
-        TIMESTAMP(timezone=True),
-        default=Utils.datetime_now_to_db,
+        UTCDateTime,
+        default=Utils.datetime_now,
         nullable=False,
         # index=True
     )
@@ -174,7 +198,7 @@ class BaseEntity(Base, AutoRepr):
     )
 
     date_updated = Column(
-        TIMESTAMP(timezone=True),
+        UTCDateTime,
         nullable=True
     )
 
@@ -192,7 +216,7 @@ class BaseEntity(Base, AutoRepr):
     )
 
     date_deleted = Column(
-        TIMESTAMP(timezone=True),
+        UTCDateTime,
         nullable=True
     )
 
@@ -229,7 +253,7 @@ class BaseQueryDto(Object):
     version: Optional[int] = Field(None, description='The current version number of the record')
 
 
-T = TypeVar('T', bound=Union[BaseQueryDto, bool, str, Object])
+T = TypeVar('T', bound=Union[BaseQueryDto, bool, str, dict, Object])
 
 
 class SuccessResponse(Object, Generic[T]):

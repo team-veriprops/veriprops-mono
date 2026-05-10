@@ -6,10 +6,12 @@ from datetime import datetime
 from typing import Optional, List
 
 from pydantic import EmailStr
-from sqlalchemy import Boolean, Column, DateTime, Index, String
+from sqlalchemy import Boolean, Column, Index, String
 
 from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils.db.models import UTCDateTime
+
 
 class UserType(str, enum.Enum):
     USER = "USER"
@@ -19,6 +21,7 @@ class UserType(str, enum.Enum):
 class UserPersona(str, enum.Enum):
     CUSTOMER = "CUSTOMER"
     AGENT = "AGENT"
+
 
 class SecurityEventType(str, enum.Enum):
     LOGIN_SUCCESS = "LOGIN_SUCCESS"
@@ -58,9 +61,9 @@ class DeviceSession(BaseEntity):
     ip_address = Column(String(64), nullable=True)
     approx_location = Column(String(128), nullable=True)
     device_fingerprint = Column(String(128), nullable=True)
-    last_active_at = Column(DateTime(timezone=True), nullable=False)
+    last_active_at = Column(UTCDateTime, nullable=False)
     revoked = Column(Boolean, nullable=False, default=False)
-    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(UTCDateTime, nullable=True)
 
 
 class SecurityEvent(BaseEntity):
@@ -73,7 +76,7 @@ class SecurityEvent(BaseEntity):
     approx_location = Column(String(128), nullable=True)
     device = Column(String(512), nullable=True)
     device_fingerprint = Column(String(128), nullable=True)
-    occurred_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    occurred_at = Column(UTCDateTime, nullable=False, index=True)
 
 
 class PasswordResetToken(BaseEntity):
@@ -81,8 +84,8 @@ class PasswordResetToken(BaseEntity):
 
     user_id = Column(String(36), nullable=False, index=True)
     token_hash = Column(String(128), nullable=False, unique=True, index=True)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    consumed_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(UTCDateTime, nullable=False)
+    consumed_at = Column(UTCDateTime, nullable=True)
 
     __table_args__ = (
         Index("ix_password_reset_user", "user_id"),
@@ -123,7 +126,6 @@ class QueryDeviceSessionDto(BaseQueryDto):
     approx_location: Optional[str] = None
     last_active_at: Optional[datetime] = None
     revoked: Optional[bool] = None
-
 
 
 class DeviceSessionDto(Object):
@@ -205,6 +207,7 @@ class LoginRequestDto(Object):
     email: EmailStr
     password: str
     device_fingerprint: Optional[str] = None
+
 
 class AuthSessionDto(Object):
     access_token_expires_at: datetime

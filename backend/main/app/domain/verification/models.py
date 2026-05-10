@@ -5,6 +5,8 @@ import enum
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from main.appodus_utils.db.models import UTCDateTime
+
 
 class PropertyDocumentType(str, enum.Enum):
     SURVEY_PLAN = "SURVEY_PLAN"
@@ -12,9 +14,10 @@ class PropertyDocumentType(str, enum.Enum):
     PURCHASE_AGREEMENT = "PURCHASE_AGREEMENT"
     OTHER = "OTHER"
 
-from sqlalchemy import Column, DateTime, Index, Integer, String, Text
 
-from main.app.domain.verification.property.models import PropertyDto, PropertyType, PropertySource
+from sqlalchemy import Column, Integer, String, Text
+
+from main.app.domain.verification.property.models import PropertyDto
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
 
 
@@ -52,9 +55,9 @@ class Verification(BaseEntity):
     pricing_snapshot = Column(Text, nullable=True)  # JSON
     consent_snapshot_id = Column(String(36), nullable=True)
     payment_id = Column(String(36), nullable=True)
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
-    paid_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    submitted_at = Column(UTCDateTime, nullable=True)
+    paid_at = Column(UTCDateTime, nullable=True)
+    completed_at = Column(UTCDateTime, nullable=True)
     # Server-side wizard draft.
     draft_payload = Column(Text, nullable=True)  # JSON-encoded
     draft_step = Column(Integer, nullable=False, default=0)

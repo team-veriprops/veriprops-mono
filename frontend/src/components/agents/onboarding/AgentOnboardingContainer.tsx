@@ -60,7 +60,7 @@ export default function AgentOnboardingContainer() {
       await saveTypes.mutateAsync({ types });
       setStep(1);
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 
@@ -70,7 +70,7 @@ export default function AgentOnboardingContainer() {
       const res = await verifyBvn.mutateAsync({ bvn });
       return res.data ?? null;
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
       return null;
     }
   };
@@ -84,7 +84,7 @@ export default function AgentOnboardingContainer() {
       setErrorMessage(null);
       await uploadDocs.mutateAsync(req);
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 
@@ -96,7 +96,7 @@ export default function AgentOnboardingContainer() {
       await saveCredentials.mutateAsync(req);
       setStep(3);
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 
@@ -109,7 +109,7 @@ export default function AgentOnboardingContainer() {
       await submitApp.mutateAsync(req);
       // Status flips to PENDING — the rendered branch above will switch.
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 

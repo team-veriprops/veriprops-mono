@@ -124,17 +124,16 @@ class AccountSecurityMessages(BaseMessageSender):
             ]
         )
 
-    async def send_password_reset_request_message(self, recipient_user_id: MessageRecipientUserId,
-                                                  context_modules:List[MessageContextModule], extra_context: dict[MessageContext, Any]):
-        await self._send_message(
-            recipient_user_id=recipient_user_id,
+
+    async def send_direct_password_reset_request_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any]):
+        await self._send_direct_message(
+            recipient=recipient,
             template=AvailableTemplate.PASSWORD_RESET_REQUEST,
-            context_modules=context_modules,
+            context=context,
             category=MessageCategory.SECURITY,
             default_channels=[
                 MessageChannel.EMAIL
-            ],
-            extra_context=extra_context
+            ]
         )
 
     # async def send_password_updated_message(self, recipient_user_id: MessageRecipientUserId,

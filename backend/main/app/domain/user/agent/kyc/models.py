@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from sqlalchemy import Column, DateTime, Index, Integer, JSON, String, Text
+from sqlalchemy import Column, Index, Integer, JSON, String, Text
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils.db.models import UTCDateTime
 
 
 class KycType(str, enum.Enum):
@@ -20,7 +21,7 @@ class KycType(str, enum.Enum):
 
 
 class KycStatus(str, enum.Enum):
-    PENDING = "PENDING"          # awaiting async webhook result (selfie only)
+    PENDING = "PENDING"  # awaiting async webhook result (selfie only)
     PASSED = "PASSED"
     FAILED = "FAILED"
     UNDER_REVIEW = "UNDER_REVIEW"  # score < KYC_SELFIE_REVIEW_THRESHOLD → admin queue
@@ -39,16 +40,16 @@ class KycRecord(BaseEntity):
 
     application_id = Column(String(36), nullable=False, index=True)
     user_id = Column(String(36), nullable=False, index=True)
-    kyc_type = Column(String(32), nullable=False)       # KycType
+    kyc_type = Column(String(32), nullable=False)  # KycType
     status = Column(String(16), nullable=False, index=True)  # KycStatus
-    provider = Column(String(32), nullable=False)       # "dojah" | "stub"
+    provider = Column(String(32), nullable=False)  # "dojah" | "stub"
     provider_ref = Column(String(128), nullable=True, index=True)  # Dojah job/verification ID
-    score = Column(Integer, nullable=True)              # 0–100; selfie match confidence
+    score = Column(Integer, nullable=True)  # 0–100; selfie match confidence
     failure_reason = Column(Text, nullable=True)
-    webhook_payload = Column(JSON, nullable=True)       # raw webhook body for audit trail
+    webhook_payload = Column(JSON, nullable=True)  # raw webhook body for audit trail
     reviewed_by_admin_id = Column(String(36), nullable=True)
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    admin_decision = Column(String(8), nullable=True)   # AdminKycDecision
+    reviewed_at = Column(UTCDateTime, nullable=True)
+    admin_decision = Column(String(8), nullable=True)  # AdminKycDecision
     admin_notes = Column(Text, nullable=True)
 
     __table_args__ = (

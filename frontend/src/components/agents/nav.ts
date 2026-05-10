@@ -1,8 +1,6 @@
-import { NavItem } from "@components/nav/PortalSidebar";
-import { LayoutDashboard, ClipboardList, UserCog } from "lucide-react";
+import { ROUTES } from "@/lib/routes";
+import { NavItem } from "@/components/nav/MenuSidebar";
 
 export const agentNavItems: NavItem[] = [
-  { title: "Dashboard", href: "/agents/dashboard", icon: LayoutDashboard, has_separator_after: false },
-  { title: "Onboarding", href: "/agents/onboarding", icon: ClipboardList, has_separator_after: true },
-  { title: "Account", href: "/account", icon: UserCog, has_separator_after: false },
+  { title: "Dashboard", href: ROUTES.AGENT.DASHBOARD, icon: "dashboard", has_separator_after: false },
 ];

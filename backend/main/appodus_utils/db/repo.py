@@ -89,6 +89,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
         db_obj = self._model(**obj_in_data)
         db_obj.id = self._ensure_uuid(db_obj.id)
         db_obj.version = 1
+        db_obj.date_created = Utils.datetime_now()
         self._session.add(db_obj)
         return db_obj
 
@@ -143,6 +144,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
             new_version = old_version + 1
 
             db_obj.version = new_version
+            db_obj.date_updated = Utils.datetime_now()
             self._session.add(db_obj)
         return self._db_utils.build_row_response(db_obj)
 

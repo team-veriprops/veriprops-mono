@@ -60,15 +60,15 @@ New domains must be wired into the **domain package hierarchy**.
 * Domains that expose HTTP endpoints should define a `controller.py` router.
 * Child domain routers must be mounted in their **parent domain router**.
 * Root parent domain routers must be mounted in `main/app/domain/__init__.py`.
-* Domains without HTTP endpoints do **not** need a router, but must still be wired into the package hierarchy.
+* Domains without HTTP endpoints do **not** need a router, but must still be wired into the package hierarchy. However, domains with router mounted in their parent domain router don't need any further wiring.
 
 ### Non-negotiable rule
 
 A domain is **not considered complete** until:
 
-* its package is created,
+* its package is created.
 * it is exposed through the parent domain package hierarchy,
-* and, where applicable, its router is mounted in the appropriate parent router (or root router in `main/app/domain/__init__.py`).
+* and, where applicable, its router is mounted in the appropriate parent router (or root router in `main/app/domain/__init__.py`); but not both.
 
 
 ### Database conventions:
@@ -143,6 +143,9 @@ Provider-agnostic interfaces in [appodus_utils/integrations/](main/appodus_utils
 | Push | Firebase, Web Push |
 
 Webhook receivers live under `appodus_utils/integrations/.../webhook.py` and are mounted via the shared `webhook_router`.
+
+## Redis
+We don't use Redis directly, rather we rely on `RedisUtils` in `backend/main/appodus_utils/db/redis_utils.py`. This uses Redis when available, but fallback to an SQL implementation when not available.
 
 ## Tests
 

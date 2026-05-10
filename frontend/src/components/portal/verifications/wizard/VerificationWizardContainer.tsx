@@ -82,7 +82,7 @@ export default function VerificationWizardContainer() {
       });
       setStep(1);
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 
@@ -92,7 +92,7 @@ export default function VerificationWizardContainer() {
       await selectTier.mutateAsync({ tier, currency });
       setStep(2);
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 
@@ -104,7 +104,7 @@ export default function VerificationWizardContainer() {
       await submitVerification.mutateAsync(consents);
       setStep(3);
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(getErrorMessage(e as Error));
     }
   };
 

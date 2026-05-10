@@ -7,7 +7,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any, Dict, List
 
-from kink import di
+from kink import di, inject
 
 from main.app.config.settings import settings
 from main.app.domain.message.models import UpsertMessageDto
@@ -24,6 +24,7 @@ from main.appodus_utils import Utils
 logger = di["logger"]
 
 
+@inject
 class SmtpEmailProvider(IMessageProvider):
     """Local SMTP email provider for dev/test environments (Mailpit).
 

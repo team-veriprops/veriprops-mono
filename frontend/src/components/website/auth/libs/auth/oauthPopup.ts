@@ -35,7 +35,7 @@ export interface OauthPopupOptions {
   onError: (err: { code: "popup_blocked" | "timeout" | "provider"; message?: string; authorizationUrl?: string }) => void;
 }
 
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5mins
 const DEFAULT_POLL_MS = 500;
 const POPUP_NAME = "veriprops_oauth";
 
@@ -69,6 +69,13 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let closedPollId: ReturnType<typeof setInterval> | null = null;
   let lastAuthorizationUrl: string | undefined;
+  let expectedState: string | null;
+
+  // TODO: fetch this values dynamically from the backend
+  const allowedOrigins = new Set([
+  "http://localhost:8000",
+  "https://auth.veriprops.com"
+]);
 
   const cleanup = () => {
     window.removeEventListener("message", onMessage);
@@ -80,10 +87,13 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
   };
 
   const onMessage = (event: MessageEvent) => {
+    console.log("event: ", event)
     if (resolved) return;
-    if (event.origin !== window.location.origin) return;
+    if (!allowedOrigins.has(event.origin)) return;
+    
     const data = event.data as unknown;
     if (!isOauthResult(data)) return;
+    if (data.state !== expectedState) return;
     resolved = true;
     cleanup();
     if (data.success) {
@@ -146,8 +156,11 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
         return;
       }
       lastAuthorizationUrl = url;
+      const parsedUrl = new URL(lastAuthorizationUrl);
+      expectedState = parsedUrl.searchParams.get("state");
       try {
-        popup.location.href = url;
+        popup.location.replace(url);
+        popup.focus();
       } catch {
         // Some browsers throw if the popup was already navigated away.
         if (!resolved) {
@@ -183,7 +196,7 @@ function popupFeatures(width: number, height: number): string {
   return `popup=yes,width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes,noopener=no,noreferrer=no`;
 }
 
-function isOauthResult(data: unknown): data is { type: "oauth_result"; success: boolean; message?: string } {
+function isOauthResult(data: unknown): data is { type: "oauth_result"; success: boolean; state?: string, message?: string } {
   if (!data || typeof data !== "object") return false;
   const d = data as Record<string, unknown>;
   return d.type === "oauth_result" && typeof d.success === "boolean";
