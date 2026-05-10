@@ -153,4 +153,3 @@ We don't use Redis directly, rather we rely on `RedisUtils` in `backend/main/app
 - `test/e2e/` — integration tests (e.g. messaging service) — require external creds.
 - `test/utils/` — `mock_circuit_breaker.py`, shared fixtures.
 - `pytest.ini` sets `asyncio_mode = auto`, so async tests need no decorator.
-
