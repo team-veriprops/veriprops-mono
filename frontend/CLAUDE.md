@@ -64,6 +64,16 @@ Admin here `frontend\src\components\admin\nav.ts` and Agents here `frontend\src\
 
 Defined in both [tsconfig.json](tsconfig.json) and [vitest.config.ts](vitest.config.ts) — keep them in sync. Available: `@/*`, `@app/*`, `@components/*`, `@3rdparty/*`, `@lib/*`, `@hooks/*`, `@stores/*`, `@styles/*`, `@icons/*`, `@app-types/*`, `@context/*`, `@assets/*`.
 
+## FORM STABILITY (React Hook Form)
+
+Ensure:
+- all forms have stable validation states
+- submit button disabled during submission
+- no duplicate submissions allowed
+- errors are consistently rendered
+
+Ensure Zod validation errors are stable and testable.
+
 ## Testing
 
 Vitest + jsdom. Tests sit beside the module they cover (`*.test.ts(x)`) — see [components/ui/schemas.test.ts](src/components/ui/schemas.test.ts), [lib/routes.test.ts](src/lib/routes.test.ts), [components/website/home.data.test.ts](src/components/website/home.data.test.ts). Vitest `globals: false` — import `describe`, `it`, `expect` explicitly.
@@ -88,3 +98,50 @@ When adding new forms, follow the same `{flow}-{element}` pattern.
 ### Auth hydration
 `ClientWrapperProvider` must **not** return null while waiting for client mount. Do not add `if (!mounted) return null` — it causes a blank render flash and breaks Playwright's `waitForLoadState`. Use `suppressHydrationWarning` on wrapper elements if needed instead.
 
+
+## Cursor & Interactive Element UX Rules
+
+All interactive UI elements MUST provide clear visual affordance that they are actionable.
+
+### Required Hover + Cursor Behavior
+
+Apply appropriate cursor styles consistently across the application:
+
+- Buttons → `cursor: pointer`
+- Links → `cursor: pointer`
+- Clickable cards/containers → `cursor: pointer`
+- Menu items → `cursor: pointer`
+- Dropdown triggers → `cursor: pointer`
+- Tabs → `cursor: pointer`
+- Pagination controls → `cursor: pointer`
+- Icons with click handlers → `cursor: pointer`
+- Drag handles → `cursor: grab` / `grabbing`
+- Disabled interactive elements → `cursor: not-allowed`
+- Loading states → `cursor: wait` where appropriate
+- Text inputs/textareas → `cursor: text`
+
+### Interaction Consistency
+
+For every clickable or interactive element:
+
+- Ensure hover states exist
+- Ensure focus states exist
+- Ensure keyboard accessibility exists
+- Ensure transition feedback exists where appropriate
+- Never leave clickable elements with default cursor behavior unless intentionally non-interactive
+
+### Accessibility Expectations
+
+- Hover state must visibly communicate interactivity
+- Focus-visible styles are mandatory
+- Interactive affordances should work for mouse, keyboard, and touch users
+- Do not rely solely on color changes for interaction feedback
+
+### PR / Review Expectations
+
+Before completing any UI task, verify:
+
+- No clickable element lacks proper cursor behavior
+- No interactive element appears non-interactive
+- Disabled states are visually distinct
+- Mobile and desktop interactions remain consistent
