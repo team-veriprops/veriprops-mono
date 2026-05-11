@@ -10,13 +10,13 @@ last_updated: 2026-05-07
 
 ---
 
-**status:** S13–S16 complete — S15/S17 were already done
+**status:** S18–S27 complete — Phases 6–7 fully delivered
 
-**next_slice:** S18 (Phase 6 — Admin verification control panel)
+**next_slice:** S28 (Phase 8 — Report generation)
 
 **current_slice:** —
 
-**completion %:** 58% (81 done / 140 total — R5.2, R5.9, R5.15 closed; S13 added listing parser + 22 tests; S16 wired real payment gateways + 17 tests; 410 backend tests passing)
+**completion %:** 79% (S0–S27 done / 140 total; 424 backend + 221 frontend tests passing)
 
 ---
 
@@ -44,13 +44,24 @@ last_updated: 2026-05-07
 | S16 | Payment gateway integration (R5.9, R5.15) — replaced stub initiate() with real gateway calls: CARD→Flutterwave /payments (returns checkout_url + stores provider_ref), BANK_TRANSFER→Paystack /charge virtual account (returns bank/account/expiry instructions + stores provider_ref), WIRE→settings.WIRE_* static values; added WIRE_BENEFICIARY_BANK/SWIFT/IBAN/BENEFICIARY settings; fixed Paystack webhook handle_charge_success() (was calling broken _transaction_service); fixed Flutterwave webhook verif-hash header (was verif_hash); mounted webhook_router in domain/__init__.py; 17 payment service unit tests; 410 backend tests passing, 0 regressions | 2026-05-07 |
 | S17 | Post-payment portal — already complete (confirmed/page.tsx shows VID + ETA + SLA countdown + "Track" CTA; VerificationWizardContainer redirects to confirmed after onPaid()); no changes | 2026-05-07 |
 
+| S18 | Admin verification queue + detail — `verification/admin/` backend domain (list, detail, pause/resume/cancel/fail/delay/notes/release-to-pool); `VerificationQueue.tsx`, `VerificationDetail.tsx`, `AdminActionPanel.tsx`, `NotesList.tsx`, `VerificationStatusBadge.tsx`; admin nav + routes | 2026-05-11 |
+| S19 | Task schema + competitive pool assignment — `verification/task/` + `evidence/` backend domains; `Task` ORM + OL claim (`UPDATE WHERE status=PENDING`); `TaskService` with state derivation; `admin-service.ts` + `useAdminQueries.ts` task hooks; `AssignmentModal.tsx` | 2026-05-11 |
+| S20 | S20 audit — confirmed persona elevation on approve; cursor rules verified; `agent-service.test.ts` coverage | 2026-05-11 |
+| S21 | Agent dashboard + accept/decline — agent task routes (available/active/completed/accept/decline); `AvailableJobsList.tsx`, `ActiveTasksList.tsx`, `CompletedTasksSummary.tsx`; agent nav updated; no-show + pool timeout APScheduler jobs | 2026-05-11 |
+| S22 | Field agent submission — evidence service (GPS validation Nigeria bbox, ≥5 photo gate); `FieldAgentForm.tsx`; `EvidenceUploadSection.tsx`, `DeclarationSection.tsx`, `DraftSaveButton.tsx` | 2026-05-11 |
+| S23 | Surveyor submission — `SurveyorForm.tsx`; boundary coords + survey plan validation | 2026-05-11 |
+| S24 | Registry submission — `RegistryAgentForm.tsx`; registry search ref + title doc + ownership chain validation | 2026-05-11 |
+| S25 | Lawyer submission + dependency gate — `LawyerForm.tsx` with locked overlay; ≥200-char legal opinion; sibling SUBMITTED/APPROVED gate server-side | 2026-05-11 |
+| S26 | Offline + autosave — `sw.js` Background Sync service worker; `offlineQueue.ts` IndexedDB wrapper (drafts + upload queue); `SyncIndicator.tsx` (offline/syncing/synced banner); `SwRegistrar.tsx` client component; SW registered in agents layout | 2026-05-11 |
+| S27 | Escalation + trust elevation — `verification/escalation/` backend domain (models/repo/service); `EscalationModal.tsx`; SSE publish to `admin:escalations`; trust elevation on first task submission | 2026-05-11 |
+
 ## Current Slice
 
-S13–S17 complete. Phase 5 (Customer submission + payment) fully demoable end-to-end.
+S18–S27 complete. Phases 6–7 (Admin verification control panel + Agent task execution) fully demoable end-to-end.
 
 ## Pending Slices
 
-S18 → … (Phase 6 — Admin verification control panel) per [execution-plan.md](execution-plan.md).
+S28 → … (Phase 8 — Report generation + trust scoring) per [execution-plan.md](execution-plan.md).
 
 ---
 

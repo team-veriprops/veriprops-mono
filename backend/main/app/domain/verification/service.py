@@ -303,9 +303,29 @@ class VerificationService:
             from_state=from_state,
             to_state=target.value,
         )
+        if target == VerificationStatus.PAID:
+            await self._auto_create_tasks(verification_id, row.tier)
         return await self._to_dto(await self._repo.get_model(verification_id))
 
     # ── Helpers ───────────────────────────────────────────────────
+
+    async def _auto_create_tasks(self, verification_id: str, tier: str) -> None:
+        """Create tasks for a newly-paid verification.
+
+        Checks admin_config to decide whether to release immediately (auto-assignment
+        default ON) or hold for manual admin assignment.
+        """
+        try:
+            from main.app.domain.admin_config.service import AdminConfigService
+            from main.app.domain.verification.task.service import TaskService
+            config_svc: AdminConfigService = di[AdminConfigService]
+            task_svc: TaskService = di[TaskService]
+            release = await config_svc.get_bool("auto_assignment_enabled", fallback=True)
+            await task_svc.create_tasks_for_tier(
+                verification_id, tier, release_immediately=release,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Failed to auto-create tasks for {verification_id}: {exc}")
 
     async def _materialise_property(self, payload: Dict[str, Any]) -> str:
         try:

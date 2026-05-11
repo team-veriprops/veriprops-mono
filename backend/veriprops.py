@@ -47,9 +47,18 @@ async def lifespan_event(app: FastAPI):
     # Seed data
     await data_seeder.run_data_seed()
 
+    # Start task-monitor background jobs (pool timeout + no-show alerts)
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from main.app.jobs.task_monitor import check_no_show_timeouts, check_pool_timeouts
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(check_pool_timeouts, "interval", minutes=15, id="pool_timeout_check")
+    scheduler.add_job(check_no_show_timeouts, "interval", minutes=15, id="no_show_check")
+    scheduler.start()
+
     logger.debug("Done running lifespan")
     yield
     logger.debug("Shutting down veriprops...")
+    scheduler.shutdown(wait=False)
     await client_state_manager.close_clients()
     logger.debug("Veriprops is shutdown!")
 

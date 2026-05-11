@@ -196,25 +196,26 @@ class TestVerificationStateMachine:
 # Terminal: APPROVED
 
 TASK_VALID: list[tuple[str, str]] = [
-    # main path
+    # main path (admin-assign path)
     ("PENDING", "ASSIGNED"),
     ("ASSIGNED", "ACCEPTED"),
     ("ACCEPTED", "IN_PROGRESS"),
     ("IN_PROGRESS", "SUBMITTED"),
     ("SUBMITTED", "APPROVED"),
+    # pool path: agent claims directly from open pool
+    ("PENDING", "ACCEPTED"),      # competitive first-come-first-served claim
     # detours
     ("ASSIGNED", "PENDING"),      # decline / no-show timeout → back to pool
+    ("ACCEPTED", "PENDING"),      # agent declines after accepting → back to pool
     ("SUBMITTED", "REJECTED"),    # admin rejects
     ("REJECTED", "IN_PROGRESS"),  # agent reworks
 ]
 
 TASK_INVALID: list[tuple[str, str]] = [
-    ("PENDING", "ACCEPTED"),       # must go via ASSIGNED first
     ("PENDING", "IN_PROGRESS"),
     ("PENDING", "SUBMITTED"),
     ("ASSIGNED", "IN_PROGRESS"),   # must ACCEPT first
     ("ASSIGNED", "SUBMITTED"),
-    ("ACCEPTED", "PENDING"),       # cannot un-accept once accepted
     ("ACCEPTED", "SUBMITTED"),     # must pass through IN_PROGRESS
     ("IN_PROGRESS", "PENDING"),
     ("IN_PROGRESS", "ASSIGNED"),

@@ -85,9 +85,11 @@ verification_state_machine = StateMachine(
 # Terminal:   APPROVED (task is done; no further moves).
 
 TASK_TRANSITIONS: Dict[str, Set[str]] = {
-    "PENDING": {"ASSIGNED"},
+    # Pool path: agent accepts from the open pool (PENDING → ACCEPTED directly).
+    # Admin-assign path: admin assigns to a specific agent (PENDING → ASSIGNED → ACCEPTED).
+    "PENDING": {"ASSIGNED", "ACCEPTED"},
     "ASSIGNED": {"ACCEPTED", "PENDING"},
-    "ACCEPTED": {"IN_PROGRESS"},
+    "ACCEPTED": {"IN_PROGRESS", "PENDING"},  # PENDING = agent declines after accepting
     "IN_PROGRESS": {"SUBMITTED"},
     "SUBMITTED": {"APPROVED", "REJECTED"},
     "REJECTED": {"IN_PROGRESS"},

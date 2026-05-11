@@ -132,3 +132,111 @@ describe("AgentService", () => {
     expect(result.data?.failureReason).toBe("BVN not found in database");
   });
 });
+
+// ── Task methods ──────────────────────────────────────────────────────────────
+
+describe("AgentService — tasks", () => {
+  let http: ReturnType<typeof makeHttp>;
+  let service: AgentService;
+
+  beforeEach(() => {
+    http = makeHttp();
+    service = new AgentService(http.client);
+  });
+
+  it("getAvailableTasks calls GET /agents/tasks/available?role=FIELD", async () => {
+    http.mock.get.mockResolvedValue({ data: [] });
+
+    await service.getAvailableTasks("FIELD");
+
+    expect(http.mock.get).toHaveBeenCalledWith("/agents/tasks/available?role=FIELD");
+  });
+
+  it("getAvailableTasks appends state param when provided", async () => {
+    http.mock.get.mockResolvedValue({ data: [] });
+
+    await service.getAvailableTasks("SURVEYOR", "LAGOS");
+
+    const url = http.mock.get.mock.calls[0][0] as string;
+    expect(url).toContain("role=SURVEYOR");
+    expect(url).toContain("state=LAGOS");
+  });
+
+  it("getActiveTasks calls GET /agents/tasks/active", async () => {
+    http.mock.get.mockResolvedValue({ data: [] });
+
+    await service.getActiveTasks();
+
+    expect(http.mock.get).toHaveBeenCalledWith("/agents/tasks/active");
+  });
+
+  it("getCompletedTasks calls GET /agents/tasks/completed", async () => {
+    http.mock.get.mockResolvedValue({ data: [] });
+
+    await service.getCompletedTasks();
+
+    expect(http.mock.get).toHaveBeenCalledWith("/agents/tasks/completed");
+  });
+
+  it("getTask calls GET /agents/tasks/{taskId}", async () => {
+    http.mock.get.mockResolvedValue({ data: {} });
+
+    await service.getTask("task-abc");
+
+    expect(http.mock.get).toHaveBeenCalledWith("/agents/tasks/task-abc");
+  });
+
+  it("acceptTask posts to /agents/tasks/{taskId}/accept", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.acceptTask("task-abc");
+
+    expect(http.mock.post).toHaveBeenCalledWith("/agents/tasks/task-abc/accept", {});
+  });
+
+  it("declineTask posts to /agents/tasks/{taskId}/decline", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.declineTask("task-abc");
+
+    expect(http.mock.post).toHaveBeenCalledWith("/agents/tasks/task-abc/decline", {});
+  });
+
+  it("saveDraft puts payload to /agents/tasks/{taskId}/draft", async () => {
+    http.mock.put.mockResolvedValue({ data: {} });
+
+    await service.saveDraft("task-abc", { conditions: "good condition" });
+
+    expect(http.mock.put).toHaveBeenCalledWith("/agents/tasks/task-abc/draft", {
+      conditions: "good condition",
+    });
+  });
+
+  it("submitTask posts payload to /agents/tasks/{taskId}/submit", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.submitTask("task-abc", {
+      access_confirmed: true,
+      declaration_signed: true,
+    });
+
+    expect(http.mock.post).toHaveBeenCalledWith("/agents/tasks/task-abc/submit", {
+      access_confirmed: true,
+      declaration_signed: true,
+    });
+  });
+
+  it("reportEscalation posts category and description to /agents/tasks/{taskId}/escalation", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.reportEscalation("task-abc", {
+      category: "INACCESSIBLE",
+      description: "Gate is locked",
+    });
+
+    expect(http.mock.post).toHaveBeenCalledWith("/agents/tasks/task-abc/escalation", {
+      category: "INACCESSIBLE",
+      description: "Gate is locked",
+    });
+  });
+});

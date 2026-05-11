@@ -80,11 +80,12 @@ export default function AgentApplicationsQueue() {
             key={s}
             type="button"
             onClick={() => setFilter(s)}
-            className="text-xs font-medium px-3 py-1.5 rounded-md"
+            className="text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
             style={{
               backgroundColor: filter === s ? "white" : "transparent",
               color: filter === s ? "var(--brand-navy)" : "var(--brand-on-surface-variant)",
               boxShadow: filter === s ? "0px 4px 12px rgba(0,13,34,0.06)" : undefined,
+              cursor: "pointer",
             }}
           >
             {s}

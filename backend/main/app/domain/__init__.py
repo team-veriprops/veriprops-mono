@@ -5,14 +5,23 @@ from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
 from main.appodus_utils.config.settings import Environment
 # Importing these modules registers their ORM models with SQLAlchemy's metadata
 from main.app.domain.audit import models as _audit_models  # noqa: F401
+from main.app.domain.admin_config import models as _admin_config_models  # noqa: F401
+from main.app.domain.admin_config.controller import admin_config_router
 from main.app.domain.user.controller import user_router
 from main.app.domain.verification import models as _verification_models  # noqa: F401
 from main.app.domain.verification.controller import verification_router
+from main.app.domain.verification.admin.controller import admin_verification_router
+from main.app.domain.verification.task import models as _task_models  # noqa: F401
+from main.app.domain.verification.task.controller import admin_task_router, agent_task_router
 from main.app.domain.payment import models as _payment_models  # noqa: F401
 from main.app.domain.payment.controller import payment_router
 from main.appodus_utils.integrations.webhook import webhook_router
 
 router = APIRouter()
+router.include_router(admin_config_router)
+router.include_router(admin_verification_router)
+router.include_router(admin_task_router)
+router.include_router(agent_task_router)
 router.include_router(user_router)
 router.include_router(verification_router)
 router.include_router(payment_router)

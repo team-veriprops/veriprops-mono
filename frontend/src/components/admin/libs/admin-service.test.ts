@@ -129,3 +129,178 @@ describe("AdminService — invitations", () => {
     expect(res.data?.branch).toBe("ALREADY_ADMIN");
   });
 });
+
+// ── Verification queue ────────────────────────────────────────────────────────
+
+describe("AdminService — verifications", () => {
+  let http: ReturnType<typeof makeHttp>;
+  let service: AdminService;
+
+  beforeEach(() => {
+    http = makeHttp();
+    service = new AdminService(http.client);
+  });
+
+  it("listVerifications calls GET /admin/verifications with no params when none provided", async () => {
+    http.mock.get.mockResolvedValue({ items: [], meta: {} });
+
+    await service.listVerifications();
+
+    expect(http.mock.get).toHaveBeenCalledWith("/admin/verifications");
+  });
+
+  it("listVerifications appends status and tier filters", async () => {
+    http.mock.get.mockResolvedValue({ items: [], meta: {} });
+
+    await service.listVerifications({ status: "PAID", tier: "STANDARD", page: 2 });
+
+    const url = http.mock.get.mock.calls[0][0] as string;
+    expect(url).toContain("status=PAID");
+    expect(url).toContain("tier=STANDARD");
+    expect(url).toContain("page=2");
+  });
+
+  it("getVerification calls GET /admin/verifications/{vid}", async () => {
+    http.mock.get.mockResolvedValue({ data: {} });
+
+    await service.getVerification("VP-2026-ABC123");
+
+    expect(http.mock.get).toHaveBeenCalledWith("/admin/verifications/VP-2026-ABC123");
+  });
+
+  it("pauseVerification posts to /admin/verifications/{vid}/pause", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.pauseVerification("VP-2026-001");
+
+    expect(http.mock.post).toHaveBeenCalledWith("/admin/verifications/VP-2026-001/pause", {});
+  });
+
+  it("resumeVerification posts to /admin/verifications/{vid}/resume", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.resumeVerification("VP-2026-001");
+
+    expect(http.mock.post).toHaveBeenCalledWith("/admin/verifications/VP-2026-001/resume", {});
+  });
+
+  it("cancelVerification posts to /admin/verifications/{vid}/cancel", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.cancelVerification("VP-2026-001");
+
+    expect(http.mock.post).toHaveBeenCalledWith("/admin/verifications/VP-2026-001/cancel", {});
+  });
+
+  it("failVerification posts reason to /admin/verifications/{vid}/fail", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.failVerification("VP-2026-001", "Invalid documents");
+
+    expect(http.mock.post).toHaveBeenCalledWith("/admin/verifications/VP-2026-001/fail", {
+      reason: "Invalid documents",
+    });
+  });
+
+  it("addNote posts content/tags/pinned to /admin/verifications/{vid}/notes", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.addNote("VP-2026-001", { content: "Flagged for review", tags: ["urgent"], pinned: true });
+
+    expect(http.mock.post).toHaveBeenCalledWith("/admin/verifications/VP-2026-001/notes", {
+      content: "Flagged for review",
+      tags: ["urgent"],
+      pinned: true,
+    });
+  });
+
+  it("releaseToPool posts to /admin/verifications/{vid}/release-to-pool", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.releaseToPool("VP-2026-001");
+
+    expect(http.mock.post).toHaveBeenCalledWith("/admin/verifications/VP-2026-001/release-to-pool", {});
+  });
+});
+
+// ── Task assignment ───────────────────────────────────────────────────────────
+
+describe("AdminService — tasks", () => {
+  let http: ReturnType<typeof makeHttp>;
+  let service: AdminService;
+
+  beforeEach(() => {
+    http = makeHttp();
+    service = new AdminService(http.client);
+  });
+
+  it("listTasksForVerification calls GET /admin/verifications/{vid}/tasks", async () => {
+    http.mock.get.mockResolvedValue({ data: [] });
+
+    await service.listTasksForVerification("VP-2026-001");
+
+    expect(http.mock.get).toHaveBeenCalledWith("/admin/verifications/VP-2026-001/tasks");
+  });
+
+  it("assignTask posts agentId to /admin/verifications/{vid}/tasks/{role}/assign", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.assignTask("VP-2026-001", "FIELD", "agent-abc");
+
+    expect(http.mock.post).toHaveBeenCalledWith(
+      "/admin/verifications/VP-2026-001/tasks/FIELD/assign",
+      { agentId: "agent-abc" },
+    );
+  });
+
+  it("reassignTask posts agentId and note to /admin/tasks/{taskId}/reassign", async () => {
+    http.mock.post.mockResolvedValue({ data: {} });
+
+    await service.reassignTask("task-001", "agent-xyz", "Unavailable agent replaced");
+
+    expect(http.mock.post).toHaveBeenCalledWith("/admin/tasks/task-001/reassign", {
+      agentId: "agent-xyz",
+      note: "Unavailable agent replaced",
+    });
+  });
+
+  it("listAvailableAgents calls GET /admin/agents/available with role filter", async () => {
+    http.mock.get.mockResolvedValue({ data: [] });
+
+    await service.listAvailableAgents({ role: "FIELD", state: "LAGOS" });
+
+    const url = http.mock.get.mock.calls[0][0] as string;
+    expect(url).toContain("role=FIELD");
+    expect(url).toContain("state=LAGOS");
+  });
+});
+
+// ── System config ─────────────────────────────────────────────────────────────
+
+describe("AdminService — config", () => {
+  let http: ReturnType<typeof makeHttp>;
+  let service: AdminService;
+
+  beforeEach(() => {
+    http = makeHttp();
+    service = new AdminService(http.client);
+  });
+
+  it("listConfig calls GET /admin/config", async () => {
+    http.mock.get.mockResolvedValue({ data: [] });
+
+    await service.listConfig();
+
+    expect(http.mock.get).toHaveBeenCalledWith("/admin/config");
+  });
+
+  it("setConfig puts value to /admin/config/{key}", async () => {
+    http.mock.put.mockResolvedValue({ data: {} });
+
+    await service.setConfig("no_show_timeout_hours", "8");
+
+    expect(http.mock.put).toHaveBeenCalledWith("/admin/config/no_show_timeout_hours", {
+      value: "8",
+    });
+  });
+});

@@ -32,6 +32,7 @@ export const ROUTES = {
     DASHBOARD: '/agents/dashboard',
     ONBOARDING: '/agents/onboarding',
     ONBOARDING_STATUS: '/agents/onboarding/status',
+    TASK_DETAIL: (taskId: string) => `/agents/tasks/${taskId}`,
   },
   ADMIN: {
     GATE: '/admin',
@@ -39,6 +40,9 @@ export const ROUTES = {
     TEAM: '/admin/team',
     AGENT_APPLICATIONS: '/admin/agents/applications',
     INVITE_ACCEPT: (token: string) => `/auth/admin-invite/${token}`,
+    VERIFICATIONS: '/admin/verifications',
+    VERIFICATION_DETAIL: (vid: string) => `/admin/verifications/${vid}`,
+    CONFIG: '/admin/config',
   },
 
   ABOUT: '/about',

@@ -99,49 +99,6 @@ When adding new forms, follow the same `{flow}-{element}` pattern.
 `ClientWrapperProvider` must **not** return null while waiting for client mount. Do not add `if (!mounted) return null` — it causes a blank render flash and breaks Playwright's `waitForLoadState`. Use `suppressHydrationWarning` on wrapper elements if needed instead.
 
 
-## Cursor & Interactive Element UX Rules
+## UX & Interaction Standards
 
-All interactive UI elements MUST provide clear visual affordance that they are actionable.
-
-### Required Hover + Cursor Behavior
-
-Apply appropriate cursor styles consistently across the application:
-
-- Buttons → `cursor: pointer`
-- Links → `cursor: pointer`
-- Clickable cards/containers → `cursor: pointer`
-- Menu items → `cursor: pointer`
-- Dropdown triggers → `cursor: pointer`
-- Tabs → `cursor: pointer`
-- Pagination controls → `cursor: pointer`
-- Icons with click handlers → `cursor: pointer`
-- Drag handles → `cursor: grab` / `grabbing`
-- Disabled interactive elements → `cursor: not-allowed`
-- Loading states → `cursor: wait` where appropriate
-- Text inputs/textareas → `cursor: text`
-
-### Interaction Consistency
-
-For every clickable or interactive element:
-
-- Ensure hover states exist
-- Ensure focus states exist
-- Ensure keyboard accessibility exists
-- Ensure transition feedback exists where appropriate
-- Never leave clickable elements with default cursor behavior unless intentionally non-interactive
-
-### Accessibility Expectations
-
-- Hover state must visibly communicate interactivity
-- Focus-visible styles are mandatory
-- Interactive affordances should work for mouse, keyboard, and touch users
-- Do not rely solely on color changes for interaction feedback
-
-### PR / Review Expectations
-
-Before completing any UI task, verify:
-
-- No clickable element lacks proper cursor behavior
-- No interactive element appears non-interactive
-- Disabled states are visually distinct
-- Mobile and desktop interactions remain consistent
+See [.claude/ux-standards.md](.claude/ux-standards.md) for tooltip rules, feedback states, form validation, empty states, cursor behavior, accessibility requirements, and PR checklist.
