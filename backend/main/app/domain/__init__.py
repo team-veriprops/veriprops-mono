@@ -13,6 +13,12 @@ from main.app.domain.verification.controller import verification_router
 from main.app.domain.verification.admin.controller import admin_verification_router
 from main.app.domain.verification.task import models as _task_models  # noqa: F401
 from main.app.domain.verification.task.controller import admin_task_router, agent_task_router
+from main.app.domain.verification.task.review.controller import task_review_router
+from main.app.domain.verification.conflict.controller import conflict_router
+from main.app.domain.verification.scoring.controller import scoring_router
+from main.app.domain.verification.release.controller import release_router
+from main.app.domain.verification.portal.controller import portal_router
+from main.app.domain.verification.portal.stream import stream_router
 from main.app.domain.payment import models as _payment_models  # noqa: F401
 from main.app.domain.payment.controller import payment_router
 from main.appodus_utils.integrations.webhook import webhook_router
@@ -21,6 +27,12 @@ router = APIRouter()
 router.include_router(admin_config_router)
 router.include_router(admin_verification_router)
 router.include_router(admin_task_router)
+router.include_router(task_review_router)
+router.include_router(conflict_router)
+router.include_router(scoring_router)
+router.include_router(release_router)
+router.include_router(portal_router)
+router.include_router(stream_router)
 router.include_router(agent_task_router)
 router.include_router(user_router)
 router.include_router(verification_router)

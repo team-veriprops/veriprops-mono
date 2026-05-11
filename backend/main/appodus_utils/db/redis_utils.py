@@ -53,6 +53,17 @@ class RedisUtils:
             print(exc)
 
     @staticmethod
+    async def publish(channel: str, message: Any) -> None:
+        """Publish a message to a Redis pub/sub channel (best-effort; no-op on failure)."""
+        import json
+        try:
+            if redis:
+                payload = json.dumps(message) if not isinstance(message, str) else message
+                await redis.publish(channel, payload)
+        except Exception as exc:
+            logger.warning(f"Redis publish to {channel!r} failed: {exc}")
+
+    @staticmethod
     async def delete_by_prefix(prefix: str) -> int:
         """Delete all keys whose names start with *prefix*.
 

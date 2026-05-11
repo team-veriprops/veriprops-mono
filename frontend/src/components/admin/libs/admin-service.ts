@@ -130,6 +130,48 @@ export interface AvailableAgent {
   isTrusted: boolean;
 }
 
+// ── Conflict flag types (S29) ──
+
+export type ConflictSeverity = "WARNING" | "BLOCKER";
+export type ConflictStatus = "OPEN" | "OVERRIDDEN" | "TASK_REJECTED";
+
+export interface ConflictFlag {
+  id: string;
+  verificationId: string;
+  ruleId: string;
+  severity: ConflictSeverity;
+  description: string;
+  status: ConflictStatus;
+  resolutionNote: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+// ── Task review types (S28) ──
+
+export type TaskReviewDecision = "APPROVED" | "REJECTED";
+
+export interface TaskReviewResult {
+  taskId: string;
+  decision: TaskReviewDecision;
+  reason: string | null;
+  reviewedBy: string;
+  reviewedAt: string;
+}
+
+// ── Trust score weight types (S30) ──
+
+export interface TrustScoreWeightConfig {
+  id: string;
+  tier: string;
+  role: string;
+  weight: number;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+
 // ── Admin config types ──
 
 export interface AdminConfig {
@@ -275,6 +317,60 @@ export class AdminService {
     if (opts?.state) p.set("state", opts.state);
     const qs = p.toString();
     return this.http.get(`${this.taskBase}/agents/available${qs ? `?${qs}` : ""}`);
+  }
+
+  // ── Conflict flags (S29) ──
+
+  listConflicts(vid: string): Promise<SuccessResponse<ConflictFlag[]>> {
+    return this.http.get(`${this.verificationBase}/${vid}/conflicts`);
+  }
+
+  resolveConflict(
+    vid: string,
+    conflictId: string,
+    payload: { action: "OVERRIDE" | "REJECT_TASK"; note: string; taskIdToReject?: string },
+  ): Promise<SuccessResponse<ConflictFlag>> {
+    return this.http.post(
+      `${this.verificationBase}/${vid}/conflicts/${conflictId}/resolve`,
+      payload,
+    );
+  }
+
+  // ── Task review (S28) ──
+
+  approveTask(taskId: string, note?: string): Promise<SuccessResponse<TaskReviewResult>> {
+    return this.http.post(`${this.taskBase}/tasks/${taskId}/approve`, { note: note ?? null });
+  }
+
+  rejectTask(taskId: string, reason: string): Promise<SuccessResponse<TaskReviewResult>> {
+    return this.http.post(`${this.taskBase}/tasks/${taskId}/reject`, { reason });
+  }
+
+  reopenTask(taskId: string, reason: string): Promise<SuccessResponse<TaskReviewResult>> {
+    return this.http.post(`${this.taskBase}/tasks/${taskId}/reopen`, { reason });
+  }
+
+  // ── Release (S31) ──
+
+  releaseReport(vid: string): Promise<SuccessResponse<{ verificationId: string; vid: string; status: string; completedAt: string | null }>> {
+    return this.http.post(`${this.verificationBase}/${vid}/release`, {});
+  }
+
+  failRelease(vid: string, reason: string): Promise<SuccessResponse<{ verificationId: string; vid: string; status: string }>> {
+    return this.http.post(`${this.verificationBase}/${vid}/fail-release`, { reason });
+  }
+
+  // ── Trust score weights (S30) ──
+
+  listTrustScoreWeights(): Promise<SuccessResponse<TrustScoreWeightConfig[]>> {
+    return this.http.get("/admin/trust-score-weights");
+  }
+
+  setTierWeights(
+    tier: string,
+    weights: Record<string, number>,
+  ): Promise<SuccessResponse<TrustScoreWeightConfig[]>> {
+    return this.http.put(`/admin/trust-score-weights/${tier}`, { weights });
   }
 
   // ── Admin config ──

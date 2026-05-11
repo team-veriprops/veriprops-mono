@@ -209,6 +209,8 @@ TASK_VALID: list[tuple[str, str]] = [
     ("ACCEPTED", "PENDING"),      # agent declines after accepting → back to pool
     ("SUBMITTED", "REJECTED"),    # admin rejects
     ("REJECTED", "IN_PROGRESS"),  # agent reworks
+    # admin reopen (S28)
+    ("APPROVED", "IN_PROGRESS"),  # admin reopens an approved task for rework
 ]
 
 TASK_INVALID: list[tuple[str, str]] = [
@@ -225,11 +227,7 @@ TASK_INVALID: list[tuple[str, str]] = [
     ("REJECTED", "PENDING"),
     ("REJECTED", "SUBMITTED"),     # must rework (go to IN_PROGRESS) first
     ("REJECTED", "APPROVED"),
-]
-
-TASK_TERMINAL_EXITS: list[tuple[str, str]] = [
-    ("APPROVED", "PENDING"),
-    ("APPROVED", "IN_PROGRESS"),
+    ("APPROVED", "PENDING"),       # admin must reopen through IN_PROGRESS
     ("APPROVED", "SUBMITTED"),
 ]
 
@@ -244,24 +242,24 @@ class TestTaskStateMachine:
         with pytest.raises(IllegalStateTransitionException):
             task_state_machine.assert_can_transition(from_s, to_s, resource="Task")
 
-    @pytest.mark.parametrize("terminal,target", TASK_TERMINAL_EXITS)
-    def test_terminal_state_raises(self, terminal: str, target: str):
-        with pytest.raises(IllegalStateTransitionException):
-            task_state_machine.assert_can_transition(terminal, target, resource="Task")
+    def test_approved_is_not_terminal(self):
+        # APPROVED has a reopen path (APPROVED → IN_PROGRESS) so it is not terminal.
+        # Verification completion is governed by the verification state machine (S31 release).
+        assert task_state_machine.is_terminal("APPROVED") is False
 
-    def test_approved_is_terminal(self):
-        assert task_state_machine.is_terminal("APPROVED") is True
+    def test_no_terminal_states(self):
+        assert TASK_TERMINAL == set()
 
     def test_non_terminal_states(self):
-        for s in ("PENDING", "ASSIGNED", "ACCEPTED", "IN_PROGRESS", "SUBMITTED", "REJECTED"):
+        for s in ("PENDING", "ASSIGNED", "ACCEPTED", "IN_PROGRESS", "SUBMITTED", "REJECTED", "APPROVED"):
             assert task_state_machine.is_terminal(s) is False
 
     def test_terminal_set_matches_constants(self):
-        assert TASK_TERMINAL == {"APPROVED"}
+        assert TASK_TERMINAL == set()
 
-    def test_transition_table_covers_all_non_terminal_states(self):
-        non_terminal = {"PENDING", "ASSIGNED", "ACCEPTED", "IN_PROGRESS", "SUBMITTED", "REJECTED"}
-        assert set(TASK_TRANSITIONS.keys()) == non_terminal
+    def test_transition_table_covers_all_states(self):
+        all_states = {"PENDING", "ASSIGNED", "ACCEPTED", "IN_PROGRESS", "SUBMITTED", "REJECTED", "APPROVED"}
+        assert set(TASK_TRANSITIONS.keys()) == all_states
 
     def test_decline_returns_to_pool(self):
         """ASSIGNED → PENDING models an agent declining or timing out (PRD §5)."""

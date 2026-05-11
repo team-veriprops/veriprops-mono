@@ -8,6 +8,7 @@ import {
   type AdminSubRole,
   type VerificationStatus,
   type VerificationTier,
+  type TrustScoreWeightConfig,
 } from "./admin-service";
 
 export const adminService = new AdminService(httpClient);
@@ -23,10 +24,14 @@ export const adminKeys = {
     ["admin", "verifications", vid] as const,
   tasks: (vid: string) =>
     ["admin", "verifications", vid, "tasks"] as const,
+  conflicts: (vid: string) =>
+    ["admin", "verifications", vid, "conflicts"] as const,
   availableAgents: (opts?: { role?: string; state?: string }) =>
     ["admin", "available-agents", opts ?? {}] as const,
   config: () =>
     ["admin", "config"] as const,
+  trustScoreWeights: () =>
+    ["admin", "trust-score-weights"] as const,
 };
 
 // ── Invitations ──
@@ -231,6 +236,81 @@ export function useReassignTaskMutation() {
     }) => adminService.reassignTask(taskId, agentId, note),
     onSuccess: (_data, { vid }) =>
       qc.invalidateQueries({ queryKey: adminKeys.tasks(vid) }),
+  });
+}
+
+// ── Release (S31) ──
+
+export function useReleaseReportMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vid: string) => adminService.releaseReport(vid),
+    onSuccess: (_data, vid) => {
+      qc.invalidateQueries({ queryKey: adminKeys.verificationDetail(vid) });
+      qc.invalidateQueries({ queryKey: ["admin", "verifications"] });
+    },
+  });
+}
+
+export function useFailReleaseMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ vid, reason }: { vid: string; reason: string }) =>
+      adminService.failRelease(vid, reason),
+    onSuccess: (_data, { vid }) => {
+      qc.invalidateQueries({ queryKey: adminKeys.verificationDetail(vid) });
+      qc.invalidateQueries({ queryKey: ["admin", "verifications"] });
+    },
+  });
+}
+
+// ── Conflict flags (S29) ──
+
+export function useConflicts(vid: string) {
+  return useQuery({
+    queryKey: adminKeys.conflicts(vid),
+    queryFn: () => adminService.listConflicts(vid),
+    staleTime: 15_000,
+  });
+}
+
+export function useResolveConflictMutation(vid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      conflictId,
+      action,
+      note,
+      taskIdToReject,
+    }: {
+      conflictId: string;
+      action: "OVERRIDE" | "REJECT_TASK";
+      note: string;
+      taskIdToReject?: string;
+    }) => adminService.resolveConflict(vid, conflictId, { action, note, taskIdToReject }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.conflicts(vid) });
+      qc.invalidateQueries({ queryKey: adminKeys.verificationDetail(vid) });
+    },
+  });
+}
+
+// ── Trust score weights (S30) ──
+
+export function useTrustScoreWeights() {
+  return useQuery({
+    queryKey: adminKeys.trustScoreWeights(),
+    queryFn: () => adminService.listTrustScoreWeights(),
+    staleTime: 60_000,
+  });
+}
+
+export function useSetTierWeightsMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ tier, weights }: { tier: string; weights: Record<string, number> }) =>
+      adminService.setTierWeights(tier, weights),
+    onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.trustScoreWeights() }),
   });
 }
 

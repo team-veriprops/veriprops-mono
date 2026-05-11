@@ -55,7 +55,18 @@
       "Bash(Get-ChildItem -Path \"backend/main/app/domain/admin_config\" -ErrorAction SilentlyContinue)",
       "Bash(Get-ChildItem \".claude/skills/qa-domain/\")",
       "Bash(Select-Object Name, Length)",
-      "Edit(/.claude/skills/playwright-cli/**)"
+      "Edit(/.claude/skills/playwright-cli/**)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend\\\\main\\\\verification\" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName | ForEach-Object { $_.FullName })",
+      "Bash(Get-ChildItem \"c:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend\\\\main\\\\app\\\\domain\\\\verification\" -Name)",
+      "Bash(appodus_active_env=test python -m pytest test/unit/app/domain/verification/task/review/ -x -q)",
+      "Bash(appodus_active_env=test python -m pytest test/unit/ -x -q)",
+      "Bash(appodus_active_env=test python -m pytest test/unit/ -x -q --ignore=test/unit/app/domain/auth)",
+      "Bash(appodus_active_env=test python -m pytest test/unit/ -q --ignore=test/unit/app/domain/auth)",
+      "Bash(mkdir -p \"/c/Veriprops/repos/veriprops-mono/frontend/src/app/admin/tasks/[taskId]/review\" && mkdir -p \"/c/Veriprops/repos/veriprops-mono/frontend/src/components/admin/tasks\")",
+      "Bash(appodus_active_env=test python -m pytest test/unit/app/domain/verification/conflict/ -x -q)",
+      "Bash(mkdir -p /c/Veriprops/repos/veriprops-mono/backend/test/unit/app/domain/verification/portal && mkdir -p /c/Veriprops/repos/veriprops-mono/frontend/src/app/portal/verifications/\\\\[id\\\\] && mkdir -p /c/Veriprops/repos/veriprops-mono/frontend/src/components/portal/verifications)",
+      "Bash(mkdir -p \"/c/Veriprops/repos/veriprops-mono/frontend/src/app/portal/verifications/[id]/evidence\")",
+      "Bash(mkdir -p /c/Veriprops/repos/veriprops-mono/backend/test/unit/app/domain/verification/report && mkdir -p \"/c/Veriprops/repos/veriprops-mono/frontend/src/app/portal/verifications/[id]/report\" && mkdir -p /c/Veriprops/repos/veriprops-mono/frontend/src/components/portal/report)"
     ],
     "deny": [
       "Read(node_modules/**)",
@@ -67,6 +78,10 @@
       "Read(frontend/dist/**)",
       "Read(frontend/coverage/**)",
       "Read(**/*.egg-info/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Veriprops\\repos\\veriprops-mono\\frontend\\src\\app\\admin\\tasks\\[taskId]",
+      "C:\\Veriprops\\repos\\veriprops-mono\\frontend\\src\\app\\portal\\verifications\\[id]"
     ]
   },
   "autocompact_percentage_override": 75

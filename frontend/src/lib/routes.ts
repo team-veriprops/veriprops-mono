@@ -26,6 +26,9 @@ export const ROUTES = {
     VERIFICATION_DETAIL: (id: string) => `/portal/verifications/${id}`,
     VERIFICATION_CONFIRMED: (id: string) => `/portal/verifications/${id}/confirmed`,
     VERIFICATION_PAY: (id: string) => `/portal/verifications/${id}/pay`,
+    VERIFICATION_TRACKING: (id: string) => `/portal/verifications/${id}`,
+    VERIFICATION_EVIDENCE: (id: string) => `/portal/verifications/${id}/evidence`,
+    VERIFICATION_REPORT: (id: string) => `/portal/verifications/${id}/report`,
   },
   AGENT: {
     GATE: '/agents',
@@ -42,7 +45,9 @@ export const ROUTES = {
     INVITE_ACCEPT: (token: string) => `/auth/admin-invite/${token}`,
     VERIFICATIONS: '/admin/verifications',
     VERIFICATION_DETAIL: (vid: string) => `/admin/verifications/${vid}`,
+    TASK_REVIEW: (taskId: string) => `/admin/tasks/${taskId}/review`,
     CONFIG: '/admin/config',
+    TRUST_SCORE_WEIGHTS: '/admin/config/trust-score-weights',
   },
 
   ABOUT: '/about',

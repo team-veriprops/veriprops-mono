@@ -77,12 +77,13 @@ verification_state_machine = StateMachine(
 )
 
 
-# ── Task state machine (PRD §5) ────────────────────────────────────────────
+# ── Task state machine (PRD §5, §8) ──────────────────────────────────────────
 #
 # Main path:  PENDING → ASSIGNED → ACCEPTED → IN_PROGRESS → SUBMITTED → APPROVED
 # Detours:    ASSIGNED → PENDING   (decline / no-show timeout; back to pool)
 #             SUBMITTED → REJECTED → IN_PROGRESS   (admin rejects; agent reworks)
-# Terminal:   APPROVED (task is done; no further moves).
+#             APPROVED  → IN_PROGRESS               (admin reopens an approved task)
+# Terminal:   none — admin reopen keeps APPROVED non-terminal so it can be walked back.
 
 TASK_TRANSITIONS: Dict[str, Set[str]] = {
     # Pool path: agent accepts from the open pool (PENDING → ACCEPTED directly).
@@ -93,8 +94,9 @@ TASK_TRANSITIONS: Dict[str, Set[str]] = {
     "IN_PROGRESS": {"SUBMITTED"},
     "SUBMITTED": {"APPROVED", "REJECTED"},
     "REJECTED": {"IN_PROGRESS"},
+    "APPROVED": {"IN_PROGRESS"},  # admin reopen path
 }
-TASK_TERMINAL: Set[str] = {"APPROVED"}
+TASK_TERMINAL: Set[str] = set()  # APPROVED is no longer terminal; verification state machine governs completion
 
 task_state_machine = StateMachine(
     transitions=TASK_TRANSITIONS,

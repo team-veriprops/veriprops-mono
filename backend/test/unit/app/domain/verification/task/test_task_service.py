@@ -369,18 +369,20 @@ class TestTrustElevation:
 # ── state derivation ──────────────────────────────────────────────────────────
 
 class TestStateDeriv:
-    async def test_all_approved_sets_completed(self):
+    async def test_all_approved_sets_under_review(self):
+        # All tasks APPROVED → hand off to admin for report review (S28).
+        # COMPLETED is set exclusively by ReleaseService.release() (S31).
         tasks = [
             _task("t1", status=TaskStatus.APPROVED.value),
             _task("t2", status=TaskStatus.APPROVED.value),
         ]
         svc = _make_service(tasks=tasks)
         svc._tasks.list_for_verification = AsyncMock(return_value=tasks)
-        svc._verifications.get_model.return_value.status = VerificationStatus.UNDER_REVIEW.value
+        svc._verifications.get_model.return_value.status = VerificationStatus.IN_PROGRESS.value
 
         await svc._derive_and_update_verification_status("ver-1")
         update_call = svc._verifications.update.call_args[0][1]
-        assert update_call.status == VerificationStatus.COMPLETED
+        assert update_call.status == VerificationStatus.UNDER_REVIEW
 
     async def test_any_active_sets_in_progress(self):
         tasks = [

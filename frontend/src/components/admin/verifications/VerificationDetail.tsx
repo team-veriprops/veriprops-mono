@@ -1,13 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useAdminVerificationDetail, useVerificationTasks } from "../libs/useAdminQueries";
 import VerificationStatusBadge from "./VerificationStatusBadge";
 import AdminActionPanel from "./AdminActionPanel";
 import NotesList from "./NotesList";
 import AssignmentModal from "./AssignmentModal";
+import ConflictBadge from "./ConflictBadge";
+import ConflictPanel from "./ConflictPanel";
+import ReleaseReportPanel from "./ReleaseReportPanel";
+import { useConflicts } from "../libs/useAdminQueries";
+import TrustScoreBadge from "@components/shared/TrustScoreBadge";
 import type { Task, TaskRole, TaskStatus } from "../libs/admin-service";
 import { User, Loader2, AlertTriangle } from "lucide-react";
+import { ROUTES } from "@lib/routes";
 
 const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
   PENDING: "bg-gray-100 text-gray-600",
@@ -24,10 +31,14 @@ interface Props { vid: string }
 export default function VerificationDetail({ vid }: Props) {
   const { data: detailRes, isLoading, error } = useAdminVerificationDetail(vid);
   const { data: tasksRes } = useVerificationTasks(vid);
+  const { data: conflictsRes } = useConflicts(vid);
   const [assignModal, setAssignModal] = useState<TaskRole | null>(null);
 
   const verification = (detailRes as any)?.data ?? null;
   const tasks: Task[] = (tasksRes as any)?.data ?? [];
+  const conflicts = (conflictsRes as any)?.data ?? [];
+  const openConflictCount = conflicts.filter((f: any) => f.status === "OPEN").length;
+  const allTasksApproved = tasks.length > 0 && tasks.every((t) => t.status === "APPROVED");
 
   if (isLoading) {
     return (
@@ -54,6 +65,12 @@ export default function VerificationDetail({ vid }: Props) {
           <div className="flex items-center gap-3 mt-1">
             <VerificationStatusBadge status={verification.status} />
             <span className="text-sm text-gray-500">{verification.tier}</span>
+            {verification.status === "UNDER_REVIEW" && (
+              <ConflictBadge openCount={openConflictCount} />
+            )}
+            {verification.trustScore !== null && verification.trustScore !== undefined && (
+              <TrustScoreBadge score={Number(verification.trustScore)} size="sm" />
+            )}
           </div>
         </div>
         <AdminActionPanel verification={verification} />
@@ -97,20 +114,45 @@ export default function VerificationDetail({ vid }: Props) {
                     </span>
                   )}
                 </div>
-                {(task.status === "PENDING" || task.status === "ASSIGNED") && (
-                  <button
-                    style={{ cursor: "pointer" }}
-                    onClick={() => setAssignModal(task.role as TaskRole)}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium border border-indigo-200 rounded px-2 py-1"
-                  >
-                    {task.status === "ASSIGNED" ? "Reassign" : "Assign Agent"}
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {(task.status === "PENDING" || task.status === "ASSIGNED") && (
+                    <button
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setAssignModal(task.role as TaskRole)}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium border border-indigo-200 rounded px-2 py-1"
+                    >
+                      {task.status === "ASSIGNED" ? "Reassign" : "Assign Agent"}
+                    </button>
+                  )}
+                  {(task.status === "SUBMITTED" || task.status === "APPROVED") && (
+                    <Link
+                      href={`${ROUTES.ADMIN.TASK_REVIEW(task.id)}?vid=${vid}`}
+                      className="text-xs text-emerald-700 hover:text-emerald-900 font-medium border border-emerald-200 rounded px-2 py-1"
+                    >
+                      {task.status === "APPROVED" ? "Reopen" : "Review"}
+                    </Link>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Conflict panel + release — shown when under review */}
+      {verification.status === "UNDER_REVIEW" && (
+        <>
+          <div className="rounded-lg border border-red-100 p-4">
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">Conflict Detection</h2>
+            <ConflictPanel vid={vid} />
+          </div>
+          <ReleaseReportPanel
+            vid={vid}
+            hasOpenConflicts={openConflictCount > 0}
+            allTasksApproved={allTasksApproved}
+          />
+        </>
+      )}
 
       {/* Notes */}
       <NotesList vid={vid} notes={verification.notes ?? []} />

@@ -454,7 +454,9 @@ class TaskService:
         all_pending = statuses == {TaskStatus.PENDING.value}
 
         if all_approved:
-            new_status = VerificationStatus.COMPLETED
+            # All tasks approved → hand off to admin for report review/release (S28-S31).
+            # COMPLETED is set exclusively by ReleaseService.release() (S31), not here.
+            new_status = VerificationStatus.UNDER_REVIEW
         elif all_settled and any_submitted:
             new_status = VerificationStatus.UNDER_REVIEW
         elif any_active:
@@ -470,6 +472,17 @@ class TaskService:
                 verification_id,
                 UpdateVerificationDto(status=new_status),
             )
+            # When transitioning to UNDER_REVIEW, run conflict detection (S29)
+            if new_status == VerificationStatus.UNDER_REVIEW:
+                await self._run_conflict_detection(verification_id)
+
+    async def _run_conflict_detection(self, verification_id: str) -> None:
+        try:
+            from main.app.domain.verification.conflict.service import ConflictService
+            svc: ConflictService = di[ConflictService]
+            await svc.detect_and_store(verification_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Conflict detection failed for {verification_id}: {exc}")
 
     # ── Trust elevation ───────────────────────────────────────────────
 

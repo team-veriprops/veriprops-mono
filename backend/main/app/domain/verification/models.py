@@ -15,7 +15,9 @@ class PropertyDocumentType(str, enum.Enum):
     OTHER = "OTHER"
 
 
-from sqlalchemy import Column, Integer, String, Text
+from decimal import Decimal
+
+from sqlalchemy import Column, Integer, Numeric, String, Text
 
 from main.app.domain.verification.property.models import PropertyDto
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
@@ -61,6 +63,8 @@ class Verification(BaseEntity):
     # Server-side wizard draft.
     draft_payload = Column(Text, nullable=True)  # JSON-encoded
     draft_step = Column(Integer, nullable=False, default=0)
+    # Computed by TrustScoreService on each task approval (S30).
+    trust_score = Column(Numeric(5, 2), nullable=True)
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -86,6 +90,7 @@ class UpdateVerificationDto(Object):
     completed_at: Optional[datetime] = None
     draft_payload: Optional[str] = None
     draft_step: Optional[int] = None
+    trust_score: Optional[Decimal] = None
 
 
 class SearchVerificationDto(PageRequest, BaseQueryDto):

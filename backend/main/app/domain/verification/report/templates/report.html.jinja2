@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Veriprops Property Verification Report — {{ vid }}</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      font-size: 10pt;
+      color: #1a1a1a;
+      background: #fff;
+    }
+
+    /* ── Page setup (CSS print) ───────────────────────────── */
+    @page {
+      size: A4;
+      margin: 20mm 18mm 28mm 18mm;
+
+      @bottom-center {
+        content: "Veriprops Confidential  ·  Not for redistribution  ·  Page " counter(page) " of " counter(pages);
+        font-size: 7pt;
+        color: #aaa;
+        border-top: 0.5pt solid #ddd;
+        padding-top: 4pt;
+        width: 100%;
+        text-align: center;
+      }
+
+      @top-right {
+        content: "VID: {{ vid }}  ·  {{ version }}";
+        font-size: 7pt;
+        color: #aaa;
+      }
+    }
+
+    /* ── Cover page ───────────────────────────────────────── */
+    .cover {
+      page-break-after: always;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 220mm;
+      padding: 20mm 0;
+    }
+
+    .cover-logo {
+      font-size: 22pt;
+      font-weight: 800;
+      color: #4f46e5;
+      letter-spacing: -0.5pt;
+      margin-bottom: 4mm;
+    }
+
+    .cover-logo span { color: #1a1a1a; }
+
+    .cover-title {
+      font-size: 18pt;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 6mm;
+      line-height: 1.3;
+    }
+
+    .cover-meta {
+      font-size: 10pt;
+      color: #555;
+      margin-bottom: 2mm;
+    }
+
+    .cover-meta strong { color: #1a1a1a; }
+
+    .cover-vid {
+      font-family: "Courier New", monospace;
+      font-size: 14pt;
+      font-weight: 700;
+      color: #4f46e5;
+      margin: 6mm 0 4mm;
+      letter-spacing: 1pt;
+    }
+
+    .cover-tier-badge {
+      display: inline-block;
+      border: 1.5pt solid #4f46e5;
+      border-radius: 4pt;
+      padding: 2pt 8pt;
+      font-size: 9pt;
+      font-weight: 700;
+      color: #4f46e5;
+      text-transform: uppercase;
+      letter-spacing: 1pt;
+      margin-bottom: 6mm;
+    }
+
+    .cover-trust {
+      font-size: 28pt;
+      font-weight: 800;
+      margin-bottom: 1mm;
+    }
+
+    .cover-trust.excellent { color: #16a34a; }
+    .cover-trust.good      { color: #2563eb; }
+    .cover-trust.fair      { color: #d97706; }
+    .cover-trust.poor      { color: #dc2626; }
+
+    .cover-trust-label {
+      font-size: 9pt;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1pt;
+      color: #888;
+      margin-bottom: 8mm;
+    }
+
+    .cover-qr {
+      position: absolute;
+      right: 0;
+      bottom: 20mm;
+      text-align: center;
+    }
+
+    .cover-qr img { width: 28mm; height: 28mm; }
+    .cover-qr p { font-size: 6pt; color: #aaa; margin-top: 1mm; }
+
+    .cover-divider {
+      width: 40mm;
+      height: 2pt;
+      background: #4f46e5;
+      border: none;
+      margin: 4mm 0 8mm;
+    }
+
+    /* ── Section headings ─────────────────────────────────── */
+    h1 { font-size: 14pt; font-weight: 700; color: #1a1a1a; margin-bottom: 4mm; }
+    h2 { font-size: 11pt; font-weight: 700; color: #1a1a1a; margin-bottom: 3mm; border-bottom: 0.5pt solid #e5e7eb; padding-bottom: 1.5mm; }
+    h3 { font-size: 9.5pt; font-weight: 600; color: #374151; margin-bottom: 2mm; }
+
+    /* ── Sections ─────────────────────────────────────────── */
+    .section {
+      margin-bottom: 8mm;
+      page-break-inside: avoid;
+    }
+
+    /* ── Key–value list ───────────────────────────────────── */
+    dl.kv { width: 100%; }
+    dl.kv div { display: flex; gap: 8pt; padding: 2pt 0; border-bottom: 0.25pt solid #f3f4f6; }
+    dl.kv dt { width: 42%; font-size: 9pt; color: #6b7280; text-transform: capitalize; flex-shrink: 0; }
+    dl.kv dd { font-size: 9pt; color: #111; font-weight: 500; word-break: break-word; }
+
+    /* ── Highlighted boxes ────────────────────────────────── */
+    .highlight-box {
+      border-radius: 4pt;
+      padding: 4mm 5mm;
+      margin-bottom: 4mm;
+    }
+
+    .highlight-box.indigo { background: #eef2ff; border-left: 3pt solid #4f46e5; }
+    .highlight-box.amber  { background: #fffbeb; border-left: 3pt solid #f59e0b; }
+    .highlight-box.green  { background: #f0fdf4; border-left: 3pt solid #16a34a; }
+
+    .highlight-box p { font-size: 9.5pt; color: #374151; line-height: 1.5; }
+
+    /* ── Trust score display ──────────────────────────────── */
+    .trust-score-row {
+      display: flex;
+      align-items: center;
+      gap: 6mm;
+      margin-bottom: 4mm;
+    }
+
+    .trust-score-number {
+      font-size: 36pt;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .trust-score-number.excellent { color: #16a34a; }
+    .trust-score-number.good      { color: #2563eb; }
+    .trust-score-number.fair      { color: #d97706; }
+    .trust-score-number.poor      { color: #dc2626; }
+
+    .trust-score-band {
+      font-size: 10pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5pt;
+    }
+
+    .trust-score-band.excellent { color: #16a34a; }
+    .trust-score-band.good      { color: #2563eb; }
+    .trust-score-band.fair      { color: #d97706; }
+    .trust-score-band.poor      { color: #dc2626; }
+
+    .trust-score-desc { font-size: 8.5pt; color: #6b7280; }
+
+    /* ── Legal footer ─────────────────────────────────────── */
+    .legal-footer {
+      page-break-before: always;
+      padding-top: 6mm;
+      border-top: 0.5pt solid #d1d5db;
+    }
+
+    .legal-footer p { font-size: 7.5pt; color: #9ca3af; line-height: 1.6; margin-bottom: 1.5mm; }
+    .legal-footer p strong { color: #6b7280; }
+
+    /* ── No-data placeholder ──────────────────────────────── */
+    .no-data { font-size: 9pt; color: #9ca3af; font-style: italic; }
+
+    /* ── Table of contents ────────────────────────────────── */
+    .toc { margin-bottom: 8mm; }
+    .toc-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 2pt 0;
+      font-size: 9.5pt;
+      border-bottom: 0.25pt dotted #d1d5db;
+    }
+    .toc-item span { color: #4f46e5; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     COVER PAGE
+══════════════════════════════════════════════════════════════ -->
+<div class="cover" style="position: relative;">
+  <div class="cover-logo">Veri<span>props</span></div>
+  <div class="cover-title">Property Verification<br>Report</div>
+
+  <div class="cover-vid">{{ vid }}</div>
+
+  <div class="cover-tier-badge">{{ tier }} Verification</div>
+
+  {% if trust_score is not none %}
+    {% if trust_score >= 80 %}{% set band = "excellent" %}{% set band_label = "Excellent" %}
+    {% elif trust_score >= 60 %}{% set band = "good" %}{% set band_label = "Good" %}
+    {% elif trust_score >= 40 %}{% set band = "fair" %}{% set band_label = "Fair" %}
+    {% else %}{% set band = "poor" %}{% set band_label = "Poor" %}
+    {% endif %}
+    <div class="cover-trust {{ band }}">{{ "%.0f"|format(trust_score) }}<span style="font-size:16pt;">/100</span></div>
+    <div class="cover-trust-label trust-score-band {{ band }}">Trust Score — {{ band_label }}</div>
+  {% endif %}
+
+  <div class="cover-meta">
+    {% if completed_at %}<p>Report Date: <strong>{{ completed_at.strftime("%d %B %Y") if completed_at else "—" }}</strong></p>{% endif %}
+    <p>Version: <strong>{{ version }}</strong></p>
+    <p>Generated: <strong>{{ generated_at }}</strong></p>
+  </div>
+
+  <hr class="cover-divider" />
+
+  <div class="cover-meta" style="font-size: 8pt; color: #9ca3af; max-width: 100mm;">
+    This report is strictly confidential. Unauthorised distribution is prohibited.<br>
+    Veriprops Limited · veriprops.com
+  </div>
+
+  {% if qr_data_uri %}
+  <div class="cover-qr">
+    <img src="{{ qr_data_uri }}" alt="Verify QR" />
+    <p>Scan to verify</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+══════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <h1>Contents</h1>
+  <div class="toc">
+    <div class="toc-item"><span>Executive Summary</span><span>—</span></div>
+    {% if trust_score is not none %}
+    <div class="toc-item"><span>Trust Score</span><span>—</span></div>
+    {% endif %}
+    <div class="toc-item"><span>Registry Findings</span><span>—</span></div>
+    {% if is_standard_plus %}
+    <div class="toc-item"><span>Physical Inspection</span><span>—</span></div>
+    <div class="toc-item"><span>Boundary Survey</span><span>—</span></div>
+    {% endif %}
+    {% if is_premium %}
+    <div class="toc-item"><span>Legal Opinion</span><span>—</span></div>
+    {% endif %}
+    <div class="toc-item"><span>Risk Summary</span><span>—</span></div>
+    <div class="toc-item"><span>Legal Disclaimer</span><span>—</span></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     EXECUTIVE SUMMARY
+══════════════════════════════════════════════════════════════ -->
+{% if executive_summary %}
+<div class="section">
+  <h2>Executive Summary</h2>
+  <div class="highlight-box indigo">
+    <p>{{ executive_summary }}</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════
+     TRUST SCORE
+══════════════════════════════════════════════════════════════ -->
+{% if trust_score is not none %}
+<div class="section">
+  <h2>Trust Score</h2>
+  {% if trust_score >= 80 %}{% set band = "excellent" %}{% set band_label = "Excellent" %}{% set band_desc = "This property has passed all required verification checks with strong results." %}
+  {% elif trust_score >= 60 %}{% set band = "good" %}{% set band_label = "Good" %}{% set band_desc = "This property has satisfactory verification results with minor observations." %}
+  {% elif trust_score >= 40 %}{% set band = "fair" %}{% set band_label = "Fair" %}{% set band_desc = "Some concerns were noted during verification. Review findings carefully before proceeding." %}
+  {% else %}{% set band = "poor" %}{% set band_label = "Poor" %}{% set band_desc = "Significant concerns were identified. Independent legal counsel is strongly advised." %}
+  {% endif %}
+  <div class="trust-score-row">
+    <div class="trust-score-number {{ band }}">{{ "%.0f"|format(trust_score) }}</div>
+    <div>
+      <div class="trust-score-band {{ band }}">{{ band_label }}</div>
+      <div class="trust-score-desc">Score out of 100 · {{ tier }} tier</div>
+    </div>
+  </div>
+  <div class="highlight-box {% if band == 'excellent' or band == 'good' %}green{% elif band == 'fair' %}amber{% else %}amber{% endif %}">
+    <p>{{ band_desc }}</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════
+     REGISTRY FINDINGS  (all tiers)
+══════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <h2>Registry Findings</h2>
+  {% if registry_findings %}
+    <dl class="kv">
+      {% for k, v in registry_findings.items() %}
+      <div>
+        <dt>{{ k | replace("_", " ") }}</dt>
+        <dd>{% if v is mapping %}{{ v | tojson }}{% else %}{{ v }}{% endif %}</dd>
+      </div>
+      {% endfor %}
+    </dl>
+  {% else %}
+    <p class="no-data">No registry data recorded.</p>
+  {% endif %}
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     PHYSICAL INSPECTION  (STANDARD+)
+══════════════════════════════════════════════════════════════ -->
+{% if is_standard_plus %}
+<div class="section">
+  <h2>Physical Inspection</h2>
+  {% if physical_findings %}
+    <dl class="kv">
+      {% for k, v in physical_findings.items() %}
+      <div>
+        <dt>{{ k | replace("_", " ") }}</dt>
+        <dd>{% if v is mapping %}{{ v | tojson }}{% else %}{{ v }}{% endif %}</dd>
+      </div>
+      {% endfor %}
+    </dl>
+  {% else %}
+    <p class="no-data">No physical inspection data recorded.</p>
+  {% endif %}
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     BOUNDARY SURVEY  (STANDARD+)
+══════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <h2>Boundary Survey</h2>
+  {% if boundary_findings %}
+    <dl class="kv">
+      {% for k, v in boundary_findings.items() %}
+      <div>
+        <dt>{{ k | replace("_", " ") }}</dt>
+        <dd>{% if v is mapping %}{{ v | tojson }}{% else %}{{ v }}{% endif %}</dd>
+      </div>
+      {% endfor %}
+    </dl>
+  {% else %}
+    <p class="no-data">No boundary survey data recorded.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════
+     LEGAL OPINION  (PREMIUM only)
+══════════════════════════════════════════════════════════════ -->
+{% if is_premium %}
+<div class="section">
+  <h2>Legal Opinion</h2>
+  {% if legal_opinion %}
+    <dl class="kv">
+      {% for k, v in legal_opinion.items() %}
+      <div>
+        <dt>{{ k | replace("_", " ") }}</dt>
+        <dd>{% if v is mapping %}{{ v | tojson }}{% else %}{{ v }}{% endif %}</dd>
+      </div>
+      {% endfor %}
+    </dl>
+  {% else %}
+    <p class="no-data">No legal opinion data recorded.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════
+     RISK SUMMARY
+══════════════════════════════════════════════════════════════ -->
+{% if risk_summary %}
+<div class="section">
+  <h2>Risk Summary</h2>
+  <div class="highlight-box amber">
+    <p>{{ risk_summary }}</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════
+     LEGAL DISCLAIMER
+══════════════════════════════════════════════════════════════ -->
+<div class="legal-footer">
+  <p><strong>Legal Disclaimer</strong></p>
+  <p>
+    This report represents a professional opinion based on observations and records available at the time
+    of investigation. It does not constitute a legal guarantee of title, ownership, or property condition.
+    Veriprops and its agents accept no liability for decisions made solely on the basis of this report.
+  </p>
+  <p>
+    This report is <strong>strictly confidential</strong> and may not be redistributed without written
+    consent from Veriprops Limited. Any unauthorised reproduction or distribution is prohibited.
+  </p>
+  <p>
+    Verification ID: {{ vid }} · Version: {{ version }} · Generated: {{ generated_at }}
+  </p>
+  <p>
+    Veriprops Limited · veriprops.com · {{ tier }} Verification Tier
+  </p>
+</div>
+
+</body>
+</html>

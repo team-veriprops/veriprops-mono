@@ -15,3 +15,6 @@ from main.app.domain.verification.parser import models as parser_models  # noqa:
 from main.app.domain.verification.admin import models as admin_models  # noqa: F401
 from main.app.domain.verification.task import models as task_models  # noqa: F401
 from main.app.domain.verification.escalation import models as escalation_models  # noqa: F401
+from main.app.domain.verification.conflict import models as conflict_models  # noqa: F401
+from main.app.domain.verification.scoring import models as scoring_models  # noqa: F401
+from main.app.domain.verification.report import models as report_models  # noqa: F401

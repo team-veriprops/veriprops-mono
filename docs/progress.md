@@ -10,13 +10,13 @@ last_updated: 2026-05-07
 
 ---
 
-**status:** S18–S27 complete — Phases 6–7 fully delivered
+**status:** S28–S36 complete — Phases 8–10 (MVP arc) fully delivered
 
-**next_slice:** S28 (Phase 8 — Report generation)
+**next_slice:** —
 
 **current_slice:** —
 
-**completion %:** 79% (S0–S27 done / 140 total; 424 backend + 221 frontend tests passing)
+**completion %:** 100% MVP (S0–S36 done; all MVP slices shipped)
 
 ---
 
@@ -54,14 +54,23 @@ last_updated: 2026-05-07
 | S25 | Lawyer submission + dependency gate — `LawyerForm.tsx` with locked overlay; ≥200-char legal opinion; sibling SUBMITTED/APPROVED gate server-side | 2026-05-11 |
 | S26 | Offline + autosave — `sw.js` Background Sync service worker; `offlineQueue.ts` IndexedDB wrapper (drafts + upload queue); `SyncIndicator.tsx` (offline/syncing/synced banner); `SwRegistrar.tsx` client component; SW registered in agents layout | 2026-05-11 |
 | S27 | Escalation + trust elevation — `verification/escalation/` backend domain (models/repo/service); `EscalationModal.tsx`; SSE publish to `admin:escalations`; trust elevation on first task submission | 2026-05-11 |
+| S28 | Task Review Interface — `task/review/` backend domain (approve/reject/reopen); `TaskReviewPanel.tsx`, `EvidenceGallery.tsx`; all 4 task roles; audit log on every action | 2026-05-11 |
+| S29 | Conflict Detection — 4-rule engine (occupancy mismatch, boundary divergence >5m, authenticity conflict, owner-name mismatch); `conflict/` backend domain; `ConflictPanel.tsx`, `ConflictBadge.tsx`; admin resolution (OVERRIDE / REJECT_TASK) | 2026-05-11 |
+| S30 | Trust Score Computation — tier-specific weighted average; `scoring/` domain; `TrustScoreWeightConfig` ORM; admin weight editor; `TrustScoreBadge.tsx`; recomputes on every task approval | 2026-05-11 |
+| S31 | Release Report + FAILED State — `release/` domain; pre-checks (all tasks APPROVED + no open conflicts); UNDER_REVIEW→COMPLETED / FAILED transitions; `ReleaseReportPanel.tsx`; SSE publish `report_released` | 2026-05-11 |
+| S32 | Verification Tracking Dashboard — `portal/tracking.py`; `TrackingDto` with progress_pct, SLA, agents (first name + role only); `ProgressTracker.tsx`, `SlaTracker.tsx`, `AssignedAgentsCard.tsx`, `StateDetailBanner.tsx` | 2026-05-11 |
+| S33 | SSE Live Updates — `portal/stream.py` with Redis pub/sub + 60s heartbeat; `useVerificationStream.ts` with exponential backoff + polling fallback; tracking page auto-invalidates on events | 2026-05-11 |
+| S34 | Evidence Layer — `portal/evidence.py`; ownership-checked; never exposes agent identity; `EvidenceFeed.tsx` grouped by role; GPS metadata chips | 2026-05-11 |
+| S35 | Report HTML View — `report/assembly.py`; tier-conditional sections (BASIC: registry; STANDARD+: physical+boundary; PREMIUM: legal opinion); `AccessGateModal.tsx` scroll-to-accept; `ReportSection.tsx` collapsible; `ReportLegalFooter.tsx`; `report_views` migration | 2026-05-11 |
+| S36 | PDF Generation + Versioning — `report/pdf.py` WeasyPrint + Jinja2 + QR code; single conditional `report.html.jinja2`; version tracking with `is_superseded` watermark; `GET /api/portal/verifications/{vid}/report/pdf` blob streaming | 2026-05-11 |
 
 ## Current Slice
 
-S18–S27 complete. Phases 6–7 (Admin verification control panel + Agent task execution) fully demoable end-to-end.
+S28–S36 complete. Phases 8–10 (Admin task review, conflict detection, trust scoring, report release, customer tracking dashboard, SSE live updates, evidence feed, HTML report, PDF export) fully demoable end-to-end.
 
 ## Pending Slices
 
-S28 → … (Phase 8 — Report generation + trust scoring) per [execution-plan.md](execution-plan.md).
+All MVP slices (S0–S36) complete.
 
 ---
 
