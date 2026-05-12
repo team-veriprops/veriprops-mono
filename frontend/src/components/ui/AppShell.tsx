@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Activity,
   LayoutDashboard,
   UserCog,
   ClipboardList,
@@ -14,6 +15,9 @@ import {
   HelpCircle,
   FileCheck,
   CreditCard,
+  User,
+  MapPin,
+  Gift,
   CheckCircle2, LogOut, Menu, X
 } from "lucide-react";
 import NotificationBell from "@components/shared/notifications/NotificationBell";
@@ -38,6 +42,10 @@ const iconMap = {
   helpCircle: HelpCircle,
   fileCheck: FileCheck,
   creditCard: CreditCard,
+  user: User,
+  mapPin: MapPin,
+  activity: Activity,
+  gift: Gift,
 } as const;
 
 export default function AppShell({ navItems, children }: AppShellProps) {

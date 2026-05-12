@@ -8,11 +8,11 @@ export interface TierUpgradePreview {
 
 export class UpgradeService {
   preview(verificationId: string): Promise<{ data: TierUpgradePreview }> {
-    return httpClient.get(`/api/portal/verifications/${verificationId}/upgrade/preview`);
+    return httpClient.get(`/portal/verifications/${verificationId}/upgrade/preview`);
   }
 
   submit(verificationId: string, toTier: string): Promise<{ data: { id: string; status: string } }> {
-    return httpClient.post(`/api/portal/verifications/${verificationId}/upgrade`, { toTier });
+    return httpClient.post(`/portal/verifications/${verificationId}/upgrade`, { toTier });
   }
 }
 

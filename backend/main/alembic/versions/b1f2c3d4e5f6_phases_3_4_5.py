@@ -21,43 +21,13 @@ from alembic import op
 from sqlalchemy import inspect as sa_inspect, JSON
 from sqlalchemy.ext.mutable import MutableList
 
+from main.alembic.utils import AlembicUtils
+
 # revision identifiers, used by Alembic.
 revision: str = "b1f2c3d4e5f6"
 down_revision: Union[str, None] = "fdd959a2cfda"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
-
-
-# ── helpers ────────────────────────────────────────────────────────
-
-
-def _base_audit_columns():
-    return [
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("date_created", sa.TIMESTAMP(timezone=True), nullable=False),
-        sa.Column("created_by", sa.String(length=36), nullable=True),
-        sa.Column("date_updated", sa.TIMESTAMP(timezone=True), nullable=True),
-        sa.Column("updated_by", sa.String(length=36), nullable=True),
-        sa.Column("deleted", sa.Boolean(), nullable=False),
-        sa.Column("date_deleted", sa.TIMESTAMP(timezone=True), nullable=True),
-        sa.Column("deleted_by", sa.String(length=36), nullable=True),
-        sa.Column("version", sa.Integer(), nullable=False),
-    ]
-
-
-def _seed_audit_columns(now: datetime) -> dict:
-    return {
-        "date_created": now,
-        "date_updated": None,
-        "deleted": False,
-        "version": 1,
-    }
-
-
-def _table_exists(name: str) -> bool:
-    bind = op.get_bind()
-    return name in sa_inspect(bind).get_table_names()
-
 
 # ── agent_applications ────────────────────────────────────────────
 
@@ -91,8 +61,7 @@ def _create_agent_applications():
         sa.Column("reviewed_by_admin_id", sa.String(length=36), nullable=True),
         sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("rejection_reason", sa.Text(), nullable=True),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("user_id", name="uq_agent_applications_user"),
     )
     op.create_index("ix_agent_applications_user_id", "agent_applications", ["user_id"], unique=False)
@@ -127,8 +96,7 @@ def _create_admin_invitations():
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("accepted_by_user_id", sa.String(length=36), nullable=True),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("token_hash", name="uq_admin_invitations_token"),
     )
     op.create_index("ix_admin_invitations_email", "admin_invitations", ["email_normalized"], unique=False)
@@ -161,8 +129,7 @@ def _create_properties():
         sa.Column("details", sa.Text(), nullable=True),
         sa.Column("documents", MutableList.as_mutable(JSON), nullable=False),
         sa.Column("seller_info", sa.Text(), nullable=True),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_properties_state_lga", "properties", ["state", "lga"], unique=False)
 
@@ -191,8 +158,7 @@ def _create_verifications():
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("draft_payload", sa.Text(), nullable=True),
         sa.Column("draft_step", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("vid", name="uq_verifications_vid"),
     )
     op.create_index("ix_verifications_customer_id", "verifications", ["customer_id"], unique=False)
@@ -223,8 +189,7 @@ def _create_payments():
         sa.Column("failure_reason", sa.String(length=512), nullable=True),
         sa.Column("confirmed_by_admin_id", sa.String(length=36), nullable=True),
         sa.Column("provider_metadata", sa.Text(), nullable=True),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_payments_verification", "payments", ["verification_id"], unique=False)
     op.create_index("ix_payments_status", "payments", ["status"], unique=False)
@@ -246,8 +211,7 @@ def _create_payment_attempts():
         sa.Column("provider_ref", sa.String(length=128), nullable=True),
         sa.Column("failure_reason", sa.String(length=512), nullable=True),
         sa.Column("event_payload", sa.Text(), nullable=True),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_payment_attempts_payment", "payment_attempts", ["payment_id"], unique=False)
 
@@ -306,31 +270,31 @@ def _seed_verification_consents() -> None:
 
 
 def upgrade() -> None:
-    if not _table_exists("agent_applications"):
+    if not AlembicUtils.table_exists("agent_applications"):
         _create_agent_applications()
-    if not _table_exists("admin_invitations"):
+    if not AlembicUtils.table_exists("admin_invitations"):
         _create_admin_invitations()
-    if not _table_exists("properties"):
+    if not AlembicUtils.table_exists("properties"):
         _create_properties()
-    if not _table_exists("verifications"):
+    if not AlembicUtils.table_exists("verifications"):
         _create_verifications()
-    if not _table_exists("payments"):
+    if not AlembicUtils.table_exists("payments"):
         _create_payments()
-    if not _table_exists("payment_attempts"):
+    if not AlembicUtils.table_exists("payment_attempts"):
         _create_payment_attempts()
     _seed_verification_consents()
 
 
 def downgrade() -> None:
-    if _table_exists("payment_attempts"):
+    if AlembicUtils.table_exists("payment_attempts"):
         _drop_payment_attempts()
-    if _table_exists("payments"):
+    if AlembicUtils.table_exists("payments"):
         _drop_payments()
-    if _table_exists("verifications"):
+    if AlembicUtils.table_exists("verifications"):
         _drop_verifications()
-    if _table_exists("properties"):
+    if AlembicUtils.table_exists("properties"):
         _drop_properties()
-    if _table_exists("admin_invitations"):
+    if AlembicUtils.table_exists("admin_invitations"):
         _drop_admin_invitations()
-    if _table_exists("agent_applications"):
+    if AlembicUtils.table_exists("agent_applications"):
         _drop_agent_applications()

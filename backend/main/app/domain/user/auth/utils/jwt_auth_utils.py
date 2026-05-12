@@ -24,15 +24,19 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auths/access-token", auto_error=F
 
 
 class _JwtSettings(BaseModel):
+    authjwt_denylist_enabled: bool = True
+
     authjwt_secret_key: str = settings.AUTHJWT_SECRET_KEY
     authjwt_token_location: List[str] = list(settings.AUTHJWT_TOKEN_LOCATION)
     authjwt_cookie_secure: bool = settings.AUTHJWT_COOKIE_SECURE
     authjwt_cookie_csrf_protect: bool = settings.AUTHJWT_COOKIE_CSRF_PROTECT
     authjwt_cookie_samesite: str = settings.AUTHJWT_COOKIE_SAMESITE
-    authjwt_access_cookie_key: str = "access_token"
-    authjwt_refresh_cookie_key: str = "refresh_token"
-    authjwt_access_csrf_cookie_key: str = "csrf_access"
-    authjwt_refresh_csrf_cookie_key: str = "csrf_refresh"
+
+    authjwt_access_cookie_key: str = settings.AUTHJWT_ACCESS_COOKIE_KEY
+    authjwt_refresh_cookie_key: str = settings.AUTHJWT_REFRESH_COOKIE_KEY
+
+    authjwt_access_csrf_cookie_key: str = settings.AUTHJWT_ACCESS_CSRF_COOKIE_KEY
+    authjwt_refresh_csrf_cookie_key: str = settings.AUTHJWT_REFRESH_CSRF_COOKIE_KEY
 
 
 class JwtAuthUtils:
@@ -55,7 +59,7 @@ class JwtAuthUtils:
         authorize.jwt_required()
         token_jti = authorize.get_raw_jwt()['jti']
 
-        # TODO: Get the remaining refresh token TTL (time_to_live) from authorize
+        # TODO: Get the remaining refresh token TTL (time_to_live) from authorize, and use that instead
         time_to_live = timedelta(seconds=utils_settings.REFRESH_TOKEN_TTL_SECONDS)
 
         await RedisUtils.set_redis(f"token_jti:{token_jti}", 'true', time_to_live)  # Store until token expires

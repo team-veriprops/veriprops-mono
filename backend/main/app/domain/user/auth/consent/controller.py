@@ -16,11 +16,11 @@ consent_service: ConsentService = di[ConsentService]
 async def missing_consents(authorize: AuthJWT = Depends()):
     authorize.jwt_required()
     user_id = authorize.get_jwt_subject()
-    docs = await consent_service.list_missing_required_consents(user_id)
+    docs = await consent_service.list_missing_required_consents(str(user_id))
     return SuccessResponse[MissingConsentsDto](data=MissingConsentsDto(
         documents=[ConsentDocumentDto(
             type=d.type,
-            version=d.version,
+            consent_version=d.consent_version,
             effective_at=d.effective_at,
             title=d.title,
             href=d.href,

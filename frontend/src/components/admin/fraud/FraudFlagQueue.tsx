@@ -21,14 +21,14 @@ export interface FraudFlag {
 const qKey = ["admin", "fraud-flags", "pending"];
 
 async function listPending(): Promise<{ data: FraudFlag[] }> {
-  return httpClient.get("/api/admin/fraud-flags");
+  return httpClient.get("/admin/fraud-flags");
 }
 
 async function reviewFlag(
   flagId: string,
   decision: "APPROVED" | "REJECTED",
 ): Promise<void> {
-  await httpClient.post(`/api/admin/fraud-flags/${flagId}/review`, { decision });
+  await httpClient.post(`/admin/fraud-flags/${flagId}/review`, { decision });
 }
 
 export default function FraudFlagQueue() {

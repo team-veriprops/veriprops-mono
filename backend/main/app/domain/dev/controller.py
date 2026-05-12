@@ -190,6 +190,19 @@ async def dev_reset() -> Dict[str, Any]:
     }
 
 
+@dev_router.post("/process-abandonments", dependencies=[Depends(_require_non_prod)])
+async def dev_process_abandonments() -> Dict[str, Any]:
+    """Trigger the abandonment recovery email job for all eligible verifications.
+
+    Idempotent — verifications already emailed are skipped via abandonment_email_sent_at.
+    Never available in production (returns 404).
+    """
+    from main.app.domain.verification.service import VerificationService
+    svc: VerificationService = di[VerificationService]
+    sent = await svc.send_abandonment_emails()
+    return {"ok": True, "sent": sent}
+
+
 @dev_router.post("/seed", dependencies=[Depends(_require_non_prod)])
 async def dev_seed() -> Dict[str, Any]:
     """Insert deterministic test fixtures.

@@ -9,6 +9,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from main.alembic.utils import AlembicUtils
 from main.appodus_utils.db.models import UTCDateTime
 
 revision: str = "e4f5a6b7c8d9"
@@ -21,16 +22,10 @@ def upgrade() -> None:
     # ── admin_config ──────────────────────────────────────────────
     op.create_table(
         "admin_config",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("key", sa.String(64), nullable=False),
         sa.Column("value", sa.Text, nullable=False),
         sa.Column("description", sa.String(255), nullable=True),
-        sa.Column("updated_by", sa.String(36), nullable=True),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_admin_config_id", "admin_config", ["id"], unique=True)
     op.create_index("ix_admin_config_deleted", "admin_config", ["deleted"])
@@ -40,17 +35,12 @@ def upgrade() -> None:
     # ── verification_notes (S18) ──────────────────────────────────
     op.create_table(
         "verification_notes",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("verification_id", sa.String(36), nullable=False),
         sa.Column("admin_id", sa.String(36), nullable=False),
         sa.Column("content", sa.Text, nullable=False),
         sa.Column("tags", sa.JSON, nullable=True),
         sa.Column("pinned", sa.Boolean, nullable=False, default=False),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_verification_notes_id", "verification_notes", ["id"], unique=True)
     op.create_index("ix_verification_notes_deleted", "verification_notes", ["deleted"])
@@ -60,12 +50,6 @@ def upgrade() -> None:
     # ── tasks (S19) ───────────────────────────────────────────────
     op.create_table(
         "tasks",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("verification_id", sa.String(36), nullable=False),
         # role: FIELD / SURVEYOR / REGISTRY / LAWYER
         sa.Column("role", sa.String(16), nullable=False),
@@ -79,6 +63,7 @@ def upgrade() -> None:
         sa.Column("trust_score", sa.Integer, nullable=True),
         # JSON-encoded draft payload for draft-save feature
         sa.Column("draft_payload", sa.Text, nullable=True),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_tasks_id", "tasks", ["id"], unique=True)
     op.create_index("ix_tasks_deleted", "tasks", ["deleted"])
@@ -90,17 +75,12 @@ def upgrade() -> None:
     # ── task_assignments (S19) — assignment history ───────────────
     op.create_table(
         "task_assignments",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("task_id", sa.String(36), nullable=False),
         sa.Column("agent_id", sa.String(36), nullable=False),
         sa.Column("assigned_by", sa.String(36), nullable=True),
         sa.Column("reassigned_from_id", sa.String(36), nullable=True),
         sa.Column("note", sa.Text, nullable=True),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_task_assignments_id", "task_assignments", ["id"], unique=True)
     op.create_index("ix_task_assignments_deleted", "task_assignments", ["deleted"])
@@ -110,21 +90,16 @@ def upgrade() -> None:
     # ── evidence_items (S22-S25) ──────────────────────────────────
     op.create_table(
         "evidence_items",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("task_id", sa.String(36), nullable=False),
         sa.Column("uploader_id", sa.String(36), nullable=False),
-        # type: PHOTO / VIDEO / DOCUMENT / COORDINATE / OTHER
+        ## type: PHOTO / VIDEO / DOCUMENT / COORDINATE / OTHER
         sa.Column("type", sa.String(16), nullable=False),
         sa.Column("file_url", sa.Text, nullable=True),
         sa.Column("gps_lat", sa.Float, nullable=True),
         sa.Column("gps_lng", sa.Float, nullable=True),
         sa.Column("captured_at", UTCDateTime, nullable=True),
         sa.Column("metadata", sa.JSON, nullable=True),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_evidence_items_id", "evidence_items", ["id"], unique=True)
     op.create_index("ix_evidence_items_deleted", "evidence_items", ["deleted"])
@@ -134,17 +109,12 @@ def upgrade() -> None:
     # ── escalations (S27) ─────────────────────────────────────────
     op.create_table(
         "escalations",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("task_id", sa.String(36), nullable=False),
         sa.Column("reporter_id", sa.String(36), nullable=False),
         # INACCESSIBLE / SUSPICIOUS / SAFETY / CONFLICTING / OTHER
         sa.Column("category", sa.String(16), nullable=False),
         sa.Column("description", sa.Text, nullable=False),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_escalations_id", "escalations", ["id"], unique=True)
     op.create_index("ix_escalations_deleted", "escalations", ["deleted"])

@@ -36,10 +36,16 @@ from main.app.domain.user.agent.models import (
     AgentApplication,
     AgentApplicationDto,
     AgentApplicationStatus,
+    AgentMetricsDto,
+    AgentProfileDto,
+    AgentQualityScore,
+    AgentQualityScoreDto,
     AgentType,
+    AvailabilityStatus,
     BvnVerifyDto,
     BvnVerificationResultDto,
     CreateAgentApplicationDto,
+    CreateAgentQualityScoreDto,
     CredentialsStepDto,
     IdDocType,
     KycDocumentsDto,
@@ -48,8 +54,11 @@ from main.app.domain.user.agent.models import (
     SubmitApplicationDto,
     TypesStepDto,
     UpdateAgentApplicationDto,
+    UpdateAvailabilityDto,
+    UpdateCoverageDto,
 )
-from main.app.domain.user.agent.repo import AgentApplicationRepo
+from main.app.domain.user.agent.repo import AgentApplicationRepo, AgentQualityScoreRepo
+from main.app.domain.admin_config.service import AdminConfigService
 from main.app.domain.user.agent.validator import AgentApplicationValidator
 from main.app.domain.user.auth.consent.models import ConsentDocumentType
 from main.app.domain.user.auth.consent.service import ConsentService
@@ -90,6 +99,8 @@ class AgentApplicationService:
         kyc_provider: KycProvider,
         kyc_repo: KycRecordRepo,
         audit: AuditLogService,
+        quality_score_repo: AgentQualityScoreRepo,
+        admin_config: AdminConfigService,
     ):
         self._repo = repo
         self._validator = validator
@@ -99,6 +110,8 @@ class AgentApplicationService:
         self._kyc = kyc_provider
         self._kyc_repo = kyc_repo
         self._audit = audit
+        self._quality_scores = quality_score_repo
+        self._config = admin_config
 
     # ── Reads ──────────────────────────────────────────────────────
 
@@ -440,6 +453,43 @@ class AgentApplicationService:
         )
         return self._to_public_dto(await self._repo.get_model(application_id))
 
+    # ── Phase 16 — Reputation, Coverage & Availability ────────────
+
+    async def get_metrics(self, user_id: str) -> AgentMetricsDto:
+        """Return computed performance metrics for the requesting agent."""
+        sla_hours = await self._config.get_int("task_sla_hours", fallback=48)
+        return await self._quality_scores.compute_metrics(user_id, sla_hours)
+
+    async def get_profile(self, user_id: str) -> AgentProfileDto:
+        """Return agent's application data combined with computed metrics."""
+        app = await self.get_or_create_for_user(user_id)
+        metrics = await self.get_metrics(user_id)
+        return AgentProfileDto(**app.model_dump(), metrics=metrics)
+
+    async def update_coverage(
+        self, user_id: str, dto: UpdateCoverageDto,
+    ) -> AgentApplicationDto:
+        row = await self._repo.get_by_user_id(user_id)
+        if row is None:
+            raise ResourceNotFoundException(resource="AgentApplication")
+        await self._repo.update(str(row.id), UpdateAgentApplicationDto(
+            coverage_states=[s.upper() for s in dto.coverage_states],
+            coverage_lgas=list(dto.coverage_lgas or []),
+            max_travel_km=dto.max_travel_km,
+        ))
+        return self._to_public_dto(await self._repo.get_by_user_id(user_id))
+
+    async def set_availability(
+        self, user_id: str, dto: UpdateAvailabilityDto,
+    ) -> AgentApplicationDto:
+        row = await self._repo.get_by_user_id(user_id)
+        if row is None:
+            raise ResourceNotFoundException(resource="AgentApplication")
+        await self._repo.update(str(row.id), UpdateAgentApplicationDto(
+            availability_status=dto.status.value,
+        ))
+        return self._to_public_dto(await self._repo.get_by_user_id(user_id))
+
     # ── Helpers ────────────────────────────────────────────────────
 
     @staticmethod
@@ -467,6 +517,10 @@ class AgentApplicationService:
             submitted_at=row.submitted_at,
             reviewed_at=row.reviewed_at,
             rejection_reason=row.rejection_reason,
+            availability_status=AvailabilityStatus(
+                row.availability_status or AvailabilityStatus.AVAILABLE.value
+            ),
+            max_travel_km=row.max_travel_km,
             created_at=row.date_created,
             updated_at=row.date_updated,
         )

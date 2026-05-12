@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Type
 
 from sqlalchemy import select
 from kink import inject
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.commission.models import (
     CommissionRule,
@@ -32,7 +33,13 @@ class CommissionRuleRepo(GenericRepo[
     QueryCommissionRuleDto,
     SearchCommissionRuleDto,
 ]):
-    model = CommissionRule
+    def __init__(
+        self,
+        db: AsyncSession,
+        model: Type[CommissionRule] = CommissionRule,
+        query_dto: Type[QueryCommissionRuleDto] = QueryCommissionRuleDto,
+    ):
+        super().__init__(db, model, query_dto)
 
     async def get_for_role_and_tier(self, role: str, tier: str) -> Optional[CommissionRule]:
         session = get_db_session_from_context()
@@ -54,7 +61,13 @@ class EarningRepo(GenericRepo[
     QueryEarningDto,
     SearchEarningDto,
 ]):
-    model = Earning
+    def __init__(
+        self,
+        db: AsyncSession,
+        model: Type[Earning] = Earning,
+        query_dto: Type[QueryEarningDto] = QueryEarningDto,
+    ):
+        super().__init__(db, model, query_dto)
 
     async def list_for_agent(self, agent_id: str) -> List[Earning]:
         session = get_db_session_from_context()

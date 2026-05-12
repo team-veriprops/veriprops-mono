@@ -32,37 +32,37 @@ export interface CreateBankAccountDto {
 
 export class PayoutService {
   listBankAccounts(): Promise<{ data: BankAccount[] }> {
-    return httpClient.get("/api/agent/bank-accounts");
+    return httpClient.get("/agent/bank-accounts");
   }
 
   addBankAccount(dto: CreateBankAccountDto): Promise<{ data: BankAccount }> {
-    return httpClient.post("/api/agent/bank-accounts", dto);
+    return httpClient.post("/agent/bank-accounts", dto);
   }
 
   requestWithdrawal(amount: number, bankAccountId: string): Promise<{ data: Payout }> {
-    return httpClient.post("/api/agent/payouts", { amount, bankAccountId });
+    return httpClient.post("/agent/payouts", { amount, bankAccountId });
   }
 
   listPayouts(): Promise<{ data: Payout[] }> {
-    return httpClient.get("/api/agent/payouts");
+    return httpClient.get("/agent/payouts");
   }
 }
 
 export class PayoutAdminService {
   listAll(): Promise<{ data: Payout[] }> {
-    return httpClient.get("/api/admin/payouts");
+    return httpClient.get("/admin/payouts");
   }
 
   approve(payoutId: string): Promise<{ data: Payout }> {
-    return httpClient.post(`/api/admin/payouts/${payoutId}/approve`);
+    return httpClient.post(`/admin/payouts/${payoutId}/approve`);
   }
 
   hold(payoutId: string, reason: string): Promise<{ data: Payout }> {
-    return httpClient.post(`/api/admin/payouts/${payoutId}/hold`, { reason });
+    return httpClient.post(`/admin/payouts/${payoutId}/hold`, { reason });
   }
 
   adjust(payoutId: string, newAmount: number, reason: string): Promise<{ data: Payout }> {
-    return httpClient.put(`/api/admin/payouts/${payoutId}/adjust`, { newAmount, reason });
+    return httpClient.put(`/admin/payouts/${payoutId}/adjust`, { newAmount, reason });
   }
 }
 

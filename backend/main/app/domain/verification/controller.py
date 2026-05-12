@@ -19,6 +19,7 @@ from main.app.domain.verification.models import (
     PropertyDocumentType,
     TierSelectionDto,
     VerificationDto,
+    VerificationStatus,
     VerificationTier,
     WizardStepDto,
 )
@@ -128,6 +129,21 @@ async def upload_property_document(
         user_id, verification_id, file_bytes, file.filename or "upload", document_type.value,
     )
     return SuccessResponse[DocumentUploadResponseDto](data=dto)
+
+
+@verification_router.post(
+    "/{verification_id}/cancel",
+    response_model=SuccessResponse[VerificationDto],
+)
+async def cancel_verification(verification_id: str, authorize: AuthJWT = Depends()):
+    authorize.jwt_required()
+    user_id = authorize.get_jwt_subject()
+    # Ownership check — raises 404 if not owned
+    await verification_service.get(verification_id, user_id)
+    dto = await verification_service.transition(
+        verification_id, VerificationStatus.CANCELLED, actor_id=user_id,
+    )
+    return SuccessResponse[VerificationDto](data=dto)
 
 
 # ── Listing-URL parser (R5.2) ─────────────────────────────────────

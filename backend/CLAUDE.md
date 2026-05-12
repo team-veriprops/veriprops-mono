@@ -144,6 +144,46 @@ Provider-agnostic interfaces in [appodus_utils/integrations/](main/appodus_utils
 
 Webhook receivers live under `appodus_utils/integrations/.../webhook.py` and are mounted via the shared `webhook_router`.
 
+### Messaging & templating pattern
+
+All external channel dispatch (email, SMS, push, WhatsApp) goes through the messaging integration at `appodus_utils/integrations/messaging/`.
+
+**To send a new notification type — follow all four steps in order:**
+
+1. **Register the template slug** in `appodus_utils/integrations/messaging/templating/models.py` → `AvailableTemplate` enum.
+   ```python
+   MY_NEW_EVENT = "my_new_event"  # Email, SMS
+   ```
+
+2. **Add context variables** for any dynamic data in `appodus_utils/integrations/messaging/models.py` → `MessageContext` enum.
+   ```python
+   MY_EVENT_SOME_FIELD = "MY_EVENT_SOME_FIELD"  # my_new_event — description
+   ```
+   Global variables (`FIRST_NAME`, `BRAND`, `BRAND_SUPPORT_EMAIL`, etc.) are injected automatically via `MessageContextModule.USER` and don't need entries.
+
+3. **Create Jinja2 template files** for each channel the notification supports, named exactly `{AvailableTemplate.slug}.jinja2`:
+   - `appodus_utils/integrations/messaging/templates/email/my_new_event.jinja2`
+   - `appodus_utils/integrations/messaging/templates/sms/my_new_event.jinja2` (if SMS)
+   - `appodus_utils/integrations/messaging/templates/push/my_new_event.jinja2` (if push)
+   - etc.
+
+   Template variables use **UPPERCASE** matching the `MessageContext` enum values. The first line of email templates must be `Subject: ...`.
+
+4. **Add a send method** to the domain's message class (a subclass of `BaseMessageSender` in `app/domain/message/`):
+   ```python
+   async def send_my_event(self, recipient_user_id: str, some_field: str) -> None:
+       await self._send_message(
+           recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
+           template=AvailableTemplate.MY_NEW_EVENT,
+           context_modules=[MessageContextModule.USER],
+           category=MessageCategory.TRANSACTIONAL,
+           default_channels=[MessageChannel.EMAIL],
+           extra_context={MessageContext.MY_EVENT_SOME_FIELD.value: some_field},
+       )
+   ```
+
+**Non-negotiable:** Every `AvailableTemplate` entry must have a matching template file for every channel it declares. Registering the enum entry without the template file will cause a runtime error when the notification fires.
+
 ## Redis
 We don't use Redis directly, rather we rely on `RedisUtils` in `backend/main/appodus_utils/db/redis_utils.py`. This uses Redis when available, but fallback to an SQL implementation when not available.
 

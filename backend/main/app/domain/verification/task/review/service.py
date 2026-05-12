@@ -62,6 +62,8 @@ class TaskReviewService:
         await self._publish(task.verification_id, "task_approved", task_id)
         await self._emit_notification_safe(task, "approved")
         await self._compute_commission_safe(task, admin_id)
+        if task.agent_id:
+            await self._restore_availability_safe(task.agent_id)
         return TaskReviewDto(
             task_id=task_id,
             decision=TaskReviewDecision.APPROVED,
@@ -193,6 +195,14 @@ class TaskReviewService:
                 )
         except Exception as exc:
             logger.warning(f"Notification emit failed (task review {action}): {exc}")
+
+    async def _restore_availability_safe(self, agent_id: str) -> None:
+        try:
+            from main.app.domain.verification.task.service import TaskService
+            svc: TaskService = di[TaskService]
+            await svc._maybe_restore_availability(agent_id)
+        except Exception as exc:
+            logger.warning(f"Availability restore failed for agent {agent_id}: {exc}")
 
     async def _compute_commission_safe(self, task, admin_id: str) -> None:
         try:

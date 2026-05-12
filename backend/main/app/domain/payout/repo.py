@@ -1,6 +1,8 @@
-from typing import List
+from typing import List, Type
 from sqlalchemy import select
 from kink import inject
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from main.app.domain.payout.models import (
     BankAccount, Payout, PayoutAdjustment,
     CreateBankAccountDto, UpdateBankAccountDto, QueryBankAccountDto, SearchBankAccountDto,
@@ -16,11 +18,17 @@ class BankAccountRepo(GenericRepo[
     BankAccount, CreateBankAccountDto, UpdateBankAccountDto,
     QueryBankAccountDto, SearchBankAccountDto,
 ]):
-    model = BankAccount
+    def __init__(
+        self,
+        db: AsyncSession,
+        model: Type[BankAccount] = BankAccount,
+        query_dto: Type[QueryBankAccountDto] = QueryBankAccountDto,
+    ):
+        super().__init__(db, model, query_dto)
+
 
     async def list_for_agent(self, agent_id: str) -> List[BankAccount]:
-        session = get_db_session_from_context()
-        result = await session.execute(
+        result = await self._session.execute(
             select(BankAccount).where(
                 BankAccount.agent_id == agent_id, BankAccount.deleted == False
             )
@@ -32,11 +40,16 @@ class BankAccountRepo(GenericRepo[
 class PayoutRepo(GenericRepo[
     Payout, CreatePayoutDto, UpdatePayoutDto, QueryPayoutDto, SearchPayoutDto,
 ]):
-    model = Payout
+    def __init__(
+        self,
+        db: AsyncSession,
+        model: Type[Payout] = Payout,
+        query_dto: Type[QueryPayoutDto] = QueryPayoutDto,
+    ):
+        super().__init__(db, model, query_dto)
 
     async def list_for_agent(self, agent_id: str) -> List[Payout]:
-        session = get_db_session_from_context()
-        result = await session.execute(
+        result = await self._session.execute(
             select(Payout).where(
                 Payout.agent_id == agent_id, Payout.deleted == False
             ).order_by(Payout.date_created.desc())
@@ -49,4 +62,10 @@ class PayoutAdjustmentRepo(GenericRepo[
     PayoutAdjustment, CreatePayoutAdjustmentDto, CreatePayoutAdjustmentDto,
     QueryPayoutDto, SearchPayoutDto,
 ]):
-    model = PayoutAdjustment
+    def __init__(
+        self,
+        db: AsyncSession,
+        model: Type[PayoutAdjustment] = PayoutAdjustment,
+        query_dto: Type[QueryPayoutDto] = QueryPayoutDto,
+    ):
+        super().__init__(db, model, query_dto)

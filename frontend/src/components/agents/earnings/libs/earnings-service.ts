@@ -28,25 +28,25 @@ export interface CommissionRule {
 
 export class EarningsService {
   getSummary(): Promise<{ data: EarningsSummary }> {
-    return httpClient.get("/api/agent/earnings");
+    return httpClient.get("/agent/earnings");
   }
 
   listJobs(): Promise<{ data: EarningRecord[] }> {
-    return httpClient.get("/api/agent/earnings/jobs");
+    return httpClient.get("/agent/earnings/jobs");
   }
 }
 
 export class CommissionAdminService {
   listRules(): Promise<{ data: CommissionRule[] }> {
-    return httpClient.get("/api/admin/commission-rules");
+    return httpClient.get("/admin/commission-rules");
   }
 
   createRule(data: Omit<CommissionRule, "id">): Promise<{ data: CommissionRule }> {
-    return httpClient.post("/api/admin/commission-rules", data);
+    return httpClient.post("/admin/commission-rules", data);
   }
 
   updateRule(id: string, data: Partial<Omit<CommissionRule, "id">>): Promise<{ data: CommissionRule }> {
-    return httpClient.put(`/api/admin/commission-rules/${id}`, data);
+    return httpClient.put(`/admin/commission-rules/${id}`, data);
   }
 }
 

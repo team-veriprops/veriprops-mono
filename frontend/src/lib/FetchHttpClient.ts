@@ -53,7 +53,7 @@ export class FetchHttpClient implements HttpClient {
       headers["X-TIMEZONE"] = timezone;
       headers["X-LOCALE"] = locale;
 
-      const csrfToken = this.getCookie("csrf_access");
+      const csrfToken = this.getCookie("__Host-access_csrf_token");
       if (csrfToken) {
         headers["X-CSRF-Token"] = csrfToken;
       }
@@ -78,7 +78,7 @@ export class FetchHttpClient implements HttpClient {
 
       if (!response.ok) {
         if (response.status === 401 && !options._retry) {
-          return this.handle401<T>(url, options);
+          return this.handle401<T>(url, options, headers);
         }
         if (response.status === 403) {
           this.redirectToAccessDenied();
@@ -115,12 +115,13 @@ export class FetchHttpClient implements HttpClient {
 
   private async handle401<T>(
     url: string,
-    options: RequestInit & { _retry?: boolean }
+    options: RequestInit & { _retry?: boolean },
+    headers: Record<string, string>
   ): Promise<T> {
     options._retry = true;
 
     try {
-      await this.refreshToken();
+      await this.refreshToken(headers);
       this.notifySubscribers();
       return this.request<T>(url, options);
     } catch (err) {
@@ -130,7 +131,7 @@ export class FetchHttpClient implements HttpClient {
     }
   }
 
-  private async refreshToken(): Promise<void> {
+  private async refreshToken(headers: Record<string, string>): Promise<void> {
     if (this.isRefreshing) {
       return new Promise((resolve) => this.refreshSubscribers.push(resolve));
     }
@@ -138,6 +139,7 @@ export class FetchHttpClient implements HttpClient {
     try {
       await fetch(`/api/users/auth/sessions/current`, {
         method: "POST",
+        headers,
         credentials: "include",
       });
     } finally {
@@ -167,7 +169,7 @@ export class FetchHttpClient implements HttpClient {
   private redirectToLogin() {
     if (typeof window !== "undefined") {
       const current = window.location.pathname + window.location.search;
-      window.location.href = `/login?redirect=${encodeURIComponent(current)}`;
+      window.location.href = `/auth/login?redirect=${encodeURIComponent(current)}`;
     }
   }
 

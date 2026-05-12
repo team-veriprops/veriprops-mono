@@ -2,170 +2,102 @@ session_id: null
 command: resume
 
 status: checkpointed
-phase: phases_11_12_13_14_15
+phase: phases_16_17
 
 current_slice: null
 current_subtask: null
-last_completed_slices: [S18, S19, S20, S21, S22, S23, S24, S25, S26, S27, S28, S29, S30, S31, S32, S33, S34, S35, S36, S37, S38, S39, S40, S41, S42, S43, S44, S45, S46, S47, S48]
+last_completed_slices: [S18, S19, S20, S21, S22, S23, S24, S25, S26, S27, S28, S29, S30, S31, S32, S33, S34, S35, S36, S37, S38, S39, S40, S41, S42, S43, S44, S45, S46, S47, S48, S49, S50, S51, S52]
 
 modified_files:
+  # Backend
   - backend/main/app/domain/__init__.py
-  - backend/main/app/domain/payout/controller.py
-  - backend/main/app/domain/thread/service.py
+  - backend/main/app/domain/audit/models.py
   - backend/main/app/domain/payment/service.py
-  - backend/main/app/domain/verification/task/service.py
+  - backend/main/app/domain/verification/portal/controller.py
   - backend/main/app/domain/verification/release/service.py
-  - backend/main/app/domain/verification/task/review/service.py
   - backend/main/app/domain/verification/service.py
-  - backend/main/app/domain/verification/models.py
+  - backend/main/app/domain/verification/repo.py
+  - backend/main/app/domain/verification/task/review/service.py
+  - backend/main/app/domain/verification/task/service.py
+  - backend/main/app/domain/user/agent/models.py
+  - backend/main/app/domain/user/agent/service.py
+  - backend/main/app/domain/user/agent/repo.py
+  - backend/main/app/domain/user/agent/controller.py
+  - backend/main/app/domain/admin_config/service.py
+  - backend/main/app/domain/dev/controller.py
+  - backend/main/app/state/machine.py
+  - backend/main/appodus_utils/db/models.py
+  - backend/main/appodus_utils/integrations/messaging/templating/models.py
+  # Frontend
+  - frontend/src/app/portal/verifications/[id]/page.tsx
+  - frontend/src/app/portal/verifications/[id]/report/page.tsx
+  - frontend/src/app/portal/dashboard/page.tsx
+  - frontend/src/components/admin/nav.ts
+  - frontend/src/components/agents/nav.ts
+  - frontend/src/components/ui/AppShell.tsx
+  - frontend/src/lib/routes.ts
+  - frontend/src/components/agents/libs/agent-service.ts
+  - frontend/src/components/agents/libs/useAgentApplicationQueries.ts
+  - frontend/src/components/portal/verifications/libs/verification-service.ts
+  - frontend/src/components/portal/verifications/libs/useVerificationQueries.ts
+  # Test fixes
+  - backend/test/unit/app/domain/agent/test_agent_application.py
+  - backend/test/unit/app/domain/agent/test_kyc_service_s8.py
+  - backend/test/unit/app/domain/verification/task/test_task_service.py
+  - frontend/src/components/agents/libs/agent-service.test.ts
+  - frontend/src/components/agents/onboarding/wizardUtils.test.ts
+  # Docs
   - docs/requirements-matrix.md
   - docs/runtime-state.yaml
   - docs/progress.md
 
 created_files:
-  # Backend — Thread (S37)
-  - backend/main/app/domain/thread/__init__.py
-  - backend/main/app/domain/thread/models.py
-  - backend/main/app/domain/thread/repo.py
-  - backend/main/app/domain/thread/service.py
-  - backend/main/app/domain/thread/controller.py
-  - backend/main/app/domain/thread/ws.py
-  - backend/main/app/domain/thread/fraud/__init__.py
-  - backend/main/app/domain/thread/fraud/models.py
-  - backend/main/app/domain/thread/fraud/rules.py
-  - backend/main/app/domain/thread/fraud/service.py
-  - backend/main/app/domain/thread/fraud/repo.py
-  - backend/main/app/domain/thread/fraud/controller.py
-  # Backend — Notification (S39)
-  - backend/main/app/domain/notification/__init__.py
-  - backend/main/app/domain/notification/models.py
-  - backend/main/app/domain/notification/repo.py
-  - backend/main/app/domain/notification/service.py
-  - backend/main/app/domain/notification/controller.py
-  - backend/main/app/domain/notification/events.py
+  # Backend — Agent Reputation (S49)
+  - backend/main/app/domain/user/agent/quality_score/
+  - backend/main/app/domain/user/agent/quality_score/__init__.py
+  - backend/main/app/domain/user/agent/quality_score/models.py
+  - backend/main/app/domain/user/agent/quality_score/repo.py
+  # Backend — Referral (S51)
+  - backend/main/app/domain/referral/__init__.py
+  - backend/main/app/domain/referral/models.py
+  - backend/main/app/domain/referral/repo.py
+  - backend/main/app/domain/referral/service.py
+  - backend/main/app/domain/referral/controller.py
+  # Backend — Messaging (S52)
   - backend/main/app/domain/message/verification_messages.py
-  # Backend — Share (S43)
-  - backend/main/app/domain/verification/share/__init__.py
-  - backend/main/app/domain/verification/share/models.py
-  - backend/main/app/domain/verification/share/repo.py
-  - backend/main/app/domain/verification/share/service.py
-  - backend/main/app/domain/verification/share/controller.py
-  # Backend — Recheck (S44)
-  - backend/main/app/domain/verification/recheck/__init__.py
-  - backend/main/app/domain/verification/recheck/models.py
-  - backend/main/app/domain/verification/recheck/repo.py
-  - backend/main/app/domain/verification/recheck/service.py
-  - backend/main/app/domain/verification/recheck/controller.py
-  # Backend — Tier Upgrade (S45)
-  - backend/main/app/domain/verification/tier_upgrade/__init__.py
-  - backend/main/app/domain/verification/tier_upgrade/models.py
-  - backend/main/app/domain/verification/tier_upgrade/repo.py
-  - backend/main/app/domain/verification/tier_upgrade/service.py
-  - backend/main/app/domain/verification/tier_upgrade/controller.py
-  # Backend — Dispute (S46)
-  - backend/main/app/domain/verification/dispute/__init__.py
-  - backend/main/app/domain/verification/dispute/models.py
-  - backend/main/app/domain/verification/dispute/repo.py
-  - backend/main/app/domain/verification/dispute/service.py
-  - backend/main/app/domain/verification/dispute/controller.py
-  - backend/main/app/domain/verification/dispute/validator.py
-  # Backend — Commission (S47)
-  - backend/main/app/domain/commission/__init__.py
-  - backend/main/app/domain/commission/models.py
-  - backend/main/app/domain/commission/repo.py
-  - backend/main/app/domain/commission/service.py
-  - backend/main/app/domain/commission/controller.py
-  # Backend — Payout (S48)
-  - backend/main/app/domain/payout/__init__.py
-  - backend/main/app/domain/payout/models.py
-  - backend/main/app/domain/payout/repo.py
-  - backend/main/app/domain/payout/service.py
-  - backend/main/app/domain/payout/controller.py
-  - backend/main/app/domain/payout/validator.py
   # Backend — Migrations
-  - backend/main/alembic/versions/c3d4e5f6a7b8_s37_s38_threads_fraud.py
-  - backend/main/alembic/versions/d4e5f6a7b8c9_s39_notifications.py
-  - backend/main/alembic/versions/e5f6a7b8c9d0_s43_s48_share_recheck_dispute_commission_payout.py
-  # Backend — Tests
-  - backend/test/unit/app/domain/thread/__init__.py
-  - backend/test/unit/app/domain/thread/test_thread_service.py
-  - backend/test/unit/app/domain/thread/fraud/__init__.py
-  - backend/test/unit/app/domain/thread/fraud/test_fraud_detection_service.py
-  - backend/test/unit/app/domain/notification/__init__.py
-  - backend/test/unit/app/domain/notification/test_notification_service.py
-  - backend/test/unit/app/domain/commission/__init__.py
-  - backend/test/unit/app/domain/commission/test_commission_service.py
-  - backend/test/unit/app/domain/payout/__init__.py
-  - backend/test/unit/app/domain/payout/test_payout_service.py
-  - backend/test/unit/app/domain/verification/dispute/__init__.py
-  - backend/test/unit/app/domain/verification/dispute/test_dispute_service.py
-  - backend/test/unit/app/domain/verification/recheck/__init__.py
-  - backend/test/unit/app/domain/verification/recheck/test_recheck_service.py
-  - backend/test/unit/app/domain/verification/share/__init__.py
-  - backend/test/unit/app/domain/verification/share/test_share_service.py
-  # Frontend — Thread (S37)
-  - frontend/src/app/portal/verifications/[id]/messages/page.tsx
-  - frontend/src/app/agents/tasks/[taskId]/messages/page.tsx
-  - frontend/src/app/admin/verifications/[vid]/messages/page.tsx
-  - frontend/src/components/shared/chat/ThreadView.tsx
-  - frontend/src/components/shared/chat/libs/thread-service.ts
-  # Frontend — Fraud (S38)
-  - frontend/src/app/admin/fraud-flags/page.tsx
-  - frontend/src/components/admin/fraud/FraudFlagQueue.tsx
-  # Frontend — Notifications (S39–S41)
-  - frontend/src/components/shared/notifications/NotificationBell.tsx
-  - frontend/src/components/shared/notifications/NotificationList.tsx
-  - frontend/src/app/portal/account/notification-preferences/page.tsx
-  - frontend/src/app/agents/account/notification-preferences/page.tsx
-  - frontend/src/components/shared/notifications/NotificationPreferencesForm.tsx
-  # Frontend — Public lookup (S42)
-  - frontend/src/app/verify/[id]/page.tsx
-  - frontend/src/components/public/VerificationBadge.tsx
-  - frontend/src/components/public/PublicSummaryCard.tsx
-  - frontend/src/libs/public-verification-service.ts
-  # Frontend — Share (S43)
-  - frontend/src/components/portal/report/ShareModal.tsx
-  # Frontend — Recheck (S44)
-  - frontend/src/components/portal/report/RecheckModal.tsx
-  - frontend/src/app/admin/rechecks/page.tsx
-  - frontend/src/components/admin/rechecks/RecheckQueue.tsx
-  # Frontend — Tier Upgrade (S45)
-  - frontend/src/components/portal/report/TierUpgradeModal.tsx
-  - frontend/src/components/portal/report/libs/upgrade-service.ts
-  # Frontend — Dispute (S46)
-  - frontend/src/components/portal/report/DisputeModal.tsx
-  - frontend/src/app/admin/disputes/page.tsx
-  - frontend/src/components/admin/disputes/DisputeQueue.tsx
-  - frontend/src/components/admin/disputes/DisputeResolutionForm.tsx
-  # Frontend — Earnings/Commission (S47)
-  - frontend/src/app/agents/earnings/page.tsx
-  - frontend/src/components/agents/earnings/EarningsDashboard.tsx
-  - frontend/src/components/agents/earnings/JobBreakdownTable.tsx
-  - frontend/src/components/agents/earnings/libs/earnings-service.ts
-  - frontend/src/app/admin/commission-rules/page.tsx
-  - frontend/src/components/admin/commission/CommissionRuleEditor.tsx
-  # Frontend — Payouts (S48)
-  - frontend/src/app/agents/payouts/page.tsx
-  - frontend/src/components/agents/payouts/WithdrawalModal.tsx
-  - frontend/src/components/agents/payouts/PayoutHistory.tsx
-  - frontend/src/components/agents/payouts/libs/payout-service.ts
-  - frontend/src/app/admin/payouts/page.tsx
-  - frontend/src/components/admin/payouts/PayoutPanel.tsx
-  - frontend/src/components/admin/payouts/AdjustPayoutModal.tsx
+  - backend/main/alembic/versions/f6a7b8c9d0e1_s49_s50_agent_reputation_coverage.py
+  - backend/main/alembic/versions/a7b8c9d0e1f2_s51_s52_referral_abandonment.py
+  # Frontend — Agent Profile + Settings (S49–S50)
+  - frontend/src/app/agents/profile/page.tsx
+  - frontend/src/app/agents/settings/coverage/page.tsx
+  - frontend/src/app/agents/settings/availability/page.tsx
+  # Frontend — Referrals (S51)
+  - frontend/src/app/portal/referrals/page.tsx
+  - frontend/src/components/portal/referrals/referral-service.ts
+  # Tests — S49–S52
+  - backend/test/unit/app/domain/agent/test_metrics.py
+  - backend/test/unit/app/domain/verification/task/test_availability_flip.py
+  - backend/test/unit/app/domain/referral/__init__.py
+  - backend/test/unit/app/domain/referral/test_referral.py
+  - backend/test/unit/app/domain/verification/test_abandonment.py
 
 tests:
   written: true
   executed: true
   passing: true
-  last_run: "2026-05-12 — 62 new backend unit tests passing (thread 5, thread/fraud 11, notification 6, commission 7, payout 4, dispute 9, recheck 5, share 9 = 56 direct + 6 extra assertions); cross-check audit of 3 gaps all resolved"
+  last_run: "2026-05-12 — 44 new backend unit tests passing (test_metrics 12, test_availability_flip 10, test_referral 18, test_abandonment 6); all pre-existing tests maintained (71 agent+task tests passing after fixture updates)"
 
 self_audit:
   started: true
   completed: true
   findings:
-    - "Gap 1 (CRITICAL): Payout RBAC bug — MANAGE_PAYOUTS → APPROVE_PAYOUT in payout/controller.py; all 4 finance admin payout endpoints now correctly guarded"
-    - "Gap 2: NEW_MESSAGE notification hook — _emit_new_message_safe() added to thread/service.py post_message(); resolves recipient via VerificationRepo (CUSTOMER_ADMIN) or TaskRepo (ADMIN_AGENT)"
-    - "Gap 3: 8 backend unit test files created covering all S37-S48 new domains; 62 tests passing"
+    - "S49: AgentMetrics computation (completion_rate, accuracy_score, timeliness_score) + composite ranking formula 0.4*(accuracy/5)+0.4*(completion/100)+0.2*(timeliness/100) implemented and tested"
+    - "S50: availability auto-flip (_maybe_flip_unavailable/_maybe_restore_availability) on task accept/release; manual LIMITED preserved; 5 admin config defaults added"
+    - "S51: ReferralService (get_or_create_code, claim_referral with self-referral rejection, compute_discount with cap, credit_referrer_on_success); referral controller + frontend page"
+    - "S52: get_abandonments/send_abandonment_emails (idempotent via abandonment_email_sent_at set BEFORE send); refresh_price_lock; AbandonmentBanner in portal dashboard; cancel endpoint"
+    - "Pre-existing test fixture fixes: availability_status + max_travel_km added to mock application builders in 3 test files; quality_score_repo + admin_config added to _make_service in test_task_service.py"
+    - "NavIconKey union extended with user/mapPin/activity/gift; iconMap updated in AppShell.tsx"
 
 clarification_needed: []
 
@@ -173,7 +105,7 @@ git:
   branch: dev
   dirty: true
 
-next_action: null
+next_action: final_audit
 
 started_at: null
-last_checkpoint: "2026-05-12 S37-S48 — Phases 11-15 (messaging + fraud, notifications, public sharing, disputes/recheck/tier-upgrade, earnings/payouts) complete"
+last_checkpoint: "2026-05-12 S49-S52 — Phases 16-17 (agent reputation+coverage, referral system, abandonment recovery) complete — ALL PHASES DONE"

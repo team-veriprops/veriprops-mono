@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     "third-party property listing verification Nigeria"
   ],
   icons: {
-    icon: "/favicon.png",
+    icon: "/favicon/favicon_ico_16x16.png",
   },
   authors: [{ name: "Veriprops" }],
   robots: "index, follow",

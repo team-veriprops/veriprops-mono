@@ -83,6 +83,7 @@ class PaymentService:
         self._session_service = session_service
         self._user_repo = user_repo
         self._gateway_factory = gateway_factory
+        self._referral_service = None  # lazy-loaded to avoid circular import
 
     # ── Initiation ────────────────────────────────────────────────
 
@@ -113,6 +114,22 @@ class PaymentService:
         if user is None:
             raise ResourceNotFoundException(resource="User")
 
+        # Check first-payment eligibility and compute discounts (Phase 17)
+        payment_amount_kobo = int(snapshot.total_amount_minor)
+        discount_breakdown = None
+        try:
+            referral_svc = await self._get_referral_service()
+            if referral_svc is not None:
+                prior_payments = await self._payment_repo.count_succeeded_for_user(customer_id)
+                is_first = prior_payments == 0
+                if is_first:
+                    discount_breakdown = await referral_svc.compute_discount(
+                        customer_id, payment_amount_kobo, is_first_payment=True,
+                    )
+                    payment_amount_kobo = discount_breakdown.final_amount_kobo
+        except Exception as exc:
+            logger.warning("Referral discount computation failed — charging full amount: {}", exc)
+
         provider = (
             PaymentProvider.PAYSTACK
             if dto.method == PaymentMethod.BANK_TRANSFER
@@ -122,7 +139,7 @@ class PaymentService:
         await self._payment_repo.create(CreatePaymentDto(
             verification_id=str(verification.id),
             provider=provider,
-            amount_minor=snapshot.total_amount_minor,
+            amount_minor=payment_amount_kobo,
             currency=snapshot.currency,
             method=dto.method,
             status=status,
@@ -164,7 +181,7 @@ class PaymentService:
             flw_gw = self._gateway_factory.get_gateway(IntegratedPlatform.FLUTTERWAVE)
             checkout_url = await flw_gw.initialize_payment(PaymentInitRequest(
                 tx_ref=tx_ref,
-                amount=snapshot.total_amount_minor / 100,
+                amount=payment_amount_kobo / 100,
                 currency=snapshot.currency,
                 redirect_url=dto.redirect_url or settings.FLUTTERWAVE_REDIRECT_URL or "",
                 customer=customer_info,
@@ -182,7 +199,7 @@ class PaymentService:
             expiry = Utils.datetime_now_plus(hours=24)
             charge_result = await paystack_gw.charge_bank_transfer(PaystackBankTransferChargeRequest(
                 email=user.email,
-                amount=snapshot.total_amount_minor,
+                amount=payment_amount_kobo,
                 reference=tx_ref,
                 bank_transfer={"account_expires_at": expiry.isoformat()},
             ))
@@ -194,7 +211,7 @@ class PaymentService:
                 "virtualAccountNumber": charge_result.account_number,
                 "accountName": charge_result.account_name,
                 "expiresAt": charge_result.expiry_date or expiry.isoformat(),
-                "amountMinor": snapshot.total_amount_minor,
+                "amountMinor": payment_amount_kobo,
                 "currency": snapshot.currency,
             }
 
@@ -205,7 +222,7 @@ class PaymentService:
                 "iban": settings.WIRE_IBAN,
                 "beneficiary": settings.WIRE_BENEFICIARY,
                 "reference": verification.vid,
-                "amountMinor": snapshot.total_amount_minor,
+                "amountMinor": payment_amount_kobo,
                 "currency": snapshot.currency,
                 "uploadProofTo": f"/api/payments/{payment.id}/wire-proof",
             }
@@ -330,6 +347,13 @@ class PaymentService:
             description=f"payment {payment.id} succeeded for {verification.vid}",
             user_id=str(verification.customer_id),
         )
+        # Credit referrer on invitee's first payment (Phase 17 — S51)
+        try:
+            referral_svc = await self._get_referral_service()
+            if referral_svc is not None:
+                await referral_svc.credit_referrer_on_success(str(verification.customer_id))
+        except Exception as exc:
+            logger.warning("Referral credit failed for customer {}: {}", verification.customer_id, exc)
         # Emit in-app notification
         try:
             from main.app.domain.notification.service import NotificationService
@@ -344,6 +368,14 @@ class PaymentService:
             )
         except Exception as exc:
             logger.warning("Notification emit failed (payment): {}", exc)
+
+    async def _get_referral_service(self):
+        """Lazy-load ReferralService to avoid circular imports at module level."""
+        try:
+            from main.app.domain.referral.service import ReferralService
+            return di[ReferralService]
+        except Exception:
+            return None
 
     def _to_dto(self, payment: Optional[Payment]) -> PaymentDto:
         if payment is None:

@@ -30,7 +30,7 @@ export default function RecheckModal({ verificationId, open, onClose }: Props) {
 
   const submit = useMutation({
     mutationFn: () =>
-      httpClient.post(`/api/portal/verifications/${verificationId}/recheck`, {
+      httpClient.post(`/portal/verifications/${verificationId}/recheck`, {
         reason,
         scopeRoles,
       }),

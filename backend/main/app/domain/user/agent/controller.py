@@ -25,6 +25,8 @@ from main.app.domain.user.agent.models import (
     AdminAgentApplicationDto,
     AgentApplicationDto,
     AgentApplicationStatus,
+    AgentMetricsDto,
+    AgentProfileDto,
     BvnVerifyDto,
     BvnVerificationResultDto,
     CredentialsStepDto,
@@ -32,6 +34,8 @@ from main.app.domain.user.agent.models import (
     RejectApplicationDto,
     SubmitApplicationDto,
     TypesStepDto,
+    UpdateAvailabilityDto,
+    UpdateCoverageDto,
 )
 from main.app.domain.user.agent.service import AgentApplicationService
 from main.app.domain.user.auth.utils.permissions import (
@@ -103,6 +107,40 @@ async def submit_application(
         ip_address=ClientUtils.get_client_ip(request),
         device_fingerprint=request.headers.get("X-Device-Fingerprint"),
     )
+    return SuccessResponse[AgentApplicationDto](data=dto)
+
+
+# ─── Phase 16 — Profile, Coverage & Availability ────────────────
+
+@agent_router.get("/me/profile", response_model=SuccessResponse[AgentProfileDto])
+async def get_my_profile(authorize: AuthJWT = Depends()):
+    authorize.jwt_required()
+    user_id = authorize.get_jwt_subject()
+    dto = await agent_service.get_profile(user_id)
+    return SuccessResponse[AgentProfileDto](data=dto)
+
+
+@agent_router.get("/me/metrics", response_model=SuccessResponse[AgentMetricsDto])
+async def get_my_metrics(authorize: AuthJWT = Depends()):
+    authorize.jwt_required()
+    user_id = authorize.get_jwt_subject()
+    dto = await agent_service.get_metrics(user_id)
+    return SuccessResponse[AgentMetricsDto](data=dto)
+
+
+@agent_router.put("/me/coverage", response_model=SuccessResponse[AgentApplicationDto])
+async def update_coverage(req: UpdateCoverageDto, authorize: AuthJWT = Depends()):
+    authorize.jwt_required()
+    user_id = authorize.get_jwt_subject()
+    dto = await agent_service.update_coverage(user_id, req)
+    return SuccessResponse[AgentApplicationDto](data=dto)
+
+
+@agent_router.put("/me/availability", response_model=SuccessResponse[AgentApplicationDto])
+async def update_availability(req: UpdateAvailabilityDto, authorize: AuthJWT = Depends()):
+    authorize.jwt_required()
+    user_id = authorize.get_jwt_subject()
+    dto = await agent_service.set_availability(user_id, req)
     return SuccessResponse[AgentApplicationDto](data=dto)
 
 

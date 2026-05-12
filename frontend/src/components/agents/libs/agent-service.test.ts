@@ -20,6 +20,8 @@ const mockApp: AgentApplication = {
   yearsOfExperience: null,
   coverageStates: [],
   coverageLgas: [],
+  maxTravelKm: null,
+  availabilityStatus: "AVAILABLE",
   bio: null,
   submittedAt: null,
   reviewedAt: null,

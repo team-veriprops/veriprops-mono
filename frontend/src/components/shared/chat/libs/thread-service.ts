@@ -31,19 +31,19 @@ export interface PostMessagePayload {
 
 export class ThreadService {
   getByVerification(vid: string): Promise<{ data: Thread }> {
-    return httpClient.get(`/api/threads/by-verification/${vid}`);
+    return httpClient.get(`/threads/by-verification/${vid}`);
   }
 
   getByTask(taskId: string): Promise<{ data: Thread }> {
-    return httpClient.get(`/api/threads/by-task/${taskId}`);
+    return httpClient.get(`/threads/by-task/${taskId}`);
   }
 
   listMessages(threadId: string, limit = 50): Promise<{ data: ThreadMessage[] }> {
-    return httpClient.get(`/api/threads/${threadId}/messages?limit=${limit}`);
+    return httpClient.get(`/threads/${threadId}/messages?limit=${limit}`);
   }
 
   postMessage(threadId: string, payload: PostMessagePayload): Promise<{ data: ThreadMessage }> {
-    return httpClient.post(`/api/threads/${threadId}/messages`, payload);
+    return httpClient.post(`/threads/${threadId}/messages`, payload);
   }
 }
 

@@ -10,6 +10,7 @@ from sqlalchemy import (Column,
                         DateTime, JSON)
 
 from main.appodus_utils import BaseEntity, PageRequest, BaseQueryDto, Object
+from main.appodus_utils.db.models import UTCDateTime
 from main.appodus_utils.integrations.messaging.models import (MessageChannel,
                                                                      MessageStatus,
                                                                      MessagePriority,
@@ -34,9 +35,9 @@ class Message(BaseEntity):
     error = Column(Text)
     retry_count = Column(Integer, default=0)
     priority = Column(Integer, default=MessagePriority.NORMAL)  # 1=high, 2=normal, 3=low
-    scheduled_at = Column(DateTime(), nullable=True)
-    sent_at = Column(DateTime(), nullable=True)
-    delivered_at = Column(DateTime(), nullable=True)
+    scheduled_at = Column(UTCDateTime, nullable=True)
+    sent_at = Column(UTCDateTime, nullable=True)
+    delivered_at = Column(UTCDateTime, nullable=True)
     extras = Column(JSON, default={})
     callback_url = Column(String(100))
 

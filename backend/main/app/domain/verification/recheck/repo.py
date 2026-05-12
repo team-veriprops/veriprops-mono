@@ -1,7 +1,10 @@
 """Re-check repo — S44."""
 from __future__ import annotations
 
+from typing import Type
+
 from kink import inject
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.verification.recheck.models import (
     RecheckRequest,
@@ -21,4 +24,10 @@ class RecheckRequestRepo(GenericRepo[
     QueryRecheckRequestDto,
     SearchRecheckRequestDto,
 ]):
-    model = RecheckRequest
+    def __init__(
+        self,
+        db: AsyncSession,
+        model: Type[RecheckRequest] = RecheckRequest,
+        query_dto: Type[QueryRecheckRequestDto] = QueryRecheckRequestDto,
+    ):
+        super().__init__(db, model, query_dto)

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Optional
 
 from kink import di, inject
 
@@ -17,7 +17,7 @@ from main.app.domain.payout.models import (
     PayoutStatus,
     SearchPayoutDto,
     UpdatePayoutDto,
-    WithdrawalRequestDto,
+    WithdrawalRequestDto, Payout,
 )
 from main.app.domain.payout.repo import BankAccountRepo, PayoutAdjustmentRepo, PayoutRepo
 from main.appodus_utils import Utils
@@ -88,8 +88,9 @@ class PayoutService:
         return [self._payout_to_dto(r) for r in rows]
 
     async def list_all_payouts(self) -> List[PayoutDto]:
-        rows = await self._payout_repo.get_all(SearchPayoutDto())
-        return [self._payout_to_dto(r) for r in rows]
+        rows = await self._payout_repo.get_page(SearchPayoutDto())
+        # TODO: return Page instead
+        return [self._payout_to_dto(r) for r in rows.items]
 
     async def approve(self, payout_id: str, admin_id: str) -> PayoutDto:
         row = await self._get_or_raise(payout_id)
@@ -144,7 +145,7 @@ class PayoutService:
 
     # ── Helpers ───────────────────────────────────────────────────
 
-    async def _get_or_raise(self, payout_id: str):
+    async def _get_or_raise(self, payout_id: str) -> Payout:
         row = await self._payout_repo.get_model(payout_id)
         if row is None:
             raise ResourceNotFoundException(resource="Payout")
@@ -160,7 +161,10 @@ class PayoutService:
         except Exception as exc:
             logger.warning(f"Notification emit failed (payout {action}): {exc}")
 
-    def _payout_to_dto(self, row) -> PayoutDto:
+    def _payout_to_dto(self, row: Optional[Payout] = None) -> PayoutDto:
+        if row is None:
+            raise ResourceNotFoundException(resource="Payout")
+
         return PayoutDto(
             id=str(row.id),
             agent_id=str(row.agent_id),

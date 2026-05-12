@@ -6,6 +6,8 @@ export type AgentApplicationStatus = "DRAFT" | "PENDING" | "APPROVED" | "REJECTE
 export type KycMethod = "BVN" | "ID_DOC";
 export type IdDocType = "NIN" | "PASSPORT" | "DRIVERS_LICENCE" | "VOTERS_CARD";
 
+export type AvailabilityStatus = "AVAILABLE" | "LIMITED" | "UNAVAILABLE";
+
 export interface AgentApplication {
   id: string;
   userId: string;
@@ -23,12 +25,38 @@ export interface AgentApplication {
   yearsOfExperience: number | null;
   coverageStates: string[];
   coverageLgas: string[];
+  maxTravelKm: number | null;
+  availabilityStatus: AvailabilityStatus;
   bio: string | null;
   submittedAt: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
   createdAt: string;
   updatedAt: string | null;
+}
+
+export interface AgentMetrics {
+  completionRate: number;
+  accuracyScore: number;
+  timelinessScore: number;
+  totalJobs: number;
+  activeSince: string | null;
+}
+
+export interface AgentProfile {
+  application: AgentApplication;
+  metrics: AgentMetrics;
+  isTopAgent: boolean;
+}
+
+export interface UpdateCoverageRequest {
+  coverageStates: string[];
+  coverageLgas: string[];
+  maxTravelKm?: number;
+}
+
+export interface UpdateAvailabilityRequest {
+  status: AvailabilityStatus;
 }
 
 export interface BvnVerificationResult {
@@ -143,6 +171,24 @@ export class AgentService {
     payload: SubmitApplicationRequest,
   ): Promise<SuccessResponse<AgentApplication>> {
     return this.http.post(`${this.base}/me/application/submit`, payload);
+  }
+
+  // ── Profile & metrics ──
+
+  getMyProfile(): Promise<SuccessResponse<AgentProfile>> {
+    return this.http.get(`${this.base}/me/profile`);
+  }
+
+  getMyMetrics(): Promise<SuccessResponse<AgentMetrics>> {
+    return this.http.get(`${this.base}/me/metrics`);
+  }
+
+  updateCoverage(payload: UpdateCoverageRequest): Promise<SuccessResponse<AgentApplication>> {
+    return this.http.put(`${this.base}/me/coverage`, payload);
+  }
+
+  updateAvailability(payload: UpdateAvailabilityRequest): Promise<SuccessResponse<AgentApplication>> {
+    return this.http.put(`${this.base}/me/availability`, payload);
   }
 
   // ── Tasks ──

@@ -11,7 +11,7 @@ export const trackingKeys = {
 export function useVerificationTracking(vid: string) {
   return useQuery({
     queryKey: trackingKeys.tracking(vid),
-    queryFn: () => httpClient.get(`/api/portal/verifications/${vid}/tracking`),
+    queryFn: () => httpClient.get(`/portal/verifications/${vid}/tracking`),
     staleTime: 15_000,
     refetchInterval: 60_000,  // S33 fallback poll
   });
@@ -20,7 +20,7 @@ export function useVerificationTracking(vid: string) {
 export function useVerificationEvidence(vid: string) {
   return useQuery({
     queryKey: trackingKeys.evidence(vid),
-    queryFn: () => httpClient.get(`/api/portal/verifications/${vid}/evidence`),
+    queryFn: () => httpClient.get(`/portal/verifications/${vid}/evidence`),
     staleTime: 30_000,
   });
 }

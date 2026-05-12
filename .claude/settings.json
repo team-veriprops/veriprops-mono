@@ -77,7 +77,8 @@
       "Bash(.venv/Scripts/python.exe -m pytest test/unit/app/domain/verification/ -x -q)",
       "Bash(.venv/Scripts/python.exe -m pytest test/unit/app/domain/verification/scoring/test_trust_score_service.py::TestUpdateWeights::test_valid_weights_saved -x -q)",
       "Bash(Remove-Item \"c:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend\\\\main\\\\alembic\\\\versions\\\\a1b2c3d4e5f6_s37_s38_threads_fraud.py\")",
-      "Read(//c/Veriprops/repos/veriprops-mono/frontend/src/app/**)"
+      "Read(//c/Veriprops/repos/veriprops-mono/frontend/src/app/**)",
+      "Bash(python -m pytest test/unit/app/domain/verification/test_abandonment.py test/unit/app/domain/referral/test_referral.py -q --tb=short)"
     ],
     "deny": [
       "Read(node_modules/**)",

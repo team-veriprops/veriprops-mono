@@ -22,19 +22,19 @@ export interface NotificationPreference {
 
 export class NotificationService {
   list(limit = 30): Promise<{ data: Notification[] }> {
-    return httpClient.get(`/api/notifications?limit=${limit}`);
+    return httpClient.get(`/notifications?limit=${limit}`);
   }
 
   markRead(id: string): Promise<{ data: null }> {
-    return httpClient.post(`/api/notifications/${id}/read`);
+    return httpClient.post(`/notifications/${id}/read`);
   }
 
   getPreferences(): Promise<{ data: NotificationPreference[] }> {
-    return httpClient.get("/api/notifications/preferences");
+    return httpClient.get("/notifications/preferences");
   }
 
   upsertPreference(pref: Omit<NotificationPreference, "userId">): Promise<{ data: NotificationPreference }> {
-    return httpClient.put("/api/notifications/preferences", pref);
+    return httpClient.put("/notifications/preferences", pref);
   }
 }
 

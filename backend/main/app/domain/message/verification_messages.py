@@ -144,3 +144,19 @@ class VerificationMessages(BaseMessageSender):
             default_channels=[MessageChannel.EMAIL],
             extra_context={MessageContext.PAYOUT_HOLD_REASON.value: reason},
         )
+
+    async def send_abandonment_recovery(
+        self,
+        recipient_user_id: str,
+        verification_id: str,
+        vid: str,
+    ) -> None:
+        """One-time recovery email sent 24 hrs after wizard abandonment without payment."""
+        await self._send_message(
+            recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
+            template=AvailableTemplate.VERIFICATION_ABANDONMENT_RECOVERY,
+            context_modules=[MessageContextModule.USER],
+            category=MessageCategory.TRANSACTIONAL,
+            default_channels=[MessageChannel.EMAIL],
+            extra_context={MessageContext.ABANDONMENT_VID.value: vid},
+        )

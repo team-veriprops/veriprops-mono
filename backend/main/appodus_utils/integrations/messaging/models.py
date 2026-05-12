@@ -37,6 +37,7 @@ class MessageContext(str, Enum):
     DISPUTE_VERIFICATION_ID = "DISPUTE_VERIFICATION_ID"          # dispute_filed — VID of the disputed verification
     DISPUTE_RESOLUTION_OUTCOME = "DISPUTE_RESOLUTION_OUTCOME"    # dispute_resolved — REJECTED / FULL_REFUND / PARTIAL_RECHECK
     PAYOUT_HOLD_REASON = "PAYOUT_HOLD_REASON"                    # payout_held — admin-supplied hold reason
+    ABANDONMENT_VID = "ABANDONMENT_VID"                          # abandonment_recovery — VID of the abandoned verification
 
 
 class PushProviderType(str, Enum):

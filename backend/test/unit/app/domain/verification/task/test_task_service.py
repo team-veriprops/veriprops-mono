@@ -126,6 +126,15 @@ def _make_service(
     audit = MagicMock()
     audit.schedule = MagicMock()
 
+    quality_score_repo = MagicMock()
+
+    admin_config = MagicMock()
+    admin_config.get_int = AsyncMock(return_value=5)
+    admin_config.get_bool = AsyncMock(return_value=True)
+    admin_config.get = AsyncMock(return_value="5")
+    agent_app_repo.get_by_user_id = AsyncMock(return_value=None)
+    agent_app_repo.update = AsyncMock()
+
     return TaskService(
         task_repo=task_repo,
         assignment_repo=assignment_repo,
@@ -134,6 +143,8 @@ def _make_service(
         agent_app_repo=agent_app_repo,
         user_repo=user_repo,
         audit=audit,
+        quality_score_repo=quality_score_repo,
+        admin_config=admin_config,
     )
 
 

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, ClipboardList, Plus } from "lucide-react";
+import { AlertTriangle, ArrowRight, ClipboardList, Plus, X } from "lucide-react";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
-import { useVerificationList } from "@components/portal/verifications/libs/useVerificationQueries";
+import { useVerificationList, useCancelVerificationMutation } from "@components/portal/verifications/libs/useVerificationQueries";
 import { Verification, VerificationStatus } from "@components/portal/verifications/libs/verification-service";
 import { ROUTES } from "@lib/routes";
 
@@ -34,6 +34,50 @@ const STATUS_COLORS: Record<VerificationStatus, { bg: string; text: string }> = 
   REFUNDED: { bg: "rgba(107,114,128,0.1)", text: "#6b7280" },
   FAILED: { bg: "rgba(239,68,68,0.1)", text: "#ef4444" },
 };
+
+const ABANDONMENT_STATUSES: VerificationStatus[] = ["DRAFT", "SUBMITTED"];
+const ABANDONMENT_HOURS_MS = 24 * 60 * 60 * 1000;
+
+function AbandonmentBanner({ v, onDiscard }: { v: Verification; onDiscard: (id: string) => void }) {
+  const address = v.property?.addressLine ?? v.property?.state ?? "Unknown property";
+  return (
+    <div
+      className="flex items-start gap-3 p-4 rounded-xl"
+      style={{ backgroundColor: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.2)" }}
+    >
+      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#d97706" }} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+          Incomplete verification
+        </p>
+        <p className="text-xs mt-0.5" style={{ color: "var(--brand-on-surface-variant)" }}>
+          {address} · {v.tier} tier
+          {v.pricing && (
+            <span> · ₦{(v.pricing.totalAmountMinor / 100).toLocaleString("en-NG")}</span>
+          )}
+        </p>
+        <div className="flex items-center gap-2 mt-2">
+          <Link
+            href={ROUTES.PORTAL.VERIFICATION_DETAIL(v.id)}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white"
+            style={{ backgroundColor: "var(--brand-viridian)" }}
+          >
+            Continue
+          </Link>
+          <button
+            type="button"
+            onClick={() => onDiscard(v.id)}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border"
+            style={{ color: "var(--brand-on-surface-variant)", borderColor: "rgba(196,198,207,0.4)" }}
+          >
+            <X className="w-3 h-3" />
+            Discard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function StatusChip({ status }: { status: VerificationStatus }) {
   const { bg, text } = STATUS_COLORS[status] ?? STATUS_COLORS.DRAFT;
@@ -78,11 +122,31 @@ export default function PortalDashboardPage() {
   const session = useAuthStore((s) => s.session);
   const firstName = session?.user?.firstName ?? "there";
   const { data: verifications, isLoading } = useVerificationList();
+  const cancelMutation = useCancelVerificationMutation();
 
   const hasVerifications = verifications && verifications.length > 0;
 
+  const cutoff = Date.now() - ABANDONMENT_HOURS_MS;
+  const abandonedVerifications = (verifications ?? []).filter((v) =>
+    ABANDONMENT_STATUSES.includes(v.status) &&
+    new Date(v.updatedAt ?? v.createdAt).getTime() < cutoff,
+  );
+
+  async function handleDiscard(id: string) {
+    await cancelMutation.mutateAsync(id);
+  }
+
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto">
+      {/* Abandonment banners */}
+      {abandonedVerifications.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {abandonedVerifications.map((v) => (
+            <AbandonmentBanner key={v.id} v={v} onDiscard={handleDiscard} />
+          ))}
+        </div>
+      )}
+
       {/* Welcome heading */}
       <div className="mb-8">
         <h1 className="text-2xl font-extrabold font-display" style={{ color: "var(--brand-navy)" }}>

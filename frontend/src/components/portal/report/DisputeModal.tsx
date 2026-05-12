@@ -38,7 +38,7 @@ export default function DisputeModal({ verificationId, open, onClose }: Props) {
 
   const submit = useMutation({
     mutationFn: () =>
-      httpClient.post(`/api/portal/verifications/${verificationId}/dispute`, {
+      httpClient.post(`/portal/verifications/${verificationId}/dispute`, {
         disputeType,
         description,
       }),

@@ -171,3 +171,5 @@ class AvailableAgentDto(Object):
     active_task_count: int = 0
     rating: Optional[float] = None
     is_trusted: bool = False
+    is_top_agent: bool = False
+    composite_score: float = 0.0

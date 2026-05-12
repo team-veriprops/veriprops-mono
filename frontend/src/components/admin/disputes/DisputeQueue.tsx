@@ -21,7 +21,7 @@ const qKey = ["admin", "disputes"];
 export default function DisputeQueue() {
   const { data, isLoading } = useQuery({
     queryKey: qKey,
-    queryFn: () => httpClient.get("/api/admin/disputes"),
+    queryFn: () => httpClient.get("/admin/disputes"),
   });
   const disputes: Dispute[] = (data as any)?.data ?? [];
   const [resolving, setResolving] = useState<string | null>(null);

@@ -253,7 +253,7 @@ class BaseQueryDto(Object):
     version: Optional[int] = Field(None, description='The current version number of the record')
 
 
-T = TypeVar('T', bound=Union[BaseQueryDto, bool, str, dict, Object])
+T = TypeVar('T', bound=Union[BaseQueryDto, bool, str, dict, Object, list])
 
 
 class SuccessResponse(Object, Generic[T]):

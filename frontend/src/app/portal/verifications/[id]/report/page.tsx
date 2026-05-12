@@ -55,7 +55,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
 
   const { data: res, isLoading, error, refetch } = useQuery({
     queryKey: ["portal", "verifications", id, "report"],
-    queryFn: () => httpClient.get(`/api/portal/verifications/${id}/report`),
+    queryFn: () => httpClient.get(`/portal/verifications/${id}/report`),
     staleTime: 30_000,
   });
   const report: ReportData | null = (res as any)?.data ?? null;

@@ -58,6 +58,12 @@ from main.app.domain.payout import (  # noqa: F401
     PayoutAdjustment as _PayoutAdjustmentModel,
 )
 from main.app.domain.payout import payout_router
+from main.app.domain.referral import (  # noqa: F401
+    ReferralCode as _ReferralCodeModel,
+    ReferralRedemption as _ReferralRedemptionModel,
+)
+from main.app.domain.referral import referral_router
+from main.app.domain.user.agent.models import AgentQualityScore as _AgentQualityScoreModel  # noqa: F401
 from main.appodus_utils.integrations.webhook import webhook_router
 
 router = APIRouter()
@@ -85,6 +91,7 @@ router.include_router(tier_upgrade_router)
 router.include_router(dispute_router)
 router.include_router(commission_router)
 router.include_router(payout_router)
+router.include_router(referral_router)
 router.include_router(webhook_router)
 
 # Dev/test-only endpoints — never mounted in production

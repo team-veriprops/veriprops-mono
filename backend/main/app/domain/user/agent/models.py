@@ -1,9 +1,14 @@
-"""Agent application domain — PRD §3 / Phase 3 (Agent Onboarding & KYC).
+"""Agent application domain — PRD §3, §24, §25 / Phase 3, 16.
 
 A single AgentApplication row tracks an applicant from DRAFT through PENDING
 (submitted), and into APPROVED or REJECTED. Wizard payloads land in this row
 incrementally — no separate draft table — because the row is bound to user_id
 and is mutable until submission.
+
+Phase 16 additions:
+- availability_status + max_travel_km on AgentApplication
+- AgentQualityScore ORM (one per completed task, admin-assigned)
+- AgentMetricsDto (computed aggregates surfaced on the agent profile page)
 """
 from __future__ import annotations
 
@@ -11,7 +16,7 @@ import enum
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Column, DateTime, Index, Integer, JSON, String, Text
+from sqlalchemy import Column, DateTime, Index, Integer, JSON, SmallInteger, String, Text
 from sqlalchemy.ext.mutable import MutableList, MutableDict
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
@@ -29,6 +34,12 @@ class AgentApplicationStatus(str, enum.Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+
+
+class AvailabilityStatus(str, enum.Enum):
+    AVAILABLE = "AVAILABLE"
+    LIMITED = "LIMITED"
+    UNAVAILABLE = "UNAVAILABLE"
 
 
 class KycMethod(str, enum.Enum):
@@ -85,9 +96,30 @@ class AgentApplication(BaseEntity):
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     rejection_reason = Column(Text, nullable=True)
 
+    # Phase 16 — Coverage & Availability
+    availability_status = Column(
+        String(20), nullable=False, default=AvailabilityStatus.AVAILABLE.value,
+    )
+    max_travel_km = Column(Integer, nullable=True)
+
     __table_args__ = (
         Index("ix_agent_applications_status_submitted", "status", "submitted_at"),
     )
+
+
+# ─── AgentQualityScore ORM (Phase 16 — S49) ──────────────────────
+
+
+class AgentQualityScore(BaseEntity):
+    """Admin-assigned quality rating after a task is APPROVED (1–5 stars)."""
+
+    __tablename__ = "agent_quality_scores"
+
+    task_id = Column(String(36), nullable=False, unique=True, index=True)
+    agent_id = Column(String(36), nullable=False, index=True)
+    score = Column(SmallInteger, nullable=False)        # 1–5
+    note = Column(Text, nullable=True)
+    reviewed_by_admin_id = Column(String(36), nullable=False)
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -123,6 +155,8 @@ class UpdateAgentApplicationDto(Object):
     reviewed_by_admin_id: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     rejection_reason: Optional[str] = None
+    availability_status: Optional[str] = None
+    max_travel_km: Optional[int] = None
 
 
 class SearchAgentApplicationDto(PageRequest, BaseQueryDto):
@@ -201,6 +235,8 @@ class AgentApplicationDto(Object):
     submitted_at: Optional[datetime] = None
     reviewed_at: Optional[datetime] = None
     rejection_reason: Optional[str] = None
+    availability_status: AvailabilityStatus = AvailabilityStatus.AVAILABLE
+    max_travel_km: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -231,3 +267,69 @@ class KycUploadUrlsDto(Object):
     selfie_upload_url: str
     selfie_object_key: str
     expires_in_seconds: int
+
+
+# ─── Phase 16 DTOs ────────────────────────────────────────────────
+
+
+class CreateQualityScoreDto(Object):
+    score: int          # 1–5
+    note: Optional[str] = None
+
+
+class AgentQualityScoreDto(Object):
+    id: str
+    task_id: str
+    agent_id: str
+    score: int
+    note: Optional[str] = None
+    reviewed_by_admin_id: str
+    created_at: datetime
+
+
+class AgentMetricsDto(Object):
+    """Computed performance aggregates for an agent."""
+    completion_rate: float          # 0–100 %
+    accuracy_score: float           # 1–5 (avg quality score; 0.0 if no scores yet)
+    timeliness_score: float         # 0–100 %
+    total_jobs: int
+    active_since: Optional[datetime] = None
+
+
+class AgentProfileDto(AgentApplicationDto):
+    """Agent's own view of their profile — application + computed metrics."""
+    metrics: AgentMetricsDto
+
+
+class UpdateCoverageDto(Object):
+    coverage_states: List[str]
+    coverage_lgas: List[str]
+    max_travel_km: Optional[int] = None
+
+
+class UpdateAvailabilityDto(Object):
+    status: AvailabilityStatus
+
+
+# Quality score CRUD DTOs (for repo layer)
+class CreateAgentQualityScoreDto(Object):
+    task_id: str
+    agent_id: str
+    score: int
+    note: Optional[str] = None
+    reviewed_by_admin_id: str
+
+
+class UpdateAgentQualityScoreDto(Object):
+    score: Optional[int] = None
+    note: Optional[str] = None
+    reviewed_by_admin_id: Optional[str] = None
+
+
+class QueryAgentQualityScoreDto(BaseQueryDto):
+    agent_id: Optional[str] = None
+    task_id: Optional[str] = None
+
+
+class SearchAgentQualityScoreDto(PageRequest, BaseQueryDto):
+    agent_id: Optional[str] = None

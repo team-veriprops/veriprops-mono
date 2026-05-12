@@ -95,6 +95,17 @@ export function useSubmitVerificationMutation(id: string) {
   });
 }
 
+export function useCancelVerificationMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => verificationService.cancel(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: verificationKeys.list });
+      qc.invalidateQueries({ queryKey: verificationKeys.activeDraft });
+    },
+  });
+}
+
 export function useInitiatePaymentMutation() {
   return useMutation({
     mutationFn: (payload: {

@@ -4,13 +4,14 @@ Revision ID: a1b2c3d4e5f6
 Revises: f5a6b7c8d9e0
 Create Date: 2026-05-11 00:00:02.000000
 """
-from typing import Sequence, Union
 import uuid
 from datetime import datetime, timezone
+from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 
+from main.alembic.utils import AlembicUtils
 from main.appodus_utils.db.models import UTCDateTime
 
 revision: str = "a1b2c3d4e5f6"
@@ -20,14 +21,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 # Provisional defaults (D2 decision)
 _SEED_WEIGHTS = [
-    ("BASIC",    "REGISTRY",  "100.000"),
-    ("STANDARD", "FIELD",      "35.000"),
-    ("STANDARD", "SURVEYOR",   "30.000"),
-    ("STANDARD", "REGISTRY",   "35.000"),
-    ("PREMIUM",  "FIELD",      "25.000"),
-    ("PREMIUM",  "SURVEYOR",   "20.000"),
-    ("PREMIUM",  "REGISTRY",   "30.000"),
-    ("PREMIUM",  "LAWYER",     "25.000"),
+    ("BASIC", "REGISTRY", "100.000"),
+    ("STANDARD", "FIELD", "35.000"),
+    ("STANDARD", "SURVEYOR", "30.000"),
+    ("STANDARD", "REGISTRY", "35.000"),
+    ("PREMIUM", "FIELD", "25.000"),
+    ("PREMIUM", "SURVEYOR", "20.000"),
+    ("PREMIUM", "REGISTRY", "30.000"),
+    ("PREMIUM", "LAWYER", "25.000"),
 ]
 
 
@@ -35,16 +36,10 @@ def upgrade() -> None:
     # ── trust_score_weight_config ──────────────────────────────────────────────
     op.create_table(
         "trust_score_weight_config",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("tier", sa.String(16), nullable=False),
         sa.Column("role", sa.String(16), nullable=False),
         sa.Column("weight", sa.Numeric(6, 3), nullable=False, default=0),
-        sa.Column("updated_by", sa.String(36), nullable=True),
+        *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("tier", "role", name="uq_ts_weight_tier_role"),
     )
     op.create_index("ix_ts_weight_config_id", "trust_score_weight_config", ["id"], unique=True)
@@ -71,17 +66,12 @@ def upgrade() -> None:
     # ── trust_score_breakdowns ─────────────────────────────────────────────────
     op.create_table(
         "trust_score_breakdowns",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("verification_id", sa.String(36), nullable=False),
         sa.Column("task_scores_json", sa.Text, nullable=False),
         sa.Column("weights_json", sa.Text, nullable=False),
         sa.Column("computed_score", sa.Numeric(5, 2), nullable=False),
         sa.Column("computed_at", UTCDateTime, nullable=False),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_ts_breakdowns_id", "trust_score_breakdowns", ["id"], unique=True)
     op.create_index("ix_ts_breakdowns_verification_id", "trust_score_breakdowns", ["verification_id"])

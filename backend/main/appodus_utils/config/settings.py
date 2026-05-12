@@ -119,7 +119,7 @@ class AppodusBaseSettings(BaseSettings):
     APPLE_PRIVATE_KEY: Optional[str] = "mock_value"
 
     # AUTHJWT
-    AUTHJWT_SECRET_KEY: str = "auth_jwt_s3cr3t"
+    AUTHJWT_SECRET_KEY: str = "auth_jwt_s3cr3t-635678$%#"
     # Configure application to store and get JWT from cookies
     AUTHJWT_TOKEN_LOCATION: List[str] = Field(default_factory=lambda: ["cookies"])
     # Only allow JWT cookies to be sent over https
@@ -128,8 +128,10 @@ class AppodusBaseSettings(BaseSettings):
     AUTHJWT_COOKIE_CSRF_PROTECT: bool = True
     # Change to 'lax' in production to make your website more secure from CSRF Attacks, default is None
     AUTHJWT_COOKIE_SAMESITE: str = 'none' # Must be 'none' when AUTHJWT_COOKIE_SECURE = True
-    # AUTHJWT_ACCESS_COOKIE_KEY: str = 'Host-access_token'
-    # AUTHJWT_REFRESH_COOKIE_KEY: str = 'Host-refresh_token'
+    AUTHJWT_ACCESS_COOKIE_KEY: str = '__Host-access_token'
+    AUTHJWT_REFRESH_COOKIE_KEY: str = '__Host-refresh_token'
+    AUTHJWT_ACCESS_CSRF_COOKIE_KEY: str = '__Host-access_csrf_token'
+    AUTHJWT_REFRESH_CSRF_COOKIE_KEY: str = '__Host-refresh_csrf_token'
     # AUTHJWT_ALGORITHM: str = ""
 
     # MESSAGING

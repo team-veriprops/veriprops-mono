@@ -28,6 +28,9 @@ export const ROUTES = {
     TASK_MESSAGES: (taskId: string) => `/agents/tasks/${taskId}/messages`,
     EARNINGS: '/agents/earnings',
     PAYOUTS: '/agents/payouts',
+    PROFILE: '/agents/profile',
+    SETTINGS_COVERAGE: '/agents/settings/coverage',
+    SETTINGS_AVAILABILITY: '/agents/settings/availability',
     NOTIFICATION_PREFERENCES: '/agents/account/notification-preferences',
   },
   ADMIN: {
@@ -63,6 +66,7 @@ export const ROUTES = {
     VERIFICATION_REPORT: (id: string) => `/portal/verifications/${id}/report`,
     VERIFICATION_MESSAGES: (id: string) => `/portal/verifications/${id}/messages`,
     NOTIFICATION_PREFERENCES: '/portal/account/notification-preferences',
+    REFERRALS: '/portal/referrals',
   },
 
   ABOUT: '/about',

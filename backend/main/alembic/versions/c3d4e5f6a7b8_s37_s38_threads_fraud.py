@@ -9,6 +9,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from main.alembic.utils import AlembicUtils
 from main.appodus_utils.db.models import UTCDateTime
 
 revision: str = "c3d4e5f6a7b8"
@@ -21,15 +22,10 @@ def upgrade() -> None:
     # -- message_threads -------------------------------------------
     op.create_table(
         "message_threads",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("thread_type", sa.String(20), nullable=False),
         sa.Column("verification_id", sa.String(36), nullable=False),
         sa.Column("task_id", sa.String(36), nullable=True),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_threads_id", "message_threads", ["id"], unique=True)
     op.create_index("ix_threads_thread_type", "message_threads", ["thread_type"])
@@ -44,12 +40,6 @@ def upgrade() -> None:
     # -- thread_messages -------------------------------------------
     op.create_table(
         "thread_messages",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("thread_id", sa.String(36), nullable=False),
         sa.Column("sender_id", sa.String(36), nullable=True),
         sa.Column("sender_role", sa.String(16), nullable=False),
@@ -57,6 +47,7 @@ def upgrade() -> None:
         sa.Column("body", sa.Text, nullable=False),
         sa.Column("attachment_key", sa.String(512), nullable=True),
         sa.Column("is_held", sa.Boolean, nullable=False, default=False),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_thread_messages_id", "thread_messages", ["id"], unique=True)
     op.create_index("ix_thread_messages_thread_id", "thread_messages", ["thread_id"])
@@ -64,12 +55,6 @@ def upgrade() -> None:
     # -- fraud_flags -----------------------------------------------
     op.create_table(
         "fraud_flags",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("date_deleted", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
         sa.Column("message_id", sa.String(36), nullable=False),
         sa.Column("message_body", sa.Text, nullable=False),
         sa.Column("matched_patterns", sa.Text, nullable=False),
@@ -77,6 +62,7 @@ def upgrade() -> None:
         sa.Column("review_decision", sa.String(16), nullable=True),
         sa.Column("reviewer_id", sa.String(36), nullable=True),
         sa.Column("reviewed_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_fraud_flags_id", "fraud_flags", ["id"], unique=True)
     op.create_index("ix_fraud_flags_message_id", "fraud_flags", ["message_id"])

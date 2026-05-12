@@ -112,6 +112,10 @@ export class VerificationService {
     return this.http.get(`${this.base}/me/list`);
   }
 
+  cancel(id: string): Promise<SuccessResponse<Verification>> {
+    return this.http.post(`${this.base}/${id}/cancel`, {});
+  }
+
   quote(
     tier: VerificationTier,
     currency: string,

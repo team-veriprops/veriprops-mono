@@ -81,6 +81,8 @@ def _make_application(
     app.years_of_experience = None
     app.coverage_states = coverage_states if coverage_states is not None else ["LAGOS"]
     app.coverage_lgas = []
+    app.max_travel_km = None
+    app.availability_status = "AVAILABLE"
     app.bio = None
     app.submitted_at = None
     app.reviewed_at = None

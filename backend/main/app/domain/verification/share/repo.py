@@ -1,10 +1,11 @@
 """Share link repos — S43."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Type
 
 from sqlalchemy import select
 from kink import inject
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.verification.share.models import (
     ShareLink,
@@ -29,7 +30,13 @@ class ShareLinkRepo(GenericRepo[
     QueryShareLinkDto,
     SearchShareLinkDto,
 ]):
-    model = ShareLink
+    def __init__(
+        self,
+        db: AsyncSession,
+        model: Type[ShareLink] = ShareLink,
+        query_dto: Type[QueryShareLinkDto] = QueryShareLinkDto,
+    ):
+        super().__init__(db, model, query_dto)
 
     async def get_by_token(self, token: str) -> Optional[ShareLink]:
         session = get_db_session_from_context()
@@ -47,4 +54,10 @@ class ShareRecipientRepo(GenericRepo[
     QueryShareRecipientDto,
     SearchShareLinkDto,
 ]):
-    model = ShareRecipient
+    def __init__(
+        self,
+        db: AsyncSession,
+        model: Type[ShareRecipient] = ShareRecipient,
+        query_dto: Type[QueryShareRecipientDto] = QueryShareRecipientDto,
+    ):
+        super().__init__(db, model, query_dto)

@@ -6,16 +6,19 @@ Create Date: 2025-06-01 02:19:26.646342
 
 """
 import json
-import os
 import uuid
 from datetime import datetime, timezone
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from passlib.context import CryptContext
 from sqlalchemy import inspect as sa_inspect, JSON
 from sqlalchemy.ext.mutable import MutableList
+
+from main.alembic.utils import AlembicUtils
+from main.app.config.settings import settings
+from main.appodus_utils import Utils
+from main.appodus_utils.db.models import UTCDateTime
 
 # revision identifiers, used by Alembic.
 revision: str = 'fdd959a2cfda'
@@ -30,7 +33,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def _create_tab_key_values():
     op.create_table('key_values', sa.Column('key', sa.String(length=128), nullable=False),
                     sa.Column('value', sa.LargeBinary(), nullable=False),
-                    sa.Column('expires_at', sa.DateTime(), nullable=False),
+                    sa.Column('expires_at', UTCDateTime, nullable=False),
                     sa.PrimaryKeyConstraint('key'))
     op.create_index(op.f('ix_key_values_key'), 'key_values', ['key'], unique=True)
 
@@ -40,19 +43,7 @@ def _drop_tab_key_values():
     op.drop_table('key_values')
 
 
-def _base_audit_columns():
-    """Mirror BaseEntity audit columns."""
-    return [
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("date_created", sa.TIMESTAMP(timezone=True), nullable=False),
-        sa.Column("created_by", sa.String(length=36), nullable=True),
-        sa.Column("date_updated", sa.TIMESTAMP(timezone=True), nullable=True),
-        sa.Column("updated_by", sa.String(length=36), nullable=True),
-        sa.Column("deleted", sa.Boolean(), nullable=False),
-        sa.Column("date_deleted", sa.TIMESTAMP(timezone=True), nullable=True),
-        sa.Column("deleted_by", sa.String(length=36), nullable=True),
-        sa.Column("version", sa.Integer(), nullable=False),
-    ]
+
 
 
 def _create_signup_drafts():
@@ -61,9 +52,8 @@ def _create_signup_drafts():
         sa.Column("email", sa.String(length=254), nullable=False),
         sa.Column("step", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("payload", sa.Text(), nullable=False),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        sa.Column("expires_at", UTCDateTime, nullable=False),
+        *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("email", name="uq_signup_drafts_email"),
     )
     op.create_index("ix_signup_drafts_id", "signup_drafts", ["id"], unique=True)
@@ -81,6 +71,7 @@ def _drop_signup_drafts():
     op.drop_index("ix_signup_drafts_id", table_name="signup_drafts")
     op.drop_constraint("uq_signup_drafts_email", "signup_drafts", type_="unique")
     op.drop_table("signup_drafts")
+
 
 def _create_users():
     op.create_table(
@@ -104,10 +95,9 @@ def _create_users():
         sa.Column("trust_status", sa.String(length=16), nullable=False),
         sa.Column("password_hash", sa.String(length=255), nullable=True),
         sa.Column("avatar_url", sa.String(length=512), nullable=True),
-        sa.Column("locked_until", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("locked_until", UTCDateTime, nullable=True),
         sa.Column("failed_login_count", sa.Integer(), nullable=False, server_default="0"),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("email_normalized", name="uq_users_email"),
     )
     op.create_index("ix_users_phone_e164", "users", ["phone_e164"], unique=False)
@@ -131,8 +121,7 @@ def _create_oauth_identities():
         sa.Column("subject", sa.String(length=255), nullable=False),
         sa.Column("email", sa.String(length=254), nullable=True),
         sa.Column("raw_profile", sa.Text(), nullable=True),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("provider", "subject", name="uq_oauth_provider_subject"),
     )
     op.create_index("ix_oauth_identities_id", "oauth_identities", ["id"], unique=True)
@@ -152,11 +141,10 @@ def _create_consent_documents():
         "consent_documents",
         sa.Column("type", sa.String(length=32), nullable=False),
         sa.Column("consent_version", sa.String(length=16), nullable=False),
-        sa.Column("effective_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("effective_at", UTCDateTime, nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("href", sa.String(length=255), nullable=False),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("type", "consent_version", name="uq_consent_type_version"),
     )
     op.create_index("ix_consent_documents_type", "consent_documents", ["type"], unique=False)
@@ -177,11 +165,10 @@ def _create_user_consents():
         sa.Column("user_id", sa.String(length=36), nullable=False),
         sa.Column("document_type", sa.String(length=32), nullable=False),
         sa.Column("consent_version", sa.String(length=16), nullable=False),
-        sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("accepted_at", UTCDateTime, nullable=False),
         sa.Column("ip_address", sa.String(length=64), nullable=True),
         sa.Column("device_fingerprint", sa.String(length=128), nullable=True),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_user_consents_user_id", "user_consents", ["user_id"], unique=False)
     op.create_index("ix_user_consents_id", "user_consents", ["id"], unique=True)
@@ -204,11 +191,10 @@ def _create_device_sessions():
         sa.Column("ip_address", sa.String(length=64), nullable=True),
         sa.Column("approx_location", sa.String(length=128), nullable=True),
         sa.Column("device_fingerprint", sa.String(length=128), nullable=True),
-        sa.Column("last_active_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("last_active_at", UTCDateTime, nullable=False),
         sa.Column("revoked", sa.Boolean(), nullable=False),
-        sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        sa.Column("revoked_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("refresh_token_hash", name="uq_device_token_hash"),
     )
     op.create_index("ix_device_sessions_user_id", "device_sessions", ["user_id"], unique=False)
@@ -233,9 +219,8 @@ def _create_security_events():
         sa.Column("approx_location", sa.String(length=128), nullable=True),
         sa.Column("device", sa.String(length=512), nullable=True),
         sa.Column("device_fingerprint", sa.String(length=128), nullable=True),
-        sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        sa.Column("occurred_at", UTCDateTime, nullable=False),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_security_events_user_id", "security_events", ["user_id"], unique=False)
     op.create_index("ix_security_events_type", "security_events", ["type"], unique=False)
@@ -256,10 +241,9 @@ def _create_password_reset_tokens():
         "password_reset_tokens",
         sa.Column("user_id", sa.String(length=36), nullable=False),
         sa.Column("token_hash", sa.String(length=128), nullable=False),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("consumed_at", sa.DateTime(timezone=True), nullable=True),
-        *_base_audit_columns(),
-        sa.PrimaryKeyConstraint("id"),
+        sa.Column("expires_at", UTCDateTime, nullable=False),
+        sa.Column("consumed_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("token_hash", name="uq_password_reset_token_hash"),
     )
     op.create_index("ix_password_reset_user", "password_reset_tokens", ["user_id"], unique=False)
@@ -301,11 +285,11 @@ def _seed_consent_documents() -> None:
         sa.column("id", sa.String),
         sa.column("type", sa.String),
         sa.column("consent_version", sa.String),
-        sa.column("effective_at", sa.DateTime(timezone=True)),
+        sa.column("effective_at", UTCDateTime),
         sa.column("title", sa.String),
         sa.column("href", sa.String),
-        sa.column("date_created", sa.TIMESTAMP(timezone=True)),
-        sa.column("date_updated", sa.TIMESTAMP(timezone=True)),
+        sa.column("date_created", UTCDateTime),
+        sa.column("date_updated", UTCDateTime),
         sa.column("deleted", sa.Boolean),
         sa.column("version", sa.Integer),
     )
@@ -352,11 +336,11 @@ def _seed_consent_documents() -> None:
 def _seed_super_admin() -> None:
     """Seed the first Super Admin if `SUPER_ADMIN_PASSWORD` is set in env.
     Idempotent: skipped if a user with the canonical email already exists."""
-    password = os.getenv("SUPER_ADMIN_PASSWORD")
-    if not password:
-        return
+    password = settings.SUPER_ADMIN_PASSWORD  # os.getenv("SUPER_ADMIN_PASSWORD")
+    email = settings.SUPER_ADMIN_EMAIL  # os.getenv("SUPER_ADMIN_EMAIL")
+    if not password or not email:
+        raise ValueError("Super Admin details not set.")
 
-    email = os.getenv("SUPER_ADMIN_EMAIL", "admin@veriprops.ng")
     conn = op.get_bind()
     existing = conn.execute(
         sa.text("SELECT 1 FROM users WHERE email = :email LIMIT 1"),
@@ -365,8 +349,7 @@ def _seed_super_admin() -> None:
     if existing:
         return
 
-    pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-    password_hash = pwd_context.hash(password)
+    password_hash = Utils.get_password_hash(password)
     now = datetime.now(timezone.utc)
     conn.execute(
         sa.text(
@@ -412,54 +395,49 @@ def _seed_super_admin() -> None:
     )
 
 
-def _table_exists(name: str) -> bool:
-    bind = op.get_bind()
-    return name in sa_inspect(bind).get_table_names()
-
-
 def upgrade() -> None:
-    if not _table_exists('users'):
+    if not AlembicUtils.table_exists('users'):
         _create_users()
-    if not _table_exists('key_values'):
+    if not AlembicUtils.table_exists('key_values'):
         _create_tab_key_values()
-    if not _table_exists('oauth_identities'):
+    if not AlembicUtils.table_exists('oauth_identities'):
         _create_oauth_identities()
-    if not _table_exists('consent_documents'):
+    if not AlembicUtils.table_exists('consent_documents'):
         _create_consent_documents()
-    if not _table_exists('user_consents'):
+    if not AlembicUtils.table_exists('user_consents'):
         _create_user_consents()
-    if not _table_exists('device_sessions'):
+    if not AlembicUtils.table_exists('device_sessions'):
         _create_device_sessions()
-    if not _table_exists('security_events'):
+    if not AlembicUtils.table_exists('security_events'):
         _create_security_events()
-    if not _table_exists('password_reset_tokens'):
+    if not AlembicUtils.table_exists('password_reset_tokens'):
         _create_password_reset_tokens()
-    if not _table_exists("signup_drafts"):
+    if not AlembicUtils.table_exists("signup_drafts"):
         _create_signup_drafts()
 
     # Data seeds belong here, not in app-level seeders.
-    if not _table_exists('consent_documents'):
+    if AlembicUtils.table_exists('consent_documents'):
         _seed_consent_documents()
-    if not _table_exists('users'):
+    if AlembicUtils.table_exists('users'):
         _seed_super_admin()
 
 
 def downgrade() -> None:
-    if not _table_exists('key_values'):
+    if not AlembicUtils.table_exists('key_values'):
         _drop_tab_key_values()
-    if not _table_exists('password_reset_tokens'):
+    if not AlembicUtils.table_exists('password_reset_tokens'):
         _drop_password_reset_tokens()
-    if not _table_exists('security_events'):
+    if not AlembicUtils.table_exists('security_events'):
         _drop_security_events()
-    if not _table_exists('device_sessions'):
+    if not AlembicUtils.table_exists('device_sessions'):
         _drop_device_sessions()
-    if not _table_exists('user_consents'):
+    if not AlembicUtils.table_exists('user_consents'):
         _drop_user_consents()
-    if not _table_exists('consent_documents'):
+    if not AlembicUtils.table_exists('consent_documents'):
         _drop_consent_documents()
-    if not _table_exists('oauth_identities'):
+    if not AlembicUtils.table_exists('oauth_identities'):
         _drop_oauth_identities()
-    if not _table_exists('users'):
+    if not AlembicUtils.table_exists('users'):
         _drop_users()
-    if _table_exists("signup_drafts"):
+    if AlembicUtils.table_exists("signup_drafts"):
         _drop_signup_drafts()

@@ -1,7 +1,8 @@
-from typing import Optional, Type
+from datetime import datetime, timedelta
+from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.verification.models import (
@@ -55,3 +56,19 @@ class VerificationRepo(
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def list_abandoned(self, older_than_hours: int = 24) -> List[Verification]:
+        """Return verifications abandoned (no email sent yet, stale, has draft data)."""
+        cutoff = datetime.utcnow() - timedelta(hours=older_than_hours)
+        stmt = (
+            select(Verification)
+            .where(
+                Verification.deleted.is_(False),
+                Verification.status.in_(["DRAFT", "SUBMITTED"]),
+                Verification.abandonment_email_sent_at.is_(None),
+                Verification.draft_step > 0,
+                func.coalesce(Verification.date_updated, Verification.date_created) < cutoff,
+            )
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())

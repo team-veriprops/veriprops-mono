@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from pydantic import EmailStr, Field
-from sqlalchemy import Boolean, Column, Index, String, Integer, JSON
+from sqlalchemy import BigInteger, Boolean, Column, Index, String, Integer, JSON
 from sqlalchemy.ext.mutable import MutableList
 
 from main.app.domain.user.auth.session.models import UserType, UserPersona
@@ -52,6 +52,9 @@ class User(BaseEntity):
     admin_sub_role = Column(String(16), nullable=True)
 
     trust_status = Column(String(16), nullable=False, default=TrustStatus.UNTRUSTED.value)
+
+    # Phase 17 — referral credits (stored in kobo to avoid float precision issues)
+    credit_balance_kobo = Column(BigInteger, nullable=False, default=0)
 
     password_hash = Column(String(255), nullable=True)  # nullable for OAuth-only users
     avatar_url = Column(String(512), nullable=True)
@@ -109,6 +112,7 @@ class UpdateUserDto(Object):
     personas: Optional[List[str]] = None
     admin_sub_role: Optional[str] = None
     trust_status: Optional[str] = None
+    credit_balance_kobo: Optional[int] = None
     password_hash: Optional[str] = None
     avatar_url: Optional[str] = None
     locked_until: Optional[datetime] = None

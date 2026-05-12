@@ -30,6 +30,36 @@ CONFIG_DEFAULTS: dict[str, tuple[str, str]] = {
         "true",
         "When true, tasks are auto-created and broadcast to qualifying agents when a verification reaches PAID",
     ),
+    # Phase 16 — Agent Reputation & Coverage
+    "agent_max_active_tasks": (
+        "5",
+        "Max concurrent active tasks (ACCEPTED+IN_PROGRESS) before agent is auto-set to UNAVAILABLE",
+    ),
+    "agent_low_performance_threshold": (
+        "60",
+        "Completion rate % below which an agent receives reduced job feed visibility",
+    ),
+    "agent_top_agent_accuracy_threshold": (
+        "4.5",
+        "Accuracy score (1–5) at or above which an agent earns the Top Agent badge",
+    ),
+    "task_sla_hours": (
+        "48",
+        "Hours from task acceptance within which submission is counted as on-time for timeliness score",
+    ),
+    # Phase 17 — Growth & Conversion
+    "referral_credit_ngn": (
+        "1000",
+        "Credit amount (NGN) added to a referrer when their invitee completes their first payment",
+    ),
+    "first_time_discount_percent": (
+        "10",
+        "Percentage discount auto-applied to a customer's first verification payment",
+    ),
+    "max_discount_percent": (
+        "20",
+        "Maximum combined discount cap (referral + first-time) applied to any single payment",
+    ),
 }
 
 

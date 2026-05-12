@@ -38,7 +38,7 @@ export default function ShareModal({ verificationId, open, onClose }: Props) {
 
   const createShare = useMutation({
     mutationFn: () =>
-      httpClient.post(`/api/portal/verifications/${verificationId}/share`, {
+      httpClient.post(`/portal/verifications/${verificationId}/share`, {
         mode,
         recipientEmail: mode === "NAMED_RECIPIENT" ? recipientEmail : undefined,
         expiryDays: 30,
@@ -52,7 +52,7 @@ export default function ShareModal({ verificationId, open, onClose }: Props) {
 
   const revokeShare = useMutation({
     mutationFn: () =>
-      httpClient.delete(`/api/portal/verifications/${verificationId}/share/${link!.id}`),
+      httpClient.delete(`/portal/verifications/${verificationId}/share/${link!.id}`),
     onSuccess: () => {
       setLink(null);
       setError(null);

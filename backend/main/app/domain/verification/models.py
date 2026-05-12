@@ -65,6 +65,8 @@ class Verification(BaseEntity):
     draft_step = Column(Integer, nullable=False, default=0)
     # Computed by TrustScoreService on each task approval (S30).
     trust_score = Column(Numeric(5, 2), nullable=True)
+    # Phase 17 — abandonment recovery (S52)
+    abandonment_email_sent_at = Column(UTCDateTime, nullable=True)
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -91,6 +93,7 @@ class UpdateVerificationDto(Object):
     draft_payload: Optional[str] = None
     draft_step: Optional[int] = None
     trust_score: Optional[Decimal] = None
+    abandonment_email_sent_at: Optional[datetime] = None
 
 
 class SearchVerificationDto(PageRequest, BaseQueryDto):

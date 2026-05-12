@@ -11,10 +11,18 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from kink import di, inject
 
+from main.app.domain.admin_config.service import AdminConfigService
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.user.agent.models import AgentApplicationStatus
-from main.app.domain.user.agent.repo import AgentApplicationRepo
+from main.app.domain.user.agent.models import (
+    AgentApplicationStatus,
+    AgentQualityScoreDto,
+    AvailabilityStatus,
+    CreateAgentQualityScoreDto,
+    CreateQualityScoreDto,
+    UpdateAgentApplicationDto,
+)
+from main.app.domain.user.agent.repo import AgentApplicationRepo, AgentQualityScoreRepo
 from main.app.domain.user.models import TrustStatus, UpdateUserDto
 from main.app.domain.user.repo import UserRepo
 from main.app.domain.verification.models import UpdateVerificationDto, VerificationStatus
@@ -62,6 +70,8 @@ class TaskService:
         agent_app_repo: AgentApplicationRepo,
         user_repo: UserRepo,
         audit: AuditLogService,
+        quality_score_repo: AgentQualityScoreRepo,
+        admin_config: AdminConfigService,
     ):
         self._tasks = task_repo
         self._assignments = assignment_repo
@@ -70,6 +80,8 @@ class TaskService:
         self._agent_apps = agent_app_repo
         self._users = user_repo
         self._audit = audit
+        self._quality_scores = quality_score_repo
+        self._config = admin_config
 
     # ── Task creation ─────────────────────────────────────────────────
 
@@ -269,6 +281,7 @@ class TaskService:
             meta={"action": "AGENT_ACCEPT"},
         )
         await self._derive_and_update_verification_status(task.verification_id)
+        await self._maybe_flip_unavailable(agent_id)
         return self._task_to_dto(await self._tasks.get_task(task_id))
 
     async def agent_decline(self, task_id: str, agent_id: str) -> TaskDto:
@@ -298,6 +311,7 @@ class TaskService:
             meta={"action": "AGENT_DECLINE"},
         )
         await self._derive_and_update_verification_status(task.verification_id)
+        await self._maybe_restore_availability(agent_id)
         return self._task_to_dto(await self._tasks.get_task(task_id))
 
     async def save_draft(
@@ -398,12 +412,64 @@ class TaskService:
         tasks = await self._tasks.list_completed_for_agent(agent_id)
         return [self._task_to_dto(t) for t in tasks]
 
+    # ── Quality scores (Phase 16 — S49) ──────────────────────────────
+
+    async def assign_quality_score(
+        self,
+        task_id: str,
+        dto: CreateQualityScoreDto,
+        admin_id: str,
+    ) -> AgentQualityScoreDto:
+        """Admin assigns 1–5 quality score after a task is APPROVED."""
+        task = await self._get_task_or_raise(task_id)
+        if task.status != TaskStatus.APPROVED.value:
+            raise ValidationException(
+                message="Quality scores can only be assigned to APPROVED tasks"
+            )
+        if not (1 <= dto.score <= 5):
+            raise ValidationException(message="Quality score must be between 1 and 5")
+
+        # Upsert — overwrite if admin is correcting a score
+        existing = await self._quality_scores.get_by_task_id(task_id)
+        if existing:
+            from main.app.domain.user.agent.models import UpdateAgentQualityScoreDto
+            await self._quality_scores.update(str(existing.id), UpdateAgentQualityScoreDto(
+                score=dto.score,
+                note=dto.note,
+                reviewed_by_admin_id=admin_id,
+            ))
+            row = await self._quality_scores.get_by_task_id(task_id)
+        else:
+            row = await self._quality_scores.create_return_model(CreateAgentQualityScoreDto(
+                task_id=task_id,
+                agent_id=task.agent_id,
+                score=dto.score,
+                note=dto.note,
+                reviewed_by_admin_id=admin_id,
+            ))
+        self._audit.schedule(
+            AuditActionType.VERIFICATION_STATE_CHANGED,
+            resource_type="AgentQualityScore",
+            resource_id=task_id,
+            actor_id=admin_id,
+            meta={"score": dto.score, "agent_id": task.agent_id},
+        )
+        return AgentQualityScoreDto(
+            id=str(row.id),
+            task_id=row.task_id,
+            agent_id=row.agent_id,
+            score=row.score,
+            note=row.note,
+            reviewed_by_admin_id=row.reviewed_by_admin_id,
+            created_at=row.date_created,
+        )
+
     # ── Admin: available agents list ──────────────────────────────────
 
     async def list_available_agents(
         self, role: Optional[str] = None, state: Optional[str] = None,
     ) -> List[AvailableAgentDto]:
-        """Return APPROVED agents eligible for task assignment, ranked."""
+        """Return APPROVED agents eligible for task assignment, ranked by composite score."""
         from main.app.domain.user.agent.models import SearchAgentApplicationDto
         apps = await self._agent_apps.get_by_criterion(
             SearchAgentApplicationDto(
@@ -412,14 +478,20 @@ class TaskService:
                 page_size=200,
             )
         )
+        sla_hours = await self._config.get_int("task_sla_hours", fallback=48)
+        top_agent_threshold = float(await self._config.get("agent_top_agent_accuracy_threshold") or "4.5")
+
         result: List[AvailableAgentDto] = []
         for app_data in apps:
-            app_id = app_data.get("id") if isinstance(app_data, dict) else getattr(app_data, "id", None)
             user_id = app_data.get("user_id") if isinstance(app_data, dict) else getattr(app_data, "user_id", None)
             types = app_data.get("types") if isinstance(app_data, dict) else getattr(app_data, "types", [])
             coverage_states = (
                 app_data.get("coverage_states") if isinstance(app_data, dict)
                 else getattr(app_data, "coverage_states", [])
+            )
+            availability_status = (
+                app_data.get("availability_status") if isinstance(app_data, dict)
+                else getattr(app_data, "availability_status", AvailabilityStatus.AVAILABLE.value)
             )
             if not user_id:
                 continue
@@ -427,11 +499,26 @@ class TaskService:
                 continue
             if state and state.upper() not in [s.upper() for s in (coverage_states or [])]:
                 continue
+            # Exclude unavailable agents from assignment list
+            if availability_status == AvailabilityStatus.UNAVAILABLE.value:
+                continue
 
             user = await self._users.get_model(user_id)
             if user is None:
                 continue
             active_count = await self._tasks.count_active_for_agent(user_id)
+            metrics = await self._quality_scores.compute_metrics(user_id, sla_hours)
+
+            is_top_agent = (
+                metrics.accuracy_score >= top_agent_threshold
+                and metrics.completion_rate >= 80.0
+            )
+            # Composite score: accuracy 40%, completion 40%, timeliness 20%
+            composite = (
+                0.4 * (metrics.accuracy_score / 5.0)
+                + 0.4 * (metrics.completion_rate / 100.0)
+                + 0.2 * (metrics.timeliness_score / 100.0)
+            )
             result.append(
                 AvailableAgentDto(
                     agent_id=str(user.id),
@@ -441,11 +528,14 @@ class TaskService:
                     types=list(types or []),
                     coverage_states=list(coverage_states or []),
                     active_task_count=active_count,
+                    rating=round(metrics.accuracy_score, 2) if metrics.accuracy_score else None,
                     is_trusted=user.trust_status == TrustStatus.TRUSTED.value,
+                    is_top_agent=is_top_agent,
+                    composite_score=round(composite, 4),
                 )
             )
-        # Rank: trusted first, then fewest active tasks
-        result.sort(key=lambda a: (not a.is_trusted, a.active_task_count))
+        # Rank: Top Agents first, then trusted, then composite score DESC
+        result.sort(key=lambda a: (not a.is_top_agent, not a.is_trusted, -a.composite_score))
         return result
 
     # ── Verification state derivation ─────────────────────────────────
@@ -510,6 +600,32 @@ class TaskService:
                 agent_id,
                 UpdateUserDto(trust_status=TrustStatus.TRUSTED.value),
             )
+
+    # ── Availability auto-management (Phase 16 — S50) ────────────────
+
+    async def _maybe_flip_unavailable(self, agent_id: str) -> None:
+        """Auto-set agent UNAVAILABLE when they hit the max active task cap."""
+        max_tasks = await self._config.get_int("agent_max_active_tasks", fallback=5)
+        active_count = await self._tasks.count_active_for_agent(agent_id)
+        if active_count >= max_tasks:
+            app = await self._agent_apps.get_by_user_id(agent_id)
+            if app and app.availability_status != AvailabilityStatus.UNAVAILABLE.value:
+                await self._agent_apps.update(str(app.id), UpdateAgentApplicationDto(
+                    availability_status=AvailabilityStatus.UNAVAILABLE.value,
+                ))
+
+    async def _maybe_restore_availability(self, agent_id: str) -> None:
+        """Restore agent to AVAILABLE when task count drops below cap."""
+        max_tasks = await self._config.get_int("agent_max_active_tasks", fallback=5)
+        active_count = await self._tasks.count_active_for_agent(agent_id)
+        if active_count < max_tasks:
+            app = await self._agent_apps.get_by_user_id(agent_id)
+            # Only restore if the status was auto-flipped (UNAVAILABLE); leave
+            # LIMITED or manually set UNAVAILABLE alone.
+            if app and app.availability_status == AvailabilityStatus.UNAVAILABLE.value:
+                await self._agent_apps.update(str(app.id), UpdateAgentApplicationDto(
+                    availability_status=AvailabilityStatus.AVAILABLE.value,
+                ))
 
     # ── Submit payload validators ─────────────────────────────────────
 

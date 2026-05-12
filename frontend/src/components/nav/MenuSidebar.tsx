@@ -8,7 +8,11 @@ export type NavIconKey =
   | "settings"
   | "helpCircle"
   | "fileCheck"
-  | "creditCard";
+  | "creditCard"
+  | "user"
+  | "mapPin"
+  | "activity"
+  | "gift";
 
 export interface NavItem {
   title: string;

@@ -35,7 +35,7 @@ export default function DisputeResolutionForm({ disputeId, open, onClose }: Prop
 
   const resolve = useMutation({
     mutationFn: () =>
-      httpClient.post(`/api/admin/disputes/${disputeId}/resolve`, { outcome, resolutionNote }),
+      httpClient.post(`/admin/disputes/${disputeId}/resolve`, { outcome, resolutionNote }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "disputes"] });
       setError(null);

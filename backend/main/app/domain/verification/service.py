@@ -13,7 +13,7 @@ import io
 import json
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -307,6 +307,63 @@ class VerificationService:
             await self._auto_create_tasks(verification_id, row.tier)
         await self._post_status_system_message(verification_id, from_state, target.value)
         return await self._to_dto(await self._repo.get_model(verification_id))
+
+    # ── Abandonment recovery (S52) ────────────────────────────────
+
+    async def get_abandonments(self) -> List[Verification]:
+        """Return DRAFT/SUBMITTED verifications idle >24 hrs with no recovery email sent."""
+        return await self._repo.list_abandoned(older_than_hours=24)
+
+    async def send_abandonment_emails(self) -> int:
+        """Send one-time recovery email per abandoned verification. Returns count sent."""
+        from main.app.domain.message.verification_messages import VerificationMessages
+        from main.app.domain.user.repo import UserRepo
+        msg_svc: VerificationMessages = di[VerificationMessages]
+        user_repo: UserRepo = di[UserRepo]
+
+        abandoned = await self.get_abandonments()
+        sent = 0
+        for verification in abandoned:
+            try:
+                user = await user_repo.get_model(str(verification.customer_id))
+                if user is None:
+                    continue
+                # Mark before send to prevent duplicate sends on retry
+                await self._repo.update(str(verification.id), UpdateVerificationDto(
+                    abandonment_email_sent_at=Utils.datetime_now(),
+                ))
+                await msg_svc.send_abandonment_recovery(
+                    recipient_user_id=str(verification.customer_id),
+                    verification_id=str(verification.id),
+                    vid=verification.vid,
+                )
+                sent += 1
+            except Exception as exc:
+                logger.warning("Abandonment email failed for {}: {}", verification.id, exc)
+        return sent
+
+    async def refresh_price_lock(self, verification_id: str) -> None:
+        """Recalculate pricing snapshot if the verification is SUBMITTED and >24 hr stale."""
+        row = await self._repo.get_model(verification_id)
+        if row is None or row.status != VerificationStatus.SUBMITTED.value:
+            return
+        cutoff = Utils.datetime_now() - timedelta(hours=24)
+        last_updated = row.date_updated or row.date_created
+        if last_updated >= cutoff:
+            return
+        tier = VerificationTier(row.tier)
+        currency = "NGN"
+        if row.pricing_snapshot:
+            try:
+                existing = PricingSnapshotDto.model_validate(json.loads(row.pricing_snapshot))
+                currency = existing.currency
+            except Exception:
+                pass
+        snapshot = self._pricing.quote(tier, currency)
+        snapshot = self._pricing.lock(snapshot)
+        await self._repo.update(verification_id, UpdateVerificationDto(
+            pricing_snapshot=snapshot.model_dump_json(by_alias=True),
+        ))
 
     # ── Helpers ───────────────────────────────────────────────────
 

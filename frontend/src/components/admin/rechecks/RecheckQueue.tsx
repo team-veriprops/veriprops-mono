@@ -23,20 +23,20 @@ export default function RecheckQueue() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: qKey,
-    queryFn: () => httpClient.get("/api/admin/rechecks"),
+    queryFn: () => httpClient.get("/admin/rechecks"),
   });
   const requests: RecheckRequest[] = (data as any)?.data ?? [];
   const [error, setError] = useState<string | null>(null);
 
   const approve = useMutation({
-    mutationFn: (id: string) => httpClient.post(`/api/admin/rechecks/${id}/approve`),
+    mutationFn: (id: string) => httpClient.post(`/admin/rechecks/${id}/approve`),
     onSuccess: () => qc.invalidateQueries({ queryKey: qKey }),
     onError: (e: any) => setError(getErrorMessage(e)),
   });
 
   const reject = useMutation({
     mutationFn: (id: string) =>
-      httpClient.post(`/api/admin/rechecks/${id}/reject`, { reason: "Does not meet criteria." }),
+      httpClient.post(`/admin/rechecks/${id}/reject`, { reason: "Does not meet criteria." }),
     onSuccess: () => qc.invalidateQueries({ queryKey: qKey }),
     onError: (e: any) => setError(getErrorMessage(e)),
   });

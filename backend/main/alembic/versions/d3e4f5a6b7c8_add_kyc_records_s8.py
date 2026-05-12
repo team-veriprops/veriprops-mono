@@ -14,6 +14,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from main.alembic.utils import AlembicUtils
 from main.appodus_utils.db.models import UTCDateTime
 
 revision: str = "d3e4f5a6b7c8"
@@ -25,12 +26,6 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "kyc_records",
-        sa.Column("id", sa.String(36), nullable=False, primary_key=True),
-        sa.Column("date_created", UTCDateTime, nullable=False),
-        sa.Column("date_updated", UTCDateTime, nullable=True),
-        sa.Column("version", sa.Integer, nullable=False, default=1),
-        sa.Column("deleted", sa.Boolean, nullable=False, default=False),
-        # Domain fields
         sa.Column("application_id", sa.String(36), nullable=False),
         sa.Column("user_id", sa.String(36), nullable=False),
         sa.Column("kyc_type", sa.String(32), nullable=False),
@@ -44,6 +39,7 @@ def upgrade() -> None:
         sa.Column("reviewed_at", UTCDateTime, nullable=True),
         sa.Column("admin_decision", sa.String(8), nullable=True),
         sa.Column("admin_notes", sa.Text, nullable=True),
+        *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_kyc_records_application_id", "kyc_records", ["application_id"])
     op.create_index("ix_kyc_records_user_id", "kyc_records", ["user_id"])
