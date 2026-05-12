@@ -1,13 +1,17 @@
 "use client";
 
 import { use, useState, useCallback } from "react";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, Share2, RefreshCw, ArrowUpCircle, Flag } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
 import AccessGateModal from "@components/portal/report/AccessGateModal";
 import ReportHeader from "@components/portal/report/ReportHeader";
 import ReportSection from "@components/portal/report/ReportSection";
 import ReportLegalFooter from "@components/portal/report/ReportLegalFooter";
+import ShareModal from "@components/portal/report/ShareModal";
+import RecheckModal from "@components/portal/report/RecheckModal";
+import TierUpgradeModal from "@components/portal/report/TierUpgradeModal";
+import DisputeModal from "@components/portal/report/DisputeModal";
 
 interface ReportData {
   vid: string;
@@ -44,6 +48,10 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   const { id } = use(params);
   const [acknowledged, setAcknowledged] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [recheckOpen, setRecheckOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [disputeOpen, setDisputeOpen] = useState(false);
 
   const { data: res, isLoading, error, refetch } = useQuery({
     queryKey: ["portal", "verifications", id, "report"],
@@ -96,6 +104,50 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   return (
     <div className="max-w-2xl mx-auto px-4 py-10 space-y-6">
       {showGate && <AccessGateModal vid={id} onAccepted={handleAccepted} />}
+
+      <ShareModal verificationId={id} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <RecheckModal verificationId={id} open={recheckOpen} onClose={() => setRecheckOpen(false)} />
+      <TierUpgradeModal verificationId={id} open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+      <DisputeModal verificationId={id} open={disputeOpen} onClose={() => setDisputeOpen(false)} />
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setShareOpen(true)}
+          style={{ cursor: "pointer" }}
+          className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          data-testid="report-share-trigger"
+        >
+          <Share2 className="h-3.5 w-3.5" /> Share
+        </button>
+        <button
+          type="button"
+          onClick={() => setRecheckOpen(true)}
+          style={{ cursor: "pointer" }}
+          className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+          data-testid="report-recheck-trigger"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Request Re-check
+        </button>
+        <button
+          type="button"
+          onClick={() => setUpgradeOpen(true)}
+          style={{ cursor: "pointer" }}
+          className="inline-flex items-center gap-1.5 rounded-md border border-indigo-300 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+          data-testid="report-upgrade-trigger"
+        >
+          <ArrowUpCircle className="h-3.5 w-3.5" /> Upgrade Tier
+        </button>
+        <button
+          type="button"
+          onClick={() => setDisputeOpen(true)}
+          style={{ cursor: "pointer" }}
+          className="inline-flex items-center gap-1.5 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+          data-testid="report-dispute-trigger"
+        >
+          <Flag className="h-3.5 w-3.5" /> File Dispute
+        </button>
+      </div>
 
       <ReportHeader
         vid={report.vid}

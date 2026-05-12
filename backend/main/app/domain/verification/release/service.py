@@ -83,6 +83,7 @@ class ReleaseService:
             meta={"action": "RELEASE_REPORT"},
         )
         await self._publish(str(ver.id), "report_released")
+        await self._notify_report_ready_safe(str(ver.id), str(ver.customer_id))
         return ReleaseDto(
             verification_id=str(ver.id),
             vid=ver.vid,
@@ -140,6 +141,21 @@ class ReleaseService:
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"Conflict check failed for {verification_id}: {exc}")
             return False
+
+    async def _notify_report_ready_safe(self, verification_id: str, customer_id: str) -> None:
+        try:
+            from main.app.domain.notification.service import NotificationService
+            from main.app.domain.notification.models import NotificationEvent
+            notif_svc: NotificationService = di[NotificationService]
+            await notif_svc.emit(
+                NotificationEvent.REPORT_READY,
+                recipient_id=customer_id,
+                context={},
+                entity_type="Verification",
+                entity_id=verification_id,
+            )
+        except Exception as exc:
+            logger.warning(f"Notification emit failed (report_ready): {exc}")
 
     async def _publish(self, verification_id: str, event: str) -> None:
         try:

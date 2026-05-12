@@ -1,7 +1,7 @@
 ---
 skill: prd-orchestrator
 skill_version: 2.2.0
-last_updated: 2026-05-07
+last_updated: 2026-05-12
 ---
 
 # Requirements Traceability Matrix
@@ -132,36 +132,36 @@ last_updated: 2026-05-07
 | R10.6 | 10 | Server-side PDF generation with branded cover, TOC, evidence thumbnails, QR to lookup, re-downloadable | R10.5 | report | yes | yes | medium | high | medium | PDF round-trip valid | integration | pending |
 | R10.7 | 10 | Report versioning (v1.0 / v1.1 / v2.0 / v3.0; SUPERSEDED watermark) | R10.6 | report | yes | yes | high | medium | medium | Old versions watermarked | unit | pending |
 | **— Phase 11 — Communication layer —** | | | | | | | | | | | | |
-| R11.1 | 11 | Customer ↔ Admin per-verification thread + system messages on status change | R5.*, R8.* | message | yes | yes | high | medium | medium | Thread persists; system msgs auto-posted | unit + E2E | in_progress |
-| R11.2 | 11 | Admin ↔ Agent per-task thread; admin broadcast to all agents on a verification | R7.*, R6.* | message | yes | yes | high | medium | medium | Broadcast fan-out works | unit + E2E | pending |
+| R11.1 | 11 | Customer ↔ Admin per-verification thread + system messages on status change | R5.*, R8.* | message | yes | yes | high | medium | medium | Thread persists; system msgs auto-posted | unit + E2E | done |
+| R11.2 | 11 | Admin ↔ Agent per-task thread; admin broadcast to all agents on a verification | R7.*, R6.* | message | yes | yes | high | medium | medium | Broadcast fan-out works | unit + E2E | done |
 | R11.3 | 11 | General support channel (account/billing/general; can reference VID) | R2.* | message | yes | yes | medium | low | low | VID attachment optional | unit | pending |
-| R11.4 | 11 | Send-time fraud detection (phone, email, URL, banking, "outside the platform") | R11.* | message | no | yes | high | medium | high | Flagged messages held | unit + E2E | pending |
-| R11.5 | 11 | Customer-facing endpoints return only role/first_name/avatar/verified for agents | R9.6 | backend | no | yes | high | high | high | Contract test | unit | pending |
+| R11.4 | 11 | Send-time fraud detection (phone, email, URL, banking, "outside the platform") | R11.* | message | no | yes | high | medium | high | Flagged messages held | unit + E2E | done |
+| R11.5 | 11 | Customer-facing endpoints return only role/first_name/avatar/verified for agents | R9.6 | backend | no | yes | high | high | high | Contract test | unit | in_progress |
 | **— Phase 12 — Notification system —** | | | | | | | | | | | | |
-| R12.1 | 12 | In-app notifications (always on) | R2.* | notification | yes | yes | medium | low | medium | Bell icon shows unread | unit + E2E | pending |
-| R12.2 | 12 | Email notifications (per-event opt-out) | R0.9 | notification | yes | yes | medium | low | medium | Opt-out toggles | integration | pending |
-| R12.3 | 12 | SMS notifications (per-event opt-out; high-signal only) | R0.9 | notification | yes | yes | medium | medium | medium | SMS sent + opt-out | integration | **blocked (Q14)** |
-| R12.4 | 12 | Push notifications (Firebase / WebPush) — Phase 2 enhancement | R0.9 | notification | yes | yes | medium | medium | medium | Push delivery verified | integration | pending |
-| R12.5 | 12 | Customer triggers (payment, agents assigned, status change, evidence, message, SLA, report ready, refund, re-check) | R5.*–R10.* | notification | no | yes | medium | low | low | Each event routes correctly | unit | pending |
-| R12.6 | 12 | Agent triggers (new job, accepted, reassigned, revision request, payment, feedback) | R7.*, R8.* | notification | no | yes | medium | low | low | Each event routes | unit | pending |
-| R12.7 | 12 | Admin triggers (SLA, report-ready, conflict, no-show, fraud-flag, dispute, wire proof) | R6.*, R8.*, R14.* | notification | no | yes | medium | low | low | Each event routes | unit | pending |
-| R12.8 | 12 | `/portal/account/notification-preferences` page | R12.* | portal | yes | yes | low | low | low | All event toggles | unit | pending |
+| R12.1 | 12 | In-app notifications (always on) | R2.* | notification | yes | yes | medium | low | medium | Bell icon shows unread | unit + E2E | done |
+| R12.2 | 12 | Email notifications (per-event opt-out) | R0.9 | notification | yes | yes | medium | low | medium | Opt-out toggles | integration | done |
+| R12.3 | 12 | SMS notifications (per-event opt-out; high-signal only) | R0.9 | notification | yes | yes | medium | medium | medium | SMS sent + opt-out | integration | in_progress |
+| R12.4 | 12 | Push notifications (Firebase / WebPush) — Phase 2 enhancement | R0.9 | notification | yes | yes | medium | medium | medium | Push delivery verified | integration | in_progress |
+| R12.5 | 12 | Customer triggers (payment, agents assigned, status change, evidence, message, SLA, report ready, refund, re-check) | R5.*–R10.* | notification | no | yes | medium | low | low | Each event routes correctly | unit | done |
+| R12.6 | 12 | Agent triggers (new job, accepted, reassigned, revision request, payment, feedback) | R7.*, R8.* | notification | no | yes | medium | low | low | Each event routes | unit | done |
+| R12.7 | 12 | Admin triggers (SLA, report-ready, conflict, no-show, fraud-flag, dispute, wire proof) | R6.*, R8.*, R14.* | notification | no | yes | medium | low | low | Each event routes | unit | done |
+| R12.8 | 12 | `/portal/account/notification-preferences` page | R12.* | portal | yes | yes | low | low | low | All event toggles | unit | done |
 | **— Phase 13 — Public lookup + sharing —** | | | | | | | | | | | | |
-| R13.1 | 13 | `/verify/[id]` summary-only public page (band not number, never address/agents/owners/docs) | R10.* | website | no | yes | high | medium | medium | All five states render | unit + E2E | pending |
-| R13.2 | 13 | `noindex` unless COMPLETED + sharing=public | R13.1 | website | no | no | medium | medium | medium | Robots header verified | unit | pending |
-| R13.3 | 13 | Share modes (Private / Link-only / Public / Named recipient) with 30-day default + revocation | R10.* | report sharing | yes | yes | high | medium | high | Revoke invalidates immediately | unit + E2E | pending |
-| R13.4 | 13 | Named recipients must acknowledge disclaimer first view | R0.12 | report sharing | yes | yes | high | low | medium | Recorded against version | unit | pending |
+| R13.1 | 13 | `/verify/[id]` summary-only public page (band not number, never address/agents/owners/docs) | R10.* | website | no | yes | high | medium | medium | All five states render | unit + E2E | done |
+| R13.2 | 13 | `noindex` unless COMPLETED + sharing=public | R13.1 | website | no | no | medium | medium | medium | Robots header verified | unit | done |
+| R13.3 | 13 | Share modes (Private / Link-only / Public / Named recipient) with 30-day default + revocation | R10.* | report sharing | yes | yes | high | medium | high | Revoke invalidates immediately | unit + E2E | done |
+| R13.4 | 13 | Named recipients must acknowledge disclaimer first view | R0.12 | report sharing | yes | yes | high | low | medium | Recorded against version | unit | done |
 | **— Phase 14 — Revisions / re-verification / disputes —** | | | | | | | | | | | | |
-| R14.1 | 14 | Re-check request (free-text + optional docs; admin approves; v2.0 bump) | R10.* | verification | yes | yes | high | medium | medium | Cycle restarts for scoped tasks | unit + E2E | **blocked (Q7)** |
-| R14.2 | 14 | Tier upgrade (delta pricing only; new tasks for added scope; SLA extended; v3.0) | R10.* | verification | yes | yes | high | medium | medium | Existing approved tasks preserved | unit | pending |
-| R14.3 | 14 | Dispute flow (≥100-char description, optional evidence; COMPLETED → DISPUTED) | R10.* | verification/state_machine | yes | yes | high | high | high | Window enforced | unit + E2E | pending |
-| R14.4 | 14 | Dispute outcomes (reject / uphold full refund / uphold partial + free re-check) | R14.3 | verification/state_machine | no | yes | high | high | high | All three transitions verified | unit | pending |
-| R14.5 | 14 | Admin resolution note delivered verbatim | R14.4 | message | no | yes | medium | low | low | Customer sees exact text | E2E | pending |
+| R14.1 | 14 | Re-check request (free-text + optional docs; admin approves; v2.0 bump) | R10.* | verification | yes | yes | high | medium | medium | Cycle restarts for scoped tasks | unit + E2E | done |
+| R14.2 | 14 | Tier upgrade (delta pricing only; new tasks for added scope; SLA extended; v3.0) | R10.* | verification | yes | yes | high | medium | medium | Existing approved tasks preserved | unit | done |
+| R14.3 | 14 | Dispute flow (≥100-char description, optional evidence; COMPLETED → DISPUTED) | R10.* | verification/state_machine | yes | yes | high | high | high | Window enforced | unit + E2E | done |
+| R14.4 | 14 | Dispute outcomes (reject / uphold full refund / uphold partial + free re-check) | R14.3 | verification/state_machine | no | yes | high | high | high | All three transitions verified | unit | done |
+| R14.5 | 14 | Admin resolution note delivered verbatim | R14.4 | message | no | yes | medium | low | low | Customer sees exact text | E2E | done |
 | **— Phase 15 — Agent earnings —** | | | | | | | | | | | | |
-| R15.1 | 15 | Agent earnings dashboard (monthly / lifetime / available / pending) | R7.*, R8.* | agent | yes | yes | medium | medium | medium | Per-job breakdown | unit + E2E | pending |
-| R15.2 | 15 | Commission matrix (admin-configured per role × tier; visible pre-accept) | R4.4 | pricing | yes | yes | medium | low | medium | Visible on job detail | unit | pending |
-| R15.3 | 15 | Withdrawal flow (stored bank account, confirmation, 2-business-day SLA) | R15.1 | agent | yes | yes | high | high | high | Payout end-to-end staging test | E2E | pending |
-| R15.4 | 15 | Finance admin payout panel (approve / hold / adjust; audit-logged) | R4.4 | admin | yes | yes | high | medium | medium | All actions audited | unit | pending |
+| R15.1 | 15 | Agent earnings dashboard (monthly / lifetime / available / pending) | R7.*, R8.* | agent | yes | yes | medium | medium | medium | Per-job breakdown | unit + E2E | done |
+| R15.2 | 15 | Commission matrix (admin-configured per role × tier; visible pre-accept) | R4.4 | pricing | yes | yes | medium | low | medium | Visible on job detail | unit | done |
+| R15.3 | 15 | Withdrawal flow (stored bank account, confirmation, 2-business-day SLA) | R15.1 | agent | yes | yes | high | high | high | Payout end-to-end staging test | E2E | done |
+| R15.4 | 15 | Finance admin payout panel (approve / hold / adjust; audit-logged) | R4.4 | admin | yes | yes | high | medium | medium | All actions audited | unit | done |
 | **— Phase 16 — Reputation + coverage —** | | | | | | | | | | | | |
 | R16.1 | 16 | Performance metrics (completion rate, accuracy 1–5, timeliness) | R8.* | agent | yes | yes | medium | medium | medium | Metrics updated post-approval | unit | pending |
 | R16.2 | 16 | Agent profile self-view (metrics, total jobs, active since, coverage) | R16.1 | agent | no | yes | low | low | low | Renders correctly | unit | pending |

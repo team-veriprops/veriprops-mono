@@ -16,6 +16,7 @@ import {
   CreditCard,
   CheckCircle2, LogOut, Menu, X
 } from "lucide-react";
+import NotificationBell from "@components/shared/notifications/NotificationBell";
 import { useLogoutMutation } from "@components/website/auth/libs/useAuthQueries";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { NavItem } from "@/components/nav/MenuSidebar";
@@ -193,11 +194,14 @@ export default function AppShell({ navItems, children }: AppShellProps) {
               Veriprops
             </span>
           </div>
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-            style={{ backgroundColor: "rgba(63,102,83,0.12)", color: "var(--brand-viridian)" }}
-          >
-            {initials}
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+              style={{ backgroundColor: "rgba(63,102,83,0.12)", color: "var(--brand-viridian)" }}
+            >
+              {initials}
+            </div>
           </div>
         </header>
 

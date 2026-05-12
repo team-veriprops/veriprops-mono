@@ -66,7 +66,18 @@
       "Bash(appodus_active_env=test python -m pytest test/unit/app/domain/verification/conflict/ -x -q)",
       "Bash(mkdir -p /c/Veriprops/repos/veriprops-mono/backend/test/unit/app/domain/verification/portal && mkdir -p /c/Veriprops/repos/veriprops-mono/frontend/src/app/portal/verifications/\\\\[id\\\\] && mkdir -p /c/Veriprops/repos/veriprops-mono/frontend/src/components/portal/verifications)",
       "Bash(mkdir -p \"/c/Veriprops/repos/veriprops-mono/frontend/src/app/portal/verifications/[id]/evidence\")",
-      "Bash(mkdir -p /c/Veriprops/repos/veriprops-mono/backend/test/unit/app/domain/verification/report && mkdir -p \"/c/Veriprops/repos/veriprops-mono/frontend/src/app/portal/verifications/[id]/report\" && mkdir -p /c/Veriprops/repos/veriprops-mono/frontend/src/components/portal/report)"
+      "Bash(mkdir -p /c/Veriprops/repos/veriprops-mono/backend/test/unit/app/domain/verification/report && mkdir -p \"/c/Veriprops/repos/veriprops-mono/frontend/src/app/portal/verifications/[id]/report\" && mkdir -p /c/Veriprops/repos/veriprops-mono/frontend/src/components/portal/report)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\frontend\\\\src\\\\services\" -ErrorAction SilentlyContinue)",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, 'c:/Veriprops/repos/veriprops-mono/backend/main'\\); from appodus_utils.router import AppRouter; print\\('found'\\)\")",
+      "Bash(python c:/Veriprops/repos/veriprops-mono/backend/main/appodus_utils/router.py)",
+      "Bash(pip show *)",
+      "Bash(.venv/Scripts/python.exe -c \"from main.appodus_utils.router import AppRouter; print\\(AppRouter.__module__, AppRouter.__bases__\\)\")",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/pip.exe install *)",
+      "Bash(.venv/Scripts/python.exe -m pytest test/unit/app/domain/verification/ -x -q)",
+      "Bash(.venv/Scripts/python.exe -m pytest test/unit/app/domain/verification/scoring/test_trust_score_service.py::TestUpdateWeights::test_valid_weights_saved -x -q)",
+      "Bash(Remove-Item \"c:\\\\Veriprops\\\\repos\\\\veriprops-mono\\\\backend\\\\main\\\\alembic\\\\versions\\\\a1b2c3d4e5f6_s37_s38_threads_fraud.py\")",
+      "Read(//c/Veriprops/repos/veriprops-mono/frontend/src/app/**)"
     ],
     "deny": [
       "Read(node_modules/**)",

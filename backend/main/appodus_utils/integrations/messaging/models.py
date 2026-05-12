@@ -31,6 +31,13 @@ class MessageContext(str, Enum):
     BRAND_SUPPORT_EMAIL = "BRAND_SUPPORT_EMAIL"
     BRAND_SUPPORT_PHONE = "BRAND_SUPPORT_PHONE"
 
+    # VERIFICATION PLATFORM
+    VERIFICATION_NEW_STATUS = "VERIFICATION_NEW_STATUS"          # status_change — new state the verification transitioned to
+    RECHECK_DECISION_OUTCOME = "RECHECK_DECISION_OUTCOME"        # recheck_decision — APPROVED or REJECTED
+    DISPUTE_VERIFICATION_ID = "DISPUTE_VERIFICATION_ID"          # dispute_filed — VID of the disputed verification
+    DISPUTE_RESOLUTION_OUTCOME = "DISPUTE_RESOLUTION_OUTCOME"    # dispute_resolved — REJECTED / FULL_REFUND / PARTIAL_RECHECK
+    PAYOUT_HOLD_REASON = "PAYOUT_HOLD_REASON"                    # payout_held — admin-supplied hold reason
+
 
 class PushProviderType(str, Enum):
     FIREBASE = "firebase"

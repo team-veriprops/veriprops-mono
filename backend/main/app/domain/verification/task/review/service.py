@@ -60,6 +60,8 @@ class TaskReviewService:
         await self._derive_verification_status(task.verification_id)
         await self._recompute_trust_score(task.verification_id)
         await self._publish(task.verification_id, "task_approved", task_id)
+        await self._emit_notification_safe(task, "approved")
+        await self._compute_commission_safe(task, admin_id)
         return TaskReviewDto(
             task_id=task_id,
             decision=TaskReviewDecision.APPROVED,
@@ -91,6 +93,7 @@ class TaskReviewService:
         )
         await self._derive_verification_status(task.verification_id)
         await self._publish(task.verification_id, "task_rejected", task_id)
+        await self._emit_notification_safe(task, "rejected")
         return TaskReviewDto(
             task_id=task_id,
             decision=TaskReviewDecision.REJECTED,
@@ -174,3 +177,45 @@ class TaskReviewService:
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"SSE publish failed ({event}): {exc}")
+
+    async def _emit_notification_safe(self, task, action: str) -> None:
+        try:
+            from main.app.domain.notification.service import NotificationService
+            from main.app.domain.notification.models import NotificationEvent
+            notif_svc: NotificationService = di[NotificationService]
+            if action == "rejected":
+                await notif_svc.emit(
+                    NotificationEvent.REVISION_REQUEST,
+                    recipient_id=str(task.agent_id or ""),
+                    context={},
+                    entity_type="Task",
+                    entity_id=str(task.id),
+                )
+        except Exception as exc:
+            logger.warning(f"Notification emit failed (task review {action}): {exc}")
+
+    async def _compute_commission_safe(self, task, admin_id: str) -> None:
+        try:
+            from main.app.domain.commission.service import CommissionService
+            from main.app.domain.verification.repo import VerificationRepo
+            from main.app.domain.payment.repo import PaymentRepo
+            from main.app.domain.payment.models import PaymentStatus, SearchPaymentDto
+            commission_svc: CommissionService = di[CommissionService]
+            ver_repo: VerificationRepo = di[VerificationRepo]
+            payment_repo: PaymentRepo = di[PaymentRepo]
+            ver = await ver_repo.get(str(task.verification_id))
+            if ver is None or not task.agent_id:
+                return
+            payments = await payment_repo.get_all(SearchPaymentDto(verification_id=str(task.verification_id)))
+            succeeded = [p for p in payments if p.status == PaymentStatus.SUCCEEDED.value]
+            gross_amount = float(succeeded[0].amount_minor) / 100 if succeeded else 0.0
+            await commission_svc.compute_and_record(
+                task_id=str(task.id),
+                agent_id=str(task.agent_id),
+                verification_id=str(task.verification_id),
+                role=str(task.role),
+                tier=str(ver.tier),
+                gross_amount=gross_amount,
+            )
+        except Exception as exc:
+            logger.warning(f"Commission compute failed for task {task.id}: {exc}")

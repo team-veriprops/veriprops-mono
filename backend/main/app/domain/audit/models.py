@@ -44,6 +44,8 @@ class AuditActionType(str, enum.Enum):
     KYC_BVN_VERIFIED = "KYC_BVN_VERIFIED"
     KYC_SELFIE_RESOLVED = "KYC_SELFIE_RESOLVED"
     KYC_ADMIN_REVIEWED = "KYC_ADMIN_REVIEWED"
+    # ── Admin config ───────────────────────────────────────────────
+    ADMIN_CONFIG_CHANGED = "ADMIN_CONFIG_CHANGED"
 
 
 # ─── ORM ──────────────────────────────────────────────────────────────────────

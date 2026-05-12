@@ -103,6 +103,14 @@ export default function VerificationDetailPage({
           View Evidence
         </Link>
       )}
+
+      {/* Messages link */}
+      <Link
+        href={ROUTES.PORTAL.VERIFICATION_MESSAGES(id)}
+        className="block rounded-lg border border-gray-200 px-5 py-3 text-sm font-medium text-indigo-600 hover:bg-indigo-50 text-center"
+      >
+        Messages
+      </Link>
     </div>
   );
 }

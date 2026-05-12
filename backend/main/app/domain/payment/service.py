@@ -330,6 +330,20 @@ class PaymentService:
             description=f"payment {payment.id} succeeded for {verification.vid}",
             user_id=str(verification.customer_id),
         )
+        # Emit in-app notification
+        try:
+            from main.app.domain.notification.service import NotificationService
+            from main.app.domain.notification.models import NotificationEvent
+            notif_svc: NotificationService = di[NotificationService]
+            await notif_svc.emit(
+                NotificationEvent.PAYMENT_CONFIRMED,
+                recipient_id=str(verification.customer_id),
+                context={},
+                entity_type="Verification",
+                entity_id=str(verification.id),
+            )
+        except Exception as exc:
+            logger.warning("Notification emit failed (payment): {}", exc)
 
     def _to_dto(self, payment: Optional[Payment]) -> PaymentDto:
         if payment is None:

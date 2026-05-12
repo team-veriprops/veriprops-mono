@@ -98,6 +98,22 @@ class TaskService:
                 )
             )
             created.append(self._task_to_dto(task))
+        # Notify customer that agents have been assigned
+        try:
+            from main.app.domain.notification.service import NotificationService
+            from main.app.domain.notification.models import NotificationEvent
+            ver = await self._verifications.get_model(verification_id)
+            if ver:
+                notif_svc: NotificationService = di[NotificationService]
+                await notif_svc.emit(
+                    NotificationEvent.AGENTS_ASSIGNED,
+                    recipient_id=str(ver.customer_id),
+                    context={},
+                    entity_type="Verification",
+                    entity_id=verification_id,
+                )
+        except Exception as exc:
+            logger.warning(f"Notification emit failed (agents_assigned): {exc}")
         return created
 
     async def release_to_pool(self, verification_id: str, admin_id: str) -> List[TaskDto]:

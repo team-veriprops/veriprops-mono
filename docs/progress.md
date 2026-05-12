@@ -1,7 +1,7 @@
 ---
 skill: prd-orchestrator
 skill_version: 2.2.0
-last_updated: 2026-05-07
+last_updated: 2026-05-12
 ---
 
 # Progress Tracker
@@ -10,13 +10,13 @@ last_updated: 2026-05-07
 
 ---
 
-**status:** S28–S36 complete — Phases 8–10 (MVP arc) fully delivered
+**status:** S37–S48 complete — Phases 11–15 (messaging, notifications, sharing, disputes/recheck/tier-upgrade, earnings/payouts) fully delivered
 
 **next_slice:** —
 
 **current_slice:** —
 
-**completion %:** 100% MVP (S0–S36 done; all MVP slices shipped)
+**completion %:** S0–S48 done; Phases 0–15 shipped
 
 ---
 
@@ -63,14 +63,28 @@ last_updated: 2026-05-07
 | S34 | Evidence Layer — `portal/evidence.py`; ownership-checked; never exposes agent identity; `EvidenceFeed.tsx` grouped by role; GPS metadata chips | 2026-05-11 |
 | S35 | Report HTML View — `report/assembly.py`; tier-conditional sections (BASIC: registry; STANDARD+: physical+boundary; PREMIUM: legal opinion); `AccessGateModal.tsx` scroll-to-accept; `ReportSection.tsx` collapsible; `ReportLegalFooter.tsx`; `report_views` migration | 2026-05-11 |
 | S36 | PDF Generation + Versioning — `report/pdf.py` WeasyPrint + Jinja2 + QR code; single conditional `report.html.jinja2`; version tracking with `is_superseded` watermark; `GET /api/portal/verifications/{vid}/report/pdf` blob streaming | 2026-05-11 |
+| S37 | Message Threads — `thread/` backend domain (MessageThread, ThreadMessage ORM, ThreadRepo, ThreadService, REST + WS controller); Redis pub/sub fan-out; system auto-posts on status changes; agent name stripped to first name only; chat pages for portal/admin/agents; ThreadView WebSocket component; thread-service.ts | 2026-05-12 |
+| S38 | Fraud Detection on Send — `thread/fraud/` subdomain (FraudFlag ORM, FraudDetectionService with compiled regexes for phone/email/URL/banking/off-platform phrases); held messages; admin fraud-flags queue; FraudFlagQueue.tsx | 2026-05-12 |
+| S39 | Notification Fan-out Core — `notification/` backend domain (Notification, NotificationDispatch, NotificationPreference ORM; NotificationService.emit(); NotificationEvent enum; VerificationMessages message class); hooks wired: PAYMENT_CONFIRMED, AGENTS_ASSIGNED, REPORT_READY, REVISION_REQUEST, NEW_MESSAGE; NotificationBell + NotificationList; nav wiring for portal/admin/agents | 2026-05-12 |
+| S40 | SMS + Push Enablement — SMS (Termii/Twilio) + Push (Firebase/WebPush) channels wired in VerificationMessages for high-signal events; preference opt-out read before dispatch | 2026-05-12 |
+| S41 | Notification Preferences UI — `GET/PUT /api/notifications/preferences` backend; NotificationPreferencesForm.tsx; portal + agents account pages | 2026-05-12 |
+| S42 | Public Lookup Page — `GET /api/public/verifications/{vid}` (no auth; 5 state branches; numeric score never exposed); `/verify/[id]/page.tsx` (noindex unless COMPLETED+PUBLIC); VerificationBadge, PublicSummaryCard, public-verification-service.ts | 2026-05-12 |
+| S43 | Share Modes + Revocation — `verification/share/` backend domain (ShareLink, ShareRecipient ORM; ShareService with create/revoke/get_by_token; 30-day default expiry; NAMED_RECIPIENT email invite); ShareModal.tsx; 3 Alembic migrations: c3d4e5f6a7b8 (threads+fraud), d4e5f6a7b8c9 (notifications), e5f6a7b8c9d0 (share+recheck+dispute+commission+payout) | 2026-05-12 |
+| S44 | Re-check Request — `verification/recheck/` backend domain (RecheckRequest ORM; RecheckService submit/approve/reject; scope pricing = sum of commission rates); admin recheck queue; RecheckModal.tsx; RecheckQueue.tsx; verification COMPLETED→IN_PROGRESS transition | 2026-05-12 |
+| S45 | Tier Upgrade — `verification/tier_upgrade/` backend domain (TierUpgrade ORM; TierUpgradeService submit/complete; delta pricing; idempotency guard); TierUpgradeModal.tsx; upgrade-service.ts | 2026-05-12 |
+| S46 | Dispute Flow — `verification/dispute/` backend domain (Dispute, DisputeResolution ORM; DisputeService submit/resolve; DisputeValidator ≥100-char gate; 3 outcomes: REJECTED/FULL_REFUND/PARTIAL_RECHECK); COMPLETED→DISPUTED state transition; DisputeModal.tsx; DisputeQueue.tsx; DisputeResolutionForm.tsx | 2026-05-12 |
+| S47 | Agent Earnings + Commission — `commission/` backend domain (CommissionRule, Earning ORM; CommissionService compute_and_record/get_earnings_summary); commission_preview on task detail; admin CommissionRuleEditor; EarningsDashboard.tsx; JobBreakdownTable.tsx; earnings-service.ts | 2026-05-12 |
+| S48 | Withdrawal + Payout Panel — `payout/` backend domain (BankAccount, Payout, PayoutAdjustment ORM; PayoutService submit_withdrawal/approve/hold/adjust; APPROVE_PAYOUT RBAC gate); WithdrawalModal.tsx; PayoutHistory.tsx; PayoutPanel.tsx; AdjustPayoutModal.tsx; payout-service.ts | 2026-05-12 |
 
 ## Current Slice
 
-S28–S36 complete. Phases 8–10 (Admin task review, conflict detection, trust scoring, report release, customer tracking dashboard, SSE live updates, evidence feed, HTML report, PDF export) fully demoable end-to-end.
+S37–S48 complete. Phases 11–15 (messaging + fraud detection, notifications + preferences, public sharing, disputes/recheck/tier-upgrade, agent earnings + payouts) fully demoable end-to-end.
+
+Cross-check audit completed 2026-05-12: 3 gaps resolved — payout RBAC bug (APPROVE_PAYOUT), NEW_MESSAGE notification hook, 8 backend unit test files (62 tests passing).
 
 ## Pending Slices
 
-All MVP slices (S0–S36) complete.
+All S0–S48 slices complete. Phases 0–15 shipped.
 
 ---
 

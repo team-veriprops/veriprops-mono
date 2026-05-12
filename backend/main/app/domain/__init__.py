@@ -17,10 +17,47 @@ from main.app.domain.verification.task.review.controller import task_review_rout
 from main.app.domain.verification.conflict.controller import conflict_router
 from main.app.domain.verification.scoring.controller import scoring_router
 from main.app.domain.verification.release.controller import release_router
-from main.app.domain.verification.portal.controller import portal_router
+from main.app.domain.verification.portal.controller import portal_router, public_router
 from main.app.domain.verification.portal.stream import stream_router
 from main.app.domain.payment import models as _payment_models  # noqa: F401
 from main.app.domain.payment.controller import payment_router
+from main.app.domain.thread import (  # noqa: F401
+    MessageThread as _ThreadModel,
+    ThreadMessage as _ThreadMessageModel,
+    FraudFlag as _FraudFlagModel,
+)
+from main.app.domain.thread import thread_router, ws_router, fraud_router
+from main.app.domain.notification import (  # noqa: F401
+    Notification as _NotificationModel,
+    NotificationDispatch as _NotificationDispatchModel,
+    NotificationPreference as _NotificationPrefModel,
+)
+from main.app.domain.notification import notification_router
+from main.app.domain.verification.share import (  # noqa: F401
+    ShareLink as _ShareLinkModel,
+    ShareRecipient as _ShareRecipientModel,
+)
+from main.app.domain.verification.share import share_router
+from main.app.domain.verification.recheck import RecheckRequest as _RecheckModel  # noqa: F401
+from main.app.domain.verification.recheck import recheck_router
+from main.app.domain.verification.tier_upgrade import TierUpgrade as _TierUpgradeModel  # noqa: F401
+from main.app.domain.verification.tier_upgrade import tier_upgrade_router
+from main.app.domain.verification.dispute import (  # noqa: F401
+    Dispute as _DisputeModel,
+    DisputeResolution as _DisputeResolutionModel,
+)
+from main.app.domain.verification.dispute import dispute_router
+from main.app.domain.commission import (  # noqa: F401
+    CommissionRule as _CommissionRuleModel,
+    Earning as _EarningModel,
+)
+from main.app.domain.commission import commission_router
+from main.app.domain.payout import (  # noqa: F401
+    BankAccount as _BankAccountModel,
+    Payout as _PayoutModel,
+    PayoutAdjustment as _PayoutAdjustmentModel,
+)
+from main.app.domain.payout import payout_router
 from main.appodus_utils.integrations.webhook import webhook_router
 
 router = APIRouter()
@@ -32,11 +69,22 @@ router.include_router(conflict_router)
 router.include_router(scoring_router)
 router.include_router(release_router)
 router.include_router(portal_router)
+router.include_router(public_router)
 router.include_router(stream_router)
 router.include_router(agent_task_router)
 router.include_router(user_router)
 router.include_router(verification_router)
 router.include_router(payment_router)
+router.include_router(thread_router)
+router.include_router(fraud_router)
+router.include_router(ws_router)
+router.include_router(notification_router)
+router.include_router(share_router)
+router.include_router(recheck_router)
+router.include_router(tier_upgrade_router)
+router.include_router(dispute_router)
+router.include_router(commission_router)
+router.include_router(payout_router)
 router.include_router(webhook_router)
 
 # Dev/test-only endpoints — never mounted in production

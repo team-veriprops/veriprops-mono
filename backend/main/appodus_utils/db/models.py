@@ -267,6 +267,10 @@ class SuccessResponse(Object, Generic[T]):
 
     data: Optional[T] = None
 
+    @classmethod
+    def ok(cls, data: T, message: Optional[str] = None) -> "SuccessResponse[T]":
+        return cls(data=data, message=message)
+
 
 class PaginationMeta(Object):
     page: int = 0

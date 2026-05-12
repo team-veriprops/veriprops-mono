@@ -305,9 +305,24 @@ class VerificationService:
         )
         if target == VerificationStatus.PAID:
             await self._auto_create_tasks(verification_id, row.tier)
+        await self._post_status_system_message(verification_id, from_state, target.value)
         return await self._to_dto(await self._repo.get_model(verification_id))
 
     # ── Helpers ───────────────────────────────────────────────────
+
+    async def _post_status_system_message(
+        self, verification_id: str, from_state: str, to_state: str
+    ) -> None:
+        try:
+            from main.app.domain.thread.service import ThreadService
+            from main.app.domain.thread.models import ThreadType
+            thread_svc: ThreadService = di[ThreadService]
+            body = f"Verification status changed from {from_state} to {to_state}."
+            await thread_svc.post_system_message_for_verification(
+                verification_id, ThreadType.CUSTOMER_ADMIN, body
+            )
+        except Exception as exc:
+            logger.warning("System message post failed for {}: {}", verification_id, exc)
 
     async def _auto_create_tasks(self, verification_id: str, tier: str) -> None:
         """Create tasks for a newly-paid verification.
