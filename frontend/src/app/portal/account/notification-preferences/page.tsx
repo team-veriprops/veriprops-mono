@@ -9,7 +9,7 @@ export default function NotificationPreferencesPage() {
       <p className="text-sm text-gray-500 mb-6">
         Choose how you receive updates for each event type.
       </p>
-      <NotificationPreferencesForm />
+      <NotificationPreferencesForm persona="customer" />
     </div>
   );
 }

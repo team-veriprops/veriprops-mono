@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Button } from "@3rdparty/ui/button";
 import { Clock, CheckCircle2, XCircle } from "lucide-react";
+import { ROUTES } from "@lib/routes";
 import type { AgentApplication } from "../libs/agent-service";
 
 interface Props {
@@ -19,7 +21,7 @@ export default function ApprovalStatusCard({ application, onEdit }: Props) {
         icon={<CheckCircle2 className="w-7 h-7" />}
         title="You're an approved agent"
         body="You can now accept jobs in your coverage area. Head to your dashboard to see what's available."
-        cta={{ label: "Go to dashboard", href: "/agents/dashboard" }}
+        cta={{ label: "Go to dashboard", href: ROUTES.AGENT.DASHBOARD }}
       />
     );
   }
@@ -101,7 +103,7 @@ function Card({
       {cta && (
         cta.href ? (
           <Button asChild>
-            <a href={cta.href}>{cta.label}</a>
+            <Link href={cta.href}>{cta.label}</Link>
           </Button>
         ) : (
           <Button type="button" onClick={cta.onClick}>

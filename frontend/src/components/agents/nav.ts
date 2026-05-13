@@ -10,4 +10,5 @@ export const agentNavItems: NavItem[] = [
   { title: "Earnings", href: ROUTES.AGENT.EARNINGS, icon: "creditCard", has_separator_after: false },
   { title: "Payouts", href: ROUTES.AGENT.PAYOUTS, icon: "creditCard", has_separator_after: false },
   { title: "Onboarding", href: ROUTES.AGENT.ONBOARDING, icon: "userCog", has_separator_after: false },
+  { title: "Notification Preferences", href: ROUTES.AGENT.NOTIFICATION_PREFERENCES, icon: "bell", has_separator_after: false },
 ];

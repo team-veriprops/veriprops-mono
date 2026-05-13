@@ -10,9 +10,11 @@ export type NavIconKey =
   | "fileCheck"
   | "creditCard"
   | "user"
+  | "users"
   | "mapPin"
   | "activity"
-  | "gift";
+  | "gift"
+  | "bell";
 
 export interface NavItem {
   title: string;

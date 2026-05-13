@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@3rdparty/ui/button";
 import {
   Dialog,
@@ -183,9 +184,9 @@ export default function AgentApplicationsQueue() {
                     {selected.surveyorLicenceUrl && (
                       <>
                         {" · "}
-                        <a href={selected.surveyorLicenceUrl} target="_blank" rel="noopener" style={{ color: "var(--brand-viridian)" }}>
+                        <Link href={selected.surveyorLicenceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand-viridian)" }}>
                           view
-                        </a>
+                        </Link>
                       </>
                     )}
                   </Section>
@@ -196,9 +197,9 @@ export default function AgentApplicationsQueue() {
                     {selected.nbaLicenceUrl && (
                       <>
                         {" · "}
-                        <a href={selected.nbaLicenceUrl} target="_blank" rel="noopener" style={{ color: "var(--brand-viridian)" }}>
+                        <Link href={selected.nbaLicenceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand-viridian)" }}>
                           view
-                        </a>
+                        </Link>
                       </>
                     )}
                   </Section>

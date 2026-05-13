@@ -17,13 +17,23 @@ const flushMicrotasks = async () => {
 function makePopup(closed = false) {
   return {
     closed,
-    location: { href: "" },
+    location: { href: "", replace: vi.fn() },
+    focus: vi.fn(),
     close: vi.fn(),
   };
 }
 
-function resolvedOauth(url = "https://accounts.google.com/o/oauth2?state=x") {
+// The OAuth callback postMessage comes from the backend origin.
+const BACKEND_ORIGIN = "http://localhost:8000";
+
+// All resolvedOauth URLs must embed a ?state= param that matches
+// what the implementation extracts with parsedUrl.searchParams.get("state").
+function resolvedOauth(url = `https://accounts.google.com/o/oauth2?state=x`) {
   return Promise.resolve({ data: { authorizationUrl: url } });
+}
+
+function dispatchOauthMessage(data: Record<string, unknown>, origin = BACKEND_ORIGIN) {
+  window.dispatchEvent(new MessageEvent("message", { origin, data }));
 }
 
 beforeEach(() => {
@@ -98,12 +108,7 @@ describe("cancel on close", () => {
     await flushMicrotasks();
 
     // Fire a success message before closing the popup.
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        origin: window.location.origin,
-        data: { type: "oauth_result", success: true },
-      }),
-    );
+    dispatchOauthMessage({ type: "oauth_result", success: true, state: "x" });
 
     (popup as { closed: boolean }).closed = true;
     vi.advanceTimersByTime(600);
@@ -147,12 +152,7 @@ describe("postMessage validation", () => {
 
     await flushMicrotasks();
 
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        origin: "https://evil.example.com",
-        data: { type: "oauth_result", success: true },
-      }),
-    );
+    dispatchOauthMessage({ type: "oauth_result", success: true, state: "x" }, "https://evil.example.com");
 
     expect(onSuccess).not.toHaveBeenCalled();
   });
@@ -167,12 +167,7 @@ describe("postMessage validation", () => {
 
     await flushMicrotasks();
 
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        origin: window.location.origin,
-        data: { type: "some_other_event", success: true },
-      }),
-    );
+    dispatchOauthMessage({ type: "some_other_event", success: true, state: "x" });
 
     expect(onSuccess).not.toHaveBeenCalled();
   });
@@ -187,12 +182,7 @@ describe("postMessage validation", () => {
 
     await flushMicrotasks();
 
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        origin: window.location.origin,
-        data: { type: "oauth_result", success: true },
-      }),
-    );
+    dispatchOauthMessage({ type: "oauth_result", success: true, state: "x" });
 
     expect(onSuccess).toHaveBeenCalledOnce();
   });
@@ -207,12 +197,12 @@ describe("postMessage validation", () => {
 
     await flushMicrotasks();
 
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        origin: window.location.origin,
-        data: { type: "oauth_result", success: false, message: "Account exists. Please log in and link this provider explicitly." },
-      }),
-    );
+    dispatchOauthMessage({
+      type: "oauth_result",
+      success: false,
+      state: "x",
+      message: "Account exists. Please log in and link this provider explicitly.",
+    });
 
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ code: "provider", message: "Account exists. Please log in and link this provider explicitly." }),

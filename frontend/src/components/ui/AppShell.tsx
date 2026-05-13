@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
+  Bell,
   LayoutDashboard,
   UserCog,
   ClipboardList,
@@ -16,6 +17,7 @@ import {
   FileCheck,
   CreditCard,
   User,
+  Users,
   MapPin,
   Gift,
   CheckCircle2, LogOut, Menu, X
@@ -43,9 +45,11 @@ const iconMap = {
   fileCheck: FileCheck,
   creditCard: CreditCard,
   user: User,
+  users: Users,
   mapPin: MapPin,
   activity: Activity,
   gift: Gift,
+  bell: Bell,
 } as const;
 
 export default function AppShell({ navItems, children }: AppShellProps) {

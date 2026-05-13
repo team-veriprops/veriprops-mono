@@ -3,21 +3,27 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { notificationService, NotificationPreference } from "./libs/notification-service";
 
-const EVENTS = [
-  { key: "STATUS_CHANGE", label: "Verification Status Change" },
-  { key: "PAYMENT_CONFIRMED", label: "Payment Confirmed" },
-  { key: "AGENTS_ASSIGNED", label: "Agents Assigned" },
-  { key: "JOB_ALERT", label: "New Job Alert" },
-  { key: "REPORT_READY", label: "Report Ready" },
-  { key: "NEW_MESSAGE", label: "New Message" },
-  { key: "REVISION_REQUEST", label: "Revision Requested" },
-  { key: "SLA_BREACH", label: "SLA Breach" },
-  { key: "RECHECK_DECISION", label: "Re-check Decision" },
-  { key: "DISPUTE_FILED", label: "Dispute Filed" },
-  { key: "DISPUTE_RESOLVED", label: "Dispute Resolved" },
-  { key: "PAYOUT_APPROVED", label: "Payout Approved" },
-  { key: "PAYOUT_HELD", label: "Payout On Hold" },
+export type NotificationPersona = "customer" | "agent";
+
+export const ALL_EVENTS = [
+  { key: "STATUS_CHANGE", label: "Verification Status Change", personas: ["customer"] as string[] },
+  { key: "PAYMENT_CONFIRMED", label: "Payment Confirmed", personas: ["customer"] as string[] },
+  { key: "AGENTS_ASSIGNED", label: "Agents Assigned", personas: ["customer"] as string[] },
+  { key: "JOB_ALERT", label: "New Job Alert", personas: ["agent"] as string[] },
+  { key: "REPORT_READY", label: "Report Ready", personas: ["customer"] as string[] },
+  { key: "NEW_MESSAGE", label: "New Message", personas: ["customer", "agent"] as string[] },
+  { key: "REVISION_REQUEST", label: "Revision Requested", personas: ["agent"] as string[] },
+  { key: "SLA_BREACH", label: "SLA Breach", personas: [] as string[] },
+  { key: "RECHECK_DECISION", label: "Re-check Decision", personas: ["customer"] as string[] },
+  { key: "DISPUTE_FILED", label: "Dispute Filed", personas: [] as string[] },
+  { key: "DISPUTE_RESOLVED", label: "Dispute Resolved", personas: ["customer"] as string[] },
+  { key: "PAYOUT_APPROVED", label: "Payout Approved", personas: ["agent"] as string[] },
+  { key: "PAYOUT_HELD", label: "Payout On Hold", personas: ["agent"] as string[] },
 ];
+
+export function getEventsForPersona(persona?: NotificationPersona) {
+  return persona ? ALL_EVENTS.filter((e) => e.personas.includes(persona)) : ALL_EVENTS;
+}
 
 const CHANNELS: { key: keyof Omit<NotificationPreference, "userId" | "eventType">; label: string }[] = [
   { key: "emailEnabled", label: "Email" },
@@ -25,7 +31,12 @@ const CHANNELS: { key: keyof Omit<NotificationPreference, "userId" | "eventType"
   { key: "pushEnabled", label: "Push" },
 ];
 
-export default function NotificationPreferencesForm() {
+interface Props {
+  persona?: NotificationPersona;
+}
+
+export default function NotificationPreferencesForm({ persona }: Props) {
+  const EVENTS = getEventsForPersona(persona);
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["notification-prefs"],

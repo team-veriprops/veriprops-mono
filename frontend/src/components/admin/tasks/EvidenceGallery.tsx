@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { MapPin, FileText, Video, Image, X } from "lucide-react";
 import type { Task } from "@components/admin/libs/admin-service";
 
@@ -49,6 +50,7 @@ export default function EvidenceGallery({ task, evidence }: Props) {
               className="group relative rounded-lg border border-gray-200 overflow-hidden aspect-square bg-gray-50 hover:border-indigo-400 transition-colors"
             >
               {item.type === "PHOTO" ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={item.fileUrl}
                   alt="evidence"
@@ -84,20 +86,21 @@ export default function EvidenceGallery({ task, evidence }: Props) {
             </button>
 
             {selected.type === "PHOTO" ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img src={selected.fileUrl} alt="evidence" className="w-full max-h-[70vh] object-contain" />
             ) : selected.type === "VIDEO" ? (
               <video src={selected.fileUrl} controls className="w-full max-h-[70vh]" />
             ) : (
               <div className="flex flex-col items-center gap-4 py-12">
                 <FileText className="h-16 w-16 text-gray-400" />
-                <a
+                <Link
                   href={selected.fileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-indigo-600 underline text-sm"
                 >
                   Open Document
-                </a>
+                </Link>
               </div>
             )}
 

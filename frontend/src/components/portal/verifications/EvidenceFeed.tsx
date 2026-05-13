@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { MapPin, FileText, Image, Video, X, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface EvidenceItem {
@@ -53,9 +54,9 @@ function EvidenceViewer({ items, startIndex, onClose }: { items: EvidenceItem[];
           ) : item.evidenceType === "VIDEO" ? (
             <video src={item.fileUrl} controls className="max-h-96 w-full" />
           ) : (
-            <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-white underline p-8">
+            <Link href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-white underline p-8">
               Open Document
-            </a>
+            </Link>
           )}
         </div>
         <div className="p-4 space-y-2">
