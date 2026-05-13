@@ -99,7 +99,9 @@ export default function AdminInviteAcceptPage({
         cta={{
           label: "Go to login",
           onClick: () =>
-            router.push(`${ROUTES.AUTH.LOGIN}?intent=${AuthIntent.INVITED_ADMIN}&redirect=/auth/admin-invite/${token}`),
+            router.push(
+              `${ROUTES.AUTH.LOGIN}?email=${encodeURIComponent(result.email)}&intent=${AuthIntent.INVITED_ADMIN}&redirect=/auth/admin-invite/${token}`,
+            ),
         }}
       />
     );
@@ -117,7 +119,10 @@ export default function AdminInviteAcceptPage({
         label: "Continue to signup",
         onClick: () =>
           router.push(
-            `${ROUTES.AUTH.SIGNUP}?email=${encodeURIComponent(result.email)}&intent=${AuthIntent.INVITED_ADMIN}&redirect=/auth/admin-invite/${token}`,
+            `${ROUTES.AUTH.SIGNUP}?email=${encodeURIComponent(result.email)}` +
+            `&firstName=${encodeURIComponent(result.firstName ?? "")}` +
+            `&lastName=${encodeURIComponent(result.lastName ?? "")}` +
+            `&intent=${AuthIntent.INVITED_ADMIN}&redirect=/auth/admin-invite/${token}`,
           ),
       }}
     />

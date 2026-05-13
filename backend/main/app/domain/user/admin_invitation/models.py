@@ -33,6 +33,8 @@ class AdminInvitation(BaseEntity):
 
     email_normalized = Column(String(254), nullable=False, index=True)
     email = Column(String(254), nullable=False)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
     sub_role = Column(String(16), nullable=False)
     inviter_admin_id = Column(String(36), nullable=False)
     token_hash = Column(String(128), nullable=False, unique=True)
@@ -48,6 +50,8 @@ class AdminInvitation(BaseEntity):
 class CreateAdminInvitationDto(Object):
     email_normalized: str
     email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     sub_role: AdminSubRole
     inviter_admin_id: str
     token_hash: str
@@ -75,6 +79,8 @@ class QueryAdminInvitationDto(BaseQueryDto, CreateAdminInvitationDto, UpdateAdmi
 
 class InviteAdminRequestDto(Object):
     email: EmailStr
+    first_name: str
+    last_name: str
     sub_role: AdminSubRole
 
 
@@ -98,6 +104,7 @@ class InviteAdminResultDto(Object):
     # Raw, single-use token returned to the inviter so they can copy/forward
     # the link if email delivery fails. Omitted on subsequent reads.
     raw_token: str
+    inviter_fullname: str = ""
 
 
 class AcceptInviteResultDto(Object):
@@ -111,3 +118,5 @@ class AcceptInviteResultDto(Object):
     branch: str
     email: str
     sub_role: Optional[AdminSubRole] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None

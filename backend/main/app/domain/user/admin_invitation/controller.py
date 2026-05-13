@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
@@ -30,7 +30,13 @@ from main.app.domain.user.auth.utils.permissions import (
     Permission,
     require_permission,
 )
+from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.db.models import Page, SuccessResponse
+from main.appodus_utils.integrations.messaging.models import (
+    EmailRecipient,
+    MessageContext,
+    MessageRequestRecipient,
+)
 
 logger: Logger = di["logger"]
 
@@ -45,13 +51,35 @@ admin_invitation_router = APIRouter(prefix="/admin-invitations", tags=["Admin In
 )
 async def invite(
     req: InviteAdminRequestDto,
+    request: Request,
     inviter_admin_id: str = Depends(require_permission(Permission.INVITE_ADMIN)),
 ):
     result = await invitation_service.invite(
         inviter_admin_id=inviter_admin_id,
         email=req.email,
         sub_role=req.sub_role,
+        first_name=req.first_name,
+        last_name=req.last_name,
     )
+    try:
+        from main.app.domain.user.user_messages import AccountSecurityMessages
+        acct_msgs = di[AccountSecurityMessages]
+        domain = ClientUtils.get_referer_domain(request)
+        link = f"{domain}/auth/admin-invite/{result.raw_token}"
+        fullname = f"{req.first_name} {req.last_name}".strip()
+        await acct_msgs.send_direct_admin_user_invite_message(
+            recipient=MessageRequestRecipient(
+                email=EmailRecipient(email=str(req.email), fullname=fullname),
+            ),
+            context={
+                MessageContext.FIRST_NAME: req.first_name,
+                MessageContext.FULL_NAME: result.inviter_fullname,
+                MessageContext.LINK: link,
+                MessageContext.VALIDITY: "72 hours",
+            },
+        )
+    except Exception:
+        logger.warning("Could not send admin invite email", exc_info=True)
     return SuccessResponse[InviteAdminResultDto](data=result)
 
 

@@ -60,6 +60,7 @@ export default function LoginContainer() {
   const intent = isAuthIntent(intentParam) ? intentParam : AuthIntent.DEFAULT;
   const tier = searchParams.get("tier");
   const redirect = searchParams.get("redirect");
+  const emailParam = searchParams.get("email") ?? "";
 
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -87,7 +88,7 @@ export default function LoginContainer() {
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "", rememberMe: false },
+    defaultValues: { email: emailParam, password: "", rememberMe: false },
     mode: "onBlur",
   });
 

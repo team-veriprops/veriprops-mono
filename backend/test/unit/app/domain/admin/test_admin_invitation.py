@@ -16,6 +16,7 @@ from main.appodus_utils.db.session import db_session_ctx
 from main.app.domain.user.admin_invitation.models import (
     AdminInvitationStatus,
     AdminSubRole,
+    QueryAdminInvitationDto,
 )
 from main.app.domain.user.auth.session.models import SecurityEventType, UserType
 from main.appodus_utils.exception.exceptions import (
@@ -52,6 +53,20 @@ def _make_service():
     svc._repo = AsyncMock()
     svc._user_repo = AsyncMock()
     svc._session_service = AsyncMock()
+
+    async def _to_query_dto(row):
+        return QueryAdminInvitationDto(
+            email=row.email,
+            email_normalized=row.email_normalized,
+            sub_role=AdminSubRole(row.sub_role),
+            inviter_admin_id=row.inviter_admin_id,
+            token_hash="mock-hash",
+            expires_at=row.expires_at,
+            first_name=row.first_name,
+            last_name=row.last_name,
+        )
+
+    svc._repo.to_query_dto.side_effect = _to_query_dto
     return svc
 
 
@@ -59,6 +74,8 @@ def _make_invite_row(
     *,
     invite_id: str = "inv-001",
     email: str = "invitee@example.com",
+    first_name: str = "Ada",
+    last_name: str = "Obi",
     sub_role: str = AdminSubRole.OPERATIONS.value,
     status: str = AdminInvitationStatus.PENDING.value,
     expires_at: datetime = _FUTURE,
@@ -67,6 +84,9 @@ def _make_invite_row(
     row = MagicMock()
     row.id = invite_id
     row.email_normalized = email
+    row.email = email
+    row.first_name = first_name
+    row.last_name = last_name
     row.sub_role = sub_role
     row.status = status
     row.expires_at = expires_at
@@ -91,11 +111,19 @@ def _make_user(
 
 # ── invite ────────────────────────────────────────────────────────────────────
 
+def _make_inviter_user(*, first_name: str = "Super", last_name: str = "Admin"):
+    user = MagicMock()
+    user.first_name = first_name
+    user.last_name = last_name
+    return user
+
+
 async def test_invite_creates_invitation_and_records_event():
     svc = _make_service()
     row = _make_invite_row()
     svc._repo.get_pending_for_email.return_value = None
     svc._repo.get_by_token_hash.return_value = row
+    svc._user_repo.get_model.return_value = _make_inviter_user()
 
     result = await svc.invite(
         inviter_admin_id="admin-001",
@@ -118,6 +146,7 @@ async def test_invite_revokes_existing_pending_invitation():
     new_row = _make_invite_row(invite_id="new-inv")
     svc._repo.get_pending_for_email.return_value = existing
     svc._repo.get_by_token_hash.return_value = new_row
+    svc._user_repo.get_model.return_value = _make_inviter_user()
 
     await svc.invite(
         inviter_admin_id="admin-001",
@@ -137,6 +166,7 @@ async def test_invite_normalises_email_to_lowercase():
     row = _make_invite_row(email="invitee@example.com")
     svc._repo.get_pending_for_email.return_value = None
     svc._repo.get_by_token_hash.return_value = row
+    svc._user_repo.get_model.return_value = _make_inviter_user()
 
     result = await svc.invite(
         inviter_admin_id="admin-001",
@@ -146,6 +176,42 @@ async def test_invite_normalises_email_to_lowercase():
 
     create_dto = svc._repo.create.call_args.args[0]
     assert create_dto.email_normalized == "invitee@example.com"
+
+
+async def test_invite_stores_first_and_last_name():
+    svc = _make_service()
+    row = _make_invite_row(first_name="Ada", last_name="Obi")
+    svc._repo.get_pending_for_email.return_value = None
+    svc._repo.get_by_token_hash.return_value = row
+    svc._user_repo.get_model.return_value = _make_inviter_user()
+
+    await svc.invite(
+        inviter_admin_id="admin-001",
+        email="invitee@example.com",
+        sub_role=AdminSubRole.OPERATIONS,
+        first_name="Ada",
+        last_name="Obi",
+    )
+
+    create_dto = svc._repo.create.call_args.args[0]
+    assert create_dto.first_name == "Ada"
+    assert create_dto.last_name == "Obi"
+
+
+async def test_invite_returns_inviter_fullname():
+    svc = _make_service()
+    row = _make_invite_row()
+    svc._repo.get_pending_for_email.return_value = None
+    svc._repo.get_by_token_hash.return_value = row
+    svc._user_repo.get_model.return_value = _make_inviter_user(first_name="Super", last_name="Admin")
+
+    result = await svc.invite(
+        inviter_admin_id="admin-001",
+        email="invitee@example.com",
+        sub_role=AdminSubRole.OPERATIONS,
+    )
+
+    assert result.inviter_fullname == "Super Admin"
 
 
 # ── accept ────────────────────────────────────────────────────────────────────
@@ -191,6 +257,19 @@ async def test_accept_signup_required_when_no_account():
     svc._repo.update.assert_not_called()
 
 
+async def test_accept_signup_required_includes_names():
+    svc = _make_service()
+    invite = _make_invite_row(email="newuser@example.com", first_name="Ada", last_name="Obi")
+    svc._repo.get_by_token_hash.return_value = invite
+    svc._user_repo.get_by_email.return_value = None
+
+    result = await svc.accept("raw-token")
+
+    assert result.branch == "SIGNUP_REQUIRED"
+    assert result.first_name == "Ada"
+    assert result.last_name == "Obi"
+
+
 async def test_accept_login_required_when_account_exists_no_session():
     svc = _make_service()
     invite = _make_invite_row(email="existing@example.com")
@@ -203,6 +282,20 @@ async def test_accept_login_required_when_account_exists_no_session():
     assert result.branch == "LOGIN_REQUIRED"
     assert result.email == "existing@example.com"
     svc._user_repo.update.assert_not_called()
+
+
+async def test_accept_login_required_includes_names():
+    svc = _make_service()
+    invite = _make_invite_row(email="existing@example.com", first_name="Ada", last_name="Obi")
+    user = _make_user(user_type=UserType.USER.value)
+    svc._repo.get_by_token_hash.return_value = invite
+    svc._user_repo.get_by_email.return_value = user
+
+    result = await svc.accept("raw-token", current_user_id=None)
+
+    assert result.branch == "LOGIN_REQUIRED"
+    assert result.first_name == "Ada"
+    assert result.last_name == "Obi"
 
 
 async def test_accept_already_admin_when_user_already_has_admin_role():
@@ -231,7 +324,7 @@ async def test_accept_merges_role_when_existing_user_is_signed_in():
 
     assert result.branch == "ACCEPTED"
     assert result.sub_role == AdminSubRole.FINANCE
-    user_update = svc._user_repo.update.call_args.args[1]
+    user_update = svc._user_repo.update_return_model.call_args.args[1]
     assert user_update.user_type == UserType.ADMIN.value
     assert user_update.admin_sub_role == AdminSubRole.FINANCE.value
     invite_update = svc._repo.update.call_args.args[1]

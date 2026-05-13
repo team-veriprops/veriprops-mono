@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthShell from "../AuthShell";
@@ -29,6 +29,7 @@ import { ROUTES, isAuthIntent } from "@lib/routes";
 import { resolvePostAuthRedirect } from "@components/website/auth/libs/auth/redirect";
 import { getDeviceFingerprint } from "@components/website/auth/libs/auth/fingerprint";
 import { getErrorMessage } from "@lib/utils";
+import { findCountry } from "@components/website/auth/libs/auth/locale";
 
 const STEPS = ["Account", "Verify", "Residence", "Consent"];
 
@@ -41,6 +42,9 @@ export default function SignupContainer() {
   const intent = isAuthIntent(intentParam) ? intentParam : AuthIntent.DEFAULT;
   const tier = searchParams.get("tier");
   const redirect = searchParams.get("redirect");
+  const emailParam = searchParams.get("email") ?? "";
+  const firstNameParam = searchParams.get("firstName") ?? "";
+  const lastNameParam = searchParams.get("lastName") ?? "";
 
   const [step, setStep] = useState(0);
   const [step1, setStep1] = useState<SignupStep1Values | null>(null);
@@ -48,6 +52,26 @@ export default function SignupContainer() {
   const [step3, setStep3] = useState<SignupStep3Values | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resumed, setResumed] = useState(false);
+
+  // Pre-populate step 1 from URL params (admin invite flow); only used when
+  // there is no draft to restore.
+  const urlStep1 = useMemo((): SignupStep1Values | null => {
+    if (!emailParam) return null;
+    return { email: emailParam, firstName: firstNameParam, lastName: lastNameParam, password: "" };
+  }, [emailParam, firstNameParam, lastNameParam]);
+
+  // Derive step 3 defaults from the phone country code chosen in step 2.
+  const step3Defaults = useMemo((): Partial<SignupStep3Values> | undefined => {
+    if (step3) return step3;
+    if (!step2?.countryCode) return undefined;
+    const info = findCountry(step2.countryCode);
+    if (!info) return undefined;
+    return {
+      countryOfResidence: step2.countryCode,
+      timezone: info.defaultTimezone,
+      preferredCurrency: info.defaultCurrency,
+    };
+  }, [step3, step2?.countryCode]);
 
   const signupMutation = useSignupMutation();
 
@@ -214,7 +238,7 @@ export default function SignupContainer() {
 
       {step === 0 && (
         <>
-          <AccountBasicsStep defaultValues={step1 ?? undefined} onSubmit={handleStep1} />
+          <AccountBasicsStep defaultValues={step1 ?? urlStep1 ?? undefined} onSubmit={handleStep1} />
           <AuthDivider />
           <SocialAuthButtons verb="Sign up with" intent={intent} />
         </>
@@ -235,7 +259,7 @@ export default function SignupContainer() {
 
       {step === 2 && (
         <ResidenceStep
-          defaultValues={step3 ?? undefined}
+          defaultValues={step3Defaults}
           onSubmit={handleStep3}
           onBack={() => setStep(1)}
         />

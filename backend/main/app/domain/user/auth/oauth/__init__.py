@@ -1,8 +1,5 @@
 from typing import Optional, Tuple
 
-from main.app.domain.user.auth.oauth.providers.apple import AppleAuthProvider
-from main.app.domain.user.auth.oauth.providers.facebook import FacebookAuthProvider
-from main.app.domain.user.auth.oauth.providers.google import GoogleAuthProvider
 from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
 from main.appodus_utils import Utils
 

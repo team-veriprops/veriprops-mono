@@ -36,6 +36,7 @@ from main.app.domain.user.auth.signup_draft.service import SignupDraftService
 from main.appodus_utils import RouterUtils, Utils
 from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.integrations.messaging.models import MessageRequestRecipient, EmailRecipient, MessageContext
 
 auth_service: AuthService = di[AuthService]
@@ -67,6 +68,25 @@ async def signup(req: SignupRequestDto, request: Request, authorize: AuthJWT = D
         user, authorize, ip_address=ClientUtils.get_client_ip(request),
         device=ClientUtils.get_user_agent(request), device_fingerprint=req.device_fingerprint,
     )
+
+    try:
+        from main.app.domain.user.user_messages import AccountSecurityMessages
+        acct_msgs = di[AccountSecurityMessages]
+        fullname = f"{req.first_name} {req.last_name}".strip()
+        await acct_msgs.send_direct_new_user_welcome_message(
+            recipient=MessageRequestRecipient(
+                fullname=fullname,
+                email=EmailRecipient(email=req.email, fullname=fullname),
+                phone=PhoneNumber(dial_code=req.dial_code, number=req.phone),
+            ),
+            context={
+                MessageContext.FIRST_NAME: req.first_name,
+                MessageContext.LAST_NAME: req.last_name,
+                MessageContext.FULL_NAME: fullname,
+            },
+        )
+    except Exception:
+        logger.warning("Could not send welcome message after signup", exc_info=True)
 
     # Server-side signup draft is no longer needed once the account is created.
     try:

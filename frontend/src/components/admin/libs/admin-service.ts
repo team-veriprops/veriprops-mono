@@ -32,6 +32,8 @@ export interface AcceptInviteResult {
   branch: AcceptInviteBranch;
   email: string;
   subRole: AdminSubRole | null;
+  firstName?: string;
+  lastName?: string;
 }
 
 export interface PageResponse<T> {
@@ -195,6 +197,8 @@ export class AdminService {
   // ── Admin invitations ──
   inviteAdmin(payload: {
     email: string;
+    firstName: string;
+    lastName: string;
     subRole: AdminSubRole;
   }): Promise<SuccessResponse<InviteAdminResult>> {
     return this.http.post(this.inviteBase, payload);

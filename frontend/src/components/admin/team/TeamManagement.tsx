@@ -43,6 +43,8 @@ export default function TeamManagement() {
   const revokeMutation = useRevokeInvitationMutation();
 
   const [open, setOpen] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [subRole, setSubRole] = useState<AdminSubRole>("OPERATIONS");
   const [inviteResult, setInviteResult] = useState<InviteAdminResult | null>(null);
@@ -51,7 +53,7 @@ export default function TeamManagement() {
   const handleInvite = async () => {
     setError(null);
     try {
-      const res = await inviteMutation.mutateAsync({ email, subRole });
+      const res = await inviteMutation.mutateAsync({ email, firstName, lastName, subRole });
       setInviteResult(res.data ?? null);
     } catch (e) {
       setError(getErrorMessage(e as Error));
@@ -60,6 +62,8 @@ export default function TeamManagement() {
 
   const handleClose = () => {
     setOpen(false);
+    setFirstName("");
+    setLastName("");
     setEmail("");
     setSubRole("OPERATIONS");
     setInviteResult(null);
@@ -162,6 +166,36 @@ export default function TeamManagement() {
 
           {!inviteResult ? (
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span
+                    className="text-xs font-medium block mb-1.5"
+                    style={{ color: "var(--brand-on-surface-variant)" }}
+                  >
+                    First name
+                  </span>
+                  <Input
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Adaeze"
+                    autoComplete="given-name"
+                  />
+                </label>
+                <label className="block">
+                  <span
+                    className="text-xs font-medium block mb-1.5"
+                    style={{ color: "var(--brand-on-surface-variant)" }}
+                  >
+                    Last name
+                  </span>
+                  <Input
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Williams"
+                    autoComplete="family-name"
+                  />
+                </label>
+              </div>
               <label className="block">
                 <span
                   className="text-xs font-medium block mb-1.5"
@@ -235,7 +269,7 @@ export default function TeamManagement() {
                 </Button>
                 <Button
                   type="button"
-                  disabled={!email.includes("@") || inviteMutation.isPending}
+                  disabled={!firstName.trim() || !lastName.trim() || !email.includes("@") || inviteMutation.isPending}
                   onClick={handleInvite}
                 >
                   {inviteMutation.isPending ? "Sending…" : "Send invite"}

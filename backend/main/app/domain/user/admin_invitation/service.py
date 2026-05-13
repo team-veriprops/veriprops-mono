@@ -69,6 +69,8 @@ class AdminInvitationService:
         inviter_admin_id: str,
         email: str,
         sub_role: AdminSubRole,
+        first_name: str = "",
+        last_name: str = "",
     ) -> InviteAdminResultDto:
         normalised_email = email.strip().lower()
         # Revoke any earlier pending invitation for the same email.
@@ -86,6 +88,8 @@ class AdminInvitationService:
         await self._repo.create(CreateAdminInvitationDto(
             email=email,
             email_normalized=normalised_email,
+            first_name=first_name or None,
+            last_name=last_name or None,
             sub_role=sub_role,
             inviter_admin_id=inviter_admin_id,
             token_hash=token_hash,
@@ -104,9 +108,16 @@ class AdminInvitationService:
             user_id=inviter_admin_id,
         )
 
+        inviter = await self._user_repo.get_model(inviter_admin_id)
+        inviter_fullname = (
+            f"{inviter.first_name or ''} {inviter.last_name or ''}".strip()
+            if inviter else ""
+        )
+
         return InviteAdminResultDto(
-            invitation= await self._repo.to_query_dto(row),
+            invitation=await self._repo.to_query_dto(row),
             raw_token=raw_token,
+            inviter_fullname=inviter_fullname,
         )
 
     async def get_pending_for_email(self, email: str) -> Optional[AdminInvitation]:
@@ -169,6 +180,8 @@ class AdminInvitationService:
                 branch=BRANCH_SIGNUP_REQUIRED,
                 email=invite.email,
                 sub_role=AdminSubRole(invite.sub_role),
+                first_name=invite.first_name,
+                last_name=invite.last_name,
             )
 
         # Branch 3: already an admin
@@ -180,6 +193,8 @@ class AdminInvitationService:
             return AcceptInviteResultDto(
                 branch=BRANCH_ALREADY_ADMIN,
                 email=invite.email,
+                first_name=invite.first_name,
+                last_name=invite.last_name,
             )
 
         # Branch 2: existing non-admin user must be signed-in to merge.
@@ -187,6 +202,8 @@ class AdminInvitationService:
             return AcceptInviteResultDto(
                 branch=BRANCH_LOGIN_REQUIRED,
                 email=invite.email,
+                first_name=invite.first_name,
+                last_name=invite.last_name,
             )
         if str(existing_user.id) != current_user_id:
             raise ValidationException(
@@ -202,6 +219,8 @@ class AdminInvitationService:
             branch=BRANCH_ACCEPTED,
             email=invite.email,
             sub_role=AdminSubRole(invite.sub_role),
+            first_name=invite.first_name,
+            last_name=invite.last_name,
         )
 
     async def _commit_acceptance(
