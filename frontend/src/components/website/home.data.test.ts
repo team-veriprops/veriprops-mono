@@ -13,6 +13,7 @@ import {
   CTA_VERIFY_HREF,
   CTA_AGENT_HREF,
 } from "./home.data";
+import { AuthIntent } from "./auth/models";
 
 describe("pricingTiers", () => {
   it("has exactly three tiers", () => {
@@ -219,7 +220,7 @@ describe("footerLinks", () => {
     expect(labels).toContain("Terms of Service");
   });
 
-  it("Become an Agent footer link targets /auth?intent=agent (PRD §1.12)", () => {
+  it(`Become an Agent footer link targets /auth?intent=${AuthIntent.AGENT} (PRD §1.12)`, () => {
     const agentLink = footerLinks.company.find((l) => l.label === "Become an Agent");
     expect(agentLink).toBeDefined();
     expect(agentLink?.href).toBe(CTA_AGENT_HREF);
@@ -288,13 +289,13 @@ describe("formatPrice", () => {
 });
 
 describe("CTA URL constants (PRD §1.12 exit criteria)", () => {
-  it("CTA_VERIFY_HREF targets /auth with intent=verify, not /auth/login", () => {
-    expect(CTA_VERIFY_HREF).toBe("/auth?intent=verify");
+  it(`CTA_VERIFY_HREF targets /auth with intent=${AuthIntent.VERIFY}, not /auth/login`, () => {
+    expect(CTA_VERIFY_HREF).toBe(`/auth?intent=${AuthIntent.VERIFY}`);
     expect(CTA_VERIFY_HREF).not.toContain("/auth/login");
   });
 
-  it("CTA_AGENT_HREF targets /auth with intent=agent, not /auth/login", () => {
-    expect(CTA_AGENT_HREF).toBe("/auth?intent=agent");
+  it(`CTA_AGENT_HREF targets /auth with intent=${AuthIntent.AGENT}, not /auth/login`, () => {
+    expect(CTA_AGENT_HREF).toBe(`/auth?intent=${AuthIntent.AGENT}`);
     expect(CTA_AGENT_HREF).not.toContain("/auth/login");
   });
 });

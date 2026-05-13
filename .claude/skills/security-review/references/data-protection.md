@@ -283,7 +283,7 @@ def cleanup_old_data():
     cutoff = datetime.now() - timedelta(days=RETENTION_DAYS)
 
     # Delete old records
-    OldRecord.query.filter(OldRecord.created_at < cutoff).delete()
+    OldRecord.query.filter(OldRecord.date_created < cutoff).delete()
 
     # Or anonymize instead of delete
     User.query.filter(User.last_login < cutoff).update({

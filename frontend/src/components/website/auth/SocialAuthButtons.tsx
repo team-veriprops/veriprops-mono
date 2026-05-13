@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { startOauthPopup } from "./libs/auth/oauthPopup";
 import { useCurrentSession } from "./libs/useAuthQueries";
-import { OAuthFlowMode, SocialProvider } from "@components/website/auth/models";
+import { OAuthFlowMode, AuthIntent, SocialProvider } from "@components/website/auth/models";
 import { resolvePostAuthRedirect } from "./libs/auth/redirect";
-import { AuthIntent, isAuthIntent, ROUTES } from "@lib/routes";
+import { isAuthIntent, ROUTES } from "@lib/routes";
 
 interface SocialAuthButtonsProps {
   /** Hint text — "Sign in with" or "Sign up with". */

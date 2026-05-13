@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from main.app.domain.user.auth.models import AuthIntent
+
 if TYPE_CHECKING:
     from loguru import Logger
 import json
@@ -43,7 +45,7 @@ class OauthUtils:
         base_url: str,
         client_id: str,
         scope: str,
-        intent: Optional[str] = None,
+        intent: Optional[AuthIntent] = None,
         mode: OAuthFlowMode = OAuthFlowMode.AUTH,
         link_user_id: Optional[str] = None,
     ) -> str:
@@ -69,7 +71,7 @@ class OauthUtils:
 
         oauth_request_payload = OAuthRequestStoredState(
             code_verifier=code_verifier,
-            intent=intent or "default",
+            intent=intent or AuthIntent.DEFAULT,
             frontend_origin=frontend_origin,
             mode=mode,
             link_user_id=link_user_id,

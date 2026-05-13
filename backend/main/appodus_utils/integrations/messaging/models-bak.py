@@ -87,8 +87,8 @@
 #     channel: str
 #     content: str
 #     variables: Dict[str, Any]
-#     created_at: datetime
-#     updated_at: Optional[datetime]
+#     date_created: datetime
+#     date_updated: Optional[datetime]
 #
 #
 # class Stat(Object):

@@ -18,10 +18,10 @@
 
 import { isAutomationEnvironment } from "@lib/automation";
 import { authService } from "@components/website/auth/libs/useAuthQueries";
-import { OAuthFlowMode, SocialProvider } from "@components/website/auth/models";
+import { OAuthFlowMode, AuthIntent, SocialProvider } from "@components/website/auth/models";
 
 export interface OauthPopupOptions {
-  intent?: string;
+  intent?: AuthIntent;
   mode?: OAuthFlowMode;
   /** Total wait time before forcing failure. Default: 5 minutes. */
   timeoutMs?: number;

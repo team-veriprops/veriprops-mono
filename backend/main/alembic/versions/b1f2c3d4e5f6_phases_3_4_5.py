@@ -22,6 +22,7 @@ from sqlalchemy import inspect as sa_inspect, JSON
 from sqlalchemy.ext.mutable import MutableList
 
 from main.alembic.utils import AlembicUtils
+from main.appodus_utils.db.models import UTCDateTime
 
 # revision identifiers, used by Alembic.
 revision: str = "b1f2c3d4e5f6"
@@ -41,12 +42,12 @@ def _create_agent_applications():
         sa.Column("kyc_method", sa.String(length=16), nullable=True),
         sa.Column("bvn_last4", sa.String(length=4), nullable=True),
         sa.Column("bvn_verification_id", sa.String(length=128), nullable=True),
-        sa.Column("bvn_verified_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("bvn_verified_at", UTCDateTime, nullable=True),
         sa.Column("id_doc_type", sa.String(length=32), nullable=True),
         sa.Column("id_doc_url", sa.String(length=512), nullable=True),
         sa.Column("selfie_url", sa.String(length=512), nullable=True),
         sa.Column("selfie_match_score", sa.Integer(), nullable=True),
-        sa.Column("selfie_matched_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("selfie_matched_at", UTCDateTime, nullable=True),
         sa.Column("surveyor_licence_no", sa.String(length=64), nullable=True),
         sa.Column("surveyor_licence_url", sa.String(length=512), nullable=True),
         sa.Column("nba_licence_no", sa.String(length=64), nullable=True),
@@ -57,9 +58,9 @@ def _create_agent_applications():
         sa.Column("bio", sa.Text(), nullable=True),
         sa.Column("truthfulness_acknowledged", sa.String(length=8), nullable=True),
         sa.Column("agent_terms_consent_id", sa.String(length=36), nullable=True),
-        sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("submitted_at", UTCDateTime, nullable=True),
         sa.Column("reviewed_by_admin_id", sa.String(length=36), nullable=True),
-        sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("reviewed_at", UTCDateTime, nullable=True),
         sa.Column("rejection_reason", sa.Text(), nullable=True),
         *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("user_id", name="uq_agent_applications_user"),
@@ -89,12 +90,13 @@ def _create_admin_invitations():
     op.create_table(
         "admin_invitations",
         sa.Column("email_normalized", sa.String(length=254), nullable=False),
+        sa.Column("email", sa.String(length=254), nullable=False),
         sa.Column("sub_role", sa.String(length=16), nullable=False),
         sa.Column("inviter_admin_id", sa.String(length=36), nullable=False),
         sa.Column("token_hash", sa.String(length=128), nullable=False),
         sa.Column("status", sa.String(length=16), nullable=False),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("expires_at", UTCDateTime, nullable=False),
+        sa.Column("accepted_at", UTCDateTime, nullable=True),
         sa.Column("accepted_by_user_id", sa.String(length=36), nullable=True),
         *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("token_hash", name="uq_admin_invitations_token"),
@@ -153,9 +155,9 @@ def _create_verifications():
         sa.Column("pricing_snapshot", sa.Text(), nullable=True),
         sa.Column("consent_snapshot_id", sa.String(length=36), nullable=True),
         sa.Column("payment_id", sa.String(length=36), nullable=True),
-        sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("paid_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("submitted_at", UTCDateTime, nullable=True),
+        sa.Column("paid_at", UTCDateTime, nullable=True),
+        sa.Column("completed_at", UTCDateTime, nullable=True),
         sa.Column("draft_payload", sa.Text(), nullable=True),
         sa.Column("draft_step", sa.Integer(), nullable=False, server_default=sa.text("0")),
         *AlembicUtils.base_audit_columns(),

@@ -22,6 +22,13 @@ export enum UserType {
   ADMIN = "ADMIN",
 }
 
+export enum AuthIntent {
+  DEFAULT = "default", // Customer
+  VERIFY = "verify",   // Customer
+  AGENT = "agent",     // Agent
+  INVITED_ADMIN = "invited-admin", // Admin
+}
+
 export enum UserPersona {
   CUSTOMER = "CUSTOMER",
   AGENT = "AGENT",
@@ -78,7 +85,7 @@ export interface AuthUser {
   hasPassword: boolean;
   linkedProviders: SocialProvider[];
   avatarUrl?: string;
-  createdAt: string;
+  dateCreated: string;
 }
 
 export interface AuthSession {
@@ -96,7 +103,7 @@ export interface DeviceSession {
   approxLocation: string;
   current: boolean;
   lastActiveAt: string;
-  createdAt: string;
+  dateCreated: string;
 }
 
 export enum SecurityEventType {
@@ -151,5 +158,5 @@ export interface SignupDraft {
   email: string;
   step: number;
   payload: Record<string, unknown>;
-  updatedAt: string;
+  dateUpdated: string;
 }

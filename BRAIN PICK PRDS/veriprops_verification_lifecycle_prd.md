@@ -138,8 +138,8 @@ It covers three actor perspectives:
 | `price_locked_at` | Timestamp | When price was locked |
 | `price_locked_ngn` | Decimal | NGN amount locked at checkout |
 | `sla_deadline` | Timestamp | Computed from `PAID` timestamp + tier SLA |
-| `created_at` | Timestamp | |
-| `updated_at` | Timestamp | |
+| `date_created` | Timestamp | |
+| `date_updated` | Timestamp | |
 
 #### Task
 | Field | Type | Notes |

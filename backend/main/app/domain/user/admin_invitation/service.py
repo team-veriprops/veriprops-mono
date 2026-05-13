@@ -19,7 +19,6 @@ from main.app.config.settings import settings
 from main.app.domain.user.admin_invitation.models import (
     AcceptInviteResultDto,
     AdminInvitation,
-    AdminInvitationDto,
     AdminInvitationStatus,
     CreateAdminInvitationDto,
     InviteAdminResultDto,
@@ -28,7 +27,7 @@ from main.app.domain.user.admin_invitation.models import (
 from main.app.domain.user.admin_invitation.repo import AdminInvitationRepo
 from main.app.domain.user.auth.session.models import SecurityEventType
 from main.app.domain.user.auth.session.service import SessionService
-from main.app.domain.user.models import AdminSubRole, UpdateUserDto
+from main.app.domain.user.models import AdminSubRole, UpdateUserDto, User
 from main.app.domain.user.auth.session.models import UserType
 from main.app.domain.user.repo import UserRepo
 from main.appodus_utils import Utils
@@ -71,9 +70,9 @@ class AdminInvitationService:
         email: str,
         sub_role: AdminSubRole,
     ) -> InviteAdminResultDto:
-        normalised = email.strip().lower()
+        normalised_email = email.strip().lower()
         # Revoke any earlier pending invitation for the same email.
-        existing = await self._repo.get_pending_for_email(normalised)
+        existing = await self._repo.get_pending_for_email(email)
         if existing:
             await self._repo.update(str(existing.id), UpdateAdminInvitationDto(
                 status=AdminInvitationStatus.REVOKED,
@@ -85,7 +84,8 @@ class AdminInvitationService:
         expires_at = Utils.datetime_now_plus(hours=ttl_hours)
 
         await self._repo.create(CreateAdminInvitationDto(
-            email_normalized=normalised,
+            email=email,
+            email_normalized=normalised_email,
             sub_role=sub_role,
             inviter_admin_id=inviter_admin_id,
             token_hash=token_hash,
@@ -100,18 +100,21 @@ class AdminInvitationService:
 
         await self._record_event(
             type_=SecurityEventType.ADMIN_INVITED,
-            description=f"invited {normalised} as {sub_role.value} by {inviter_admin_id}",
+            description=f"invited {normalised_email} as {sub_role.value} by {inviter_admin_id}",
             user_id=inviter_admin_id,
         )
 
         return InviteAdminResultDto(
-            invitation=self._to_dto(row),
+            invitation= await self._repo.to_query_dto(row),
             raw_token=raw_token,
         )
 
+    async def get_pending_for_email(self, email: str) -> Optional[AdminInvitation]:
+        return await self._repo.get_pending_for_email(email=email)
+
     async def list(self, status: Optional[AdminInvitationStatus] = None):
         from main.app.domain.user.admin_invitation.models import SearchAdminInvitationDto
-        search = SearchAdminInvitationDto(page=1, page_size=100)
+        search = SearchAdminInvitationDto(page=0, page_size=100)
         if status:
             search.status = status.value
         page = await self._repo.get_page(search)
@@ -164,7 +167,7 @@ class AdminInvitationService:
         if existing_user is None:
             return AcceptInviteResultDto(
                 branch=BRANCH_SIGNUP_REQUIRED,
-                email=invite.email_normalized,
+                email=invite.email,
                 sub_role=AdminSubRole(invite.sub_role),
             )
 
@@ -176,39 +179,53 @@ class AdminInvitationService:
             ))
             return AcceptInviteResultDto(
                 branch=BRANCH_ALREADY_ADMIN,
-                email=invite.email_normalized,
+                email=invite.email,
             )
 
         # Branch 2: existing non-admin user must be signed-in to merge.
         if not current_user_id:
             return AcceptInviteResultDto(
                 branch=BRANCH_LOGIN_REQUIRED,
-                email=invite.email_normalized,
+                email=invite.email,
             )
         if str(existing_user.id) != current_user_id:
             raise ValidationException(
                 message="You must accept the invitation while signed in as the invited email",
             )
 
-        await self._user_repo.update(str(existing_user.id), UpdateUserDto(
-            user_type=UserType.ADMIN.value,
-            admin_sub_role=invite.sub_role,
-        ))
-        await self._repo.update(str(invite.id), UpdateAdminInvitationDto(
-            status=AdminInvitationStatus.ACCEPTED,
-            accepted_at=Utils.datetime_now(),
-            accepted_by_user_id=str(existing_user.id),
-        ))
-        await self._record_event(
-            type_=SecurityEventType.ADMIN_INVITE_ACCEPTED,
-            description=f"accepted invitation {invite.id}",
+        await self._commit_acceptance(
+            invite_id=str(invite.id),
             user_id=str(existing_user.id),
+            admin_sub_role=invite.sub_role
         )
         return AcceptInviteResultDto(
             branch=BRANCH_ACCEPTED,
-            email=invite.email_normalized,
+            email=invite.email,
             sub_role=AdminSubRole(invite.sub_role),
         )
+
+    async def _commit_acceptance(
+            self,
+            invite_id: str,
+            user_id: str,
+            admin_sub_role: AdminSubRole,
+    ) -> Optional[User]:
+        user = await self._user_repo.update_return_model(user_id, UpdateUserDto(
+            user_type=UserType.ADMIN.value,
+            admin_sub_role=admin_sub_role,
+        ))
+        await self._repo.update(invite_id, UpdateAdminInvitationDto(
+            status=AdminInvitationStatus.ACCEPTED,
+            accepted_at=Utils.datetime_now(),
+            accepted_by_user_id=user_id,
+        ))
+        await self._record_event(
+            type_=SecurityEventType.ADMIN_INVITE_ACCEPTED,
+            description=f"accepted invitation {invite_id}",
+            user_id=user_id,
+        )
+
+        return user
 
     async def attach_admin_role_to_new_user(
         self,
@@ -238,20 +255,6 @@ class AdminInvitationService:
         )
 
     # ── Helpers ──
-
-    @staticmethod
-    def _to_dto(row: AdminInvitation) -> AdminInvitationDto:
-        return AdminInvitationDto(
-            id=str(row.id),
-            email=row.email_normalized,
-            sub_role=AdminSubRole(row.sub_role),
-            status=AdminInvitationStatus(row.status),
-            inviter_admin_id=row.inviter_admin_id,
-            expires_at=row.expires_at,
-            accepted_at=row.accepted_at,
-            created_at=row.date_created,
-        )
-
     async def _record_event(
         self, type_: SecurityEventType, description: str, user_id: Optional[str] = None,
     ) -> None:

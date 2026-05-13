@@ -3,6 +3,8 @@ session/device, and consent acceptance. Wired from `controller.py`."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from main.app.domain.user.admin_invitation.service import AdminInvitationService
+
 if TYPE_CHECKING:
     from loguru import Logger
 
@@ -19,7 +21,7 @@ from kink import di, inject
 from main.app.domain.user.auth.models import (
     OtpChannel,
     ProfileCompletionDto,
-    SignupRequestDto,
+    SignupRequestDto, AuthIntent,
 )
 from main.app.domain.user.auth.otp_service import OtpService, recipient_for
 from main.appodus_utils.db.types.phone import PhoneNumber
@@ -88,7 +90,7 @@ class AuthService:
             consent_service: ConsentService,
             session_service: SessionService,
             otp_service: OtpService,
-            oauth_identity_service: OAuthIdentityService
+            oauth_identity_service: OAuthIdentityService,
     ):
         self._user_service = user_service
         self._consent_service = consent_service
@@ -130,7 +132,13 @@ class AuthService:
             )
 
         password_hash = Utils.get_password_hash(req.password)
-        intent_persona = UserPersona.AGENT if req.intent == "agent" else UserPersona.CUSTOMER
+        intent_persona = (
+            [UserPersona.AGENT]
+            if req.intent == AuthIntent.AGENT
+            else [UserPersona.CUSTOMER]
+            if req.intent != AuthIntent.INVITED_ADMIN
+            else []
+        )
 
         user = await self._user_service.create_user(CreateUserDto(
             first_name=req.first_name,
@@ -143,9 +151,9 @@ class AuthService:
             preferred_currency=req.preferred_currency,
             phone_country_code=req.country_code,
             phone_dial_code=req.dial_code,
-            personas=[intent_persona],
-            email_verified=True,
-            phone_verified=True,
+            personas=intent_persona,
+            email_verified=email_ok,
+            phone_verified=phone_ok,
         ))
 
         # Verified markers are single-use — drop them so a future signup attempt
@@ -181,7 +189,7 @@ class AuthService:
             last_name: str,
             avatar_url: Optional[str],
             raw_profile: dict,
-            intent: Optional[str],
+            intent: Optional[AuthIntent],
     ) -> tuple[User, bool]:
         """Returns (user, is_new). Raises if email collision with password account."""
         existing_identity = await self._oauth_identity_service.get_oauth_identity(provider, subject)
@@ -199,7 +207,7 @@ class AuthService:
             )
             return existing_user, False
 
-        intent_persona = UserPersona.AGENT if intent == "agent" else UserPersona.CUSTOMER
+        intent_persona = UserPersona.AGENT if intent == AuthIntent.AGENT else UserPersona.CUSTOMER
         user = await self._user_service.create_user(CreateUserDto(
             first_name=first_name or "Veriprops",
             last_name=last_name or "User",

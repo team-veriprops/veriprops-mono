@@ -52,7 +52,7 @@ class ReportVersionRepo(
                 ReportVersion.is_superseded.is_(False),
                 ReportVersion.deleted.is_(False),
             )
-            .order_by(ReportVersion.created_at.desc())
+            .order_by(ReportVersion.date_created.desc())
             .limit(1)
         )
         return result.scalars().first()

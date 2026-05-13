@@ -118,7 +118,7 @@ class VerificationService:
         return await self._to_dto(row) if row else None
 
     async def list_for_customer(
-        self, customer_id: str, page: int = 1, page_size: int = 20,
+        self, customer_id: str, page: int = 0, page_size: int = 20,
     ):
         search = SearchVerificationDto(page=page, page_size=page_size, customer_id=customer_id)
         return await self._repo.get_page(search)
@@ -470,8 +470,8 @@ class VerificationService:
             submitted_at=row.submitted_at,
             paid_at=row.paid_at,
             completed_at=row.completed_at,
-            created_at=row.date_created,
-            updated_at=row.date_updated,
+            date_created=row.date_created,
+            date_updated=row.date_updated,
             draft_step=row.draft_step or 0,
             draft_payload=self._decode_payload(row.draft_payload),
         )

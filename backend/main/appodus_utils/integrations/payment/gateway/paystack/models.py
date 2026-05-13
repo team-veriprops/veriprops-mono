@@ -174,7 +174,7 @@ class ChargeSuccessData(Object):
     reference: str
     gateway_response: Optional[str] = None
 
-    created_at: Optional[str] = None
+    date_created: Optional[str] = None
     paid_at: Optional[str] = None
 
     ip_address: Optional[str] = None
@@ -225,7 +225,7 @@ class RefundData(Object):
     transaction: int
     reference: str
     amount: int
-    created_at: str
+    date_created: str
     currency: TransactionCurrency
     channel: str
     status: str

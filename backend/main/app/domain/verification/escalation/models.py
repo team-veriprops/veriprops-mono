@@ -33,8 +33,8 @@ class EscalationDto(Object):
     reporter_id: str
     category: EscalationCategory
     description: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    date_created: datetime
+    date_updated: Optional[datetime] = None
 
 
 class CreateEscalationDto(Object):

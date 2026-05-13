@@ -16,7 +16,7 @@ class PriorityLevel(IntEnum):
 @dataclass(order=True)
 class PrioritizedMessage:
     priority: PriorityLevel
-    created_at: datetime
+    date_created: datetime
     message: object = None
 
 
@@ -27,7 +27,7 @@ class PriorityQueue:
     def add_message(self, message: object, priority: PriorityLevel):
         heappush(self._queue, PrioritizedMessage(
             priority=priority,
-            created_at=Utils.datetime_now(),
+            date_created=Utils.datetime_now(),
             message=message
         ))
 

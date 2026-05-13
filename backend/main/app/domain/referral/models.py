@@ -48,7 +48,7 @@ class ReferralCodeDto(Object):
     code: str
     times_redeemed: int
     referral_link: str
-    created_at: datetime
+    date_created: datetime
 
 
 class ReferralStatsDto(Object):
@@ -66,7 +66,7 @@ class ReferralRedemptionDto(Object):
     invitee_id: str
     status: RedemptionStatus
     credited_at: Optional[datetime] = None
-    created_at: datetime
+    date_created: datetime
 
 
 class DiscountBreakdownDto(Object):

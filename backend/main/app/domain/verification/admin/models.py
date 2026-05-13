@@ -34,8 +34,8 @@ class VerificationNoteDto(Object):
     content: str
     tags: Optional[List[str]] = None
     pinned: bool = False
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    date_created: datetime
+    date_updated: Optional[datetime] = None
 
 
 class CreateVerificationNoteDto(Object):
@@ -96,8 +96,8 @@ class AdminVerificationListItemDto(Object):
     address_line: Optional[str] = None
     submitted_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    date_created: datetime
+    date_updated: Optional[datetime] = None
 
 
 class AdminVerificationDetailDto(Object):
@@ -112,8 +112,8 @@ class AdminVerificationDetailDto(Object):
     submitted_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    date_created: datetime
+    date_updated: Optional[datetime] = None
 
 
 class AdminVerificationSearchDto(PageRequest, BaseQueryDto):

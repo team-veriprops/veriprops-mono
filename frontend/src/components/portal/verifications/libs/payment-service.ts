@@ -21,8 +21,8 @@ export interface Payment {
   providerRef: string | null;
   failureReason: string | null;
   wireProofUrl: string | null;
-  createdAt: string;
-  updatedAt: string | null;
+  dateCreated: string;
+  dateUpdated: string | null;
 }
 
 export interface InitiatePaymentResult {

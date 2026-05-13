@@ -1,3 +1,5 @@
+import { AuthIntent } from "./auth/models";
+
 export interface PricingTier {
   name: string;
   priceNGN: number;
@@ -242,7 +244,7 @@ export const footerLinks = {
     { label: "Privacy Policy", href: "#" },
     { label: "Terms of Service", href: "#" },
     { label: "Contact Support", href: "#" },
-    { label: "Become an Agent", href: "/auth?intent=agent" },
+    { label: "Become an Agent", href: `/auth?intent=${AuthIntent.AGENT}` },
   ] as FooterLink[],
   socials: [
     { label: "Facebook", href: "#" },
@@ -272,5 +274,5 @@ export function formatPrice(priceNGN: number, currency: Currency): string {
   return `${symbol}${amount.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
-export const CTA_VERIFY_HREF = "/auth?intent=verify";
-export const CTA_AGENT_HREF = "/auth?intent=agent";
+export const CTA_VERIFY_HREF = `/auth?intent=${AuthIntent.VERIFY}`;
+export const CTA_AGENT_HREF = `/auth?intent=${AuthIntent.AGENT}`;

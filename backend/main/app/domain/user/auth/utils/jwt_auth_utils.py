@@ -56,11 +56,12 @@ class JwtAuthUtils:
 
     @staticmethod
     async def revoke_token(authorize: AuthJWT) -> bool:
-        authorize.jwt_required()
+        await authorize.jwt_required()
         token_jti = authorize.get_raw_jwt()['jti']
 
-        # TODO: Get the remaining refresh token TTL (time_to_live) from authorize, and use that instead
-        time_to_live = timedelta(seconds=utils_settings.REFRESH_TOKEN_TTL_SECONDS)
+        raw_jwt = authorize.get_raw_jwt() or {}
+        exp_time_secs=int(raw_jwt.get("exp", 0))
+        time_to_live = timedelta(seconds=exp_time_secs)
 
         await RedisUtils.set_redis(f"token_jti:{token_jti}", 'true', time_to_live)  # Store until token expires
 
@@ -107,11 +108,15 @@ class JwtAuthUtils:
     @staticmethod
     async def refresh_access_token(authorize: AuthJWT) :
 
-        authorize.jwt_refresh_token_required()
-        user_id = authorize.get_jwt_subject()
+        await authorize.jwt_refresh_token_required()
+        user_id = str(authorize.get_jwt_subject())
 
-        # TODO: Get user_claims from authorize
-        user_claims = {}
+        raw_jwt = authorize.get_raw_jwt() or {}
+        user_claims = {
+            "user_type": raw_jwt.get('user_type'),
+            "personas": raw_jwt.get('user_personas', []),
+            "admin_sub_role": raw_jwt.get('admin_sub_role'),
+        }
 
         try:
 
@@ -123,9 +128,9 @@ class JwtAuthUtils:
             raise
 
     @staticmethod
-    async def access_token_protected(token: str = Depends(oauth2_scheme), authorizer: AuthJWT = Depends()):
-        authorizer.jwt_required()
-        return authorizer
+    async def access_token_protected(token: str = Depends(oauth2_scheme), authorize: AuthJWT = Depends()):
+        await authorize.jwt_required()
+        return authorize
 
     @staticmethod
     def generate_pkce() -> tuple[str, str, str]:

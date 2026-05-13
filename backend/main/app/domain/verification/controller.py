@@ -42,16 +42,16 @@ verification_router = APIRouter(prefix="/verifications", tags=["Verifications"])
 @verification_router.get("/me", response_model=SuccessResponse[VerificationDto])
 async def get_my_active_draft(authorize: AuthJWT = Depends()):
     """Return the active DRAFT for the caller, creating one if none exists."""
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await verification_service.create_or_resume_draft(user_id)
     return SuccessResponse[VerificationDto](data=dto)
 
 
 @verification_router.get("/{verification_id}", response_model=SuccessResponse[VerificationDto])
 async def get_verification(verification_id: str, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await verification_service.get(verification_id, user_id)
     return SuccessResponse[VerificationDto](data=dto)
 
@@ -60,8 +60,8 @@ async def get_verification(verification_id: str, authorize: AuthJWT = Depends())
 async def update_draft(
     verification_id: str, req: WizardStepDto, authorize: AuthJWT = Depends(),
 ):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await verification_service.update_draft_step(user_id, verification_id, req)
     return SuccessResponse[VerificationDto](data=dto)
 
@@ -73,8 +73,8 @@ async def update_draft(
 async def select_tier(
     verification_id: str, req: TierSelectionDto, authorize: AuthJWT = Depends(),
 ):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await verification_service.select_tier(user_id, verification_id, req.tier, req.currency)
     return SuccessResponse[VerificationDto](data=dto)
 
@@ -89,8 +89,8 @@ async def submit_verification(
     request: Request,
     authorize: AuthJWT = Depends(),
 ):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await verification_service.submit(
         user_id,
         verification_id,
@@ -107,8 +107,8 @@ async def list_my_verifications(
     page_size: int = Query(20, ge=1, le=100),
     authorize: AuthJWT = Depends(),
 ):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     return await verification_service.list_for_customer(user_id, page=page, page_size=page_size)
 
 
@@ -122,8 +122,8 @@ async def upload_property_document(
     document_type: PropertyDocumentType = Form(PropertyDocumentType.OTHER),
     authorize: AuthJWT = Depends(),
 ):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     file_bytes = await file.read()
     dto = await verification_service.upload_document(
         user_id, verification_id, file_bytes, file.filename or "upload", document_type.value,
@@ -136,8 +136,8 @@ async def upload_property_document(
     response_model=SuccessResponse[VerificationDto],
 )
 async def cancel_verification(verification_id: str, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     # Ownership check — raises 404 if not owned
     await verification_service.get(verification_id, user_id)
     dto = await verification_service.transition(
@@ -161,8 +161,8 @@ async def parse_listing_url(
     Always returns HTTP 200 — failures are surfaced as ParseResultDto(success=False)
     so the wizard can gracefully fall back to manual entry.
     """
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     # Ownership + draft guard via service (raises on ownership mismatch or non-draft).
     from main.app.domain.verification.models import VerificationStatus
     from main.appodus_utils.exception.exceptions import ValidationException

@@ -26,8 +26,8 @@ const mockApp: AgentApplication = {
   submittedAt: null,
   reviewedAt: null,
   rejectionReason: null,
-  createdAt: "2026-05-07T00:00:00Z",
-  updatedAt: null,
+  dateCreated: "2026-05-07T00:00:00Z",
+  dateUpdated: null,
 };
 
 function makeHttp(): { mock: Record<string, ReturnType<typeof vi.fn>>; client: HttpClient } {

@@ -165,8 +165,8 @@ class VerificationDto(Object):
     submitted_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    date_created: datetime
+    date_updated: Optional[datetime] = None
     draft_step: int = 0
     draft_payload: Optional[Dict[str, Any]] = None
 

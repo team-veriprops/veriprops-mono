@@ -235,8 +235,8 @@ class AdminVerificationService:
             address_line=prop.address_line if prop else None,
             submitted_at=row.submitted_at,
             paid_at=row.paid_at,
-            created_at=row.date_created,
-            updated_at=row.date_updated,
+            date_created=row.date_created,
+            date_updated=row.date_updated,
         )
 
     @staticmethod
@@ -271,8 +271,8 @@ class AdminVerificationService:
             submitted_at=row.submitted_at,
             paid_at=row.paid_at,
             completed_at=row.completed_at,
-            created_at=row.date_created,
-            updated_at=row.date_updated,
+            date_created=row.date_created,
+            date_updated=row.date_updated,
         )
 
     @staticmethod
@@ -284,6 +284,6 @@ class AdminVerificationService:
             content=note.content,
             tags=list(note.tags or []),
             pinned=bool(note.pinned),
-            created_at=note.date_created,
-            updated_at=note.date_updated,
+            date_created=note.date_created,
+            date_updated=note.date_updated,
         )

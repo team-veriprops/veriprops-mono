@@ -31,8 +31,8 @@ export interface AgentApplication {
   submittedAt: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
-  createdAt: string;
-  updatedAt: string | null;
+  dateCreated: string;
+  dateUpdated: string | null;
 }
 
 export interface AgentMetrics {
@@ -114,8 +114,8 @@ export interface Task {
   submittedAt: string | null;
   trustScore: number | null;
   draftPayload: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string | null;
+  dateCreated: string;
+  dateUpdated: string | null;
 }
 
 export interface EvidenceItem {
@@ -127,7 +127,7 @@ export interface EvidenceItem {
   gpsLat: number | null;
   gpsLng: number | null;
   capturedAt: string | null;
-  createdAt: string;
+  dateCreated: string;
 }
 
 export interface Escalation {
@@ -136,7 +136,7 @@ export interface Escalation {
   reporterId: string;
   category: "INACCESSIBLE" | "SUSPICIOUS" | "SAFETY" | "CONFLICTING" | "OTHER";
   description: string;
-  createdAt: string;
+  dateCreated: string;
 }
 
 export class AgentService {

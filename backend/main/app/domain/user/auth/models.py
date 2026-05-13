@@ -18,6 +18,12 @@ class OtpChannel(str, enum.Enum):
     EMAIL = "EMAIL"
     PHONE = "PHONE"
 
+class AuthIntent(str, enum.Enum):
+    DEFAULT = "default" # Customer
+    VERIFY = "verify" # Customer
+    AGENT = "agent" # Agent
+    INVITED_ADMIN = "invited-admin" # Admin
+
 class SignupRequestDto(Object):
     first_name: str
     last_name: str
@@ -30,7 +36,7 @@ class SignupRequestDto(Object):
     timezone: str
     preferred_currency: TransactionCurrency = TransactionCurrency.NGN
     consents: List[UserConsentInputDto] = Field(default_factory=list)
-    intent: Optional[str] = None
+    intent: Optional[AuthIntent] = None
     device_fingerprint: Optional[str] = None
 
 

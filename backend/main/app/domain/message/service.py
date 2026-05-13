@@ -69,7 +69,7 @@ class MessageService:
         page_size = limit
         search_dto = SearchMessageDto(page=0, page_size=page_size,
                                       status=MessageStatus.PENDING,
-                                      order_by="priority, created_at",
+                                      order_by="priority, date_created",
                                       )
 
         return await self._message_repo.get_page(search_dto)
@@ -79,9 +79,9 @@ class MessageService:
         search_dto = SearchMessageDto(page=0, page_size=page_size,
                                       status=MessageStatus.FAILED,
                                       retry_count=max_retries,
-                                      created_at=older_than,
-                                      order_by="retry_count, created_at",
-                                      where="retry_count < AND created_at < "
+                                      date_created=older_than,
+                                      order_by="retry_count, date_created",
+                                      where="retry_count < AND date_created < "
                                       )
 
         return await self._message_repo.get_page(search_dto)

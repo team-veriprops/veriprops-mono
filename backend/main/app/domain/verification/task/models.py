@@ -82,8 +82,8 @@ class TaskDto(Object):
     submitted_at: Optional[datetime] = None
     trust_score: Optional[int] = None
     draft_payload: Optional[dict] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    date_created: datetime
+    date_updated: Optional[datetime] = None
 
 
 class TaskAssignmentDto(Object):
@@ -93,7 +93,7 @@ class TaskAssignmentDto(Object):
     assigned_by: Optional[str] = None
     reassigned_from_id: Optional[str] = None
     note: Optional[str] = None
-    created_at: datetime
+    date_created: datetime
 
 
 class CreateTaskDto(Object):

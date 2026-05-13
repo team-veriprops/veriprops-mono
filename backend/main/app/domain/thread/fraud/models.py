@@ -39,7 +39,7 @@ class FraudFlagDto(Object):
     review_decision: Optional[FraudReviewDecision] = None
     reviewer_id: Optional[str] = None
     reviewed_at: Optional[datetime] = None
-    created_at: datetime
+    date_created: datetime
 
 
 class CreateFraudFlagDto(Object):

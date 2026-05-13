@@ -4,6 +4,7 @@
 URL shape: `/users/auth/...`
 """
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -24,8 +25,7 @@ from main.app.domain.user.auth.models import (
     ProfileCompletionDto,
     ResetPasswordDto,
     SetPasswordDto,
-    SignupRequestDto,
-)
+    SignupRequestDto, )
 from main.app.domain.user.auth.oauth.controller import oauth_router
 from main.app.domain.user.auth.service import AuthService
 from main.app.domain.user.auth.session.controller import session_router
@@ -62,10 +62,12 @@ logger: Logger = di["logger"]
 @auth_router.post("/signup", response_model=SuccessResponse[AuthSessionDto], status_code=HTTPStatus.CREATED)
 async def signup(req: SignupRequestDto, request: Request, authorize: AuthJWT = Depends()):
     user = await auth_service.signup(req, ip_address=ClientUtils.get_client_ip(request))
+
     session = await session_service.issue_session_cookies(
         user, authorize, ip_address=ClientUtils.get_client_ip(request),
         device=ClientUtils.get_user_agent(request), device_fingerprint=req.device_fingerprint,
     )
+
     # Server-side signup draft is no longer needed once the account is created.
     try:
         await signup_draft_service.discard(req.email)
@@ -76,8 +78,8 @@ async def signup(req: SignupRequestDto, request: Request, authorize: AuthJWT = D
 
 @auth_router.post("/profile/complete", response_model=SuccessResponse[AuthSessionDto])
 async def profile_complete(req: ProfileCompletionDto, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     user = await auth_service.complete_profile(user_id, req)
     return SuccessResponse[AuthSessionDto](data=await session_service.build_session_dto(user))
 
@@ -111,7 +113,8 @@ async def verify_otp(req: OtpVerifyDto, request: Request):
 
 @auth_router.post("/password/forgot", response_model=SuccessResponse[bool])
 async def forgot_password(req: ForgotPasswordDto, request: Request):
-    raw_token, fullname = await auth_service.request_password_reset(req.email, ip_address=ClientUtils.get_client_ip(request))
+    raw_token, fullname = await auth_service.request_password_reset(req.email,
+                                                                    ip_address=ClientUtils.get_client_ip(request))
     if raw_token:
         try:
             from main.app.domain.user.user_messages import AccountSecurityMessages
@@ -147,7 +150,7 @@ async def reset_password(req: ResetPasswordDto, authorize: AuthJWT = Depends()):
 
 @auth_router.post("/password/set", response_model=SuccessResponse[bool])
 async def set_password(req: SetPasswordDto, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
+    await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
     await auth_service.set_password(user_id, req.password)
     return SuccessResponse[bool](data=True)

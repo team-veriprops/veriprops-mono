@@ -66,7 +66,7 @@ class ThreadDto(Object):
     thread_type: ThreadType
     verification_id: str
     task_id: Optional[str] = None
-    created_at: datetime
+    date_created: datetime
 
 
 class ThreadMessageDto(Object):
@@ -78,7 +78,7 @@ class ThreadMessageDto(Object):
     body: str
     attachment_key: Optional[str] = None
     is_held: bool = False
-    created_at: datetime
+    date_created: datetime
 
 
 class CreateThreadDto(Object):

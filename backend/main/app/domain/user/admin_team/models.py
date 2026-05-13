@@ -14,7 +14,7 @@ class AdminTeamMemberDto(Object):
     first_name: str
     last_name: str
     sub_role: AdminSubRole
-    created_at: datetime
+    date_created: datetime
 
 
 class ChangeSubRoleRequestDto(Object):

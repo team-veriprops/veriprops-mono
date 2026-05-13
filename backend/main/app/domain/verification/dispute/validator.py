@@ -1,9 +1,12 @@
+from kink import inject
+
 from main.app.domain.verification.models import VerificationStatus
 from main.appodus_utils.exception.exceptions import ValidationException
 
 _MIN_DESCRIPTION_LENGTH = 100
 
 
+@inject
 class DisputeValidator:
     def assert_can_dispute(self, status: str) -> None:
         if VerificationStatus(status) != VerificationStatus.COMPLETED:

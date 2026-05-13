@@ -18,7 +18,7 @@ import {
   SignupStep2Values,
   SignupStep3Values,
 } from "../schemas";
-import { UserConsent, SignupDraft } from "@components/website/auth/models";
+import { UserConsent, SignupDraft, AuthIntent } from "@components/website/auth/models";
 import {
   loadActiveLocalDraft,
   loadLocalDraft,
@@ -38,7 +38,7 @@ export default function SignupContainer() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const intentParam = searchParams.get("intent");
-  const intent = isAuthIntent(intentParam) ? intentParam : "default";
+  const intent = isAuthIntent(intentParam) ? intentParam : AuthIntent.DEFAULT;
   const tier = searchParams.get("tier");
   const redirect = searchParams.get("redirect");
 
@@ -94,7 +94,7 @@ export default function SignupContainer() {
           const res = await authService.getSignupDraft(localDraft.email);
           const remote = res.data;
           if (cancelled) return;
-          if (remote && remote.updatedAt >= localDraft.updatedAt) {
+          if (remote && remote.dateUpdated >= localDraft.dateUpdated) {
             applyDraft(remote);
             return;
           }
@@ -113,7 +113,7 @@ export default function SignupContainer() {
       email: next.payload.email,
       step: next.step,
       payload: next.payload,
-      updatedAt: new Date().toISOString(),
+      dateUpdated: new Date().toISOString(),
     };
     saveLocalDraft(draft);
     // Fire-and-forget server sync. Non-fatal: localStorage is sufficient for
@@ -196,7 +196,7 @@ export default function SignupContainer() {
   };
 
   const subtitle =
-    intent === "agent"
+    intent === AuthIntent.AGENT
       ? "Create your Veriprops account first. After this, we'll walk you through the agent application."
       : tier
       ? `Set up your account so we can pre-select the ${tier} tier on your verification.`
@@ -205,7 +205,7 @@ export default function SignupContainer() {
   return (
     <AuthShell>
       <AuthHeading
-        eyebrow={intent === "agent" ? "Step 1 of 2 — agent path" : "Create your account"}
+        eyebrow={intent === AuthIntent.AGENT ? "Step 1 of 2 — agent path" : "Create your account"}
         title="Welcome to Veriprops."
         subtitle={subtitle}
       />

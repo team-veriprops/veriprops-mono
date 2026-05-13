@@ -73,7 +73,7 @@ Phase 0 (Foundation)
 
 These are **scaffolding** — not user-visible, but every later phase depends on them:
 
-- `BaseEntity` (UUID id, created_at, updated_at, version, deleted) — soft-delete only.
+- `BaseEntity` (UUID id, date_created, date_updated, version, deleted) — soft-delete only.
 - `GenericRepo[Model, Create, Update, Query, Search]` — pagination, soft-delete-aware.
 - `@transactional` decorator with `USE_IF_PRESENT` / `ALWAYS_NEW` / `FALLBACK_NEW` policies.
 - `AppodusBaseException` hierarchy with structured context → HTTP mapping.

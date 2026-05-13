@@ -36,8 +36,6 @@ class ReportVersion(BaseEntity):
     version_string = Column(String(16), nullable=False)  # e.g. "v1.0", "v2.0"
     pdf_s3_key = Column(String(512), nullable=True)
     is_superseded = Column(Boolean, nullable=False, default=False)
-    created_at = Column(UTCDateTime, nullable=False)
-    created_by = Column(String(36), nullable=True)
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────────────────
@@ -77,7 +75,7 @@ class CreateReportVersionDto(Object):
     vid: str
     version_string: str
     pdf_s3_key: Optional[str] = None
-    created_at: datetime
+    date_created: datetime
     created_by: Optional[str] = None
 
 

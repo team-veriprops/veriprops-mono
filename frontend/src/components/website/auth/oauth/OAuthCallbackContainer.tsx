@@ -11,6 +11,7 @@ import { useCurrentSession } from "../libs/useAuthQueries";
 import ProfileCompletionModal from "./ProfileCompletionModal";
 import { ROUTES, isAuthIntent, buildAuthUrl } from "@lib/routes";
 import { resolvePostAuthRedirect } from "@components/website/auth/libs/auth/redirect";
+import { AuthIntent } from "../models";
 
 interface Props {
   provider: string;
@@ -29,7 +30,7 @@ export default function OAuthCallbackContainer({ provider }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const intentParam = searchParams.get("intent");
-  const intent = isAuthIntent(intentParam) ? intentParam : "default";
+  const intent = isAuthIntent(intentParam) ? intentParam : AuthIntent.DEFAULT;
   const errorCode = searchParams.get("error");
 
   const sessionQuery = useCurrentSession(!errorCode);

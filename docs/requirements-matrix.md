@@ -14,7 +14,7 @@ last_updated: 2026-05-12
 | ID | Phase | Requirement | Dependencies | Modules | Schema Impact | API Impact | Security Impact | Complexity | Risk | Acceptance Criteria | Test Coverage | Status |
 |----|------|-------------|--------------|----------|---------------|------------|----------------|------------|------|---------------------|---------------|--------|
 | R0.1 | 0 | Monorepo layout (backend/, frontend/) | none | repo | no | no | low | low | low | Both apps boot independently; `/api/*` rewrite works | smoke | done |
-| R0.2 | 0 | `BaseEntity` (UUID id, created_at, updated_at, version, deleted) | none | appodus_utils/db | yes | no | low | low | low | All domain entities inherit; soft-delete enforced | unit | done |
+| R0.2 | 0 | `BaseEntity` (UUID id, date_created, date_updated, version, deleted) | none | appodus_utils/db | yes | no | low | low | low | All domain entities inherit; soft-delete enforced | unit | done |
 | R0.3 | 0 | `GenericRepo[Model,Create,Update,Query,Search]` with pagination, soft-delete-aware | R0.2 | appodus_utils/db | no | no | low | medium | low | Generic CRUD/list/page works for any subclass | unit | done |
 | R0.4 | 0 | `@transactional` with USE_IF_PRESENT / ALWAYS_NEW / FALLBACK_NEW | R0.2 | appodus_utils/decorators | no | no | medium | medium | medium | Each policy verified; raises if missing context | unit | done |
 | R0.5 | 0 | `AppodusBaseException` hierarchy + HTTP mapping | none | appodus_utils/exception | no | yes | medium | low | low | Custom exceptions return structured HTTP | unit | done |

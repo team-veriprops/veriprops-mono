@@ -20,6 +20,7 @@ from sqlalchemy import Column, DateTime, Index, Integer, JSON, SmallInteger, Str
 from sqlalchemy.ext.mutable import MutableList, MutableDict
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils.db.models import UTCDateTime
 
 
 class AgentType(str, enum.Enum):
@@ -69,12 +70,12 @@ class AgentApplication(BaseEntity):
     kyc_method = Column(String(16), nullable=True)
     bvn_last4 = Column(String(4), nullable=True)
     bvn_verification_id = Column(String(128), nullable=True)
-    bvn_verified_at = Column(DateTime(timezone=True), nullable=True)
+    bvn_verified_at = Column(UTCDateTime, nullable=True)
     id_doc_type = Column(String(32), nullable=True)
     id_doc_url = Column(String(512), nullable=True)
     selfie_url = Column(String(512), nullable=True)
     selfie_match_score = Column(Integer, nullable=True)  # 0–100
-    selfie_matched_at = Column(DateTime(timezone=True), nullable=True)
+    selfie_matched_at = Column(UTCDateTime, nullable=True)
 
     # Step 3 — Professional credentials (conditional)
     surveyor_licence_no = Column(String(64), nullable=True)
@@ -89,11 +90,11 @@ class AgentApplication(BaseEntity):
     # Step 4 — Submission
     truthfulness_acknowledged = Column(String(8), nullable=True)
     agent_terms_consent_id = Column(String(36), nullable=True)
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
+    submitted_at = Column(UTCDateTime, nullable=True)
 
     # Admin review
     reviewed_by_admin_id = Column(String(36), nullable=True)
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_at = Column(UTCDateTime, nullable=True)
     rejection_reason = Column(Text, nullable=True)
 
     # Phase 16 — Coverage & Availability
@@ -237,8 +238,8 @@ class AgentApplicationDto(Object):
     rejection_reason: Optional[str] = None
     availability_status: AvailabilityStatus = AvailabilityStatus.AVAILABLE
     max_travel_km: Optional[int] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    date_created: datetime
+    date_updated: Optional[datetime] = None
 
 
 # Admin-facing DTO — exposes signed URLs (admins only).
@@ -284,7 +285,7 @@ class AgentQualityScoreDto(Object):
     score: int
     note: Optional[str] = None
     reviewed_by_admin_id: str
-    created_at: datetime
+    date_created: datetime
 
 
 class AgentMetricsDto(Object):

@@ -78,5 +78,5 @@ class SignupDraftService:
             email=row.email,
             step=row.step,
             payload=payload,
-            updated_at=row.date_updated or row.date_created,
+            date_updated=row.date_updated or row.date_created,
         )

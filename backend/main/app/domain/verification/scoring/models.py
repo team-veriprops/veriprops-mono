@@ -48,7 +48,7 @@ class TrustScoreWeightDto(Object):
     role: str
     weight: Decimal
     updated_by: Optional[str] = None
-    updated_at: Optional[datetime] = None
+    date_updated: Optional[datetime] = None
 
 
 class UpdateWeightDto(Object):

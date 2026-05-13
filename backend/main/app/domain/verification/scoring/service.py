@@ -200,5 +200,5 @@ class TrustScoreService:
             role=row.role,
             weight=Decimal(str(row.weight)),
             updated_by=row.updated_by,
-            updated_at=row.date_updated,
+            date_updated=row.date_updated,
         )

@@ -46,7 +46,10 @@ class AdminInvitationRepo(
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_pending_for_email(self, email_normalized: str) -> Optional[AdminInvitation]:
+    async def get_pending_for_email(self, email: str) -> Optional[AdminInvitation]:
+
+        email_normalized = email.strip().lower()
+
         stmt = (
             select(AdminInvitation)
             .where(

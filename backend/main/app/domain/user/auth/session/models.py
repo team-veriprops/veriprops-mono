@@ -137,7 +137,7 @@ class DeviceSessionDto(Object):
     approx_location: Optional[str] = None
     current: bool
     last_active_at: datetime
-    created_at: datetime
+    date_created: datetime
 
 
 class CreateSecurityEventDto(Object):
@@ -235,4 +235,4 @@ class SessionUserDto(Object):
     has_password: bool
     linked_providers: List[SocialAuthProvider]
     avatar_url: Optional[str] = None
-    created_at: datetime
+    date_created: datetime

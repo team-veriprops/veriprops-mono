@@ -24,6 +24,7 @@ import { ROUTES, isAuthIntent, buildAuthUrl } from "@lib/routes";
 import { resolvePostAuthRedirect } from "@components/website/auth/libs/auth/redirect";
 import { getDeviceFingerprint } from "@components/website/auth/libs/auth/fingerprint";
 import { getErrorMessage } from "@lib/utils";
+import { AuthIntent } from "../models";
 
 const LOCKOUT_KEY = "veriprops-login-lockout";
 const ATTEMPTS_KEY = "veriprops-login-attempts";
@@ -56,7 +57,7 @@ export default function LoginContainer() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const intentParam = searchParams.get("intent");
-  const intent = isAuthIntent(intentParam) ? intentParam : "default";
+  const intent = isAuthIntent(intentParam) ? intentParam : AuthIntent.DEFAULT;
   const tier = searchParams.get("tier");
   const redirect = searchParams.get("redirect");
 

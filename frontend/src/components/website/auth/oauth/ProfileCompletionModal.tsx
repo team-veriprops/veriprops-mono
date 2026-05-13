@@ -15,13 +15,12 @@ import {
   suggestTimezoneForCountry,
 } from "@components/website/auth/libs/auth/locale";
 import { CURRENCY_NAMES, TransactionCurrency } from "@/types/models";
-import { OtpChannel, AuthUser } from "@components/website/auth/models";
+import { OtpChannel, AuthUser, AuthIntent } from "@components/website/auth/models";
 import {
   useCompleteProfileMutation,
   useSendOtpMutation,
   useVerifyOtpMutation,
 } from "../libs/useAuthQueries";
-import { AuthIntent } from "@lib/routes";
 import { getErrorMessage } from "@lib/utils";
 
 interface Props {

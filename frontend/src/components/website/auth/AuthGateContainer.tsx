@@ -6,7 +6,9 @@ import { ArrowRight, ShieldCheck, UserPlus, LogIn, Briefcase } from "lucide-reac
 import AuthShell from "./AuthShell";
 import AuthHeading from "./AuthHeading";
 import SocialAuthButtons, { AuthDivider } from "./SocialAuthButtons";
-import { ROUTES, isAuthIntent, buildAuthUrl, AuthIntent } from "@lib/routes";
+import { ROUTES, isAuthIntent, buildAuthUrl} from "@lib/routes";
+import { AuthIntent } from "./models";
+import { Sign } from "node:crypto";
 
 interface IntentCopy {
   eyebrow: string;
@@ -46,7 +48,7 @@ const COPY: Record<AuthIntent, IntentCopy> = {
 export default function AuthGateContainer() {
   const search = useSearchParams();
   const rawIntent = search.get("intent");
-  const intent: AuthIntent = isAuthIntent(rawIntent) ? rawIntent : "default";
+  const intent: AuthIntent = isAuthIntent(rawIntent) ? rawIntent : AuthIntent.DEFAULT;
   const tier = search.get("tier");
   const redirect = search.get("redirect");
 
@@ -57,10 +59,10 @@ export default function AuthGateContainer() {
   return (
     <AuthShell
       panelHeading={
-        intent === "agent" ? "Earn from verified work." : "Verify before you pay."
+        intent === AuthIntent.AGENT ? "Earn from verified work." : "Verify before you pay."
       }
       panelCopy={
-        intent === "agent"
+        intent === AuthIntent.AGENT
           ? "Veriprops connects you with paying customers who need exactly the work you do. Submit on your terms; get paid on time."
           : "Veriprops independently checks ownership, encumbrances, boundaries and physical reality of any Nigerian property — before you wire a single naira."
       }
@@ -74,7 +76,7 @@ export default function AuthGateContainer() {
           style={{ boxShadow: "0 8px 24px -6px rgba(0,13,34,0.3)" }}
         >
           <span className="inline-flex items-center gap-3">
-            {intent === "agent" ? (
+            {intent === AuthIntent.AGENT ? (
               <Briefcase className="w-5 h-5" strokeWidth={2.2} />
             ) : (
               <UserPlus className="w-5 h-5" strokeWidth={2.2} />

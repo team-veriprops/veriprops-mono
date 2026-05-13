@@ -107,7 +107,7 @@ function VerificationRow({ v }: { v: Verification }) {
         </div>
         <div className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>
           {v.tier} tier · {v.property?.state ?? "—"}{v.property?.lga ? `, ${v.property.lga}` : ""}
-          {" · "}{new Date(v.createdAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
+          {" · "}{new Date(v.dateCreated).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
         </div>
       </div>
       <ArrowRight
@@ -129,7 +129,7 @@ export default function PortalDashboardPage() {
   const cutoff = Date.now() - ABANDONMENT_HOURS_MS;
   const abandonedVerifications = (verifications ?? []).filter((v) =>
     ABANDONMENT_STATUSES.includes(v.status) &&
-    new Date(v.updatedAt ?? v.createdAt).getTime() < cutoff,
+    new Date(v.dateUpdated ?? v.dateCreated).getTime() < cutoff,
   );
 
   async function handleDiscard(id: string) {

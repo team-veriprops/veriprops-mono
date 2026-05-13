@@ -81,6 +81,7 @@ class UserBaseDto(Object):
 
 
 class CreateUserDto(UserBaseDto):
+    password_hash: Optional[str] = None
     personas: List[UserPersona] = Field(default_factory=list)
     admin_sub_role: Optional[AdminSubRole] = None
     email_verified: bool = False
@@ -89,8 +90,6 @@ class CreateUserDto(UserBaseDto):
 
 class _CreateUserDto(CreateUserDto):
     user_type: UserType = UserType.USER
-
-    password_hash: Optional[str] = None
     phone_e164: str
     email_normalized: str
 

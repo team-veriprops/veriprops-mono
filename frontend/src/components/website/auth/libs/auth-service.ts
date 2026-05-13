@@ -1,6 +1,6 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { SuccessResponse } from "@/types/models";
-import { AuthSession, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, SocialProvider, UserConsent } from "@components/website/auth/models";
+import { AuthSession, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, AuthIntent, SocialProvider, UserConsent } from "@components/website/auth/models";
 /**
  * Frontend-facing auth API. Endpoint paths follow the convention used elsewhere
  * in the app (`/users/auth/...` — see FetchHttpClient.refreshToken). Backend is
@@ -21,7 +21,7 @@ export interface SignupRequest {
   timezone: string;
   preferredCurrency: string;
   consents: UserConsent[];
-  intent?: string;
+  intent?: AuthIntent;
   deviceFingerprint?: string;
 }
 
@@ -113,7 +113,7 @@ export class AuthService {
    */
   startOauth(
     provider: SocialProvider,
-    opts?: { intent?: string; mode?: OAuthFlowMode },
+    opts?: { intent?: AuthIntent; mode?: OAuthFlowMode },
   ): Promise<SuccessResponse<{ authorizationUrl: string }>> {
     const search = new URLSearchParams();
     if (opts?.intent) search.set("intent", opts.intent);

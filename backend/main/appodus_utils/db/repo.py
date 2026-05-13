@@ -61,6 +61,11 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
 
         return row
 
+
+    async def get_all(self, search_dto: SearchSchemaType) -> List[ModelType]:
+        rows, _, _, _, lean = await self._search_rows(search_dto)
+        return rows
+
     # @transactional()
     async def get_by_criterion(self, search_dto: SearchSchemaType) -> List[QuerySchemaType]:
         rows, _, _, _, lean = await self._search_rows(search_dto)
@@ -71,6 +76,9 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
         row, lean = await self._get_model_by_id(_id, query_fields, include_deleted=True)
 
         return self._db_utils.build_row_response(row, lean)
+
+    async def to_query_dto(self, row: ModelType):
+        return self._db_utils.build_row_response(row=row, return_success_response_obj=False)
 
     async def get_page(self, search_dto: SearchSchemaType) -> Page[QuerySchemaType]:
         rows, criterion, page, page_size, lean = await self._search_rows(search_dto)
@@ -115,8 +123,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
 
     # @handle_exceptions
     @transactional()
-    async def update(self, _id: Union[str, uuid.UUID], obj_in: Union[UpdateSchemaType, Dict[str, Any]]) -> Optional[
-        SuccessResponse[QuerySchemaType]]:
+    async def update_return_model(self, _id: Union[str, uuid.UUID], obj_in: Union[UpdateSchemaType, Dict[str, Any]]) -> Optional[ModelType]:
         db_obj = await self._get(_id)
         if db_obj and obj_in:
             db_obj_data = jsonable_encoder(db_obj, by_alias=False)
@@ -141,11 +148,18 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
             if not old_version:
                 old_version = db_obj.version
 
-            new_version = old_version + 1
+            new_version = int(old_version or 0) + 1
 
             db_obj.version = new_version
             db_obj.date_updated = Utils.datetime_now()
             self._session.add(db_obj)
+        return db_obj
+
+    @transactional()
+    async def update(self, _id: Union[str, uuid.UUID], obj_in: Union[UpdateSchemaType, Dict[str, Any]]) -> Optional[
+        SuccessResponse[QuerySchemaType]]:
+        db_obj = await self.update_return_model(_id=_id, obj_in=obj_in)
+
         return self._db_utils.build_row_response(db_obj)
 
     # @handle_exceptions

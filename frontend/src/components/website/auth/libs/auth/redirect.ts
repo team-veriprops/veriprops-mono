@@ -1,5 +1,5 @@
-import { ROUTES, AuthIntent } from "@/lib/routes";
-import { AuthUser, UserType, UserPersona } from "@components/website/auth/models";
+import { ROUTES} from "@/lib/routes";
+import { AuthUser, UserType, UserPersona, AuthIntent } from "@components/website/auth/models";
 /**
  * Post-auth redirect logic. Priority (PRD §2.4):
  *   Admin only           → /admin
@@ -26,10 +26,10 @@ export function resolvePostAuthRedirect(
   const isAgent = user.personas.includes(UserPersona.AGENT);
   const isCustomer = user.personas.includes(UserPersona.CUSTOMER);
 
-  if (options.intent === "verify" && isCustomer) {
+  if (options.intent === AuthIntent.VERIFY && isCustomer) {
     return ROUTES.PORTAL.VERIFICATIONS_NEW;
   }
-  if (options.intent === "agent" && !isAgent) {
+  if (options.intent === AuthIntent.AGENT && !isAgent) {
     return ROUTES.AGENT.ONBOARDING;
   }
 

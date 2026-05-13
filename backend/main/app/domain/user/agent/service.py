@@ -130,7 +130,7 @@ class AgentApplicationService:
         return self._to_public_dto(row) if row else None
 
     async def list_for_admin(
-        self, status: Optional[AgentApplicationStatus] = None, page: int = 1, page_size: int = 25,
+        self, status: Optional[AgentApplicationStatus] = None, page: int = 0, page_size: int = 25,
     ) -> Page[AdminAgentApplicationDto]:
         search = SearchAgentApplicationDto(page=page, page_size=page_size)
         if status:
@@ -521,8 +521,8 @@ class AgentApplicationService:
                 row.availability_status or AvailabilityStatus.AVAILABLE.value
             ),
             max_travel_km=row.max_travel_km,
-            created_at=row.date_created,
-            updated_at=row.date_updated,
+            date_created=row.date_created,
+            date_updated=row.date_updated,
         )
 
     def _to_admin_dto(self, row: AgentApplication, user) -> AdminAgentApplicationDto:
@@ -555,8 +555,8 @@ class AgentApplicationService:
             reviewed_at=r.reviewed_at,
             admin_decision=AdminKycDecision(r.admin_decision) if r.admin_decision else None,
             admin_notes=r.admin_notes,
-            created_at=r.date_created,
-            updated_at=r.date_updated,
+            date_created=r.date_created,
+            date_updated=r.date_updated,
         )
 
     async def _record_security_event(

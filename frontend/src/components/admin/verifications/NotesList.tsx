@@ -99,7 +99,7 @@ export default function NotesList({ vid, notes }: Props) {
                 )}
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                {new Date(note.createdAt).toLocaleString()}
+                {new Date(note.dateCreated).toLocaleString()}
               </p>
             </div>
           ))}

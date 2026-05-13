@@ -39,7 +39,7 @@ async def list_verifications(
     state: Optional[str] = Query(None),
     lga: Optional[str] = Query(None),
     vid: Optional[str] = Query(None),
-    page: int = Query(1, ge=1),
+    page: int = Query(0, ge=0),
     page_size: int = Query(25, ge=1, le=100),
     _: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
 ):

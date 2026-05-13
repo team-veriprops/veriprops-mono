@@ -11,10 +11,11 @@ from datetime import datetime
 from typing import Optional
 
 from pydantic import EmailStr
-from sqlalchemy import Column, DateTime, Index, String
+from sqlalchemy import Column, String
 
 from main.app.domain.user.models import AdminSubRole
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils.db.models import UTCDateTime
 
 
 class AdminInvitationStatus(str, enum.Enum):
@@ -31,12 +32,13 @@ class AdminInvitation(BaseEntity):
     __tablename__ = "admin_invitations"
 
     email_normalized = Column(String(254), nullable=False, index=True)
+    email = Column(String(254), nullable=False)
     sub_role = Column(String(16), nullable=False)
     inviter_admin_id = Column(String(36), nullable=False)
     token_hash = Column(String(128), nullable=False, unique=True)
     status = Column(String(16), nullable=False, default=AdminInvitationStatus.PENDING.value, index=True)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    accepted_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(UTCDateTime, nullable=False)
+    accepted_at = Column(UTCDateTime, nullable=True)
     accepted_by_user_id = Column(String(36), nullable=True)
 
 
@@ -45,6 +47,7 @@ class AdminInvitation(BaseEntity):
 
 class CreateAdminInvitationDto(Object):
     email_normalized: str
+    email: str
     sub_role: AdminSubRole
     inviter_admin_id: str
     token_hash: str
@@ -63,10 +66,8 @@ class SearchAdminInvitationDto(PageRequest, BaseQueryDto):
     status: Optional[str] = None
 
 
-class QueryAdminInvitationDto(BaseQueryDto):
-    email_normalized: Optional[str] = None
-    status: Optional[str] = None
-    sub_role: Optional[str] = None
+class QueryAdminInvitationDto(BaseQueryDto, CreateAdminInvitationDto, UpdateAdminInvitationDto):
+    pass
 
 
 # ── Inputs / outputs ──
@@ -81,19 +82,19 @@ class AcceptInviteRequestDto(Object):
     token: str
 
 
-class AdminInvitationDto(Object):
-    id: str
-    email: str
-    sub_role: AdminSubRole
-    status: AdminInvitationStatus
-    inviter_admin_id: str
-    expires_at: datetime
-    accepted_at: Optional[datetime] = None
-    created_at: datetime
+# class AdminInvitationDto(Object):
+#     id: str
+#     email: str
+#     sub_role: AdminSubRole
+#     status: AdminInvitationStatus
+#     inviter_admin_id: str
+#     expires_at: datetime
+#     accepted_at: Optional[datetime] = None
+#     date_created: datetime
 
 
 class InviteAdminResultDto(Object):
-    invitation: AdminInvitationDto
+    invitation: QueryAdminInvitationDto
     # Raw, single-use token returned to the inviter so they can copy/forward
     # the link if email delivery fails. Omitted on subsequent reads.
     raw_token: str

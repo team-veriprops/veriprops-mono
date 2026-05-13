@@ -136,6 +136,10 @@ export class FetchHttpClient implements HttpClient {
       return new Promise((resolve) => this.refreshSubscribers.push(resolve));
     }
     this.isRefreshing = true;
+    const csrfToken = this.getCookie("__Host-refresh_csrf_token");
+      if (csrfToken) {
+        headers["X-CSRF-Token"] = csrfToken;
+      }
     try {
       await fetch(`/api/users/auth/sessions/current`, {
         method: "POST",

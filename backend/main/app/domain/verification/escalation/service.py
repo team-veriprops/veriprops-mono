@@ -71,6 +71,6 @@ class EscalationService:
             reporter_id=item.reporter_id,
             category=EscalationCategory(item.category),
             description=item.description,
-            created_at=item.date_created,
-            updated_at=item.date_updated,
+            date_created=item.date_created,
+            date_updated=item.date_updated,
         )

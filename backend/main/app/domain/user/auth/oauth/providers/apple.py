@@ -7,6 +7,7 @@ from jose import jwt, exceptions as jose_exceptions
 from kink import di, inject
 from starlette.requests import Request
 
+from main.app.domain.user.auth.models import AuthIntent
 from main.app.domain.user.auth.oauth.providers.models import (
     OAuthCallbackRequestDto,
     OAuthFlowMode,
@@ -82,7 +83,7 @@ class AppleAuthProvider(ISocialAuthProvider):
     async def initialize(
         self,
         request: Request,
-        intent: Optional[str] = None,
+        intent: Optional[AuthIntent] = None,
         mode: OAuthFlowMode = OAuthFlowMode.AUTH,
         link_user_id: Optional[str] = None,
     ) -> str:

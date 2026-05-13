@@ -20,7 +20,7 @@ export interface AdminInvitation {
   inviterAdminId: string;
   expiresAt: string;
   acceptedAt: string | null;
-  createdAt: string;
+  dateCreated: string;
 }
 
 export interface InviteAdminResult {
@@ -70,8 +70,8 @@ export interface VerificationNote {
   content: string;
   tags: string[];
   pinned: boolean;
-  createdAt: string;
-  updatedAt: string | null;
+  dateCreated: string;
+  dateUpdated: string | null;
 }
 
 export interface AdminVerificationListItem {
@@ -85,8 +85,8 @@ export interface AdminVerificationListItem {
   addressLine: string | null;
   submittedAt: string | null;
   paidAt: string | null;
-  createdAt: string;
-  updatedAt: string | null;
+  dateCreated: string;
+  dateUpdated: string | null;
 }
 
 export interface AdminVerificationDetail extends AdminVerificationListItem {
@@ -114,8 +114,8 @@ export interface Task {
   submittedAt: string | null;
   trustScore: number | null;
   draftPayload: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string | null;
+  dateCreated: string;
+  dateUpdated: string | null;
 }
 
 export interface AvailableAgent {
@@ -145,8 +145,8 @@ export interface ConflictFlag {
   resolutionNote: string | null;
   resolvedBy: string | null;
   resolvedAt: string | null;
-  createdAt: string;
-  updatedAt: string | null;
+  dateCreated: string;
+  dateUpdated: string | null;
 }
 
 // ── Task review types (S28) ──
@@ -169,7 +169,7 @@ export interface TrustScoreWeightConfig {
   role: string;
   weight: number;
   updatedBy: string | null;
-  updatedAt: string | null;
+  dateUpdated: string | null;
 }
 
 // ── Admin config types ──
@@ -180,7 +180,7 @@ export interface AdminConfig {
   value: string;
   description: string | null;
   updatedBy: string | null;
-  updatedAt: string | null;
+  dateUpdated: string | null;
 }
 
 export class AdminService {

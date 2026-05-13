@@ -115,8 +115,8 @@ async def get_available_tasks(
     authorize: AuthJWT = Depends(),
 ):
     """PENDING tasks visible to this agent (geo + role filtered)."""
-    authorize.jwt_required()
-    agent_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
     tasks = await task_service.list_available_for_agent(agent_id=agent_id, role=role, state=state)
     return SuccessResponse[List[TaskDto]](data=tasks)
 
@@ -126,8 +126,8 @@ async def get_available_tasks(
     response_model=SuccessResponse[List[TaskDto]],
 )
 async def get_active_tasks(authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    agent_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
     tasks = await task_service.list_active_for_agent(agent_id)
     return SuccessResponse[List[TaskDto]](data=tasks)
 
@@ -137,8 +137,8 @@ async def get_active_tasks(authorize: AuthJWT = Depends()):
     response_model=SuccessResponse[List[TaskDto]],
 )
 async def get_completed_tasks(authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    agent_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
     tasks = await task_service.list_completed_for_agent(agent_id)
     return SuccessResponse[List[TaskDto]](data=tasks)
 
@@ -148,7 +148,7 @@ async def get_completed_tasks(authorize: AuthJWT = Depends()):
     response_model=SuccessResponse[TaskDto],
 )
 async def get_task(task_id: str, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
+    await authorize.jwt_required()
     dto = await task_service.get_task(task_id)
     return SuccessResponse[TaskDto](data=dto)
 
@@ -159,8 +159,8 @@ async def get_task(task_id: str, authorize: AuthJWT = Depends()):
 )
 async def accept_task(task_id: str, authorize: AuthJWT = Depends()):
     """First-come-first-served accept.  409 if another agent already took it."""
-    authorize.jwt_required()
-    agent_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
     dto = await task_service.agent_accept(task_id, agent_id)
     return SuccessResponse[TaskDto](data=dto)
 
@@ -170,8 +170,8 @@ async def accept_task(task_id: str, authorize: AuthJWT = Depends()):
     response_model=SuccessResponse[TaskDto],
 )
 async def decline_task(task_id: str, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    agent_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
     dto = await task_service.agent_decline(task_id, agent_id)
     return SuccessResponse[TaskDto](data=dto)
 
@@ -181,8 +181,8 @@ async def decline_task(task_id: str, authorize: AuthJWT = Depends()):
     response_model=SuccessResponse[TaskDto],
 )
 async def save_draft(task_id: str, payload: dict, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    agent_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
     dto = await task_service.save_draft(task_id, agent_id, payload)
     return SuccessResponse[TaskDto](data=dto)
 
@@ -200,8 +200,8 @@ async def upload_evidence(
     captured_at: Optional[str] = Form(None),
     authorize: AuthJWT = Depends(),
 ):
-    authorize.jwt_required()
-    agent_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
     file_bytes = await file.read()
     captured_dt = None
     if captured_at:
@@ -228,8 +228,8 @@ async def upload_evidence(
     response_model=SuccessResponse[TaskDto],
 )
 async def submit_task(task_id: str, payload: dict, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    agent_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
     dto = await task_service.submit(task_id, agent_id, payload)
     return SuccessResponse[TaskDto](data=dto)
 
@@ -241,8 +241,8 @@ async def submit_task(task_id: str, payload: dict, authorize: AuthJWT = Depends(
 async def report_escalation(
     task_id: str, req: ReportEscalationDto, authorize: AuthJWT = Depends(),
 ):
-    authorize.jwt_required()
-    agent_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
     dto = await escalation_service.report(task_id, agent_id, req)
     return SuccessResponse[EscalationDto](data=dto)
 

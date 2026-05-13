@@ -61,7 +61,7 @@ class BankTransferResponseData(Object):
     account_number: str
     bank_code: str
     full_name: Optional[str]
-    created_at: Optional[str]
+    date_created: Optional[str]
     currency: TransactionCurrency
     amount: float
     fee: Optional[float]

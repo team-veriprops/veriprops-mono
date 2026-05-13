@@ -14,8 +14,8 @@ consent_service: ConsentService = di[ConsentService]
 
 @consent_router.get("/missing", response_model=SuccessResponse[MissingConsentsDto])
 async def missing_consents(authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     docs = await consent_service.list_missing_required_consents(str(user_id))
     return SuccessResponse[MissingConsentsDto](data=MissingConsentsDto(
         documents=[ConsentDocumentDto(
@@ -34,8 +34,8 @@ async def accept_consents(
         request: Request,
         authorize: AuthJWT = Depends(),
 ):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     for c in req.consents:
         await consent_service.record_user_consent(
             user_id=user_id,

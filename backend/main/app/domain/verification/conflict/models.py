@@ -52,8 +52,8 @@ class ConflictFlagDto(Object):
     resolution_note: Optional[str] = None
     resolved_by: Optional[str] = None
     resolved_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    date_created: datetime
+    date_updated: Optional[datetime] = None
 
 
 class CreateConflictFlagDto(Object):

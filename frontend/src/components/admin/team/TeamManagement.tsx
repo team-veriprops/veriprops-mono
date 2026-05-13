@@ -130,7 +130,7 @@ export default function TeamManagement() {
                   <Td>
                     <StatusPill status={inv.status} />
                   </Td>
-                  <Td>{new Date(inv.createdAt).toLocaleDateString()}</Td>
+                  <Td>{new Date(inv.dateCreated).toLocaleDateString()}</Td>
                   <Td>{new Date(inv.expiresAt).toLocaleDateString()}</Td>
                   <Td className="text-right">
                     {inv.status === "PENDING" && (

@@ -88,9 +88,8 @@ class PayoutService:
         return [self._payout_to_dto(r) for r in rows]
 
     async def list_all_payouts(self) -> List[PayoutDto]:
-        rows = await self._payout_repo.get_page(SearchPayoutDto())
-        # TODO: return Page instead
-        return [self._payout_to_dto(r) for r in rows.items]
+        rows = await self._payout_repo.get_all(SearchPayoutDto())
+        return [self._payout_to_dto(r) for r in rows]
 
     async def approve(self, payout_id: str, admin_id: str) -> PayoutDto:
         row = await self._get_or_raise(payout_id)

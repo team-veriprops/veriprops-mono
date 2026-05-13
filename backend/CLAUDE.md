@@ -81,12 +81,13 @@ A domain is **not considered complete** until:
 * Reference IDs are normal indexed columns
 * Alembic migrations must never emit ALTER TABLE ... ADD FOREIGN KEY
 * Don't create duplicate indexes, prefer UniqueConstraint to create_index.
+* Don't use DateTime or TIMESTAMP directly, instead use UTCDateTime in the file `backend/main/appodus_utils/db/models.py`
 
 
 
 ### Generic repository
 
-`GenericRepo[Model, Create, Update, Query, Search]` ([appodus_utils/db/repo.py](main/appodus_utils/db/repo.py)) provides CRUD, pagination, and soft-delete-aware queries. Entities inherit from `BaseEntity` which adds `id` (UUID), `created_at`, `updated_at`, `version` (optimistic locking), `deleted` (soft-delete flag) — never `DELETE` rows by hand; flip `deleted`.
+`GenericRepo[Model, Create, Update, Query, Search]` ([appodus_utils/db/repo.py](main/appodus_utils/db/repo.py)) provides CRUD, pagination, and soft-delete-aware queries. Entities inherit from `BaseEntity` which adds `id` (UUID), `date_created`, `date_updated`, `version` (optimistic locking), `deleted` (soft-delete flag) — never `DELETE` rows by hand; flip `deleted`. Pagination is zero indexed (First page = 0)
 
 ### Transaction management
 

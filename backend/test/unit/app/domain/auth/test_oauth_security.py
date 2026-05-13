@@ -106,7 +106,7 @@ async def test_google_token_wrong_audience_rejected():
 
         from main.app.domain.user.auth.oauth.providers.google import _verify_google_id_token
         with pytest.raises(jose_exceptions.JWTClaimsError):
-            await _verify_google_id_token("fake.jwt.token", "wrong-client-id")
+            await _verify_google_id_token("fake.jwt.token", "fake-access-token", "wrong-client-id")
 
 
 async def test_google_token_invalid_signature_rejected():
@@ -117,7 +117,7 @@ async def test_google_token_invalid_signature_rejected():
 
         from main.app.domain.user.auth.oauth.providers.google import _verify_google_id_token
         with pytest.raises(jose_exceptions.JWTError):
-            await _verify_google_id_token("tampered.jwt.token", "google-client-id")
+            await _verify_google_id_token("tampered.jwt.token", "fake-access-token", "google-client-id")
 
 
 # ── Google JWKS — caching ─────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ async def test_google_jwks_refetched_on_kid_miss():
         mock_jwt.decode.side_effect = fake_decode
 
         from main.app.domain.user.auth.oauth.providers.google import _verify_google_id_token
-        result = await _verify_google_id_token("some.jwt.token", "google-client-id")
+        result = await _verify_google_id_token("some.jwt.token", "fake-access-token", "google-client-id")
 
     mock_redis.delete.assert_called_once_with("oauth:jwks:google")
     mock_client.get.assert_called_once()
@@ -234,7 +234,7 @@ async def test_apple_jwks_refetched_on_kid_miss():
         mock_jwt.decode.side_effect = fake_decode
 
         from main.app.domain.user.auth.oauth.providers.apple import _decode_apple_id_token
-        result = await _decode_apple_id_token("apple.id.token", "com.veriprops.app")
+        result = await _decode_apple_id_token("apple.id.token", "fake-access-token", "com.veriprops.app")
 
     mock_redis.delete.assert_called_once_with("oauth:jwks:apple")
     mock_client.get.assert_called_once()

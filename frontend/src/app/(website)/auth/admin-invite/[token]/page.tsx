@@ -8,6 +8,7 @@ import { ROUTES } from "@lib/routes";
 import { useAcceptInvitationMutation } from "@components/admin/libs/useAdminQueries";
 import type { AcceptInviteResult } from "@components/admin/libs/admin-service";
 import { getErrorMessage } from "@lib/utils";
+import { AuthIntent } from "@/components/website/auth/models";
 
 export default function AdminInviteAcceptPage({
   params,
@@ -98,7 +99,7 @@ export default function AdminInviteAcceptPage({
         cta={{
           label: "Go to login",
           onClick: () =>
-            router.push(`${ROUTES.AUTH.LOGIN}?redirect=/auth/admin-invite/${token}`),
+            router.push(`${ROUTES.AUTH.LOGIN}?intent=${AuthIntent.INVITED_ADMIN}&redirect=/auth/admin-invite/${token}`),
         }}
       />
     );
@@ -116,7 +117,7 @@ export default function AdminInviteAcceptPage({
         label: "Continue to signup",
         onClick: () =>
           router.push(
-            `${ROUTES.AUTH.SIGNUP}?email=${encodeURIComponent(result.email)}&adminInvite=${token}`,
+            `${ROUTES.AUTH.SIGNUP}?email=${encodeURIComponent(result.email)}&intent=${AuthIntent.INVITED_ADMIN}&redirect=/auth/admin-invite/${token}`,
           ),
       }}
     />

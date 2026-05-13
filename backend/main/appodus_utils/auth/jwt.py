@@ -19,9 +19,9 @@ class JWTClaims:
 
 
 async def _extract_claims(authorize: AuthJWT = Depends()) -> JWTClaims:
-    authorize.jwt_required()
+    await authorize.jwt_required()
     raw = authorize.get_raw_jwt() or {}
-    sub = authorize.get_jwt_subject()
+    sub = str(authorize.get_jwt_subject())
     if not sub:
         raise ForbiddenException(message="Invalid token: missing subject")
     return JWTClaims(

@@ -110,8 +110,8 @@ class KycRecordDto(Object):
     reviewed_at: Optional[datetime] = None
     admin_decision: Optional[AdminKycDecision] = None
     admin_notes: Optional[str] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    date_created: datetime
+    date_updated: Optional[datetime] = None
 
 
 class AdminKycReviewDto(Object):

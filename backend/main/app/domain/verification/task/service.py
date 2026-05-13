@@ -461,7 +461,7 @@ class TaskService:
             score=row.score,
             note=row.note,
             reviewed_by_admin_id=row.reviewed_by_admin_id,
-            created_at=row.date_created,
+            date_created=row.date_created,
         )
 
     # ── Admin: available agents list ──────────────────────────────────
@@ -718,8 +718,8 @@ class TaskService:
             submitted_at=task.submitted_at,
             trust_score=task.trust_score,
             draft_payload=draft,
-            created_at=task.date_created,
-            updated_at=task.date_updated,
+            date_created=task.date_created,
+            date_updated=task.date_updated,
         )
 
     # ── Internal helpers ──────────────────────────────────────────────

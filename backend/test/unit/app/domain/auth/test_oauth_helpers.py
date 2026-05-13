@@ -1,6 +1,6 @@
 """OAuth helper tests — no network."""
 from main.app.domain.user.auth.oauth import make_oauth_state, normalise_provider
-from main.app.domain.user.models import SocialAuthProvider
+from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
 
 
 class TestMakeOauthState:

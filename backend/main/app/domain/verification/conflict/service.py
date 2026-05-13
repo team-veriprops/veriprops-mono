@@ -159,6 +159,6 @@ class ConflictService:
             resolution_note=flag.resolution_note,
             resolved_by=flag.resolved_by,
             resolved_at=flag.resolved_at,
-            created_at=flag.date_created,
-            updated_at=flag.date_updated,
+            date_created=flag.date_created,
+            date_updated=flag.date_updated,
         )

@@ -35,7 +35,7 @@ class AdminConfigDto(Object):
     value: str
     description: Optional[str] = None
     updated_by: Optional[str] = None
-    updated_at: Optional[datetime] = None
+    date_updated: Optional[datetime] = None
 
 
 class CreateAdminConfigDto(Object):

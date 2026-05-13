@@ -40,7 +40,6 @@ def upgrade() -> None:
         sa.Column("version_string", sa.String(16), nullable=False),
         sa.Column("pdf_s3_key", sa.String(512), nullable=True),
         sa.Column("is_superseded", sa.Boolean, nullable=False, default=False),
-        sa.Column("created_at", UTCDateTime, nullable=False),
         *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_report_versions_id", "report_versions", ["id"], unique=True)

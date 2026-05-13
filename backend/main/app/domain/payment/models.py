@@ -142,8 +142,8 @@ class PaymentDto(Object):
     provider_ref: Optional[str] = None
     failure_reason: Optional[str] = None
     wire_proof_url: Optional[str] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    date_created: datetime
+    date_updated: Optional[datetime] = None
 
 
 class InitiatePaymentResultDto(Object):

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import TypeVar, Optional, Generic, List, Union, Any
 
 from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import Column, Boolean, UUID, TIMESTAMP, Integer, String, DateTime, TypeDecorator
+from sqlalchemy import Column, Boolean, UUID, Integer, String, DateTime, TypeDecorator
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr, DeclarativeBase
 

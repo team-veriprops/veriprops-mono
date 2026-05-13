@@ -119,7 +119,7 @@ class AppodusBaseSettings(BaseSettings):
     APPLE_PRIVATE_KEY: Optional[str] = "mock_value"
 
     # AUTHJWT
-    AUTHJWT_SECRET_KEY: str = "auth_jwt_s3cr3t-635678$%#"
+    AUTHJWT_SECRET_KEY: str = "d344auth_jwt_s3cr3t-635678$%#agst634"
     # Configure application to store and get JWT from cookies
     AUTHJWT_TOKEN_LOCATION: List[str] = Field(default_factory=lambda: ["cookies"])
     # Only allow JWT cookies to be sent over https

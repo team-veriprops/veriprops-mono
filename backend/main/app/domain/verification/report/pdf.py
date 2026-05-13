@@ -63,7 +63,7 @@ class PDFGeneratorService:
                 vid=vid,
                 version_string="v1.0",
                 pdf_s3_key=None,
-                created_at=now,
+                date_created=now,
                 created_by=customer_id,
             )
         )
@@ -84,7 +84,7 @@ class PDFGeneratorService:
                 vid=vid,
                 version_string=new_version_string,
                 pdf_s3_key=None,
-                created_at=now,
+                date_created=now,
                 created_by=created_by,
             )
         )

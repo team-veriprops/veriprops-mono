@@ -50,7 +50,7 @@ class EvidenceItemDto(Object):
     gps_lng: Optional[float] = None
     captured_at: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
-    created_at: datetime
+    date_created: datetime
 
 
 class CreateEvidenceItemDto(Object):

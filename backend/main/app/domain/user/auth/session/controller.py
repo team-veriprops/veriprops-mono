@@ -30,7 +30,7 @@ def _to_device_dto(s, current_token_hash: Optional[str]) -> DeviceSessionDto:
         approx_location=s.approx_location,
         current=bool(current_token_hash and s.refresh_token_hash == current_token_hash),
         last_active_at=s.last_active_at,
-        created_at=s.date_created,
+        date_created=s.date_created,
     )
 
 @session_router.post("", response_model=SuccessResponse[AuthSessionDto])

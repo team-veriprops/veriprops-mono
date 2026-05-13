@@ -26,7 +26,7 @@ async def check_pool_timeouts() -> None:
         config_svc: AdminConfigService = di[AdminConfigService]
         task_repo: TaskRepo = di[TaskRepo]
 
-        hours = config_svc.get_int("pool_timeout_hours", fallback=24)
+        hours = await config_svc.get_int("pool_timeout_hours", fallback=24)
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         from main.appodus_utils.decorators.transactional import SessionPolicy
@@ -58,7 +58,7 @@ async def check_no_show_timeouts() -> None:
         config_svc: AdminConfigService = di[AdminConfigService]
         task_repo: TaskRepo = di[TaskRepo]
 
-        hours = config_svc.get_int("no_show_timeout_hours", fallback=4)
+        hours = await config_svc.get_int("no_show_timeout_hours", fallback=4)
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         @transactional(session_policy=SessionPolicy.ALWAYS_NEW)

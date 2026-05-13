@@ -21,10 +21,9 @@ from libre_fastapi_jwt import AuthJWT
 from main.app.domain.user.admin_invitation.models import (
     AcceptInviteRequestDto,
     AcceptInviteResultDto,
-    AdminInvitationDto,
     AdminInvitationStatus,
     InviteAdminRequestDto,
-    InviteAdminResultDto,
+    InviteAdminResultDto, QueryAdminInvitationDto,
 )
 from main.app.domain.user.admin_invitation.service import AdminInvitationService
 from main.app.domain.user.auth.utils.permissions import (
@@ -58,7 +57,7 @@ async def invite(
 
 @admin_invitation_router.get(
     "",
-    response_model=Page[AdminInvitationDto],
+    response_model=Page[QueryAdminInvitationDto],
 )
 async def list_invites(
     status: Optional[AdminInvitationStatus] = None,
@@ -90,9 +89,9 @@ async def accept(
     # Optional auth: accept the request whether or not the caller is signed in;
     # the service decides which branch to take.
     try:
-        authorize.jwt_optional()
+        await authorize.jwt_optional()
     except Exception:
         pass
-    current_user_id = authorize.get_jwt_subject()
+    current_user_id = str(authorize.get_jwt_subject())
     result = await invitation_service.accept(req.token, current_user_id=current_user_id)
     return SuccessResponse[AcceptInviteResultDto](data=result)

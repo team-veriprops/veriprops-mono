@@ -234,5 +234,5 @@ class ReferralService:
             code=row.code,
             times_redeemed=row.times_redeemed or 0,
             referral_link=f"{_BASE_URL}/auth/signup?ref={row.code}",
-            created_at=row.date_created,
+            date_created=row.date_created,
         )

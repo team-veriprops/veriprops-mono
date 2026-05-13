@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { resolvePostAuthRedirect } from "./redirect";
 import { TransactionCurrency } from "@/types/models";
-import { AuthUser, TrustStatus, UserPersona, UserType } from "@components/website/auth/models";
+import { AuthUser, AuthIntent, TrustStatus, UserPersona, UserType } from "@components/website/auth/models";
 const baseUser: AuthUser = {
   id: "u_1",
   firstName: "Ada",
@@ -20,7 +20,7 @@ const baseUser: AuthUser = {
   trustStatus: TrustStatus.UNTRUSTED,
   hasPassword: true,
   linkedProviders: [],
-  createdAt: new Date().toISOString(),
+  dateCreated: new Date().toISOString(),
 };
 
 describe("resolvePostAuthRedirect", () => {
@@ -56,12 +56,12 @@ describe("resolvePostAuthRedirect", () => {
   });
 
   it("intent=verify routes a customer to verifications/new", () => {
-    const dest = resolvePostAuthRedirect(baseUser, { intent: "verify" });
+    const dest = resolvePostAuthRedirect(baseUser, { intent: AuthIntent.VERIFY });
     expect(dest).toBe("/portal/verifications/new");
   });
 
   it("intent=agent for non-agent customer routes to onboarding", () => {
-    const dest = resolvePostAuthRedirect(baseUser, { intent: "agent" });
+    const dest = resolvePostAuthRedirect(baseUser, { intent: AuthIntent.AGENT });
     expect(dest).toBe("/agents/onboarding");
   });
 

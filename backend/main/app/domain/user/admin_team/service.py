@@ -95,7 +95,7 @@ class AdminTeamService:
             first_name=user.first_name,
             last_name=user.last_name,
             sub_role=AdminSubRole(user.admin_sub_role),
-            created_at=user.date_created,
+            date_created=user.date_created,
         )
 
     async def _record_event(

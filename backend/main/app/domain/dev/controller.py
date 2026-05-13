@@ -162,8 +162,8 @@ async def _upsert_seed_users() -> List[str]:
         user = User(
             id=uid,
             version=1,
-            created_at=now,
-            updated_at=now,
+            date_created=now,
+            date_updated=now,
             deleted=False,
             failed_login_count=0,
             **{k: v for k, v in spec.items() if k != "id"},

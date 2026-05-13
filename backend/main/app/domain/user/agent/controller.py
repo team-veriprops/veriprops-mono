@@ -57,40 +57,40 @@ agent_router = APIRouter(prefix="/agents", tags=["Agents"])
 
 @agent_router.get("/me/application", response_model=SuccessResponse[AgentApplicationDto])
 async def get_my_application(authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await agent_service.get_or_create_for_user(user_id)
     return SuccessResponse[AgentApplicationDto](data=dto)
 
 
 @agent_router.post("/me/application/types", response_model=SuccessResponse[AgentApplicationDto])
 async def update_types(req: TypesStepDto, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await agent_service.update_types(user_id, req)
     return SuccessResponse[AgentApplicationDto](data=dto)
 
 
 @agent_router.post("/me/application/kyc/bvn", response_model=SuccessResponse[BvnVerificationResultDto])
 async def verify_bvn(req: BvnVerifyDto, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     result = await agent_service.verify_bvn(user_id, req)
     return SuccessResponse[BvnVerificationResultDto](data=result)
 
 
 @agent_router.post("/me/application/kyc/documents", response_model=SuccessResponse[AgentApplicationDto])
 async def record_kyc_documents(req: KycDocumentsDto, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await agent_service.record_kyc_documents(user_id, req)
     return SuccessResponse[AgentApplicationDto](data=dto)
 
 
 @agent_router.post("/me/application/credentials", response_model=SuccessResponse[AgentApplicationDto])
 async def update_credentials(req: CredentialsStepDto, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await agent_service.update_credentials(user_id, req)
     return SuccessResponse[AgentApplicationDto](data=dto)
 
@@ -99,8 +99,8 @@ async def update_credentials(req: CredentialsStepDto, authorize: AuthJWT = Depen
 async def submit_application(
     req: SubmitApplicationDto, request: Request, authorize: AuthJWT = Depends(),
 ):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await agent_service.submit(
         user_id,
         req,
@@ -114,32 +114,32 @@ async def submit_application(
 
 @agent_router.get("/me/profile", response_model=SuccessResponse[AgentProfileDto])
 async def get_my_profile(authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await agent_service.get_profile(user_id)
     return SuccessResponse[AgentProfileDto](data=dto)
 
 
 @agent_router.get("/me/metrics", response_model=SuccessResponse[AgentMetricsDto])
 async def get_my_metrics(authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await agent_service.get_metrics(user_id)
     return SuccessResponse[AgentMetricsDto](data=dto)
 
 
 @agent_router.put("/me/coverage", response_model=SuccessResponse[AgentApplicationDto])
 async def update_coverage(req: UpdateCoverageDto, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await agent_service.update_coverage(user_id, req)
     return SuccessResponse[AgentApplicationDto](data=dto)
 
 
 @agent_router.put("/me/availability", response_model=SuccessResponse[AgentApplicationDto])
 async def update_availability(req: UpdateAvailabilityDto, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await agent_service.set_availability(user_id, req)
     return SuccessResponse[AgentApplicationDto](data=dto)
 
@@ -165,7 +165,7 @@ async def kyc_webhook(request: Request):
 )
 async def admin_list_applications(
     status: Optional[AgentApplicationStatus] = Query(None),
-    page: int = Query(1, ge=1),
+    page: int = Query(0, ge=0),
     page_size: int = Query(25, ge=1, le=100),
     _: str = Depends(require_permission(Permission.APPROVE_AGENT)),
 ):
@@ -202,7 +202,7 @@ async def admin_reject(
     response_model=Page[KycRecordDto],
 )
 async def admin_list_kyc_under_review(
-    page: int = Query(1, ge=1),
+    page: int = Query(0, ge=0),
     page_size: int = Query(25, ge=1, le=100),
     _: str = Depends(require_permission(Permission.APPROVE_AGENT)),
 ):

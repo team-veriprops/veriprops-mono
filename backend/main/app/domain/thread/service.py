@@ -233,7 +233,7 @@ class ThreadService:
             thread_type=ThreadType(row.thread_type),
             verification_id=row.verification_id,
             task_id=row.task_id,
-            created_at=row.date_created,
+            date_created=row.date_created,
         )
 
     @staticmethod
@@ -247,5 +247,5 @@ class ThreadService:
             body=row.body,
             attachment_key=row.attachment_key,
             is_held=row.is_held,
-            created_at=row.date_created,
+            date_created=row.date_created,
         )

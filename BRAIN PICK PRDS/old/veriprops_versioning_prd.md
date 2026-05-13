@@ -36,7 +36,7 @@ Every report is a snapshot in time.
 -   data_snapshot (JSON)
 -   generated_summary
 -   change_summary
--   created_at
+-   date_created
 -   created_by (system \| admin \| recheck)
 
 ------------------------------------------------------------------------

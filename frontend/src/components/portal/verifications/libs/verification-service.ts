@@ -63,8 +63,8 @@ export interface Verification {
   submittedAt: string | null;
   paidAt: string | null;
   completedAt: string | null;
-  createdAt: string;
-  updatedAt: string | null;
+  dateCreated: string;
+  dateUpdated: string | null;
   draftStep: number;
   draftPayload: Record<string, unknown> | null;
 }

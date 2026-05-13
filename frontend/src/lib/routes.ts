@@ -1,3 +1,5 @@
+import { AuthIntent } from "@/components/website/auth/models";
+
 export const ROUTES = {
   HOME: '/',
 
@@ -81,7 +83,7 @@ export const ROUTES = {
   },
 } as const;
 
-export type AuthIntent = 'verify' | 'agent' | 'default';
+// export type AuthIntent = 'verify' | 'agent' | 'default';
 
 export const AUTH_INTENTS = ['verify', 'agent', 'default'] as const satisfies readonly AuthIntent[];
 
@@ -93,7 +95,7 @@ export const buildAuthUrl = (
   params: { intent?: AuthIntent | null; redirect?: string | null; tier?: string | null } = {},
 ): string => {
   const search = new URLSearchParams();
-  if (params.intent && params.intent !== 'default') search.set('intent', params.intent);
+  if (params.intent && params.intent !== AuthIntent.DEFAULT) search.set('intent', params.intent);
   if (params.redirect) search.set('redirect', params.redirect);
   if (params.tier) search.set('tier', params.tier);
   const qs = search.toString();

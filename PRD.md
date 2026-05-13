@@ -221,7 +221,7 @@ Phases are sequenced. Each phase assumes the previous is live. Phases 0–10 con
 ### 0.1 Deliverables
 
 - **Monorepo layout** — `backend/` (FastAPI + Alembic + SQLAlchemy + Kink DI) and `web/` (Next.js 16 App Router + Tailwind + Zustand + React Query).
-- **Base entity** — `BaseEntity` with `id` (UUID), `created_at`, `updated_at`, `version` (optimistic locking), `deleted` (soft delete).
+- **Base entity** — `BaseEntity` with `id` (UUID), `date_created`, `date_updated`, `version` (optimistic locking), `deleted` (soft delete).
 - **Generic repository pattern** — `GenericRepo[Model, Create, Update, Query, Search]` with pagination, soft-delete-aware queries.
 - **Transaction management** — `@transactional` decorator with three session policies (`USE_IF_PRESENT`, `ALWAYS_NEW`, `FALLBACK_NEW`).
 - **Exception hierarchy** — `AppodusBaseException` with structured context, HTTP mapping.

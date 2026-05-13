@@ -101,7 +101,7 @@ Two deployable apps over HTTP:
 
 ### Conventions
 
-- All tables extend `BaseEntity` columns: `id` (UUID, PK), `created_at`, `updated_at`, `version` (optimistic lock), `deleted` (soft-delete flag).
+- All tables extend `BaseEntity` columns: `id` (UUID, PK), `date_created`, `date_updated`, `version` (optimistic lock), `deleted` (soft-delete flag).
 - **No DB foreign keys, no cascade, no ON DELETE/UPDATE.** Reference IDs are indexed `CHAR(36)` columns; integrity is application-enforced.
 - **No duplicate indexes;** prefer `UniqueConstraint` over `create_index(unique=True)`.
 - Per [backend/CLAUDE.md](../backend/CLAUDE.md): MySQL via async driver.
@@ -169,17 +169,17 @@ Two deployable apps over HTTP:
 
 ### Indexes (illustrative, not exhaustive)
 
-- `verifications(customer_id, global_state, created_at desc)` — customer dashboard list
-- `verifications(global_state, created_at desc)` — admin queue
+- `verifications(customer_id, global_state, date_created desc)` — customer dashboard list
+- `verifications(global_state, date_created desc)` — admin queue
 - `tasks(agent_id, state)` — agent dashboard
 - `tasks(verification_id, role)` — verification detail
-- `evidence_items(task_id, created_at desc)` — evidence feed
-- `messages(thread_id, created_at)` — chronological reads
+- `evidence_items(task_id, date_created desc)` — evidence feed
+- `messages(thread_id, date_created)` — chronological reads
 - `audit_logs(entity_type, entity_id, ts)` — per-entity history
 - `share_links(token_hash unique)` — public lookup
 - `oauth_identities(provider, subject)` unique — OAuth re-auth
 - `user_consents(user_id, doc_type, version)` unique — one record per acceptance
-- `notifications(recipient_id, read_at, created_at desc)` — bell counter
+- `notifications(recipient_id, read_at, date_created desc)` — bell counter
 
 ---
 

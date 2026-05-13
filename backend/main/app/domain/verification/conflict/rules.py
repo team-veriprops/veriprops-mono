@@ -45,7 +45,7 @@ class BaseConflictRule(ABC):
             severity=self.severity,
             description=description,
             status=ConflictStatus.OPEN,
-            created_at=datetime.now(timezone.utc),
+            date_created=datetime.now(timezone.utc),
         )
 
 

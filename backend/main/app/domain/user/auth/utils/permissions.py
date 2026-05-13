@@ -74,22 +74,22 @@ def require_permission(permission: Permission) -> Callable:
     """FastAPI dependency factory."""
 
     async def _dep(authorize: AuthJWT = Depends()) -> str:
-        authorize.jwt_required()
+        await authorize.jwt_required()
         claims = authorize.get_raw_jwt() or {}
         user_type = claims.get("user_type")
         sub_role = claims.get("admin_sub_role")
         if not has_permission(user_type, sub_role, permission):
             raise ForbiddenException(message=f"Missing permission: {permission.value}")
-        return authorize.get_jwt_subject()
+        return str(authorize.get_jwt_subject())
 
     return _dep
 
 
 async def require_admin(authorize: AuthJWT = Depends()) -> str:
     """Lightweight 'any admin' guard — short-circuits before more specific checks."""
-    authorize.jwt_required()
+    await authorize.jwt_required()
     claims = authorize.get_raw_jwt() or {}
     user_type = (claims.get("user_type") or "").upper()
     if user_type != UserType.ADMIN.value:
         raise ForbiddenException(message="Admin access required")
-    return authorize.get_jwt_subject()
+    return str(authorize.get_jwt_subject())

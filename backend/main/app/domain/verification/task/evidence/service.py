@@ -107,5 +107,5 @@ class EvidenceService:
             gps_lng=item.gps_lng,
             captured_at=item.captured_at,
             metadata=dict(item.metadata_ or {}),
-            created_at=item.date_created,
+            date_created=item.date_created,
         )

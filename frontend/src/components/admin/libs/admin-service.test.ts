@@ -11,7 +11,7 @@ const mockInvitation: AdminInvitation = {
   inviterAdminId: "admin-001",
   expiresAt: "2099-12-31T00:00:00Z",
   acceptedAt: null,
-  createdAt: "2026-05-07T00:00:00Z",
+  dateCreated: "2026-05-07T00:00:00Z",
 };
 
 function makeHttp(): { mock: Record<string, ReturnType<typeof vi.fn>>; client: HttpClient } {

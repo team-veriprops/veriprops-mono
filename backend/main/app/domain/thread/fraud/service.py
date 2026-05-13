@@ -108,5 +108,5 @@ class FraudDetectionService:
             review_decision=FraudReviewDecision(row.review_decision) if row.review_decision else None,
             reviewer_id=row.reviewer_id,
             reviewed_at=row.reviewed_at,
-            created_at=row.date_created,
+            date_created=row.date_created,
         )

@@ -391,8 +391,8 @@ class PaymentService:
             provider_ref=payment.provider_ref,
             failure_reason=payment.failure_reason,
             wire_proof_url=payment.wire_proof_url,
-            created_at=payment.date_created,
-            updated_at=payment.date_updated,
+            date_created=payment.date_created,
+            date_updated=payment.date_updated,
         )
 
     @staticmethod
@@ -408,6 +408,6 @@ class PaymentService:
             provider_ref=getattr(query, "provider_ref", None),
             failure_reason=getattr(query, "failure_reason", None),
             wire_proof_url=getattr(query, "wire_proof_url", None),
-            created_at=query.date_created,
-            updated_at=getattr(query, "date_updated", None),
+            date_created=query.date_created,
+            date_updated=getattr(query, "date_updated", None),
         )

@@ -63,4 +63,4 @@ class SignupDraftDto(Object):
     email: str
     step: int
     payload: Dict[str, Any]
-    updated_at: datetime
+    date_updated: datetime

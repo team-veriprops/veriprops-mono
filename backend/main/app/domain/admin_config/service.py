@@ -102,7 +102,7 @@ class AdminConfigService:
                     value=default_val,
                     description=desc,
                     updated_by=None,
-                    updated_at=None,
+                    date_updated=None,
                 ))
         return out
 
@@ -133,5 +133,5 @@ class AdminConfigService:
             value=row.value,
             description=row.description,
             updated_by=row.updated_by,
-            updated_at=row.date_updated,
+            date_updated=row.date_updated,
         )

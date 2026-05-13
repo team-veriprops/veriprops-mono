@@ -16,6 +16,8 @@ round-trip in `mode=LINK` with their JWT cookie attached).
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from main.app.domain.user.auth.models import AuthIntent
+
 if TYPE_CHECKING:
     from loguru import Logger
 
@@ -60,7 +62,7 @@ class OAuthStartResponseDto:
 async def init_social_auth(
     request: Request,
     provider: SocialAuthProvider,
-    intent: Optional[str] = None,
+    intent: Optional[AuthIntent] = None,
     mode: OAuthFlowMode = OAuthFlowMode.AUTH,
     authorize: AuthJWT = Depends(),
 ):
@@ -69,8 +71,8 @@ async def init_social_auth(
     stored state so the callback can link to the right account."""
     link_user_id: Optional[str] = None
     if mode == OAuthFlowMode.LINK:
-        authorize.jwt_required()
-        link_user_id = authorize.get_jwt_subject()
+        await authorize.jwt_required()
+        link_user_id = str(authorize.get_jwt_subject())
 
     auth_provider: ISocialAuthProvider = social_auth_service_factory.get_auth_provider(provider)
     authorization_url = await auth_provider.initialize(
@@ -164,8 +166,8 @@ async def auth_callback(
             provider=provider,
             subject=user_info.id,
             email=user_info.email,
-            first_name=user_info.firstname,
-            last_name=user_info.lastname,
+            first_name=user_info.firstname or "",
+            last_name=user_info.lastname or "",
             avatar_url=user_info.picture,
             raw_profile=user_info.model_dump(),
             intent=stored_state.intent,
@@ -190,14 +192,14 @@ async def auth_callback(
 
 @oauth_router.get("/links", response_model=SuccessResponse[List[str]])
 async def list_oauth_links(authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     return SuccessResponse[List[str]](data=await oauth_identity_service.list_linked_providers(user_id))
 
 
 @oauth_router.delete("/links/{provider}", response_model=SuccessResponse[bool])
 async def unlink_oauth(provider: str, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     await auth_service.unlink_oauth(user_id, SocialAuthProvider(provider.lower()))
     return SuccessResponse[bool](data=True)

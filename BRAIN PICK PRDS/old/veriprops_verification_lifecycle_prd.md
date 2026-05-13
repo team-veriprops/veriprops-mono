@@ -46,8 +46,8 @@ Define a **strict, deterministic lifecycle** for property verification that:
 - tier  
 - property_id  
 - customer_id  
-- created_at  
-- updated_at  
+- date_created  
+- date_updated  
 
 ---
 
