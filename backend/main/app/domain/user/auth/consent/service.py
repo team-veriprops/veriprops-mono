@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loguru import Logger
 
+import csv
+import io
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -14,6 +16,8 @@ from main.app.domain.user.auth.consent.models import (
     ConsentDocumentType,
     CreateConsentDocumentDto,
     CreateUserConsentDto,
+    UserConsentHistoryItemDto,
+    UserConsentHistoryPageDto,
 )
 from main.app.domain.user.auth.consent.repo import ConsentDocumentRepo, UserConsentRepo
 from main.appodus_utils import Utils
@@ -103,3 +107,40 @@ class ConsentService:
             if not latest_user or latest_user.consent_version != current.consent_version:
                 missing.append(current)
         return missing
+
+    # ── S57 — R19.4 consent history ──────────────────────────────────────────
+
+    async def list_for_user(
+        self, user_id: str, page: int = 0, page_size: int = 20
+    ) -> UserConsentHistoryPageDto:
+        rows, total = await self._user_consent_repo.list_for_user(
+            user_id=user_id, offset=page * page_size, limit=page_size
+        )
+        items = [
+            UserConsentHistoryItemDto(
+                document_type=r.document_type,
+                consent_version=r.consent_version,
+                accepted_at=r.accepted_at,
+                ip_address=r.ip_address,
+                device_fingerprint=r.device_fingerprint,
+            )
+            for r in rows
+        ]
+        return UserConsentHistoryPageDto(items=items, total=total, page=page, page_size=page_size)
+
+    async def export_for_user_csv(self, user_id: str) -> bytes:
+        rows, _ = await self._user_consent_repo.list_for_user(
+            user_id=user_id, offset=0, limit=10_000
+        )
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["document_type", "consent_version", "accepted_at", "ip_address", "device_fingerprint"])
+        for r in rows:
+            writer.writerow([
+                r.document_type,
+                r.consent_version,
+                r.accepted_at.isoformat() if r.accepted_at else "",
+                r.ip_address or "",
+                r.device_fingerprint or "",
+            ])
+        return buf.getvalue().encode("utf-8")

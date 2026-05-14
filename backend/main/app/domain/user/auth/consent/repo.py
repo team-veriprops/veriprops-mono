@@ -95,3 +95,17 @@ class UserConsentRepo(
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def list_for_user(self, user_id: str, offset: int, limit: int):
+        from sqlalchemy import func
+        base = (
+            select(UserConsent)
+            .where(UserConsent.deleted.is_(False), UserConsent.user_id == user_id)
+        )
+        total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
+        rows = (
+            await self._session.execute(
+                base.order_by(desc(UserConsent.accepted_at)).offset(offset).limit(limit)
+            )
+        ).scalars().all()
+        return list(rows), total or 0

@@ -1,12 +1,14 @@
-"""Portal customer endpoints — tracking, evidence, report (S32, S34, S35, S36, S42)."""
+"""Portal customer endpoints — tracking, evidence, report, activity log (S32, S34–S36, S42, S56)."""
 from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
+from main.app.domain.audit.models import AuditActivityPageDto
+from main.app.domain.audit.service import AuditLogService
 from main.app.domain.verification.models import VerificationStatus
 from main.app.domain.verification.portal.models import (
     AcknowledgeDto as _AcknowledgePortalDto,
@@ -21,6 +23,7 @@ from main.app.domain.verification.report.models import ReportDto
 from main.app.domain.verification.report.pdf import PDFGeneratorService
 from main.appodus_utils import Object
 from main.appodus_utils.auth.jwt import AuthJWTBearer
+from main.appodus_utils.exception.exceptions import ForbiddenException, ResourceNotFoundException
 from main.appodus_utils.response.success_response import SuccessResponse
 from main.appodus_utils.router import AppRouter
 from kink import di
@@ -85,6 +88,32 @@ async def download_report_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="veriprops-report-{vid}.pdf"'},
     )
+
+
+# ── Activity log (S56 — R19.2) ───────────────────────────────────────────────
+
+
+@portal_router.get("/{vid}/activity", response_model=SuccessResponse[AuditActivityPageDto])
+async def get_verification_activity(
+    vid: str,
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=20, ge=1, le=50),
+    ver_repo: VerificationRepo = Depends(lambda: di[VerificationRepo]),
+    audit_svc: AuditLogService = Depends(lambda: di[AuditLogService]),
+    claims=Depends(_auth),
+):
+    verification = await ver_repo.get_by_vid(vid)
+    if not verification or verification.deleted:
+        raise ResourceNotFoundException(resource=f"Verification {vid}")
+    if str(verification.customer_id) != claims.sub:
+        raise ForbiddenException(message="Not your verification")
+    result = await audit_svc.get_activity_log(
+        resource_type="VERIFICATION",
+        resource_id=str(verification.id),
+        page=page,
+        page_size=page_size,
+    )
+    return SuccessResponse.ok(result)
 
 
 # ── Public lookup (S42) — no auth ─────────────────────────────────────────────

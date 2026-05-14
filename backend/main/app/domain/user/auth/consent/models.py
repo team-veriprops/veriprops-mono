@@ -1,4 +1,4 @@
-"""Consent (consent_versioned) — PRD §3.2."""
+"""Consent (consent_versioned) — PRD §3.2 / S57 (R19.4)."""
 from __future__ import annotations
 
 import enum
@@ -123,3 +123,21 @@ class MissingConsentsDto(Object):
 
 class AcceptConsentsDto(Object):
     consents: List[UserConsentInputDto]
+
+
+# ─── S57 — R19.4 consent history DTOs ───────────────────────────────
+
+
+class UserConsentHistoryItemDto(Object):
+    document_type: str
+    consent_version: str
+    accepted_at: datetime
+    ip_address: Optional[str] = None
+    device_fingerprint: Optional[str] = None
+
+
+class UserConsentHistoryPageDto(Object):
+    items: List[UserConsentHistoryItemDto]
+    total: int
+    page: int
+    page_size: int

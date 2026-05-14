@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from kink import inject
 
@@ -11,6 +11,7 @@ from main.app.domain.thread.fraud import rules as _rules
 from main.app.domain.thread.fraud.models import (
     CreateFraudFlagDto,
     FraudFlagDto,
+    FraudFlagHistoryPageDto,
     FraudReviewDecision,
     ReviewFraudFlagDto,
     UpdateFraudFlagDto,
@@ -63,6 +64,28 @@ class FraudDetectionService:
     async def list_pending(self) -> List[FraudFlagDto]:
         flags = await self._flags.list_pending()
         return [self._to_dto(f) for f in flags]
+
+    async def list_history(
+        self,
+        reviewed: Optional[bool] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        page: int = 0,
+        page_size: int = 20,
+    ) -> FraudFlagHistoryPageDto:
+        rows, total = await self._flags.list_all(
+            reviewed=reviewed,
+            date_from=date_from,
+            date_to=date_to,
+            offset=page * page_size,
+            limit=page_size,
+        )
+        return FraudFlagHistoryPageDto(
+            items=[self._to_dto(r) for r in rows],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
 
     async def review(self, flag_id: str, dto: ReviewFraudFlagDto, reviewer_id: str) -> FraudFlagDto:
         flag = await self._flags.get_model(flag_id)

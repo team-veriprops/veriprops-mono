@@ -16,5 +16,7 @@ export const adminNavItems: NavItem[] = [
   { title: "Content", href: ROUTES.ADMIN.CONTENT, icon: "fileText", has_separator_after: false },
   { title: "Broadcasts", href: ROUTES.ADMIN.BROADCASTS, icon: "megaphone", has_separator_after: false },
   { title: "Fraud Review", href: ROUTES.ADMIN.FRAUD_FLAGS, icon: "alertTriangle", has_separator_after: false },
+  { title: "Audit Log", href: ROUTES.ADMIN.AUDIT_ACTIONS, icon: "fileText", has_separator_after: false },
+  { title: "Erasure Requests", href: ROUTES.ADMIN.ERASURE_REQUESTS, icon: "userRoundKey", has_separator_after: false },
   { title: "System Config", href: ROUTES.ADMIN.CONFIG, icon: "settings", has_separator_after: false },
 ];

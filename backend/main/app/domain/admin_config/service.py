@@ -70,6 +70,15 @@ CONFIG_DEFAULTS: dict[str, tuple[str, str]] = {
         "admin",
         "Who authors Area Insights: 'admin' only (D21 resolved — admin-only)",
     ),
+    # Phase 19 — Retention (S58)
+    "pii_retention_days": (
+        "2555",
+        "Days to retain user PII before NDPR erasure window (default ~7 years)",
+    ),
+    "erasure_request_review_sla_days": (
+        "5",
+        "SLA for admin to review a data erasure request (business days)",
+    ),
 }
 
 

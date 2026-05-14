@@ -13,6 +13,8 @@ from fastapi import APIRouter, Depends, Form, Query, UploadFile
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
+from main.app.domain.audit.models import AuditActivityPageDto
+from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
 from main.app.domain.verification.task.models import (
     AdminAssignDto,
@@ -151,6 +153,33 @@ async def get_task(task_id: str, authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
     dto = await task_service.get_task(task_id)
     return SuccessResponse[TaskDto](data=dto)
+
+
+@agent_task_router.get(
+    "/tasks/{task_id}/history",
+    response_model=SuccessResponse[AuditActivityPageDto],
+)
+async def get_task_history(
+    task_id: str,
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=20, ge=1, le=50),
+    authorize: AuthJWT = Depends(),
+):
+    """PII-safe state-transition history for an agent's task (R19.3)."""
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
+    task = await task_service.get_task(task_id)
+    if task.agent_id != agent_id:
+        from main.appodus_utils.exception.exceptions import ForbiddenException
+        raise ForbiddenException(message="Not your task")
+    audit_svc: AuditLogService = di[AuditLogService]
+    result = await audit_svc.get_activity_log(
+        resource_type="TASK",
+        resource_id=task_id,
+        page=page,
+        page_size=page_size,
+    )
+    return SuccessResponse.ok(result)
 
 
 @agent_task_router.post(

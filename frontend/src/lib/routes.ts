@@ -19,6 +19,8 @@ export const ROUTES = {
     SECURITY: '/account/security',
     DEVICES: '/account/devices',
     LINKED: '/account/linked',
+    CONSENTS: '/account/consents',
+    DATA_PRIVACY: '/account/data-privacy',
   },
 
   AGENT: {
@@ -27,6 +29,7 @@ export const ROUTES = {
     ONBOARDING: '/agents/onboarding',
     ONBOARDING_STATUS: '/agents/onboarding/status',
     TASK_DETAIL: (taskId: string) => `/agents/tasks/${taskId}`,
+    TASK_HISTORY: (taskId: string) => `/agents/tasks/${taskId}/history`,
     TASK_MESSAGES: (taskId: string) => `/agents/tasks/${taskId}/messages`,
     EARNINGS: '/agents/earnings',
     PAYOUTS: '/agents/payouts',
@@ -67,6 +70,9 @@ export const ROUTES = {
     BROADCASTS: '/admin/broadcasts',
     BROADCAST_NEW: '/admin/broadcasts/new',
     BROADCAST_DETAIL: (id: string) => `/admin/broadcasts/${id}`,
+    AUDIT_ACTIONS: '/admin/audit/actions',
+    VERIFICATION_AUDIT_EXPORT: (vid: string) => `/api/admin/audit/verifications/${vid}/export`,
+    ERASURE_REQUESTS: '/admin/erasure-requests',
   },
   PUBLIC: {
     VERIFY: (id: string) => `/verify/${id}`,
@@ -82,6 +88,7 @@ export const ROUTES = {
     VERIFICATION_EVIDENCE: (id: string) => `/portal/verifications/${id}/evidence`,
     VERIFICATION_REPORT: (id: string) => `/portal/verifications/${id}/report`,
     VERIFICATION_MESSAGES: (id: string) => `/portal/verifications/${id}/messages`,
+    VERIFICATION_ACTIVITY: (id: string) => `/portal/verifications/${id}/activity`,
     NOTIFICATION_PREFERENCES: '/portal/account/notification-preferences',
     REFERRALS: '/portal/referrals',
   },

@@ -74,6 +74,21 @@ export interface ConsentRecord {
   consentVersion: string;
 }
 
+export interface ActivityEvent {
+  action: string;
+  occurredAt: string;
+  fromState: string | null;
+  toState: string | null;
+  meta: Record<string, unknown> | null;
+}
+
+export interface ActivityPage {
+  items: ActivityEvent[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export class VerificationService {
   private readonly base = "/verifications";
 
@@ -114,6 +129,16 @@ export class VerificationService {
 
   cancel(id: string): Promise<SuccessResponse<Verification>> {
     return this.http.post(`${this.base}/${id}/cancel`, {});
+  }
+
+  getActivity(
+    id: string,
+    page = 0,
+    pageSize = 20,
+  ): Promise<SuccessResponse<ActivityPage>> {
+    return this.http.get(
+      `/portal/verifications/${id}/activity?page=${page}&page_size=${pageSize}`,
+    );
   }
 
   quote(

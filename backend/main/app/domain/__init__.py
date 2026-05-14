@@ -72,6 +72,9 @@ from main.app.domain.broadcast import models as _broadcast_models  # noqa: F401
 from main.app.domain.broadcast.controller import broadcast_router
 from main.appodus_utils.integrations.webhook import webhook_router
 from main.app.domain.analytics.controller import analytics_router
+from main.app.domain.audit.controller import audit_router
+from main.app.domain.retention import models as _retention_models  # noqa: F401
+from main.app.domain.retention.controller import retention_router
 
 router = APIRouter()
 router.include_router(admin_config_router)
@@ -100,6 +103,8 @@ router.include_router(commission_router)
 router.include_router(payout_router)
 router.include_router(referral_router)
 router.include_router(analytics_router)
+router.include_router(audit_router)
+router.include_router(retention_router)
 router.include_router(pricing_admin_router)
 router.include_router(content_admin_router)
 router.include_router(public_content_router)

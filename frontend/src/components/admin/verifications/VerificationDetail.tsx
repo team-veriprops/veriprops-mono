@@ -13,7 +13,7 @@ import ReleaseReportPanel from "./ReleaseReportPanel";
 import { useConflicts } from "../libs/useAdminQueries";
 import TrustScoreBadge from "@components/shared/TrustScoreBadge";
 import type { Task, TaskRole, TaskStatus } from "../libs/admin-service";
-import { User, Loader2, AlertTriangle } from "lucide-react";
+import { User, Loader2, AlertTriangle, Download } from "lucide-react";
 import { ROUTES } from "@lib/routes";
 
 const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
@@ -73,7 +73,17 @@ export default function VerificationDetail({ vid }: Props) {
             )}
           </div>
         </div>
-        <AdminActionPanel verification={verification} />
+        <div className="flex items-center gap-2">
+          <a
+            href={ROUTES.ADMIN.VERIFICATION_AUDIT_EXPORT(vid)}
+            download={`audit-${vid}.csv`}
+            className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 border border-gray-200 rounded px-3 py-1.5"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export Audit
+          </a>
+          <AdminActionPanel verification={verification} />
+        </div>
       </div>
 
       {/* Property info */}

@@ -28,6 +28,9 @@ import {
   type UpdateContentItemPayload,
   type BroadcastDto,
   type CreateBroadcastPayload,
+  type AdminActionLogPageDto,
+  type ErasureRequestPageDto,
+  type ErasureStatus,
 } from "./admin-service";
 
 export const adminService = new AdminService(httpClient);
@@ -566,5 +569,56 @@ export function useScheduleBroadcastMutation() {
     mutationFn: ({ broadcastId, scheduledAt }: { broadcastId: string; scheduledAt: string }) =>
       adminService.scheduleBroadcast(broadcastId, scheduledAt),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+// ── Audit (S56) ──
+
+export function useAuditActions(opts?: {
+  actionTypes?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  return useQuery({
+    queryKey: ["admin", "audit", "actions", opts ?? {}] as const,
+    queryFn: () => adminService.getAuditActions(opts),
+    staleTime: 60_000,
+  });
+}
+
+// ── Erasure requests (S58) ──
+
+export function useErasureRequests(status?: import("./admin-service").ErasureStatus, page = 0) {
+  return useQuery({
+    queryKey: ["admin", "erasure-requests", status ?? "all", page] as const,
+    queryFn: () => adminService.getErasureRequests({ status, page, pageSize: 20 }),
+    staleTime: 30_000,
+  });
+}
+
+export function useApproveErasureMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (requestId: string) => adminService.approveErasure(requestId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "erasure-requests"] }),
+  });
+}
+
+export function useRejectErasureMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, reason }: { requestId: string; reason: string }) =>
+      adminService.rejectErasure(requestId, reason),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "erasure-requests"] }),
+  });
+}
+
+export function useExecuteErasureMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (requestId: string) => adminService.executeErasure(requestId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "erasure-requests"] }),
   });
 }

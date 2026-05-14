@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Column, Index, JSON, String
 
@@ -46,6 +46,11 @@ class AuditActionType(str, enum.Enum):
     KYC_ADMIN_REVIEWED = "KYC_ADMIN_REVIEWED"
     # ── Admin config ───────────────────────────────────────────────
     ADMIN_CONFIG_CHANGED = "ADMIN_CONFIG_CHANGED"
+    # ── Data retention / erasure (S58) ─────────────────────────────
+    DATA_ERASURE_REQUESTED = "DATA_ERASURE_REQUESTED"
+    DATA_ERASURE_APPROVED = "DATA_ERASURE_APPROVED"
+    DATA_ERASURE_REJECTED = "DATA_ERASURE_REJECTED"
+    DATA_ERASURE_EXECUTED = "DATA_ERASURE_EXECUTED"
 
 
 # ─── ORM ──────────────────────────────────────────────────────────────────────
@@ -107,3 +112,42 @@ class QueryAuditLogDto(BaseQueryDto):
     from_state: Optional[str] = None
     to_state: Optional[str] = None
     occurred_at: Optional[datetime] = None
+
+
+# ─── S56 read DTOs ────────────────────────────────────────────────────────────
+
+class AuditEventDto(Object):
+    """PII-safe event shown to customers and agents (no actor_id)."""
+    action: str
+    occurred_at: datetime
+    from_state: Optional[str] = None
+    to_state: Optional[str] = None
+    meta: Optional[Dict[str, Any]] = None
+
+
+class AuditPackRowDto(Object):
+    """Full row returned to admin for export / action-log view."""
+    id: str
+    actor_id: Optional[str] = None
+    action: str
+    resource_type: str
+    resource_id: str
+    from_state: Optional[str] = None
+    to_state: Optional[str] = None
+    occurred_at: datetime
+    ip_address: Optional[str] = None
+    meta: Optional[Dict[str, Any]] = None
+
+
+class AuditActivityPageDto(Object):
+    items: List[AuditEventDto]
+    total: int
+    page: int
+    page_size: int
+
+
+class AdminActionLogPageDto(Object):
+    items: List[AuditPackRowDto]
+    total: int
+    page: int
+    page_size: int

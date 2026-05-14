@@ -139,6 +139,21 @@ export interface Escalation {
   dateCreated: string;
 }
 
+export interface ActivityEvent {
+  action: string;
+  occurredAt: string;
+  fromState: string | null;
+  toState: string | null;
+  meta: Record<string, unknown> | null;
+}
+
+export interface ActivityPage {
+  items: ActivityEvent[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export class AgentService {
   private readonly base = "/users/agents";
   private readonly taskBase = "/agents/tasks";
@@ -243,5 +258,17 @@ export class AgentService {
     payload: { category: Escalation["category"]; description: string },
   ): Promise<SuccessResponse<Escalation>> {
     return this.http.post(`${this.taskBase}/${taskId}/escalation`, payload);
+  }
+
+  // ── History ──
+
+  getTaskHistory(
+    taskId: string,
+    page = 0,
+    pageSize = 20,
+  ): Promise<SuccessResponse<ActivityPage>> {
+    return this.http.get(
+      `${this.taskBase}/${taskId}/history?page=${page}&page_size=${pageSize}`,
+    );
   }
 }

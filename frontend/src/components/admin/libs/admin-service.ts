@@ -386,6 +386,51 @@ export interface UpdateContentItemPayload {
   state?: string;
 }
 
+// ── Audit types (S56) ──
+
+export interface AuditPackRowDto {
+  id: string;
+  actorId: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  fromState: string | null;
+  toState: string | null;
+  occurredAt: string;
+  ipAddress: string | null;
+  meta: Record<string, unknown> | null;
+}
+
+export interface AdminActionLogPageDto {
+  items: AuditPackRowDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// ── Erasure types (S58) ──
+
+export type ErasureStatus = "PENDING" | "APPROVED" | "EXECUTED" | "REJECTED";
+
+export interface ErasureRequestDto {
+  id: string;
+  userId: string;
+  reason: string | null;
+  status: ErasureStatus;
+  requestedAt: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  executedAt: string | null;
+  rejectionReason: string | null;
+}
+
+export interface ErasureRequestPageDto {
+  items: ErasureRequestDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 // ── Broadcast types (S55) ──
 
 export type BroadcastStatus = "DRAFT" | "SCHEDULED" | "SENDING" | "SENT" | "CANCELLED";
@@ -769,5 +814,51 @@ export class AdminService {
 
   previewBroadcast(broadcastId: string): Promise<SuccessResponse<PreviewBroadcastDto>> {
     return this.http.get(`/admin/broadcasts/${broadcastId}/preview`);
+  }
+
+  // ── Audit (S56) ──
+
+  getAuditActions(opts?: {
+    actionTypes?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<SuccessResponse<AdminActionLogPageDto>> {
+    const p = new URLSearchParams();
+    if (opts?.actionTypes?.length) opts.actionTypes.forEach((t) => p.append("action_types", t));
+    if (opts?.dateFrom) p.set("date_from", opts.dateFrom);
+    if (opts?.dateTo) p.set("date_to", opts.dateTo);
+    if (opts?.page !== undefined) p.set("page", String(opts.page));
+    if (opts?.pageSize) p.set("page_size", String(opts.pageSize));
+    const qs = p.toString();
+    return this.http.get(`/admin/audit/actions${qs ? `?${qs}` : ""}`);
+  }
+
+  // ── Erasure requests (S58) ──
+
+  getErasureRequests(opts?: {
+    status?: ErasureStatus;
+    page?: number;
+    pageSize?: number;
+  }): Promise<SuccessResponse<ErasureRequestPageDto>> {
+    const p = new URLSearchParams();
+    if (opts?.status) p.set("status", opts.status);
+    if (opts?.page !== undefined) p.set("page", String(opts.page));
+    if (opts?.pageSize) p.set("page_size", String(opts.pageSize));
+    const qs = p.toString();
+    return this.http.get(`/admin/erasure-requests${qs ? `?${qs}` : ""}`);
+  }
+
+  approveErasure(requestId: string): Promise<SuccessResponse<ErasureRequestDto>> {
+    return this.http.put(`/admin/erasure-requests/${requestId}/approve`, {});
+  }
+
+  rejectErasure(requestId: string, reason: string): Promise<SuccessResponse<ErasureRequestDto>> {
+    return this.http.put(`/admin/erasure-requests/${requestId}/reject`, { rejectionReason: reason });
+  }
+
+  executeErasure(requestId: string): Promise<SuccessResponse<ErasureRequestDto>> {
+    return this.http.post(`/admin/erasure-requests/${requestId}/execute`, {});
   }
 }

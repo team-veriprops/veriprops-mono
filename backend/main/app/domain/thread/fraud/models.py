@@ -65,3 +65,13 @@ class SearchFraudFlagDto(PageRequest, BaseQueryDto):
 
 class ReviewFraudFlagDto(Object):
     decision: FraudReviewDecision
+
+
+# ─── S57 — R19.5 fraud flag history ──────────────────────────────────────────
+
+
+class FraudFlagHistoryPageDto(Object):
+    items: list[FraudFlagDto]
+    total: int
+    page: int
+    page_size: int

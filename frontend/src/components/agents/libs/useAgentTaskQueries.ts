@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { agentService } from "./useAgentApplicationQueries";
-import type { TaskRole, Escalation } from "./agent-service";
+import type { TaskRole, Escalation, ActivityPage } from "./agent-service";
 
 export const taskKeys = {
   available: (role: TaskRole, state?: string) =>
@@ -10,6 +10,7 @@ export const taskKeys = {
   active: ["agent", "tasks", "active"] as const,
   completed: ["agent", "tasks", "completed"] as const,
   detail: (taskId: string) => ["agent", "tasks", taskId] as const,
+  history: (taskId: string, page: number) => ["agent", "tasks", taskId, "history", page] as const,
 };
 
 export function useAvailableTasks(role: TaskRole, state?: string) {
@@ -41,6 +42,14 @@ export function useTask(taskId: string) {
     queryKey: taskKeys.detail(taskId),
     queryFn: () => agentService.getTask(taskId),
     staleTime: 10_000,
+  });
+}
+
+export function useTaskHistory(taskId: string, page = 0) {
+  return useQuery<{ data: ActivityPage }>({
+    queryKey: taskKeys.history(taskId, page),
+    queryFn: () => agentService.getTaskHistory(taskId, page),
+    staleTime: 60_000,
   });
 }
 
