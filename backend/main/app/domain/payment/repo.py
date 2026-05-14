@@ -46,6 +46,28 @@ class PaymentRepo(
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def admin_list(
+        self,
+        status: Optional[str],
+        method: Optional[str],
+        page: int,
+        page_size: int,
+    ):
+        from sqlalchemy import func, select
+        from main.appodus_utils.db.session import get_db_session_from_context
+        session = get_db_session_from_context()
+        filters = [Payment.deleted.is_(False)]
+        if status:
+            filters.append(Payment.status == status)
+        if method:
+            filters.append(Payment.method == method)
+        total = await session.scalar(select(func.count(Payment.id)).where(*filters)) or 0
+        offset = page * page_size
+        result = await session.execute(
+            select(Payment).where(*filters).order_by(Payment.date_created.desc()).offset(offset).limit(page_size)
+        )
+        return list(result.scalars().all()), int(total)
+
     async def count_succeeded_for_user(self, user_id: str) -> int:
         """Count SUCCEEDED payments made by the given customer.
 

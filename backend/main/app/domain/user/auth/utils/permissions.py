@@ -36,6 +36,8 @@ class Permission(str, enum.Enum):
     RELEASE_REPORT = "RELEASE_REPORT"
     CONFIRM_WIRE_PAYMENT = "CONFIRM_WIRE_PAYMENT"
     VIEW_ADMIN_PANEL = "VIEW_ADMIN_PANEL"
+    CREATE_CONTENT = "CREATE_CONTENT"
+    PUBLISH_CONTENT = "PUBLISH_CONTENT"
 
 
 # Role → permissions matrix. Super admins implicitly hold every permission.
@@ -54,6 +56,15 @@ _ROLE_MATRIX: dict[AdminSubRole, Set[Permission]] = {
         Permission.CONFIGURE_PRICING,
         Permission.CONFIRM_WIRE_PAYMENT,
         Permission.VIEW_ADMIN_PANEL,
+    },
+    AdminSubRole.CONTENT_CREATOR: {
+        Permission.VIEW_ADMIN_PANEL,
+        Permission.CREATE_CONTENT,
+    },
+    AdminSubRole.CONTENT_APPROVER: {
+        Permission.VIEW_ADMIN_PANEL,
+        Permission.CREATE_CONTENT,
+        Permission.PUBLISH_CONTENT,
     },
 }
 

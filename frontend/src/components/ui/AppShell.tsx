@@ -6,7 +6,12 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
   Bell,
+  BarChart2,
+  DollarSign,
+  FileText,
   LayoutDashboard,
+  Megaphone,
+  Tag,
   UserCog,
   ClipboardList,
   AlertTriangle,
@@ -50,6 +55,11 @@ const iconMap = {
   activity: Activity,
   gift: Gift,
   bell: Bell,
+  barChart: BarChart2,
+  tag: Tag,
+  dollarSign: DollarSign,
+  fileText: FileText,
+  megaphone: Megaphone,
 } as const;
 
 export default function AppShell({ navItems, children }: AppShellProps) {

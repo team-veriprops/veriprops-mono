@@ -9,6 +9,25 @@ import {
   type VerificationStatus,
   type VerificationTier,
   type TrustScoreWeightConfig,
+  type MissionControlDto,
+  type RegionalPerformanceDto,
+  type AnalyticsDashboardDto,
+  type PricingTierConfigDto,
+  type PricingUpgradeDeltaDto,
+  type UpsertPricingTierPayload,
+  type UpdatePricingTierPayload,
+  type UpsertUpgradeDeltaPayload,
+  type PaymentDto,
+  type PaymentStatus,
+  type PaymentMethod,
+  type EarningDto,
+  type EarningStatus,
+  type ContentItemDto,
+  type ContentItemType,
+  type CreateContentItemPayload,
+  type UpdateContentItemPayload,
+  type BroadcastDto,
+  type CreateBroadcastPayload,
 } from "./admin-service";
 
 export const adminService = new AdminService(httpClient);
@@ -32,6 +51,24 @@ export const adminKeys = {
     ["admin", "config"] as const,
   trustScoreWeights: () =>
     ["admin", "trust-score-weights"] as const,
+  missionControl: () =>
+    ["admin", "analytics", "mission-control"] as const,
+  regionalPerformance: () =>
+    ["admin", "analytics", "regional-performance"] as const,
+  analyticsDashboard: () =>
+    ["admin", "analytics", "dashboard"] as const,
+  pricingTiers: () =>
+    ["admin", "pricing", "tiers"] as const,
+  upgradeDeltas: () =>
+    ["admin", "pricing", "upgrade-deltas"] as const,
+  adminPayments: (opts?: Record<string, string>) =>
+    ["admin", "payments", opts ?? {}] as const,
+  adminCommissions: (opts?: Record<string, string>) =>
+    ["admin", "commissions", opts ?? {}] as const,
+  content: (opts?: Record<string, unknown>) =>
+    ["admin", "content", opts ?? {}] as const,
+  broadcasts: (opts?: Record<string, unknown>) =>
+    ["admin", "broadcasts", opts ?? {}] as const,
 };
 
 // ── Invitations ──
@@ -47,7 +84,7 @@ export function useAdminInvitations(status?: AdminInvitationStatus) {
 export function useInviteAdminMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { email: string; subRole: AdminSubRole }) =>
+    mutationFn: (payload: { email: string; firstName: string; lastName: string; subRole: AdminSubRole }) =>
       adminService.inviteAdmin(payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "invitations"] }),
   });
@@ -330,5 +367,204 @@ export function useSetConfigMutation() {
     mutationFn: ({ key, value }: { key: string; value: string }) =>
       adminService.setConfig(key, value),
     onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.config() }),
+  });
+}
+
+// ── Analytics (S53) ──
+
+export function useMissionControl() {
+  return useQuery({
+    queryKey: adminKeys.missionControl(),
+    queryFn: () => adminService.getMissionControl(),
+    staleTime: 60_000,
+  });
+}
+
+export function useRegionalPerformance() {
+  return useQuery({
+    queryKey: adminKeys.regionalPerformance(),
+    queryFn: () => adminService.getRegionalPerformance(),
+    staleTime: 60_000,
+  });
+}
+
+export function useAnalyticsDashboard() {
+  return useQuery({
+    queryKey: adminKeys.analyticsDashboard(),
+    queryFn: () => adminService.getAnalyticsDashboard(),
+    staleTime: 60_000,
+  });
+}
+
+// ── Pricing (S54) ──
+
+export function usePricingTiers() {
+  return useQuery({
+    queryKey: adminKeys.pricingTiers(),
+    queryFn: () => adminService.getPricingTiers(),
+    staleTime: 60_000,
+  });
+}
+
+export function useUpsertPricingTierMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: UpsertPricingTierPayload) => adminService.upsertPricingTier(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.pricingTiers() }),
+  });
+}
+
+export function useUpdatePricingTierMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ tier, payload }: { tier: string; payload: UpdatePricingTierPayload }) =>
+      adminService.updatePricingTier(tier, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.pricingTiers() }),
+  });
+}
+
+export function useUpgradeDeltas() {
+  return useQuery({
+    queryKey: adminKeys.upgradeDeltas(),
+    queryFn: () => adminService.getUpgradeDeltas(),
+    staleTime: 60_000,
+  });
+}
+
+export function useUpsertUpgradeDeltaMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: UpsertUpgradeDeltaPayload) => adminService.upsertUpgradeDelta(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.upgradeDeltas() }),
+  });
+}
+
+// ── Finance: payments (S54) ──
+
+export function useAdminPayments(opts?: {
+  status?: PaymentStatus;
+  method?: PaymentMethod;
+  page?: number;
+  pageSize?: number;
+}) {
+  return useQuery({
+    queryKey: adminKeys.adminPayments(opts as Record<string, string>),
+    queryFn: () => adminService.adminListPayments(opts),
+    staleTime: 30_000,
+  });
+}
+
+export function useConfirmWirePaymentMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ paymentId, note }: { paymentId: string; note?: string }) =>
+      adminService.confirmWirePayment(paymentId, note),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "payments"] }),
+  });
+}
+
+// ── Finance: commissions (S54) ──
+
+export function useAdminCommissions(opts?: {
+  agentId?: string;
+  status?: EarningStatus;
+  page?: number;
+  pageSize?: number;
+}) {
+  return useQuery({
+    queryKey: adminKeys.adminCommissions(opts as Record<string, string>),
+    queryFn: () => adminService.adminListCommissions(opts),
+    staleTime: 30_000,
+  });
+}
+
+// ── Content (S55) ──
+
+export function useAdminContent(opts?: {
+  itemType?: ContentItemType;
+  publishedOnly?: boolean;
+  page?: number;
+}) {
+  return useQuery({
+    queryKey: adminKeys.content(opts as Record<string, unknown>),
+    queryFn: () => adminService.listContent(opts),
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateContentItemMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateContentItemPayload) => adminService.createContentItem(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "content"] }),
+  });
+}
+
+export function useUpdateContentItemMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, payload }: { itemId: string; payload: UpdateContentItemPayload }) =>
+      adminService.updateContentItem(itemId, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "content"] }),
+  });
+}
+
+export function usePublishContentItemMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, isPublished }: { itemId: string; isPublished: boolean }) =>
+      adminService.publishContentItem(itemId, isPublished),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "content"] }),
+  });
+}
+
+export function useDeleteContentItemMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) => adminService.deleteContentItem(itemId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "content"] }),
+  });
+}
+
+// ── Broadcasts (S55) ──
+
+export function useBroadcasts(opts?: { page?: number }) {
+  return useQuery({
+    queryKey: adminKeys.broadcasts(opts),
+    queryFn: () => adminService.listBroadcasts(opts),
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateBroadcastMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateBroadcastPayload) => adminService.createBroadcast(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useSendBroadcastNowMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (broadcastId: string) => adminService.sendBroadcastNow(broadcastId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useCancelBroadcastMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (broadcastId: string) => adminService.cancelBroadcast(broadcastId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useScheduleBroadcastMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ broadcastId, scheduledAt }: { broadcastId: string; scheduledAt: string }) =>
+      adminService.scheduleBroadcast(broadcastId, scheduledAt),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
   });
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Users, ClipboardList, ArrowRight } from "lucide-react";
 import { useAgentApplications, useAdminInvitations } from "@components/admin/libs/useAdminQueries";
 import { ROUTES } from "@lib/routes";
+import MissionControlPanel from "./analytics/MissionControlPanel";
 
 interface StatCardProps {
   label: string;
@@ -51,8 +52,8 @@ export default function AdminDashboard() {
   const pendingInvites = invitations?.meta?.total ?? invitations?.items?.length ?? 0;
 
   return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto">
-      <div className="mb-8">
+    <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-10">
+      <div>
         <h1 className="text-2xl font-extrabold font-display" style={{ color: "var(--brand-navy)" }}>
           Admin Dashboard
         </h1>
@@ -61,24 +62,31 @@ export default function AdminDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <StatCard
-          label="Pending Agent Applications"
-          value={pendingApps}
-          loading={appsLoading}
-          href={ROUTES.ADMIN.AGENT_APPLICATIONS}
-          accent="rgba(63,102,83,0.1)"
-          icon={<ClipboardList className="w-5 h-5" style={{ color: "var(--brand-viridian)" }} strokeWidth={1.75} />}
-        />
-        <StatCard
-          label="Pending Team Invitations"
-          value={pendingInvites}
-          loading={invLoading}
-          href={ROUTES.ADMIN.TEAM}
-          accent="rgba(59,130,246,0.1)"
-          icon={<Users className="w-5 h-5" style={{ color: "#3b82f6" }} strokeWidth={1.75} />}
-        />
-      </div>
+      <MissionControlPanel />
+
+      <section>
+        <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--brand-navy)" }}>
+          Action Items
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <StatCard
+            label="Pending Agent Applications"
+            value={pendingApps}
+            loading={appsLoading}
+            href={ROUTES.ADMIN.AGENT_APPLICATIONS}
+            accent="rgba(63,102,83,0.1)"
+            icon={<ClipboardList className="w-5 h-5" style={{ color: "var(--brand-viridian)" }} strokeWidth={1.75} />}
+          />
+          <StatCard
+            label="Pending Team Invitations"
+            value={pendingInvites}
+            loading={invLoading}
+            href={ROUTES.ADMIN.TEAM}
+            accent="rgba(59,130,246,0.1)"
+            icon={<Users className="w-5 h-5" style={{ color: "#3b82f6" }} strokeWidth={1.75} />}
+          />
+        </div>
+      </section>
     </div>
   );
 }

@@ -43,6 +43,13 @@ const COPY: Record<AuthIntent, IntentCopy> = {
     primaryCta: "Create an account",
     secondaryCta: "I already have an account",
   },
+  "invited-admin": {
+    eyebrow: "Admin Invitation",
+    title: "You've been invited.",
+    subtitle: "Sign in or create an account to accept your admin invitation to Veriprops.",
+    primaryCta: "Accept invitation",
+    secondaryCta: "I already have an account",
+  },
 };
 
 export default function AuthGateContainer() {

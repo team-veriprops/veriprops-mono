@@ -79,6 +79,26 @@ class EarningRepo(GenericRepo[
         )
         return list(result.scalars().all())
 
+    async def admin_list(
+        self,
+        agent_id: Optional[str],
+        status: Optional[str],
+        page: int,
+        page_size: int,
+    ):
+        from sqlalchemy import func, select
+        filters = [Earning.deleted == False]
+        if agent_id:
+            filters.append(Earning.agent_id == agent_id)
+        if status:
+            filters.append(Earning.status == status)
+        total = await self._session.scalar(select(func.count(Earning.id)).where(*filters)) or 0
+        offset = page * page_size
+        result = await self._session.execute(
+            select(Earning).where(*filters).order_by(Earning.date_created.desc()).offset(offset).limit(page_size)
+        )
+        return list(result.scalars().all()), int(total)
+
     async def sum_available(self, agent_id: str) -> Decimal:
         from sqlalchemy import func
         session = get_db_session_from_context()

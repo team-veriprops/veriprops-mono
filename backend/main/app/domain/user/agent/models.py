@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from sqlalchemy import Column, DateTime, Index, Integer, JSON, SmallInteger, String, Text
-from sqlalchemy.ext.mutable import MutableList, MutableDict
+from sqlalchemy import Column, Index, Integer, JSON, SmallInteger, String, Text
+from sqlalchemy.ext.mutable import MutableList
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
 from main.appodus_utils.db.models import UTCDateTime
@@ -118,7 +118,7 @@ class AgentQualityScore(BaseEntity):
 
     task_id = Column(String(36), nullable=False, unique=True, index=True)
     agent_id = Column(String(36), nullable=False, index=True)
-    score = Column(SmallInteger, nullable=False)        # 1–5
+    score = Column(SmallInteger, nullable=False)  # 1–5
     note = Column(Text, nullable=True)
     reviewed_by_admin_id = Column(String(36), nullable=False)
 
@@ -274,7 +274,7 @@ class KycUploadUrlsDto(Object):
 
 
 class CreateQualityScoreDto(Object):
-    score: int          # 1–5
+    score: int  # 1–5
     note: Optional[str] = None
 
 
@@ -290,9 +290,9 @@ class AgentQualityScoreDto(Object):
 
 class AgentMetricsDto(Object):
     """Computed performance aggregates for an agent."""
-    completion_rate: float          # 0–100 %
-    accuracy_score: float           # 1–5 (avg quality score; 0.0 if no scores yet)
-    timeliness_score: float         # 0–100 %
+    completion_rate: float  # 0–100 %
+    accuracy_score: float  # 1–5 (avg quality score; 0.0 if no scores yet)
+    timeliness_score: float  # 0–100 %
     total_jobs: int
     active_since: Optional[datetime] = None
 

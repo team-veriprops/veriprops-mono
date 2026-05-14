@@ -72,8 +72,12 @@ export default function LandingFooter() {
               className="text-sm leading-relaxed mb-6"
               style={{ color: "var(--brand-on-surface-variant)" }}
             >
-              The Sovereign Curator of Real Estate Verification. We reduce
-              uncertainty. We do not eliminate it.
+              Helping Nigerians buy property safely through trusted 
+              verification and due diligence.
+
+              <br />
+              <br />
+              <b className="text-xs">Buy with confidence. Verify before you pay.</b>
             </p>
 
             {/* Socials */}

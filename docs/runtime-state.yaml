@@ -2,102 +2,126 @@ session_id: null
 command: resume
 
 status: checkpointed
-phase: phases_16_17
+phase: phases_18
 
 current_slice: null
 current_subtask: null
-last_completed_slices: [S18, S19, S20, S21, S22, S23, S24, S25, S26, S27, S28, S29, S30, S31, S32, S33, S34, S35, S36, S37, S38, S39, S40, S41, S42, S43, S44, S45, S46, S47, S48, S49, S50, S51, S52]
+last_completed_slices: [S18, S19, S20, S21, S22, S23, S24, S25, S26, S27, S28, S29, S30, S31, S32, S33, S34, S35, S36, S37, S38, S39, S40, S41, S42, S43, S44, S45, S46, S47, S48, S49, S50, S51, S52, S53, S54, S55]
 
 modified_files:
-  # Backend
+  # Backend — Phase 18 (S53–S55)
   - backend/main/app/domain/__init__.py
-  - backend/main/app/domain/audit/models.py
-  - backend/main/app/domain/payment/service.py
-  - backend/main/app/domain/verification/portal/controller.py
-  - backend/main/app/domain/verification/release/service.py
-  - backend/main/app/domain/verification/service.py
-  - backend/main/app/domain/verification/repo.py
-  - backend/main/app/domain/verification/task/review/service.py
-  - backend/main/app/domain/verification/task/service.py
-  - backend/main/app/domain/user/agent/models.py
-  - backend/main/app/domain/user/agent/service.py
-  - backend/main/app/domain/user/agent/repo.py
-  - backend/main/app/domain/user/agent/controller.py
+  - backend/main/app/domain/user/models.py
+  - backend/main/app/domain/user/auth/utils/permissions.py
   - backend/main/app/domain/admin_config/service.py
-  - backend/main/app/domain/dev/controller.py
-  - backend/main/app/state/machine.py
-  - backend/main/appodus_utils/db/models.py
+  - backend/main/app/domain/payment/repo.py
+  - backend/main/app/domain/payment/service.py
+  - backend/main/app/domain/payment/controller.py
+  - backend/main/app/domain/commission/repo.py
+  - backend/main/app/domain/commission/service.py
+  - backend/main/app/domain/commission/controller.py
+  - backend/main/app/domain/broadcast/service.py
   - backend/main/appodus_utils/integrations/messaging/templating/models.py
-  # Frontend
-  - frontend/src/app/portal/verifications/[id]/page.tsx
-  - frontend/src/app/portal/verifications/[id]/report/page.tsx
-  - frontend/src/app/portal/dashboard/page.tsx
+  - backend/main/appodus_utils/integrations/messaging/models.py
+  # Frontend — Phase 18 (S53–S55)
   - frontend/src/components/admin/nav.ts
-  - frontend/src/components/agents/nav.ts
+  - frontend/src/components/admin/libs/admin-service.ts
+  - frontend/src/components/admin/libs/useAdminQueries.ts
+  - frontend/src/components/admin/team/TeamManagement.tsx
   - frontend/src/components/ui/AppShell.tsx
+  - frontend/src/components/nav/MenuSidebar.tsx
   - frontend/src/lib/routes.ts
-  - frontend/src/components/agents/libs/agent-service.ts
-  - frontend/src/components/agents/libs/useAgentApplicationQueries.ts
-  - frontend/src/components/portal/verifications/libs/verification-service.ts
-  - frontend/src/components/portal/verifications/libs/useVerificationQueries.ts
-  # Test fixes
-  - backend/test/unit/app/domain/agent/test_agent_application.py
-  - backend/test/unit/app/domain/agent/test_kyc_service_s8.py
-  - backend/test/unit/app/domain/verification/task/test_task_service.py
-  - frontend/src/components/agents/libs/agent-service.test.ts
-  - frontend/src/components/agents/onboarding/wizardUtils.test.ts
-  # Docs
-  - docs/requirements-matrix.md
-  - docs/runtime-state.yaml
-  - docs/progress.md
+  # Pre-existing bug fixes caught during build
+  - frontend/src/app/agents/settings/coverage/page.tsx
+  - frontend/src/components/portal/verifications/AssignedAgentsCard.tsx
+  - frontend/src/components/website/auth/AuthGateContainer.tsx
 
 created_files:
-  # Backend — Agent Reputation (S49)
-  - backend/main/app/domain/user/agent/quality_score/
-  - backend/main/app/domain/user/agent/quality_score/__init__.py
-  - backend/main/app/domain/user/agent/quality_score/models.py
-  - backend/main/app/domain/user/agent/quality_score/repo.py
-  # Backend — Referral (S51)
-  - backend/main/app/domain/referral/__init__.py
-  - backend/main/app/domain/referral/models.py
-  - backend/main/app/domain/referral/repo.py
-  - backend/main/app/domain/referral/service.py
-  - backend/main/app/domain/referral/controller.py
-  # Backend — Messaging (S52)
-  - backend/main/app/domain/message/verification_messages.py
-  # Backend — Migrations
-  - backend/main/alembic/versions/f6a7b8c9d0e1_s49_s50_agent_reputation_coverage.py
-  - backend/main/alembic/versions/a7b8c9d0e1f2_s51_s52_referral_abandonment.py
-  # Frontend — Agent Profile + Settings (S49–S50)
-  - frontend/src/app/agents/profile/page.tsx
-  - frontend/src/app/agents/settings/coverage/page.tsx
-  - frontend/src/app/agents/settings/availability/page.tsx
-  # Frontend — Referrals (S51)
-  - frontend/src/app/portal/referrals/page.tsx
-  - frontend/src/components/portal/referrals/referral-service.ts
-  # Tests — S49–S52
-  - backend/test/unit/app/domain/agent/test_metrics.py
-  - backend/test/unit/app/domain/verification/task/test_availability_flip.py
-  - backend/test/unit/app/domain/referral/__init__.py
-  - backend/test/unit/app/domain/referral/test_referral.py
-  - backend/test/unit/app/domain/verification/test_abandonment.py
+  # Backend — Sub-roles (Phase A)
+  # (extended existing enums in models.py + permissions.py)
+  # Backend — S53 Analytics
+  - backend/main/app/domain/analytics/__init__.py
+  - backend/main/app/domain/analytics/models.py
+  - backend/main/app/domain/analytics/repo.py
+  - backend/main/app/domain/analytics/service.py
+  - backend/main/app/domain/analytics/controller.py
+  - backend/main/alembic/versions/b8c9d0e1f2a3_s53_analytics_indexes.py
+  # Backend — S54 Pricing
+  - backend/main/app/domain/verification/pricing/__init__.py
+  - backend/main/app/domain/verification/pricing/models.py
+  - backend/main/app/domain/verification/pricing/repo.py
+  - backend/main/app/domain/verification/pricing/service.py
+  - backend/main/app/domain/verification/pricing/controller.py
+  - backend/main/alembic/versions/c9d0e1f2a3b4_s54_pricing_db.py
+  # Backend — S55 Content
+  - backend/main/app/domain/content/__init__.py
+  - backend/main/app/domain/content/models.py
+  - backend/main/app/domain/content/repo.py
+  - backend/main/app/domain/content/service.py
+  - backend/main/app/domain/content/controller.py
+  # Backend — S55 Broadcast
+  - backend/main/app/domain/broadcast/__init__.py
+  - backend/main/app/domain/broadcast/models.py
+  - backend/main/app/domain/broadcast/repo.py
+  - backend/main/app/domain/broadcast/service.py
+  - backend/main/app/domain/broadcast/controller.py
+  - backend/main/app/domain/broadcast/messages.py
+  # Backend — S55 Templates
+  - backend/main/appodus_utils/integrations/messaging/templates/email/admin_broadcast.jinja2
+  - backend/main/appodus_utils/integrations/messaging/templates/push/admin_broadcast.jinja2
+  # Backend — S55 Migration + Tests
+  - backend/main/alembic/versions/d0e1f2a3b4c5_s55_content_broadcast.py
+  - backend/test/unit/app/domain/analytics/__init__.py
+  - backend/test/unit/app/domain/analytics/test_analytics_service.py
+  - backend/test/unit/app/domain/verification/pricing/__init__.py
+  - backend/test/unit/app/domain/verification/pricing/test_pricing_service.py
+  - backend/test/unit/app/domain/content/__init__.py
+  - backend/test/unit/app/domain/content/test_content_service.py
+  - backend/test/unit/app/domain/broadcast/__init__.py
+  - backend/test/unit/app/domain/broadcast/test_broadcast_service.py
+  # Frontend — S53 Analytics
+  - frontend/src/components/admin/analytics/MissionControlPanel.tsx
+  - frontend/src/components/admin/analytics/RegionalPerformanceTable.tsx
+  - frontend/src/components/admin/analytics/AnalyticsDashboard.tsx
+  - frontend/src/app/admin/analytics/page.tsx
+  # Frontend — S54 Pricing + Finance
+  - frontend/src/components/admin/pricing/PricingManager.tsx
+  - frontend/src/components/admin/pricing/UpgradeDeltaEditor.tsx
+  - frontend/src/components/admin/finance/PaymentsTable.tsx
+  - frontend/src/components/admin/finance/CommissionBreakdownTable.tsx
+  - frontend/src/app/admin/pricing/page.tsx
+  - frontend/src/app/admin/finance/page.tsx
+  - frontend/src/app/admin/finance/payments/page.tsx
+  - frontend/src/app/admin/finance/payouts/page.tsx
+  - frontend/src/app/admin/finance/commissions/page.tsx
+  # Frontend — S55 Content + Broadcast
+  - frontend/src/components/admin/content/ContentItemTable.tsx
+  - frontend/src/components/admin/content/ContentItemForm.tsx
+  - frontend/src/components/admin/content/AreaInsightPanel.tsx
+  - frontend/src/components/admin/broadcast/BroadcastList.tsx
+  - frontend/src/components/admin/broadcast/BroadcastComposer.tsx
+  - frontend/src/app/admin/content/page.tsx
+  - frontend/src/app/admin/broadcasts/page.tsx
+  - frontend/src/app/admin/broadcasts/new/page.tsx
+  - frontend/src/app/admin/broadcasts/[broadcastId]/page.tsx
 
 tests:
   written: true
   executed: true
   passing: true
-  last_run: "2026-05-12 — 44 new backend unit tests passing (test_metrics 12, test_availability_flip 10, test_referral 18, test_abandonment 6); all pre-existing tests maintained (71 agent+task tests passing after fixture updates)"
+  last_run: "2026-05-14 — 19 S55 backend unit tests passing (content: 9, broadcast: 10); pnpm build succeeded with 0 TypeScript errors"
 
 self_audit:
   started: true
   completed: true
   findings:
-    - "S49: AgentMetrics computation (completion_rate, accuracy_score, timeliness_score) + composite ranking formula 0.4*(accuracy/5)+0.4*(completion/100)+0.2*(timeliness/100) implemented and tested"
-    - "S50: availability auto-flip (_maybe_flip_unavailable/_maybe_restore_availability) on task accept/release; manual LIMITED preserved; 5 admin config defaults added"
-    - "S51: ReferralService (get_or_create_code, claim_referral with self-referral rejection, compute_discount with cap, credit_referrer_on_success); referral controller + frontend page"
-    - "S52: get_abandonments/send_abandonment_emails (idempotent via abandonment_email_sent_at set BEFORE send); refresh_price_lock; AbandonmentBanner in portal dashboard; cancel endpoint"
-    - "Pre-existing test fixture fixes: availability_status + max_travel_km added to mock application builders in 3 test files; quality_score_repo + admin_config added to _make_service in test_task_service.py"
-    - "NavIconKey union extended with user/mapPin/activity/gift; iconMap updated in AppShell.tsx"
+    - "Phase A: AdminSubRole extended with CONTENT_CREATOR + CONTENT_APPROVER; Permission enum extended with CREATE_CONTENT + PUBLISH_CONTENT; role matrix updated; TeamManagement UI updated"
+    - "S53: AnalyticsRepo (pure aggregation, no GenericRepo) + AnalyticsService + controller; analytics indexes migration; MissionControlPanel + RegionalPerformanceTable + AnalyticsDashboard frontend"
+    - "S54: PricingTierConfig + PricingLineItem + PricingUpgradeDelta ORM; DB-backed pricing service with static fallback; admin pricing endpoints; payment admin list + wire confirm; commission breakdown; pricing migration with seed from TIER_MATRIX"
+    - "S55: ContentItem ORM + ContentService (CRUD + publish + reorder + area insights); public content endpoints (no auth); broadcast domain (status machine DRAFT→SCHEDULED/SENT/CANCELLED); BroadcastMessages.send_broadcast via AvailableTemplate.ADMIN_BROADCAST"
+    - "S55 Frontend: ContentItemTable (publish toggle + edit + delete), ContentItemForm (RHF + Zod + conditional AREA_INSIGHT fields), AreaInsightPanel (state/LGA filter), BroadcastList (send/cancel/view), BroadcastComposer (4-step wizard), content page (tabbed), broadcast pages (list/new/detail)"
+    - "Timezone fix: BroadcastService.schedule() now strips tzinfo from both sides before comparison"
+    - "Build fixes: NavIconKey + iconMap extended for barChart/tag/dollarSign/fileText/megaphone; AUTH_INTENTS enum updated; AuthGateContainer INVITED_ADMIN copy added; Lucide title→aria-label; coverage page metadata removed"
 
 clarification_needed: []
 
@@ -105,7 +129,7 @@ git:
   branch: dev
   dirty: true
 
-next_action: final_audit
+next_action: idle
 
 started_at: null
-last_checkpoint: "2026-05-12 S49-S52 — Phases 16-17 (agent reputation+coverage, referral system, abandonment recovery) complete — ALL PHASES DONE"
+last_checkpoint: "2026-05-14 S53-S55 — Phase 18 (analytics, pricing/finance, content/broadcast) complete — ALL PHASES DONE"

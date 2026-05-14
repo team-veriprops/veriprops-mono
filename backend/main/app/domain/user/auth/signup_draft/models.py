@@ -9,9 +9,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from sqlalchemy import Column, DateTime, Index, Integer, String, Text
+from sqlalchemy import Column, Index, Integer, String, Text
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils.db.models import UTCDateTime
 
 
 class SignupDraft(BaseEntity):
@@ -24,7 +25,7 @@ class SignupDraft(BaseEntity):
     # JSON-encoded payload — opaque to the backend; the frontend wizard owns
     # the schema. Storing as TEXT keeps us DB-portable.
     payload = Column(Text, nullable=False, default="{}")
-    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    expires_at = Column(UTCDateTime, nullable=False, index=True)
 
     __table_args__ = (
         Index("ix_signup_drafts_email_active", "email", "expires_at"),

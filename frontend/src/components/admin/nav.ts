@@ -3,6 +3,7 @@ import { NavItem } from "@/components/nav/MenuSidebar";
 
 export const adminNavItems: NavItem[] = [
   { title: "Dashboard", href: ROUTES.ADMIN.DASHBOARD, icon: "dashboard", has_separator_after: false },
+  { title: "Analytics", href: ROUTES.ADMIN.ANALYTICS, icon: "barChart", has_separator_after: false },
   { title: "Team", href: ROUTES.ADMIN.TEAM, icon: "users", has_separator_after: false },
   { title: "Verifications", href: ROUTES.ADMIN.VERIFICATIONS, icon: "fileCheck", has_separator_after: false },
   { title: "Agent Applications", href: ROUTES.ADMIN.AGENT_APPLICATIONS, icon: "userCog", has_separator_after: false },
@@ -10,6 +11,10 @@ export const adminNavItems: NavItem[] = [
   { title: "Re-check Requests", href: ROUTES.ADMIN.RECHECKS, icon: "fileCheck", has_separator_after: false },
   { title: "Payouts", href: ROUTES.ADMIN.PAYOUTS, icon: "creditCard", has_separator_after: false },
   { title: "Commission Rules", href: ROUTES.ADMIN.COMMISSION_RULES, icon: "fileCheck", has_separator_after: false },
+  { title: "Pricing", href: ROUTES.ADMIN.PRICING, icon: "tag", has_separator_after: false },
+  { title: "Finance", href: ROUTES.ADMIN.FINANCE, icon: "dollarSign", has_separator_after: false },
+  { title: "Content", href: ROUTES.ADMIN.CONTENT, icon: "fileText", has_separator_after: false },
+  { title: "Broadcasts", href: ROUTES.ADMIN.BROADCASTS, icon: "megaphone", has_separator_after: false },
   { title: "Fraud Review", href: ROUTES.ADMIN.FRAUD_FLAGS, icon: "alertTriangle", has_separator_after: false },
   { title: "System Config", href: ROUTES.ADMIN.CONFIG, icon: "settings", has_separator_after: false },
 ];

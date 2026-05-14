@@ -7,21 +7,21 @@ from sqlalchemy import (Column,
                         String,
                         Text,
                         Integer,
-                        DateTime, JSON)
+                        JSON)
 
 from main.appodus_utils import BaseEntity, PageRequest, BaseQueryDto, Object
 from main.appodus_utils.db.models import UTCDateTime
 from main.appodus_utils.integrations.messaging.models import (MessageChannel,
-                                                                     MessageStatus,
-                                                                     MessagePriority,
-                                                                     MessageProviderName,
-                                                                     MessageRequest)
+                                                              MessageStatus,
+                                                              MessagePriority,
+                                                              MessageProviderName,
+                                                              MessageRequest)
 from main.appodus_utils.integrations.messaging.models import (MessageRecipient,
-                                                                     EmailPayload,
-                                                                     SmsPayload,
-                                                                     WhatsappPayload,
-                                                                     PushPayload,
-                                                                     WebPushPayload)
+                                                              EmailPayload,
+                                                              SmsPayload,
+                                                              WhatsappPayload,
+                                                              PushPayload,
+                                                              WebPushPayload)
 
 
 class Message(BaseEntity):

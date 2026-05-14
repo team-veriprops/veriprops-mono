@@ -52,6 +52,21 @@ export const ROUTES = {
     RECHECKS: '/admin/rechecks',
     PAYOUTS: '/admin/payouts',
     COMMISSION_RULES: '/admin/commission-rules',
+    ANALYTICS: '/admin/analytics',
+    PRICING: '/admin/pricing',
+    FINANCE: '/admin/finance',
+    FINANCE_PAYMENTS: '/admin/finance/payments',
+    FINANCE_PAYOUTS: '/admin/finance/payouts',
+    FINANCE_COMMISSIONS: '/admin/finance/commissions',
+    CONTENT: '/admin/content',
+    CONTENT_HOW_IT_WORKS: '/admin/content/how-it-works',
+    CONTENT_FAQS: '/admin/content/faqs',
+    CONTENT_TESTIMONIALS: '/admin/content/testimonials',
+    CONTENT_AGENT_SPOTLIGHTS: '/admin/content/agent-spotlights',
+    CONTENT_AREA_INSIGHTS: '/admin/content/area-insights',
+    BROADCASTS: '/admin/broadcasts',
+    BROADCAST_NEW: '/admin/broadcasts/new',
+    BROADCAST_DETAIL: (id: string) => `/admin/broadcasts/${id}`,
   },
   PUBLIC: {
     VERIFY: (id: string) => `/verify/${id}`,
@@ -85,7 +100,7 @@ export const ROUTES = {
 
 // export type AuthIntent = 'verify' | 'agent' | 'default';
 
-export const AUTH_INTENTS = ['verify', 'agent', 'default'] as const satisfies readonly AuthIntent[];
+export const AUTH_INTENTS = [AuthIntent.VERIFY, AuthIntent.AGENT, AuthIntent.DEFAULT, AuthIntent.INVITED_ADMIN] as const satisfies readonly AuthIntent[];
 
 export const isAuthIntent = (value: string | null | undefined): value is AuthIntent =>
   !!value && (AUTH_INTENTS as readonly string[]).includes(value);

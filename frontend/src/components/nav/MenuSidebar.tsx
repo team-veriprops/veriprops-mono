@@ -14,7 +14,12 @@ export type NavIconKey =
   | "mapPin"
   | "activity"
   | "gift"
-  | "bell";
+  | "bell"
+  | "barChart"
+  | "tag"
+  | "dollarSign"
+  | "fileText"
+  | "megaphone";
 
 export interface NavItem {
   title: string;

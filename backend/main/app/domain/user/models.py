@@ -19,6 +19,8 @@ class AdminSubRole(str, enum.Enum):
     SUPER = "SUPER"
     OPERATIONS = "OPERATIONS"
     FINANCE = "FINANCE"
+    CONTENT_CREATOR = "CONTENT_CREATOR"
+    CONTENT_APPROVER = "CONTENT_APPROVER"
 
 
 class TrustStatus(str, enum.Enum):

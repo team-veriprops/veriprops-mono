@@ -35,6 +35,16 @@ const SUB_ROLES: { value: AdminSubRole; label: string; blurb: string }[] = [
     label: "Finance Admin",
     blurb: "Approves payouts, confirms wires, configures pricing.",
   },
+  {
+    value: "CONTENT_CREATOR",
+    label: "Content Creator",
+    blurb: "Creates and edits site content (FAQs, spotlights, area insights). Cannot publish.",
+  },
+  {
+    value: "CONTENT_APPROVER",
+    label: "Content Approver",
+    blurb: "Creates, edits, publishes content and sends system-wide broadcast notifications.",
+  },
 ];
 
 export default function TeamManagement() {

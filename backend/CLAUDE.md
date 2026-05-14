@@ -81,7 +81,7 @@ A domain is **not considered complete** until:
 * Reference IDs are normal indexed columns
 * Alembic migrations must never emit ALTER TABLE ... ADD FOREIGN KEY
 * Don't create duplicate indexes, prefer UniqueConstraint to create_index.
-* Don't use DateTime or TIMESTAMP directly, instead use UTCDateTime in the file `backend/main/appodus_utils/db/models.py`
+* When mapping date/datetime, don't use DateTime or TIMESTAMP directly, instead use UTCDateTime in the file `backend/main/appodus_utils/db/models.py`
 
 
 

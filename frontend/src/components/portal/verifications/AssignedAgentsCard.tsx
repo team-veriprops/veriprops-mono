@@ -43,7 +43,7 @@ export default function AssignedAgentsCard({ agents }: Props) {
           </span>
           <span className="text-sm font-medium text-gray-800">{agent.firstName}</span>
           {agent.isTrusted && (
-            <ShieldCheck className="h-4 w-4 text-green-600" title="Trusted Agent" />
+            <ShieldCheck className="h-4 w-4 text-green-600" aria-label="Trusted Agent" />
           )}
         </div>
       ))}

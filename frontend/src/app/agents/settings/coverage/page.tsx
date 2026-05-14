@@ -5,7 +5,6 @@ import { MapPin, Save } from "lucide-react";
 import { useAgentApplication, useUpdateCoverageMutation } from "@components/agents/libs/useAgentApplicationQueries";
 import { nigerianStates } from "@lib/nigerianLocations";
 
-export const metadata = undefined; // client component
 
 function StateToggle({
   label,

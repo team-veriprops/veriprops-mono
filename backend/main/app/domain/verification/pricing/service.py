@@ -2,11 +2,14 @@
 
 Quotes are derived from the static `config.TIER_MATRIX` and an FX cache.
 On "continue to payment" the verification stores the locked snapshot in JSON.
+
+Phase 18 (S54): DB-backed pricing methods added alongside the static quote()
+to avoid breaking existing wizard flows.
 """
 from __future__ import annotations
 
 import time
-from typing import Dict, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from kink import inject
 
@@ -22,7 +25,10 @@ from main.app.domain.verification.pricing.config import (
     line_items_for_tier,
 )
 from main.appodus_utils import Utils
-from main.appodus_utils.exception.exceptions import ValidationException
+from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
+from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
+from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.exception.exceptions import ResourceNotFoundException, ValidationException
 
 
 # Module-level FX cache: { currency: (rate, fetched_at_epoch) }.
@@ -31,9 +37,29 @@ _FX_CACHE: Dict[str, Tuple[float, float]] = {}
 
 
 @inject
+@decorate_all_methods(transactional(), exclude=["__init__", "quote", "lock", "_get_fx_rate"], exclude_startswith=["_"])
+@decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class PricingService:
     """Pure-compute service. No DB writes — the verification service is in
     charge of persisting the pricing snapshot."""
+
+    def __init__(self):
+        # Repos injected lazily to avoid circular deps with existing non-DI usage
+        self._tier_repo: Optional["PricingTierConfigRepo"] = None
+        self._line_item_repo: Optional["PricingLineItemRepo"] = None
+        self._delta_repo: Optional["PricingUpgradeDeltaRepo"] = None
+
+    def _get_repos(self):
+        if self._tier_repo is None:
+            from kink import di
+            from main.app.domain.verification.pricing.repo import (
+                PricingLineItemRepo,
+                PricingTierConfigRepo,
+                PricingUpgradeDeltaRepo,
+            )
+            self._tier_repo = di[PricingTierConfigRepo]
+            self._line_item_repo = di[PricingLineItemRepo]
+            self._delta_repo = di[PricingUpgradeDeltaRepo]
 
     def quote(self, tier: VerificationTier, currency: str = "NGN") -> PricingSnapshotDto:
         currency = (currency or "NGN").upper()
@@ -78,6 +104,135 @@ class PricingService:
             "locked_at": locked_at,
             "locked_until": locked_until,
         })
+
+    # ── Admin DB-backed methods (S54) ────────────────────────────
+
+    async def list_tier_configs(self):
+        from main.app.domain.verification.pricing.models import PricingTierConfigDto, PricingLineItemDto as PricingLIDto
+        self._get_repos()
+        configs = await self._tier_repo.list_all_active()
+        result = []
+        for cfg in configs:
+            line_items = await self._line_item_repo.list_for_config(str(cfg.id))
+            result.append(self._config_to_dto(cfg, line_items))
+        return result
+
+    async def upsert_tier(self, dto, admin_id: str):
+        from main.app.domain.verification.pricing.models import (
+            CreatePricingTierConfigDto,
+            CreatePricingLineItemDto,
+            UpdatePricingTierConfigDto,
+        )
+        self._get_repos()
+        existing = await self._tier_repo.get_for_tier_currency(dto.tier, dto.currency)
+        if existing is None:
+            cfg = await self._tier_repo.create(CreatePricingTierConfigDto(
+                tier=dto.tier,
+                label=dto.label,
+                currency=dto.currency,
+                service_fee_minor=dto.service_fee_minor,
+                updated_by=admin_id,
+            ))
+        else:
+            await self._tier_repo.update(str(existing.id), UpdatePricingTierConfigDto(
+                label=dto.label,
+                service_fee_minor=dto.service_fee_minor,
+                is_active=True,
+                updated_by=admin_id,
+            ))
+            cfg = await self._tier_repo.get_model(str(existing.id))
+
+        # Replace line items
+        await self._line_item_repo.delete_for_config(str(cfg.id))
+        for li in dto.line_items:
+            await self._line_item_repo.create(CreatePricingLineItemDto(
+                tier_config_id=str(cfg.id),
+                label=li.label,
+                amount_minor=li.amount_minor,
+                description=li.description,
+                sort_order=li.sort_order,
+            ))
+
+        line_items = await self._line_item_repo.list_for_config(str(cfg.id))
+        return self._config_to_dto(cfg, line_items)
+
+    async def update_tier(self, tier: str, dto, admin_id: str):
+        from main.app.domain.verification.pricing.models import UpdatePricingTierConfigDto
+        self._get_repos()
+        existing = await self._tier_repo.get_active_for_tier(tier)
+        if existing is None:
+            raise ResourceNotFoundException(resource="PricingTierConfig")
+        update = UpdatePricingTierConfigDto(**{k: v for k, v in dto.model_dump().items() if v is not None})
+        update.updated_by = admin_id
+        await self._tier_repo.update(str(existing.id), update)
+        cfg = await self._tier_repo.get_model(str(existing.id))
+        line_items = await self._line_item_repo.list_for_config(str(cfg.id))
+        return self._config_to_dto(cfg, line_items)
+
+    async def list_upgrade_deltas(self):
+        self._get_repos()
+        rows = await self._delta_repo.list_all()
+        return [self._delta_to_dto(r) for r in rows]
+
+    async def upsert_upgrade_delta(self, dto, admin_id: str):
+        from main.app.domain.verification.pricing.models import (
+            CreatePricingUpgradeDeltaDto,
+            UpdatePricingUpgradeDeltaDto,
+        )
+        self._get_repos()
+        existing = await self._delta_repo.get_for_pair(dto.from_tier, dto.to_tier, dto.currency)
+        if existing is None:
+            row = await self._delta_repo.create(CreatePricingUpgradeDeltaDto(
+                from_tier=dto.from_tier,
+                to_tier=dto.to_tier,
+                delta_minor=dto.delta_minor,
+                currency=dto.currency,
+                updated_by=admin_id,
+            ))
+        else:
+            await self._delta_repo.update(str(existing.id), UpdatePricingUpgradeDeltaDto(
+                delta_minor=dto.delta_minor,
+                updated_by=admin_id,
+            ))
+            row = await self._delta_repo.get_model(str(existing.id))
+        return self._delta_to_dto(row)
+
+    @staticmethod
+    def _config_to_dto(cfg, line_items):
+        from main.app.domain.verification.pricing.models import PricingTierConfigDto, PricingLineItemDto as PricingLIDto
+        return PricingTierConfigDto(
+            id=str(cfg.id),
+            tier=cfg.tier,
+            label=cfg.label,
+            currency=cfg.currency,
+            service_fee_minor=cfg.service_fee_minor,
+            is_active=cfg.is_active,
+            line_items=[
+                PricingLIDto(
+                    id=str(li.id),
+                    label=li.label,
+                    amount_minor=li.amount_minor,
+                    description=li.description,
+                    sort_order=li.sort_order,
+                )
+                for li in line_items
+            ],
+            updated_by=cfg.updated_by,
+            date_updated=cfg.date_updated,
+        )
+
+    @staticmethod
+    def _delta_to_dto(row):
+        from main.app.domain.verification.pricing.models import PricingUpgradeDeltaDto
+        return PricingUpgradeDeltaDto(
+            id=str(row.id),
+            from_tier=row.from_tier,
+            to_tier=row.to_tier,
+            delta_minor=row.delta_minor,
+            currency=row.currency,
+            updated_by=row.updated_by,
+            date_updated=row.date_updated,
+        )
 
     @staticmethod
     def _get_fx_rate(currency: str) -> tuple[float, float, bool]:

@@ -1,11 +1,11 @@
 """Payment HTTP routes — PRD Phase 5 (§5.4)."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from loguru import Logger
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
@@ -21,7 +21,7 @@ from main.app.domain.user.auth.utils.permissions import (
     Permission,
     require_permission,
 )
-from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.db.models import Page, SuccessResponse
 
 logger: Logger = di["logger"]
 
@@ -73,6 +73,22 @@ async def admin_confirm_wire(
 ):
     dto = await payment_service.confirm_wire(payment_id, admin_id, req)
     return SuccessResponse[PaymentDto](data=dto)
+
+
+@payment_router.get(
+    "/admin/payments",
+    response_model=Page[PaymentDto],
+)
+async def admin_list_payments(
+    status: Optional[str] = Query(None),
+    method: Optional[str] = Query(None),
+    page: int = Query(0, ge=0),
+    page_size: int = Query(25, ge=1, le=100),
+    _: str = Depends(require_permission(Permission.VIEW_ADMIN_PANEL)),
+):
+    return await payment_service.admin_list_payments(
+        status=status, method=method, page=page, page_size=page_size,
+    )
 
 
 # ── Webhook ────────────────────────────────────────────────────

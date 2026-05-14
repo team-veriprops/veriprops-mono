@@ -103,3 +103,6 @@ class AvailableTemplate(str, Enum):
     REFERRAL_PROGRAM_INVITATION = "referral_program_invitation"  # Email, WhatsApp, Mobile push
     HOLIDAY_FESTIVE_GREETING = "holiday_festive_greeting"  # Email, WhatsApp
     LIMITED_TIME_PROMO_DISCOUNT = "limited_time_promo_discount"  # Email, WhatsApp, Mobile push, Web Push
+
+    # ============ ADMIN BROADCAST ============
+    ADMIN_BROADCAST = "admin_broadcast"  # Email, Push

@@ -4,7 +4,7 @@ import type {
   AgentApplication,
 } from "@components/agents/libs/agent-service";
 
-export type AdminSubRole = "SUPER" | "OPERATIONS" | "FINANCE";
+export type AdminSubRole = "SUPER" | "OPERATIONS" | "FINANCE" | "CONTENT_CREATOR" | "CONTENT_APPROVER";
 export type AdminInvitationStatus = "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
 export type AcceptInviteBranch =
   | "SIGNUP_REQUIRED"
@@ -183,6 +183,245 @@ export interface AdminConfig {
   description: string | null;
   updatedBy: string | null;
   dateUpdated: string | null;
+}
+
+// ── Analytics types (S53) ──
+
+export interface MissionControlDto {
+  activeVerifications: number;
+  pendingAssignments: number;
+  stuckJobs: number;
+  slaAtRiskCount: number;
+  revenueTotalNgn: number;
+  availableAgents: number;
+}
+
+export interface RegionalStat {
+  region: string;
+  activeCount: number;
+  completedCount: number;
+  avgTrustScore: number | null;
+  revenueNgn: number;
+}
+
+export interface RegionalPerformanceDto {
+  regions: RegionalStat[];
+}
+
+export interface ConversionFunnelDto {
+  signups: number;
+  submitted: number;
+  paid: number;
+  completed: number;
+  signupToPaidPct: number;
+  paidToCompletedPct: number;
+}
+
+export interface AvgVerificationTimeByTierDto {
+  tier: string;
+  avgHours: number;
+}
+
+export interface AgentPerformanceTrendDto {
+  period: string;
+  avgQualityScore: number;
+  totalScores: number;
+}
+
+export interface RevenueByLocationDto {
+  state: string;
+  tier: string;
+  revenueNgn: number;
+  count: number;
+}
+
+export interface DisputeRateDto {
+  totalCompleted: number;
+  totalDisputed: number;
+  disputeRatePct: number;
+}
+
+export interface AnalyticsDashboardDto {
+  conversionFunnel: ConversionFunnelDto;
+  avgTimeByTier: AvgVerificationTimeByTierDto[];
+  agentPerformanceTrends: AgentPerformanceTrendDto[];
+  revenueByLocation: RevenueByLocationDto[];
+  disputeRate: DisputeRateDto;
+}
+
+// ── Pricing types (S54) ──
+
+export interface PricingLineItemDto {
+  id?: string;
+  label: string;
+  amountMinor: number;
+  description?: string;
+  sortOrder: number;
+}
+
+export interface PricingTierConfigDto {
+  id: string;
+  tier: string;
+  label: string;
+  currency: string;
+  serviceFeeMinor: number;
+  isActive: boolean;
+  lineItems: PricingLineItemDto[];
+  updatedBy?: string | null;
+  dateUpdated?: string | null;
+}
+
+export interface UpsertPricingTierPayload {
+  tier: string;
+  label: string;
+  currency?: string;
+  serviceFeeMinor: number;
+  lineItems: Omit<PricingLineItemDto, "id">[];
+}
+
+export interface UpdatePricingTierPayload {
+  label?: string;
+  serviceFeeMinor?: number;
+  isActive?: boolean;
+}
+
+export interface PricingUpgradeDeltaDto {
+  id: string;
+  fromTier: string;
+  toTier: string;
+  deltaMinor: number;
+  currency: string;
+  updatedBy?: string | null;
+  dateUpdated?: string | null;
+}
+
+export interface UpsertUpgradeDeltaPayload {
+  fromTier: string;
+  toTier: string;
+  deltaMinor: number;
+  currency?: string;
+}
+
+// ── Finance / payment types (S54) ──
+
+export type PaymentMethod = "CARD" | "BANK_TRANSFER" | "WIRE";
+export type PaymentStatus =
+  | "INITIATED" | "PROCESSING" | "SUCCEEDED" | "FAILED"
+  | "PENDING_TRANSFER" | "PENDING_WIRE";
+
+export interface PaymentDto {
+  id: string;
+  verificationId: string;
+  provider: string;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  amountMinor: number;
+  currency: string;
+  providerRef?: string | null;
+  failureReason?: string | null;
+  wireProofUrl?: string | null;
+  dateCreated: string;
+  dateUpdated?: string | null;
+}
+
+// ── Commission breakdown types (S54) ──
+
+export type EarningStatus = "PENDING" | "ON_HOLD" | "PAID";
+
+export interface EarningDto {
+  id: string;
+  agentId: string;
+  taskId: string;
+  verificationId: string;
+  grossAmount: number;
+  commissionPct: number;
+  netAmount: number;
+  status: EarningStatus;
+  computedAt: string;
+  dateCreated: string;
+}
+
+// ── Content types (S55) ──
+
+export type ContentItemType =
+  | "HOW_IT_WORKS_STEP" | "FAQ" | "TESTIMONIAL"
+  | "AGENT_SPOTLIGHT" | "AREA_INSIGHT";
+
+export interface ContentItemDto {
+  id: string;
+  itemType: ContentItemType;
+  slug: string;
+  title: string;
+  body: string;
+  meta?: string | null;
+  isPublished: boolean;
+  sortOrder: number;
+  authorId?: string | null;
+  lga?: string | null;
+  state?: string | null;
+  dateCreated: string;
+  dateUpdated?: string | null;
+}
+
+export interface CreateContentItemPayload {
+  itemType: ContentItemType;
+  slug: string;
+  title: string;
+  body: string;
+  meta?: string;
+  isPublished?: boolean;
+  sortOrder?: number;
+  lga?: string;
+  state?: string;
+}
+
+export interface UpdateContentItemPayload {
+  slug?: string;
+  title?: string;
+  body?: string;
+  meta?: string;
+  isPublished?: boolean;
+  sortOrder?: number;
+  lga?: string;
+  state?: string;
+}
+
+// ── Broadcast types (S55) ──
+
+export type BroadcastStatus = "DRAFT" | "SCHEDULED" | "SENDING" | "SENT" | "CANCELLED";
+export type BroadcastAudience = "ALL" | "CUSTOMERS" | "AGENTS";
+
+export interface BroadcastDto {
+  id: string;
+  subject: string;
+  bodyText: string;
+  bodyHtml?: string | null;
+  audience: BroadcastAudience;
+  channels?: string | null;
+  status: BroadcastStatus;
+  scheduledAt?: string | null;
+  sentAt?: string | null;
+  createdBy?: string | null;
+  totalRecipients?: number | null;
+  sentCount?: number | null;
+  dateCreated: string;
+  dateUpdated?: string | null;
+}
+
+export interface CreateBroadcastPayload {
+  subject: string;
+  bodyText: string;
+  bodyHtml?: string;
+  audience?: BroadcastAudience;
+  channels?: string;
+}
+
+export interface PreviewBroadcastDto {
+  subject: string;
+  bodyText: string;
+  bodyHtml?: string | null;
+  audience: BroadcastAudience;
+  estimatedRecipients: number;
 }
 
 export class AdminService {
@@ -385,5 +624,150 @@ export class AdminService {
 
   setConfig(key: string, value: string): Promise<SuccessResponse<AdminConfig>> {
     return this.http.put(`${this.configBase}/${key}`, { value });
+  }
+
+  // ── Analytics (S53) ──
+
+  getMissionControl(): Promise<SuccessResponse<MissionControlDto>> {
+    return this.http.get("/admin/analytics/mission-control");
+  }
+
+  getRegionalPerformance(): Promise<SuccessResponse<RegionalPerformanceDto>> {
+    return this.http.get("/admin/analytics/regional-performance");
+  }
+
+  getAnalyticsDashboard(): Promise<SuccessResponse<AnalyticsDashboardDto>> {
+    return this.http.get("/admin/analytics/dashboard");
+  }
+
+  // ── Pricing (S54) ──
+
+  getPricingTiers(): Promise<SuccessResponse<PricingTierConfigDto[]>> {
+    return this.http.get("/admin/pricing/tiers");
+  }
+
+  upsertPricingTier(payload: UpsertPricingTierPayload): Promise<SuccessResponse<PricingTierConfigDto>> {
+    return this.http.post("/admin/pricing/tiers", payload);
+  }
+
+  updatePricingTier(tier: string, payload: UpdatePricingTierPayload): Promise<SuccessResponse<PricingTierConfigDto>> {
+    return this.http.put(`/admin/pricing/tiers/${tier}`, payload);
+  }
+
+  getUpgradeDeltas(): Promise<SuccessResponse<PricingUpgradeDeltaDto[]>> {
+    return this.http.get("/admin/pricing/upgrade-deltas");
+  }
+
+  upsertUpgradeDelta(payload: UpsertUpgradeDeltaPayload): Promise<SuccessResponse<PricingUpgradeDeltaDto>> {
+    return this.http.put("/admin/pricing/upgrade-deltas", payload);
+  }
+
+  // ── Finance: payments (S54) ──
+
+  adminListPayments(opts?: {
+    status?: PaymentStatus;
+    method?: PaymentMethod;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PageResponse<PaymentDto>> {
+    const p = new URLSearchParams();
+    if (opts?.status) p.set("status", opts.status);
+    if (opts?.method) p.set("method", opts.method);
+    if (opts?.page !== undefined) p.set("page", String(opts.page));
+    if (opts?.pageSize) p.set("page_size", String(opts.pageSize));
+    const qs = p.toString();
+    return this.http.get(`/payments/admin/payments${qs ? `?${qs}` : ""}`);
+  }
+
+  confirmWirePayment(paymentId: string, note?: string): Promise<SuccessResponse<PaymentDto>> {
+    return this.http.post(`/payments/admin/${paymentId}/confirm-wire`, { note: note ?? null });
+  }
+
+  // ── Finance: commissions (S54) ──
+
+  adminListCommissions(opts?: {
+    agentId?: string;
+    status?: EarningStatus;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PageResponse<EarningDto>> {
+    const p = new URLSearchParams();
+    if (opts?.agentId) p.set("agent_id", opts.agentId);
+    if (opts?.status) p.set("status", opts.status);
+    if (opts?.page !== undefined) p.set("page", String(opts.page));
+    if (opts?.pageSize) p.set("page_size", String(opts.pageSize));
+    const qs = p.toString();
+    return this.http.get(`/admin/commission/breakdown${qs ? `?${qs}` : ""}`);
+  }
+
+  // ── Content (S55) ──
+
+  listContent(opts?: {
+    itemType?: ContentItemType;
+    publishedOnly?: boolean;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PageResponse<ContentItemDto>> {
+    const p = new URLSearchParams();
+    if (opts?.itemType) p.set("item_type", opts.itemType);
+    if (opts?.publishedOnly !== undefined) p.set("published_only", String(opts.publishedOnly));
+    if (opts?.page !== undefined) p.set("page", String(opts.page));
+    if (opts?.pageSize) p.set("page_size", String(opts.pageSize));
+    const qs = p.toString();
+    return this.http.get(`/admin/content${qs ? `?${qs}` : ""}`);
+  }
+
+  createContentItem(payload: CreateContentItemPayload): Promise<SuccessResponse<ContentItemDto>> {
+    return this.http.post("/admin/content", payload);
+  }
+
+  updateContentItem(itemId: string, payload: UpdateContentItemPayload): Promise<SuccessResponse<ContentItemDto>> {
+    return this.http.put(`/admin/content/${itemId}`, payload);
+  }
+
+  publishContentItem(itemId: string, isPublished: boolean): Promise<SuccessResponse<ContentItemDto>> {
+    return this.http.post(`/admin/content/${itemId}/publish`, { isPublished });
+  }
+
+  deleteContentItem(itemId: string): Promise<SuccessResponse<boolean>> {
+    return this.http.delete(`/admin/content/${itemId}`);
+  }
+
+  reorderContentItems(itemIds: string[]): Promise<SuccessResponse<ContentItemDto[]>> {
+    return this.http.post("/admin/content/reorder", { itemIds });
+  }
+
+  // ── Broadcasts (S55) ──
+
+  listBroadcasts(opts?: { page?: number; pageSize?: number }): Promise<PageResponse<BroadcastDto>> {
+    const p = new URLSearchParams();
+    if (opts?.page !== undefined) p.set("page", String(opts.page));
+    if (opts?.pageSize) p.set("page_size", String(opts.pageSize));
+    const qs = p.toString();
+    return this.http.get(`/admin/broadcasts${qs ? `?${qs}` : ""}`);
+  }
+
+  createBroadcast(payload: CreateBroadcastPayload): Promise<SuccessResponse<BroadcastDto>> {
+    return this.http.post("/admin/broadcasts", payload);
+  }
+
+  updateBroadcast(broadcastId: string, payload: Partial<CreateBroadcastPayload>): Promise<SuccessResponse<BroadcastDto>> {
+    return this.http.put(`/admin/broadcasts/${broadcastId}`, payload);
+  }
+
+  scheduleBroadcast(broadcastId: string, scheduledAt: string): Promise<SuccessResponse<BroadcastDto>> {
+    return this.http.post(`/admin/broadcasts/${broadcastId}/schedule`, { scheduledAt });
+  }
+
+  sendBroadcastNow(broadcastId: string): Promise<SuccessResponse<BroadcastDto>> {
+    return this.http.post(`/admin/broadcasts/${broadcastId}/send-now`, {});
+  }
+
+  cancelBroadcast(broadcastId: string): Promise<SuccessResponse<BroadcastDto>> {
+    return this.http.post(`/admin/broadcasts/${broadcastId}/cancel`, {});
+  }
+
+  previewBroadcast(broadcastId: string): Promise<SuccessResponse<PreviewBroadcastDto>> {
+    return this.http.get(`/admin/broadcasts/${broadcastId}/preview`);
   }
 }

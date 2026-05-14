@@ -58,6 +58,7 @@ from main.appodus_utils.integrations.payment.gateway.models import (
 from main.appodus_utils.integrations.payment.gateway.paystack.models import PaystackBankTransferChargeRequest
 from main.appodus_utils.integrations.payment.gateway.paystack.payment import PaystackPaymentGateway
 from main.app.config.settings import IntegratedPlatform, settings
+from main.appodus_utils.db.models import Page, PaginationMeta
 
 logger: Logger = di["logger"]
 
@@ -368,6 +369,19 @@ class PaymentService:
             )
         except Exception as exc:
             logger.warning("Notification emit failed (payment): {}", exc)
+
+    async def admin_list_payments(
+        self,
+        *,
+        status: Optional[str] = None,
+        method: Optional[str] = None,
+        page: int = 0,
+        page_size: int = 25,
+    ) -> "Page[PaymentDto]":
+        rows, total = await self._payment_repo.admin_list(status, method, page, page_size)
+        items = [self._to_dto(r) for r in rows]
+        meta = PaginationMeta(page=page, page_size=page_size, count=len(items), total=total)
+        return Page[PaymentDto](items=items, meta=meta)
 
     async def _get_referral_service(self):
         """Lazy-load ReferralService to avoid circular imports at module level."""

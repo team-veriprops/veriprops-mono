@@ -60,6 +60,16 @@ CONFIG_DEFAULTS: dict[str, tuple[str, str]] = {
         "20",
         "Maximum combined discount cap (referral + first-time) applied to any single payment",
     ),
+    # Phase 18 — Pricing & Finance
+    "cancellation_surcharge_pct": (
+        "5",
+        "% surcharge on customer cancellation after agent assignment",
+    ),
+    # Phase 18 — Content
+    "area_insights_owner": (
+        "admin",
+        "Who authors Area Insights: 'admin' only (D21 resolved — admin-only)",
+    ),
 }
 
 

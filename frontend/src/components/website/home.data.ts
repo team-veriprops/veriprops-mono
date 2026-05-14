@@ -61,7 +61,7 @@ export const ecosystemFeatures: EcosystemFeature[] = [
   {
     title: "Trust Score",
     description:
-      "Our proprietary weighted algorithm calculates risk from registry records, encumbrances, and ground inspection. 90+ is Safe — 60–89 is Caution — 0–59 is High Risk.",
+      "Our proprietary weighted algorithm calculates risk from registry records, encumbrances, and ground inspection. 90+ is Safe, 60–89 is Caution, and 0–59 is High Risk.",
     icon: "BarChart3",
   },
   {

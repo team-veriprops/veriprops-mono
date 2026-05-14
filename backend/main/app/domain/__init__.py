@@ -64,7 +64,14 @@ from main.app.domain.referral import (  # noqa: F401
 )
 from main.app.domain.referral import referral_router
 from main.app.domain.user.agent.models import AgentQualityScore as _AgentQualityScoreModel  # noqa: F401
+from main.app.domain.verification.pricing import models as _pricing_models  # noqa: F401
+from main.app.domain.verification.pricing.controller import pricing_admin_router
+from main.app.domain.content import models as _content_models  # noqa: F401
+from main.app.domain.content.controller import content_admin_router, public_content_router
+from main.app.domain.broadcast import models as _broadcast_models  # noqa: F401
+from main.app.domain.broadcast.controller import broadcast_router
 from main.appodus_utils.integrations.webhook import webhook_router
+from main.app.domain.analytics.controller import analytics_router
 
 router = APIRouter()
 router.include_router(admin_config_router)
@@ -92,6 +99,11 @@ router.include_router(dispute_router)
 router.include_router(commission_router)
 router.include_router(payout_router)
 router.include_router(referral_router)
+router.include_router(analytics_router)
+router.include_router(pricing_admin_router)
+router.include_router(content_admin_router)
+router.include_router(public_content_router)
+router.include_router(broadcast_router)
 router.include_router(webhook_router)
 
 # Dev/test-only endpoints — never mounted in production

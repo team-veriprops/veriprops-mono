@@ -21,6 +21,7 @@ from main.app.domain.commission.models import (
 )
 from main.app.domain.commission.repo import CommissionRuleRepo, EarningRepo
 from main.appodus_utils import Utils
+from main.appodus_utils.db.models import Page, PaginationMeta
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -98,6 +99,19 @@ class CommissionService:
         )
 
     # ── Admin rule management ─────────────────────────────────────
+
+    async def admin_list_earnings(
+        self,
+        *,
+        agent_id: Optional[str] = None,
+        status: Optional[str] = None,
+        page: int = 0,
+        page_size: int = 25,
+    ) -> Page[EarningDto]:
+        rows, total = await self._earning_repo.admin_list(agent_id, status, page, page_size)
+        items = [self._earning_to_dto(r) for r in rows]
+        meta = PaginationMeta(page=page, page_size=page_size, count=len(items), total=total)
+        return Page[EarningDto](items=items, meta=meta)
 
     async def list_rules(self) -> List[CommissionRuleDto]:
         from main.app.domain.commission.models import SearchCommissionRuleDto
