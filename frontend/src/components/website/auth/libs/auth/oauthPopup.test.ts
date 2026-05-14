@@ -23,8 +23,8 @@ function makePopup(closed = false) {
   };
 }
 
-// The OAuth callback postMessage comes from the backend origin.
-const BACKEND_ORIGIN = "http://localhost:8000";
+// The OAuth callback page is served by the same Next.js app — always same-origin.
+const SAME_ORIGIN = window.location.origin;
 
 // All resolvedOauth URLs must embed a ?state= param that matches
 // what the implementation extracts with parsedUrl.searchParams.get("state").
@@ -32,7 +32,7 @@ function resolvedOauth(url = `https://accounts.google.com/o/oauth2?state=x`) {
   return Promise.resolve({ data: { authorizationUrl: url } });
 }
 
-function dispatchOauthMessage(data: Record<string, unknown>, origin = BACKEND_ORIGIN) {
+function dispatchOauthMessage(data: Record<string, unknown>, origin = SAME_ORIGIN) {
   window.dispatchEvent(new MessageEvent("message", { origin, data }));
 }
 

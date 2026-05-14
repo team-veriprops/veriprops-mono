@@ -1,5 +1,6 @@
 export interface HttpClient {
   get<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
+  getBlob(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<Blob>;
   post<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
   put<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
   patch<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
@@ -31,7 +32,7 @@ export class FetchHttpClient implements HttpClient {
 
   private async request<T>(
     url: string,
-    options: RequestInit & { _retry?: boolean; timeout?: number } = {}
+    options: RequestInit & { _retry?: boolean; timeout?: number; _responseType?: 'blob' } = {}
   ): Promise<T> {
     const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
@@ -98,6 +99,9 @@ export class FetchHttpClient implements HttpClient {
         );
       }
 
+      if (options._responseType === 'blob') {
+        return response.blob() as unknown as T;
+      }
       return this.safeJson(response);
     } catch (error: any) {
       if (error.name === "AbortError") {
@@ -208,6 +212,10 @@ export class FetchHttpClient implements HttpClient {
   // --- HttpClient methods ---
   async get<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T> {
     return this.request<T>(url, { ...config, method: "GET" });
+  }
+
+  async getBlob(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<Blob> {
+    return this.request<Blob>(url, { ...config, method: "GET", _responseType: "blob" });
   }
 
   async post<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {

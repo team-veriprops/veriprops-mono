@@ -4,6 +4,7 @@ import { use, useState, useCallback } from "react";
 import { Loader2, AlertTriangle, Share2, RefreshCw, ArrowUpCircle, Flag } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
+import { reportService } from "@components/portal/report/libs/report-service";
 import AccessGateModal from "@components/portal/report/AccessGateModal";
 import ReportHeader from "@components/portal/report/ReportHeader";
 import ReportSection from "@components/portal/report/ReportSection";
@@ -68,9 +69,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   async function handleDownloadPdf() {
     setPdfLoading(true);
     try {
-      const resp = await fetch(`/api/portal/verifications/${id}/report/pdf`, { credentials: "include" });
-      if (!resp.ok) throw new Error("PDF unavailable");
-      const blob = await resp.blob();
+      const blob = await reportService.downloadPdf(id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

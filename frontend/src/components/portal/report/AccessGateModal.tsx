@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { FileText, Loader2 } from "lucide-react";
+import { reportService } from "./libs/report-service";
 
 interface Props {
   vid: string;
@@ -23,12 +24,7 @@ export default function AccessGateModal({ vid, onAccepted }: Props) {
   async function handleAccept() {
     setAccepting(true);
     try {
-      await fetch(`/api/portal/verifications/${vid}/report/acknowledge`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ip_address: null }),
-        credentials: "include",
-      });
+      await reportService.acknowledge(vid);
       onAccepted();
     } catch {
       setAccepting(false);

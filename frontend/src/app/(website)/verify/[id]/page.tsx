@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getPublicSummary } from "@/components/public/libs/public-verification-service";
+import { publicVerificationService } from "@/components/public/libs/public-verification-service";
 import VerificationBadge from "@components/public/VerificationBadge";
 import PublicSummaryCard from "@components/public/PublicSummaryCard";
 import { ROUTES } from "@/lib/routes";
@@ -14,7 +14,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const summary = await getPublicSummary(id);
+  const summary = await publicVerificationService.getSummary(id);
   const isPublicCompleted = summary?.status === "COMPLETED" && summary?.sharingMode === "PUBLIC";
   return {
     title: summary ? `Verification ${summary.vid} — Veriprops` : "Verification Not Found",
@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PublicVerifyPage({ params }: Props) {
   const { id } = await params;
-  const summary = await getPublicSummary(id);
+  const summary = await publicVerificationService.getSummary(id);
 
   if (!summary) notFound();
 
