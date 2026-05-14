@@ -71,11 +71,10 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
   let lastAuthorizationUrl: string | undefined;
   let expectedState: string | null;
 
-  // TODO: fetch this values dynamically from the backend
-  const allowedOrigins = new Set([
-  "http://localhost:8000",
-  "https://auth.veriprops.com"
-]);
+  // The callback HTML is served through the same Next.js proxy as this page —
+  // always same-origin. window.location.origin is environment-agnostic and
+  // correct for local dev, staging, and production without hardcoding.
+  const allowedOrigins = new Set([window.location.origin]);
 
   const cleanup = () => {
     window.removeEventListener("message", onMessage);
@@ -87,7 +86,6 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
   };
 
   const onMessage = (event: MessageEvent) => {
-    console.log("event: ", event)
     if (resolved) return;
     if (!allowedOrigins.has(event.origin)) return;
     

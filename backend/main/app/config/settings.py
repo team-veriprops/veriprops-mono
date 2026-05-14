@@ -48,14 +48,24 @@ class Settings(AppodusBaseSettings):
     """
 
     # OAuth — popup flow
-    # Public origin of *this* backend service. Used to build the OAuth redirect_uri
-    # registered with each provider. Must match the value configured in the
-    # Google/Apple/Facebook developer consoles.
+    # Public origin of *this* backend service (used for non-OAuth purposes).
     BACKEND_PUBLIC_ORIGIN: str = "http://localhost:8000"
+    # Base URL used to build the OAuth redirect_uri sent to each provider.
+    # Must point at the frontend proxy (e.g. http://localhost:3000) so that the
+    # provider redirects the popup through Next.js. The proxy forwards the request
+    # to this backend transparently, and the Set-Cookie response flows back through
+    # the proxy — so the browser receives the cookie on the frontend origin, not
+    # the backend origin. Defaults to BACKEND_PUBLIC_ORIGIN when empty (legacy).
+    OAUTH_CALLBACK_BASE_URL: str = ""
     # Allowlist of frontend origins permitted to receive postMessage from the
     # OAuth popup callback. The Referer at /start must match one of these
     # exactly (scheme + host + port). Comma-separated.
     OAUTH_FRONTEND_ORIGINS: str = "http://localhost:3000,https://veriprops.ng,https://www.veriprops.ng,https://staging.veriprops.ng,https://dev.veriprops.ng"
+
+    @property
+    def oauth_callback_base(self) -> str:
+        """Resolved base URL for OAuth redirect_uri construction."""
+        return (self.OAUTH_CALLBACK_BASE_URL or self.BACKEND_PUBLIC_ORIGIN).rstrip("/")
 
     # PAYMENT
     PAYMENT_REDIRECT_PATH: str = "/redirect"

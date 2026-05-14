@@ -127,7 +127,7 @@ class AppodusBaseSettings(BaseSettings):
     # Enable csrf double submit protection. default is True
     AUTHJWT_COOKIE_CSRF_PROTECT: bool = True
     # Change to 'lax' in production to make your website more secure from CSRF Attacks, default is None
-    AUTHJWT_COOKIE_SAMESITE: str = 'none' # Must be 'none' when AUTHJWT_COOKIE_SECURE = True
+    AUTHJWT_COOKIE_SAMESITE: str = 'lax'
     AUTHJWT_ACCESS_COOKIE_KEY: str = '__Host-access_token'
     AUTHJWT_REFRESH_COOKIE_KEY: str = '__Host-refresh_token'
     AUTHJWT_ACCESS_CSRF_COOKIE_KEY: str = '__Host-access_csrf_token'

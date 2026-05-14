@@ -84,10 +84,13 @@ class OauthUtils:
 
     @staticmethod
     async def callback_redirect_uri(platform: SocialAuthProvider) -> str:
-        """The OAuth redirect_uri registered with each provider. Must point at
-        this backend (not the frontend) — the popup loads the backend HTML
-        callback page, which then postMessages the parent frame and closes."""
-        return f"{settings.BACKEND_PUBLIC_ORIGIN.rstrip('/')}/api/users/auth/oauth/{platform.value}/callback"
+        """The OAuth redirect_uri sent to the provider. Points at the frontend
+        proxy (settings.oauth_callback_base) which transparently forwards the
+        request to this backend. The Set-Cookie response flows back through the
+        proxy, so the browser receives the session cookie on the frontend origin
+        rather than the backend origin — making the cookie visible to all
+        subsequent frontend API requests."""
+        return f"{settings.oauth_callback_base}/api/users/auth/oauth/{platform.value}/callback"
 
     @staticmethod
     async def resolve_frontend_origin(request: Request) -> str:
