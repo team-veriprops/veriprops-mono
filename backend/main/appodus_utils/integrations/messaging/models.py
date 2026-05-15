@@ -80,6 +80,7 @@ class MessageCategory(str, enum.Enum):
     SECURITY = "security"
     ADMIN = "admin"
     REMINDER = "reminder"
+    BROADCAST = "broadcast"
 
 
 class MessageProviderName(str, Enum):

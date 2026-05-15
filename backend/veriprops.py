@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -9,8 +10,8 @@ from contextlib import asynccontextmanager
 from libre_fastapi_jwt.exceptions import AuthJWTException
 from starlette import status
 
-from main.app.config.settings import settings # noqa: F401
-from main.appodus_utils.config.bootstrap import BaseDiBootstrap # noqa: F401
+from main.app.config.settings import settings  # noqa: F401
+from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
 from main.app.db.seeder import DataSeeder
 from main.appodus_utils.integrations.webhook import webhook_router
 from main.appodus_utils.config.client_manager import ClientStateManager
@@ -26,13 +27,14 @@ from main.appodus_utils.exception.exception_handlers import (
 from main.appodus_utils.exception.exceptions import AppodusBaseException
 from main.appodus_utils.middleware.db_session_middleware import DBSessionMiddleware
 from main.appodus_utils.middleware.request_logging_middleware import RequestLoggingMiddleware
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from kink import di
 from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 
 from main.app.domain import router
+from main.app.jobs.scheduled import start_scheduler, stop_scheduler
 
 logger: Logger = di['logger']
 client_state_manager: ClientStateManager = ClientStateManager()
@@ -47,18 +49,13 @@ async def lifespan_event(app: FastAPI):
     # Seed data
     await data_seeder.run_data_seed()
 
-    # Start task-monitor background jobs (pool timeout + no-show alerts)
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    from main.app.jobs.task_monitor import check_no_show_timeouts, check_pool_timeouts
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(check_pool_timeouts, "interval", minutes=15, id="pool_timeout_check")
-    scheduler.add_job(check_no_show_timeouts, "interval", minutes=15, id="no_show_check")
-    scheduler.start()
+    # Start Scheduled Jobs
+    start_scheduler()
 
     logger.debug("Done running lifespan")
     yield
     logger.debug("Shutting down veriprops...")
-    scheduler.shutdown(wait=False)
+    stop_scheduler()
     await client_state_manager.close_clients()
     logger.debug("Veriprops is shutdown!")
 

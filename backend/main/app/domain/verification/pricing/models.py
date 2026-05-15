@@ -24,7 +24,6 @@ class PricingTierConfig(BaseEntity):
     currency = Column(String(8), nullable=False, default="NGN")
     service_fee_minor = Column(BigInteger, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
-    updated_by = Column(String(36), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("tier", "currency", name="uq_pricing_tier_currency"),

@@ -88,14 +88,7 @@ class ShareService:
         from main.appodus_utils.db.session import get_db_session_from_context
         from sqlalchemy import select
         from main.app.domain.verification.share.models import ShareRecipient, UpdateShareRecipientDto
-        session = get_db_session_from_context()
-        result = await session.execute(
-            select(ShareRecipient).where(
-                ShareRecipient.share_link_id == str(row.id),
-                ShareRecipient.deleted == False,
-            )
-        )
-        recipient = result.scalars().first()
+        recipient = await self._recipient_repo.get_share_recipient(str(row.id))
         if recipient and recipient.acknowledged_at is None:
             await self._recipient_repo.update(
                 str(recipient.id),

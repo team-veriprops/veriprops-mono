@@ -42,7 +42,7 @@ class CommissionRuleRepo(GenericRepo[
         super().__init__(db, model, query_dto)
 
     async def get_for_role_and_tier(self, role: str, tier: str) -> Optional[CommissionRule]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(CommissionRule).where(
                 CommissionRule.role == role,
@@ -70,7 +70,7 @@ class EarningRepo(GenericRepo[
         super().__init__(db, model, query_dto)
 
     async def list_for_agent(self, agent_id: str) -> List[Earning]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(Earning).where(
                 Earning.agent_id == agent_id,
@@ -101,7 +101,7 @@ class EarningRepo(GenericRepo[
 
     async def sum_available(self, agent_id: str) -> Decimal:
         from sqlalchemy import func
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(func.sum(Earning.net_amount)).where(
                 Earning.agent_id == agent_id,

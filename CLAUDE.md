@@ -30,6 +30,11 @@ Frontend reads `API_BASE_URL` (server-only) from its env to build the proxy targ
 - **Path handling.** Use `path.join` / `pathlib` / POSIX-safe APIs — never hardcode `\` or `/` separators.
 - **Real-time channel**: SSE (live dashboard updates, notifications, metrics counters, audit feed), WS (collaborative workflow,chat,presence,two-way realtime commands).
 
+## Pagination Convention
+Every list that can grow, should be implemented a page as follows:
+1. **Backend** -  The API must accept page (zero index) and page_size params, defaulted to 0 and 10 respectively. The API should also return an Object of Page[T], implemented in the file `backend\main\appodus_utils\db\models.py`. The GenericRepo returns this Object through get_page
+2. **Frontend** - The frontend receives the value as an Object of Page<T>, implemented in the file `frontend\src\types\models.ts`. It must also implement paginated rendering of the values. For main Table in the Admin pages, use our existing DataTable implemented here `frontend\src\components\ui\DataTable.tsx`
+
 ## Workflow
 
 When adding a feature, write a short plan and confirm with the user before coding, write tests first, then implement. Update the relevant `CLAUDE.md` if a new pattern emerges that future agents would otherwise have to re-derive.

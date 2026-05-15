@@ -163,3 +163,30 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         rows = (await self._session.execute(stmt)).mappings().all()
 
         return [EmailRecipient(**row) for row in rows]
+
+    async def erase_user(self, user_id: str, short_user_id: str):
+        await self._session.execute(
+            sa_update(User)
+            .where(User.id == user_id)
+            .values(
+                email=f"deleted_{short_user_id}@erased.veriprops.com",
+                email_normalized=f"deleted_{short_user_id}@erased.veriprops.com",
+                phone="",
+                phone_e164=None,
+                first_name="Deleted",
+                last_name="User",
+                password_hash=None,
+            )
+        )
+
+    async def has_active_verification(self, user_id: str, non_terminal_verification_status: frozenset[str]) -> bool:
+        from main.app.domain.verification.models import Verification
+        stmt = select(Verification).where(
+            Verification.deleted.is_(False),
+            Verification.customer_id == user_id,
+            Verification.status.in_(list(non_terminal_verification_status)),
+        ).limit(1)
+        result = await self._session.execute(stmt)
+
+        return result.scalar_one_or_none() is not None
+

@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import math
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -248,11 +250,13 @@ class DbUtils:
         prev_page: Optional[int] = None if page == 0 else page - 1
         next_page: Optional[int] = None if total / page_size <= page + 1 else page + 1
         count = len(response_rows)
+        total_pages = math.ceil(total / page_size)
         meta = PaginationMeta(
             page=page,
             page_size=page_size,
             count=count,
             total=total,
+            total_pages=total_pages,
             prev_page=prev_page,
             next_page=next_page,
         )

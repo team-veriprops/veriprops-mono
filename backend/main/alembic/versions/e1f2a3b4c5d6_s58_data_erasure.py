@@ -21,7 +21,6 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "data_erasure_requests",
-        sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("user_id", sa.String(36), nullable=False, index=True),
         sa.Column("reason", sa.Text, nullable=True),
         sa.Column("status", sa.String(16), nullable=False, server_default="PENDING"),

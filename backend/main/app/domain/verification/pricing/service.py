@@ -61,7 +61,7 @@ class PricingService:
             self._line_item_repo = di[PricingLineItemRepo]
             self._delta_repo = di[PricingUpgradeDeltaRepo]
 
-    def quote(self, tier: VerificationTier, currency: str = "NGN") -> PricingSnapshotDto:
+    async def quote(self, tier: VerificationTier, currency: str = "NGN") -> PricingSnapshotDto:
         currency = (currency or "NGN").upper()
         if currency not in SUPPORTED_CURRENCIES:
             raise ValidationException(message=f"Unsupported currency: {currency}")
@@ -96,7 +96,7 @@ class PricingService:
             fx_stale=stale,
         )
 
-    def lock(self, snapshot: PricingSnapshotDto) -> PricingSnapshotDto:
+    async def lock(self, snapshot: PricingSnapshotDto) -> PricingSnapshotDto:
         ttl_hours = settings.PRICE_LOCK_TTL_HOURS or 24
         locked_at = Utils.datetime_now()
         locked_until = Utils.datetime_now_plus(hours=ttl_hours)

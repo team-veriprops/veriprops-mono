@@ -12,16 +12,17 @@ from kink import di
 if TYPE_CHECKING:
     from loguru import Logger
 
+from main.appodus_utils.decorators.transactional import TransactionSessionPolicy, transactional
+from main.app.domain.admin_config.service import AdminConfigService
+from main.app.domain.verification.task.repo import TaskRepo
+
 logger: "Logger" = di["logger"]
 
 
-async def check_pool_timeouts() -> None:
+@transactional(session_policy=TransactionSessionPolicy.FALLBACK_NEW)
+async def check_task_pool_timeouts() -> None:
     """Alert admin when a task has been PENDING too long with no agent accepting."""
     try:
-        from main.app.domain.admin_config.service import AdminConfigService
-        from main.app.domain.verification.task.repo import TaskRepo
-        from main.appodus_utils.decorators.transactional import transactional
-        from main.appodus_utils.db.session import get_db_session_from_context
 
         config_svc: AdminConfigService = di[AdminConfigService]
         task_repo: TaskRepo = di[TaskRepo]
@@ -29,9 +30,7 @@ async def check_pool_timeouts() -> None:
         hours = await config_svc.get_int("pool_timeout_hours", fallback=24)
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
-        from main.appodus_utils.decorators.transactional import SessionPolicy
-
-        @transactional(session_policy=SessionPolicy.ALWAYS_NEW)
+        @transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW)
         async def _run():
             stale_tasks = await task_repo.list_pending_stale(cutoff)
             for task in stale_tasks:
@@ -45,15 +44,13 @@ async def check_pool_timeouts() -> None:
 
         await _run()
     except Exception as exc:  # noqa: BLE001
-        logger.warning(f"pool_timeout check failed: {exc}")
+        logger.warning("pool_timeout check failed: {}", exc)
 
 
-async def check_no_show_timeouts() -> None:
+@transactional(session_policy=TransactionSessionPolicy.FALLBACK_NEW)
+async def check_task_no_show_timeouts() -> None:
     """Alert admin when an ACCEPTED task has no progress past the no-show window."""
     try:
-        from main.app.domain.admin_config.service import AdminConfigService
-        from main.app.domain.verification.task.repo import TaskRepo
-        from main.appodus_utils.decorators.transactional import SessionPolicy, transactional
 
         config_svc: AdminConfigService = di[AdminConfigService]
         task_repo: TaskRepo = di[TaskRepo]
@@ -61,7 +58,7 @@ async def check_no_show_timeouts() -> None:
         hours = await config_svc.get_int("no_show_timeout_hours", fallback=4)
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
-        @transactional(session_policy=SessionPolicy.ALWAYS_NEW)
+        @transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW)
         async def _run():
             no_show_tasks = await task_repo.list_accepted_no_progress(cutoff)
             for task in no_show_tasks:
@@ -76,7 +73,7 @@ async def check_no_show_timeouts() -> None:
 
         await _run()
     except Exception as exc:  # noqa: BLE001
-        logger.warning(f"no_show check failed: {exc}")
+        logger.warning("no_show check failed: {}", exc)
 
 
 def _fire_sse_alert(event_type: str, **payload) -> None:

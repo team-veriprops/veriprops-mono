@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import List, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from kink import inject, di
-from sqlalchemy import select, update as sa_update
 
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.retention.models import (
@@ -17,10 +16,10 @@ from main.app.domain.retention.models import (
     UpdateErasureRequestDto,
 )
 from main.app.domain.retention.repo import DataErasureRequestRepo
+from main.app.domain.user.repo import UserRepo
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
-from main.appodus_utils.db.session import get_db_session_from_context
 from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ResourceNotFoundException,
@@ -40,8 +39,9 @@ _NON_TERMINAL = frozenset([
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class RetentionPolicyService:
-    def __init__(self, repo: DataErasureRequestRepo):
+    def __init__(self, repo: DataErasureRequestRepo, user_repo: UserRepo):
         self._repo = repo
+        self._user_repo = user_repo
 
     async def get_latest_for_user(self, user_id: str) -> Optional[ErasureRequestDto]:
         row = await self._repo.get_latest_for_user(user_id)
@@ -110,7 +110,7 @@ class RetentionPolicyService:
         return self._to_dto(row)
 
     async def reject_erasure(
-        self, request_id: str, admin_id: str, reason: str
+            self, request_id: str, admin_id: str, reason: str
     ) -> ErasureRequestDto:
         row = await self._repo.get_model(request_id)
         if row is None:
@@ -154,23 +154,9 @@ class RetentionPolicyService:
             )
 
         user_id = row.user_id
-        short = user_id.replace("-", "")[:8]
-        session = get_db_session_from_context()
+        short_user_id = user_id.replace("-", "")[:8]
 
-        from main.app.domain.user.models import User
-        await session.execute(
-            sa_update(User)
-            .where(User.id == user_id)
-            .values(
-                email=f"deleted_{short}@erased.veriprops.com",
-                email_normalized=f"deleted_{short}@erased.veriprops.com",
-                phone="",
-                phone_e164=None,
-                first_name="Deleted",
-                last_name="User",
-                password_hash=None,
-            )
-        )
+        await self._user_repo.erase_user(user_id=user_id, short_user_id=short_user_id)
 
         await self._repo.update(
             request_id,
@@ -192,10 +178,10 @@ class RetentionPolicyService:
         )
 
     async def list_requests(
-        self,
-        status: Optional[str] = None,
-        page: int = 0,
-        page_size: int = 20,
+            self,
+            status: Optional[str] = None,
+            page: int = 0,
+            page_size: int = 20,
     ) -> ErasureRequestPageDto:
         rows, total = await self._repo.list_by_status(status, offset=page * page_size, limit=page_size)
         return ErasureRequestPageDto(
@@ -206,15 +192,9 @@ class RetentionPolicyService:
         )
 
     async def _assert_no_active_verifications(self, user_id: str) -> None:
-        from main.app.domain.verification.models import Verification
-        session = get_db_session_from_context()
-        stmt = select(Verification).where(
-            Verification.deleted.is_(False),
-            Verification.customer_id == user_id,
-            Verification.status.in_(list(_NON_TERMINAL)),
-        ).limit(1)
-        result = await session.execute(stmt)
-        if result.scalar_one_or_none() is not None:
+        has_active_verification = await self._user_repo.has_active_verification(user_id=user_id,
+                                                                                non_terminal_verification_status=_NON_TERMINAL)
+        if has_active_verification:
             raise InvalidResourceStateException(
                 resource="DataErasureRequest",
                 message="Cannot request erasure while active verifications exist",

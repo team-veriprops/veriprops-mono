@@ -25,7 +25,7 @@ class TrustScoreWeightRepo(
         super().__init__(TrustScoreWeightConfig)
 
     async def list_for_tier(self, tier: str) -> List[TrustScoreWeightConfig]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(TrustScoreWeightConfig)
             .where(
@@ -36,7 +36,7 @@ class TrustScoreWeightRepo(
         return list(result.scalars().all())
 
     async def list_all(self) -> List[TrustScoreWeightConfig]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(TrustScoreWeightConfig)
             .where(TrustScoreWeightConfig.deleted.is_(False))
@@ -45,7 +45,7 @@ class TrustScoreWeightRepo(
         return list(result.scalars().all())
 
     async def get_for_tier_role(self, tier: str, role: str) -> Optional[TrustScoreWeightConfig]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(TrustScoreWeightConfig)
             .where(
@@ -65,7 +65,7 @@ class TrustScoreBreakdownRepo(
         super().__init__(TrustScoreBreakdown)
 
     async def latest_for_verification(self, verification_id: str) -> Optional[TrustScoreBreakdown]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(TrustScoreBreakdown)
             .where(

@@ -42,7 +42,7 @@ class ContentItemRepo(
         item_type: ContentItemType,
         published_only: bool = True,
     ) -> List[ContentItem]:
-        session = get_db_session_from_context()
+        session = self._session
         filters = [
             ContentItem.item_type == item_type.value,
             ContentItem.deleted == False,
@@ -60,7 +60,7 @@ class ContentItemRepo(
         lga: Optional[str] = None,
         published_only: bool = True,
     ) -> List[ContentItem]:
-        session = get_db_session_from_context()
+        session = self._session
         filters = [
             ContentItem.item_type == ContentItemType.AREA_INSIGHT.value,
             ContentItem.deleted == False,
@@ -77,7 +77,7 @@ class ContentItemRepo(
         return list(result.scalars().all())
 
     async def get_by_slug(self, slug: str) -> Optional[ContentItem]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(ContentItem).where(
                 ContentItem.slug == slug,
@@ -94,7 +94,7 @@ class ContentItemRepo(
         page_size: int = 25,
     ):
         from sqlalchemy import func
-        session = get_db_session_from_context()
+        session = self._session
         filters = [ContentItem.deleted == False]
         if item_type:
             filters.append(ContentItem.item_type == item_type)

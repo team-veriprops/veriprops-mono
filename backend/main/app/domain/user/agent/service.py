@@ -147,7 +147,7 @@ class AgentApplicationService:
         return Page[AdminAgentApplicationDto](items=items, meta=result.meta)
 
     async def list_kyc_under_review(
-        self, page: int = 1, page_size: int = 25,
+        self, page: int = 0, page_size: int = 25,
     ) -> Page[KycRecordDto]:
         result = await self._kyc_repo.list_under_review(page=page, page_size=page_size)
         return Page[KycRecordDto](

@@ -1,5 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
-import { SuccessResponse } from "@/types/models";
+import { Page, SuccessResponse } from "@/types/models";
 
 export type VerificationTier = "BASIC" | "STANDARD" | "PREMIUM";
 export type VerificationStatus =
@@ -123,7 +123,7 @@ export class VerificationService {
     return this.http.post(`${this.base}/${id}/submit`, payload);
   }
 
-  list(): Promise<SuccessResponse<Verification[]>> {
+  paginated(): Promise<Page<Verification>> {
     return this.http.get(`${this.base}/me/list`);
   }
 

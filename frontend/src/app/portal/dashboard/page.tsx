@@ -94,7 +94,7 @@ function StatusChip({ status }: { status: VerificationStatus }) {
 function VerificationRow({ v }: { v: Verification }) {
   return (
     <Link
-      href={ROUTES.PORTAL.VERIFICATION_DETAIL(v.id)}
+      href={ROUTES.PORTAL.VERIFICATION_DETAIL(v.vid)}
       className="flex items-center gap-4 px-6 py-4 hover:bg-white transition-colors duration-150 group"
       style={{ borderBottom: "1px solid rgba(196,198,207,0.12)" }}
     >
@@ -124,10 +124,10 @@ export default function PortalDashboardPage() {
   const { data: verifications, isLoading } = useVerificationList();
   const cancelMutation = useCancelVerificationMutation();
 
-  const hasVerifications = verifications && verifications.length > 0;
+  const hasVerifications = verifications && verifications.items.length > 0;
 
   const cutoff = Date.now() - ABANDONMENT_HOURS_MS;
-  const abandonedVerifications = (verifications ?? []).filter((v) =>
+  const abandonedVerifications = (verifications?.items ?? []).filter((v) =>
     ABANDONMENT_STATUSES.includes(v.status) &&
     new Date(v.dateUpdated ?? v.dateCreated).getTime() < cutoff,
   );
@@ -212,7 +212,7 @@ export default function PortalDashboardPage() {
           </div>
         )}
 
-        {!isLoading && hasVerifications && verifications.map((v) => (
+        {!isLoading && hasVerifications && verifications.items.map((v) => (
           <VerificationRow key={v.id} v={v} />
         ))}
       </div>

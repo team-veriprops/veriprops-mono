@@ -67,7 +67,7 @@ class KycRecordRepo(
         return result.scalar_one_or_none()
 
     async def list_under_review(
-        self, page: int = 1, page_size: int = 25
+        self, page: int = 0, page_size: int = 25
     ) -> Page[KycRecord]:
         search = SearchKycRecordDto(
             page=page,

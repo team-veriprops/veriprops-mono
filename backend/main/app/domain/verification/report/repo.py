@@ -23,7 +23,7 @@ class ReportViewRepo(GenericRepo[ReportView, CreateReportViewDto, None, None, No
         super().__init__(ReportView)
 
     async def get_for_customer(self, vid: str, customer_id: str) -> Optional[ReportView]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(ReportView)
             .where(
@@ -44,7 +44,7 @@ class ReportVersionRepo(
         super().__init__(ReportVersion)
 
     async def current_for_vid(self, vid: str) -> Optional[ReportVersion]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(ReportVersion)
             .where(

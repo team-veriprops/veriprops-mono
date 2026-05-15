@@ -59,7 +59,6 @@ def upgrade() -> None:
         sa.Column("status", sa.String(16), nullable=False, server_default="DRAFT"),
         sa.Column("scheduled_at", UTCDateTime, nullable=True),
         sa.Column("sent_at", UTCDateTime, nullable=True),
-        sa.Column("created_by", sa.String(36), nullable=True),
         sa.Column("total_recipients", sa.Integer, nullable=True),
         sa.Column("sent_count", sa.Integer, nullable=True, server_default="0"),
         *AlembicUtils.base_audit_columns(),

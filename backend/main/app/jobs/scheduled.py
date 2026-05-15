@@ -1,20 +1,66 @@
-# from apscheduler.schedulers.asyncio import AsyncIOScheduler
-# from kink import di
-#
-# from main.app.domain.data.key_value.service import KeyValueService
-# from main.app.jobs.tasks.contract_signer_reminder_agent import ContractSignerReminderAgent
-#
-# contract_signer_reminder_agent: ContractSignerReminderAgent = di[ContractSignerReminderAgent]
-# scheduler: AsyncIOScheduler = AsyncIOScheduler()
-#
-# key_value_service: KeyValueService = di[KeyValueService]
-#
-# @scheduler.scheduled_job('interval', id='my_job_id', seconds=60)
-# async def run_callback_handler():
-#     await contract_signer_reminder_agent.remind_all_due_contract_signers()
-#     await key_value_service.cleanup_expired()
-#     # Renew Drive Subscription
-#
-#
-# def start_scheduler():
-#     scheduler.start()
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from kink import di
+
+if TYPE_CHECKING:
+    from loguru import Logger
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+from main.app.jobs.task_monitor import check_task_no_show_timeouts, check_task_pool_timeouts
+
+logger: Logger = di['logger']
+scheduler: AsyncIOScheduler = AsyncIOScheduler()
+
+# Register task-monitor background jobs (pool timeout + no-show alerts)
+scheduler.add_job(
+    check_task_pool_timeouts,
+    "interval",
+    minutes=15,
+    id="pool_timeout_check",
+)
+
+scheduler.add_job(
+    check_task_no_show_timeouts,
+    "interval",
+    minutes=15,
+    id="no_show_check",
+)
+
+
+def start_scheduler():
+    if scheduler.running:
+        logger.warning("Scheduler is already running")
+        return
+
+    try:
+        scheduler.start()
+        logger.info("APScheduler started successfully")
+
+        for job in scheduler.get_jobs():
+            logger.info(
+                "Registered job: id={} next_run={} trigger={}",
+                job.id,
+                job.next_run_time,
+                job.trigger,
+            )
+
+    except Exception:
+        logger.exception("Failed to start APScheduler")
+        raise
+
+
+def stop_scheduler():
+    if not scheduler.running:
+        logger.warning("Scheduler is not running")
+        return
+
+    try:
+        scheduler.shutdown(wait=False)
+        logger.info("APScheduler shutdown successfully")
+
+    except Exception:
+        logger.exception("Failed to shutdown APScheduler")
+        raise

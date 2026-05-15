@@ -31,7 +31,7 @@ class BroadcastMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.ADMIN_BROADCAST,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.BROADCAST,
             default_channels=[MessageChannel.EMAIL, MessageChannel.PUSH],
             extra_context={
                 MessageContext.BROADCAST_SUBJECT.value: subject,

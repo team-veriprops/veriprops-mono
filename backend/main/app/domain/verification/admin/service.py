@@ -80,7 +80,7 @@ class AdminVerificationService:
         state: Optional[str] = None,
         lga: Optional[str] = None,
         vid: Optional[str] = None,
-        page: int = 1,
+        page: int = 0,
         page_size: int = 25,
     ) -> Page[AdminVerificationListItemDto]:
         rows, total = await self._admin_repo.list_admin(

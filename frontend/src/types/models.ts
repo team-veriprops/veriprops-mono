@@ -219,7 +219,15 @@ export interface BaseQueryDto {
 }
 
 export interface Page<T> {
+  status: string;          // always "success"
+  code: string;            // typically "200"
+  message?: string;
+  traceId?: string;
   items: T[];               // List of items of type T
+  meta: PaginationMeta
+}
+
+export interface PaginationMeta{
   page: number;            // Current page number
   pageSize: number;       // Number of items per page
   count: number;           // Number of items returned in this page

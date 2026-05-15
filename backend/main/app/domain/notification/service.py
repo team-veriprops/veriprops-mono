@@ -8,11 +8,10 @@ from kink import di, inject
 from main.app.domain.notification.events import render_title, render_body
 from main.app.domain.notification.models import (
     CreateNotificationDto,
-    NotificationDispatch,
     NotificationDto,
     NotificationEvent,
     NotificationPreferenceDto,
-    UpsertNotificationPreferenceDto,
+    UpsertNotificationPreferenceDto, NotificationPreference, Notification,
 )
 from main.app.domain.notification.repo import (
     NotificationDispatchRepo,
@@ -35,22 +34,22 @@ logger: "Logger" = di["logger"]
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class NotificationService:
     def __init__(
-        self,
-        repo: NotificationRepo,
-        dispatch_repo: NotificationDispatchRepo,
-        pref_repo: NotificationPreferenceRepo,
+            self,
+            repo: NotificationRepo,
+            dispatch_repo: NotificationDispatchRepo,
+            pref_repo: NotificationPreferenceRepo,
     ):
         self._repo = repo
         self._dispatch_repo = dispatch_repo
         self._pref_repo = pref_repo
 
     async def emit(
-        self,
-        event: NotificationEvent,
-        recipient_id: str,
-        context: Dict[str, Any],
-        entity_type: Optional[str] = None,
-        entity_id: Optional[str] = None,
+            self,
+            event: NotificationEvent,
+            recipient_id: str,
+            context: Dict[str, Any],
+            entity_type: Optional[str] = None,
+            entity_id: Optional[str] = None,
     ) -> NotificationDto:
         """Write an in-app notification row.
 
@@ -89,7 +88,7 @@ class NotificationService:
         return [self._pref_to_dto(r) for r in rows]
 
     async def upsert_preference(
-        self, user_id: str, dto: UpsertNotificationPreferenceDto
+            self, user_id: str, dto: UpsertNotificationPreferenceDto
     ) -> NotificationPreferenceDto:
         existing = await self._pref_repo.get_for_user_and_event(user_id, dto.event_type)
         if existing:
@@ -107,16 +106,13 @@ class NotificationService:
                 sms_enabled=dto.sms_enabled,
                 push_enabled=dto.push_enabled,
             )
-            row = await self._pref_repo.create(dto_with_user)
-            # Patch user_id — GenericRepo.create uses model fields from dto
-            from main.appodus_utils.db.session import get_db_session_from_context
-            session = get_db_session_from_context()
+            row = await self._pref_repo.create_return_model(dto_with_user)
             row.user_id = user_id
         return self._pref_to_dto(row)
 
     # ── Helpers ───────────────────────────────────────────────────
 
-    def _to_dto(self, row) -> NotificationDto:
+    def _to_dto(self, row: Notification) -> NotificationDto:
         return NotificationDto(
             id=str(row.id),
             recipient_id=row.recipient_id,
@@ -129,7 +125,7 @@ class NotificationService:
             date_created=str(row.date_created),
         )
 
-    def _pref_to_dto(self, row) -> NotificationPreferenceDto:
+    def _pref_to_dto(self, row: NotificationPreference) -> NotificationPreferenceDto:
         return NotificationPreferenceDto(
             user_id=row.user_id,
             event_type=row.event_type,

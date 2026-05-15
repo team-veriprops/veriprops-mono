@@ -55,7 +55,7 @@ class PaymentRepo(
     ):
         from sqlalchemy import func, select
         from main.appodus_utils.db.session import get_db_session_from_context
-        session = get_db_session_from_context()
+        session = self._session
         filters = [Payment.deleted.is_(False)]
         if status:
             filters.append(Payment.status == status)

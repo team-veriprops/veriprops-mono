@@ -78,18 +78,18 @@ class TrackingService:
         task_repo: TaskRepo,
         user_repo: UserRepo,
     ):
-        self._verifications = verification_repo
-        self._tasks = task_repo
-        self._users = user_repo
+        self._verification_repo = verification_repo
+        self._task_repo = task_repo
+        self._user_repo = user_repo
 
     async def get_tracking(self, vid: str, customer_id: str) -> TrackingDto:
-        ver = await self._verifications.get_by_vid(vid)
+        ver = await self._verification_repo.get_by_vid(vid)
         if ver is None:
             raise ResourceNotFoundException(resource="Verification")
         if ver.customer_id != customer_id:
             raise ForbiddenException(message="Access denied")
 
-        tasks = await self._tasks.list_for_verification(str(ver.id))
+        tasks = await self._task_repo.list_for_verification(str(ver.id))
         assigned_agents = await self._build_agent_list(tasks)
         sla = self._build_sla(ver)
 
@@ -124,7 +124,7 @@ class TrackingService:
         for task in tasks:
             if task.agent_id and task.agent_id not in seen_agent_ids:
                 seen_agent_ids.add(task.agent_id)
-                user = await self._users.get(task.agent_id)
+                user = await self._user_repo.get(task.agent_id)
                 if user:
                     agents.append(AssignedAgentDto(
                         role=task.role,

@@ -141,7 +141,7 @@ def get_db_session_from_context() -> AsyncSession:
     try:
         session = db_session_ctx.get()
     except LookupError:
-        raise AppodusBaseException(error_msg)
+        raise LookupError(error_msg)
     if session is None:
-        raise AppodusBaseException(error_msg)
+        raise LookupError(error_msg)
     return session

@@ -23,6 +23,7 @@ class BroadcastAudience(str, enum.Enum):
     ALL = "ALL"
     CUSTOMERS = "CUSTOMERS"
     AGENTS = "AGENTS"
+    ADMINS = "ADMINS"
 
 
 class Broadcast(BaseEntity):

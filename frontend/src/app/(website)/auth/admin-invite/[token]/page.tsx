@@ -9,6 +9,7 @@ import { useAcceptInvitationMutation } from "@components/admin/libs/useAdminQuer
 import type { AcceptInviteResult } from "@components/admin/libs/admin-service";
 import { getErrorMessage } from "@lib/utils";
 import { AuthIntent } from "@/components/website/auth/models";
+import { useLogoutMutation } from "@/components/website/auth/libs/useAuthQueries";
 
 export default function AdminInviteAcceptPage({
   params,
@@ -38,6 +39,13 @@ export default function AdminInviteAcceptPage({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
+
+  const logout = useLogoutMutation();
+  const handleLogout = () => {
+    logout.mutate(undefined, {
+      onSuccess: () => router.push(ROUTES.AUTH.LOGIN),
+    });
+  };
 
   if (error) {
     return (
@@ -70,7 +78,7 @@ export default function AdminInviteAcceptPage({
         icon={<CheckCircle2 className="w-7 h-7" />}
         title="You're now an admin"
         body={`Your account ${result.email} has been promoted to ${result.subRole}.`}
-        cta={{ label: "Go to admin dashboard", onClick: () => router.push(ROUTES.ADMIN.DASHBOARD) }}
+        cta={{ label: "Go to login", onClick: () => handleLogout() }}
       />
     );
   }
@@ -83,7 +91,9 @@ export default function AdminInviteAcceptPage({
         icon={<ShieldCheck className="w-7 h-7" />}
         title="You're already an admin"
         body={`The invitation has been retired — you can sign in to ${result.email} as usual.`}
-        cta={{ label: "Continue to login", onClick: () => router.push(ROUTES.AUTH.LOGIN) }}
+        cta={{ label: "Continue to login", onClick: () => router.push(
+          `${ROUTES.AUTH.LOGIN}?email=${encodeURIComponent(result.email)}`
+        ) }}
       />
     );
   }
@@ -100,7 +110,9 @@ export default function AdminInviteAcceptPage({
           label: "Go to login",
           onClick: () =>
             router.push(
-              `${ROUTES.AUTH.LOGIN}?email=${encodeURIComponent(result.email)}&intent=${AuthIntent.INVITED_ADMIN}&redirect=/auth/admin-invite/${token}`,
+              `${ROUTES.AUTH.LOGIN}?email=${encodeURIComponent(result.email)}`+
+              `&intent=${AuthIntent.INVITED_ADMIN}`+
+              `&redirect=${ROUTES.ADMIN.INVITE_ACCEPT(token ?? "")}`,
             ),
         }}
       />
@@ -122,7 +134,8 @@ export default function AdminInviteAcceptPage({
             `${ROUTES.AUTH.SIGNUP}?email=${encodeURIComponent(result.email)}` +
             `&firstName=${encodeURIComponent(result.firstName ?? "")}` +
             `&lastName=${encodeURIComponent(result.lastName ?? "")}` +
-            `&intent=${AuthIntent.INVITED_ADMIN}&redirect=/auth/admin-invite/${token}`,
+            `&intent=${AuthIntent.INVITED_ADMIN}`+
+            `&redirect=${ROUTES.ADMIN.INVITE_ACCEPT(token ?? "")}`,
           ),
       }}
     />

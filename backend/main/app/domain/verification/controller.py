@@ -103,7 +103,7 @@ async def submit_verification(
 
 @verification_router.get("/me/list", response_model=Page)
 async def list_my_verifications(
-    page: int = Query(1, ge=1),
+    page: int = Query(0, ge=0),
     page_size: int = Query(20, ge=1, le=100),
     authorize: AuthJWT = Depends(),
 ):
@@ -184,4 +184,5 @@ async def quote_pricing(
     tier: VerificationTier = Query(VerificationTier.STANDARD),
     currency: str = Query("NGN"),
 ):
-    return SuccessResponse[PricingSnapshotDto](data=pricing_service.quote(tier, currency))
+    result = await pricing_service.quote(tier, currency)
+    return SuccessResponse[PricingSnapshotDto](data=result)

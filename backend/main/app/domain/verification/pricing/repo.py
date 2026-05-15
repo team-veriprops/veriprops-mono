@@ -47,7 +47,7 @@ class PricingTierConfigRepo(
         super().__init__(db, model, query_dto)
 
     async def get_active_for_tier(self, tier: str, currency: str = "NGN") -> Optional[PricingTierConfig]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(PricingTierConfig).where(
                 PricingTierConfig.tier == tier,
@@ -59,7 +59,7 @@ class PricingTierConfigRepo(
         return result.scalars().first()
 
     async def list_all_active(self) -> List[PricingTierConfig]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(PricingTierConfig).where(
                 PricingTierConfig.is_active == True,
@@ -69,7 +69,7 @@ class PricingTierConfigRepo(
         return list(result.scalars().all())
 
     async def get_for_tier_currency(self, tier: str, currency: str) -> Optional[PricingTierConfig]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(PricingTierConfig).where(
                 PricingTierConfig.tier == tier,
@@ -99,7 +99,7 @@ class PricingLineItemRepo(
         super().__init__(db, model, query_dto)
 
     async def list_for_config(self, tier_config_id: str) -> List[PricingLineItem]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(PricingLineItem).where(
                 PricingLineItem.tier_config_id == tier_config_id,
@@ -110,7 +110,7 @@ class PricingLineItemRepo(
 
     async def delete_for_config(self, tier_config_id: str) -> None:
         from main.appodus_utils import Utils
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(PricingLineItem).where(
                 PricingLineItem.tier_config_id == tier_config_id,
@@ -141,7 +141,7 @@ class PricingUpgradeDeltaRepo(
         super().__init__(db, model, query_dto)
 
     async def get_for_pair(self, from_tier: str, to_tier: str, currency: str = "NGN") -> Optional[PricingUpgradeDelta]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(PricingUpgradeDelta).where(
                 PricingUpgradeDelta.from_tier == from_tier,
@@ -153,7 +153,7 @@ class PricingUpgradeDeltaRepo(
         return result.scalars().first()
 
     async def list_all(self) -> List[PricingUpgradeDelta]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(PricingUpgradeDelta).where(
                 PricingUpgradeDelta.deleted == False,

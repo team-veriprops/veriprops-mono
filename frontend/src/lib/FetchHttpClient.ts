@@ -183,7 +183,7 @@ export class FetchHttpClient implements HttpClient {
 
   private redirectToAccessDenied() {
     if (typeof window !== "undefined") {
-      window.location.href = `/403`;
+      window.location.href = `/forbidden`;
     }
   }
 
@@ -201,12 +201,6 @@ export class FetchHttpClient implements HttpClient {
       else sig.addEventListener("abort", () => controller.abort());
     });
     return controller.signal;
-  }
-
-  private isLogout(response: Response, method: string): boolean{
-    const logoutUrl = "/users/auth/sessions/current"
-
-    return response.url.indexOf(logoutUrl) > 0 && method.toLocaleUpperCase() === "DELETE"
   }
 
   // --- HttpClient methods ---

@@ -167,8 +167,8 @@ class VerificationService:
         self._validator.assert_owner(row, customer_id)
         self._validator.assert_draft(row)
 
-        snapshot = self._pricing.quote(tier, currency)
-        snapshot = self._pricing.lock(snapshot)
+        snapshot = await self._pricing.quote(tier, currency)
+        snapshot = await self._pricing.lock(snapshot)
         await self._repo.update(verification_id, UpdateVerificationDto(
             tier=tier,
             pricing_snapshot=snapshot.model_dump_json(by_alias=True),
@@ -359,8 +359,8 @@ class VerificationService:
                 currency = existing.currency
             except Exception:
                 pass
-        snapshot = self._pricing.quote(tier, currency)
-        snapshot = self._pricing.lock(snapshot)
+        snapshot = await self._pricing.quote(tier, currency)
+        snapshot = await self._pricing.lock(snapshot)
         await self._repo.update(verification_id, UpdateVerificationDto(
             pricing_snapshot=snapshot.model_dump_json(by_alias=True),
         ))

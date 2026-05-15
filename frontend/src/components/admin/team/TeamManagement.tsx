@@ -22,6 +22,7 @@ import type {
 } from "../libs/admin-service";
 import { Copy, MailPlus, RotateCcw } from "lucide-react";
 import { getErrorMessage } from "@lib/utils";
+import { ROUTES } from "@/lib/routes";
 
 const SUB_ROLES: { value: AdminSubRole; label: string; blurb: string }[] = [
   { value: "SUPER", label: "Super Admin", blurb: "Full access. Can invite admins." },
@@ -82,7 +83,7 @@ export default function TeamManagement() {
   };
 
   const inviteLink = inviteResult
-    ? `${typeof window !== "undefined" ? window.location.origin : ""}/auth/admin-invite/${inviteResult.rawToken}`
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}${ROUTES.ADMIN.INVITE_ACCEPT(inviteResult.rawToken)}`
     : null;
 
   return (

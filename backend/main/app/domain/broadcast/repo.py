@@ -13,7 +13,7 @@ from main.app.domain.broadcast.models import (
     CreateBroadcastDto,
     QueryBroadcastDto,
     SearchBroadcastDto,
-    UpdateBroadcastDto,
+    UpdateBroadcastDto, BroadcastAudience,
 )
 from main.appodus_utils.db.repo import GenericRepo
 from main.appodus_utils.db.session import get_db_session_from_context
@@ -39,7 +39,7 @@ class BroadcastRepo(
 
     async def list_due_scheduled(self) -> List[Broadcast]:
         from main.appodus_utils import Utils
-        session = get_db_session_from_context()
+        session = self._session
         now = Utils.datetime_now()
         result = await session.execute(
             select(Broadcast).where(
@@ -52,7 +52,7 @@ class BroadcastRepo(
 
     async def list_all(self, page: int = 0, page_size: int = 25):
         from sqlalchemy import func
-        session = get_db_session_from_context()
+        session = self._session
         filters = [Broadcast.deleted == False]
         total = await session.scalar(select(func.count(Broadcast.id)).where(*filters)) or 0
         result = await session.execute(
@@ -60,3 +60,18 @@ class BroadcastRepo(
             .offset(page * page_size).limit(page_size)
         )
         return list(result.scalars().all()), int(total)
+
+    async def get_broadcast_user_ids(self, audience: BroadcastAudience) -> list[str]:
+        from main.app.domain.user.models import User
+        from main.app.domain.user.auth.session.models import UserType, UserPersona
+
+        stmt = select(User.id).where(User.deleted == False)
+        if audience == BroadcastAudience.ADMINS:
+            stmt = stmt.where(User.user_type == UserType.ADMIN.value)
+        elif audience == BroadcastAudience.CUSTOMERS:
+            stmt = stmt.where(User.personas.in_(UserPersona.CUSTOMER.value))
+        elif audience == BroadcastAudience.AGENTS:
+            stmt = stmt.where(User.personas.in_(UserPersona.AGENT.value))
+        result = await self._session.execute(stmt)
+
+        return [str(r) for r in result.scalars().all()]

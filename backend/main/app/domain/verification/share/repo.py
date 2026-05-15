@@ -39,7 +39,7 @@ class ShareLinkRepo(GenericRepo[
         super().__init__(db, model, query_dto)
 
     async def get_by_token(self, token: str) -> Optional[ShareLink]:
-        session = get_db_session_from_context()
+        session = self._session
         result = await session.execute(
             select(ShareLink).where(ShareLink.token == token, ShareLink.deleted == False)
         )
@@ -61,3 +61,14 @@ class ShareRecipientRepo(GenericRepo[
         query_dto: Type[QueryShareRecipientDto] = QueryShareRecipientDto,
     ):
         super().__init__(db, model, query_dto)
+
+    async def get_share_recipient(self, share_link_id: str) -> Optional[ShareRecipient]:
+        session = self._session
+        result = await session.execute(
+            select(ShareRecipient).where(
+                ShareRecipient.share_link_id == share_link_id,
+                ShareRecipient.deleted == False,
+            )
+        )
+
+        return result.scalars().first()

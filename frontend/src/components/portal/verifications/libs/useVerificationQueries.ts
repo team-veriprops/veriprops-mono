@@ -12,6 +12,7 @@ import {
   type Verification,
   type VerificationTier,
 } from "./verification-service";
+import { Page } from "@/types/models";
 
 export const verificationService = new VerificationService(httpClient);
 export const paymentService = new PaymentService(httpClient);
@@ -28,7 +29,7 @@ export const verificationKeys = {
 export function useVerificationList() {
   return useQuery({
     queryKey: verificationKeys.list,
-    queryFn: async (): Promise<Verification[]> => (await verificationService.list()).data ?? [],
+    queryFn: async (): Promise<Page<Verification>> => (await verificationService.paginated()),
     staleTime: 30_000,
   });
 }

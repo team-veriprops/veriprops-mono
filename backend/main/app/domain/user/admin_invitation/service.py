@@ -85,7 +85,7 @@ class AdminInvitationService:
         ttl_hours = settings.ADMIN_INVITE_TTL_HOURS or 72
         expires_at = Utils.datetime_now_plus(hours=ttl_hours)
 
-        await self._repo.create(CreateAdminInvitationDto(
+        row = await self._repo.create_return_model(CreateAdminInvitationDto(
             email=email,
             email_normalized=normalised_email,
             first_name=first_name or None,
@@ -95,7 +95,7 @@ class AdminInvitationService:
             token_hash=token_hash,
             expires_at=expires_at,
         ))
-        row = await self._repo.get_by_token_hash(token_hash)
+
         if row is None:
             raise InvalidResourceStateException(
                 resource="AdminInvitation",
@@ -232,6 +232,7 @@ class AdminInvitationService:
         user = await self._user_repo.update_return_model(user_id, UpdateUserDto(
             user_type=UserType.ADMIN.value,
             admin_sub_role=admin_sub_role,
+            personas=[]
         ))
         await self._repo.update(invite_id, UpdateAdminInvitationDto(
             status=AdminInvitationStatus.ACCEPTED,

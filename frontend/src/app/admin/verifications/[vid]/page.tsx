@@ -6,13 +6,16 @@ export const metadata: Metadata = {
 };
 
 interface Props {
-  params: { vid: string };
+  params: Promise<{ vid: string }>;
 }
 
-export default function AdminVerificationDetailPage({ params }: Props) {
+export default async function AdminVerificationDetailPage({ params }: Props) {
+  
+  const { vid } = await params;
+
   return (
     <div className="p-6">
-      <VerificationDetail vid={params.vid} />
+      <VerificationDetail vid={vid} />
     </div>
   );
 }

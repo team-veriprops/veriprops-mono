@@ -47,7 +47,7 @@ async def login(req: LoginRequestDto, request: Request, authorize: AuthJWT = Dep
 
 @session_router.delete("/current", response_model=SuccessResponse[bool])
 async def logout(request: Request, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
+    await authorize.jwt_required()
     refresh_cookie = request.cookies.get("refresh_token")
     if refresh_cookie:
         await session_service.revoke_current_device(refresh_cookie)
@@ -64,16 +64,16 @@ async def refresh_session(authorize: AuthJWT = Depends()):
 
 @session_router.get("/current", response_model=SuccessResponse[AuthSessionDto])
 async def current_session(authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     user = await user_service.get_user_model(user_id)
     session = await session_service.build_session_dto(user)
     return SuccessResponse[AuthSessionDto](data=session)
 
 @session_router.get("", response_model=SuccessResponse[List[DeviceSessionDto]])
 async def list_devices(request: Request, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     refresh = request.cookies.get("refresh_token")
     current_hash = Utils.sha256(refresh) if refresh else None
     sessions = await session_service.list_devices(user_id)
@@ -83,15 +83,15 @@ async def list_devices(request: Request, authorize: AuthJWT = Depends()):
 
 @session_router.delete("/{session_id}", response_model=SuccessResponse[bool])
 async def revoke_device(session_id: str, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
+    await authorize.jwt_required()
     await session_service.revoke_device(session_id)
     return SuccessResponse[bool](data=True)
 
 
 @session_router.delete("", response_model=SuccessResponse[bool])
 async def revoke_all_others(scope: str, request: Request, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     refresh = request.cookies.get("refresh_token")
     current_hash = Utils.sha256(refresh) if refresh else None
     if scope != "others":
@@ -102,8 +102,8 @@ async def revoke_all_others(scope: str, request: Request, authorize: AuthJWT = D
 
 @session_router.get("/security/events", response_model=SuccessResponse[List[SecurityEventDto]])
 async def list_security_events(authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     events = await session_service.list_recent_events(user_id)
     dtos = [SecurityEventDto(
         id=str(e.id),

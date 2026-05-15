@@ -35,16 +35,16 @@ payment_router = APIRouter(prefix="/payments", tags=["Payments"])
     response_model=SuccessResponse[InitiatePaymentResultDto],
 )
 async def initiate_payment(req: InitiatePaymentDto, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     result = await payment_service.initiate(user_id, req)
     return SuccessResponse[InitiatePaymentResultDto](data=result)
 
 
 @payment_router.get("/{payment_id}", response_model=SuccessResponse[PaymentDto])
 async def get_payment(payment_id: str, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await payment_service.get(user_id, payment_id)
     return SuccessResponse[PaymentDto](data=dto)
 
@@ -56,8 +56,8 @@ async def get_payment(payment_id: str, authorize: AuthJWT = Depends()):
 async def upload_wire_proof(
     payment_id: str, req: WireProofDto, authorize: AuthJWT = Depends(),
 ):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
     dto = await payment_service.upload_wire_proof(user_id, payment_id, req)
     return SuccessResponse[PaymentDto](data=dto)
 

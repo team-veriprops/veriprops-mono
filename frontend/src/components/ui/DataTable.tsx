@@ -142,14 +142,14 @@ export function DataTable<T extends Record<string, any>>({
   };
 
   const handleNextPage = () => {
-    if (dataPage?.nextPage) {
-      updateFilters({ page: dataPage?.nextPage });
+    if (dataPage?.meta.nextPage) {
+      updateFilters({ page: dataPage?.meta.nextPage });
     }
   };
 
   const handlePrevPage = () => {
-    if (dataPage?.prevPage !== undefined && dataPage?.prevPage >= 0) {
-      updateFilters({ page: dataPage?.prevPage });
+    if (dataPage?.meta.prevPage !== undefined && dataPage?.prevPage >= 0) {
+      updateFilters({ page: dataPage?.meta.prevPage });
     }
   };
 
@@ -311,7 +311,7 @@ export function DataTable<T extends Record<string, any>>({
         {/* Pagination footer */}
         <TableFooterPagination
           page={currentPage}
-          totalPages={dataPage?.totalPages || 0}
+          totalPages={dataPage?.meta.totalPages || 0}
           onPreviousPage={handlePrevPage}
           onNextPage={handleNextPage}
           onResetPage={handlePageReset}

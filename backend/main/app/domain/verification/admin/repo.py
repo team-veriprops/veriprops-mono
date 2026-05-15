@@ -71,7 +71,7 @@ class AdminVerificationRepo:
         state: Optional[str] = None,
         lga: Optional[str] = None,
         vid: Optional[str] = None,
-        page: int = 1,
+        page: int = 0,
         page_size: int = 25,
     ) -> Tuple[List[Verification], int]:
         from sqlalchemy import cast as sa_cast, String as SAString, text

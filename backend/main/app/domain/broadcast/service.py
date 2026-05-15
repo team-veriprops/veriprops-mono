@@ -1,7 +1,9 @@
-"""Broadcast service — S55."""
 from __future__ import annotations
+from typing import TYPE_CHECKING
 
-from datetime import datetime, timezone
+if TYPE_CHECKING:
+    from loguru import Logger
+
 from typing import List, Optional
 
 from kink import di, inject
@@ -28,6 +30,7 @@ from main.appodus_utils.exception.exceptions import (
     ValidationException,
 )
 
+logger: Logger = di["logger"]
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
@@ -50,8 +53,7 @@ class BroadcastService:
 
     async def create(self, dto: CreateBroadcastDto, admin_id: str) -> BroadcastDto:
         create_dto = CreateBroadcastDto(**{**dto.model_dump(), "created_by": admin_id})
-        result = await self._repo.create(create_dto)
-        row = await self._repo.get_model(result.data.id)
+        row = await self._repo.create_return_model(create_dto)
         return self._to_dto(row)
 
     async def update(self, broadcast_id: str, dto: UpdateBroadcastDto, admin_id: str) -> BroadcastDto:
@@ -60,8 +62,7 @@ class BroadcastService:
             raise ResourceNotFoundException(resource="Broadcast")
         if row.status not in (BroadcastStatus.DRAFT.value, BroadcastStatus.SCHEDULED.value):
             raise InvalidResourceStateException(resource="Broadcast", message="Can only edit DRAFT or SCHEDULED broadcasts")
-        await self._repo.update(broadcast_id, dto)
-        updated = await self._repo.get_model(broadcast_id)
+        updated = await self._repo.update_return_model(broadcast_id, dto)
         return self._to_dto(updated)
 
     async def schedule(self, broadcast_id: str, dto: ScheduleBroadcastDto, admin_id: str) -> BroadcastDto:
@@ -140,18 +141,9 @@ class BroadcastService:
 
     async def _resolve_recipients(self, audience: BroadcastAudience) -> List[str]:
         try:
-            from sqlalchemy import select
-            from main.app.domain.user.models import User
-            from main.appodus_utils.db.session import get_db_session_from_context
-            session = get_db_session_from_context()
-            stmt = select(User.id).where(User.deleted == False)
-            if audience == BroadcastAudience.CUSTOMERS:
-                stmt = stmt.where(User.user_type == "CUSTOMER")
-            elif audience == BroadcastAudience.AGENTS:
-                stmt = stmt.where(User.user_type == "AGENT")
-            result = await session.execute(stmt)
-            return [str(r) for r in result.scalars().all()]
-        except Exception:
+            return await self._repo.get_broadcast_user_ids(audience=audience)
+        except Exception as e:
+            logger.error("Error resolving broadcast recipients: {}", e)
             return []
 
     @staticmethod
@@ -163,7 +155,7 @@ class BroadcastService:
             body_html=row.body_html,
             audience=BroadcastAudience(row.audience),
             channels=row.channels,
-            status=BroadcastStatus(row.status),
+            status=BroadcastStatus(row.status) if row.status is not None else BroadcastStatus.DRAFT,
             scheduled_at=row.scheduled_at,
             sent_at=row.sent_at,
             created_by=row.created_by,

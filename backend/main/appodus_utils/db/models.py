@@ -277,6 +277,7 @@ class PaginationMeta(Object):
     page_size: int = 10
     count: int = 0
     total: int = 0
+    total_pages: int = 0
     prev_page: Optional[int] = None
     next_page: Optional[int] = None
 

@@ -25,6 +25,7 @@ from main.app.domain.verification.models import Verification, VerificationStatus
 from main.app.domain.verification.task.models import Task, TaskStatus
 from main.app.domain.payment.models import Payment, PaymentStatus
 from main.appodus_utils.db.session import get_db_session_from_context
+from main.appodus_utils.decorators.transactional import transactional, TransactionSessionPolicy
 
 
 @inject
@@ -129,6 +130,7 @@ class AnalyticsRepo:
         ]
         return RegionalPerformanceDto(regions=regions)
 
+    @transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW)
     async def conversion_funnel(self) -> ConversionFunnelDto:
         session = self._session
         from main.app.domain.user.auth.session.models import UserPersona
@@ -176,6 +178,7 @@ class AnalyticsRepo:
             paid_to_completed_pct=paid_to_completed_pct,
         )
 
+    @transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW)
     async def avg_verification_time_by_tier(self) -> List[AvgVerificationTimeByTierDto]:
         session = self._session
         rows = await session.execute(
@@ -197,6 +200,7 @@ class AnalyticsRepo:
             for r in rows
         ]
 
+    @transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW)
     async def agent_performance_trends(self, months: int = 6) -> List[AgentPerformanceTrendDto]:
         session = self._session
         rows = await session.execute(
@@ -223,6 +227,7 @@ class AnalyticsRepo:
             for r in rows
         ]
 
+    @transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW)
     async def revenue_by_location(self) -> List[RevenueByLocationDto]:
         session = self._session
         rows = await session.execute(
@@ -251,6 +256,7 @@ class AnalyticsRepo:
             for r in rows
         ]
 
+    @transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW)
     async def dispute_rate(self) -> DisputeRateDto:
         session = self._session
         total_completed = await session.scalar(
