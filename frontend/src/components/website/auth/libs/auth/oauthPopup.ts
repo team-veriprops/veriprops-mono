@@ -19,6 +19,7 @@
 import { isAutomationEnvironment } from "@lib/automation";
 import { authService } from "@components/website/auth/libs/useAuthQueries";
 import { OAuthFlowMode, AuthIntent, SocialProvider } from "@components/website/auth/models";
+import { ROUTES } from "@lib/routes";
 
 export interface OauthPopupOptions {
   intent?: AuthIntent;
@@ -177,7 +178,7 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
       if (closedPollId !== null) clearInterval(closedPollId);
       try {
         if (popup && !popup.closed) {
-          popup.location.href = `${window.location.origin}/auth/oauth/error`;
+          popup.location.href = `${window.location.origin}${ROUTES.AUTH.OAUTH_ERROR}`;
         }
       } catch { /* ignore */ }
       signalOauthComplete("failed");

@@ -11,6 +11,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useInitiatePaymentMutation, paymentService } from "../libs/useVerificationQueries";
+import { ROUTES } from "@lib/routes";
 import type { PaymentMethod, InitiatePaymentResult } from "../libs/payment-service";
 import type { Verification } from "../libs/verification-service";
 import { getErrorMessage } from "@lib/utils";
@@ -41,7 +42,7 @@ export default function PaymentStep({ verification, onPaid }: Props) {
       const res = await initiate.mutateAsync({
         verificationId: verification.id,
         method,
-        redirectUrl: `${window.location.origin}/portal/verifications/${verification.id}/confirmed`,
+        redirectUrl: `${window.location.origin}${ROUTES.PORTAL.VERIFICATION_CONFIRMED(verification.id)}`,
       });
       setResult(res.data ?? null);
       if (res.data?.checkoutUrl && method === "CARD") {

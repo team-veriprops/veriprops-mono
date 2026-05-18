@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, ArrowRight } from "lucide-react";
+import { ROUTES } from "@lib/routes";
 import { footerLinks } from "./home.data";
 
 const socialColors: Record<string, string> = {
@@ -54,7 +55,7 @@ export default function LandingFooter() {
           {/* Brand column */}
           <div className="md:col-span-1">
             {/* Logo */}
-            <Link href="/" className="inline-flex items-center gap-2.5 mb-5">
+            <Link href={ROUTES.HOME} className="inline-flex items-center gap-2.5 mb-5">
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center signature-gradient"
               >

@@ -4,10 +4,23 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Menu, X, CheckCircle2 } from "lucide-react";
 import { navLinks, CTA_VERIFY_HREF } from "./home.data";
+import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
+import { UserType, UserPersona } from "@components/website/auth/models";
+import { ROUTES } from "@lib/routes";
 
 export default function LandingNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+
+  const session = useAuthStore((s) => s.session);
+  const user = session?.user;
+  const isLoggedIn = !!session;
+  const dashboardHref =
+    user?.userType === UserType.ADMIN
+      ? ROUTES.ADMIN.DASHBOARD
+      : user?.personas?.includes(UserPersona.AGENT)
+        ? ROUTES.AGENT.DASHBOARD
+        : ROUTES.PORTAL.DASHBOARD;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -27,7 +40,7 @@ export default function LandingNav() {
     >
       <div className="max-w-7xl mx-auto px-6 lg:px-8 h-18 flex items-center justify-between py-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
+        <Link href={ROUTES.HOME} className="flex items-center gap-2.5 group">
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center signature-gradient"
           >
@@ -64,20 +77,41 @@ export default function LandingNav() {
 
         {/* Desktop CTAs */}
         <div className="hidden md:flex items-center gap-3">
-          <Link
-            href="/auth/login"
-            className="px-5 py-2.5 text-sm font-semibold rounded-lg transition-all duration-150 hover:bg-gray-50"
-            style={{ color: "var(--brand-navy)" }}
-          >
-            Log in
-          </Link>
-          <Link
-            href={CTA_VERIFY_HREF}
-            className="signature-gradient text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 hover:opacity-90 hover:scale-[0.98] active:scale-95"
-            style={{ boxShadow: "0 4px 14px -3px rgba(0,13,34,0.35)" }}
-          >
-            Verify a Property
-          </Link>
+          {isLoggedIn ? (
+            <>
+              <Link
+                href={CTA_VERIFY_HREF}
+                className="px-5 py-2.5 text-sm font-semibold rounded-lg transition-all duration-150 hover:bg-gray-50"
+                style={{ color: "var(--brand-navy)" }}
+              >
+                Verify a Property
+              </Link>
+              <Link
+                href={dashboardHref}
+                className="signature-gradient text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 hover:opacity-90 hover:scale-[0.98] active:scale-95"
+                style={{ boxShadow: "0 4px 14px -3px rgba(0,13,34,0.35)" }}
+              >
+                Back to Dashboard
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                href={ROUTES.AUTH.LOGIN}
+                className="px-5 py-2.5 text-sm font-semibold rounded-lg transition-all duration-150 hover:bg-gray-50"
+                style={{ color: "var(--brand-navy)" }}
+              >
+                Log in
+              </Link>
+              <Link
+                href={CTA_VERIFY_HREF}
+                className="signature-gradient text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 hover:opacity-90 hover:scale-[0.98] active:scale-95"
+                style={{ boxShadow: "0 4px 14px -3px rgba(0,13,34,0.35)" }}
+              >
+                Verify a Property
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile hamburger */}
@@ -114,21 +148,43 @@ export default function LandingNav() {
               </a>
             ))}
             <div className="mt-4 pt-4 flex flex-col gap-3" style={{ borderTop: "1px solid rgba(196,198,207,0.3)" }}>
-              <Link
-                href="/auth/login"
-                onClick={() => setMenuOpen(false)}
-                className="py-3 px-4 text-center text-sm font-semibold rounded-lg border transition-colors"
-                style={{ color: "var(--brand-navy)", borderColor: "rgba(196,198,207,0.4)" }}
-              >
-                Log in
-              </Link>
-              <Link
-                href={CTA_VERIFY_HREF}
-                onClick={() => setMenuOpen(false)}
-                className="signature-gradient text-white py-3 px-4 text-center text-sm font-semibold rounded-lg"
-              >
-                Verify a Property
-              </Link>
+              {isLoggedIn ? (
+                <>
+                  <Link
+                    href={CTA_VERIFY_HREF}
+                    onClick={() => setMenuOpen(false)}
+                    className="py-3 px-4 text-center text-sm font-semibold rounded-lg border transition-colors"
+                    style={{ color: "var(--brand-navy)", borderColor: "rgba(196,198,207,0.4)" }}
+                  >
+                    Verify a Property
+                  </Link>
+                  <Link
+                    href={dashboardHref}
+                    onClick={() => setMenuOpen(false)}
+                    className="signature-gradient text-white py-3 px-4 text-center text-sm font-semibold rounded-lg"
+                  >
+                    Back to Dashboard
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href={ROUTES.AUTH.LOGIN}
+                    onClick={() => setMenuOpen(false)}
+                    className="py-3 px-4 text-center text-sm font-semibold rounded-lg border transition-colors"
+                    style={{ color: "var(--brand-navy)", borderColor: "rgba(196,198,207,0.4)" }}
+                  >
+                    Log in
+                  </Link>
+                  <Link
+                    href={CTA_VERIFY_HREF}
+                    onClick={() => setMenuOpen(false)}
+                    className="signature-gradient text-white py-3 px-4 text-center text-sm font-semibold rounded-lg"
+                  >
+                    Verify a Property
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

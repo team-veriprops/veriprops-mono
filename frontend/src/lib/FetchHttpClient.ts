@@ -1,3 +1,5 @@
+import { ROUTES, buildAuthUrl } from "./routes";
+
 export interface HttpClient {
   get<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
   getBlob(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<Blob>;
@@ -177,20 +179,19 @@ export class FetchHttpClient implements HttpClient {
   private redirectToLogin() {
     if (typeof window !== "undefined") {
       const current = window.location.pathname + window.location.search;
-      window.location.href = `/auth/login?redirect=${encodeURIComponent(current)}`;
+      window.location.href = buildAuthUrl(ROUTES.AUTH.LOGIN, { redirect: current });
     }
   }
 
   private redirectToAccessDenied() {
     if (typeof window !== "undefined") {
-      window.location.href = `/forbidden`;
+      window.location.href = ROUTES.FORBIDDEN;
     }
   }
 
   private notifyNetworkError() {
     if (typeof window !== "undefined") {
       console.error("Network error. Please check your internet connection.");
-      alert("Network error. Please check your internet connection.");
     }
   }
 

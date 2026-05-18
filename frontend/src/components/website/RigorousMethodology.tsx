@@ -2,6 +2,7 @@ import type { ComponentType, CSSProperties } from "react";
 import { Upload, Search, Shield, Lock, Award } from "lucide-react";
 import { methodologySteps } from "./home.data";
 import { AuthIntent } from "./auth/models";
+import { ROUTES, buildAuthUrl } from "@lib/routes";
 
 const iconMap: Record<string, ComponentType<{ className?: string; strokeWidth?: number; style?: CSSProperties }>> = {
   Upload,
@@ -143,7 +144,7 @@ export default function RigorousMethodology() {
             </p>
           </div>
           <a
-            href={`/auth?intent=${AuthIntent.VERIFY}`}
+            href={buildAuthUrl(ROUTES.AUTH.GATE, { intent: AuthIntent.VERIFY })}
             className="flex-shrink-0 inline-flex items-center gap-2 signature-gradient text-white px-8 py-3.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90 hover:scale-[0.98]"
             style={{ boxShadow: "0 6px 20px -4px rgba(0,13,34,0.35)" }}
           >

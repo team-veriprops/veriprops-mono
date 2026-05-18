@@ -122,7 +122,7 @@ export default function AuthGateContainer() {
         <p className="text-xs leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
           We never ask for your bank details, send payment links via DM, or use your data for anything beyond
           delivering verifications. Read our{" "}
-          <Link href="/legal/privacy" className="font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <Link href={ROUTES.LEGAL.PRIVACY} className="font-semibold" style={{ color: "var(--brand-navy)" }}>
             Privacy Policy
           </Link>
           .

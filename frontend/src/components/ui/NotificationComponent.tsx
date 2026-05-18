@@ -9,6 +9,7 @@ import { Bell, Dot, Settings, Trash2 } from "lucide-react";
 import { Button } from "@components/3rdparty/ui/button";
 import { Badge } from "@components/3rdparty/ui/badge";
 import { redirect } from "next/navigation";
+import { ROUTES } from "@lib/routes";
 interface Notification {
   id: string;
   title: string;
@@ -40,7 +41,7 @@ export default function NotificationComponent({
           <div className="flex justify-between">
             <h4 className="font-medium mb-2">Notifications</h4>
             <Settings
-              onClick={() => redirect("/portal/settings/notifications")}
+              onClick={() => redirect(ROUTES.PORTAL.NOTIFICATION_PREFERENCES)}
               className="text-muted-foreground hover:text-black cursor-pointer"
               size={17}
             />

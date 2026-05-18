@@ -13,6 +13,7 @@ import {
 import { Button } from "@3rdparty/ui/button";
 import { httpClient } from "@/containers";
 import { getErrorMessage } from "@lib/utils";
+import { ROUTES } from "@lib/routes";
 
 type ShareMode = "PRIVATE" | "LINK_ONLY" | "PUBLIC" | "NAMED_RECIPIENT";
 
@@ -60,7 +61,7 @@ export default function ShareModal({ verificationId, open, onClose }: Props) {
     onError: (e: any) => setError(getErrorMessage(e)),
   });
 
-  const shareUrl = link ? `${window.location.origin}/verify/${verificationId}?token=${link.token}` : "";
+  const shareUrl = link ? `${window.location.origin}${ROUTES.PUBLIC.VERIFY(verificationId)}?token=${link.token}` : "";
 
   const copyLink = async () => {
     await navigator.clipboard.writeText(shareUrl);

@@ -3,6 +3,7 @@ import { twMerge } from "tailwind-merge";
 import { redirect } from "next/navigation";
 import { getFxRate, Measurement, Money, TransactionCurrency } from "@/types/models";
 import { HttpError } from "./FetchHttpClient";
+import { ROUTES } from "./routes";
 
 
 /**
@@ -109,7 +110,7 @@ export const formatLocationCoordinates = (coordinates: {lat: number, lng: number
 };
 
 export const onLogoutRedirect = () => {
-  redirect("/");
+  redirect(ROUTES.HOME);
 };
 
 export const getSearchQuery = (searchKey: string, searchParams: string) => {

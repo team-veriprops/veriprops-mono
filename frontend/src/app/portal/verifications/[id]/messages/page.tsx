@@ -24,7 +24,7 @@ export default function PortalVerificationMessagesPage({
   const thread = (data as any)?.data ?? null;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white">
         <Link

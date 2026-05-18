@@ -5,6 +5,7 @@ import { Button } from "@3rdparty/ui/button";
 import { Checkbox } from "@3rdparty/ui/checkbox";
 import { AlertCircle } from "lucide-react";
 import type { AgentApplication } from "../libs/agent-service";
+import { ROUTES } from "@lib/routes";
 
 const AGENT_TERMS_VERSION = "1.0.0";
 
@@ -92,7 +93,7 @@ export default function ReviewStep({ application, pending, onBack, onSubmit }: P
             <>
               I have read and accept the{" "}
               <a
-                href="/legal/agent-terms"
+                href={ROUTES.LEGAL.AGENT_TERMS}
                 target="_blank"
                 rel="noopener"
                 className="font-medium"

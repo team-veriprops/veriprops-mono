@@ -30,8 +30,11 @@ import {
 import NotificationBell from "@components/shared/notifications/NotificationBell";
 import { useLogoutMutation } from "@components/website/auth/libs/useAuthQueries";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
+import { UserType, UserPersona, type AuthUser } from "@components/website/auth/models";
 import { NavItem } from "@/components/nav/MenuSidebar";
 import { ROUTES } from "@lib/routes";
+import TopNavBreadcrumb from "@components/ui/TopNav/TopNavBreadcrumb";
+import TopNavUserMenu from "@components/ui/TopNav/TopNavUserMenu";
 
 interface AppShellProps {
   navItems: NavItem[];
@@ -62,35 +65,38 @@ const iconMap = {
   megaphone: Megaphone,
 } as const;
 
-export default function AppShell({ navItems, children }: AppShellProps) {
-  const pathname = usePathname();
-  const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+interface SidebarNavProps {
+  navItems: NavItem[];
+  pathname: string;
+  onNavItemClick: () => void;
+  showUserSection: boolean;
+  user: AuthUser | null | undefined;
+  initials: string;
+  onLogout: () => void;
+  isLoggingOut: boolean;
+}
 
-  const session = useAuthStore((s) => s.session);
-  const user = session?.user;
-  const initials = user
-    ? `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() || "U"
-    : "U";
-
-  const logout = useLogoutMutation();
-  const handleLogout = () => {
-    logout.mutate(undefined, {
-      onSuccess: () => router.push(ROUTES.AUTH.LOGIN),
-    });
-  };
-
-  const NavContent = () => (
+function SidebarNav({
+  navItems,
+  pathname,
+  onNavItemClick,
+  showUserSection,
+  user,
+  initials,
+  onLogout,
+  isLoggingOut,
+}: SidebarNavProps) {
+  return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-6 py-5 flex items-center gap-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <Link href={ROUTES.HOME} className="px-6 py-5 flex items-center gap-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <div className="w-7 h-7 rounded-md flex items-center justify-center signature-gradient">
           <CheckCircle2 className="w-4 h-4 text-white" strokeWidth={2.5} />
         </div>
         <span className="text-base font-extrabold tracking-tight font-display" style={{ color: "#fff" }}>
           Veriprops
         </span>
-      </div>
+      </Link>
 
       {/* Nav items */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -99,12 +105,12 @@ export default function AppShell({ navItems, children }: AppShellProps) {
           const Icon = iconMap[item.icon];
 
           if (!Icon) return null;
-          
+
           return (
             <div key={item.href}>
               <Link
                 href={item.href}
-                onClick={() => setSidebarOpen(false)}
+                onClick={onNavItemClick}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
                 style={isActive
                   ? { backgroundColor: "rgba(63,102,83,0.2)", color: "#a5d0b9", border: "1px solid rgba(63,102,83,0.2)" }
@@ -127,45 +133,92 @@ export default function AppShell({ navItems, children }: AppShellProps) {
         })}
       </nav>
 
-      {/* User + logout */}
-      <div className="px-4 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="flex items-center gap-3 mb-3 px-1">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold"
-            style={{ backgroundColor: "rgba(63,102,83,0.25)", color: "#a5d0b9" }}
+      {/* User + logout — mobile drawer only */}
+      {showUserSection && (
+        <div className="px-4 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="flex items-center gap-3 mb-3 px-1">
+            <Link
+              href={ROUTES.ACCOUNT.SECURITY}
+              onClick={onNavItemClick}
+              className="flex items-center gap-3 flex-1 min-w-0 group"
+            >
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold transition-opacity group-hover:opacity-80"
+                style={{ backgroundColor: "rgba(63,102,83,0.25)", color: "#a5d0b9" }}
+              >
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold truncate group-hover:underline" style={{ color: "#fff" }}>
+                  {user ? `${user.firstName} ${user.lastName}` : "Loading..."}
+                </div>
+                <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  {user?.email ?? ""}
+                </div>
+              </div>
+            </Link>
+            <div className="flex-shrink-0">
+              <NotificationBell dark />
+            </div>
+          </div>
+          <button
+            onClick={onLogout}
+            disabled={isLoggingOut}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:bg-white/5"
+            style={{ color: "rgba(255,255,255,0.45)" }}
           >
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold truncate" style={{ color: "#fff" }}>
-              {user ? `${user.firstName} ${user.lastName}` : "Loading..."}
-            </div>
-            <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
-              {user?.email ?? ""}
-            </div>
-          </div>
+            <LogOut className="w-4 h-4" strokeWidth={1.75} />
+            {isLoggingOut ? "Signing out…" : "Sign out"}
+          </button>
         </div>
-        <button
-          onClick={handleLogout}
-          disabled={logout.isPending}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:bg-white/5"
-          style={{ color: "rgba(255,255,255,0.45)" }}
-        >
-          <LogOut className="w-4 h-4" strokeWidth={1.75} />
-          {logout.isPending ? "Signing out…" : "Sign out"}
-        </button>
-      </div>
+      )}
     </div>
   );
+}
+
+export default function AppShell({ navItems, children }: AppShellProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const session = useAuthStore((s) => s.session);
+  const user = session?.user;
+  const initials = user
+    ? `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() || "U"
+    : "U";
+
+  const logout = useLogoutMutation();
+  const handleLogout = () => {
+    logout.mutate(undefined, {
+      onSuccess: () => router.push(ROUTES.AUTH.LOGIN),
+    });
+  };
+
+  const notificationPrefsHref =
+    user?.userType === UserType.ADMIN
+      ? undefined
+      : user?.personas?.includes(UserPersona.AGENT)
+        ? ROUTES.AGENT.NOTIFICATION_PREFERENCES
+        : ROUTES.PORTAL.NOTIFICATION_PREFERENCES;
+
+  const sidebarNavProps: Omit<SidebarNavProps, "showUserSection"> = {
+    navItems,
+    pathname,
+    onNavItemClick: () => setSidebarOpen(false),
+    user,
+    initials,
+    onLogout: handleLogout,
+    isLoggingOut: logout.isPending,
+  };
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — navigation only, no user section */}
       <aside
         className="hidden lg:flex flex-col w-60 flex-shrink-0 h-full"
         style={{ backgroundColor: "var(--brand-navy)", borderRight: "1px solid rgba(255,255,255,0.06)" }}
       >
-        <NavContent />
+        <SidebarNav {...sidebarNavProps} showUserSection={false} />
       </aside>
 
       {/* Mobile sidebar overlay */}
@@ -177,7 +230,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
         />
       )}
 
-      {/* Mobile sidebar drawer */}
+      {/* Mobile sidebar drawer — includes user section */}
       <aside
         className="lg:hidden fixed inset-y-0 left-0 z-50 w-64 flex flex-col transform transition-transform duration-300"
         style={{
@@ -191,11 +244,32 @@ export default function AppShell({ navItems, children }: AppShellProps) {
             <X className="w-5 h-5" />
           </button>
         </div>
-        <NavContent />
+        <SidebarNav {...sidebarNavProps} showUserSection={true} />
       </aside>
 
       {/* Main content area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* Desktop top nav */}
+        <header
+          className="hidden lg:flex items-center justify-between px-6 h-14 flex-shrink-0"
+          style={{
+            backgroundColor: "#fff",
+            borderBottom: "1px solid rgba(196,198,207,0.12)",
+          }}
+        >
+          <TopNavBreadcrumb />
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <TopNavUserMenu
+              user={user}
+              initials={initials}
+              onLogout={handleLogout}
+              isLoggingOut={logout.isPending}
+              notificationPrefsHref={notificationPrefsHref}
+            />
+          </div>
+        </header>
+
         {/* Mobile header */}
         <header
           className="lg:hidden flex items-center gap-4 px-4 py-3 flex-shrink-0"

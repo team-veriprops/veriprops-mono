@@ -11,6 +11,7 @@ export const ROUTES = {
     RESET_PASSWORD: (token: string) => `/auth/reset-password/${token}`,
     SET_PASSWORD: '/auth/set-password',
     OAUTH_CALLBACK: (provider: string) => `/auth/oauth/${provider}/callback`,
+    OAUTH_ERROR: '/auth/oauth/error',
     LOGIN_SUCCESS_REDIRECT: "/auth/login/success-redirect"
   },
 
@@ -26,8 +27,7 @@ export const ROUTES = {
   AGENT: {
     GATE: '/agents',
     DASHBOARD: '/agents/dashboard',
-    ONBOARDING: '/agents/onboarding',
-    ONBOARDING_STATUS: '/agents/onboarding/status',
+    TASKS: '/agents/tasks',
     TASK_DETAIL: (taskId: string) => `/agents/tasks/${taskId}`,
     TASK_HISTORY: (taskId: string) => `/agents/tasks/${taskId}/history`,
     TASK_MESSAGES: (taskId: string) => `/agents/tasks/${taskId}/messages`,
@@ -35,7 +35,6 @@ export const ROUTES = {
     PAYOUTS: '/agents/payouts',
     PROFILE: '/agents/profile',
     SETTINGS_COVERAGE: '/agents/settings/coverage',
-    SETTINGS_AVAILABILITY: '/agents/settings/availability',
     NOTIFICATION_PREFERENCES: '/agents/account/notification-preferences',
   },
   ADMIN: {
@@ -91,6 +90,25 @@ export const ROUTES = {
     VERIFICATION_ACTIVITY: (id: string) => `/portal/verifications/${id}/activity`,
     NOTIFICATION_PREFERENCES: '/portal/account/notification-preferences',
     REFERRALS: '/portal/referrals',
+    VERIFICATIONS: '/portal/verifications',
+    NOTIFICATIONS: '/portal/notifications',
+    PAYMENTS: '/portal/account/payments',
+    SUPPORT: '/portal/support',
+  },
+
+  FORBIDDEN: '/forbidden',
+
+  LEGAL: {
+    PRIVACY: '/legal/privacy',
+    TERMS: '/legal/terms',
+    AGENT_TERMS: '/legal/agent-terms',
+    VERIFICATION_TERMS: '/legal/verification-terms',
+    VERIFICATION_DISCLAIMER: '/legal/verification-disclaimer',
+    FINDINGS_OPINION: '/legal/findings-opinion',
+    JURISDICTION: '/legal/jurisdiction',
+    COMMUNICATION_RECORDING: '/legal/communication-recording',
+    REFUND_POLICY: '/legal/refund-policy',
+    REPORT_DISCLAIMER: '/legal/report-disclaimer',
   },
 
   ABOUT: '/about',

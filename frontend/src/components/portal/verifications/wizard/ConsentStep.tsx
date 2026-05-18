@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@3rdparty/ui/button";
 import { Checkbox } from "@3rdparty/ui/checkbox";
 import { AlertCircle } from "lucide-react";
+import { ROUTES } from "@lib/routes";
 
 const CONSENT_VERSION = "1.0.0";
 
@@ -19,31 +20,31 @@ const ITEMS: ConsentItem[] = [
     type: "VERIFICATION_DISCLAIMER",
     title: "Verification Disclaimer",
     body: "I understand the verification report represents Veriprops' professional opinion, not a legal guarantee.",
-    href: "/legal/verification-disclaimer",
+    href: ROUTES.LEGAL.VERIFICATION_DISCLAIMER,
   },
   {
     type: "FINDINGS_OPINION_ACK",
     title: "Findings & Opinion Acknowledgement",
     body: "I acknowledge that findings are based on information available at the time of verification.",
-    href: "/legal/findings-opinion",
+    href: ROUTES.LEGAL.FINDINGS_OPINION,
   },
   {
     type: "JURISDICTION_PLATFORM_ONLY",
     title: "Jurisdiction & Platform-Only Transactions",
     body: "All payments and communication for this verification will happen on the Veriprops platform.",
-    href: "/legal/jurisdiction",
+    href: ROUTES.LEGAL.JURISDICTION,
   },
   {
     type: "COMMUNICATION_RECORDING",
     title: "Communication Recording",
     body: "Messages exchanged with Veriprops administrators and on the platform are recorded for audit.",
-    href: "/legal/communication-recording",
+    href: ROUTES.LEGAL.COMMUNICATION_RECORDING,
   },
   {
     type: "REFUND_POLICY",
     title: "Refund & Cancellation Policy",
     body: "I have read and accept the refund and cancellation policy.",
-    href: "/legal/refund-policy",
+    href: ROUTES.LEGAL.REFUND_POLICY,
   },
 ];
 
