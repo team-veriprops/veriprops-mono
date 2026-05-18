@@ -16,18 +16,32 @@ function StatCard({
   icon: React.ElementType;
   highlight?: boolean;
 }) {
+  const cardStyle = highlight
+    ? { backgroundColor: "rgba(63,102,83,0.08)", border: "1px solid rgba(63,102,83,0.2)" }
+    : { backgroundColor: "#fff", border: "1px solid rgba(196,198,207,0.2)" };
+
   return (
     <div
-      className={`rounded-lg border p-5 ${
-        highlight ? "border-indigo-200 bg-indigo-50" : "border-gray-200 bg-white"
-      }`}
+      className="rounded-xl p-5"
+      style={cardStyle}
       data-testid={`earnings-stat-${label.toLowerCase().replace(/\s+/g, "-")}`}
     >
       <div className="flex items-center gap-2 mb-2">
-        <Icon className={`h-4 w-4 ${highlight ? "text-indigo-600" : "text-gray-500"}`} />
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
+        <Icon
+          className="h-4 w-4"
+          style={{ color: highlight ? "var(--brand-viridian)" : "var(--brand-on-surface-variant)" }}
+        />
+        <p
+          className="text-xs font-medium uppercase tracking-wide"
+          style={{ color: "var(--brand-on-surface-variant)" }}
+        >
+          {label}
+        </p>
       </div>
-      <p className={`text-2xl font-bold ${highlight ? "text-indigo-700" : "text-gray-900"}`}>
+      <p
+        className="text-2xl font-bold"
+        style={{ color: highlight ? "var(--brand-viridian)" : "var(--brand-navy)" }}
+      >
         {value}
       </p>
     </div>
@@ -48,13 +62,17 @@ export default function EarningsDashboard() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-10">
-        <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
+        <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--brand-viridian)" }} />
       </div>
     );
   }
 
   if (error || !summary) {
-    return <p className="text-sm text-red-600 py-4">Failed to load earnings data.</p>;
+    return (
+      <p className="text-sm py-4" style={{ color: "#ef4444" }}>
+        Failed to load earnings data.
+      </p>
+    );
   }
 
   return (

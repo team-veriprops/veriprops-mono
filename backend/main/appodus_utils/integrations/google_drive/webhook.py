@@ -13,8 +13,8 @@ from starlette.datastructures import QueryParams
 from starlette.responses import JSONResponse, Response
 
 from main.app.config.settings import settings, IntegratedPlatform
-from main.app.domain.webhook.callback.model import CreateCallbackDto, CallbackType, QueryCallbackDto
-from main.app.domain.webhook.callback.service import CallbackService
+from main.appodus_utils.domain.webhook.callback.model import CreateCallbackDto, CallbackType, QueryCallbackDto
+from main.appodus_utils.domain.webhook.callback.service import CallbackService
 from main.appodus_utils.integrations.google_drive.models import GoogleDriveWebhookPayload
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
 from main.appodus_utils import Utils

@@ -4,7 +4,7 @@ from __future__ import annotations
 import enum
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Column, Float, Index, JSON, String, Text
+from sqlalchemy import BigInteger, Column, Float, Index, JSON, String, Text
 from sqlalchemy.ext.mutable import MutableList
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
@@ -36,6 +36,8 @@ class Property(BaseEntity):
     details = Column(Text, nullable=True)  # type-specific JSON
     documents = Column(MutableList.as_mutable(JSON), nullable=False, default=list)
     seller_info = Column(Text, nullable=True)  # JSON
+    estimated_price_minor = Column(BigInteger, nullable=True)
+    estimated_price_currency = Column(String(3), nullable=True)
 
     __table_args__ = (
         Index("ix_properties_state_lga", "state", "lga"),
@@ -58,6 +60,8 @@ class CreatePropertyDto(Object):
     details: Optional[str] = None
     documents: List[str] = []
     seller_info: Optional[str] = None
+    estimated_price_minor: Optional[int] = None
+    estimated_price_currency: Optional[str] = None
 
 
 class UpdatePropertyDto(Object):
@@ -74,6 +78,8 @@ class UpdatePropertyDto(Object):
     details: Optional[str] = None
     documents: Optional[List[str]] = None
     seller_info: Optional[str] = None
+    estimated_price_minor: Optional[int] = None
+    estimated_price_currency: Optional[str] = None
 
 
 class SearchPropertyDto(PageRequest, BaseQueryDto):
@@ -101,3 +107,5 @@ class PropertyDto(Object):
     details: Optional[Dict[str, Any]] = None
     documents: List[str] = []
     seller_info: Optional[Dict[str, Any]] = None
+    estimated_price_minor: Optional[int] = None
+    estimated_price_currency: Optional[str] = None

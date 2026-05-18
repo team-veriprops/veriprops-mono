@@ -65,9 +65,9 @@ async def generic_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled error: {str(exc)}")
     logger.debug(traceback.format_exc())
 
-    ENVIRONMENT: str = os.getenv('ENVIRONMENT', "Environment.PRODUCTION")
+    ENVIRONMENT: str = os.getenv('ENVIRONMENT', "prod")
 
-    if ENVIRONMENT == "Environment.DEVELOPMENT":
+    if ENVIRONMENT not in ("prod", "staging"):
         return JSONResponse(
             status_code=HTTP_500_INTERNAL_SERVER_ERROR,
             content={

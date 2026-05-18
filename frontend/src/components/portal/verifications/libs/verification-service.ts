@@ -123,8 +123,8 @@ export class VerificationService {
     return this.http.post(`${this.base}/${id}/submit`, payload);
   }
 
-  paginated(): Promise<Page<Verification>> {
-    return this.http.get(`${this.base}/me/list`);
+  paginated(page = 0, pageSize = 20): Promise<Page<Verification>> {
+    return this.http.get(`${this.base}/me/list?page=${page}&page_size=${pageSize}`);
   }
 
   cancel(id: string): Promise<SuccessResponse<Verification>> {

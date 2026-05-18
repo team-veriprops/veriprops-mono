@@ -48,15 +48,15 @@ export default function PortalReferralsPage() {
   const [copied, setCopied] = useState(false);
 
   function handleCopy() {
-    if (!stats?.link) return;
-    navigator.clipboard.writeText(stats.link).then(() => {
+    if (!stats?.referralLink) return;
+    navigator.clipboard.writeText(stats.referralLink).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
   }
 
-  const creditNgn = stats ? (stats.creditBalanceKobo / 100).toFixed(0) : "0";
-  const isEmpty = !stats || stats.timesRedeemed === 0;
+  const creditNgn = stats ? stats.creditBalanceNgn.toFixed(0) : "0";
+  const hasCreditBalance = stats ? stats.creditBalanceNgn > 0 : false;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
@@ -86,14 +86,14 @@ export default function PortalReferralsPage() {
             <div
               className="flex-1 min-w-0 px-3 py-2 rounded-lg text-sm font-mono truncate"
               style={{ backgroundColor: "rgba(0,13,34,0.04)", color: "var(--brand-navy)", border: "1px solid rgba(196,198,207,0.2)" }}
-              title={stats?.link}
+              title={stats?.referralLink}
             >
-              {stats?.link ?? "—"}
+              {stats?.referralLink ?? "—"}
             </div>
             <button
               type="button"
               onClick={handleCopy}
-              disabled={!stats?.link}
+              disabled={!stats?.referralLink}
               className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all hover:opacity-90 disabled:opacity-40 text-white"
               style={{ backgroundColor: copied ? "#3f6653" : "var(--brand-navy)" }}
               data-testid="referral-copy-link"
@@ -110,51 +110,46 @@ export default function PortalReferralsPage() {
         )}
       </div>
 
-      {/* Stats grid */}
+      {/* Credit balance banner — only when > 0 */}
+      {!isLoading && hasCreditBalance && (
+        <div
+          className="flex items-center gap-3 p-4 rounded-xl"
+          style={{ backgroundColor: "rgba(63,102,83,0.07)", border: "1px solid rgba(63,102,83,0.2)" }}
+        >
+          <Wallet className="w-4 h-4 flex-shrink-0" style={{ color: "var(--brand-viridian)" }} />
+          <p className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+            You have ₦{Number(creditNgn).toLocaleString("en-NG")} in referral credit
+          </p>
+        </div>
+      )}
+
+      {/* Stats grid — always shown once data loads */}
       {!isLoading && stats && (
         <div className="grid grid-cols-2 gap-3">
           <StatCard
             icon={Users}
-            label="Total Invited"
-            value={String(stats.timesRedeemed)}
+            label="Total Referred"
+            value={String(stats.totalInvited)}
             iconColor="var(--brand-viridian)"
           />
           <StatCard
             icon={Check}
-            label="Credited (NGN)"
-            value={`₦${Number(stats.creditedNgn).toLocaleString("en-NG")}`}
+            label="Credited"
+            value={`${stats.totalCredited} referral${stats.totalCredited !== 1 ? "s" : ""}`}
             iconColor="var(--brand-viridian)"
           />
           <StatCard
             icon={Clock}
-            label="Pending Credits (NGN)"
-            value={`₦${Number(stats.pendingCreditsNgn).toLocaleString("en-NG")}`}
+            label="Pending"
+            value={`${stats.pendingCount} referral${stats.pendingCount !== 1 ? "s" : ""}`}
             iconColor="#d97706"
           />
           <StatCard
-            icon={Wallet}
-            label="Credit Balance"
-            value={`₦${Number(creditNgn).toLocaleString("en-NG")}`}
+            icon={Gift}
+            label="Earn per Referral"
+            value="₦1,000"
             iconColor="var(--brand-viridian)"
           />
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!isLoading && isEmpty && (
-        <div className="text-center py-8">
-          <div
-            className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
-            style={{ backgroundColor: "rgba(63,102,83,0.08)" }}
-          >
-            <Gift className="w-6 h-6" style={{ color: "var(--brand-viridian)" }} />
-          </div>
-          <p className="text-sm font-medium mb-1" style={{ color: "var(--brand-navy)" }}>
-            No referrals yet
-          </p>
-          <p className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>
-            Share your link above to start earning credit when friends verify their properties.
-          </p>
         </div>
       )}
     </div>

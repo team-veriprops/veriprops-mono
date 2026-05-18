@@ -41,12 +41,11 @@ export interface AgentMetrics {
   timelinessScore: number;
   totalJobs: number;
   activeSince: string | null;
+  isTopAgent: boolean;
 }
 
-export interface AgentProfile {
-  application: AgentApplication;
+export interface AgentProfile extends AgentApplication {
   metrics: AgentMetrics;
-  isTopAgent: boolean;
 }
 
 export interface UpdateCoverageRequest {

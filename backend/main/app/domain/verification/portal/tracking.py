@@ -40,10 +40,12 @@ _STATUS_LABELS: Dict[str, str] = {
 }
 
 _STATUS_DETAILS: Dict[str, str] = {
-    "PAID": "Your verification is paid. We are assigning agents to begin.",
-    "IN_PROGRESS": "Our agents are actively working on your property verification.",
-    "UNDER_REVIEW": "All agent findings have been submitted and are under admin review.",
+    "PAYMENT_PENDING": "Your payment is being processed. This usually takes a few minutes. If this persists beyond 30 minutes, contact support with your Verification ID.",
+    "PAID": "Payment confirmed. Our team is assigning agents to your verification. You'll be notified within 24 hours.",
+    "IN_PROGRESS": "Agents are actively working on your verification. No action required from you right now.",
+    "UNDER_REVIEW": "All field work is complete. Our team is reviewing the findings for quality and consistency. This is intentional — expect your report shortly.",
     "COMPLETED": "Your report is ready. You may view and download it now.",
+    "DISPUTED": "Your dispute has been filed and is under review. Our team will respond within 5 business days.",
     "FAILED": "This verification could not be completed. Contact support for assistance.",
 }
 

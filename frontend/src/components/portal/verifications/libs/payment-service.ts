@@ -1,5 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
-import { SuccessResponse } from "@/types/models";
+import { Page, SuccessResponse } from "@/types/models";
 
 export type PaymentMethod = "CARD" | "BANK_TRANSFER" | "WIRE";
 export type PaymentStatus =
@@ -23,6 +23,10 @@ export interface Payment {
   wireProofUrl: string | null;
   dateCreated: string;
   dateUpdated: string | null;
+}
+
+export interface CustomerPayment extends Payment {
+  vid: string;
 }
 
 export interface InitiatePaymentResult {
@@ -53,5 +57,9 @@ export class PaymentService {
     payload: { proofUrl: string },
   ): Promise<SuccessResponse<Payment>> {
     return this.http.post(`${this.base}/${id}/wire-proof`, payload);
+  }
+
+  listForCustomer(page = 0, pageSize = 20): Promise<SuccessResponse<Page<CustomerPayment>>> {
+    return this.http.get(`${this.base}/me?page=${page}&page_size=${pageSize}`);
   }
 }

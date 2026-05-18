@@ -42,6 +42,10 @@ When adding a feature, write a short plan and confirm with the user before codin
 ### Non-negotiable rule
 1. No Frontend/Backend duplicate implementations. 
 2. As much as possible, deliver all implementation as full vertical slices (backend domains + Alembic migrations + tests + frontend ) so each phase ships demoably end-to-end.
+3. For any change/refactor, make sure to also refactor the whole codebase, including all their references and related implementations; no feature should be ophaned.
+4. After each code change, refactor all existing tests, run the tests, and fix defects. Also confirm the app builds and lints.
+5. No facts should be derived on the frontend, delegate such tasks to the backend.
+6. When investigating the app ui, use playwright-cli skills.
 
 ## Automation determinism
 
@@ -53,3 +57,13 @@ The codebase ships a deterministic foundation for autonomous QA (Playwright + Cl
 - **Frontend `data-testid`.** Auth form elements carry stable `data-testid` selectors. Never remove them. Follow the naming scheme: `login-*`, `signup-*`, `verify-*`, `oauth-*`.
 - **Window hooks.** `window.__app_ready__`, `window.__auth_snapshot__`, `window.__oauth_complete__`, `window.__TEST_MODE__` are exposed in automation environments only. Guards **must** use `isAutomationEnvironment()` from `@lib/automation` — never `NODE_ENV` checks. `isAutomationEnvironment()` returns `true` for `NEXT_PUBLIC_ENVIRONMENT=local|development|test` and `false` for `staging|production`. Do not remove these hooks. Do not gate them on feature flags.
 - **OAuth completion contract.** `window.__oauth_complete__` follows a strict per-attempt lifecycle: `null` (pending, reset at the top of every `startOauthPopup` call) → `"success"` (provider confirmed) or `"failed"` (any non-success terminal: provider error, timeout, popup blocked, navigation failure, user cancel). A `CustomEvent("__oauth_complete__", { detail: { status } })` is dispatched on every terminal transition. Never leave the state as `null` after an attempt resolves.
+
+Important constraints:
+- Prefer correctness and maintainability over speed
+- Reuse existing abstractions where sensible
+- Avoid introducing duplicate layout systems
+- Keep implementation scalable for future dashboard sections
+- Avoid hardcoded breadcrumbs where possible
+- Desktop-first implementation for now
+- Do not generate code until investigation is complete
+- Be explicit about tradeoffs and uncertainties

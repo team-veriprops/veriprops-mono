@@ -90,9 +90,10 @@ class ReferralService:
         credit_balance_kobo = int(getattr(user, "credit_balance_kobo", 0) or 0)
 
         if code_row is None:
+            code_dto = await self.get_or_create_code(user_id)
             return ReferralStatsDto(
-                code="",
-                referral_link="",
+                code=code_dto.code,
+                referral_link=code_dto.referral_link,
                 total_invited=0,
                 total_credited=0,
                 pending_count=0,

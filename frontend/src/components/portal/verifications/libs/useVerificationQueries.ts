@@ -5,6 +5,7 @@ import { httpClient } from "@/containers";
 import {
   PaymentService,
   type PaymentMethod,
+  type CustomerPayment,
 } from "./payment-service";
 import {
   VerificationService,
@@ -18,7 +19,7 @@ export const verificationService = new VerificationService(httpClient);
 export const paymentService = new PaymentService(httpClient);
 
 export const verificationKeys = {
-  list: ["verification", "list"] as const,
+  list: (page = 0, pageSize = 20) => ["verification", "list", page, pageSize] as const,
   activeDraft: ["verification", "active-draft"] as const,
   detail: (id: string) => ["verification", "detail", id] as const,
   pricing: (tier: VerificationTier, currency: string) =>
@@ -26,10 +27,10 @@ export const verificationKeys = {
   payment: (id: string) => ["payment", "detail", id] as const,
 };
 
-export function useVerificationList() {
+export function useVerificationList(page = 0, pageSize = 20) {
   return useQuery({
-    queryKey: verificationKeys.list,
-    queryFn: async (): Promise<Page<Verification>> => (await verificationService.paginated()),
+    queryKey: verificationKeys.list(page, pageSize),
+    queryFn: async (): Promise<Page<Verification>> => (await verificationService.paginated(page, pageSize)),
     staleTime: 30_000,
   });
 }
@@ -89,8 +90,13 @@ export function useSubmitVerificationMutation(id: string) {
   return useMutation({
     mutationFn: (consents: ConsentRecord[]) =>
       verificationService.submit(id, { consents }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: verificationKeys.activeDraft });
+    onSuccess: (data) => {
+      // Set cache directly instead of invalidating — invalidating causes GET /verifications/me
+      // to fire, which auto-creates a new DRAFT (create_or_resume_draft), replacing the
+      // submitted verification in the wizard with an unrelated new draft.
+      if (data.data) {
+        qc.setQueryData(verificationKeys.activeDraft, data.data);
+      }
       qc.invalidateQueries({ queryKey: verificationKeys.detail(id) });
     },
   });
@@ -101,7 +107,7 @@ export function useCancelVerificationMutation() {
   return useMutation({
     mutationFn: (id: string) => verificationService.cancel(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: verificationKeys.list });
+      qc.invalidateQueries({ queryKey: ["verification", "list"] });
       qc.invalidateQueries({ queryKey: verificationKeys.activeDraft });
     },
   });
@@ -124,5 +130,17 @@ export function usePayment(id: string, enabled = true) {
     queryFn: async () => (await paymentService.get(id)).data ?? null,
     staleTime: 5_000,
     refetchInterval: 5_000,
+  });
+}
+
+export function useMyPayments(page = 0, pageSize = 20) {
+  return useQuery<Page<CustomerPayment>>({
+    queryKey: ["payments", "my", page, pageSize],
+    queryFn: async (): Promise<Page<CustomerPayment>> => {
+      const res = await paymentService.listForCustomer(page, pageSize);
+      if (!res.data) throw new Error("No payment data");
+      return res.data;
+    },
+    staleTime: 30_000,
   });
 }

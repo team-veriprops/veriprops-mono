@@ -38,10 +38,12 @@ describe("AdminService — invitations", () => {
     const result: InviteAdminResult = { invitation: mockInvitation, rawToken: "tok_abc" };
     http.mock.post.mockResolvedValue({ data: result });
 
-    const res = await service.inviteAdmin({ email: "ops@example.com", subRole: "OPERATIONS" });
+    const res = await service.inviteAdmin({ email: "ops@example.com", firstName: "Ops", lastName: "User", subRole: "OPERATIONS" });
 
     expect(http.mock.post).toHaveBeenCalledWith("/users/admin-invitations", {
       email: "ops@example.com",
+      firstName: "Ops",
+      lastName: "User",
       subRole: "OPERATIONS",
     });
     expect(res.data?.rawToken).toBe("tok_abc");

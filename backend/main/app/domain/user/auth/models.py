@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import enum
-from datetime import datetime
 from typing import List, Optional
 
 from pydantic import EmailStr, Field
 
-from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
-from main.app.domain.user.auth.consent.models import  UserConsentInputDto
-from main.app.domain.user.models import UserPersona, UserType
+from main.app.domain.user.auth.consent.models import UserConsentInputDto
 from main.appodus_utils import Object
 from main.appodus_utils.db.types.money import TransactionCurrency
 
@@ -18,11 +15,13 @@ class OtpChannel(str, enum.Enum):
     EMAIL = "EMAIL"
     PHONE = "PHONE"
 
+
 class AuthIntent(str, enum.Enum):
-    DEFAULT = "default" # Customer
-    VERIFY = "verify" # Customer
-    AGENT = "agent" # Agent
-    INVITED_ADMIN = "invited-admin" # Admin
+    DEFAULT = "default"  # Customer
+    VERIFY = "verify"  # Customer
+    AGENT = "agent"  # Agent
+    INVITED_ADMIN = "invited-admin"  # Admin
+
 
 class SignupRequestDto(Object):
     first_name: str
@@ -38,7 +37,6 @@ class SignupRequestDto(Object):
     consents: List[UserConsentInputDto] = Field(default_factory=list)
     intent: Optional[AuthIntent] = None
     device_fingerprint: Optional[str] = None
-
 
 
 class OtpSendDto(Object):

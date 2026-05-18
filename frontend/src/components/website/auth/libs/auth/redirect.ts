@@ -30,7 +30,7 @@ export function resolvePostAuthRedirect(
     return ROUTES.PORTAL.VERIFICATIONS_NEW;
   }
   if (options.intent === AuthIntent.AGENT && !isAgent) {
-    return ROUTES.AGENT.ONBOARDING;
+    return ROUTES.AGENT.DASHBOARD;
   }
 
   if (isAgent) return ROUTES.AGENT.DASHBOARD;

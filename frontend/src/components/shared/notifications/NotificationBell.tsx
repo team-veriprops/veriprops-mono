@@ -6,7 +6,7 @@ import { useNotifications } from "./NotificationList";
 import NotificationList from "./NotificationList";
 import type { Notification } from "./libs/notification-service";
 
-export default function NotificationBell() {
+export default function NotificationBell({ dark = false }: { dark?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { data } = useNotifications();
@@ -28,11 +28,11 @@ export default function NotificationBell() {
       <button
         onClick={() => setOpen((v) => !v)}
         style={{ cursor: "pointer" }}
-        className="relative p-2 rounded-lg hover:bg-gray-100"
+        className={`relative p-2 rounded-lg ${dark ? "hover:bg-white/10" : "hover:bg-gray-100"}`}
         aria-label="Notifications"
         data-testid="notification-bell-button"
       >
-        <Bell className="h-5 w-5 text-gray-600" />
+        <Bell className={`h-5 w-5 ${dark ? "text-white/55" : "text-gray-600"}`} />
         {unread > 0 && (
           <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
             {unread > 9 ? "9+" : unread}

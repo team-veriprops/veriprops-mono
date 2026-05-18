@@ -370,6 +370,21 @@ class PaymentService:
         except Exception as exc:
             logger.warning("Notification emit failed (payment): {}", exc)
 
+    async def list_for_customer(
+        self,
+        customer_id: str,
+        page: int = 0,
+        page_size: int = 20,
+    ) -> "Page[CustomerPaymentDto]":
+        from main.app.domain.payment.models import CustomerPaymentDto
+        rows, total = await self._payment_repo.list_for_customer(customer_id, page, page_size)
+        items = [
+            CustomerPaymentDto(**self._to_dto(payment).model_dump(), vid=vid)
+            for payment, vid in rows
+        ]
+        meta = PaginationMeta(page=page, page_size=page_size, count=len(items), total=total)
+        return Page[CustomerPaymentDto](items=items, meta=meta)
+
     async def admin_list_payments(
         self,
         *,

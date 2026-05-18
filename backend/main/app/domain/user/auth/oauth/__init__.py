@@ -1,7 +1,10 @@
-from typing import Optional, Tuple
+from main.app.domain.user.auth.oauth.providers.apple import AppleAuthProvider  # noqa: F401
+from main.app.domain.user.auth.oauth.providers.facebook import FacebookAuthProvider  # noqa: F401
+from main.app.domain.user.auth.oauth.providers.google import GoogleAuthProvider  # noqa: F401
 
-from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
+from typing import Optional, Tuple
 from main.appodus_utils import Utils
+from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
 
 
 def make_oauth_state(intent: Optional[str]) -> Tuple[str, dict]:

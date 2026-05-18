@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 from kink import di
 from starlette.requests import Request
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, Response
 
 from main.app.config.settings import settings
 from main.app.domain.user.auth.oauth.providers.models import (
@@ -138,6 +138,7 @@ class OauthUtils:
     @staticmethod
     async def popup_response(
         *,
+        response: Response,
         success: bool,
         target_origin: str,
         state: Optional[str] = None,
@@ -156,38 +157,45 @@ class OauthUtils:
             message or "Sign-in failed. You can close this window."
         )
         html = f"""<!doctype html>
-<html lang=\"en\">
-<head>
-<meta charset=\"utf-8\" />
-<title>Veriprops — Sign in</title>
-<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />
-<style>
-  body {{ font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
-          background: #0b0d10; color: #e6e8eb; display: flex;
-          align-items: center; justify-content: center; height: 100vh; margin: 0; }}
-  .card {{ max-width: 320px; padding: 24px; text-align: center; }}
-  .muted {{ color: #9aa3ad; font-size: 14px; margin-top: 8px; }}
-</style>
-</head>
-<body>
-<div class=\"card\">
-  <p>{body_text}</p>
-  <p class=\"muted\">If this window did not close automatically, you can close it now.</p>
-</div>
-<script>
-(function () {{
-  try {{
-    if (window.opener && !window.opener.closed) {{
-      window.opener.postMessage({payload_json}, {target_js});
-    }}
-  }} catch (_) {{}}
-  setTimeout(function () {{ try {{ window.close(); }} catch (_) {{}} }}, 200);
-}})();
-</script>
-</body>
-</html>"""
-        response = HTMLResponse(content=html, status_code=200)
+        <html lang=\"en\">
+        <head>
+        <meta charset=\"utf-8\" />
+        <title>Veriprops — Sign in</title>
+        <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />
+        <style>
+          body {{ font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
+                  background: #0b0d10; color: #e6e8eb; display: flex;
+                  align-items: center; justify-content: center; height: 100vh; margin: 0; }}
+          .card {{ max-width: 320px; padding: 24px; text-align: center; }}
+          .muted {{ color: #9aa3ad; font-size: 14px; margin-top: 8px; }}
+        </style>
+        </head>
+        <body>
+        <div class=\"card\">
+          <p>{body_text}</p>
+          <p class=\"muted\">If this window did not close automatically, you can close it now.</p>
+        </div>
+        <script>
+        (function () {{
+          try {{
+            if (window.opener && !window.opener.closed) {{
+              window.opener.postMessage({payload_json}, {target_js});
+            }}
+          }} catch (_) {{}}
+          setTimeout(function () {{ try {{ window.close(); }} catch (_) {{}} }}, 200);
+        }})();
+        </script>
+        </body>
+        </html>"""
+        html_response = HTMLResponse(content=html, status_code=200)
+
         if extra_headers:
             for k, v in extra_headers.items():
-                response.headers[k] = v
-        return response
+                html_response.headers[k] = v
+
+        # copy header
+        for header, value in response.raw_headers:
+            if header.lower() == b"set-cookie":  # copy cookie
+                html_response.headers.append(header.decode(), value.decode())
+
+        return html_response

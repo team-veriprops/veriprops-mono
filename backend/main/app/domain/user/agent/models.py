@@ -88,7 +88,7 @@ class AgentApplication(BaseEntity):
     bio = Column(Text, nullable=True)
 
     # Step 4 — Submission
-    truthfulness_acknowledged = Column(String(8), nullable=True)
+    truthfulness_acknowledged = Column(String(16), nullable=True)
     agent_terms_consent_id = Column(String(36), nullable=True)
     submitted_at = Column(UTCDateTime, nullable=True)
 
@@ -295,6 +295,7 @@ class AgentMetricsDto(Object):
     timeliness_score: float  # 0–100 %
     total_jobs: int
     active_since: Optional[datetime] = None
+    is_top_agent: bool = False  # accuracy_score >= 4.5 and total_jobs >= 10
 
 
 class AgentProfileDto(AgentApplicationDto):

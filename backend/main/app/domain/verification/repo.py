@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
-from typing import List, Optional, Type
+from typing import Dict, List, Optional, Type
 
 from kink import inject
-from sqlalchemy import func, select
+from sqlalchemy import func, select, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.verification.models import (
@@ -68,6 +68,51 @@ class VerificationRepo(
                 Verification.abandonment_email_sent_at.is_(None),
                 Verification.draft_step > 0,
                 func.coalesce(Verification.date_updated, Verification.date_created) < cutoff,
+            )
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def count_by_status_for_customer(self, customer_id: str) -> Dict[str, int]:
+        """Return a mapping of status → count for all non-deleted verifications of one customer."""
+        stmt = (
+            select(Verification.status, func.count(Verification.id).label("cnt"))
+            .where(
+                Verification.deleted.is_(False),
+                Verification.customer_id == customer_id,
+            )
+            .group_by(Verification.status)
+        )
+        result = await self._session.execute(stmt)
+        return {row.status: row.cnt for row in result}
+
+    async def list_abandoned_for_customer(
+        self, customer_id: str, older_than_hours: int = 24
+    ) -> List[Verification]:
+        """Return this customer's stale DRAFT/SUBMITTED verifications older than the cutoff."""
+        cutoff = datetime.utcnow() - timedelta(hours=older_than_hours)
+        stmt = (
+            select(Verification)
+            .where(
+                Verification.deleted.is_(False),
+                Verification.customer_id == customer_id,
+                Verification.status.in_(["DRAFT", "SUBMITTED"]),
+                Verification.draft_step > 0,
+                func.coalesce(Verification.date_updated, Verification.date_created) < cutoff,
+            )
+            .order_by(Verification.date_updated.desc())
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_completed_vids_for_customer(self, customer_id: str) -> List[str]:
+        """Return VIDs of all COMPLETED verifications for this customer."""
+        stmt = (
+            select(Verification.vid)
+            .where(
+                Verification.deleted.is_(False),
+                Verification.customer_id == customer_id,
+                Verification.status == "COMPLETED",
             )
         )
         result = await self._session.execute(stmt)

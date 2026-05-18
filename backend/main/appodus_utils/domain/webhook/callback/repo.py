@@ -5,9 +5,9 @@ from sqlalchemy import and_, literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.config.settings import IntegratedPlatform
-from main.app.domain.webhook.callback.model import Callback, CreateCallbackDto, UpdateCallbackDto, QueryCallbackDto, \
+from main.appodus_utils.domain.webhook.callback.model import Callback, CreateCallbackDto, UpdateCallbackDto, QueryCallbackDto, \
     SearchCallbackDto
-from main.app.domain.webhook.callback.model import CallbackType
+from main.appodus_utils.domain.webhook.callback.model import CallbackType
 from main.appodus_utils.db.repo import GenericRepo
 
 

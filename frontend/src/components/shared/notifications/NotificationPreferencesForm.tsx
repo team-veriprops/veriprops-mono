@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { notificationService, NotificationPreference } from "./libs/notification-service";
 
 export type NotificationPersona = "customer" | "agent";
@@ -38,6 +40,7 @@ interface Props {
 export default function NotificationPreferencesForm({ persona }: Props) {
   const EVENTS = getEventsForPersona(persona);
   const qc = useQueryClient();
+  const [pendingToggle, setPendingToggle] = useState<string | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["notification-prefs"],
     queryFn: () => notificationService.getPreferences(),
@@ -57,10 +60,16 @@ export default function NotificationPreferencesForm({ persona }: Props) {
   const upsert = useMutation({
     mutationFn: (pref: Omit<NotificationPreference, "userId">) =>
       notificationService.upsertPreference(pref),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notification-prefs"] }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["notification-prefs"] });
+      setPendingToggle(null);
+    },
+    onError: () => setPendingToggle(null),
   });
 
   const toggle = (eventType: string, channel: keyof Omit<NotificationPreference, "userId" | "eventType">) => {
+    const key = `${eventType}-${channel}`;
+    setPendingToggle(key);
     const current = getPref(eventType);
     upsert.mutate({ ...current, [channel]: !current[channel] });
   };
@@ -88,27 +97,37 @@ export default function NotificationPreferencesForm({ persona }: Props) {
             return (
               <tr key={ev.key} data-testid={`pref-row-${ev.key}`}>
                 <td className="py-3 pr-8 text-gray-800">{ev.label}</td>
-                {CHANNELS.map((ch) => (
-                  <td key={ch.key} className="px-4 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => toggle(ev.key, ch.key)}
-                      disabled={upsert.isPending}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 ${
-                        pref[ch.key] ? "bg-indigo-600" : "bg-gray-200"
-                      }`}
-                      aria-checked={pref[ch.key]}
-                      aria-label={`${ev.label} ${ch.label}`}
-                      data-testid={`pref-toggle-${ev.key}-${ch.key}`}
-                    >
-                      <span
-                        className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
-                          pref[ch.key] ? "translate-x-5" : "translate-x-1"
-                        }`}
-                      />
-                    </button>
-                  </td>
-                ))}
+                {CHANNELS.map((ch) => {
+                  const toggleKey = `${ev.key}-${ch.key}`;
+                  const isThisPending = pendingToggle === toggleKey;
+                  return (
+                    <td key={ch.key} className="px-4 py-3 text-center">
+                      {isThisPending ? (
+                        <span className="inline-flex h-5 w-9 items-center justify-center rounded-full bg-gray-100">
+                          <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => toggle(ev.key, ch.key)}
+                          disabled={upsert.isPending}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 ${
+                            pref[ch.key] ? "bg-indigo-600" : "bg-gray-200"
+                          } ${upsert.isPending ? "opacity-50 cursor-not-allowed" : ""}`}
+                          aria-checked={pref[ch.key]}
+                          aria-label={`${ev.label} ${ch.label}`}
+                          data-testid={`pref-toggle-${ev.key}-${ch.key}`}
+                        >
+                          <span
+                            className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                              pref[ch.key] ? "translate-x-5" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}

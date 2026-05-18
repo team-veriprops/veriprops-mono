@@ -60,9 +60,9 @@ describe("resolvePostAuthRedirect", () => {
     expect(dest).toBe("/portal/verifications/new");
   });
 
-  it("intent=agent for non-agent customer routes to onboarding", () => {
+  it("intent=agent for non-agent customer routes to agents dashboard (modal handles onboarding)", () => {
     const dest = resolvePostAuthRedirect(baseUser, { intent: AuthIntent.AGENT });
-    expect(dest).toBe("/agents/onboarding");
+    expect(dest).toBe("/agents/dashboard");
   });
 
   it("explicit redirect param overrides defaults", () => {

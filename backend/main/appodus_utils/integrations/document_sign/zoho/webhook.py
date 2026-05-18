@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
+
 if TYPE_CHECKING:
     from loguru import Logger
 import hashlib
@@ -14,7 +16,6 @@ from starlette.datastructures import QueryParams
 from starlette.responses import Response, RedirectResponse
 
 from main.app.config.settings import settings, IntegratedPlatform
-from main.app.domain.webhook.callback.model import QueryCallbackDto
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
 
 logger: Logger = di['logger']

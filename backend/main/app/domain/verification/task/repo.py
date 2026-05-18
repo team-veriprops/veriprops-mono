@@ -62,7 +62,7 @@ class TaskRepo(
         ]
         if excluded_task_ids:
             conditions.append(Task.id.notin_(excluded_task_ids))
-        stmt = select(Task).where(*conditions).order_by(Task.pool_released_at.asc().nullsfirst())
+        stmt = select(Task).where(*conditions).order_by(Task.pool_released_at.asc())
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 

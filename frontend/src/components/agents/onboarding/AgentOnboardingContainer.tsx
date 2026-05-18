@@ -21,7 +21,7 @@ import { deriveResumeStep } from "./wizardUtils";
 
 const STEPS = ["Roles", "KYC", "Credentials", "Review"];
 
-export default function AgentOnboardingContainer() {
+export default function AgentOnboardingContainer({ compact = false }: { compact?: boolean }) {
   const { data: application, isLoading } = useAgentApplication();
   const [step, setStep] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -113,6 +113,71 @@ export default function AgentOnboardingContainer() {
     }
   };
 
+  const stepContent = (
+    <section
+      className="rounded-2xl p-6 sm:p-8"
+      style={{
+        backgroundColor: "var(--brand-surface-card)",
+        boxShadow: "0px 24px 48px rgba(0,13,34,0.06)",
+      }}
+    >
+      {errorMessage && (
+        <div
+          className="text-sm mb-4 rounded-md p-3"
+          style={{
+            color: "var(--destructive)",
+            backgroundColor: "rgba(186,26,26,0.06)",
+          }}
+        >
+          {errorMessage}
+        </div>
+      )}
+
+      {step === 0 && (
+        <TypeSelectionStep
+          defaultValue={application.types}
+          pending={saveTypes.isPending}
+          onSubmit={handleTypes}
+        />
+      )}
+      {step === 1 && (
+        <KycStep
+          application={application}
+          onVerifyBvn={handleVerifyBvn}
+          onUploadDocs={handleUploadDocs}
+          onContinue={() => setStep(2)}
+          onBack={() => setStep(0)}
+          pending={verifyBvn.isPending || uploadDocs.isPending}
+        />
+      )}
+      {step === 2 && (
+        <CredentialsStep
+          application={application}
+          pending={saveCredentials.isPending}
+          onBack={() => setStep(1)}
+          onSubmit={handleCredentials}
+        />
+      )}
+      {step === 3 && (
+        <ReviewStep
+          application={application}
+          pending={submitApp.isPending}
+          onBack={() => setStep(2)}
+          onSubmit={handleSubmit}
+        />
+      )}
+    </section>
+  );
+
+  if (compact) {
+    return (
+      <div className="space-y-6">
+        <Stepper steps={STEPS} current={step} />
+        {stepContent}
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
       <header className="space-y-3">
@@ -135,59 +200,7 @@ export default function AgentOnboardingContainer() {
 
       <Stepper steps={STEPS} current={step} />
 
-      <section
-        className="rounded-2xl p-6 sm:p-8"
-        style={{
-          backgroundColor: "var(--brand-surface-card)",
-          boxShadow: "0px 24px 48px rgba(0,13,34,0.06)",
-        }}
-      >
-        {errorMessage && (
-          <div
-            className="text-sm mb-4 rounded-md p-3"
-            style={{
-              color: "var(--destructive)",
-              backgroundColor: "rgba(186,26,26,0.06)",
-            }}
-          >
-            {errorMessage}
-          </div>
-        )}
-
-        {step === 0 && (
-          <TypeSelectionStep
-            defaultValue={application.types}
-            pending={saveTypes.isPending}
-            onSubmit={handleTypes}
-          />
-        )}
-        {step === 1 && (
-          <KycStep
-            application={application}
-            onVerifyBvn={handleVerifyBvn}
-            onUploadDocs={handleUploadDocs}
-            onContinue={() => setStep(2)}
-            onBack={() => setStep(0)}
-            pending={verifyBvn.isPending || uploadDocs.isPending}
-          />
-        )}
-        {step === 2 && (
-          <CredentialsStep
-            application={application}
-            pending={saveCredentials.isPending}
-            onBack={() => setStep(1)}
-            onSubmit={handleCredentials}
-          />
-        )}
-        {step === 3 && (
-          <ReviewStep
-            application={application}
-            pending={submitApp.isPending}
-            onBack={() => setStep(2)}
-            onSubmit={handleSubmit}
-          />
-        )}
-      </section>
+      {stepContent}
     </div>
   );
 }

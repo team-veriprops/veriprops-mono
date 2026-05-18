@@ -3,11 +3,11 @@ import { SuccessResponse } from "@/types/models";
 
 export interface ReferralStats {
   code: string;
-  link: string;
-  timesRedeemed: number;
-  pendingCreditsNgn: number;
-  creditedNgn: number;
-  creditBalanceKobo: number;
+  referralLink: string;
+  totalInvited: number;
+  totalCredited: number;
+  pendingCount: number;
+  creditBalanceNgn: number;
 }
 
 export interface ClaimReferralRequest {

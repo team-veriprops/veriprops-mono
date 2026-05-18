@@ -12,14 +12,16 @@ export default function AgentPayoutsPage() {
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Payouts</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Your withdrawal requests and payment history.</p>
+          <h1 className="text-xl font-semibold" style={{ color: "var(--brand-navy)" }}>Payouts</h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--brand-on-surface-variant)" }}>
+            Your withdrawal requests and payment history.
+          </p>
         </div>
         <button
           type="button"
           onClick={() => setWithdrawOpen(true)}
-          style={{ cursor: "pointer" }}
-          className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={{ cursor: "pointer", backgroundColor: "var(--brand-viridian)" }}
+          className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
           data-testid="request-withdrawal-button"
         >
           <Banknote className="h-4 w-4" />
@@ -29,8 +31,11 @@ export default function AgentPayoutsPage() {
 
       <WithdrawalModal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} />
 
-      <div className="rounded-lg border border-gray-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-gray-800 mb-4">Withdrawal History</h2>
+      <div
+        className="rounded-xl p-5"
+        style={{ backgroundColor: "#fff", border: "1px solid rgba(196,198,207,0.2)" }}
+      >
+        <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--brand-navy)" }}>Withdrawal History</h2>
         <PayoutHistory />
       </div>
     </div>

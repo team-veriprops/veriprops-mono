@@ -83,30 +83,30 @@ export default function WithdrawalModal({ open, onClose }: Props) {
 
         {step === "select-bank" && (
           <div className="space-y-3">
-            <p className="text-sm text-gray-600">Select a bank account to receive your funds:</p>
+            <p className="text-sm" style={{ color: "var(--brand-on-surface-variant)" }}>Select a bank account to receive your funds:</p>
             {banks.length === 0 && (
-              <p className="text-xs text-gray-400 italic">No bank accounts saved.</p>
+              <p className="text-xs italic" style={{ color: "var(--brand-on-surface-variant)" }}>No bank accounts saved.</p>
             )}
             {banks.map((b) => (
               <button
                 key={b.id}
                 type="button"
                 onClick={() => { setSelectedBank(b); setStep("enter-amount"); }}
-                style={{ cursor: "pointer" }}
-                className={`w-full rounded-md border p-3 text-left transition-colors hover:border-indigo-400 ${
-                  selectedBank?.id === b.id ? "border-indigo-400 bg-indigo-50" : "border-gray-200"
-                }`}
+                className="w-full rounded-xl border p-3 text-left transition-all"
+                style={selectedBank?.id === b.id
+                  ? { cursor: "pointer", borderColor: "var(--brand-viridian)", backgroundColor: "rgba(63,102,83,0.06)" }
+                  : { cursor: "pointer", borderColor: "rgba(196,198,207,0.4)" }}
                 data-testid="bank-account-option"
               >
-                <p className="text-sm font-medium text-gray-900">{b.bankName}</p>
-                <p className="text-xs text-gray-500">{b.accountNumber} · {b.accountHolderName}</p>
+                <p className="text-sm font-medium" style={{ color: "var(--brand-navy)" }}>{b.bankName}</p>
+                <p className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>{b.accountNumber} · {b.accountHolderName}</p>
               </button>
             ))}
             <button
               type="button"
               onClick={() => setStep("add-bank")}
-              style={{ cursor: "pointer" }}
-              className="w-full rounded-md border-2 border-dashed border-gray-300 py-3 text-xs text-gray-500 hover:border-indigo-300 hover:text-indigo-600"
+              className="w-full rounded-xl border-2 border-dashed py-3 text-xs transition-colors hover:opacity-80"
+              style={{ cursor: "pointer", borderColor: "rgba(196,198,207,0.5)", color: "var(--brand-on-surface-variant)" }}
               data-testid="add-bank-account-button"
             >
               + Add new bank account
@@ -119,14 +119,15 @@ export default function WithdrawalModal({ open, onClose }: Props) {
           <div className="space-y-3">
             {["bankName", "accountNumber", "accountHolderName"].map((field) => (
               <div key={field}>
-                <label className="block text-xs font-medium text-gray-600 mb-1 capitalize">
+                <label className="block text-xs font-medium mb-1 capitalize" style={{ color: "var(--brand-on-surface-variant)" }}>
                   {field.replace(/([A-Z])/g, " $1").trim()}
                 </label>
                 <input
                   type="text"
                   value={(newBank as any)[field]}
                   onChange={(e) => setNewBank((b) => ({ ...b, [field]: e.target.value }))}
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2"
+                  style={{ borderColor: "rgba(196,198,207,0.4)", "--tw-ring-color": "var(--brand-viridian)" } as React.CSSProperties}
                   data-testid={`new-bank-${field}`}
                 />
               </div>
@@ -137,13 +138,16 @@ export default function WithdrawalModal({ open, onClose }: Props) {
 
         {step === "enter-amount" && selectedBank && (
           <div className="space-y-4">
-            <div className="rounded-md bg-gray-50 border border-gray-200 p-3">
-              <p className="text-xs text-gray-500">Paying to</p>
-              <p className="text-sm font-medium text-gray-900">{selectedBank.bankName}</p>
-              <p className="text-xs text-gray-600">{selectedBank.accountNumber} · {selectedBank.accountHolderName}</p>
+            <div
+              className="rounded-xl p-3"
+              style={{ backgroundColor: "rgba(63,102,83,0.04)", border: "1px solid rgba(196,198,207,0.2)" }}
+            >
+              <p className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>Paying to</p>
+              <p className="text-sm font-medium" style={{ color: "var(--brand-navy)" }}>{selectedBank.bankName}</p>
+              <p className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>{selectedBank.accountNumber} · {selectedBank.accountHolderName}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₦)</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: "var(--brand-navy)" }}>Amount (₦)</label>
               <input
                 type="number"
                 min="1"
@@ -161,12 +165,12 @@ export default function WithdrawalModal({ open, onClose }: Props) {
 
         {step === "confirm" && (
           <div className="space-y-3 py-2">
-            <p className="text-sm text-gray-700">
+            <p className="text-sm" style={{ color: "var(--brand-on-surface-variant)" }}>
               You are requesting a withdrawal of{" "}
-              <span className="font-bold text-gray-900">₦{parseFloat(amount).toLocaleString()}</span>{" "}
+              <span className="font-bold" style={{ color: "var(--brand-navy)" }}>₦{parseFloat(amount).toLocaleString()}</span>{" "}
               to {selectedBank?.bankName} ({selectedBank?.accountNumber}).
             </p>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>
               Payouts are processed within 2 business days after approval.
             </p>
             {error && <p className="text-sm text-red-600">{error}</p>}
@@ -175,8 +179,8 @@ export default function WithdrawalModal({ open, onClose }: Props) {
 
         {step === "done" && (
           <div className="py-4 text-center">
-            <p className="text-green-700 font-medium">Withdrawal request submitted.</p>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="font-medium" style={{ color: "var(--brand-viridian)" }}>Withdrawal request submitted.</p>
+            <p className="text-sm mt-1" style={{ color: "var(--brand-on-surface-variant)" }}>
               Your request will be reviewed by the finance team.
             </p>
           </div>

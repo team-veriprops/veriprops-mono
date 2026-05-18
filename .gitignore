@@ -1,5 +1,6 @@
 # CLAUDE
 .claude/settings.local.json
+.playwright-cli
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

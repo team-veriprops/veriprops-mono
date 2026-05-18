@@ -53,3 +53,27 @@ class CustomerEvidenceItemDto(Object):
 
 class AcknowledgeDto(Object):
     ip_address: Optional[str] = None
+
+
+# ── Dashboard summary ─────────────────────────────────────────────────────────
+
+class AbandonedVerificationSummaryDto(Object):
+    id: str
+    vid: str
+    tier: str
+    status: str
+    property_state: Optional[str] = None
+    property_lga: Optional[str] = None
+    property_address: Optional[str] = None
+    total_amount_minor: Optional[int] = None
+    currency: Optional[str] = None
+    date_updated: Optional[datetime] = None
+    date_created: datetime
+
+
+class DashboardSummaryDto(Object):
+    total: int
+    active: int
+    completed: int
+    unread_report_count: int
+    abandoned: List[AbandonedVerificationSummaryDto]

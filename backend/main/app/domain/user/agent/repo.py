@@ -159,10 +159,13 @@ class AgentQualityScoreRepo(
 
         active_since = min((t.date_created for t in tasks), default=None)
 
+        accuracy_score_rounded = round(accuracy_score, 2)
+        total = len(tasks)
         return AgentMetricsDto(
             completion_rate=round(completion_rate, 1),
-            accuracy_score=round(accuracy_score, 2),
+            accuracy_score=accuracy_score_rounded,
             timeliness_score=round(timeliness_score, 1),
-            total_jobs=len(tasks),
+            total_jobs=total,
             active_since=active_since,
+            is_top_agent=accuracy_score_rounded >= 4.5 and total >= 10,
         )

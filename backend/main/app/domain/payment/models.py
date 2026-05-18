@@ -146,6 +146,11 @@ class PaymentDto(Object):
     date_updated: Optional[datetime] = None
 
 
+class CustomerPaymentDto(PaymentDto):
+    """PaymentDto extended with the verification's VID — used in the customer payment history."""
+    vid: str
+
+
 class InitiatePaymentResultDto(Object):
     payment: PaymentDto
     # For CARD method: redirect URL the frontend should open. For TRANSFER:

@@ -148,7 +148,7 @@ export function DataTable<T extends Record<string, any>>({
   };
 
   const handlePrevPage = () => {
-    if (dataPage?.meta.prevPage !== undefined && dataPage?.prevPage >= 0) {
+    if (dataPage?.meta.prevPage !== undefined && dataPage?.meta.prevPage >= 0) {
       updateFilters({ page: dataPage?.meta.prevPage });
     }
   };

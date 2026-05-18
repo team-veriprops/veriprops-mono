@@ -1,27 +1,10 @@
 "use client";
 
-import { Star, TrendingUp, Clock, Briefcase, Calendar, CheckCircle2 } from "lucide-react";
-import { useAgentProfile } from "@components/agents/libs/useAgentApplicationQueries";
-import { ROUTES } from "@lib/routes";
 import Link from "next/link";
-
-function AvailabilityBadge({ status }: { status: string }) {
-  const config = {
-    AVAILABLE: { label: "Available", color: "#3f6653", bg: "rgba(63,102,83,0.1)", dot: "#3f6653" },
-    LIMITED: { label: "Limited", color: "#d97706", bg: "rgba(245,158,11,0.1)", dot: "#d97706" },
-    UNAVAILABLE: { label: "Unavailable", color: "#ef4444", bg: "rgba(239,68,68,0.1)", dot: "#ef4444" },
-  }[status] ?? { label: status, color: "#6b7280", bg: "rgba(107,114,128,0.1)", dot: "#6b7280" };
-
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-      style={{ backgroundColor: config.bg, color: config.color }}
-    >
-      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: config.dot }} />
-      {config.label}
-    </span>
-  );
-}
+import { Star, Clock, Briefcase, Calendar, CheckCircle2 } from "lucide-react";
+import { useAgentProfile } from "@components/agents/libs/useAgentApplicationQueries";
+import AvailabilityToggle from "@components/agents/dashboard/AvailabilityToggle";
+import { ROUTES } from "@lib/routes";
 
 function ScoreBar({ value, max = 100 }: { value: number; max?: number }) {
   const pct = Math.min(100, (value / max) * 100);
@@ -72,7 +55,8 @@ export default function AgentProfilePage() {
     );
   }
 
-  const { application, metrics, isTopAgent } = profile;
+  const { metrics } = profile;
+  const { isTopAgent } = metrics;
   const activeSince = metrics.activeSince
     ? new Date(metrics.activeSince).toLocaleDateString("en-NG", { month: "long", year: "numeric" })
     : "—";
@@ -99,14 +83,7 @@ export default function AgentProfilePage() {
               Top Agent
             </span>
           )}
-          <AvailabilityBadge status={application.availabilityStatus} />
-          <Link
-            href={ROUTES.AGENT.SETTINGS_AVAILABILITY}
-            className="text-xs underline"
-            style={{ color: "var(--brand-viridian)" }}
-          >
-            Edit
-          </Link>
+          <AvailabilityToggle />
         </div>
       </div>
 
@@ -144,7 +121,6 @@ export default function AgentProfilePage() {
           <h2 className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>Performance Metrics</h2>
         </div>
         <div className="divide-y" style={{ borderColor: "rgba(196,198,207,0.12)" }}>
-          {/* Completion rate */}
           <div className="px-5 py-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -158,7 +134,6 @@ export default function AgentProfilePage() {
             <ScoreBar value={metrics.completionRate} />
           </div>
 
-          {/* Accuracy */}
           <div className="px-5 py-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -170,7 +145,6 @@ export default function AgentProfilePage() {
             <ScoreBar value={metrics.accuracyScore} max={5} />
           </div>
 
-          {/* Timeliness */}
           <div className="px-5 py-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -202,13 +176,13 @@ export default function AgentProfilePage() {
           </Link>
         </div>
         <p className="text-sm" style={{ color: "var(--brand-on-surface-variant)" }}>
-          {application.coverageStates.length > 0
-            ? application.coverageStates.join(", ")
+          {profile.coverageStates.length > 0
+            ? profile.coverageStates.join(", ")
             : "No coverage areas set"}
         </p>
-        {application.maxTravelKm != null && (
+        {profile.maxTravelKm != null && (
           <p className="text-xs mt-1" style={{ color: "var(--brand-on-surface-variant)" }}>
-            Max travel: {application.maxTravelKm} km
+            Max travel: {profile.maxTravelKm} km
           </p>
         )}
       </div>

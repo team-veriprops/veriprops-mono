@@ -14,8 +14,8 @@ from starlette import status
 from starlette.responses import Response, RedirectResponse
 
 from main.app.config.settings import IntegratedPlatform, settings
-from main.app.domain.webhook.callback.model import QueryCallbackDto
-from main.app.domain.webhook.callback.service import CallbackService
+from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
+from main.appodus_utils.domain.webhook.callback.service import CallbackService
 from main.appodus_utils import Utils
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
 from main.appodus_utils.integrations.payment.gateway.paystack.models import PaystackWebhookPayload, PaystackEventType, \

@@ -16,6 +16,8 @@ round-trip in `mode=LINK` with their JWT cookie attached).
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from starlette.responses import Response
+
 from main.app.domain.user.auth.models import AuthIntent
 
 if TYPE_CHECKING:
@@ -85,6 +87,7 @@ async def init_social_auth(
 async def auth_callback(
     provider: SocialAuthProvider,
     request: Request,
+    response: Response,
     authorize: AuthJWT = Depends(),
 ):
     """Provider redirects the popup here. Returns minimal HTML that
@@ -187,7 +190,7 @@ async def auth_callback(
         ip_address=ClientUtils.get_client_ip(request),
         device=ClientUtils.get_user_agent(request),
     )
-    return await OauthUtils.popup_response(success=True, target_origin=target_origin, state=str(state))
+    return await OauthUtils.popup_response(response=response, success=True, target_origin=target_origin, state=str(state))
 
 
 @oauth_router.get("/links", response_model=SuccessResponse[List[str]])

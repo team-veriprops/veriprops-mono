@@ -1,7 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Column, String, ForeignKey, UniqueConstraint, Index
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, UniqueConstraint, Index
 
 from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
 from main.appodus_utils import PageRequest, BaseQueryDto, Object, BaseEntity

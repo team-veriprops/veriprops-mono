@@ -11,6 +11,7 @@ from libre_fastapi_jwt import AuthJWT
 
 from main.app.domain.payment.models import (
     ConfirmWireDto,
+    CustomerPaymentDto,
     InitiatePaymentDto,
     InitiatePaymentResultDto,
     PaymentDto,
@@ -39,6 +40,18 @@ async def initiate_payment(req: InitiatePaymentDto, authorize: AuthJWT = Depends
     user_id = str(authorize.get_jwt_subject())
     result = await payment_service.initiate(user_id, req)
     return SuccessResponse[InitiatePaymentResultDto](data=result)
+
+
+@payment_router.get("/me", response_model=SuccessResponse[Page[CustomerPaymentDto]])
+async def list_my_payments(
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=20, ge=1, le=100),
+    authorize: AuthJWT = Depends(),
+):
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    result = await payment_service.list_for_customer(customer_id, page=page, page_size=page_size)
+    return SuccessResponse[Page[CustomerPaymentDto]](data=result)
 
 
 @payment_router.get("/{payment_id}", response_model=SuccessResponse[PaymentDto])

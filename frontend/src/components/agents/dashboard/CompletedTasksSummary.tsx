@@ -12,26 +12,29 @@ export default function CompletedTasksSummary() {
   const submitted = tasks.filter((t) => t.status === "SUBMITTED").length;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
+    <div
+      className="rounded-xl p-4 space-y-3"
+      style={{ backgroundColor: "#fff", border: "1px solid rgba(196,198,207,0.2)" }}
+    >
       <div className="flex items-center gap-2">
-        <CheckCircle2 className="h-4 w-4 text-green-500" />
-        <h3 className="text-sm font-semibold text-gray-700">Completed</h3>
+        <CheckCircle2 className="h-4 w-4" style={{ color: "var(--brand-viridian)" }} />
+        <h3 className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>Completed</h3>
       </div>
       {isLoading ? (
-        <p className="text-sm text-gray-400">Loading…</p>
+        <p className="text-sm" style={{ color: "var(--brand-on-surface-variant)" }}>Loading…</p>
       ) : (
         <div className="flex gap-6">
           <div>
-            <p className="text-2xl font-bold text-green-600">{approved}</p>
-            <p className="text-xs text-gray-500">Approved</p>
+            <p className="text-2xl font-bold" style={{ color: "var(--brand-viridian)" }}>{approved}</p>
+            <p className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>Approved</p>
           </div>
           <div>
-            <p className="text-2xl font-bold text-purple-600">{submitted}</p>
-            <p className="text-xs text-gray-500">Under Review</p>
+            <p className="text-2xl font-bold" style={{ color: "#2563eb" }}>{submitted}</p>
+            <p className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>Under Review</p>
           </div>
           <div>
-            <p className="text-2xl font-bold text-gray-700">{tasks.length}</p>
-            <p className="text-xs text-gray-500">Total</p>
+            <p className="text-2xl font-bold" style={{ color: "var(--brand-navy)" }}>{tasks.length}</p>
+            <p className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>Total</p>
           </div>
         </div>
       )}

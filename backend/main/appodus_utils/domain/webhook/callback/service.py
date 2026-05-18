@@ -7,10 +7,10 @@ if TYPE_CHECKING:
 from kink import di, inject
 
 from main.appodus_utils import Page
-from main.app.domain.webhook.callback.model import CreateCallbackDto, QueryCallbackDto, SearchCallbackDto, \
+from main.appodus_utils.domain.webhook.callback.model import CreateCallbackDto, QueryCallbackDto, SearchCallbackDto, \
     _UpdateCallbackDto
-from main.app.domain.webhook.callback.repo import CallbackRepo
-from main.app.domain.webhook.callback.validator import CallbackValidator
+from main.appodus_utils.domain.webhook.callback.repo import CallbackRepo
+from main.appodus_utils.domain.webhook.callback.validator import CallbackValidator
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional

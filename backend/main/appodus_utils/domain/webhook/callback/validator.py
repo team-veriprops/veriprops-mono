@@ -1,6 +1,6 @@
 from kink import inject
 
-from main.app.domain.webhook.callback.repo import CallbackRepo
+from main.appodus_utils.domain.webhook.callback.repo import CallbackRepo
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 
 

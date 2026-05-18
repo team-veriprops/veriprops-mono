@@ -46,7 +46,7 @@ export function useTask(taskId: string) {
 }
 
 export function useTaskHistory(taskId: string, page = 0) {
-  return useQuery<{ data: ActivityPage }>({
+  return useQuery({
     queryKey: taskKeys.history(taskId, page),
     queryFn: () => agentService.getTaskHistory(taskId, page),
     staleTime: 60_000,

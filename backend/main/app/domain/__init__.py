@@ -3,7 +3,6 @@ from fastapi import APIRouter
 from main.app.config.settings import settings  # noqa: F401
 from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
 from main.appodus_utils.config.settings import Environment
-# Importing these modules registers their ORM models with SQLAlchemy's metadata
 from main.app.domain.audit import models as _audit_models  # noqa: F401
 from main.app.domain.admin_config import models as _admin_config_models  # noqa: F401
 from main.app.domain.admin_config.controller import admin_config_router
@@ -18,6 +17,7 @@ from main.app.domain.verification.conflict.controller import conflict_router
 from main.app.domain.verification.scoring.controller import scoring_router
 from main.app.domain.verification.release.controller import release_router
 from main.app.domain.verification.portal.controller import portal_router, public_router
+from main.app.domain.verification.portal.dashboard_controller import portal_dashboard_router
 from main.app.domain.verification.portal.stream import stream_router
 from main.app.domain.payment import models as _payment_models  # noqa: F401
 from main.app.domain.payment.controller import payment_router
@@ -85,6 +85,7 @@ router.include_router(conflict_router)
 router.include_router(scoring_router)
 router.include_router(release_router)
 router.include_router(portal_router)
+router.include_router(portal_dashboard_router)
 router.include_router(public_router)
 router.include_router(stream_router)
 router.include_router(agent_task_router)

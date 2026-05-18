@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
+
 if TYPE_CHECKING:
     from loguru import Logger
 import json
@@ -13,7 +15,6 @@ from kink import di
 from starlette.responses import Response, RedirectResponse
 
 from main.app.config.settings import IntegratedPlatform
-from main.app.domain.webhook.callback.model import QueryCallbackDto
 from main.appodus_utils.exception.exceptions import UnauthorizedException
 
 logger: Logger = di['logger']

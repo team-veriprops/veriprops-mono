@@ -1,4 +1,4 @@
-from typing import Optional, Type
+from typing import List, Optional, Tuple, Type
 
 from kink import inject
 from sqlalchemy import func, select
@@ -67,6 +67,35 @@ class PaymentRepo(
             select(Payment).where(*filters).order_by(Payment.date_created.desc()).offset(offset).limit(page_size)
         )
         return list(result.scalars().all()), int(total)
+
+    async def list_for_customer(
+        self, customer_id: str, page: int = 0, page_size: int = 20,
+    ) -> Tuple[List[Tuple[Payment, str]], int]:
+        """Return (Payment, vid) pairs for all non-deleted payments belonging to a customer."""
+        from main.app.domain.verification.models import Verification
+
+        session = self._session
+        join_cond = Payment.verification_id == Verification.id
+        filters = [
+            Payment.deleted.is_(False),
+            Verification.deleted.is_(False),
+            Verification.customer_id == customer_id,
+        ]
+
+        total = await session.scalar(
+            select(func.count(Payment.id)).join(Verification, join_cond).where(*filters)
+        ) or 0
+
+        result = await session.execute(
+            select(Payment, Verification.vid)
+            .join(Verification, join_cond)
+            .where(*filters)
+            .order_by(Payment.date_created.desc())
+            .offset(page * page_size)
+            .limit(page_size)
+        )
+        rows = [(row.Payment, row.vid) for row in result]
+        return rows, int(total)
 
     async def count_succeeded_for_user(self, user_id: str) -> int:
         """Count SUCCEEDED payments made by the given customer.

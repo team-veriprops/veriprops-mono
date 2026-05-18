@@ -1,7 +1,7 @@
 """Repositories for trust score weight config and breakdowns."""
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Type
 
 from kink import inject
 from sqlalchemy import select
@@ -15,14 +15,21 @@ from main.app.domain.verification.scoring.models import (
 )
 from main.appodus_utils.db.repo import GenericRepo
 from main.appodus_utils.db.session import get_db_session_from_context
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @inject
 class TrustScoreWeightRepo(
     GenericRepo[TrustScoreWeightConfig, CreateWeightConfigDto, UpdateWeightDto, None, None]
 ):
-    def __init__(self) -> None:
-        super().__init__(TrustScoreWeightConfig)
+    def __init__(
+        self,
+        db: AsyncSession,
+        model: Type[TrustScoreWeightConfig] = TrustScoreWeightConfig,
+        query_dto=None,
+    ) -> None:
+        super().__init__(db, model, query_dto)
+        self.db = db
 
     async def list_for_tier(self, tier: str) -> List[TrustScoreWeightConfig]:
         session = self._session
@@ -61,8 +68,14 @@ class TrustScoreWeightRepo(
 class TrustScoreBreakdownRepo(
     GenericRepo[TrustScoreBreakdown, CreateBreakdownDto, None, None, None]
 ):
-    def __init__(self) -> None:
-        super().__init__(TrustScoreBreakdown)
+    def __init__(
+        self,
+        db: AsyncSession,
+        model: Type[TrustScoreBreakdown] = TrustScoreBreakdown,
+        query_dto=None,
+    ) -> None:
+        super().__init__(db, model, query_dto)
+        self.db = db
 
     async def latest_for_verification(self, verification_id: str) -> Optional[TrustScoreBreakdown]:
         session = self._session

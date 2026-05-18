@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShieldCheck, Monitor, Link2, ChevronLeft, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Monitor, Link2, FileText, Shield, ChevronLeft, CheckCircle2 } from "lucide-react";
 import { ROUTES } from "@lib/routes";
 import { cn } from "@lib/utils";
+import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
+import { UserType, UserPersona } from "@components/website/auth/models";
 
 interface AccountShellProps {
   title: string;
@@ -13,13 +15,23 @@ interface AccountShellProps {
 }
 
 const NAV = [
-  { href: ROUTES.ACCOUNT.SECURITY, label: "Security activity",  icon: ShieldCheck },
-  { href: ROUTES.ACCOUNT.DEVICES,  label: "Connected devices",  icon: Monitor },
-  { href: ROUTES.ACCOUNT.LINKED,   label: "Linked accounts",    icon: Link2 },
+  { href: ROUTES.ACCOUNT.SECURITY,     label: "Security activity",  icon: ShieldCheck },
+  { href: ROUTES.ACCOUNT.DEVICES,      label: "Connected devices",  icon: Monitor },
+  { href: ROUTES.ACCOUNT.LINKED,       label: "Linked accounts",    icon: Link2 },
+  { href: ROUTES.ACCOUNT.CONSENTS,     label: "Consent history",    icon: FileText },
+  { href: ROUTES.ACCOUNT.DATA_PRIVACY, label: "Data & privacy",     icon: Shield },
 ];
+
+function useBackHref(): string {
+  const user = useAuthStore((s) => s.session?.user);
+  if (user?.userType === UserType.ADMIN) return ROUTES.ADMIN.DASHBOARD;
+  if (user?.personas.includes(UserPersona.AGENT)) return ROUTES.AGENT.DASHBOARD;
+  return ROUTES.PORTAL.DASHBOARD;
+}
 
 export default function AccountShell({ title, subtitle, children }: AccountShellProps) {
   const pathname = usePathname();
+  const backHref = useBackHref();
   return (
     <div className="min-h-screen bg-[var(--brand-surface-base)]">
       <header
@@ -38,11 +50,11 @@ export default function AccountShell({ title, subtitle, children }: AccountShell
           </span>
         </Link>
         <Link
-          href={ROUTES.PORTAL.DASHBOARD}
+          href={backHref}
           className="inline-flex items-center gap-1.5 text-sm font-semibold"
           style={{ color: "var(--brand-on-surface-variant)" }}
         >
-          <ChevronLeft className="w-4 h-4" /> Back to portal
+          <ChevronLeft className="w-4 h-4" /> Back to dashboard
         </Link>
       </header>
 
