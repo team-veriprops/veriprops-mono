@@ -148,6 +148,8 @@ class OauthUtils:
         """Minimal HTML returned by the OAuth callback. It posts a single
         `oauth_result` message to the popup opener and self-closes. The parent
         validates `event.origin` and `event.data.type` before acting."""
+        
+        timeout = 200 if success else 10000
         payload = {"type": "oauth_result", "success": bool(success), "state": state}
         if message:
             payload["message"] = message
@@ -182,7 +184,7 @@ class OauthUtils:
               window.opener.postMessage({payload_json}, {target_js});
             }}
           }} catch (_) {{}}
-          setTimeout(function () {{ try {{ window.close(); }} catch (_) {{}} }}, 200);
+          setTimeout(function () {{ try {{ window.close(); }} catch (_) {{}} }}, {timeout});
         }})();
         </script>
         </body>
