@@ -114,12 +114,12 @@ async def auth_callback(
 
     if error or not code or not state:
         return await OauthUtils.popup_response(
-            success=False, target_origin=target_origin,
+            response=response, success=False, target_origin=target_origin,
             message="Sign-in was cancelled or the request was invalid.",
         )
     if not stored_state or not stored_state.code_verifier:
         return await OauthUtils.popup_response(
-            success=False, target_origin=target_origin, state=str(state),
+            response=response, success=False, target_origin=target_origin, state=str(state),
             message="Sign-in session expired. Please try again.",
         )
 
@@ -136,13 +136,13 @@ async def auth_callback(
     except Exception as e:
         logger.error("Error verifying Oauth callback request: {}", e)
         return await OauthUtils.popup_response(
-            success=False, target_origin=target_origin, state=str(state),
+            response=response, success=False, target_origin=target_origin, state=str(state),
             message="Could not complete sign-in with the provider. Please try again.",
         )
 
     if not user_info.email or not user_info.id:
         return await OauthUtils.popup_response(
-            success=False, target_origin=target_origin, state=str(state),
+            response=response, success=False, target_origin=target_origin, state=str(state),
             message="Provider did not return enough information to sign you in.",
         )
 
@@ -158,10 +158,11 @@ async def auth_callback(
             )
         except Exception:
             return await OauthUtils.popup_response(
-                success=False, target_origin=target_origin, state=str(state),
+                response=response, success=False, target_origin=target_origin, state=str(state),
                 message="Could not link this account. It may already be linked to another user.",
             )
-        return await OauthUtils.popup_response(success=True, target_origin=target_origin, state=str(state))
+            
+        return await OauthUtils.popup_response(response=response, success=True, target_origin=target_origin, state=str(state))
 
     # ── AUTH mode: signup or login ──────────────────────────────────────────
     try:
@@ -178,7 +179,7 @@ async def auth_callback(
     except UserAlreadyExistsException:
         # Email exists with a password account, no link yet → REJECT per spec.
         return await OauthUtils.popup_response(
-            success=False, target_origin=target_origin, state=str(state),
+            response=response, success=False, target_origin=target_origin, state=str(state),
             message="Account exists. Please log in and link this provider explicitly.",
         )
 

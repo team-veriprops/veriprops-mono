@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 import json
 import urllib.parse
 from datetime import timedelta
-from typing import Optional, Tuple
+from typing import Optional
 from urllib.parse import urlparse
 
 from kink import di
