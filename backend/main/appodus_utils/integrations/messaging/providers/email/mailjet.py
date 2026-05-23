@@ -1,151 +1,153 @@
 from decimal import Decimal
+from logging import Logger
+from typing import Any, Dict, List, Optional
 
-import mailjet_rest
-from typing import Dict, Any, List
-import logging
-
+from httpx import AsyncClient
 from kink import inject, di
 
 from main.app.config.settings import settings
 from main.app.domain.message.models import UpsertMessageDto
 from main.appodus_utils.db.types.money import Money, TransactionCurrency
-from main.appodus_utils.integrations.exception.exceptions import IntegrationException
-from main.appodus_utils.integrations.messaging.models import MessageStatus, MessageProviderName, MessageChannel
+from main.appodus_utils.integrations.exception.exceptions import (
+    IntegrationAuthenticationException,
+    IntegrationException,
+    IntegrationRateLimitException,
+)
+from main.appodus_utils.integrations.messaging.models import (
+    Attachment,
+    EmailPayload,
+    MessageChannel,
+    MessageProviderName,
+    MessageStatus,
+)
 from main.appodus_utils.integrations.messaging.providers.models import IMessageProvider
 from main.appodus_utils import Utils
 
-logger: logging.Logger = di['logger']
-
+logger: Logger = di['logger']
 
 @inject
 class MailjetEmailProvider(IMessageProvider):
+    """
+    Mailjet Send API v3.1.
+    Docs: https://dev.mailjet.com/email/guides/send-api-v31/
+    POST https://api.mailjet.com/v3.1/send
+    Auth: HTTP Basic (api_key, api_secret)
+    Success: 200 OK — message ID at Messages[0].To[0].MessageID (integer).
+    Errors: 400 validation (Messages[0].Errors[].ErrorMessage), 401 auth, 429 rate-limit, 5xx server.
+    """
+
     def __init__(self):
-        self.client = mailjet_rest.Client(
-            auth=(settings.MAILJET_API_KEY, settings.MAILJET_API_SECRET),
-            version='v3.1'
-        )
+        self.api_key = settings.MAILJET_API_KEY
+        self.api_secret = settings.MAILJET_API_SECRET
+        self.client = di[AsyncClient]
+        self.BASE_URL = settings.MAILJET_API
 
     @property
     def name(self) -> MessageProviderName:
         return MessageProviderName.MAILJET
 
     @property
-    def supported_channels(self) -> List[str]:
+    def supported_channels(self) -> list[MessageChannel]:
         return [MessageChannel.EMAIL]
 
     async def get_cost(self, message_id: str) -> Money:
         return Money(value=Decimal("0.0"), currency=TransactionCurrency.NGN)
 
     async def send_message(self, message: UpsertMessageDto) -> UpsertMessageDto:
-        """
-        Send email through Mailjet API
-        Supports:
-        - Single and multiple recipients
-        - HTML and text content
-        - Attachments
-        - Templates with variables
-        """
-        try:
-            email_data = self._prepare_email_data(message)
+        url = f"{self.BASE_URL}/v3.1/send"
+        response = await self.client.post(
+            url,
+            json=self._build_body(message),
+            auth=(self.api_key, self.api_secret),
+        )
 
-            # Use appropriate Mailjet API endpoint
-            if 'TemplateID' in email_data:
-                result = await self._send_template_email(email_data)
-            else:
-                result = await self._send_regular_email(email_data)
+        if response.status_code == 401:
+            raise IntegrationAuthenticationException("Invalid Mailjet API credentials")
+        if response.status_code == 429:
+            primary = message.to.recipient
+            raise IntegrationRateLimitException(
+                key=primary if isinstance(primary, str) else primary[0],
+                reset_at=Utils.datetime_now_plus(minutes=1),
+            )
+        if 400 <= response.status_code < 500:
+            errors = response.json().get("Messages", [{}])[0].get("Errors", [])
+            detail = "; ".join(e.get("ErrorMessage", "") for e in errors) if errors else response.text
+            raise IntegrationException(detail or "Mailjet API error")
+        if response.status_code >= 500:
+            response.raise_for_status()
 
-            message.sent_at = Utils.datetime_now()
-            message.provider = self.name
-            message.status = MessageStatus.SENT
-            message.provider_id = result.get('Messages', [{}])[0].get('To')[0].get('MessageID')
-            return message
+        data = response.json()
+        msg_result = data.get("Messages", [{}])[0]
+        if msg_result.get("Status") != "success":
+            raise IntegrationException(f"Mailjet rejected the message: {msg_result}")
 
-        except Exception as e:
-            logger.error(f"Mailjet send failed: {str(e)}", exc_info=True)
-            message.status = "failed"
-            message.error = str(e)
-            raise IntegrationException(f"Mailjet send failed: {str(e)}")
+        message.sent_at = Utils.datetime_now()
+        message.provider = self.name
+        message.status = MessageStatus.SENT
+        to_list = msg_result.get("To", [{}])
+        message.provider_id = str(to_list[0].get("MessageID", "")) if to_list else ""
+        return message
 
-    async def get_message_status(self, message_id: str) -> Dict[str, Any]:
-        """
-        Check email status through Mailjet API
-        """
-        try:
-            result = self.client.messagehistory.get(id=message_id)
-            return {
-                'status': result.json().get('Data', [{}])[0].get('EventType'),
-                'details': result.json()
-            }
-        except Exception as e:
-            logger.error(f"Mailjet status check failed: {str(e)}")
-            return {'status': 'unknown', 'error': str(e)}
+    def _build_body(self, message: UpsertMessageDto) -> Dict[str, Any]:
+        payload: EmailPayload = message.payload
 
-    def _prepare_email_data(self, message: UpsertMessageDto) -> Dict:
-        """
-        Prepare Mailjet API payload from our standard message format
-        """
-        content = message.content
-        recipients = self._parse_recipients(message.recipient)
+        recipient = message.to.recipient
+        to_list = (
+            [{"Email": r} for r in recipient]
+            if isinstance(recipient, list)
+            else [{"Email": recipient, "Name": message.to.fullname}]
+        )
 
-        base_payload = {
-            'Messages': [{
-                'From': {
-                    'Email': content.get('from_email') or settings.EMAIL_FROM_ADDRESS,
-                    'Name': content.get('from_name') or settings.EMAIL_FROM_NAME
-                },
-                'To': recipients['to'],
-                'Cc': recipients['cc'],
-                'Bcc': recipients['bcc'],
-                'Subject': content.get('subject', 'No Subject'),
-                'CustomID': message.id,
-                'EventPayload': message.extras or {}
-            }]
+        msg: Dict[str, Any] = {
+            "From": {
+                "Email": str(payload.from_email) if payload.from_email else settings.EMAIL_FROM_ADDRESS,
+                "Name": payload.from_name or settings.EMAIL_FROM_NAME,
+            },
+            "To": to_list,
+            "Subject": payload.subject,
+            "CustomID": message.id or "",
         }
 
-        # Handle template vs regular email
-        if 'template_id' in content:
-            base_payload['Messages'][0]['TemplateID'] = content['template_id']
-            base_payload['Messages'][0]['TemplateLanguage'] = True
-            base_payload['Messages'][0]['Variables'] = content.get('variables', {})
+        if message.to.cc_recipient:
+            msg["Cc"] = [{"Email": r.email, "Name": r.fullname} for r in message.to.cc_recipient]
+
+        if message.to.bcc_recipient:
+            msg["Bcc"] = [{"Email": r.email, "Name": r.fullname} for r in message.to.bcc_recipient]
+
+        if payload.provider_template_id:
+            msg["TemplateID"] = int(payload.provider_template_id)
+            msg["TemplateLanguage"] = True
+            msg["Variables"] = payload.provider_template_variables or {}
         else:
-            base_payload['Messages'][0]['HTMLPart'] = content.get('html')
-            base_payload['Messages'][0]['TextPart'] = content.get('text')
+            if payload.html:
+                msg["HTMLPart"] = payload.html
+            if payload.text:
+                msg["TextPart"] = payload.text
 
-        # Add attachments if present
-        if 'attachments' in content:
-            base_payload['Messages'][0]['Attachments'] = [
-                {
-                    'ContentType': att.get('content_type'),
-                    'Filename': att.get('filename'),
-                    'Base64Content': att.get('content')
-                }
-                for att in content['attachments']
-            ]
+        if payload.attachments:
+            msg["Attachments"] = self._build_attachments(payload.attachments)
 
-        return base_payload
+        return {"Messages": [msg]}
 
-    def _parse_recipients(self, recipient_field: str) -> Dict:
-        """
-        Parse recipient string into Mailjet format
-        Format: "to@example.com,cc@example.com,bcc@example.com"
-        """
-        parts = [p.strip() for p in recipient_field.split(',')]
-        return {
-            'to': [{'Email': parts[0]}],
-            'cc': [{'Email': e} for e in parts[1:] if not e.startswith('bcc:')],
-            'bcc': [{'Email': e[4:]} for e in parts if e.startswith('bcc:')]
-        }
+    @staticmethod
+    def _build_attachments(attachments: List[Attachment]) -> List[Dict[str, str]]:
+        return [
+            {
+                "ContentType": att.content_type,
+                "Filename": att.filename,
+                "Base64Content": att.content,
+            }
+            for att in attachments
+        ]
 
-    async def _send_regular_email(self, email_data: Dict) -> Dict:
-        """Send regular email through Mailjet API"""
-        result = self.client.send.create(data=email_data)
-        if result.status_code != 200:
-            raise IntegrationException(f"Mailjet API error: {result.json()}")
-        return result.json()
-
-    async def _send_template_email(self, email_data: Dict) -> Dict:
-        """Send template email through Mailjet API"""
-        result = self.client.send.create(data=email_data)
-        if result.status_code != 200:
-            raise IntegrationException(f"Mailjet template error: {result.json()}")
-        return result.json()
+    async def get_message_status(self, message_id: str) -> str | None:
+        # GET https://api.mailjet.com/v3/REST/messagehistory/{id}
+        url = f"{self.BASE_URL}/v3/REST/messagehistory/{message_id}"
+        try:
+            response = await self.client.get(url, auth=(self.api_key, self.api_secret))
+            response.raise_for_status()
+            data = response.json().get("Data", [{}])
+            return data[0].get("EventType") if data else None
+        except Exception as e:
+            logger.debug("Mailjet get_message_status failed for {}: {}", message_id, e)
+            return None

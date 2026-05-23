@@ -69,7 +69,8 @@ async def invite(
         fullname = f"{req.first_name} {req.last_name}".strip()
         await acct_msgs.send_direct_admin_user_invite_message(
             recipient=MessageRequestRecipient(
-                email=EmailRecipient(email=str(req.email), fullname=fullname),
+                email=str(req.email),
+                fullname=fullname
             ),
             context={
                 MessageContext.FIRST_NAME: req.first_name,

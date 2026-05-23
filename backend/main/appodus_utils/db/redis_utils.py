@@ -35,7 +35,8 @@ class RedisUtils:
         try:
             if redis:
                 logger.debug("Connected to Redis Server to read")
-                return await redis.get(key).decode("utf-8")
+                result = await redis.get(key)
+                return result.decode("utf-8") if result else None
             else:
                 return await key_value_service.get(key)
         except Exception as exc:

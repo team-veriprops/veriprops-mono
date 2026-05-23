@@ -125,6 +125,7 @@ class Settings(AppodusBaseSettings):
     SENDGRID_API_KEY: Optional[str] = ""
     SENDGRID_API_SECRET: Optional[str] = ""
     # MAILJET
+    MAILJET_API: Optional[str] = 'https://api.mailjet.com'
     MAILJET_API_KEY: Optional[str] = 'c7e9d85f278d57415a52e10323b1b599'
     MAILJET_API_SECRET: Optional[str] = '8e09beef376c4858b9eb548c77d899f4'
 

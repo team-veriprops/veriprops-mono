@@ -76,7 +76,7 @@ async def signup(req: SignupRequestDto, request: Request, authorize: AuthJWT = D
         await acct_msgs.send_direct_new_user_welcome_message(
             recipient=MessageRequestRecipient(
                 fullname=fullname,
-                email=EmailRecipient(email=req.email, fullname=fullname),
+                email=req.email,
                 phone=PhoneNumber(dial_code=req.dial_code, number=req.phone),
             ),
             context={
@@ -109,7 +109,7 @@ async def profile_complete(req: ProfileCompletionDto, authorize: AuthJWT = Depen
         await acct_msgs.send_direct_new_user_welcome_message(
             recipient=MessageRequestRecipient(
                 fullname=fullname,
-                email=EmailRecipient(email=user.email, fullname=fullname),
+                email=user.email,
                 phone=PhoneNumber(dial_code=req.dial_code, number=req.phone),
             ),
             context={
@@ -166,7 +166,8 @@ async def forgot_password(req: ForgotPasswordDto, request: Request):
 
             await account_security_messages.send_direct_password_reset_request_message(
                 recipient=MessageRequestRecipient(
-                    email=EmailRecipient(email=req.email, fullname=fullname)
+                    email=req.email,
+                    fullname=fullname
                 ),
                 context={
                     MessageContext.FULL_NAME: fullname,

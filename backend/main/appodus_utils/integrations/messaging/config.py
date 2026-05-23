@@ -19,7 +19,7 @@ class MessagingConfig(Object):
     from_name: str = Field(..., min_length=1, max_length=100)
     sms_ttl: int = Field(..., gt=60, le=86400)
     sms_sender_id: str = Field(..., min_length=1, max_length=11)
-    headers: List[Dict[str, str]] = Field(default_factory=list)
+    headers: Dict[str, str] = Field(default_factory=dict)
     priority: MessagePriority = MessagePriority.NORMAL
     sandbox_mode: bool = False
     categories: Optional[List[str]] = Field(default_factory=list)
@@ -154,7 +154,7 @@ class MessagingConfig(Object):
             from_name=settings.EMAIL_FROM_NAME,
             sms_ttl=settings.SMS_TTL,
             sms_sender_id=settings.SMS_SENDER_ID,
-            headers=settings.MESSAGING_HEADERS or [],
+            headers=settings.MESSAGING_HEADERS or {},
             priority=settings.MESSAGING_PRIORITY,
             sandbox_mode=settings.MESSAGING_SANDBOX_MODE,
             categories=settings.MESSAGING_CATEGORIES,

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Dict, Any
 
 from kink import inject
@@ -28,7 +29,7 @@ class TemplateService:
             template_name: AvailableTemplate,
             context: Dict[str, Any]
     ) -> str:
-        full_template_path = f"{channel.value}/{template_name.value}.{self.engine_factory.template_extension}"
+        full_template_path = Path(channel.value, f"{template_name.value}.{self.engine_factory.template_extension}").as_posix()
 
         try:
             if not self.engine.supports_template(full_template_path):

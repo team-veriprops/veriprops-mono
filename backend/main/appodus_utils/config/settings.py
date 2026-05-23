@@ -156,10 +156,12 @@ class AppodusBaseSettings(BaseSettings):
     MESSAGE_TEMPLATE_DIR: str = "resources/templates"
     MESSAGING_BRAND_NAME: str = "appodus"
 
-    MESSAGING_HEADERS: List[str] = []
+    MESSAGING_HEADERS: Dict[str, str] = {}
     MESSAGING_PRIORITY: int = 2
     MESSAGING_SANDBOX_MODE: bool = False
     MESSAGING_CATEGORIES: List[str] = []
+    MESSAGING_RPS_LIMIT: int = 20
+    MESSAGING_BULK_CONCURRENCY: int = 10
 
     # SMTP (Mailpit in dev/test — auto-selected when ENVIRONMENT is not prod/staging)
     SMTP_HOST: Optional[str] = "localhost"

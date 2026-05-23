@@ -59,7 +59,7 @@ class MockSmsProvider(IMessageProvider):
         text = getattr(message.payload, "text", None) or ""
 
         logger.info(
-            "[MockSmsProvider] SMS suppressed in %s. To: %s | Text: %.80s",
+            "[MockSmsProvider] SMS suppressed in {}. To: {} | Text: {:.80}",
             env, to_number, text,
         )
 

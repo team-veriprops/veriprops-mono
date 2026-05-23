@@ -103,7 +103,7 @@ class SmtpEmailProvider(IMessageProvider):
         await loop.run_in_executor(None, _send_sync)
 
         logger.debug(
-            "SMTP email sent to %s via %s:%s (subject: %s)",
+            "SMTP email sent to {} via {}:{} (subject: {})",
             to_addresses, host, port, subject,
         )
 
