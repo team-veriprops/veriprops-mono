@@ -1,9 +1,9 @@
-import uuid
 from datetime import datetime, timezone
 from typing import TypeVar, Optional, Generic, List, Union, Any
 
 from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import Column, Boolean, UUID, Integer, String, DateTime, TypeDecorator
+from sqlalchemy import Column, Boolean, UUID, Integer, String, DateTime, TypeDecorator, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr, DeclarativeBase
 
@@ -141,13 +141,30 @@ class UTCDateTime(TypeDecorator[datetime]):
     and returns timezone-aware UTC datetime objects.
     """
 
-    impl = DateTime
+    impl = DateTime(timezone=True)
     cache_ok = True  # important for SQLAlchemy 2.x performance
 
+    def process_bind_param(
+            self,
+            value: Optional[datetime],
+            dialect: Any,
+            ) -> Optional[datetime]:
+        if value is None:
+            return None
+
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value)
+
+        # Treat naive datetimes as UTC; normalise tz-aware ones to UTC.
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+
+        return value.astimezone(timezone.utc)
+
     def process_result_value(
-        self,
-        value: Optional[datetime],
-        dialect: Any,
+            self,
+            value: Optional[datetime],
+            dialect: Any,
     ) -> Optional[datetime]:
         if value is None:
             return None
@@ -158,6 +175,13 @@ class UTCDateTime(TypeDecorator[datetime]):
 
         # Normalize everything to UTC (safe even if DB sends tz-aware)
         return value.astimezone(timezone.utc)
+
+
+# JSON column that renders as JSONB on PostgreSQL (indexable, supports the @>
+# containment operator) and falls back to plain JSON on other dialects, so the
+# dual-DB support in settings.SupportedDB still holds.
+JSONB_VARIANT = JSON().with_variant(JSONB(), "postgresql")
+
 
 class Base(DeclarativeBase):
     pass
@@ -179,7 +203,7 @@ class BaseEntity(Base, AutoRepr):
     id = Column(
         UUID(as_uuid=True),
         primary_key=True,
-        default=uuid.uuid4,
+        default=Utils.generate_uuid,
         unique=True,
         index=True
     )

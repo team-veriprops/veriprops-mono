@@ -25,6 +25,7 @@ from passlib.context import CryptContext
 from starlette import status
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
+from uuid6 import uuid7
 
 from main.appodus_utils.exception.exceptions import AppodusBaseException
 
@@ -408,7 +409,7 @@ class Utils:
     @staticmethod
     def get_tran_ref():
         now = Utils.datetime_now()
-        uuid_str = uuid.uuid4().__str__()
+        uuid_str = Utils.generate_uuid().__str__()
         return f'{now.year}' \
                f'-{now.month}' \
                f'-{now.day}' \
@@ -420,12 +421,12 @@ class Utils:
     def random_str(length: int = 6):
         if length > 36:
             raise AppodusBaseException(message=f"random_str: the maximum length is 36, you requested '{length}'")
-        uuid_str = uuid.uuid4().__str__()
+        uuid_str = Utils.generate_uuid().__str__()
         return uuid_str[:length]
 
     @staticmethod
     def get_document_ref():
-        return uuid.uuid1().hex
+        return Utils.generate_uuid().hex
 
     @staticmethod
     def get_url_str(request: Request) -> str:
@@ -467,8 +468,18 @@ class Utils:
         return scrambled_value
 
     @staticmethod
-    def hex_to_uuid(value: str):
-        return uuid.UUID(hex=value, version=4) if isinstance(value, str) else value
+    def generate_uuid() -> uuid.UUID:
+        return uuid7()
+
+    @staticmethod
+    def hex_to_uuid(value: str | uuid.UUID):
+        if isinstance(value, uuid.UUID):
+            return value
+
+        if isinstance(value, str):
+            return uuid.UUID(value)
+
+        raise TypeError(f"Invalid UUID value: {type(value)}")
 
     @staticmethod
     def uuid_to_hex(value: uuid.UUID):

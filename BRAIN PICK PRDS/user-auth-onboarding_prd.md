@@ -1,4 +1,4 @@
-# Veriprops — User Onboarding & Authentication
+# Veriprops — User Onboarding & Authentication (user-auth-onboarding_prd.md)
 ## Product Requirements Document (PRD)
 
 **Product:** Veriprops  

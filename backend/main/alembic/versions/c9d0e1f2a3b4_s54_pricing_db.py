@@ -5,14 +5,14 @@ Revision ID: c9d0e1f2a3b4
 Revises: b8c9d0e1f2a3
 Create Date: 2026-05-14 00:01:00.000000
 """
-from typing import Sequence, Union
-import uuid
 from datetime import datetime, timezone
+from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 
 from main.alembic.utils import AlembicUtils
+from main.appodus_utils import Utils
 
 revision: str = "c9d0e1f2a3b4"
 down_revision: Union[str, None] = "b8c9d0e1f2a3"
@@ -23,7 +23,7 @@ _NOW = datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _uid() -> str:
-    return str(uuid.uuid4())
+    return str(Utils.generate_uuid())
 
 
 def upgrade() -> None:
@@ -86,8 +86,10 @@ def upgrade() -> None:
             "currency": "NGN", "service_fee_minor": 1500000, "is_active": True,
             "updated_by": None, "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
             "line_items": [
-                {"label": "Registry search", "amount_minor": 13000000, "description": "Title search at the registry of record", "sort_order": 0},
-                {"label": "Document collection", "amount_minor": 500000, "description": "Acquisition of certified true copies", "sort_order": 1},
+                {"label": "Registry search", "amount_minor": 13000000,
+                 "description": "Title search at the registry of record", "sort_order": 0},
+                {"label": "Document collection", "amount_minor": 500000,
+                 "description": "Acquisition of certified true copies", "sort_order": 1},
             ],
         },
         {
@@ -95,10 +97,14 @@ def upgrade() -> None:
             "currency": "NGN", "service_fee_minor": 2500000, "is_active": True,
             "updated_by": None, "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
             "line_items": [
-                {"label": "Registry search", "amount_minor": 13000000, "description": "Title search at the registry of record", "sort_order": 0},
-                {"label": "Document collection", "amount_minor": 500000, "description": "Acquisition of certified true copies", "sort_order": 1},
-                {"label": "Field inspection", "amount_minor": 9000000, "description": "On-site inspection by Field Agent", "sort_order": 2},
-                {"label": "Survey assessment", "amount_minor": 10000000, "description": "Boundary + survey-plan check", "sort_order": 3},
+                {"label": "Registry search", "amount_minor": 13000000,
+                 "description": "Title search at the registry of record", "sort_order": 0},
+                {"label": "Document collection", "amount_minor": 500000,
+                 "description": "Acquisition of certified true copies", "sort_order": 1},
+                {"label": "Field inspection", "amount_minor": 9000000,
+                 "description": "On-site inspection by Field Agent", "sort_order": 2},
+                {"label": "Survey assessment", "amount_minor": 10000000, "description": "Boundary + survey-plan check",
+                 "sort_order": 3},
             ],
         },
         {
@@ -106,11 +112,16 @@ def upgrade() -> None:
             "currency": "NGN", "service_fee_minor": 5000000, "is_active": True,
             "updated_by": None, "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
             "line_items": [
-                {"label": "Registry search", "amount_minor": 13000000, "description": "Title search at the registry of record", "sort_order": 0},
-                {"label": "Document collection", "amount_minor": 500000, "description": "Acquisition of certified true copies", "sort_order": 1},
-                {"label": "Field inspection", "amount_minor": 9000000, "description": "On-site inspection by Field Agent", "sort_order": 2},
-                {"label": "Survey assessment", "amount_minor": 12000000, "description": "Boundary + survey-plan check", "sort_order": 3},
-                {"label": "Legal opinion", "amount_minor": 35500000, "description": "Structured legal opinion by registered lawyer", "sort_order": 4},
+                {"label": "Registry search", "amount_minor": 13000000,
+                 "description": "Title search at the registry of record", "sort_order": 0},
+                {"label": "Document collection", "amount_minor": 500000,
+                 "description": "Acquisition of certified true copies", "sort_order": 1},
+                {"label": "Field inspection", "amount_minor": 9000000,
+                 "description": "On-site inspection by Field Agent", "sort_order": 2},
+                {"label": "Survey assessment", "amount_minor": 12000000, "description": "Boundary + survey-plan check",
+                 "sort_order": 3},
+                {"label": "Legal opinion", "amount_minor": 35500000,
+                 "description": "Structured legal opinion by registered lawyer", "sort_order": 4},
             ],
         },
     ]

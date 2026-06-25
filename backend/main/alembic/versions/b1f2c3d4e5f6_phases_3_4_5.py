@@ -12,16 +12,16 @@ Revision ID: b1f2c3d4e5f6
 Revises: fdd959a2cfda
 Create Date: 2026-05-01 09:30:00.000000
 """
-import uuid
 from datetime import datetime, timezone
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy import inspect as sa_inspect, JSON
+from sqlalchemy import JSON
 from sqlalchemy.ext.mutable import MutableList
 
 from main.alembic.utils import AlembicUtils
+from main.appodus_utils import Utils
 from main.appodus_utils.db.models import UTCDateTime
 
 # revision identifiers, used by Alembic.
@@ -29,6 +29,7 @@ revision: str = "b1f2c3d4e5f6"
 down_revision: Union[str, None] = "fdd959a2cfda"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
 
 # ── agent_applications ────────────────────────────────────────────
 
@@ -240,7 +241,6 @@ SEED_EFFECTIVE_AT = datetime(2026, 5, 1, tzinfo=timezone.utc)
 
 def _seed_verification_consents() -> None:
     conn = op.get_bind()
-    now = datetime.now(timezone.utc)
     for doc_type, ver, title, href in VERIFICATION_CONSENT_SEEDS:
         existing = conn.execute(
             sa.text(
@@ -259,13 +259,13 @@ def _seed_verification_consents() -> None:
                 "VALUES (:id, :type, :ver, :eff, :title, :href, :now, FALSE, 1)"
             ),
             {
-                "id": str(uuid.uuid4()),
+                "id": Utils.generate_uuid(),
                 "type": doc_type,
                 "ver": ver,
-                "eff": SEED_EFFECTIVE_AT,
+                "eff": SEED_EFFECTIVE_AT, 
                 "title": title,
                 "href": href,
-                "now": now,
+                "now": Utils.datetime_now(),
             },
         )
 
@@ -286,7 +286,9 @@ def upgrade() -> None:
         _create_payments()
     if not AlembicUtils.table_exists("payment_attempts"):
         _create_payment_attempts()
-    _seed_verification_consents()
+        
+    if AlembicUtils.table_exists('consent_documents'):
+        _seed_verification_consents()
 
 
 def downgrade() -> None:

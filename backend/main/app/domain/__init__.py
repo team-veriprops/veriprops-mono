@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from main.app.config.settings import settings  # noqa: F401
+from main.app.domain.message.controller import message_router
 from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
 from main.appodus_utils.config.settings import Environment
 from main.app.domain.audit import models as _audit_models  # noqa: F401
@@ -77,6 +78,7 @@ from main.app.domain.retention import models as _retention_models  # noqa: F401
 from main.app.domain.retention.controller import retention_router
 
 router = APIRouter()
+router.include_router(message_router)
 router.include_router(admin_config_router)
 router.include_router(admin_verification_router)
 router.include_router(admin_task_router)

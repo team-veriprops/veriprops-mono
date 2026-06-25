@@ -16,11 +16,11 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Column, Index, Integer, JSON, SmallInteger, String, Text
+from sqlalchemy import Column, Index, Integer, SmallInteger, String, Text
 from sqlalchemy.ext.mutable import MutableList
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 
 class AgentType(str, enum.Enum):
@@ -64,7 +64,7 @@ class AgentApplication(BaseEntity):
     status = Column(String(16), nullable=False, default=AgentApplicationStatus.DRAFT.value, index=True)
 
     # Step 1 — Type selection (multi-select)
-    types = Column(MutableList.as_mutable(JSON), nullable=False, default=list)
+    types = Column(MutableList.as_mutable(JSONB_VARIANT), nullable=False, default=list)
 
     # Step 2 — KYC
     kyc_method = Column(String(16), nullable=True)
@@ -83,8 +83,8 @@ class AgentApplication(BaseEntity):
     nba_licence_no = Column(String(64), nullable=True)
     nba_licence_url = Column(String(512), nullable=True)
     years_of_experience = Column(Integer, nullable=True)
-    coverage_states = Column(MutableList.as_mutable(JSON), nullable=False, default=list)
-    coverage_lgas = Column(MutableList.as_mutable(JSON), nullable=False, default=list)
+    coverage_states = Column(MutableList.as_mutable(JSONB_VARIANT), nullable=False, default=list)
+    coverage_lgas = Column(MutableList.as_mutable(JSONB_VARIANT), nullable=False, default=list)
     bio = Column(Text, nullable=True)
 
     # Step 4 — Submission

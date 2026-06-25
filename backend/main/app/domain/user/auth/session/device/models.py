@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, String, JSON
+from sqlalchemy import Column, String
 
 from main.appodus_utils import BaseEntity, PageRequest, BaseQueryDto, Utils
 from main.appodus_utils import Object
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 from main.appodus_utils.integrations.messaging.models import PushToken, PushProviderType
 
 
@@ -14,7 +14,7 @@ class Device(BaseEntity):
     user_id = Column(String(36), nullable=False)
     device_id = Column(String(36), nullable=False)
     push_provider_type = Column(String(20), nullable=False)
-    push_token = Column(JSON, nullable=False)
+    push_token = Column(JSONB_VARIANT, nullable=False)
     last_active = Column(UTCDateTime, nullable=False)
 
 

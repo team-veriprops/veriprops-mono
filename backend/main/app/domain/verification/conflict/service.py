@@ -66,7 +66,7 @@ class ConflictService:
                 resource_type="ConflictFlag",
                 resource_id=str(record.id),
                 actor_id=None,
-                meta={
+                details={
                     "action": "CONFLICT_DETECTED",
                     "rule_id": flag.rule_id,
                     "severity": flag.severity.value,
@@ -129,7 +129,7 @@ class ConflictService:
             resource_type="ConflictFlag",
             resource_id=conflict_id,
             actor_id=admin_id,
-            meta={"action": "CONFLICT_RESOLVED", "resolution": dto.action, "note": dto.note},
+            details={"action": "CONFLICT_RESOLVED", "resolution": dto.action, "note": dto.note},
         )
         updated = await self._conflicts.get_by_id(conflict_id)
         return self._to_dto(updated)

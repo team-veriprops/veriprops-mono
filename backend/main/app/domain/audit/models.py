@@ -10,10 +10,10 @@ import enum
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Column, Index, JSON, String
+from sqlalchemy import Column, Index, String
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 
 class AuditActionType(str, enum.Enum):
@@ -67,7 +67,7 @@ class AuditLog(BaseEntity):
     from_state = Column(String(32), nullable=True)
     to_state = Column(String(32), nullable=True)
     # Flexible extras: rejection reason, tier, ref numbers, etc.
-    meta = Column(JSON, nullable=True)
+    details = Column(JSONB_VARIANT, nullable=True)
     ip_address = Column(String(64), nullable=True)
     occurred_at = Column(UTCDateTime, nullable=False, index=True)
 
@@ -87,7 +87,7 @@ class CreateAuditLogDto(Object):
     resource_id: str
     from_state: Optional[str] = None
     to_state: Optional[str] = None
-    meta: Optional[Dict[str, Any]] = None
+    details: Optional[Dict[str, Any]] = None
     ip_address: Optional[str] = None
     occurred_at: datetime
 
@@ -122,7 +122,7 @@ class AuditEventDto(Object):
     occurred_at: datetime
     from_state: Optional[str] = None
     to_state: Optional[str] = None
-    meta: Optional[Dict[str, Any]] = None
+    details: Optional[Dict[str, Any]] = None
 
 
 class AuditPackRowDto(Object):
@@ -136,7 +136,7 @@ class AuditPackRowDto(Object):
     to_state: Optional[str] = None
     occurred_at: datetime
     ip_address: Optional[str] = None
-    meta: Optional[Dict[str, Any]] = None
+    details: Optional[Dict[str, Any]] = None
 
 
 class AuditActivityPageDto(Object):

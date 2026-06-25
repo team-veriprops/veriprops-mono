@@ -122,7 +122,7 @@ async def test_invite_creates_invitation_and_records_event():
     svc = _make_service()
     row = _make_invite_row()
     svc._repo.get_pending_for_email.return_value = None
-    svc._repo.get_by_token_hash.return_value = row
+    svc._repo.create_return_model.return_value = row
     svc._user_repo.get_model.return_value = _make_inviter_user()
 
     result = await svc.invite(
@@ -131,7 +131,7 @@ async def test_invite_creates_invitation_and_records_event():
         sub_role=AdminSubRole.OPERATIONS,
     )
 
-    svc._repo.create.assert_called_once()
+    svc._repo.create_return_model.assert_called_once()
     assert result.invitation.email == "invitee@example.com"
     assert result.invitation.sub_role == AdminSubRole.OPERATIONS
     assert result.raw_token  # non-empty, single-use
@@ -145,7 +145,7 @@ async def test_invite_revokes_existing_pending_invitation():
     existing = _make_invite_row(invite_id="old-inv")
     new_row = _make_invite_row(invite_id="new-inv")
     svc._repo.get_pending_for_email.return_value = existing
-    svc._repo.get_by_token_hash.return_value = new_row
+    svc._repo.create_return_model.return_value = new_row
     svc._user_repo.get_model.return_value = _make_inviter_user()
 
     await svc.invite(
@@ -165,7 +165,7 @@ async def test_invite_normalises_email_to_lowercase():
     svc = _make_service()
     row = _make_invite_row(email="invitee@example.com")
     svc._repo.get_pending_for_email.return_value = None
-    svc._repo.get_by_token_hash.return_value = row
+    svc._repo.create_return_model.return_value = row
     svc._user_repo.get_model.return_value = _make_inviter_user()
 
     result = await svc.invite(
@@ -174,7 +174,7 @@ async def test_invite_normalises_email_to_lowercase():
         sub_role=AdminSubRole.SUPER,
     )
 
-    create_dto = svc._repo.create.call_args.args[0]
+    create_dto = svc._repo.create_return_model.call_args.args[0]
     assert create_dto.email_normalized == "invitee@example.com"
 
 
@@ -182,7 +182,7 @@ async def test_invite_stores_first_and_last_name():
     svc = _make_service()
     row = _make_invite_row(first_name="Ada", last_name="Obi")
     svc._repo.get_pending_for_email.return_value = None
-    svc._repo.get_by_token_hash.return_value = row
+    svc._repo.create_return_model.return_value = row
     svc._user_repo.get_model.return_value = _make_inviter_user()
 
     await svc.invite(
@@ -193,7 +193,7 @@ async def test_invite_stores_first_and_last_name():
         last_name="Obi",
     )
 
-    create_dto = svc._repo.create.call_args.args[0]
+    create_dto = svc._repo.create_return_model.call_args.args[0]
     assert create_dto.first_name == "Ada"
     assert create_dto.last_name == "Obi"
 
@@ -202,7 +202,7 @@ async def test_invite_returns_inviter_fullname():
     svc = _make_service()
     row = _make_invite_row()
     svc._repo.get_pending_for_email.return_value = None
-    svc._repo.get_by_token_hash.return_value = row
+    svc._repo.create_return_model.return_value = row
     svc._user_repo.get_model.return_value = _make_inviter_user(first_name="Super", last_name="Admin")
 
     result = await svc.invite(

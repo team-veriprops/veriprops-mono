@@ -265,8 +265,8 @@ class TestSelectTier:
 
         snapshot = MagicMock()
         snapshot.model_dump_json.return_value = '{"tier":"PREMIUM"}'
-        pricing_service.quote.return_value = snapshot
-        pricing_service.lock.return_value = snapshot
+        pricing_service.quote = AsyncMock(return_value=snapshot)
+        pricing_service.lock = AsyncMock(return_value=snapshot)
 
         await svc.select_tier("cust-001", "verif-001", VerificationTier.PREMIUM, "NGN")
 

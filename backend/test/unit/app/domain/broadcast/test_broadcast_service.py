@@ -69,8 +69,7 @@ class TestCreateBroadcast:
     async def test_creates_draft_by_default(self):
         svc, repo = _make_svc()
         row = _make_broadcast("DRAFT")
-        repo.create = AsyncMock(return_value=MagicMock(data=MagicMock(id="bc-001")))
-        repo.get_model = AsyncMock(return_value=row)
+        repo.create_return_model = AsyncMock(return_value=row)
 
         dto = CreateBroadcastDto(subject="Hello", body_text="World", audience=BroadcastAudience.ALL)
         result = await svc.create(dto, "admin-1")

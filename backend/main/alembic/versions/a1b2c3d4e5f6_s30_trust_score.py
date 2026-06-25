@@ -4,7 +4,6 @@ Revision ID: a1b2c3d4e5f6
 Revises: f5a6b7c8d9e0
 Create Date: 2026-05-11 00:00:02.000000
 """
-import uuid
 from datetime import datetime, timezone
 from typing import Sequence, Union
 
@@ -12,6 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 from main.alembic.utils import AlembicUtils
+from main.appodus_utils import Utils
 from main.appodus_utils.db.models import UTCDateTime
 
 revision: str = "a1b2c3d4e5f6"
@@ -49,7 +49,7 @@ def upgrade() -> None:
     now = datetime.now(timezone.utc)
     weight_table = sa.table(
         "trust_score_weight_config",
-        sa.column("id", sa.String),
+        sa.column("id", sa.UUID),
         sa.column("date_created", UTCDateTime),
         sa.column("version", sa.Integer),
         sa.column("deleted", sa.Boolean),
@@ -58,7 +58,7 @@ def upgrade() -> None:
         sa.column("weight", sa.Numeric),
     )
     op.bulk_insert(weight_table, [
-        {"id": str(uuid.uuid4()), "date_created": now, "version": 1, "deleted": False,
+        {"id": str(Utils.generate_uuid()), "date_created": now, "version": 1, "deleted": False,
          "tier": tier, "role": role, "weight": weight}
         for tier, role, weight in _SEED_WEIGHTS
     ])

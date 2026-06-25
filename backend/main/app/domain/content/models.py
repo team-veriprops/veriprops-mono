@@ -29,7 +29,7 @@ class ContentItem(BaseEntity):
     slug = Column(String(128), nullable=False, index=True)
     title = Column(String(256), nullable=False)
     body = Column(Text, nullable=False)
-    meta = Column(Text, nullable=True)
+    details = Column(Text, nullable=True)
     is_published = Column(Boolean, nullable=False, default=False)
     sort_order = Column(Integer, nullable=False, default=0)
     author_id = Column(String(36), nullable=True)
@@ -50,7 +50,7 @@ class ContentItemDto(Object):
     slug: str
     title: str
     body: str
-    meta: Optional[str] = None
+    details: Optional[str] = None
     is_published: bool
     sort_order: int
     author_id: Optional[str] = None
@@ -65,7 +65,7 @@ class CreateContentItemDto(Object):
     slug: str
     title: str
     body: str
-    meta: Optional[str] = None
+    details: Optional[str] = None
     is_published: bool = False
     sort_order: int = 0
     author_id: Optional[str] = None
@@ -77,7 +77,7 @@ class UpdateContentItemDto(Object):
     slug: Optional[str] = None
     title: Optional[str] = None
     body: Optional[str] = None
-    meta: Optional[str] = None
+    details: Optional[str] = None
     is_published: Optional[bool] = None
     sort_order: Optional[int] = None
     lga: Optional[str] = None

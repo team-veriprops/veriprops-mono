@@ -1,5 +1,6 @@
 import LandingNav from "@components/website/LandingNav";
 import HeroSection from "@components/website/HeroSection";
+import WhyWeExist from "@components/website/WhyWeExist";
 import VerificationEcosystem from "@components/website/VerificationEcosystem";
 import RigorousMethodology from "@components/website/RigorousMethodology";
 import VerifiedAgents from "@components/website/VerifiedAgents";
@@ -14,6 +15,7 @@ export default function HomePage() {
       <LandingNav />
       <main>
         <HeroSection />
+        <WhyWeExist />
         <VerificationEcosystem />
         <RigorousMethodology />
         <VerifiedAgents />

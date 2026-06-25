@@ -62,19 +62,19 @@ export const ecosystemFeatures: EcosystemFeature[] = [
   {
     title: "Trust Score",
     description:
-      "Our proprietary weighted algorithm calculates risk from registry records, encumbrances, and ground inspection. 90+ is Safe, 60–89 is Caution, and 0–59 is High Risk.",
+      "A single, honest number from 0–100, weighted from registry records, encumbrances, and a physical inspection. 90+ is safe, 60–89 means proceed with caution, below 60 is high risk. No jargon; just where you stand.",
     icon: "BarChart3",
   },
   {
     title: "Verification ID",
     description:
-      "A unique, immutable public identifier (VP-YYYY-XXXXXX) for every verified property. Share it — anyone can cross-reference findings without exposing your private data.",
+      "A unique public reference (VP-YYYY-XXXXXX) for every property we check. Share it with family or your bank — anyone can cross-reference the findings, on this website, without exposing your private details.",
     icon: "Fingerprint",
   },
   {
     title: "Certified Report",
     description:
-      "A comprehensive signed document from legal and site experts. Structured, versioned (v1, v2…), downloadable as PDF, and admissible for institutional financing.",
+      "A signed document from the legal and field experts who did the work. Structured, versioned, downloadable as PDF, and detailed enough to support institutional financing.",
     icon: "ShieldCheck",
   },
 ];
@@ -83,31 +83,31 @@ export const methodologySteps: MethodologyStep[] = [
   {
     step: 1,
     title: "Submit Details",
-    description: "Provide property coordinates, upload documents, and select your verification tier.",
+    description: "Share the property's location, upload any documents, and pick your verification tier.",
     icon: "Upload",
   },
   {
     step: 2,
     title: "Cross-Check Records",
-    description: "We validate ownership against official registry and survey records with certified agents.",
+    description: "Certified agents validate ownership against official registry and survey records.",
     icon: "Search",
   },
   {
     step: 3,
     title: "Check Encumbrances",
-    description: "Identify liens, caveats, pending litigations, or any outstanding claims on the property.",
+    description: "We surface liens, caveats, pending litigation, or any outstanding claim.",
     icon: "Shield",
   },
   {
     step: 4,
     title: "Run Risk Analysis",
-    description: "Assessment of area zoning, title history, fraud indicators, and surrounding property context.",
+    description: "Zoning, title history, fraud indicators, and the surrounding context.",
     icon: "Lock",
   },
   {
     step: 5,
     title: "Get Certified Report",
-    description: "Receive your high-authority digital report with Trust Score, Verification ID, and agent sign-offs.",
+    description: "Receive your Trust Score, Verification ID, and signed certified report.",
     icon: "Award",
   },
 ];
@@ -235,17 +235,22 @@ export const testimonials: Testimonial[] = [
 ];
 
 export const footerLinks = {
-  resources: [
-    { label: "Certification Standards", href: "#" },
-    { label: "Verification Process", href: "#how-it-works" },
-    { label: "Trust Score Guide", href: "#" },
-    { label: "Sample Report", href: "#" },
+  platform: [
+    { label: "How It Works", href: "#how-it-works" },
+    { label: "Trust Score Guide", href: "#ecosystem" },
+    { label: "Sample Report", href: "#sample" },
+    { label: "Pricing", href: "#pricing" },
   ] as FooterLink[],
   company: [
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms of Service", href: "#" },
-    { label: "Contact Support", href: "#" },
+    { label: "Our Story", href: ROUTES.ABOUT },
+    { label: "Certification Standards", href: "#agents" },
     { label: "Become an Agent", href: buildAuthUrl(ROUTES.AUTH.GATE, { intent: AuthIntent.AGENT }) },
+    { label: "Contact Support", href: "mailto:support@veriprops.com" },
+  ] as FooterLink[],
+  legal: [
+    { label: "Privacy Policy", href: ROUTES.LEGAL.PRIVACY },
+    { label: "Terms of Service", href: ROUTES.LEGAL.TERMS },
+    { label: "Disclaimer", href: ROUTES.LEGAL.REPORT_DISCLAIMER },
   ] as FooterLink[],
   socials: [
     { label: "Facebook", href: "#" },

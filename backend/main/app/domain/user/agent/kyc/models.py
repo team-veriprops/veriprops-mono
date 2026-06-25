@@ -9,10 +9,10 @@ import enum
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from sqlalchemy import Column, Index, Integer, JSON, String, Text
+from sqlalchemy import Column, Index, Integer, String, Text
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 
 class KycType(str, enum.Enum):
@@ -46,7 +46,7 @@ class KycRecord(BaseEntity):
     provider_ref = Column(String(128), nullable=True, index=True)  # Dojah job/verification ID
     score = Column(Integer, nullable=True)  # 0–100; selfie match confidence
     failure_reason = Column(Text, nullable=True)
-    webhook_payload = Column(JSON, nullable=True)  # raw webhook body for audit trail
+    webhook_payload = Column(JSONB_VARIANT, nullable=True)  # raw webhook body for audit trail
     reviewed_by_admin_id = Column(String(36), nullable=True)
     reviewed_at = Column(UTCDateTime, nullable=True)
     admin_decision = Column(String(8), nullable=True)  # AdminKycDecision

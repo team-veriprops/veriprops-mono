@@ -1,8 +1,8 @@
-# Veriprops — Master Product Requirements Document
+# Veriprops — Master Product Requirements Document (PRD.md)
 
 **Product:** Veriprops ("Verified Properties")
-**Audience:** Nigerians in the Diaspora verifying real estate in Nigeria
-**Stack:** FastAPI (Python) backend · Next.js 16 (App Router, React 19) frontend
+**Audience:** Primarily Nigerians in the Diaspora, and then Nigerians in Nigeria verifying real estate in Nigeria
+**Stack:** FastAPI (Python, Postgresm) backend · Next.js 16 (App Router, React 19) frontend
 **Currencies:** NGN, USD, EUR, GBP
 **Version:** 1.0 (master, consolidates product brief + auth PRD v1.1 + verification lifecycle PRD v2.0)
 **Status:** Draft — ordered for implementation
@@ -395,7 +395,7 @@ Only **Admin** approves/rejects; only **Agent** accepts/declines/submits.
 
 ### 2.1 Features
 
-- **Signup (email/password)** with expanded fields: first/last name, email (OTP), phone (OTP, country flag), country of residence, timezone (auto-suggested from country), preferred currency. Server enforces a recently-verified OTP marker (30-min TTL) for both email and phone before completing signup; markers are single-use and consumed on success.
+- **Signup (email/password)** with expanded fields: first/last name, email (OTP), phone (OTP, country flag), country of residence (auto-suggested from phone country code), timezone (auto-suggested from country), preferred currency. Server enforces a recently-verified OTP marker (30-min TTL) for both email and phone before completing signup; markers are single-use and consumed on success.
 - **Login (email/password)** with "forgot password" and "create account" links. Rate limiting: warning at 5 (`LOGIN_FAILURE_WARNING` event surfaced in Security Activity Log), lockout at 7 (15 min).
 - **OAuth (Google, Apple, Facebook)** — popup-based flow with `postMessage` bridge and HttpOnly JWT cookie session (see §2.2 OAuth Specification).
 - **OTP flow** — 6 digits, auto-advance, paste support, 10-min timer (MM:SS), resend after expiry, max 3 resends then 30-min lockout. UI surfaces remaining resends.

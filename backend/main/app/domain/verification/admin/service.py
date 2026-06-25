@@ -130,7 +130,7 @@ class AdminVerificationService:
             actor_id=admin_id,
             from_state=row.status,
             to_state=VerificationStatus.FAILED.value,
-            meta={"action": "FAIL", "reason": reason},
+            details={"action": "FAIL", "reason": reason},
         )
         return await self.get_detail(vid)
 
@@ -143,7 +143,7 @@ class AdminVerificationService:
             resource_type="Verification",
             resource_id=str(row.id),
             actor_id=admin_id,
-            meta={"action": "SET_DELAY", "delay_hours": dto.delay_hours, "reason": dto.reason},
+            details={"action": "SET_DELAY", "delay_hours": dto.delay_hours, "reason": dto.reason},
         )
         return await self.get_detail(vid)
 
@@ -163,7 +163,7 @@ class AdminVerificationService:
             resource_type="Verification",
             resource_id=str(row.id),
             actor_id=admin_id,
-            meta={"action": "ADD_NOTE", "note_id": str(note.id)},
+            details={"action": "ADD_NOTE", "note_id": str(note.id)},
         )
         return self._note_to_dto(note)
 
@@ -191,7 +191,7 @@ class AdminVerificationService:
             resource_type="Verification",
             resource_id=str(row.id),
             actor_id=admin_id,
-            meta={"action": "RELEASE_TO_POOL"},
+            details={"action": "RELEASE_TO_POOL"},
         )
         # Actual task pool release is delegated to TaskService (called by S19 endpoint)
         return await self.get_detail(vid)
@@ -212,7 +212,7 @@ class AdminVerificationService:
             actor_id=admin_id,
             from_state=from_state,
             to_state=target.value,
-            meta={"action": action},
+            details={"action": action},
         )
         return await self.get_detail(vid)
 

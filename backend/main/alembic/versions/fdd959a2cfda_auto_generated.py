@@ -6,19 +6,18 @@ Create Date: 2025-06-01 02:19:26.646342
 
 """
 import json
-import uuid
 from datetime import datetime, timezone
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy import inspect as sa_inspect, JSON
+from sqlalchemy import JSON
 from sqlalchemy.ext.mutable import MutableList
 
 from main.alembic.utils import AlembicUtils
 from main.app.config.settings import settings
 from main.appodus_utils import Utils
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 # revision identifiers, used by Alembic.
 revision: str = 'fdd959a2cfda'
@@ -41,9 +40,6 @@ def _create_tab_key_values():
 def _drop_tab_key_values():
     op.drop_index(op.f('ix_key_values_key'), table_name='key_values')
     op.drop_table('key_values')
-
-
-
 
 
 def _create_signup_drafts():
@@ -258,6 +254,35 @@ def _drop_password_reset_tokens():
     op.drop_table("password_reset_tokens")
 
 
+def _create_messages():
+    op.create_table('messages',
+                    sa.Column('channel', sa.String(length=20), nullable=False),
+                    sa.Column('to', JSONB_VARIANT,
+                              nullable=False),
+                    sa.Column('payload', JSONB_VARIANT,
+                              nullable=False),
+                    sa.Column('status', sa.String(length=20), nullable=False),
+                    sa.Column('provider', sa.String(length=50), nullable=True),
+                    sa.Column('provider_id', sa.String(length=255), nullable=True),
+                    sa.Column('error', sa.Text(), nullable=True),
+                    sa.Column('retry_count', sa.Integer(), nullable=True),
+                    sa.Column('priority', sa.Integer(), nullable=True),
+                    sa.Column('scheduled_at', UTCDateTime, nullable=True),
+                    sa.Column('sent_at', UTCDateTime, nullable=True),
+                    sa.Column('delivered_at', UTCDateTime, nullable=True),
+                    sa.Column('extras', JSONB_VARIANT,
+                              nullable=True),
+                    sa.Column('callback_url', sa.String(length=100), nullable=True),
+                    *AlembicUtils.base_audit_columns(),
+                    )
+    op.create_index(op.f('ix_messages_deleted'), 'messages', ['deleted'], unique=False)
+    op.create_index(op.f('ix_messages_id'), 'messages', ['id'], unique=True)
+
+def _drop_messages():
+    op.drop_index(op.f('ix_messages_id'), table_name='messages')
+    op.drop_index(op.f('ix_messages_deleted'), table_name='messages')
+    op.drop_table('messages')
+
 # ── Seed data ──────────────────────────────────────────────────────
 
 CONSENT_SEEDS = [
@@ -267,7 +292,7 @@ CONSENT_SEEDS = [
     ("VERIFICATION_TERMS", "1.0.0", "Verification Terms", "/legal/verification-terms"),
     ("REPORT_DISCLAIMER", "1.0.0", "Report Disclaimer", "/legal/report-disclaimer"),
 ]
-CONSENT_EFFECTIVE_AT = datetime(2026, 1, 15, tzinfo=timezone.utc)
+CONSENT_EFFECTIVE_AT = Utils.datetime_now()
 
 
 def _seed_audit_columns(now: datetime) -> dict:
@@ -278,61 +303,38 @@ def _seed_audit_columns(now: datetime) -> dict:
         "version": 1,
     }
 
-
 def _seed_consent_documents() -> None:
-    table = sa.table(
+    consent_documents = sa.table(
         "consent_documents",
-        sa.column("id", sa.String),
+        sa.column("id", sa.UUID),
         sa.column("type", sa.String),
         sa.column("consent_version", sa.String),
         sa.column("effective_at", UTCDateTime),
         sa.column("title", sa.String),
         sa.column("href", sa.String),
         sa.column("date_created", UTCDateTime),
-        sa.column("date_updated", UTCDateTime),
         sa.column("deleted", sa.Boolean),
         sa.column("version", sa.Integer),
     )
-    # The bulk_insert driver only uses column names, so duplicate names just
-    # need value entries. We pass the row dicts directly with the right keys.
-    now = datetime.now(timezone.utc)
-    rows = []
-    for doc_type, ver, title, href in CONSENT_SEEDS:
-        row = {
-            "id": str(uuid.uuid4()),
-            "type": doc_type,
-            "consent_version": ver,
-            "effective_at": CONSENT_EFFECTIVE_AT,
-            "title": title,
-            "href": href,
-            **_seed_audit_columns(now),
-        }
-        # `version` (audit) overwrites `version` (semver) — explicitly use raw SQL.
-        rows.append(row)
 
-    # Use raw insert to avoid the duplicate-column-name collision.
-    conn = op.get_bind()
-    for row in rows:
-        conn.execute(
-            sa.text(
-                "INSERT INTO consent_documents "
-                "(id, type, consent_version, effective_at, title, href, date_created, deleted, version) "
-                "VALUES (:id, :type, :consent_version, :effective_at, :title, :href, :date_created, :deleted, :version)"
-            ),
+    now = Utils.datetime_now()
+
+    op.bulk_insert(
+        consent_documents,
+        [
             {
-                "id": row["id"],
-                "type": row["type"],
-                "consent_version": row["consent_version"],
-                "effective_at": row["effective_at"],
-                "title": row["title"],
-                "href": row["href"],
-                "date_created": row["date_created"],
-                "deleted": row["deleted"],
-                "version": row["version"],
-            },
-        )
-
-
+                "id": Utils.generate_uuid(),
+                "type": doc_type,
+                "consent_version": consent_version,
+                "effective_at": now,
+                "title": title,
+                "href": href,
+                **_seed_audit_columns(now),
+            }
+            for doc_type, consent_version, title, href in CONSENT_SEEDS
+        ],
+    )
+    
 def _seed_super_admin() -> None:
     """Seed the first Super Admin if `SUPER_ADMIN_PASSWORD` is set in env.
     Idempotent: skipped if a user with the canonical email already exists."""
@@ -373,7 +375,7 @@ def _seed_super_admin() -> None:
             """
         ),
         {
-            "id": str(uuid.uuid4()),
+            "id": str(Utils.generate_uuid()),
             "first_name": "Veriprops",
             "last_name": "Admin",
             "email": email,
@@ -414,6 +416,8 @@ def upgrade() -> None:
         _create_password_reset_tokens()
     if not AlembicUtils.table_exists("signup_drafts"):
         _create_signup_drafts()
+    if not AlembicUtils.table_exists("messages"):
+        _create_messages()
 
     # Data seeds belong here, not in app-level seeders.
     if AlembicUtils.table_exists('consent_documents'):
@@ -441,3 +445,5 @@ def downgrade() -> None:
         _drop_users()
     if AlembicUtils.table_exists("signup_drafts"):
         _drop_signup_drafts()
+    if AlembicUtils.table_exists("messages"):
+        _drop_messages()

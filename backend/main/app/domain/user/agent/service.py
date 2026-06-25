@@ -353,7 +353,7 @@ class AgentApplicationService:
             resource_id=str(record.id),
             from_state=KycStatus.PENDING.value,
             to_state=new_status.value,
-            meta={"score": result.score, "provider_ref": result.provider_ref},
+            details={"score": result.score, "provider_ref": result.provider_ref},
         )
 
     # ── Admin KYC review (D18) ─────────────────────────────────────
@@ -389,7 +389,7 @@ class AgentApplicationService:
             actor_id=admin_id,
             from_state=KycStatus.UNDER_REVIEW.value,
             to_state=resolved_status.value,
-            meta={"decision": dto.decision.value, "notes": dto.notes},
+            details={"decision": dto.decision.value, "notes": dto.notes},
         )
         return self._to_kyc_dto(await self._kyc_repo.get_model(record_id))
 
@@ -449,7 +449,7 @@ class AgentApplicationService:
             actor_id=admin_id,
             from_state=AgentApplicationStatus.PENDING.value,
             to_state=AgentApplicationStatus.REJECTED.value,
-            meta={"reason": reason},
+            details={"reason": reason},
         )
         return self._to_public_dto(await self._repo.get_model(application_id))
 

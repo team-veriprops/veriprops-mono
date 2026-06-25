@@ -8,7 +8,6 @@ otherwise reports a low score.
 """
 from __future__ import annotations
 
-import uuid
 from typing import Optional
 
 from main.app.domain.user.agent.kyc.interface import (
@@ -16,6 +15,7 @@ from main.app.domain.user.agent.kyc.interface import (
     KycProvider,
     SelfieMatchResult,
 )
+from main.appodus_utils import Utils
 
 
 class StubKycProvider(KycProvider):
@@ -36,14 +36,14 @@ class StubKycProvider(KycProvider):
             )
         return BvnVerificationResult(
             verified=True,
-            verification_id=f"stub-{uuid.uuid4()}",
+            verification_id=f"stub-{Utils.generate_uuid()}",
             provider="stub",
         )
 
     async def match_selfie(
-        self,
-        selfie_bytes: bytes,
-        reference_image_bytes: Optional[bytes] = None,
+            self,
+            selfie_bytes: bytes,
+            reference_image_bytes: Optional[bytes] = None,
     ) -> SelfieMatchResult:
         if not selfie_bytes:
             return SelfieMatchResult(matched=False, score=0, failure_reason="empty selfie payload")
@@ -51,8 +51,8 @@ class StubKycProvider(KycProvider):
         return SelfieMatchResult(matched=True, score=92)
 
     async def submit_selfie(
-        self,
-        selfie_bytes: bytes,
-        reference_bvn_last4: Optional[str] = None,
+            self,
+            selfie_bytes: bytes,
+            reference_bvn_last4: Optional[str] = None,
     ) -> str:
-        return f"stub-selfie-{uuid.uuid4()}"
+        return f"stub-selfie-{Utils.generate_uuid()}"

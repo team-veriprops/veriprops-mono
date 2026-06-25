@@ -1,3 +1,4 @@
+(README.md)
 I want to build a web app with the following details:
 
 Product:
@@ -5,12 +6,12 @@ Product:
 	- Name explanation: Verified properties
 	- Description: A portal that allows people (Nigerians) to verify
 	real estate properties (Land/Building). Our target customer
-	are Nigerians in the Diaspora.
+	are Nigerians in the Diaspora, and Nigerians in Nigeria.
 	- Users:
 		1. Admin: administers the platform
 		2. Agents: Signs up on the platform to assist in 
 		verification process. Agents gets commission for any
-		success work done.
+		successful work done.
 			- Types of agents:
 				1. Field agent: Physical site inspection
 				2. Surveyor: Boundary and location confirmation

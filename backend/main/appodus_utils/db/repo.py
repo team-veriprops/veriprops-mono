@@ -218,7 +218,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
     @staticmethod
     def _ensure_uuid(_id: Union[str, uuid.UUID]) -> uuid.UUID:
         if not _id:
-            return uuid.uuid4()
+            return Utils.generate_uuid()
         return Utils.hex_to_uuid(_id) if isinstance(_id, str) else _id
 
     async def _get(self, _id: Union[str, uuid.UUID]) -> Optional[ModelType]:

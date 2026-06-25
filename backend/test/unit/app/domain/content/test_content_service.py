@@ -40,7 +40,7 @@ def _make_row(item_id="item-001", item_type="HOW_IT_WORKS_STEP", published=True)
     row.slug = "test-slug"
     row.title = "Test Title"
     row.body = "Test Body"
-    row.meta = None
+    row.details = None
     row.is_published = published
     row.sort_order = 0
     row.author_id = None

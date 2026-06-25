@@ -59,8 +59,8 @@ class AnalyticsRepo:
         stuck_q = await session.scalar(
             text(
                 "SELECT COUNT(*) FROM tasks "
-                "WHERE status = 'IN_PROGRESS' AND deleted = 0 "
-                "AND accepted_at < NOW() - INTERVAL :hours HOUR"
+                "WHERE status = 'IN_PROGRESS' AND deleted = false "
+                "AND accepted_at < NOW() - make_interval(hours => :hours)"
             ),
             {"hours": stuck_threshold_hours},
         )
@@ -68,8 +68,8 @@ class AnalyticsRepo:
         sla_q = await session.scalar(
             text(
                 "SELECT COUNT(*) FROM tasks "
-                "WHERE status IN ('ACCEPTED', 'IN_PROGRESS') AND deleted = 0 "
-                "AND accepted_at < NOW() - INTERVAL :hours HOUR"
+                "WHERE status IN ('ACCEPTED', 'IN_PROGRESS') AND deleted = false "
+                "AND accepted_at < NOW() - make_interval(hours => :hours)"
             ),
             {"hours": int(stuck_threshold_hours * 0.8)},
         )
@@ -110,9 +110,9 @@ class AnalyticsRepo:
                     AVG(v.trust_score) AS avg_trust_score,
                     COALESCE(SUM(CASE WHEN pay.status = 'SUCCEEDED' THEN pay.amount_minor ELSE 0 END), 0) / 100 AS revenue_ngn
                 FROM verifications v
-                JOIN properties p ON p.id = v.property_id AND p.deleted = 0
-                LEFT JOIN payments pay ON pay.verification_id = v.id AND pay.deleted = 0
-                WHERE v.deleted = 0
+                JOIN properties p ON p.id = v.property_id AND p.deleted = false
+                LEFT JOIN payments pay ON pay.verification_id = v.id AND pay.deleted = false
+                WHERE v.deleted = false
                 GROUP BY p.state
                 ORDER BY completed_count DESC
                 """
@@ -136,7 +136,7 @@ class AnalyticsRepo:
         from main.app.domain.user.auth.session.models import UserPersona
 
         signups = await session.scalar(
-            text("SELECT COUNT(*) FROM users WHERE JSON_CONTAINS(personas, '\"CUSTOMER\"') AND deleted = 0")
+            text("SELECT COUNT(*) FROM users WHERE personas @> '\"CUSTOMER\"' AND deleted = false")
         )
         submitted = await session.scalar(
             select(func.count(Verification.id)).where(
@@ -185,12 +185,12 @@ class AnalyticsRepo:
             text(
                 """
                 SELECT tier,
-                       AVG(TIMESTAMPDIFF(SECOND, paid_at, completed_at)) / 3600 AS avg_hours
+                       AVG(EXTRACT(EPOCH FROM (completed_at - paid_at))) / 3600 AS avg_hours
                 FROM verifications
                 WHERE status = 'COMPLETED'
                   AND paid_at IS NOT NULL
                   AND completed_at IS NOT NULL
-                  AND deleted = 0
+                  AND deleted = false
                 GROUP BY tier
                 """
             )
@@ -206,12 +206,12 @@ class AnalyticsRepo:
         rows = await session.execute(
             text(
                 """
-                SELECT DATE_FORMAT(date_created, '%Y-%m') AS period,
+                SELECT to_char(date_created, 'YYYY-MM') AS period,
                        AVG(score) AS avg_quality_score,
                        COUNT(*) AS total_scores
                 FROM agent_quality_scores
-                WHERE deleted = 0
-                  AND date_created >= NOW() - INTERVAL :months MONTH
+                WHERE deleted = false
+                  AND date_created >= NOW() - make_interval(months => :months)
                 GROUP BY period
                 ORDER BY period ASC
                 """,
@@ -237,10 +237,10 @@ class AnalyticsRepo:
                        SUM(pay.amount_minor) / 100 AS revenue_ngn,
                        COUNT(DISTINCT v.id) AS count
                 FROM verifications v
-                JOIN properties p ON p.id = v.property_id AND p.deleted = 0
+                JOIN properties p ON p.id = v.property_id AND p.deleted = false
                 JOIN payments pay ON pay.verification_id = v.id
-                    AND pay.status = 'SUCCEEDED' AND pay.deleted = 0
-                WHERE v.deleted = 0
+                    AND pay.status = 'SUCCEEDED' AND pay.deleted = false
+                WHERE v.deleted = false
                 GROUP BY p.state, v.tier
                 ORDER BY revenue_ngn DESC
                 """

@@ -120,7 +120,7 @@ class ContentService:
             slug=row.slug,
             title=row.title,
             body=row.body,
-            meta=row.meta,
+            details=row.details,
             is_published=row.is_published,
             sort_order=row.sort_order,
             author_id=row.author_id,

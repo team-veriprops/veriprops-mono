@@ -47,7 +47,7 @@ def _make_row(
     row.to_state = to_state
     row.actor_id = actor_id
     row.ip_address = "1.2.3.4"
-    row.meta = {"note": "test"}
+    row.details = {"note": "test"}
     row.occurred_at = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
     return row
 
@@ -100,7 +100,7 @@ class TestExportVerificationPackCsv:
         reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8")))
         expected_cols = {
             "occurred_at", "action", "actor_id", "resource_type", "resource_id",
-            "from_state", "to_state", "ip_address", "meta",
+            "from_state", "to_state", "ip_address", "details",
         }
         assert expected_cols == set(reader.fieldnames)
         rows = list(reader)

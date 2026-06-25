@@ -10,7 +10,7 @@ class AlembicUtils:
     def base_audit_columns():
         """Mirror BaseEntity audit columns."""
         return [
-            sa.Column("id", sa.String(length=36), nullable=False),
+            sa.Column("id", sa.UUID(), nullable=False),
             sa.Column("date_created", UTCDateTime, nullable=False),
             sa.Column("created_by", sa.String(length=36), nullable=True),
             sa.Column("date_updated", UTCDateTime, nullable=True),

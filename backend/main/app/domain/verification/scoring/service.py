@@ -148,7 +148,7 @@ class TrustScoreService:
         for role, weight in payload.weights.items():
             existing = await self._weights.get_for_tier_role(tier.upper(), role.upper())
             if existing:
-                await self._weights.update(
+                await self._weights.update_return_model(
                     str(existing.id),
                     UpdateWeightDto(weight=weight, updated_by=admin_id),
                 )
@@ -169,7 +169,7 @@ class TrustScoreService:
             resource_type="TrustScoreWeightConfig",
             resource_id=tier.upper(),
             actor_id=admin_id,
-            meta={"tier": tier, "weights": {r: str(w) for r, w in payload.weights.items()}},
+            details={"tier": tier, "weights": {r: str(w) for r, w in payload.weights.items()}},
         )
         return results
 

@@ -32,7 +32,7 @@ class PaymentInitRequest(Object):
     redirect_url: str
     customer: CustomerInfo
     customizations: Customizations
-    metadata: Optional[Dict[str, Any]] = None
+    details: Optional[Dict[str, Any]] = None
 
 
 # refund_transaction – Refund API

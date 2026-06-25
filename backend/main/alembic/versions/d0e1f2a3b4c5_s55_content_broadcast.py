@@ -5,14 +5,14 @@ Revision ID: d0e1f2a3b4c5
 Revises: c9d0e1f2a3b4
 Create Date: 2026-05-14 00:02:00.000000
 """
-from typing import Sequence, Union
-import uuid
 from datetime import datetime, timezone
+from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 
 from main.alembic.utils import AlembicUtils
+from main.appodus_utils import Utils
 from main.appodus_utils.db.models import UTCDateTime
 
 revision: str = "d0e1f2a3b4c5"
@@ -24,7 +24,7 @@ _NOW = datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _uid() -> str:
-    return str(uuid.uuid4())
+    return str(Utils.generate_uuid())
 
 
 def upgrade() -> None:
@@ -35,7 +35,7 @@ def upgrade() -> None:
         sa.Column("slug", sa.String(128), nullable=False),
         sa.Column("title", sa.String(256), nullable=False),
         sa.Column("body", sa.Text, nullable=False),
-        sa.Column("meta", sa.Text, nullable=True),
+        sa.Column("details", sa.Text, nullable=True),
         sa.Column("is_published", sa.Boolean, nullable=False, server_default="1"),
         sa.Column("sort_order", sa.Integer, nullable=False, server_default="0"),
         sa.Column("author_id", sa.String(36), nullable=True),
@@ -70,7 +70,7 @@ def upgrade() -> None:
     content_items = sa.table(
         "content_items",
         sa.column("id"), sa.column("item_type"), sa.column("slug"), sa.column("title"),
-        sa.column("body"), sa.column("meta"), sa.column("is_published"), sa.column("sort_order"),
+        sa.column("body"), sa.column("details"), sa.column("is_published"), sa.column("sort_order"),
         sa.column("author_id"), sa.column("lga"), sa.column("state"),
         sa.column("date_created"), sa.column("date_updated"), sa.column("deleted"), sa.column("version"),
     )
@@ -80,35 +80,35 @@ def upgrade() -> None:
             "id": _uid(), "item_type": "HOW_IT_WORKS_STEP", "sort_order": 0,
             "slug": "hiw-step-1-submit-details", "title": "Submit Details",
             "body": "Provide property coordinates, upload documents, and select your verification tier.",
-            "meta": None, "is_published": True, "author_id": None, "lga": None, "state": None,
+            "details": None, "is_published": True, "author_id": None, "lga": None, "state": None,
             "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
         },
         {
             "id": _uid(), "item_type": "HOW_IT_WORKS_STEP", "sort_order": 1,
             "slug": "hiw-step-2-cross-check-records", "title": "Cross-Check Records",
             "body": "We validate ownership against official registry and survey records with certified agents.",
-            "meta": None, "is_published": True, "author_id": None, "lga": None, "state": None,
+            "details": None, "is_published": True, "author_id": None, "lga": None, "state": None,
             "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
         },
         {
             "id": _uid(), "item_type": "HOW_IT_WORKS_STEP", "sort_order": 2,
             "slug": "hiw-step-3-check-encumbrances", "title": "Check Encumbrances",
             "body": "Identify liens, caveats, pending litigations, or any outstanding claims on the property.",
-            "meta": None, "is_published": True, "author_id": None, "lga": None, "state": None,
+            "details": None, "is_published": True, "author_id": None, "lga": None, "state": None,
             "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
         },
         {
             "id": _uid(), "item_type": "HOW_IT_WORKS_STEP", "sort_order": 3,
             "slug": "hiw-step-4-run-risk-analysis", "title": "Run Risk Analysis",
             "body": "Assessment of area zoning, title history, fraud indicators, and surrounding property context.",
-            "meta": None, "is_published": True, "author_id": None, "lga": None, "state": None,
+            "details": None, "is_published": True, "author_id": None, "lga": None, "state": None,
             "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
         },
         {
             "id": _uid(), "item_type": "HOW_IT_WORKS_STEP", "sort_order": 4,
             "slug": "hiw-step-5-get-certified-report", "title": "Get Certified Report",
             "body": "Receive your high-authority digital report with Trust Score, Verification ID, and agent sign-offs.",
-            "meta": None, "is_published": True, "author_id": None, "lga": None, "state": None,
+            "details": None, "is_published": True, "author_id": None, "lga": None, "state": None,
             "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
         },
     ]
@@ -119,7 +119,7 @@ def upgrade() -> None:
             "slug": "testimonial-emeka-okafor",
             "title": "Emeka Okafor — London, UK",
             "body": "I was about to wire £65,000 for a property in Lekki. Veriprops found three competing ownership claims before I paid a penny. This service saved my family's financial future.",
-            "meta": '{"tier":"Premium","initials":"EO"}',
+            "details": '{"tier":"Premium","initials":"EO"}',
             "is_published": True, "author_id": None, "lga": None, "state": None,
             "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
         },
@@ -128,7 +128,7 @@ def upgrade() -> None:
             "slug": "testimonial-adaeze-williams",
             "title": "Adaeze Williams — Houston, TX",
             "body": "The Standard report was thorough — GPS-stamped photos, boundary survey, full registry search — all delivered within 6 days. Exactly what I needed from 7,000 miles away.",
-            "meta": '{"tier":"Standard","initials":"AW"}',
+            "details": '{"tier":"Standard","initials":"AW"}',
             "is_published": True, "author_id": None, "lga": None, "state": None,
             "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
         },
@@ -137,7 +137,7 @@ def upgrade() -> None:
             "slug": "testimonial-chukwudi-nwosu",
             "title": "Chukwudi Nwosu — Toronto, Canada",
             "body": "The Trust Score concept is genius. I now only consider properties scoring above 80. It has fundamentally changed how I approach Nigerian real estate investment.",
-            "meta": '{"tier":"Basic","initials":"CN"}',
+            "details": '{"tier":"Basic","initials":"CN"}',
             "is_published": True, "author_id": None, "lga": None, "state": None,
             "date_created": _NOW, "date_updated": None, "deleted": False, "version": 1,
         },

@@ -5,10 +5,11 @@ import enum
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Column, Boolean, JSON, String, Text
+from sqlalchemy import Column, Boolean, String, Text
 
 from main.app.domain.verification.models import VerificationStatus, VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils.db.models import JSONB_VARIANT
 
 
 # ─── ORM ──────────────────────────────────────────────────────────
@@ -20,7 +21,7 @@ class VerificationNote(BaseEntity):
     verification_id = Column(String(36), nullable=False, index=True)
     admin_id = Column(String(36), nullable=False, index=True)
     content = Column(Text, nullable=False)
-    tags = Column(JSON, nullable=True)
+    tags = Column(JSONB_VARIANT, nullable=True)
     pinned = Column(Boolean, nullable=False, default=False)
 
 

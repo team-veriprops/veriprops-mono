@@ -98,7 +98,7 @@ def upgrade() -> None:
         sa.Column("gps_lat", sa.Float, nullable=True),
         sa.Column("gps_lng", sa.Float, nullable=True),
         sa.Column("captured_at", UTCDateTime, nullable=True),
-        sa.Column("metadata", sa.JSON, nullable=True),
+        sa.Column("details", sa.JSON, nullable=True),
         *AlembicUtils.base_audit_columns(),
     )
     op.create_index("ix_evidence_items_id", "evidence_items", ["id"], unique=True)

@@ -4,10 +4,11 @@ from __future__ import annotations
 import enum
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import BigInteger, Column, Float, Index, JSON, String, Text
+from sqlalchemy import BigInteger, Column, Float, Index, String, Text
 from sqlalchemy.ext.mutable import MutableList
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils.db.models import JSONB_VARIANT
 
 
 class PropertySource(str, enum.Enum):
@@ -34,7 +35,7 @@ class Property(BaseEntity):
     lng = Column(Float, nullable=True)
     landmark_description = Column(Text, nullable=True)
     details = Column(Text, nullable=True)  # type-specific JSON
-    documents = Column(MutableList.as_mutable(JSON), nullable=False, default=list)
+    documents = Column(MutableList.as_mutable(JSONB_VARIANT), nullable=False, default=list)
     seller_info = Column(Text, nullable=True)  # JSON
     estimated_price_minor = Column(BigInteger, nullable=True)
     estimated_price_currency = Column(String(3), nullable=True)

@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 from main.alembic.utils import AlembicUtils
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 revision: str = "c2d3e4f5a6b7"
 down_revision: Union[str, None] = "b1f2c3d4e5f6"
@@ -31,7 +31,7 @@ def upgrade() -> None:
         sa.Column("resource_id", sa.String(36), nullable=False),
         sa.Column("from_state", sa.String(32), nullable=True),
         sa.Column("to_state", sa.String(32), nullable=True),
-        sa.Column("meta", sa.JSON(), nullable=True),
+        sa.Column("details", JSONB_VARIANT, nullable=True),
         sa.Column("ip_address", sa.String(64), nullable=True),
         sa.Column("occurred_at", UTCDateTime, nullable=False),
         *AlembicUtils.base_audit_columns(),

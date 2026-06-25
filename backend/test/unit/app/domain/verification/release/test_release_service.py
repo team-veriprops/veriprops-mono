@@ -136,5 +136,5 @@ class TestFailRelease:
         reason = "C" * 50
         with patch.object(svc, "_publish", AsyncMock()):
             await svc.fail_release("VID-001", "admin-1", reason)
-        call_meta = audit.schedule.call_args.kwargs.get("meta", {})
+        call_meta = audit.schedule.call_args.kwargs.get("details", {})
         assert call_meta.get("reason") == reason

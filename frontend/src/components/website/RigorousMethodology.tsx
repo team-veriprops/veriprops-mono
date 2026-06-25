@@ -29,18 +29,14 @@ export default function RigorousMethodology() {
               border: "1px solid rgba(63,102,83,0.15)",
             }}
           >
-            Our Process
+            Our methodology
           </div>
           <h2
             className="text-4xl md:text-5xl font-extrabold editorial-spacing font-display leading-tight mb-5"
             style={{ color: "var(--brand-navy)" }}
           >
-            A Rigorous Methodology
+            Five steps. No shortcuts. No assumptions.
           </h2>
-          <p className="text-lg leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
-            Our 5-step sovereign verification process ensures absolute certainty
-            for your offshore investment — no shortcuts, no assumptions.
-          </p>
         </div>
 
         {/* Steps */}
@@ -90,7 +86,7 @@ export default function RigorousMethodology() {
                 </div>
 
                 {/* Icon */}
-                <div
+                {/* <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
                   style={{
                     backgroundColor: isFirst
@@ -111,15 +107,15 @@ export default function RigorousMethodology() {
                         : "var(--brand-on-surface-variant)",
                     }}
                   />
-                </div>
+                </div> */}
 
-                <h4
+                <h3
                   className="font-bold font-display text-sm mb-2"
                   style={{ color: "var(--brand-navy)" }}
                 >
                   {step.title}
-                </h4>
-                <p className="text-xs leading-relaxed px-1" style={{ color: "var(--brand-on-surface-variant)" }}>
+                </h3>
+                <p className="text-sm leading-relaxed px-1" style={{ color: "var(--brand-on-surface-variant)" }}>
                   {step.description}
                 </p>
               </div>

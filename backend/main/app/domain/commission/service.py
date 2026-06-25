@@ -120,7 +120,7 @@ class CommissionService:
 
     async def create_rule(self, dto: CreateCommissionRuleDto) -> CommissionRuleDto:
         row = await self._rule_repo.create(dto)
-        return self._rule_to_dto(row)
+        return self._rule_to_dto(row.data.model_dump())
 
     async def update_rule(self, rule_id: str, dto: UpdateCommissionRuleDto) -> CommissionRuleDto:
         await self._rule_repo.update(rule_id, dto)

@@ -80,7 +80,7 @@ class ReleaseService:
             actor_id=admin_id,
             from_state=VerificationStatus.UNDER_REVIEW.value,
             to_state=VerificationStatus.COMPLETED.value,
-            meta={"action": "RELEASE_REPORT"},
+            details={"action": "RELEASE_REPORT"},
         )
         await self._publish(str(ver.id), "report_released")
         await self._notify_report_ready_safe(str(ver.id), str(ver.customer_id))
@@ -112,7 +112,7 @@ class ReleaseService:
             actor_id=admin_id,
             from_state=VerificationStatus.UNDER_REVIEW.value,
             to_state=VerificationStatus.FAILED.value,
-            meta={"action": "FAIL_RELEASE", "reason": reason},
+            details={"action": "FAIL_RELEASE", "reason": reason},
         )
         await self._publish(str(ver.id), "verification_failed")
         return ReleaseDto(

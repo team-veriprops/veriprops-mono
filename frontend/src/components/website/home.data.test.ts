@@ -14,6 +14,7 @@ import {
   CTA_AGENT_HREF,
 } from "./home.data";
 import { AuthIntent } from "./auth/models";
+import { ROUTES } from "@lib/routes";
 
 describe("pricingTiers", () => {
   it("has exactly three tiers", () => {
@@ -204,20 +205,33 @@ describe("navLinks", () => {
 });
 
 describe("footerLinks", () => {
-  it("has resources, company, and socials groups", () => {
-    expect(Array.isArray(footerLinks.resources)).toBe(true);
+  it("has platform, company, legal, and socials groups", () => {
+    expect(Array.isArray(footerLinks.platform)).toBe(true);
     expect(Array.isArray(footerLinks.company)).toBe(true);
+    expect(Array.isArray(footerLinks.legal)).toBe(true);
     expect(Array.isArray(footerLinks.socials)).toBe(true);
   });
 
-  it("resources has at least 3 links", () => {
-    expect(footerLinks.resources.length).toBeGreaterThanOrEqual(3);
+  it("platform has at least 3 links", () => {
+    expect(footerLinks.platform.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("company has Privacy Policy and Terms of Service", () => {
-    const labels = footerLinks.company.map((l) => l.label);
+  it("legal has Privacy Policy and Terms of Service", () => {
+    const labels = footerLinks.legal.map((l) => l.label);
     expect(labels).toContain("Privacy Policy");
     expect(labels).toContain("Terms of Service");
+  });
+
+  it("legal links point at declared /legal routes (not dead # anchors)", () => {
+    for (const link of footerLinks.legal) {
+      expect(link.href.startsWith("/legal/")).toBe(true);
+    }
+  });
+
+  it("Our Story footer link targets the About page", () => {
+    const ourStory = footerLinks.company.find((l) => l.label === "Our Story");
+    expect(ourStory).toBeDefined();
+    expect(ourStory?.href).toBe(ROUTES.ABOUT);
   });
 
   it(`Become an Agent footer link targets /auth?intent=${AuthIntent.AGENT} (PRD §1.12)`, () => {

@@ -146,7 +146,7 @@ class TaskService:
             resource_type="Task",
             resource_id=verification_id,
             actor_id=admin_id,
-            meta={"action": "RELEASE_TO_POOL"},
+            details={"action": "RELEASE_TO_POOL"},
         )
         return updated
 
@@ -179,7 +179,7 @@ class TaskService:
             actor_id=assigned_by,
             from_state=task.status,
             to_state=TaskStatus.ASSIGNED.value,
-            meta={"action": "ADMIN_ASSIGN", "agent_id": agent_id},
+            details={"action": "ADMIN_ASSIGN", "agent_id": agent_id},
         )
         await self._derive_and_update_verification_status(task.verification_id)
         return self._task_to_dto(await self._tasks.get_task(task_id))
@@ -227,7 +227,7 @@ class TaskService:
             actor_id=assigned_by,
             from_state=task.status,
             to_state=TaskStatus.ASSIGNED.value,
-            meta={
+            details={
                 "action": "ADMIN_REASSIGN",
                 "from_agent_id": old_agent_id,
                 "to_agent_id": new_agent_id,
@@ -278,7 +278,7 @@ class TaskService:
             actor_id=agent_id,
             from_state=task.status,
             to_state=TaskStatus.ACCEPTED.value,
-            meta={"action": "AGENT_ACCEPT"},
+            details={"action": "AGENT_ACCEPT"},
         )
         await self._derive_and_update_verification_status(task.verification_id)
         await self._maybe_flip_unavailable(agent_id)
@@ -308,7 +308,7 @@ class TaskService:
             actor_id=agent_id,
             from_state=TaskStatus.ACCEPTED.value,
             to_state=TaskStatus.PENDING.value,
-            meta={"action": "AGENT_DECLINE"},
+            details={"action": "AGENT_DECLINE"},
         )
         await self._derive_and_update_verification_status(task.verification_id)
         await self._maybe_restore_availability(agent_id)
@@ -374,7 +374,7 @@ class TaskService:
             actor_id=agent_id,
             from_state=task.status,
             to_state=TaskStatus.SUBMITTED.value,
-            meta={"action": "AGENT_SUBMIT", "role": task.role},
+            details={"action": "AGENT_SUBMIT", "role": task.role},
         )
         await self._maybe_elevate_trust(agent_id)
         await self._derive_and_update_verification_status(task.verification_id)
@@ -452,7 +452,7 @@ class TaskService:
             resource_type="AgentQualityScore",
             resource_id=task_id,
             actor_id=admin_id,
-            meta={"score": dto.score, "agent_id": task.agent_id},
+            details={"score": dto.score, "agent_id": task.agent_id},
         )
         return AgentQualityScoreDto(
             id=str(row.id),

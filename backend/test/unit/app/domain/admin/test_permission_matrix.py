@@ -27,6 +27,7 @@ OPERATIONS_ALLOWED = {
     Permission.RELEASE_REPORT,
     Permission.VIEW_ADMIN_PANEL,
     Permission.MANAGE_VERIFICATIONS,
+    Permission.MANAGE_USERS,
 }
 
 FINANCE_ALLOWED = {

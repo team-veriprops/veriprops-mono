@@ -15,6 +15,7 @@ from main.app.domain.verification.conflict.models import (
     ConflictStatus,
 )
 from main.app.domain.verification.task.models import Task, TaskRole
+from main.appodus_utils import Utils
 
 
 class BaseConflictRule(ABC):
@@ -37,9 +38,8 @@ class BaseConflictRule(ABC):
 
     def _flag(self, verification_id: str, description: str) -> ConflictFlagDto:
         from datetime import datetime, timezone
-        from uuid import uuid4
         return ConflictFlagDto(
-            id=str(uuid4()),
+            id=str(Utils.generate_uuid()),
             verification_id=verification_id,
             rule_id=self.rule_id,
             severity=self.severity,
@@ -139,7 +139,8 @@ class OwnerNameMismatchRule(BaseConflictRule):
         ownership_chain = registry_p.get("ownership_chain")
         if not ownership_chain or not isinstance(ownership_chain, list) or len(ownership_chain) == 0:
             return None
-        last_owner = str(ownership_chain[-1].get("name", "") if isinstance(ownership_chain[-1], dict) else "").strip().lower()
+        last_owner = str(
+            ownership_chain[-1].get("name", "") if isinstance(ownership_chain[-1], dict) else "").strip().lower()
         # seller_name comes from the verification's property data, passed via the registry payload
         seller_name = str(registry_p.get("seller_name", "")).strip().lower()
         if not last_owner or not seller_name:

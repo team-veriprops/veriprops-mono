@@ -126,7 +126,7 @@ async def test_schedule_captures_all_optional_fields(mock_repo):
         actor_id="admin-456",
         from_state="PENDING",
         to_state="REJECTED",
-        meta={"reason": "incomplete documents"},
+        details={"reason": "incomplete documents"},
         ip_address="1.2.3.4",
     )
     await drain_audit_writes()
@@ -137,7 +137,7 @@ async def test_schedule_captures_all_optional_fields(mock_repo):
     assert dto.actor_id == "admin-456"
     assert dto.from_state == "PENDING"
     assert dto.to_state == "REJECTED"
-    assert dto.meta == {"reason": "incomplete documents"}
+    assert dto.details == {"reason": "incomplete documents"}
     assert dto.ip_address == "1.2.3.4"
     assert dto.occurred_at is not None
 

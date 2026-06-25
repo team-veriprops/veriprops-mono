@@ -74,7 +74,7 @@ class RetentionPolicyService:
             resource_type="USER",
             resource_id=user_id,
             actor_id=user_id,
-            meta={"reason": reason},
+            details={"reason": reason},
         )
 
         return self._to_dto(row)
@@ -138,7 +138,7 @@ class RetentionPolicyService:
             actor_id=admin_id,
             from_state=ErasureStatus.PENDING.value,
             to_state=ErasureStatus.REJECTED.value,
-            meta={"reason": reason},
+            details={"reason": reason},
         )
         row = await self._repo.get_model(request_id)
         return self._to_dto(row)

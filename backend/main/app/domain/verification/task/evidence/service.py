@@ -106,6 +106,6 @@ class EvidenceService:
             gps_lat=item.gps_lat,
             gps_lng=item.gps_lng,
             captured_at=item.captured_at,
-            metadata=dict(item.metadata_ or {}),
+            details=dict(item.details or {}),
             date_created=item.date_created,
         )

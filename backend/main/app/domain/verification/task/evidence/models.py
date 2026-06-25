@@ -5,11 +5,11 @@ import enum
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from sqlalchemy import Column, Float, Integer, JSON, String, Text
+from sqlalchemy import Column, Float, Integer, String, Text
 from sqlalchemy.ext.mutable import MutableDict
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 
 class EvidenceType(str, enum.Enum):
@@ -37,7 +37,7 @@ class EvidenceItem(BaseEntity):
     gps_lat = Column(Float, nullable=True)
     gps_lng = Column(Float, nullable=True)
     captured_at = Column(UTCDateTime, nullable=True)
-    metadata_ = Column("metadata", MutableDict.as_mutable(JSON), nullable=True)
+    details = Column(MutableDict.as_mutable(JSONB_VARIANT), nullable=True)
 
 
 class EvidenceItemDto(Object):
@@ -49,7 +49,7 @@ class EvidenceItemDto(Object):
     gps_lat: Optional[float] = None
     gps_lng: Optional[float] = None
     captured_at: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
+    details: Optional[Dict[str, Any]] = None
     date_created: datetime
 
 
@@ -61,7 +61,7 @@ class CreateEvidenceItemDto(Object):
     gps_lat: Optional[float] = None
     gps_lng: Optional[float] = None
     captured_at: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
+    details: Optional[Dict[str, Any]] = None
 
 
 class UpdateEvidenceItemDto(Object):

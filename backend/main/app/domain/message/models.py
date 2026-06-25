@@ -6,11 +6,10 @@ from pydantic import model_validator, Field, HttpUrl, ConfigDict
 from sqlalchemy import (Column,
                         String,
                         Text,
-                        Integer,
-                        JSON)
+                        Integer)
 
 from main.appodus_utils import BaseEntity, PageRequest, BaseQueryDto, Object
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 from main.appodus_utils.integrations.messaging.models import (MessageChannel,
                                                               MessageStatus,
                                                               MessagePriority,
@@ -27,8 +26,8 @@ from main.appodus_utils.integrations.messaging.models import (MessageRecipient,
 class Message(BaseEntity):
     __tablename__ = 'messages'
     channel = Column(String(20), nullable=False)
-    to = Column(JSON, nullable=False)
-    payload = Column(JSON, nullable=False)
+    to = Column(JSONB_VARIANT, nullable=False)
+    payload = Column(JSONB_VARIANT, nullable=False)
     status = Column(String(20), nullable=False, default=MessageStatus.PENDING)
     provider = Column(String(50))
     provider_id = Column(String(255))  # Provider's message ID
@@ -38,7 +37,7 @@ class Message(BaseEntity):
     scheduled_at = Column(UTCDateTime, nullable=True)
     sent_at = Column(UTCDateTime, nullable=True)
     delivered_at = Column(UTCDateTime, nullable=True)
-    extras = Column(JSON, default={})
+    extras = Column(JSONB_VARIANT, default={})
     callback_url = Column(String(100))
 
 

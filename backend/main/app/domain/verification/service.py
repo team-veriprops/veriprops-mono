@@ -4,6 +4,7 @@ Owns the wizard draft cycle and forward-only state transitions for the global
 verification entity. Property creation is folded in here on submission.
 """
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -12,7 +13,6 @@ if TYPE_CHECKING:
 import io
 import json
 import secrets
-import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -49,7 +49,6 @@ from main.app.domain.verification.property.models import (
 )
 from main.app.domain.verification.property.repo import PropertyRepo
 from main.app.domain.verification.repo import VerificationRepo
-from main.app.domain.verification.state_machine import verification_state_machine
 from main.app.domain.verification.state_machine.derive import derive_status
 from main.app.domain.verification.validator import VerificationValidator
 from main.appodus_utils import Utils
@@ -63,7 +62,6 @@ from main.appodus_utils.exception.exceptions import (
 from main.appodus_utils.integrations.document_storage.factory import DocumentStorageProviderFactory
 
 logger: Logger = di["logger"]
-
 
 # 5 verification consent document types from PRD §5.3.
 VERIFICATION_CONSENT_TYPES = (
@@ -87,14 +85,14 @@ def _generate_vid() -> str:
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class VerificationService:
     def __init__(
-        self,
-        repo: VerificationRepo,
-        property_repo: PropertyRepo,
-        validator: VerificationValidator,
-        pricing_service: PricingService,
-        consent_service: ConsentService,
-        audit: AuditLogService,
-        storage_factory: DocumentStorageProviderFactory,
+            self,
+            repo: VerificationRepo,
+            property_repo: PropertyRepo,
+            validator: VerificationValidator,
+            pricing_service: PricingService,
+            consent_service: ConsentService,
+            audit: AuditLogService,
+            storage_factory: DocumentStorageProviderFactory,
     ):
         self._repo = repo
         self._property_repo = property_repo
@@ -118,7 +116,7 @@ class VerificationService:
         return await self._to_dto(row) if row else None
 
     async def list_for_customer(
-        self, customer_id: str, page: int = 0, page_size: int = 20,
+            self, customer_id: str, page: int = 0, page_size: int = 20,
     ):
         search = SearchVerificationDto(page=page, page_size=page_size, customer_id=customer_id)
         return await self._repo.get_page(search)
@@ -140,7 +138,7 @@ class VerificationService:
         return await self._to_dto(row)
 
     async def update_draft_step(
-        self, customer_id: str, verification_id: str, dto: WizardStepDto,
+            self, customer_id: str, verification_id: str, dto: WizardStepDto,
     ) -> VerificationDto:
         row = await self._repo.get_model(verification_id)
         if row is None:
@@ -159,7 +157,7 @@ class VerificationService:
         return await self._to_dto(await self._repo.get_model(verification_id))
 
     async def select_tier(
-        self, customer_id: str, verification_id: str, tier: VerificationTier, currency: str,
+            self, customer_id: str, verification_id: str, tier: VerificationTier, currency: str,
     ) -> VerificationDto:
         row = await self._repo.get_model(verification_id)
         if row is None:
@@ -176,12 +174,12 @@ class VerificationService:
         return await self._to_dto(await self._repo.get_model(verification_id))
 
     async def submit(
-        self,
-        customer_id: str,
-        verification_id: str,
-        consents: List[ConsentRecordDto],
-        ip_address: Optional[str] = None,
-        device_fingerprint: Optional[str] = None,
+            self,
+            customer_id: str,
+            verification_id: str,
+            consents: List[ConsentRecordDto],
+            ip_address: Optional[str] = None,
+            device_fingerprint: Optional[str] = None,
     ) -> VerificationDto:
         row = await self._repo.get_model(verification_id)
         if row is None:
@@ -230,12 +228,12 @@ class VerificationService:
         return await self._to_dto(await self._repo.get_model(verification_id))
 
     async def upload_document(
-        self,
-        customer_id: str,
-        verification_id: str,
-        file_bytes: bytes,
-        filename: str,
-        document_type: str,
+            self,
+            customer_id: str,
+            verification_id: str,
+            file_bytes: bytes,
+            filename: str,
+            document_type: str,
     ) -> DocumentUploadResponseDto:
         row = await self._repo.get_model(verification_id)
         if row is None:
@@ -244,7 +242,7 @@ class VerificationService:
         self._validator.assert_draft(row)
 
         ext = Path(filename).suffix.lower() or ".bin"
-        key = f"verifications/{verification_id}/documents/{uuid.uuid4()}{ext}"
+        key = f"verifications/{verification_id}/documents/{Utils.generate_uuid()}{ext}"
         storage = self._storage_factory.get_active_provider()
         url = await storage.upload(
             key=key,
@@ -259,7 +257,7 @@ class VerificationService:
         )
 
     async def derive_global_state(
-        self, verification_id: str, task_statuses: list[str],
+            self, verification_id: str, task_statuses: list[str],
     ) -> VerificationStatus:
         """Apply PRD §0.3 rules and transition if the derived state differs.
 
@@ -280,8 +278,8 @@ class VerificationService:
         return derived
 
     async def transition(
-        self, verification_id: str, target: VerificationStatus,
-        actor_id: Optional[str] = None,
+            self, verification_id: str, target: VerificationStatus,
+            actor_id: Optional[str] = None,
     ) -> VerificationDto:
         """Internal-only. Used by PaymentService and admin actions."""
         row = await self._repo.get_model(verification_id)
@@ -368,7 +366,7 @@ class VerificationService:
     # ── Helpers ───────────────────────────────────────────────────
 
     async def _post_status_system_message(
-        self, verification_id: str, from_state: str, to_state: str
+            self, verification_id: str, from_state: str, to_state: str
     ) -> None:
         try:
             from main.app.domain.thread.service import ThreadService

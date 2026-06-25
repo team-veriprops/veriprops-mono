@@ -51,20 +51,19 @@ export default function CTASection() {
                 }}
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                ✅ Veriprops Verified
+                Verify before you pay
               </div>
 
               <h2
                 className="text-4xl md:text-5xl font-extrabold editorial-spacing font-display leading-[1.1] text-white mb-6"
               >
-                Your legacy is too valuable{" "}
-                <span style={{ color: "#a5d0b9" }}>to risk on hearsay.</span>
+                You've worked too hard{" "}
+                <span style={{ color: "#a5d0b9" }}>to risk it on hearsay.</span>
               </h2>
 
               <p className="text-lg leading-relaxed mb-10 text-white/70 max-w-lg">
-                Veriprops provides the sovereign certainty required to build
-                generational wealth in Nigeria — from anywhere in the world.
-                Verify everything. Trust nothing blindly.
+                Get started in under five minutes. Your Verification ID is assigned the moment you 
+                submit — and our team gets to work.
               </p>
 
               {/* Disclaimer */}

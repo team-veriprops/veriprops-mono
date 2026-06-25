@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ArrowRight } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { ROUTES } from "@lib/routes";
-import { footerLinks } from "./home.data";
+import { footerLinks, type FooterLink } from "./home.data";
 
 const socialColors: Record<string, string> = {
   Facebook:  "#1877F2",
@@ -42,18 +41,46 @@ const socialIcons: Record<string, React.ReactNode> = {
   ),
 };
 
-export default function LandingFooter() {
-  const [email, setEmail] = useState("");
+const linkColumns: { title: string; links: FooterLink[] }[] = [
+  { title: "Platform", links: footerLinks.platform },
+  { title: "Company", links: footerLinks.company },
+  { title: "Legal", links: footerLinks.legal },
+];
 
+// Internal app routes use Next <Link>; on-page anchors (#…), mailto:, and external
+// URLs use a plain <a>. Hover handlers are shared so every link behaves identically.
+function FooterLinkItem({ label, href }: FooterLink) {
+  const className = "text-sm transition-colors duration-150 hover:underline";
+  const style = { color: "var(--brand-on-surface-variant)" } as React.CSSProperties;
+  const onMouseEnter = (e: React.MouseEvent<HTMLElement>) =>
+    (e.currentTarget.style.color = "var(--brand-navy)");
+  const onMouseLeave = (e: React.MouseEvent<HTMLElement>) =>
+    (e.currentTarget.style.color = "var(--brand-on-surface-variant)");
+
+  if (href.startsWith("/")) {
+    return (
+      <Link href={href} className={className} style={style} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+        {label}
+      </Link>
+    );
+  }
+  return (
+    <a href={href} className={className} style={style} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      {label}
+    </a>
+  );
+}
+
+export default function LandingFooter() {
   return (
     <footer
       style={{ backgroundColor: "var(--brand-surface-low)", borderTop: "1px solid rgba(196,198,207,0.2)" }}
     >
       <div className="max-w-7xl mx-auto px-6 lg:px-8 pt-16 pb-10">
         {/* Main grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-12 mb-16">
           {/* Brand column */}
-          <div className="md:col-span-1">
+          <div className="md:col-span-2">
             {/* Logo */}
             <Link href={ROUTES.HOME} className="inline-flex items-center gap-2.5 mb-5">
               <div
@@ -73,8 +100,9 @@ export default function LandingFooter() {
               className="text-sm leading-relaxed mb-6"
               style={{ color: "var(--brand-on-surface-variant)" }}
             >
-              Helping Nigerians buy property safely through trusted 
-              verification and due diligence.
+              Helping Nigerians buy property safely — through 
+              trusted, independent verification and real 
+              due diligence. 
 
               <br />
               <br />
@@ -113,100 +141,24 @@ export default function LandingFooter() {
             </div>
           </div>
 
-          {/* Resources column */}
-          <div>
-            <h4
-              className="text-xs font-bold uppercase tracking-widest mb-5"
-              style={{ color: "var(--brand-navy)" }}
-            >
-              Resources
-            </h4>
-            <ul className="space-y-3">
-              {footerLinks.resources.map((link) => (
-                <li key={link.label}>
-                  <a
-                    href={link.href}
-                    className="text-sm transition-colors duration-150 hover:underline"
-                    style={{ color: "var(--brand-on-surface-variant)" }}
-                    onMouseEnter={(e) =>
-                      ((e.target as HTMLElement).style.color = "var(--brand-navy)")
-                    }
-                    onMouseLeave={(e) =>
-                      ((e.target as HTMLElement).style.color = "var(--brand-on-surface-variant)")
-                    }
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Company column */}
-          <div>
-            <h4
-              className="text-xs font-bold uppercase tracking-widest mb-5"
-              style={{ color: "var(--brand-navy)" }}
-            >
-              Company
-            </h4>
-            <ul className="space-y-3">
-              {footerLinks.company.map((link) => (
-                <li key={link.label}>
-                  <Link
-                    href={link.href}
-                    className="text-sm transition-colors duration-150 hover:underline"
-                    style={{ color: "var(--brand-on-surface-variant)" }}
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Newsletter column */}
-          <div>
-            <h4
-              className="text-xs font-bold uppercase tracking-widest mb-5"
-              style={{ color: "var(--brand-navy)" }}
-            >
-              Stay Informed
-            </h4>
-            <p
-              className="text-sm leading-relaxed mb-4"
-              style={{ color: "var(--brand-on-surface-variant)" }}
-            >
-              Get updates on market insights, new features, and diaspora property trends.
-            </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                setEmail("");
-              }}
-              className="flex gap-2"
-            >
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email address"
-                className="flex-1 px-4 py-2.5 text-sm rounded-lg outline-none transition-all"
-                style={{
-                  backgroundColor: "#fff",
-                  border: "1px solid rgba(196,198,207,0.3)",
-                  color: "var(--brand-on-surface)",
-                }}
-                required
-              />
-              <button
-                type="submit"
-                className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center signature-gradient transition-opacity hover:opacity-90"
+          {/* Link columns — Platform, Company, Legal */}
+          {linkColumns.map((column) => (
+            <div key={column.title}>
+              <h4
+                className="text-xs font-bold uppercase tracking-widest mb-5"
+                style={{ color: "var(--brand-navy)" }}
               >
-                <ArrowRight className="w-4 h-4 text-white" />
-              </button>
-            </form>
-          </div>
+                {column.title}
+              </h4>
+              <ul className="space-y-3">
+                {column.links.map((link) => (
+                  <li key={link.label}>
+                    <FooterLinkItem {...link} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
         {/* Bottom bar */}

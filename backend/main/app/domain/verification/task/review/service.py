@@ -55,7 +55,7 @@ class TaskReviewService:
             actor_id=admin_id,
             from_state=TaskStatus.SUBMITTED.value,
             to_state=TaskStatus.APPROVED.value,
-            meta={"action": "ADMIN_APPROVE", "note": note},
+            details={"action": "ADMIN_APPROVE", "note": note},
         )
         await self._derive_verification_status(task.verification_id)
         await self._recompute_trust_score(task.verification_id)
@@ -91,7 +91,7 @@ class TaskReviewService:
             actor_id=admin_id,
             from_state=TaskStatus.SUBMITTED.value,
             to_state=TaskStatus.IN_PROGRESS.value,
-            meta={"action": "ADMIN_REJECT", "reason": reason},
+            details={"action": "ADMIN_REJECT", "reason": reason},
         )
         await self._derive_verification_status(task.verification_id)
         await self._publish(task.verification_id, "task_rejected", task_id)
@@ -127,7 +127,7 @@ class TaskReviewService:
             actor_id=admin_id,
             from_state=TaskStatus.APPROVED.value,
             to_state=TaskStatus.IN_PROGRESS.value,
-            meta={"action": "ADMIN_REOPEN", "reason": reason},
+            details={"action": "ADMIN_REOPEN", "reason": reason},
         )
         await self._derive_verification_status(task.verification_id)
         await self._publish(task.verification_id, "task_reopened", task_id)

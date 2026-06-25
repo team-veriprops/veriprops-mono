@@ -57,7 +57,7 @@ def _make_evidence_item(task_id: str = "t-1", gps_lat: float = 6.5, gps_lng: flo
     item.gps_lat = gps_lat
     item.gps_lng = gps_lng
     item.captured_at = datetime.now(timezone.utc)
-    item.metadata_ = {}
+    item.details = {}
     item.date_created = datetime.now(timezone.utc)
     return item
 

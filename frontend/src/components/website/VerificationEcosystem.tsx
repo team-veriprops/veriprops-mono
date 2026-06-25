@@ -26,13 +26,13 @@ export default function VerificationEcosystem() {
               border: "1px solid rgba(63,102,83,0.15)",
             }}
           >
-            Platform Primitives
+            How verification works
           </div>
           <h2
             className="text-4xl md:text-5xl font-extrabold editorial-spacing font-display leading-tight mb-4"
             style={{ color: "var(--brand-navy)" }}
           >
-            The Verification Ecosystem
+            Three things you get with every verified property.
           </h2>
           {/* Accent line */}
           <div

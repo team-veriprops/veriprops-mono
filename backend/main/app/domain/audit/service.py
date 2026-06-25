@@ -65,7 +65,7 @@ class AuditLogService:
         actor_id: Optional[str] = None,
         from_state: Optional[str] = None,
         to_state: Optional[str] = None,
-        meta: Optional[Dict[str, Any]] = None,
+        details: Optional[Dict[str, Any]] = None,
         ip_address: Optional[str] = None,
     ) -> None:
         """Queue an audit write to run after the current @transactional flush."""
@@ -76,7 +76,7 @@ class AuditLogService:
             resource_id=resource_id,
             from_state=from_state,
             to_state=to_state,
-            meta=meta,
+            details=details,
             ip_address=ip_address,
             occurred_at=Utils.datetime_now(),
         )
@@ -108,7 +108,7 @@ class AuditLogService:
                 occurred_at=r.occurred_at,
                 from_state=r.from_state,
                 to_state=r.to_state,
-                meta=r.meta,
+                details=r.details,
             )
             for r in rows
         ]
@@ -125,7 +125,7 @@ class AuditLogService:
         writer = csv.writer(buf)
         writer.writerow([
             "occurred_at", "action", "actor_id", "resource_type", "resource_id",
-            "from_state", "to_state", "ip_address", "meta",
+            "from_state", "to_state", "ip_address", "details",
         ])
         for r in rows:
             writer.writerow([
@@ -137,7 +137,7 @@ class AuditLogService:
                 r.from_state or "",
                 r.to_state or "",
                 r.ip_address or "",
-                json.dumps(r.meta) if r.meta else "",
+                json.dumps(r.details) if r.details else "",
             ])
         return buf.getvalue().encode("utf-8")
 
@@ -168,7 +168,7 @@ class AuditLogService:
                 to_state=r.to_state,
                 occurred_at=r.occurred_at,
                 ip_address=r.ip_address,
-                meta=r.meta,
+                details=r.details,
             )
             for r in rows
         ]

@@ -10,7 +10,7 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Column, Integer, JSON, String, Text
+from sqlalchemy import Column, Integer, String, Text
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
 from main.appodus_utils.db.models import UTCDateTime

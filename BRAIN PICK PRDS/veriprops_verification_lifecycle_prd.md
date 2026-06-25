@@ -1,4 +1,4 @@
-# Veriprops — Verification Lifecycle
+# Veriprops — Verification Lifecycle (veriprops_verification_lifecycle_prd.md)
 ## Product Requirements Document (PRD)
 
 **Product:** Veriprops  
