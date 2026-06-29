@@ -41,8 +41,12 @@ self_audit:
     - "Movable Islamic holidays are a maintained dataset (2026–2028); refresh / make admin-configurable later."
 
 notes:
-  - "alembic upgrade head not run here: no reachable Postgres test DB (connection refused).
-     0001 incl. idempotency_keys compiles, registry-wired, ORM columns match; run on a DB-enabled env."
+  - "Migration validated live on the test DB: `alembic downgrade base` + `upgrade head` clean;
+     idempotency_keys created with expected columns + indexes (uq_idempotency_key, ix_idempotency_scope_expires).
+     Note: revision id 0001 unchanged, so plain `upgrade head` is a no-op on an already-stamped DB — rebuild
+     via downgrade base + upgrade head while 0001 stays editable (D9)."
+  - "Pre-squash orphan tables (pricing_tier_configs, trust_score_weight_config) linger in the test DB; no current
+     migration creates them (downgrade base does not drop them). To be (re)created in S9 (pricing) / S12 (scoring)."
 
 clarification_needed: []
 

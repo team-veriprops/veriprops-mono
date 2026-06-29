@@ -37,8 +37,9 @@ status: running (S1–S4 foundation)
 - none
 
 ## Blockers
-- none. NOTE: live `alembic upgrade head` not exercised here (no reachable Postgres test DB);
-  run it on a DB-enabled environment to confirm the cleaned `0001` (incl. `idempotency_keys`) applies.
+- none. Migration validated live on the test DB (`downgrade base` + `upgrade head` clean; `idempotency_keys`
+  created with correct columns/indexes). Pre-squash orphan tables (`pricing_tier_configs`,
+  `trust_score_weight_config`) remain in the test DB — no current migration creates them; recreated in S9/S12.
 
 ## Open Questions
 - D6 (relaxed by D9): foundation built greenfield; `0001` is the single editable initial migration.
