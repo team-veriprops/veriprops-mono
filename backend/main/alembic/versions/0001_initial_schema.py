@@ -254,6 +254,29 @@ def _create_audit_logs():
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Idempotency keys (PRD §4.6) — payments + entity creation
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _create_idempotency_keys():
+    op.create_table(
+        "idempotency_keys",
+        sa.Column("key", sa.String(length=128), nullable=False),
+        sa.Column("scope", sa.String(length=64), nullable=False),
+        sa.Column("request_hash", sa.String(length=64), nullable=True),
+        sa.Column("status", sa.String(length=16), nullable=False),
+        sa.Column("response_snapshot", JSONB_VARIANT, nullable=True),
+        sa.Column("resource_id", sa.String(length=36), nullable=True),
+        sa.Column("expires_at", UTCDateTime, nullable=False),
+        *AlembicUtils.base_audit_columns(),
+        sa.UniqueConstraint("key", name="uq_idempotency_key"),
+    )
+    op.create_index("ix_idempotency_keys_id", "idempotency_keys", ["id"], unique=True)
+    op.create_index("ix_idempotency_keys_deleted", "idempotency_keys", ["deleted"], unique=False)
+    op.create_index("ix_idempotency_scope_expires", "idempotency_keys", ["scope", "expires_at"], unique=False)
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Seed data
 # ─────────────────────────────────────────────────────────────────────
 
@@ -426,6 +449,7 @@ _TABLE_BUILDERS = [
     ("signup_drafts", _create_signup_drafts),
     ("messages", _create_messages),
     ("audit_logs", _create_audit_logs),
+    ("idempotency_keys", _create_idempotency_keys),
 ]
 
 

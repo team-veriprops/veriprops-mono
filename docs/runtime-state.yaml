@@ -4,12 +4,13 @@ command: run
 status: in_progress
 phase: implement
 
-current_slice: S3
-current_subtask: idempotency store + VID generator + evidence content-hash
+current_slice: S4
+current_subtask: SLA business-day calculator + Nigerian holiday calendar
 
 completed_slices:
   - S1   # foundation reconciliation: cleaned 0001 seeds, moved app/state→app/core/state, docs, green baseline
   - S2   # state derivation owner (derive.py) + tier task-dependency config (dependencies.py) + status enums
+  - S3   # idempotency store (+ idempotency_keys in 0001), VID generator, evidence content-hash, Money kobo tests
 
 modified_files:
   - CLAUDE.md
@@ -24,7 +25,11 @@ created_files:
 tests:
   written: true
   executed: true
-  passing: true   # 316 passed (S1 baseline 267 + S2 derive/dependencies 49)
+  passing: true   # 344 passed (S3 adds vid/evidence/money/idempotency)
+
+notes:
+  - "alembic upgrade head not run here: no reachable Postgres test DB (connection refused).
+     0001 incl. idempotency_keys compiles, registry-wired, ORM columns match; run on a DB-enabled env."
 
 self_audit:
   started: false
@@ -37,7 +42,7 @@ git:
   branch: dev
   dirty: false   # committed at each slice boundary (strict mode)
 
-next_action: implement S3 (app/core: vid.py, evidence.py, idempotency/; idempotency_keys table in 0001)
+next_action: implement S4 (app/core/sla.py + Nigerian holiday calendar)
 
 started_at: 2026-06-29
-last_checkpoint: "S2 complete"
+last_checkpoint: "S3 complete"

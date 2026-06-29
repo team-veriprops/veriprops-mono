@@ -5,7 +5,8 @@ from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from main.app import domain  # Ensures models are registered
+from main.app import core  # Ensures cross-cutting core models (idempotency) are registered
+from main.app import domain  # Ensures domain models are registered
 from main.app.config.settings import settings
 from main.appodus_utils import BaseEntity
 

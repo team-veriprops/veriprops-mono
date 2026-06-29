@@ -10,3 +10,6 @@ and that must have exactly one source of truth:
 - ``sla``        — business-day / Nigerian-holiday SLA calculator (PRD §0.2).
 - ``idempotency``— idempotency-key store for payments + entity creation (PRD §4.6).
 """
+# Import sub-packages that declare ORM models so that importing ``main.app.core``
+# (e.g. from Alembic ``env.py``) registers them on ``BaseEntity.metadata``.
+from main.app.core import idempotency as idempotency  # noqa: F401

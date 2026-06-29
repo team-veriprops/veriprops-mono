@@ -8,9 +8,12 @@ status: running (S1–S4 foundation)
       deleted-domain tests → suite green (267 passed).
 - S2  State derivation owner + task-dependency config — `app/core/state/{status,derive,dependencies}.py`;
       pure `derive_status` (§2.5) + tier composition / Lawyer-dependency / acyclicity (§4.2). 49 tests, 316 total.
+- S3  Idempotency + VID + evidence-hash — `app/core/vid.py`, `app/core/evidence.py`,
+      `app/core/idempotency/{models,repo,service}.py`; `idempotency_keys` table folded into 0001;
+      Money kobo-reconciliation tests. 344 total. (Live `alembic upgrade head` deferred — no DB here.)
 
 ## Current Slice
-- S3  Idempotency store + VID generator + evidence content-hash (in app/core)
+- S4  SLA business-day calculator + Nigerian holiday calendar (in app/core)
 
 ## Pending Slices
 - S2  State-machine core (validator + derivation owner + dependency config)
