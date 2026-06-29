@@ -86,6 +86,13 @@ A domain is **not considered complete** until:
 
 
 
+### Enum & status conventions
+
+**Enum references, never free literals.** Any value that has a defining enum — verification/task/report state (`main/app/core/state/status.py`), tiers, agent roles, `UserType`, `SecurityEventType`, `MessageStatus`/`MessageChannel`, `TransactionCurrency`, `IdempotencyStatus`, `Permission`, etc. — must be referenced via its enum member in app code (services, repos, validators, controllers, models/DTOs, state tables). This applies to comparisons, dict/set keys & values, defaults, and `server`-side logic.
+
+* Canonical lifecycle enums live in `main/app/core/state/status.py`; the state tables in `main/app/core/state/machine.py` reference those members (annotated `Dict[str, Set[str]]` since the enums subclass `str`, so `StateMachine` still accepts DB strings at the boundary).
+* **Exceptions:** enum *definitions* themselves (`DRAFT = "DRAFT"`); **Alembic migrations**, which stay decoupled from app enums by design (raw strings / numeric `server_default`s); and tests deliberately asserting wire/DB-string compatibility.
+
 ### Generic repository
 
 `GenericRepo[Model, Create, Update, Query, Search]` ([appodus_utils/db/repo.py](main/appodus_utils/db/repo.py)) provides CRUD, pagination, and soft-delete-aware queries. Entities inherit from `BaseEntity` which adds `id` (UUID), `date_created`, `date_updated`, `version` (optimistic locking), `deleted` (soft-delete flag) — never `DELETE` rows by hand; flip `deleted`. Pagination is zero indexed (First page = 0)

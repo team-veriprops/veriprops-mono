@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Dict, Set
 
+from main.app.core.state.status import ReportState, TaskState, VerificationStatus
 from main.appodus_utils.exception.exceptions import IllegalStateTransitionException
 
 
@@ -59,19 +60,20 @@ class StateMachine:
 #
 # Terminal states: CANCELLED, REFUNDED, FAILED (no exits once reached).
 
+_V = VerificationStatus
 VERIFICATION_TRANSITIONS: Dict[str, Set[str]] = {
-    "DRAFT": {"SUBMITTED", "CANCELLED"},
-    "SUBMITTED": {"PAYMENT_PENDING", "CANCELLED"},
-    "PAYMENT_PENDING": {"PAID", "CANCELLED", "FAILED"},
-    "PAID": {"IN_PROGRESS", "CANCELLED", "REFUNDED", "FAILED"},
-    "IN_PROGRESS": {"UNDER_REVIEW", "FAILED", "CANCELLED"},
-    "UNDER_REVIEW": {"COMPLETED", "IN_PROGRESS", "FAILED"},
+    _V.DRAFT: {_V.SUBMITTED, _V.CANCELLED},
+    _V.SUBMITTED: {_V.PAYMENT_PENDING, _V.CANCELLED},
+    _V.PAYMENT_PENDING: {_V.PAID, _V.CANCELLED, _V.FAILED},
+    _V.PAID: {_V.IN_PROGRESS, _V.CANCELLED, _V.REFUNDED, _V.FAILED},
+    _V.IN_PROGRESS: {_V.UNDER_REVIEW, _V.FAILED, _V.CANCELLED},
+    _V.UNDER_REVIEW: {_V.COMPLETED, _V.IN_PROGRESS, _V.FAILED},
     # COMPLETED → IN_PROGRESS: re-check approved (S44) or tier upgrade (S45)
-    "COMPLETED": {"DISPUTED", "IN_PROGRESS"},
+    _V.COMPLETED: {_V.DISPUTED, _V.IN_PROGRESS},
     # DISPUTED → IN_PROGRESS: partial re-check resolution (S46)
-    "DISPUTED": {"COMPLETED", "REFUNDED", "IN_PROGRESS"},
+    _V.DISPUTED: {_V.COMPLETED, _V.REFUNDED, _V.IN_PROGRESS},
 }
-VERIFICATION_TERMINAL: Set[str] = {"CANCELLED", "REFUNDED", "FAILED"}
+VERIFICATION_TERMINAL: Set[str] = {_V.CANCELLED, _V.REFUNDED, _V.FAILED}
 
 verification_state_machine = StateMachine(
     transitions=VERIFICATION_TRANSITIONS,
@@ -87,16 +89,17 @@ verification_state_machine = StateMachine(
 #             APPROVED  → IN_PROGRESS               (admin reopens an approved task)
 # Terminal:   none — admin reopen keeps APPROVED non-terminal so it can be walked back.
 
+_T = TaskState
 TASK_TRANSITIONS: Dict[str, Set[str]] = {
     # Pool path: agent accepts from the open pool (PENDING → ACCEPTED directly).
     # Admin-assign path: admin assigns to a specific agent (PENDING → ASSIGNED → ACCEPTED).
-    "PENDING": {"ASSIGNED", "ACCEPTED"},
-    "ASSIGNED": {"ACCEPTED", "PENDING"},
-    "ACCEPTED": {"IN_PROGRESS", "PENDING"},  # PENDING = agent declines after accepting
-    "IN_PROGRESS": {"SUBMITTED"},
-    "SUBMITTED": {"APPROVED", "REJECTED"},
-    "REJECTED": {"IN_PROGRESS"},
-    "APPROVED": {"IN_PROGRESS"},  # admin reopen path
+    _T.PENDING: {_T.ASSIGNED, _T.ACCEPTED},
+    _T.ASSIGNED: {_T.ACCEPTED, _T.PENDING},
+    _T.ACCEPTED: {_T.IN_PROGRESS, _T.PENDING},  # PENDING = agent declines after accepting
+    _T.IN_PROGRESS: {_T.SUBMITTED},
+    _T.SUBMITTED: {_T.APPROVED, _T.REJECTED},
+    _T.REJECTED: {_T.IN_PROGRESS},
+    _T.APPROVED: {_T.IN_PROGRESS},  # admin reopen path
 }
 TASK_TERMINAL: Set[str] = set()  # APPROVED is no longer terminal; verification state machine governs completion
 
@@ -114,11 +117,12 @@ task_state_machine = StateMachine(
 # Versioning: RELEASED → SUPERSEDED  (when admin releases a newer version)
 # Terminal:   SUPERSEDED (frozen; a newer version is the live one).
 
+_R = ReportState
 REPORT_TRANSITIONS: Dict[str, Set[str]] = {
-    "DRAFT": {"RELEASED"},
-    "RELEASED": {"SUPERSEDED"},
+    _R.DRAFT: {_R.RELEASED},
+    _R.RELEASED: {_R.SUPERSEDED},
 }
-REPORT_TERMINAL: Set[str] = {"SUPERSEDED"}
+REPORT_TERMINAL: Set[str] = {_R.SUPERSEDED}
 
 report_state_machine = StateMachine(
     transitions=REPORT_TRANSITIONS,

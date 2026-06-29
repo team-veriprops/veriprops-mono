@@ -46,7 +46,7 @@ When adding a feature/refactoring the codebase, write a short plan and confirm w
 4. After each code change, refactor all existing tests, run the tests, and fix defects. Also confirm the app builds and lints.
 5. Backend is the only source of truth; No facts should be derived on the frontend, delegate such tasks to the backend.
 6. When investigating the app ui, use playwright-cli skills.
-7. Document the codebase using: variable/class names, comments and docstrings
+7. Document the codebase using: variable/class names, comments and docstrings; comments should focus on the use cases, and not on the history, etc.
 
 ## Automation determinism
 
@@ -66,7 +66,7 @@ Important constraints:
 - Avoid introducing duplicate layout systems
 - Keep implementation scalable for future upgrades, e.g: dashboard sections
 - Avoid hardcoded breadcrumbs/Routes where possible
-- Prefer enums over string literals or composites
+- **Enum references, never free literals.** Any value that has a defining enum (statuses, tiers, roles, channels, currencies, event types, permissions, …) must be referenced via its enum member in app code — in comparisons, dict/set keys & values, defaults, and DTOs. Free string literals duplicating an enum value are prohibited. Exceptions: enum *definitions* themselves, Alembic migrations (kept decoupled from app enums by design — raw strings / numeric `server_default`s), and tests deliberately asserting wire/DB-string compatibility.
 - Mobile-first, highly responsive implementation
 - Do not generate code until investigation is complete
 - Be explicit about tradeoffs and uncertainties

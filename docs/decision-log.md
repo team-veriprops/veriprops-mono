@@ -225,3 +225,27 @@ foundation phase. This relaxes **D6** (which treated `0001` as an immutable cont
 
 ### Revisit Conditions
 - Once a non-throwaway database exists (staging/prod), stop editing `0001` and switch to additive migrations.
+
+---
+
+## Decision: D10 — Enum references over free literals (codebase-wide convention)
+
+### Context
+`app/core/state/machine.py` defined its transition tables with raw string literals, predating the canonical enums
+in `app/core/state/status.py`. A codebase-wide audit found `machine.py` was the **sole** offender (derivation,
+dependencies, surviving domains, `appodus_utils`, and the frontend already reference their enums).
+
+### Chosen Option
+Refactor `machine.py` to reference `VerificationStatus` / `TaskState` / `ReportState` members (tables annotated
+`Dict[str, Set[str]]` since the enums subclass `str`, so `StateMachine` still accepts DB strings at the boundary —
+behaviour-preserving, 363 tests unchanged). Codify the rule in [CLAUDE.md](../CLAUDE.md),
+[backend/CLAUDE.md](../backend/CLAUDE.md), and [frontend/CLAUDE.md](../frontend/CLAUDE.md): **any value with a
+defining enum must be referenced via its enum member in app code; free string literals duplicating an enum value
+are prohibited.**
+
+### Constraints Introduced
+- Exceptions: enum *definitions*, Alembic migrations (decoupled by design), and tests asserting wire/DB-string
+  compatibility. Future rebuilt domains (S5+) inherit the rule.
+
+### Revisit Conditions
+- N/A.
