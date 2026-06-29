@@ -35,6 +35,7 @@ import { NavItem } from "@/components/nav/MenuSidebar";
 import { ROUTES } from "@lib/routes";
 import TopNavBreadcrumb from "@components/ui/TopNav/TopNavBreadcrumb";
 import TopNavUserMenu from "@components/ui/TopNav/TopNavUserMenu";
+import BrandLogo from "./BrandLogo";
 
 interface AppShellProps {
   navItems: NavItem[];
@@ -88,15 +89,7 @@ function SidebarNav({
 }: SidebarNavProps) {
   return (
     <div className="flex flex-col h-full">
-      {/* Logo */}
-      <Link href={ROUTES.HOME} className="px-6 py-5 flex items-center gap-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="w-7 h-7 rounded-md flex items-center justify-center signature-gradient">
-          <CheckCircle2 className="w-4 h-4 text-white" strokeWidth={2.5} />
-        </div>
-        <span className="text-base font-extrabold tracking-tight font-display" style={{ color: "#fff" }}>
-          Veriprops
-        </span>
-      </Link>
+      <BrandLogo />
 
       {/* Nav items */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">

@@ -7,6 +7,7 @@ import { navLinks, CTA_VERIFY_HREF } from "./home.data";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { UserType, UserPersona } from "@components/website/auth/models";
 import { ROUTES } from "@lib/routes";
+import BrandLogo from "../ui/BrandLogo";
 
 export default function LandingNav() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -39,20 +40,7 @@ export default function LandingNav() {
       }}
     >
       <div className="max-w-7xl mx-auto px-6 lg:px-8 h-18 flex items-center justify-between py-4">
-        {/* Logo */}
-        <Link href={ROUTES.HOME} className="flex items-center gap-2.5 group">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center signature-gradient"
-          >
-            <CheckCircle2 className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
-          </div>
-          <span
-            className="text-xl font-extrabold tracking-tight font-display editorial-spacing"
-            style={{ color: "var(--brand-navy)" }}
-          >
-            Veriprops
-          </span>
-        </Link>
+        <BrandLogo />
 
         {/* Desktop nav links */}
         <div className="hidden md:flex items-center gap-8">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { CheckCircle2, ShieldCheck, Lock, Eye } from "lucide-react";
 import { ROUTES } from "@lib/routes";
+import BrandLogo from "@/components/ui/BrandLogo";
 
 interface AuthShellProps {
   children: React.ReactNode;
@@ -50,14 +51,7 @@ export default function AuthShell({
           }}
         />
 
-        <Link href={ROUTES.HOME} className="relative z-10 inline-flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/15">
-            <CheckCircle2 className="w-5 h-5 text-white" strokeWidth={2.5} />
-          </div>
-          <span className="text-xl font-extrabold tracking-tight font-display editorial-spacing">
-            Veriprops
-          </span>
-        </Link>
+        <BrandLogo variant="light" />
 
         <div className="relative z-10 max-w-md">
           <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest bg-white/8 border border-white/12">
@@ -65,7 +59,7 @@ export default function AuthShell({
               className="w-1.5 h-1.5 rounded-full"
               style={{ backgroundColor: "var(--brand-viridian-light)" }}
             />
-            The Sovereign Curator
+            Trusted by Nigerians worldwide
           </span>
 
           <h2 className="mt-6 text-4xl xl:text-5xl font-extrabold font-display editorial-spacing leading-[1.05]">

@@ -9,10 +9,15 @@ if TYPE_CHECKING:
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from main.app.jobs.task_monitor import check_task_no_show_timeouts, check_task_pool_timeouts
-
 logger: Logger = di['logger']
 scheduler: AsyncIOScheduler = AsyncIOScheduler()
+
+
+# TODO: dummy tasks, remove when real ones are implemented
+def check_task_no_show_timeouts() -> None:
+    pass
+def check_task_pool_timeouts() -> None:
+    pass
 
 # Register task-monitor background jobs (pool timeout + no-show alerts)
 scheduler.add_job(

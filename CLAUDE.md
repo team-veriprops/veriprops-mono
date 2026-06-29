@@ -37,15 +37,16 @@ Every list that can grow, should be implemented a page as follows:
 
 ## Workflow
 
-When adding a feature, write a short plan and confirm with the user before coding, write tests first, then implement. Update the relevant `CLAUDE.md` if a new pattern emerges that future agents would otherwise have to re-derive.
+When adding a feature/refactoring the codebase, write a short plan and confirm with the user before coding, write tests first, then implement. Update the relevant `CLAUDE.md` if a new pattern emerges that future agents would otherwise have to re-derive.
 
 ### Non-negotiable rule
 1. No Frontend/Backend duplicate implementations. 
 2. As much as possible, deliver all implementation as full vertical slices (backend domains + Alembic migrations + tests + frontend ) so each phase ships demoably end-to-end.
 3. For any change/refactor, make sure to also refactor the whole codebase, including all their references and related implementations; no feature should be ophaned.
 4. After each code change, refactor all existing tests, run the tests, and fix defects. Also confirm the app builds and lints.
-5. No facts should be derived on the frontend, delegate such tasks to the backend.
+5. Backend is the only source of truth; No facts should be derived on the frontend, delegate such tasks to the backend.
 6. When investigating the app ui, use playwright-cli skills.
+7. Document the codebase using: variable/class names, comments and docstrings
 
 ## Automation determinism
 
@@ -60,10 +61,12 @@ The codebase ships a deterministic foundation for autonomous QA (Playwright + Cl
 
 Important constraints:
 - Prefer correctness and maintainability over speed
+- Abstract every function, class, component, etc, that are related and used in 2+ surfaces/places.
 - Reuse existing abstractions where sensible
 - Avoid introducing duplicate layout systems
-- Keep implementation scalable for future dashboard sections
-- Avoid hardcoded breadcrumbs where possible
-- Desktop-first implementation for now
+- Keep implementation scalable for future upgrades, e.g: dashboard sections
+- Avoid hardcoded breadcrumbs/Routes where possible
+- Prefer enums over string literals or composites
+- Mobile-first, highly responsive implementation
 - Do not generate code until investigation is complete
 - Be explicit about tradeoffs and uncertainties

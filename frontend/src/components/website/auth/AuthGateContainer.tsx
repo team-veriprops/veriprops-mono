@@ -71,7 +71,7 @@ export default function AuthGateContainer() {
       panelCopy={
         intent === AuthIntent.AGENT
           ? "Veriprops connects you with paying customers who need exactly the work you do. Submit on your terms; get paid on time."
-          : "Veriprops independently checks ownership, encumbrances, boundaries and physical reality of any Nigerian property — before you wire a single naira."
+          : "Veriprops independently checks ownership, encumbrances, boundaries and physical reality of any Nigerian property; before you wire a single naira."
       }
     >
       <AuthHeading eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.subtitle} />

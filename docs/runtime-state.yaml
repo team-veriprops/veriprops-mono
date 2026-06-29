@@ -1,127 +1,31 @@
 session_id: null
-command: resume
+command: initialize
 
-status: checkpointed
-phase: phases_18
+status: idle
+phase: idle
 
 current_slice: null
 current_subtask: null
-last_completed_slices: [S18, S19, S20, S21, S22, S23, S24, S25, S26, S27, S28, S29, S30, S31, S32, S33, S34, S35, S36, S37, S38, S39, S40, S41, S42, S43, S44, S45, S46, S47, S48, S49, S50, S51, S52, S53, S54, S55]
 
-modified_files:
-  # Backend — Phase 18 (S53–S55)
-  - backend/main/app/domain/__init__.py
-  - backend/main/app/domain/user/models.py
-  - backend/main/app/domain/user/auth/utils/permissions.py
-  - backend/main/app/domain/admin_config/service.py
-  - backend/main/app/domain/payment/repo.py
-  - backend/main/app/domain/payment/service.py
-  - backend/main/app/domain/payment/controller.py
-  - backend/main/app/domain/commission/repo.py
-  - backend/main/app/domain/commission/service.py
-  - backend/main/app/domain/commission/controller.py
-  - backend/main/app/domain/broadcast/service.py
-  - backend/main/appodus_utils/integrations/messaging/templating/models.py
-  - backend/main/appodus_utils/integrations/messaging/models.py
-  # Frontend — Phase 18 (S53–S55)
-  - frontend/src/components/admin/nav.ts
-  - frontend/src/components/admin/libs/admin-service.ts
-  - frontend/src/components/admin/libs/useAdminQueries.ts
-  - frontend/src/components/admin/team/TeamManagement.tsx
-  - frontend/src/components/ui/AppShell.tsx
-  - frontend/src/components/nav/MenuSidebar.tsx
-  - frontend/src/lib/routes.ts
-  # Pre-existing bug fixes caught during build
-  - frontend/src/app/agents/settings/coverage/page.tsx
-  - frontend/src/components/portal/verifications/AssignedAgentsCard.tsx
-  - frontend/src/components/website/auth/AuthGateContainer.tsx
-
+modified_files: []
 created_files:
-  # Backend — Sub-roles (Phase A)
-  # (extended existing enums in models.py + permissions.py)
-  # Backend — S53 Analytics
-  - backend/main/app/domain/analytics/__init__.py
-  - backend/main/app/domain/analytics/models.py
-  - backend/main/app/domain/analytics/repo.py
-  - backend/main/app/domain/analytics/service.py
-  - backend/main/app/domain/analytics/controller.py
-  - backend/main/alembic/versions/b8c9d0e1f2a3_s53_analytics_indexes.py
-  # Backend — S54 Pricing
-  - backend/main/app/domain/verification/pricing/__init__.py
-  - backend/main/app/domain/verification/pricing/models.py
-  - backend/main/app/domain/verification/pricing/repo.py
-  - backend/main/app/domain/verification/pricing/service.py
-  - backend/main/app/domain/verification/pricing/controller.py
-  - backend/main/alembic/versions/c9d0e1f2a3b4_s54_pricing_db.py
-  # Backend — S55 Content
-  - backend/main/app/domain/content/__init__.py
-  - backend/main/app/domain/content/models.py
-  - backend/main/app/domain/content/repo.py
-  - backend/main/app/domain/content/service.py
-  - backend/main/app/domain/content/controller.py
-  # Backend — S55 Broadcast
-  - backend/main/app/domain/broadcast/__init__.py
-  - backend/main/app/domain/broadcast/models.py
-  - backend/main/app/domain/broadcast/repo.py
-  - backend/main/app/domain/broadcast/service.py
-  - backend/main/app/domain/broadcast/controller.py
-  - backend/main/app/domain/broadcast/messages.py
-  # Backend — S55 Templates
-  - backend/main/appodus_utils/integrations/messaging/templates/email/admin_broadcast.jinja2
-  - backend/main/appodus_utils/integrations/messaging/templates/push/admin_broadcast.jinja2
-  # Backend — S55 Migration + Tests
-  - backend/main/alembic/versions/d0e1f2a3b4c5_s55_content_broadcast.py
-  - backend/test/unit/app/domain/analytics/__init__.py
-  - backend/test/unit/app/domain/analytics/test_analytics_service.py
-  - backend/test/unit/app/domain/verification/pricing/__init__.py
-  - backend/test/unit/app/domain/verification/pricing/test_pricing_service.py
-  - backend/test/unit/app/domain/content/__init__.py
-  - backend/test/unit/app/domain/content/test_content_service.py
-  - backend/test/unit/app/domain/broadcast/__init__.py
-  - backend/test/unit/app/domain/broadcast/test_broadcast_service.py
-  # Frontend — S53 Analytics
-  - frontend/src/components/admin/analytics/MissionControlPanel.tsx
-  - frontend/src/components/admin/analytics/RegionalPerformanceTable.tsx
-  - frontend/src/components/admin/analytics/AnalyticsDashboard.tsx
-  - frontend/src/app/admin/analytics/page.tsx
-  # Frontend — S54 Pricing + Finance
-  - frontend/src/components/admin/pricing/PricingManager.tsx
-  - frontend/src/components/admin/pricing/UpgradeDeltaEditor.tsx
-  - frontend/src/components/admin/finance/PaymentsTable.tsx
-  - frontend/src/components/admin/finance/CommissionBreakdownTable.tsx
-  - frontend/src/app/admin/pricing/page.tsx
-  - frontend/src/app/admin/finance/page.tsx
-  - frontend/src/app/admin/finance/payments/page.tsx
-  - frontend/src/app/admin/finance/payouts/page.tsx
-  - frontend/src/app/admin/finance/commissions/page.tsx
-  # Frontend — S55 Content + Broadcast
-  - frontend/src/components/admin/content/ContentItemTable.tsx
-  - frontend/src/components/admin/content/ContentItemForm.tsx
-  - frontend/src/components/admin/content/AreaInsightPanel.tsx
-  - frontend/src/components/admin/broadcast/BroadcastList.tsx
-  - frontend/src/components/admin/broadcast/BroadcastComposer.tsx
-  - frontend/src/app/admin/content/page.tsx
-  - frontend/src/app/admin/broadcasts/page.tsx
-  - frontend/src/app/admin/broadcasts/new/page.tsx
-  - frontend/src/app/admin/broadcasts/[broadcastId]/page.tsx
+  - docs/prd-analysis.md
+  - docs/requirements-matrix.md
+  - docs/decision-log.md
+  - docs/architecture-spec.md
+  - docs/execution-plan.md
+  - docs/progress.md
+  - docs/runtime-state.yaml
 
 tests:
-  written: true
-  executed: true
-  passing: true
-  last_run: "2026-05-14 — 19 S55 backend unit tests passing (content: 9, broadcast: 10); pnpm build succeeded with 0 TypeScript errors"
+  written: false
+  executed: false
+  passing: false
 
 self_audit:
-  started: true
-  completed: true
-  findings:
-    - "Phase A: AdminSubRole extended with CONTENT_CREATOR + CONTENT_APPROVER; Permission enum extended with CREATE_CONTENT + PUBLISH_CONTENT; role matrix updated; TeamManagement UI updated"
-    - "S53: AnalyticsRepo (pure aggregation, no GenericRepo) + AnalyticsService + controller; analytics indexes migration; MissionControlPanel + RegionalPerformanceTable + AnalyticsDashboard frontend"
-    - "S54: PricingTierConfig + PricingLineItem + PricingUpgradeDelta ORM; DB-backed pricing service with static fallback; admin pricing endpoints; payment admin list + wire confirm; commission breakdown; pricing migration with seed from TIER_MATRIX"
-    - "S55: ContentItem ORM + ContentService (CRUD + publish + reorder + area insights); public content endpoints (no auth); broadcast domain (status machine DRAFT→SCHEDULED/SENT/CANCELLED); BroadcastMessages.send_broadcast via AvailableTemplate.ADMIN_BROADCAST"
-    - "S55 Frontend: ContentItemTable (publish toggle + edit + delete), ContentItemForm (RHF + Zod + conditional AREA_INSIGHT fields), AreaInsightPanel (state/LGA filter), BroadcastList (send/cancel/view), BroadcastComposer (4-step wizard), content page (tabbed), broadcast pages (list/new/detail)"
-    - "Timezone fix: BroadcastService.schedule() now strips tzinfo from both sides before comparison"
-    - "Build fixes: NavIconKey + iconMap extended for barChart/tag/dollarSign/fileText/megaphone; AUTH_INTENTS enum updated; AuthGateContainer INVITED_ADMIN copy added; Lucide title→aria-label; coverage page metadata removed"
+  started: false
+  completed: false
+  findings: []
 
 clarification_needed: []
 
@@ -129,7 +33,7 @@ git:
   branch: dev
   dirty: true
 
-next_action: idle
+next_action: run
 
 started_at: null
-last_checkpoint: "2026-05-14 S53-S55 — Phase 18 (analytics, pricing/finance, content/broadcast) complete — ALL PHASES DONE"
+last_checkpoint: null

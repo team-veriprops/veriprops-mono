@@ -3,8 +3,6 @@ session/device, and consent acceptance. Wired from `controller.py`."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from main.app.domain.user.admin_invitation.service import AdminInvitationService
-
 if TYPE_CHECKING:
     from loguru import Logger
 

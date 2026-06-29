@@ -47,12 +47,12 @@ Admin here `frontend\src\components\admin\nav.ts` and Agents here `frontend\src\
 ## Layout
 
 - `src/app/` — App Router. Top-level segments are isolated user surfaces:
-  - `(website)/` — public marketing + auth (login, signup, OAuth, password flows).
+  - `(website)/` — public marketing + auth (login, signup, OAuth, password flows) + account.
   - `portal/` — authenticated user area.
   - `admin/` — internal admin.
   - `agents/` — agent-facing area.
 - `src/components/{surface}/` — components grouped by the surface they serve (`website/`, `portal/`, `admin/`, `agents/`, `account/`, `nav/`, plus shared `ui/` and `3rdparty/`). Keep components close to the surface that owns them; promote into `ui/` only when reused by 2+ surfaces.
-- `src/components/ui/` — primitives + Radix wrappers (`AsyncStateComponent`, `DataTable`, form helpers, `verified_input/`, `upload/`).
+- `src/components/ui/` — primitives + Radix wrappers (`AsyncStateComponent`, `table`, form helpers `form/`, `verified_input/`, `upload/`, `BrandLogo`, `CopyText`, `DetailDrawer`, `InfiniteScrollTriggerComponent`, `ToolTipComponent`, `PageHeader`, `ShareModal`).
 - `src/containers/` — page-level components with business logic (currently a barrel; new orchestration components go here).
 - `src/stores/` — Zustand stores. Domain stores live next to their components (e.g. [components/website/auth/libs/useAuthStore.ts](src/components/website/auth/libs/useAuthStore.ts), [components/ui/libs/useUiStore.ts](src/components/ui/libs/useUiStore.ts)). Reserve [src/stores/](src/stores/) for app-wide state ([useGlobalSettings.ts](src/stores/useGlobalSettings.ts)).
 - `src/hooks/` — cross-cutting hooks (`useDebounce`, `useSyncedQueryState`, `useClarity`, etc.).
@@ -71,6 +71,7 @@ Ensure:
 - submit button disabled during submission
 - no duplicate submissions allowed
 - errors are consistently rendered
+- implement idempotency when necessary
 
 Ensure Zod validation errors are stable and testable.
 

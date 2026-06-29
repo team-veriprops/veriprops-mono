@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { ROUTES } from "@lib/routes";
 import { footerLinks, type FooterLink } from "./home.data";
+import BrandLogo from "../ui/BrandLogo";
 
 const socialColors: Record<string, string> = {
   Facebook:  "#1877F2",
@@ -81,20 +82,7 @@ export default function LandingFooter() {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-12 mb-16">
           {/* Brand column */}
           <div className="md:col-span-2">
-            {/* Logo */}
-            <Link href={ROUTES.HOME} className="inline-flex items-center gap-2.5 mb-5">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center signature-gradient"
-              >
-                <CheckCircle2 className="w-4 h-4 text-white" strokeWidth={2.5} />
-              </div>
-              <span
-                className="text-lg font-extrabold font-display editorial-spacing"
-                style={{ color: "var(--brand-navy)" }}
-              >
-                Veriprops
-              </span>
-            </Link>
+            <BrandLogo />
 
             <p
               className="text-sm leading-relaxed mb-6"
