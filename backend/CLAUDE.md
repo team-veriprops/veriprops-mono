@@ -71,7 +71,7 @@ A domain is **not considered complete** until:
 * and, where applicable, its router is mounted in the appropriate parent router (or root router in `main/app/domain/__init__.py`); but not both.
 
 
-### Database conventions:
+### Database/ DB migration conventions:
 
 * SQLAlchemy + Alembic
 * No database foreign keys
@@ -82,6 +82,7 @@ A domain is **not considered complete** until:
 * Alembic migrations must never emit ALTER TABLE ... ADD FOREIGN KEY
 * Don't create duplicate indexes, prefer UniqueConstraint to create_index.
 * When mapping date/datetime, don't use DateTime or TIMESTAMP directly, instead use UTCDateTime in the file `backend/main/appodus_utils/db/models.py`
+* Always use the pattern implemented in alembic migrations here `backend\main\alembic\versions\0001_initial_schema.py`, including the use separate utility methods for each migration and the use of utility methods, and DRY principle.
 
 
 

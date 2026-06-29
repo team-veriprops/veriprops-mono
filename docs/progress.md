@@ -1,15 +1,16 @@
 # Progress Tracker
 
-status: initialized
+status: running (S1–S4 foundation)
 
 ## Completed Slices
-- none
+- S1  Foundation reconciliation & doc fixes — cleaned 0001 orphaned seeds (pricing + trust-weights),
+      moved `app/state` → `app/core/state`, root CLAUDE.md MySQL→PostgreSQL, removed 9 orphaned
+      deleted-domain tests → suite green (267 passed).
 
 ## Current Slice
-- none
+- S2  State derivation owner + task-dependency config (in app/core/state)
 
 ## Pending Slices
-- S1  Foundation reconciliation & doc fixes
 - S2  State-machine core (validator + derivation owner + dependency config)
 - S3  Money / idempotency / VID / evidence-hash primitives
 - S4  SLA business-day & Nigerian holiday calendar

@@ -2,7 +2,7 @@
 
 Veriprops is a property verification platform. Monorepo with two deployable apps that talk over HTTP:
 
-- [backend/](backend/) — FastAPI service (Python 3.12, MySQL, async SQLAlchemy, Alembic). See [backend/CLAUDE.md](backend/CLAUDE.md).
+- [backend/](backend/) — FastAPI service (Python 3.12, PostgreSQL, async SQLAlchemy, Alembic). See [backend/CLAUDE.md](backend/CLAUDE.md).
 - [frontend/](frontend/) — Next.js 16 App Router, React 19, TypeScript. See [frontend/CLAUDE.md](frontend/CLAUDE.md).
 
 Product context lives in [PRD.md](PRD.md) — read the relevant section before designing features that touch verification, agent onboarding, or reports.

@@ -273,18 +273,6 @@ VERIFICATION_CONSENT_SEEDS = [
     ("REFUND_POLICY", "1.0.0", "Refund & Cancellation Policy", "/legal/refund-policy"),
 ]
 
-# Provisional trust-score weights (D2 decision)
-_SEED_WEIGHTS = [
-    ("BASIC", "REGISTRY", "100.000"),
-    ("STANDARD", "FIELD", "35.000"),
-    ("STANDARD", "SURVEYOR", "30.000"),
-    ("STANDARD", "REGISTRY", "35.000"),
-    ("PREMIUM", "FIELD", "25.000"),
-    ("PREMIUM", "SURVEYOR", "20.000"),
-    ("PREMIUM", "REGISTRY", "30.000"),
-    ("PREMIUM", "LAWYER", "25.000"),
-]
-
 
 def _seed_audit_columns(now: datetime) -> dict:
     return {
@@ -422,112 +410,6 @@ def _seed_super_admin() -> None:
     )
 
 
-def _seed_trust_score_weights() -> None:
-    now = datetime.now(timezone.utc)
-    weight_table = sa.table(
-        "trust_score_weight_config",
-        sa.column("id", sa.UUID),
-        sa.column("date_created", UTCDateTime),
-        sa.column("version", sa.Integer),
-        sa.column("deleted", sa.Boolean),
-        sa.column("tier", sa.String),
-        sa.column("role", sa.String),
-        sa.column("weight", sa.Numeric),
-    )
-    op.bulk_insert(weight_table, [
-        {"id": str(Utils.generate_uuid()), "date_created": now, "version": 1, "deleted": False,
-         "tier": tier, "role": role, "weight": weight}
-        for tier, role, weight in _SEED_WEIGHTS
-    ])
-
-
-def _seed_pricing() -> None:
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-
-    pricing_tier_configs = sa.table(
-        "pricing_tier_configs",
-        sa.column("id"), sa.column("tier"), sa.column("label"), sa.column("currency"),
-        sa.column("service_fee_minor"), sa.column("is_active"), sa.column("updated_by"),
-        sa.column("date_created"), sa.column("date_updated"), sa.column("deleted"), sa.column("version"),
-    )
-    pricing_line_items = sa.table(
-        "pricing_line_items",
-        sa.column("id"), sa.column("tier_config_id"), sa.column("label"),
-        sa.column("amount_minor"), sa.column("description"), sa.column("sort_order"),
-        sa.column("date_created"), sa.column("date_updated"), sa.column("deleted"), sa.column("version"),
-    )
-
-    tiers = [
-        {
-            "id": str(Utils.generate_uuid()), "tier": "BASIC", "label": "Basic verification (registry-only)",
-            "currency": "NGN", "service_fee_minor": 1500000, "is_active": True,
-            "updated_by": None, "date_created": now, "date_updated": None, "deleted": False, "version": 1,
-            "line_items": [
-                {"label": "Registry search", "amount_minor": 13000000,
-                 "description": "Title search at the registry of record", "sort_order": 0},
-                {"label": "Document collection", "amount_minor": 500000,
-                 "description": "Acquisition of certified true copies", "sort_order": 1},
-            ],
-        },
-        {
-            "id": str(Utils.generate_uuid()), "tier": "STANDARD",
-            "label": "Standard verification (registry + field + survey)",
-            "currency": "NGN", "service_fee_minor": 2500000, "is_active": True,
-            "updated_by": None, "date_created": now, "date_updated": None, "deleted": False, "version": 1,
-            "line_items": [
-                {"label": "Registry search", "amount_minor": 13000000,
-                 "description": "Title search at the registry of record", "sort_order": 0},
-                {"label": "Document collection", "amount_minor": 500000,
-                 "description": "Acquisition of certified true copies", "sort_order": 1},
-                {"label": "Field inspection", "amount_minor": 9000000,
-                 "description": "On-site inspection by Field Agent", "sort_order": 2},
-                {"label": "Survey assessment", "amount_minor": 10000000,
-                 "description": "Boundary + survey-plan check", "sort_order": 3},
-            ],
-        },
-        {
-            "id": str(Utils.generate_uuid()), "tier": "PREMIUM",
-            "label": "Premium verification (full + legal opinion)",
-            "currency": "NGN", "service_fee_minor": 5000000, "is_active": True,
-            "updated_by": None, "date_created": now, "date_updated": None, "deleted": False, "version": 1,
-            "line_items": [
-                {"label": "Registry search", "amount_minor": 13000000,
-                 "description": "Title search at the registry of record", "sort_order": 0},
-                {"label": "Document collection", "amount_minor": 500000,
-                 "description": "Acquisition of certified true copies", "sort_order": 1},
-                {"label": "Field inspection", "amount_minor": 9000000,
-                 "description": "On-site inspection by Field Agent", "sort_order": 2},
-                {"label": "Survey assessment", "amount_minor": 12000000,
-                 "description": "Boundary + survey-plan check", "sort_order": 3},
-                {"label": "Legal opinion", "amount_minor": 35500000,
-                 "description": "Structured legal opinion by registered lawyer", "sort_order": 4},
-            ],
-        },
-    ]
-
-    for t in tiers:
-        config_id = t["id"]
-        line_items_data = t.pop("line_items")
-        op.bulk_insert(pricing_tier_configs, [t])
-        op.bulk_insert(
-            pricing_line_items,
-            [
-                {
-                    "id": str(Utils.generate_uuid()),
-                    "tier_config_id": config_id,
-                    "label": li["label"],
-                    "amount_minor": li["amount_minor"],
-                    "description": li["description"],
-                    "sort_order": li["sort_order"],
-                    "date_created": now,
-                    "date_updated": None,
-                    "deleted": False,
-                    "version": 1,
-                }
-                for li in line_items_data
-            ],
-        )
-
 # ─────────────────────────────────────────────────────────────────────
 # Table registry (build order). Drops run in reverse.
 # ─────────────────────────────────────────────────────────────────────
@@ -558,10 +440,6 @@ def upgrade() -> None:
         _seed_verification_consents()
     if AlembicUtils.table_exists("users"):
         _seed_super_admin()
-    if AlembicUtils.table_exists("trust_score_weight_config"):
-        _seed_trust_score_weights()
-    if AlembicUtils.table_exists("pricing_tier_configs") and AlembicUtils.table_exists("pricing_line_items"):
-        _seed_pricing()
 
 
 def downgrade() -> None:

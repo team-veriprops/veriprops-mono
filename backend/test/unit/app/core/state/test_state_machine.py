@@ -7,7 +7,6 @@ Covers:
   - Report machine: all 3 states × valid/invalid transitions         (PRD §8)
   - IllegalStateTransitionException attributes (from_state / to_state)
   - is_terminal() and allowed_transitions() helpers
-  - Re-export from verification/state_machine/__init__ is intact
 """
 import pytest
 
@@ -15,7 +14,7 @@ from main.appodus_utils.exception.exceptions import (
     IllegalStateTransitionException,
     InvalidResourceStateException,
 )
-from main.app.state.machine import (
+from main.app.core.state.machine import (
     REPORT_TERMINAL,
     REPORT_TRANSITIONS,
     TASK_TERMINAL,
@@ -184,10 +183,6 @@ class TestVerificationStateMachine:
 
     def test_terminal_set_matches_constants(self):
         assert VERIFICATION_TERMINAL == {"CANCELLED", "REFUNDED", "FAILED"}
-
-    def test_re_export_from_verification_domain_module(self):
-        from main.app.domain.verification.state_machine import verification_state_machine as vsm  # noqa: F401
-        vsm.assert_can_transition("DRAFT", "SUBMITTED")  # must not raise
 
 
 # ── Task state machine (PRD §5) ──────────────────────────────────────────────
