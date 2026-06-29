@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from loguru import Logger
 
 from main.app.domain.user.auth.consent.controller import consent_router
+from main.app.domain.user.auth.cross_portal.controller import cross_portal_router
 
 from http import HTTPStatus
 
@@ -50,6 +51,7 @@ auth_router = APIRouter(prefix="/auth", tags=["Auths"])
 
 RouterUtils.add_routers(auth_router, [
     consent_router,
+    cross_portal_router,
     oauth_router,
     session_router,
     signup_draft_router,

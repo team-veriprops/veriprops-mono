@@ -21,8 +21,10 @@ const authService = new AuthService(httpClient);
 export const authKeys = {
   session: ["auth", "session"] as const,
   devices: ["auth", "devices"] as const,
-  events:  ["auth", "security-events"] as const,
+  events:  (page: number, pageSize: number) => ["auth", "security-events", page, pageSize] as const,
   linked:  ["auth", "linked-providers"] as const,
+  crossPortal: ["auth", "cross-portal"] as const,
+  publicConfig: ["config", "public"] as const,
 };
 
 export function useCurrentSession(enabled = true) {
@@ -131,10 +133,28 @@ export function useRevokeAllOtherDevicesMutation() {
   });
 }
 
-export function useSecurityEventsQuery() {
+export function useSecurityEventsQuery(page = 0, pageSize = 20) {
   return useQuery({
-    queryKey: authKeys.events,
-    queryFn: async () => (await authService.listSecurityEvents()).data ?? [],
+    queryKey: authKeys.events(page, pageSize),
+    queryFn: () => authService.listSecurityEvents(page, pageSize),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useCrossPortalSummaryQuery(enabled = true) {
+  return useQuery({
+    queryKey: authKeys.crossPortal,
+    enabled,
+    queryFn: async () => (await authService.getCrossPortalSummary()).data ?? null,
+    staleTime: 30_000,
+  });
+}
+
+export function usePublicConfigQuery() {
+  return useQuery({
+    queryKey: authKeys.publicConfig,
+    queryFn: async () => (await authService.getPublicConfig()).data ?? null,
+    staleTime: 5 * 60_000,
   });
 }
 

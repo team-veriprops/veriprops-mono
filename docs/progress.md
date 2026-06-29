@@ -24,11 +24,20 @@ status: running (S1–S4 foundation)
       correct, legal pages + sitemap/robots render. Incidental baseline build repairs (not mine): added
       `NotificationBell` stub (AppShell orphan import), removed dead `lib/mockUrlExtractor.ts`.
 
+- S6  Phase 2 — Auth hardening.
+      Backend: `PHONE_VERIFICATION_ENABLED` setting + public `GET /config/public`; revoked-session enforcement on
+      token refresh (`POST /sessions/current` rejects revoked/absent device sessions); paginated Security
+      Activity Log (`GET /sessions/security/events` → `Page[SecurityEventDto]`); cross-portal summary aggregator
+      (`GET /cross-portal/summary`, forward-compatible source registry → 0 until S11/S16). Frontend: `/account`
+      shell (AppShell + account nav) with Security/Devices/Linked/Password pages; `PortalSwitcher` + badge wired
+      into AppShell top nav (multi-persona only); `usePublicConfigQuery` exposes the phone flag for the S9 gate.
+      Backend 384 tests; frontend 241 tests (incl. auth-service contract test); build green; endpoints + route
+      protection live-verified.
+
 ## Current Slice
-- S6 (Phase 2 auth hardening) — pending start.
+- none — S5 + S6 (MVP-spine Phases 1–2) complete; next is S7 (Phase 3 agent onboarding & KYC).
 
 ## Pending Slices
-- S6  Phase 2 — Auth hardening
 - S7  Phase 3 — Agent onboarding & KYC
 - S8  Phase 4 — Admin onboarding & RBAC
 - S9  Phase 5 — Customer submission & payment  *(gated: liability-cap copy §B)*

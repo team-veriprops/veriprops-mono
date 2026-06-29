@@ -20,6 +20,7 @@ export const ROUTES = {
     SECURITY: '/account/security',
     DEVICES: '/account/devices',
     LINKED: '/account/linked',
+    PASSWORD: '/account/password',
     CONSENTS: '/account/consents',
     DATA_PRIVACY: '/account/data-privacy',
   },

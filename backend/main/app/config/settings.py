@@ -86,6 +86,11 @@ class Settings(AppodusBaseSettings):
     # ACTIVES
     ACTIVE_PAYMENT_METHOD: PaymentMethod = PaymentMethod.FLUTTERWAVE
 
+    # Phone verification toggle (authoritative source of truth). The frontend reads
+    # this via GET /config/public to decide whether to surface the phone-verify step;
+    # the payment phone-gate (Phase 5) must also consult it before enforcing phone OTP.
+    PHONE_VERIFICATION_ENABLED: bool = True
+
     # TEMPLATING
     TEMPLATE_ENGINE: Optional[str] = "jinja2"
 

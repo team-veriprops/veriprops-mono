@@ -1,6 +1,6 @@
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 from starlette.requests import Request
@@ -11,7 +11,7 @@ from main.app.domain.user.auth.utils.jwt_auth_utils import JwtAuthUtils
 from main.app.domain.user.service import UserService
 from main.appodus_utils import Utils
 from main.appodus_utils.common.client_utils import ClientUtils
-from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.db.models import Page, SuccessResponse
 from main.appodus_utils.exception.exceptions import UnauthorizedException
 
 session_router = APIRouter(prefix="/sessions", tags=["Sessions"])
@@ -57,8 +57,19 @@ async def logout(request: Request, authorize: AuthJWT = Depends()):
 
 
 @session_router.post("/current", response_model=SuccessResponse[bool])
-async def refresh_session(authorize: AuthJWT = Depends()):
+async def refresh_session(request: Request, authorize: AuthJWT = Depends()):
+    # A revoked (or absent) device session must not be renewable, even though the
+    # refresh JWT is still cryptographically valid — this is what makes "revoke
+    # device" and reset-time "revoke all sessions" actually terminate a session.
+    refresh_cookie = request.cookies.get("refresh_token")
+    token_hash = Utils.sha256(refresh_cookie) if refresh_cookie else None
+    device = await session_service.get_device_by_token_hash(token_hash) if token_hash else None
+    if not device:
+        authorize.unset_jwt_cookies()
+        raise UnauthorizedException("Session has been revoked. Please sign in again.")
+
     await JwtAuthUtils.refresh_access_token(authorize=authorize)
+    await session_service.touch_device_session(token_hash)
     return SuccessResponse[bool](data=True)
 
 
@@ -100,18 +111,12 @@ async def revoke_all_others(scope: str, request: Request, authorize: AuthJWT = D
     return SuccessResponse[bool](data=True)
 
 
-@session_router.get("/security/events", response_model=SuccessResponse[List[SecurityEventDto]])
-async def list_security_events(authorize: AuthJWT = Depends()):
+@session_router.get("/security/events", response_model=Page[SecurityEventDto])
+async def list_security_events(
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=20, ge=1, le=100),
+    authorize: AuthJWT = Depends(),
+):
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
-    events = await session_service.list_recent_events(user_id)
-    dtos = [SecurityEventDto(
-        id=str(e.id),
-        type=e.type,
-        description=e.description,
-        ip_address=e.ip_address,
-        approx_location=e.approx_location,
-        device=e.device,
-        occurred_at=e.occurred_at,
-    ) for e in events]
-    return SuccessResponse[List[SecurityEventDto]](data=dtos)
+    return await session_service.page_security_events(user_id, page=page, page_size=page_size)

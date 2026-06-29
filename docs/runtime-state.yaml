@@ -1,10 +1,10 @@
 session_id: run-s5-s6-mvp-spine
 command: resume
 
-status: in_progress
-phase: slice
+status: idle
+phase: idle
 
-current_slice: S6   # Phase 2 auth hardening — pending start (S5 committed)
+current_slice: null   # S5 + S6 complete; next is S7 (Phase 3 agent onboarding & KYC)
 current_subtask: null
 
 completed_slices:
@@ -13,6 +13,8 @@ completed_slices:
   - S3   # idempotency store (+ idempotency_keys in 0001), VID generator, evidence content-hash, Money kobo tests
   - S4   # SLA business-day calculator + Nigerian holiday calendar (app/core/sla.py)
   - S5   # Phase 1 marketing completion + Legal documents + footer pages
+  - S6   # Phase 2 auth hardening: phone-flag + public config, revoked-session enforcement, paginated security
+         #   log, cross-portal summary; /account pages + portal switcher
 
 modified_files:
   - backend/main/alembic/versions/0001_initial_schema.py   # consent_documents: +body, +signoff_status
@@ -50,8 +52,19 @@ self_audit:
     - "LegalDocument DRAFT-banner render verified live via curl rather than a testing-library unit test
        (project has no component-render test harness); covered by build + live walkthrough."
 
-next_action: implement S6 (Phase 2 auth hardening) — phone-verification toggle + revoked-session enforcement +
-             security-events pagination + cross-portal summary; frontend /account pages + portal switcher.
+self_audit_s6:
+  completed: true
+  findings:
+    - "PHONE_VERIFICATION_ENABLED has no live enforcement site yet (phone OTP is deferred to the Phase-5 payment
+       gate, S9). Delivered the authoritative setting + public endpoint + frontend hook; S9 must consult it."
+    - "Authenticated /account UI walkthrough (revoke device, link/unlink, portal badge) verified at route/endpoint
+       level (401s + 307 login redirects); full logged-in click-through deferred (session-setup cost) — covered by
+       build + unit tests. Worth a Playwright pass with a seeded session later."
+    - "Security log uses a purpose-fit server-paginated list rather than the heavy admin DataTable (client-side
+       search/sort would mislead over a single server page). DataTable remains for admin tables."
+
+next_action: idle — S5 + S6 (MVP-spine Phases 1–2) complete. Resume at S7 (Phase 3 agent onboarding & KYC).
 
 started_at: 2026-06-29
-last_checkpoint: "S5 complete — legal documents + SEO + FAQ live-verified; backend 373 tests; build green"
+last_checkpoint: "S6 complete — auth hardening backend+frontend; backend 384 tests, frontend 241; build green;
+                  endpoints + route protection live-verified"

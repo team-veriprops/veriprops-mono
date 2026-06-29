@@ -1,6 +1,6 @@
 import { HttpClient } from "@lib/FetchHttpClient";
-import { SuccessResponse } from "@/types/models";
-import { AuthSession, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, AuthIntent, SocialProvider, UserConsent } from "@components/website/auth/models";
+import { Page, PublicConfig, SuccessResponse } from "@/types/models";
+import { AuthSession, CrossPortalSummary, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, AuthIntent, SocialProvider, UserConsent } from "@components/website/auth/models";
 /**
  * Frontend-facing auth API. Endpoint paths follow the convention used elsewhere
  * in the app (`/users/auth/...` — see FetchHttpClient.refreshToken). Backend is
@@ -138,8 +138,9 @@ export class AuthService {
     return this.http.delete(`${this.base}/sessions?scope=others`);
   }
 
-  listSecurityEvents(): Promise<SuccessResponse<SecurityEvent[]>> {
-    return this.http.get(`${this.base}/sessions/security/events`);
+  listSecurityEvents(page = 0, pageSize = 20): Promise<Page<SecurityEvent>> {
+    const qs = new URLSearchParams({ page: String(page), page_size: String(pageSize) }).toString();
+    return this.http.get(`${this.base}/sessions/security/events?${qs}`);
   }
 
   listLinkedProviders(): Promise<SuccessResponse<SocialProvider[]>> {
@@ -148,6 +149,16 @@ export class AuthService {
 
   unlinkProvider(provider: SocialProvider): Promise<SuccessResponse<null>> {
     return this.http.delete(`${this.base}/oauth/links/${provider}`);
+  }
+
+  // Per-persona actionable counts for the cross-portal awareness badge (§2.14).
+  getCrossPortalSummary(): Promise<SuccessResponse<CrossPortalSummary>> {
+    return this.http.get(`${this.base}/cross-portal/summary`);
+  }
+
+  // Public runtime flags (e.g. phone-verification toggle). Not under /users/auth.
+  getPublicConfig(): Promise<SuccessResponse<PublicConfig>> {
+    return this.http.get(`/config/public`);
   }
 
   // ── Consent re-acceptance ────────────────────────────────────────
