@@ -1,10 +1,10 @@
-session_id: run-s1-s4-foundation
-command: run
+session_id: run-s5-s6-mvp-spine
+command: resume
 
-status: idle
-phase: idle
+status: in_progress
+phase: slice
 
-current_slice: null
+current_slice: S6   # Phase 2 auth hardening — pending start (S5 committed)
 current_subtask: null
 
 completed_slices:
@@ -12,49 +12,46 @@ completed_slices:
   - S2   # state derivation owner (derive.py) + tier task-dependency config (dependencies.py) + status enums
   - S3   # idempotency store (+ idempotency_keys in 0001), VID generator, evidence content-hash, Money kobo tests
   - S4   # SLA business-day calculator + Nigerian holiday calendar (app/core/sla.py)
+  - S5   # Phase 1 marketing completion + Legal documents + footer pages
 
 modified_files:
-  - CLAUDE.md                                        # MySQL → PostgreSQL (S1)
-  - backend/main/alembic/versions/0001_initial_schema.py  # S1 cleanup + S3 idempotency_keys table
-  - backend/main/alembic/env.py                      # import app.core for model discovery (S3)
+  - backend/main/alembic/versions/0001_initial_schema.py   # consent_documents: +body, +signoff_status
+  - backend/main/app/domain/user/auth/consent/{models,repo,service,controller}.py  # body/signoff + public read API
+  - backend/main/app/db/seeder.py                          # DataSeeder now seeds legal-document content
+  - frontend/src/app/layout.tsx, src/app/(website)/about/page.tsx, src/app/(website)/page.tsx  # buildMetadata + JsonLd
+  - frontend/src/components/website/{home.data.ts,LandingFooter.tsx,HeroSection.tsx}  # FAQ, footer year/socials, sample link
+  - frontend/src/types/models.ts, src/lib/routes.ts        # LegalDocument types + SAMPLE_REPORT route
 created_files:
-  - backend/main/app/core/{__init__,vid,evidence,sla}.py
-  - backend/main/app/core/state/{__init__,machine,status,derive,dependencies}.py  # machine moved from app/state
-  - backend/main/app/core/idempotency/{__init__,models,repo,service}.py
-  - backend/test/unit/app/core/state/{test_state_machine,test_derive,test_dependencies}.py
-  - backend/test/unit/app/core/{test_vid,test_evidence,test_money_kobo,test_sla}.py
-  - backend/test/unit/app/core/idempotency/test_idempotency_service.py
+  - backend/main/app/domain/user/auth/consent/content/__init__.py   # 10 drafted legal docs (PRD §3.5)
+  - backend/test/unit/app/domain/auth/{test_consent_content,test_consent_legal_documents}.py
+  - frontend/src/lib/{seo.ts,seo.test.ts,legal.server.ts}
+  - frontend/src/components/seo/JsonLd.tsx
+  - frontend/src/app/{sitemap.ts,robots.ts}
+  - frontend/src/app/(website)/legal/[slug]/page.tsx, src/app/(website)/sample-report/page.tsx
+  - frontend/src/components/website/{FaqSection.tsx,SampleReportContent.tsx,legal/LegalDocument.tsx}
+  - frontend/src/components/shared/notifications/NotificationBell.tsx   # baseline build repair (AppShell orphan)
 removed_files:
-  - 9 orphaned deleted-domain tests (agent/*, admin_team, admin_invitation, admin_config, analytics)
+  - frontend/src/lib/mockUrlExtractor.ts   # dead file with dangling import — blocked the build
 
 tests:
   written: true
   executed: true
-  passing: true   # 363 passed (S4 adds SLA calculator)
+  passing: true   # backend 373 passed; frontend seo + home.data suites green (58)
 
 self_audit:
   started: true
   completed: true
   findings:
-    - "R0.9 Message state machine (§4.7) intentionally deferred to S15 (communication layer)."
-    - "VID/idempotency are primitives; DB-uniqueness + endpoint wiring land in S9 (verification/payment rebuild)."
-    - "Movable Islamic holidays are a maintained dataset (2026–2028); refresh / make admin-configurable later."
+    - "Found + fixed a real runtime bug: GenericRepo.update jsonable_encodes datetimes → asyncpg rejected
+       effective_at as str. Seeder update now refreshes editorial fields only; effective_at set on create."
+    - "Baseline build was broken before S5 (missing NotificationBell import; dead mockUrlExtractor.ts).
+       Repaired minimally to satisfy the build-green requirement; both unrelated to S5."
+    - "Repo-wide `pnpm lint` still reports ~130 pre-existing problems in untouched files; all S5 files lint clean."
+    - "LegalDocument DRAFT-banner render verified live via curl rather than a testing-library unit test
+       (project has no component-render test harness); covered by build + live walkthrough."
 
-notes:
-  - "Migration validated live on the test DB: `alembic downgrade base` + `upgrade head` clean;
-     idempotency_keys created with expected columns + indexes (uq_idempotency_key, ix_idempotency_scope_expires).
-     Note: revision id 0001 unchanged, so plain `upgrade head` is a no-op on an already-stamped DB — rebuild
-     via downgrade base + upgrade head while 0001 stays editable (D9)."
-  - "Pre-squash orphan tables (pricing_tier_configs, trust_score_weight_config) linger in the test DB; no current
-     migration creates them (downgrade base does not drop them). To be (re)created in S9 (pricing) / S12 (scoring)."
-
-clarification_needed: []
-
-git:
-  branch: dev
-  dirty: false   # committed at each slice boundary (strict mode)
-
-next_action: idle — foundation S1–S4 complete; resume at S5 (Phase 1 marketing)
+next_action: implement S6 (Phase 2 auth hardening) — phone-verification toggle + revoked-session enforcement +
+             security-events pagination + cross-portal summary; frontend /account pages + portal switcher.
 
 started_at: 2026-06-29
-last_checkpoint: "S4 complete — foundation phase done (363 tests passing)"
+last_checkpoint: "S5 complete — legal documents + SEO + FAQ live-verified; backend 373 tests; build green"

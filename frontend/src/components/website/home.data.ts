@@ -46,6 +46,11 @@ export interface NavLink {
   href: string;
 }
 
+export interface Faq {
+  question: string;
+  answer: string;
+}
+
 export interface FooterLink {
   label: string;
   href: string;
@@ -234,11 +239,51 @@ export const testimonials: Testimonial[] = [
   },
 ];
 
+// Conversion-oriented FAQ — answers the diaspora buyer's closing objections so
+// they feel safe enough to proceed. Rendered after "Client Stories".
+export const faqs: Faq[] = [
+  {
+    question: "How do I know your agents are trustworthy and not part of the scam?",
+    answer:
+      "Every agent is independently vetted and KYC-verified before they can take work — Field agents, Surveyors, Registry agents, and NBA-licensed Lawyers. They never know who else is verifying the same property, declare any conflict of interest on each task, and confirm on-site that the property they inspected matches your submitted address. You deal with Veriprops, not the agent.",
+  },
+  {
+    question: "What if I pay and the property still turns out to be a problem?",
+    answer:
+      "We reduce uncertainty; we don't eliminate it. Your report is an honest professional opinion backed by registry checks, a physical inspection, and a Trust Score. If we assign the wrong agent or skip a step, you get a full refund and a free re-verification. Our liability is clearly set out in the Verification Terms, and our refund matrix tells you exactly what happens in every scenario before you pay.",
+  },
+  {
+    question: "I'm abroad — can I really do this without flying to Nigeria?",
+    answer:
+      "That's exactly who we built this for. Buyers in the UK, US, and Canada submit the property details online, pay securely, and track progress live as our agents on the ground do the work. You receive GPS-stamped photos, a boundary survey, a registry search, and a downloadable certified report — all without leaving home.",
+  },
+  {
+    question: "How long does a verification take?",
+    answer:
+      "It depends on the tier: Basic in 3–5 business days, Standard in 5–7, and Premium (with a legal opinion) in 7–10. Timelines exclude weekends and Nigerian public holidays, and you can watch each stage advance in real time from your dashboard.",
+  },
+  {
+    question: "Is my payment secure, and can I get a refund?",
+    answer:
+      "Payments are processed through trusted gateways (Paystack/Flutterwave) — we never see your full card details. Refunds follow a published, scenario-by-scenario policy and are issued in Naira through the same gateway; your bank reconverts at its prevailing rate. Where a problem is our fault, you're fully covered.",
+  },
+  {
+    question: "What's the difference between Basic, Standard, and Premium?",
+    answer:
+      "Basic confirms ownership and registry records — good for early due diligence. Standard adds a physical site inspection, boundary survey, and neighbourhood profile — the recommended tier for serious buyers. Premium adds a signed legal opinion, encumbrance and fraud assessment, and a full risk analysis for high-value transactions.",
+  },
+  {
+    question: "Why must everything stay on the platform?",
+    answer:
+      "Keeping submission, payment, and communication on Veriprops is how we protect you. All communication is recorded and auditable, messages are scanned to block anyone trying to move you off-platform, and your full evidence trail is preserved — so if there's ever a dispute, the record is on your side.",
+  },
+];
+
 export const footerLinks = {
   platform: [
     { label: "How It Works", href: "#how-it-works" },
     { label: "Trust Score Guide", href: "#ecosystem" },
-    { label: "Sample Report", href: "#sample" },
+    { label: "Sample Report", href: ROUTES.SAMPLE_REPORT },
     { label: "Pricing", href: "#pricing" },
   ] as FooterLink[],
   company: [

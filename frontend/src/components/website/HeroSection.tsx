@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, ArrowRight, TrendingUp } from "lucide-react";
 import { CTA_VERIFY_HREF } from "./home.data";
+import { ROUTES } from "@lib/routes";
 
 export default function HeroSection() {
   return (
@@ -89,7 +90,7 @@ export default function HeroSection() {
             style={{ color: "var(--brand-on-surface-variant)" }}
           >
             Before you send a single naira, we confirm the ownership, the boundaries, 
-            the documents, and the truth on the ground. You see exactly what you're 
+            the documents, and the truth on the ground. You see exactly what you&rsquo;re
             buying. Then you decide.
           </p>
 
@@ -125,8 +126,8 @@ export default function HeroSection() {
               Start Verification
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
-            <a
-              href="#sample"
+            <Link
+              href={ROUTES.SAMPLE_REPORT}
               className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl text-base font-bold transition-all duration-200 hover:bg-gray-50"
               style={{
                 color: "var(--brand-navy)",
@@ -134,7 +135,7 @@ export default function HeroSection() {
               }}
             >
               View Sample Report
-            </a>
+            </Link>
           </div>
         </div>
 

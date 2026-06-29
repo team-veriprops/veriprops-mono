@@ -7,6 +7,7 @@ import {
   testimonials,
   navLinks,
   footerLinks,
+  faqs,
   currencies,
   fxRates,
   formatPrice,
@@ -299,6 +300,49 @@ describe("formatPrice", () => {
       expect(result.startsWith("₦")).toBe(true);
       expect(result.endsWith("k")).toBe(true);
     }
+  });
+});
+
+describe("faqs (conversion FAQ — PRD §1)", () => {
+  it("has enough questions to address the main objections", () => {
+    expect(faqs.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("every entry has a non-empty question and answer", () => {
+    for (const faq of faqs) {
+      expect(faq.question.trim().length).toBeGreaterThan(0);
+      expect(faq.answer.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it("covers the key closing objections (trust, refund/scam, timing, payment, tiers)", () => {
+    const haystack = faqs
+      .map((f) => `${f.question} ${f.answer}`)
+      .join(" ")
+      .toLowerCase();
+    for (const topic of ["trust", "refund", "agent", "business days", "payment", "premium"]) {
+      expect(haystack).toContain(topic);
+    }
+  });
+});
+
+describe("footerLinks (footer-linked pages)", () => {
+  it("legal links resolve to /legal/* routes", () => {
+    for (const link of footerLinks.legal) {
+      expect(link.href.startsWith("/legal/")).toBe(true);
+    }
+  });
+
+  it("the Sample Report link points to the sample-report page, not an anchor", () => {
+    const sample = footerLinks.platform.find((l) => l.label === "Sample Report");
+    expect(sample?.href).toBe(ROUTES.SAMPLE_REPORT);
+  });
+
+  it("has a socials group with the expected platforms", () => {
+    const labels = footerLinks.socials.map((s) => s.label);
+    expect(labels).toEqual(
+      expect.arrayContaining(["Facebook", "Twitter", "LinkedIn", "Instagram", "YouTube"]),
+    );
   });
 });
 

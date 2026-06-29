@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
-import { ROUTES } from "@lib/routes";
 import { footerLinks, type FooterLink } from "./home.data";
 import BrandLogo from "../ui/BrandLogo";
 
@@ -97,35 +95,59 @@ export default function LandingFooter() {
               <b className="text-xs">Buy with confidence. Verify before you pay.</b>
             </p>
 
-            {/* Socials */}
+            {/* Socials — a configured handle renders a link; an unset ("#" or empty)
+                handle renders a non-interactive icon rather than a dead link. */}
             <div className="flex items-center gap-3">
-              {footerLinks.socials.map((social) => (
-                <a
-                  key={social.label}
-                  href={social.href}
-                  aria-label={social.label}
-                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-150"
-                  style={{
-                    color: "var(--brand-on-surface-variant)",
-                    border: "1px solid rgba(196,198,207,0.3)",
-                  }}
-                  onMouseEnter={(e) => {
-                    const color = socialColors[social.label];
-                    const el = e.currentTarget;
-                    el.style.color = color;
-                    el.style.borderColor = `${color}40`;
-                    el.style.backgroundColor = `${color}10`;
-                  }}
-                  onMouseLeave={(e) => {
-                    const el = e.currentTarget;
-                    el.style.color = "var(--brand-on-surface-variant)";
-                    el.style.borderColor = "rgba(196,198,207,0.3)";
-                    el.style.backgroundColor = "transparent";
-                  }}
-                >
-                  {socialIcons[social.label]}
-                </a>
-              ))}
+              {footerLinks.socials.map((social) => {
+                const configured = social.href && social.href !== "#";
+                const baseClass =
+                  "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-150";
+                const baseStyle = {
+                  color: "var(--brand-on-surface-variant)",
+                  border: "1px solid rgba(196,198,207,0.3)",
+                } as React.CSSProperties;
+
+                if (!configured) {
+                  return (
+                    <span
+                      key={social.label}
+                      aria-label={social.label}
+                      aria-disabled="true"
+                      className={`${baseClass} opacity-50 cursor-default`}
+                      style={baseStyle}
+                    >
+                      {socialIcons[social.label]}
+                    </span>
+                  );
+                }
+
+                return (
+                  <a
+                    key={social.label}
+                    href={social.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={social.label}
+                    className={baseClass}
+                    style={baseStyle}
+                    onMouseEnter={(e) => {
+                      const color = socialColors[social.label];
+                      const el = e.currentTarget;
+                      el.style.color = color;
+                      el.style.borderColor = `${color}40`;
+                      el.style.backgroundColor = `${color}10`;
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget;
+                      el.style.color = "var(--brand-on-surface-variant)";
+                      el.style.borderColor = "rgba(196,198,207,0.3)";
+                      el.style.backgroundColor = "transparent";
+                    }}
+                  >
+                    {socialIcons[social.label]}
+                  </a>
+                );
+              })}
             </div>
           </div>
 
@@ -155,8 +177,8 @@ export default function LandingFooter() {
           style={{ borderTop: "1px solid rgba(196,198,207,0.25)" }}
         >
           <p className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>
-            © 2026 Veriprops. Jurisdiction: Nigeria. All communications are recorded for
-            quality and security.
+            © {new Date().getFullYear()} Veriprops. Jurisdiction: Nigeria. All communications
+            are recorded for quality and security.
           </p>
           <p
             className="text-xs italic"

@@ -13,12 +13,21 @@ status: running (S1–S4 foundation)
       Money kobo-reconciliation tests. 344 total. (Live `alembic upgrade head` deferred — no DB here.)
 - S4  SLA business-day calculator + Nigerian holiday calendar — `app/core/sla.py` (fixed + Easter-computus
       + maintained movable-Islamic holidays; per-tier due dates 5/7/10). 363 total.
+- S5  Phase 1 — Marketing completion + Legal documents + footer pages.
+      Backend: `consent_documents` gains `body` + `signoff_status` (0001); legal content registry
+      (`consent/content/`, 10 drafted docs from PRD §3.5); idempotent `ConsentService.seed_documents()` wired
+      into `DataSeeder`; public read API (`GET /consents/documents`, `/documents/{slug}`). Frontend: reusable
+      SEO pattern (`lib/seo.ts buildMetadata` + `JsonLd`) applied to all public pages, `app/sitemap.ts` +
+      `app/robots.ts`; dynamic `/legal/[slug]` pages (react-markdown) with DRAFT banner; conversion FAQ after
+      Client Stories (FAQPage JSON-LD); `/sample-report`; footer dynamic year + socials disable-when-unset.
+      Backend 373 tests; frontend +seo/home.data tests (58). Live-verified: API returns 10 docs, DRAFT/FINAL
+      correct, legal pages + sitemap/robots render. Incidental baseline build repairs (not mine): added
+      `NotificationBell` stub (AppShell orphan import), removed dead `lib/mockUrlExtractor.ts`.
 
 ## Current Slice
-- none — foundation slices S1–S4 complete; next is S5 (Phase 1 marketing completion).
+- S6 (Phase 2 auth hardening) — pending start.
 
 ## Pending Slices
-- S5  Phase 1 — Marketing completion
 - S6  Phase 2 — Auth hardening
 - S7  Phase 3 — Agent onboarding & KYC
 - S8  Phase 4 — Admin onboarding & RBAC

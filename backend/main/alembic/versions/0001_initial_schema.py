@@ -107,6 +107,8 @@ def _create_consent_documents():
         sa.Column("effective_at", UTCDateTime, nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("href", sa.String(length=255), nullable=False),
+        sa.Column("body", sa.Text(), nullable=True),
+        sa.Column("signoff_status", sa.String(length=16), nullable=False, server_default="DRAFT"),
         *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("type", "consent_version", name="uq_consent_type_version"),
     )

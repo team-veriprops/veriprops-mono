@@ -112,6 +112,7 @@ export const ROUTES = {
   },
 
   ABOUT: '/about',
+  SAMPLE_REPORT: '/sample-report',
   PROJECTS: {
     ROOT: '/projects',
     DETAIL: (id: string | number) => `/projects/${id}`,
