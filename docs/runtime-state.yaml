@@ -4,11 +4,12 @@ command: run
 status: in_progress
 phase: implement
 
-current_slice: S2
-current_subtask: state derivation owner + task-dependency config
+current_slice: S3
+current_subtask: idempotency store + VID generator + evidence content-hash
 
 completed_slices:
   - S1   # foundation reconciliation: cleaned 0001 seeds, moved app/state→app/core/state, docs, green baseline
+  - S2   # state derivation owner (derive.py) + tier task-dependency config (dependencies.py) + status enums
 
 modified_files:
   - CLAUDE.md
@@ -23,7 +24,7 @@ created_files:
 tests:
   written: true
   executed: true
-  passing: true   # 267 passed (green baseline after orphaned-test removal)
+  passing: true   # 316 passed (S1 baseline 267 + S2 derive/dependencies 49)
 
 self_audit:
   started: false
@@ -36,7 +37,7 @@ git:
   branch: dev
   dirty: false   # committed at each slice boundary (strict mode)
 
-next_action: implement S2 (app/core/state: status.py, derive.py, dependencies.py)
+next_action: implement S3 (app/core: vid.py, evidence.py, idempotency/; idempotency_keys table in 0001)
 
 started_at: 2026-06-29
-last_checkpoint: "S1 complete"
+last_checkpoint: "S2 complete"

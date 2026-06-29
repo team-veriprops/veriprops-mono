@@ -6,9 +6,11 @@ status: running (S1–S4 foundation)
 - S1  Foundation reconciliation & doc fixes — cleaned 0001 orphaned seeds (pricing + trust-weights),
       moved `app/state` → `app/core/state`, root CLAUDE.md MySQL→PostgreSQL, removed 9 orphaned
       deleted-domain tests → suite green (267 passed).
+- S2  State derivation owner + task-dependency config — `app/core/state/{status,derive,dependencies}.py`;
+      pure `derive_status` (§2.5) + tier composition / Lawyer-dependency / acyclicity (§4.2). 49 tests, 316 total.
 
 ## Current Slice
-- S2  State derivation owner + task-dependency config (in app/core/state)
+- S3  Idempotency store + VID generator + evidence content-hash (in app/core)
 
 ## Pending Slices
 - S2  State-machine core (validator + derivation owner + dependency config)
