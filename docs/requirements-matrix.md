@@ -17,19 +17,19 @@
 | R0.6 | Consent store (ConsentDocument/UserConsent, versioned) | R0.1 | user/auth/consent | yes | yes | high | M | M | acceptance records user/version/ts/IP | done |
 | R0.7 | Auth wiring — JWT httpOnly cookie + silent refresh + guards | R0.4 | user/auth | no | yes | high | M | H | access 15m / refresh 30d; guards enforce | done |
 | R0.8 | AuditLog entity + per-transition writer hook (§4.5) | R0.1 | audit | yes | no | high | M | M | every transition writes actor/role/from→to/ts/IP | partial |
-| R0.9 | **State-machine validator** (Verification/Task/Report/Message §2,§4.7) | — | core | no | no | no | M | H | invalid transitions rejected at service layer | pending |
-| R0.10 | **`deriveVerificationState(...)` owner** (§4.1, §2.5) | R0.9 | verification | no | no | no | H | H | sole writer of status; tier-config counts | pending |
-| R0.11 | **Task-dependency config + acyclicity** (§4.2) | — | verification | yes | no | no | M | M | Lawyer depends-on siblings; cycle rejected at save | pending |
+| R0.9 | **State-machine validator** (Verification/Task/Report §2) | — | core | no | no | no | M | H | invalid transitions rejected at service layer | done (S1/S2: `app/core/state/machine.py`; Message machine deferred to S15) |
+| R0.10 | **`derive_status(...)` owner** (§4.1, §2.5) | R0.9 | core | no | no | no | H | H | sole writer of status; tier-config counts | done (S2: `app/core/state/derive.py`) |
+| R0.11 | **Task-dependency config + acyclicity** (§4.2) | — | core | no | no | no | M | M | Lawyer depends-on siblings; cycle rejected at save | done (S2: `app/core/state/dependencies.py`; code config, DB-backed admin config in S18) |
 | R0.12 | **Property entity** (thin, separate from Verification §4.3) | R0.1 | property | yes | yes | no | L | M | verification points at property row | pending |
-| R0.13 | **VID generator `VP-YYYY-XXXXXX` non-sequential** (§4.10) | — | verification | yes | no | high | M | M | high-entropy suffix; internal counter separate | pending |
-| R0.14 | **Idempotency keys — payments + entity creation** (§4.6) | R0.1 | payment/core | yes | yes | high | M | H | replayed webhook → one PAID; double-tap create → one row | pending |
-| R0.15 | **Per-item evidence content-hash helper** (§4.5) | — | evidence | no | no | high | L | M | SHA-256 over retained original; mismatch detectable | pending |
+| R0.13 | **VID generator `VP-YYYY-XXXXXX` non-sequential** (§4.10) | — | core | no | no | high | M | M | high-entropy suffix; internal counter separate | done (S3: `app/core/vid.py`; DB-uniqueness enforced when verifications table lands in S9) |
+| R0.14 | **Idempotency keys — payments + entity creation** (§4.6) | R0.1 | core | yes | yes | high | M | H | replayed webhook → one PAID; double-tap create → one row | done (S3: `app/core/idempotency/`; table in 0001; consumed by payment/create endpoints in S9) |
+| R0.15 | **Per-item evidence content-hash helper** (§4.5) | — | core | no | no | high | L | M | SHA-256 over retained original; mismatch detectable | done (S3: `app/core/evidence.py`) |
 | R0.16 | Integration shells (S3, Paystack/Flutterwave, email, SMS, KYC facade, etc.) | R0.4 | integrations | no | no | high | M | M | stubs/credentials wired behind facades | partial |
 | R0.17 | Exception hierarchy + HTTP mapping | — | appodus_utils | no | yes | no | L | L | structured error responses | done |
 | R0.18 | Middleware — per-request DB session, request logging, CORS | R0.3 | middleware | no | yes | no | L | L | session per request; CORS set | partial |
 | R0.19 | Config & env (`.env.{local,dev,staging,prod}`) | — | config | no | no | high | L | L | env-selected settings | done |
 | R0.20 | Frontend design system (Radix + Tailwind tokens, form/wizard/toast/modal) | — | frontend | no | no | no | M | L | components render; tokens resolve | partial |
-| R0.21 | SLA business-day calc + Nigerian public-holiday calendar | — | core | yes | no | no | M | M | SLA excludes weekends + NG holidays | pending |
+| R0.21 | SLA business-day calc + Nigerian public-holiday calendar | — | core | no | no | no | M | M | SLA excludes weekends + NG holidays | done (S4: `app/core/sla.py`) |
 | R0.22 | OTP_MODE / dev-endpoint / Mailpit determinism contract | R0.19 | config/dev | no | yes | high | L | M | deterministic OTP in test; dev routes non-prod only | partial |
 
 ## Phase 1 — Marketing Site & Home Page

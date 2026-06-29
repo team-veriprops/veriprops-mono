@@ -160,3 +160,68 @@ and keeps the migration history coherent.
 ### Revisit Conditions
 - If `0001` proves materially wrong vs PRD v2.4, author a corrective migration in the relevant slice rather than
   editing `0001`.
+
+---
+
+## Decision: D7 — Foundation primitives live under `app/core`
+
+### Context
+The execution plan named S2–S4 primitives under `app/domain/verification/*`, but that package was deleted in the
+consolidation and will be fully rebuilt in S9. A surviving `app/state/machine.py` already held the state-machine
+validator + transition tables.
+
+### Chosen Option
+Create a cross-cutting **`app/core`** package and **move `app/state` → `app/core/state`**. S2–S4 primitives live there:
+`app/core/state/{status,derive,dependencies}.py`, `app/core/{vid,evidence,sla}.py`, `app/core/idempotency/`.
+
+### Rationale
+These are genuinely cross-cutting (state derivation, idempotency, VID, evidence-hash, SLA are consumed by multiple
+future domains). Housing them in `app/core` gives one source of truth and avoids churn/collision when S9 rebuilds the
+full verification domain (which will *import* these, not redefine them).
+
+### Constraints Introduced
+- `app/core/__init__.py` imports model-bearing sub-packages (idempotency) so Alembic `env.py` (`from main.app import core`)
+  registers them on `BaseEntity.metadata`. Status enums in `app/core/state/status.py` are the canonical source.
+
+### Revisit Conditions
+- N/A.
+
+---
+
+## Decision: D8 — Clean orphaned seeds from `0001`
+
+### Context
+After consolidation, `0001_initial_schema.py` creates only the surviving tables (auth/message/audit/consent) but still
+contained `_seed_pricing` / `_seed_trust_score_weights` writing to `pricing_tier_configs`, `pricing_line_items`,
+`trust_score_weight_config` — tables it no longer creates (the seeds were silently skipped by `table_exists` guards).
+
+### Chosen Option
+Remove the orphaned pricing + trust-weight seeds (and `_SEED_WEIGHTS`); keep consent-document, verification-consent,
+and super-admin seeds (their tables ARE created here). Behaviour-preserving dead-code removal.
+
+### Revisit Conditions
+- Pricing + trust-weight seeds are reintroduced (with their CREATE TABLEs) when those domains are rebuilt (S9 pricing, S12 scoring).
+
+---
+
+## Decision: D9 — Greenfield foundation posture (relaxes D6)
+
+### Context
+User direction: a total rewrite was preferred; only **user-auth (backend + frontend)** and the **home page** are worth
+preserving. Nothing has shipped to production.
+
+### Chosen Option
+Build the foundation **greenfield/clean** rather than reconciling to brownfield survivors. Treat `0001` as the single
+**editable** initial migration: add new foundation tables *into* `0001` (e.g. `idempotency_keys` in S3) using the
+per-table `_create_*` + `AlembicUtils` + DRY pattern (backend/CLAUDE.md), instead of incremental migrations.
+
+### Rationale
+With no shipped database, a single coherent initial schema is cleaner than a chain of additive migrations for the
+foundation phase. This relaxes **D6** (which treated `0001` as an immutable contract).
+
+### Tradeoffs
+- Pros: one coherent initial schema; less migration noise during the foundation rebuild.
+- Cons: `0001` changes until the schema stabilises; once real data exists, revert to additive-only migrations.
+
+### Revisit Conditions
+- Once a non-throwaway database exists (staging/prod), stop editing `0001` and switch to additive migrations.

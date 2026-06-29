@@ -11,14 +11,13 @@ status: running (S1–S4 foundation)
 - S3  Idempotency + VID + evidence-hash — `app/core/vid.py`, `app/core/evidence.py`,
       `app/core/idempotency/{models,repo,service}.py`; `idempotency_keys` table folded into 0001;
       Money kobo-reconciliation tests. 344 total. (Live `alembic upgrade head` deferred — no DB here.)
+- S4  SLA business-day calculator + Nigerian holiday calendar — `app/core/sla.py` (fixed + Easter-computus
+      + maintained movable-Islamic holidays; per-tier due dates 5/7/10). 363 total.
 
 ## Current Slice
-- S4  SLA business-day calculator + Nigerian holiday calendar (in app/core)
+- none — foundation slices S1–S4 complete; next is S5 (Phase 1 marketing completion).
 
 ## Pending Slices
-- S2  State-machine core (validator + derivation owner + dependency config)
-- S3  Money / idempotency / VID / evidence-hash primitives
-- S4  SLA business-day & Nigerian holiday calendar
 - S5  Phase 1 — Marketing completion
 - S6  Phase 2 — Auth hardening
 - S7  Phase 3 — Agent onboarding & KYC
@@ -32,17 +31,18 @@ status: running (S1–S4 foundation)
 - S15–S23 Phases 11–19 — harden & scale
 
 ## Runtime State
-- idle
+- idle (S1–S4 committed; checkpoint clean)
 
 ## Pending Recovery
 - none
 
 ## Blockers
-- none (build can begin at S1)
+- none. NOTE: live `alembic upgrade head` not exercised here (no reachable Postgres test DB);
+  run it on a DB-enabled environment to confirm the cleaned `0001` (incl. `idempotency_keys`) applies.
 
 ## Open Questions
-- D6: rebuilt domain models must reconcile to the existing `0001` schema (treat `0001` as the contract).
-- D4: CLAUDE.md says MySQL; code+PRD say PostgreSQL — correction flagged, to apply in S1.
+- D6 (relaxed by D9): foundation built greenfield; `0001` is the single editable initial migration.
+- D4: applied in S1 — root CLAUDE.md now says PostgreSQL.
 - §B legal sign-offs are launch gates, not build blockers: liability-cap copy gates Phase 5 go-live;
   NBA counsel gates Phase 10 Legal Opinion go-live; Premium-lawyer insurance posture gates that tier.
 - §6.4 admin staffing gate is a business commitment (not buildable) — record before launch.
@@ -55,14 +55,17 @@ status: running (S1–S4 foundation)
 - Strict commit mode + dirty worktree: `run` is blocked until committed (see below).
 
 ## Last Commit
-- none (initialize writes docs only; no source changes)
+- S1 `bec85e1`, S2 `0465a5a`, S3 `a138219`, S4 (this commit) — foundation slices.
 
 ## Completion %
-- 0
+- ~17% (4 of 23 slices; all Phase-0 foundation primitives complete)
 
 ---
 
 ### ⚠️ Strict-mode reminder
-`config.yaml` is `mode: strict` (D3). The worktree is currently **dirty** (large staged domain deletions +
+`config.yaml` is `mode: strict` (D3). Worktree committed at each slice boundary; clean between slices.
+
+<!-- legacy note retained for history -->
+`config.yaml` is `mode: strict` (D3). The worktree was previously **dirty** (large staged domain deletions +
 edits). `prd-orchestrator run` will refuse to start until the worktree is committed/clean. Commit the in-flight
 refactor before invoking `run`.
