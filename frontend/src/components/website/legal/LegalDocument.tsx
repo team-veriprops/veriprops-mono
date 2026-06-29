@@ -4,12 +4,8 @@ import { AlertTriangle } from "lucide-react";
 
 import { ConsentSignoffStatus, type LegalDocument as LegalDocumentModel } from "@app-types/models";
 
-/**
- * Renders a backend-served legal document: title, version + effective date, a
- * draft banner for clauses still pending legal sign-off (§B), the Markdown body,
- * and the standing report-footer tagline. Content is owned by the backend
- * (single source of truth) so consent ties to the exact text shown.
- */
+// Renders a legal document: title, version, effective date, a draft banner when
+// the wording is still pending sign-off, the Markdown body, and the report footer.
 export default function LegalDocument({ doc }: { doc: LegalDocumentModel }) {
   const isDraft = doc.signoffStatus === ConsentSignoffStatus.DRAFT;
   const effective = doc.effectiveAt
@@ -72,7 +68,7 @@ export default function LegalDocument({ doc }: { doc: LegalDocumentModel }) {
   );
 }
 
-// Map Markdown elements to brand-styled JSX (no typography plugin in the project).
+// Brand styling for each Markdown element.
 const markdownComponents = {
   h2: (props: React.ComponentProps<"h2">) => (
     <h2

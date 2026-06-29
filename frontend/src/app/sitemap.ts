@@ -4,11 +4,7 @@ import { SITE } from "@lib/seo";
 import { fetchLegalDocuments } from "@lib/legal.server";
 import { ROUTES } from "@lib/routes";
 
-/**
- * Public sitemap. Lists crawlable marketing + legal routes only; gated surfaces
- * (portal/admin/agents/account/auth) are excluded and disallowed in robots.ts.
- * Legal slugs and their `lastModified` come from the backend (source of truth).
- */
+// Public sitemap: marketing + legal routes only. Legal slugs come from the backend.
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = [
     { url: abs("/"), changeFrequency: "weekly", priority: 1 },
@@ -26,7 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.3,
     }));
   } catch {
-    // A backend hiccup must not break the sitemap; serve the static routes.
+    // If the backend is unreachable, still serve the static routes.
     legalEntries = [];
   }
 

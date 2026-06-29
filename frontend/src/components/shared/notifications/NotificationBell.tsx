@@ -2,11 +2,8 @@
 
 import { Bell } from "lucide-react";
 
-/**
- * Notification bell shown in the authenticated app shell. This is a
- * forward-compatible placeholder: it renders the affordance now and is wired to
- * live unread counts + a dropdown when the notification system lands (Phase 12).
- */
+// Notification bell in the app shell. Unread counts and the dropdown arrive with
+// the notification system (Phase 12); for now it's just the icon.
 export default function NotificationBell({ dark = false }: { dark?: boolean }) {
   return (
     <button

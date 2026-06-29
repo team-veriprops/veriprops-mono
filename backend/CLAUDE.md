@@ -97,6 +97,9 @@ A domain is **not considered complete** until:
 
 `GenericRepo[Model, Create, Update, Query, Search]` ([appodus_utils/db/repo.py](main/appodus_utils/db/repo.py)) provides CRUD, pagination, and soft-delete-aware queries. Entities inherit from `BaseEntity` which adds `id` (UUID), `date_created`, `date_updated`, `version` (optimistic locking), `deleted` (soft-delete flag) — never `DELETE` rows by hand; flip `deleted`. Pagination is zero indexed (First page = 0)
 
+- **`version` is the optimistic-lock counter — never reuse it for domain versioning.** A versioned entity needs its own purpose-named column (e.g. `consent_version` on `ConsentDocument`).
+- **`update()` runs the DTO through `jsonable_encoder`**, which turns `datetime`/enum values into strings before binding. Don't push `datetime` fields through the update path (asyncpg rejects a string for a timestamp column) — set those on `create()` instead and keep `Update*Dto` to editable text/scalar fields.
+
 ### Transaction management
 
 `@transactional(session_policy=...)` ([appodus_utils/decorators/transactional.py](main/appodus_utils/decorators/transactional.py)) wraps async functions:
@@ -135,6 +138,14 @@ Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhoo
 - `ALLOWED_ORIGINS` — comma-separated CORS origins.
 - `ENABLE_OUT_MESSAGING`, `ALLOW_AUTH_BYPASS`, `DISABLE_RATE_LIMITING` — gate side effects in non-prod.
 - `GOOGLE_SERVICE_ACCOUNT_FILE` — path resolved via `get_absolute_path` (walks up out of `test/`, `main/`, or `appodus_utils/`).
+- `PHONE_VERIFICATION_ENABLED` — toggles the phone-verification step in the email/OAuth signup flow. When `false`, signup collects the number but stores `phone_verified=False`; phone is then verified at the Phase-5 payment step. `AuthService.signup`/`complete_profile` read it; the frontend reads it via `/config/public`.
+
+### Reference content & public config
+
+- **Legal documents are backend-owned.** Prose lives in the content registry at `app/domain/user/auth/consent/content/`, is upserted idempotently by `DataSeeder.run_data_seed` → `ConsentService.seed_documents` (keyed on `(type, consent_version)`), and is served publicly by `GET /users/auth/consents/documents[/{slug}]`. Edit the registry, not the migration — the `0001` rows are metadata only; bodies/sign-off land at seed time. `ConsentSignoffStatus` marks DRAFT vs FINAL wording.
+- **Public runtime flags** the frontend needs go through `app/domain/config` → `GET /config/public` (`PublicConfigDto`). Backend stays the source of truth; don't duplicate flags as frontend env vars.
+- **Cross-portal counts** (`app/domain/user/auth/cross_portal`): `CrossPortalService` keeps a registry of per-persona count sources. It returns 0 per persona until later slices call `register_source(...)`; the `/users/auth/cross-portal/summary` endpoint feeds the frontend's portal badge.
+- **Session revocation is enforced on refresh:** `POST /users/auth/sessions/current` rejects a refresh whose `device_sessions` row is revoked/absent, so device-revoke and reset-time revoke-all actually end sessions.
 
 ## Integrations
 

@@ -169,8 +169,8 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
             sa_update(User)
             .where(User.id == user_id)
             .values(
-                email=f"deleted_{short_user_id}@erased.veriprops.com",
-                email_normalized=f"deleted_{short_user_id}@erased.veriprops.com",
+                email=f"deleted_{short_user_id}@erased.veriprops.ng",
+                email_normalized=f"deleted_{short_user_id}@erased.veriprops.ng",
                 phone="",
                 phone_e164=None,
                 first_name="Deleted",

@@ -1,8 +1,5 @@
-"""Cross-portal awareness DTOs (PRD §2.14).
-
-A multi-persona user (e.g. both CUSTOMER and AGENT) needs to see, while in one
-hat, a count of actionable items waiting in the other. This module reports a
-per-persona actionable count; the frontend computes the "other hat" badge."""
+"""Cross-portal awareness DTOs (PRD §2.14). Reports a per-persona actionable
+count; the frontend turns it into the "other hat" badge."""
 from __future__ import annotations
 
 from typing import List

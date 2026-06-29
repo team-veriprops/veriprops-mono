@@ -56,7 +56,7 @@ class PaystackInitPaymentDto(Object):
                 "amount": 2500000,
                 "currency": "NGN",
                 "reference": "VRP-2026-00023",
-                "callback_url": "https://veriprops.com/pay/verify",
+                "callback_url": "https://veriprops.ng/pay/verify",
                 "channels": ["card", "bank_transfer", "ussd"],
                 "metadata": {
                     "invoice_id": "inv_123",

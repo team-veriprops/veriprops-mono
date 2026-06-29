@@ -25,12 +25,8 @@ class ConsentDocumentType(str, enum.Enum):
 
 
 class ConsentSignoffStatus(str, enum.Enum):
-    """Whether a legal document's prose is finalised by counsel.
-
-    DRAFT prose is built and shown (with a visible banner) but its exact wording
-    is on the §B legal sign-off list — go-live, not build, is gated. FINAL prose
-    is cleared for production.
-    """
+    """Whether a legal document's wording is finalised by counsel. DRAFT prose is
+    shown with a banner; FINAL is cleared for production."""
     DRAFT = "DRAFT"
     FINAL = "FINAL"
 
@@ -39,14 +35,12 @@ class ConsentDocument(BaseEntity):
     __tablename__ = "consent_documents"
 
     type = Column(String(32), nullable=False, index=True)
-    # Document version — distinct from BaseEntity.version (optimistic locking).
+    # Document version — not BaseEntity.version, which is the optimistic lock.
     consent_version = Column(String(16), nullable=False)
     effective_at = Column(DateTime(timezone=True), nullable=False)
     title = Column(String(255), nullable=False)
     href = Column(String(255), nullable=False)
-    # Markdown prose of the legal document; populated by the runtime seeder from
-    # the code content registry (kept out of the migration so prose stays editable).
-    body = Column(Text, nullable=True)
+    body = Column(Text, nullable=True)  # Markdown; populated by the seeder
     signoff_status = Column(String(16), nullable=False, server_default=ConsentSignoffStatus.DRAFT.value)
 
     __table_args__ = (
@@ -84,9 +78,9 @@ class CreateConsentDocumentDto(Object):
 
 
 class UpdateConsentDocumentDto(Object):
-    # effective_at is intentionally not updatable here: a new effective date means
-    # a new (type, consent_version) row (create path). The update path only refreshes
-    # editorial fields, avoiding the repo's jsonable_encoder datetime→str coercion.
+    # No effective_at here: a new effective date is a new row (create path). The
+    # update path refreshes editorial fields only — GenericRepo.update runs the DTO
+    # through jsonable_encoder, which would turn a datetime into a string.
     title: Optional[str] = None
     href: Optional[str] = None
     body: Optional[str] = None

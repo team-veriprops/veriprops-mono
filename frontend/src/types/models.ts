@@ -295,8 +295,7 @@ export interface LegalDocument extends LegalDocumentSummary {
   body?: string;
 }
 
-// Public runtime config (mirrors backend PublicConfigDto) — backend is the
-// source of truth; the frontend reads this rather than duplicating env flags.
+// Mirrors backend PublicConfigDto.
 export interface PublicConfig {
   phoneVerificationEnabled: boolean;
 }

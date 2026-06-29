@@ -8,11 +8,7 @@ import {
 } from "@components/3rdparty/ui/accordion";
 import { faqs } from "./home.data";
 
-/**
- * Conversion-oriented FAQ. Sits after "Client Stories" to handle the diaspora
- * buyer's final objections (agent trust, scam protection, turnaround, refunds,
- * payment security, tiers, on-platform comms) so they feel safe to proceed.
- */
+// FAQ that answers a diaspora buyer's main objections before the final CTA.
 export default function FaqSection() {
   return (
     <section

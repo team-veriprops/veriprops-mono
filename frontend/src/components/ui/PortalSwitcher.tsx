@@ -20,12 +20,8 @@ const PERSONA_HOME: Record<UserPersona, { label: string; href: string }> = {
   [UserPersona.AGENT]: { label: "Agent portal", href: ROUTES.AGENT.DASHBOARD },
 };
 
-/**
- * Cross-portal switcher (PRD §2.14). For a user holding more than one persona,
- * shows a control to switch hats with a badge counting actionable items waiting
- * in the *other* hat(s), so nothing is missed while working in one portal.
- * Renders nothing for single-persona users.
- */
+// Lets a user with more than one persona switch portals, with a badge counting
+// items waiting in the other hat. Renders nothing for single-persona users.
 export default function PortalSwitcher({ dark = false }: { dark?: boolean }) {
   const pathname = usePathname();
   const session = useAuthStore((s) => s.session);

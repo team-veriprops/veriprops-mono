@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
 import { Button } from "@3rdparty/ui/button";
 import VerifiedInput, { VerifiedInputType } from "@components/ui/verified_input/VerifiedInput";
+import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
 import { profileCompletionSchema, type ProfileCompletionValues } from "../schemas";
 import {
   RESIDENCE_COUNTRIES,
@@ -20,6 +21,7 @@ import {
   useCompleteProfileMutation,
   useSendOtpMutation,
   useVerifyOtpMutation,
+  usePublicConfigQuery,
 } from "../libs/useAuthQueries";
 import { getErrorMessage } from "@lib/utils";
 
@@ -35,6 +37,8 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
   const completeMutation = useCompleteProfileMutation();
   const sendOtp = useSendOtpMutation();
   const verifyOtp = useVerifyOtpMutation();
+  const { data: publicConfig } = usePublicConfigQuery();
+  const phoneVerificationEnabled = publicConfig?.phoneVerificationEnabled ?? true;
 
   // We reuse VerifiedInput which expects the verifyFormSchema shape, plus we
   // augment with country/timezone/currency. Use a single form for everything.
@@ -58,6 +62,12 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
   });
 
   const country = form.watch("countryOfResidence");
+
+  useEffect(() => {
+    if (!phoneVerificationEnabled) {
+      form.setValue("phoneVerified", true as never, { shouldValidate: true });
+    }
+  }, [phoneVerificationEnabled, form]);
 
   useEffect(() => {
     if (!country) return;
@@ -101,46 +111,58 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
         </p>
 
         <form className="space-y-5 mt-4" onSubmit={form.handleSubmit(onSubmit as never)} noValidate>
-          <VerifiedInput
-            form={form as never}
-            field="phone"
-            label="Phone"
-            type={VerifiedInputType.PHONE}
-            placeholder="0801 234 5678"
-            onSendVerificationMessage={({ onSuccess, onError }) => {
-              const v = form.getValues();
-              sendOtp.mutate(
-                {
-                  channel: OtpChannel.PHONE,
-                  countryCode: v.countryCode,
-                  dialCode: v.dialCode,
-                  phone: v.phone,
-                },
-                {
-                  onSuccess: () => onSuccess(),
-                  onError: (err) =>
-                    onError(getErrorMessage(err as Error, "Could not send code.")),
-                },
-              );
-            }}
-            onValidateVerificationOtp={({ otp, onSuccess, onError }) => {
-              const v = form.getValues();
-              verifyOtp.mutate(
-                {
-                  channel: OtpChannel.PHONE,
-                  countryCode: v.countryCode,
-                  dialCode: v.dialCode,
-                  phone: v.phone,
-                  code: otp ?? "",
-                },
-                {
-                  onSuccess: () => onSuccess(),
-                  onError: (err) =>
-                    onError(getErrorMessage(err as Error, "That code didn't match.")),
-                },
-              );
-            }}
-          />
+          {phoneVerificationEnabled ? (
+            <VerifiedInput
+              form={form as never}
+              field="phone"
+              label="Phone"
+              type={VerifiedInputType.PHONE}
+              placeholder="0801 234 5678"
+              onSendVerificationMessage={({ onSuccess, onError }) => {
+                const v = form.getValues();
+                sendOtp.mutate(
+                  {
+                    channel: OtpChannel.PHONE,
+                    countryCode: v.countryCode,
+                    dialCode: v.dialCode,
+                    phone: v.phone,
+                  },
+                  {
+                    onSuccess: () => onSuccess(),
+                    onError: (err) =>
+                      onError(getErrorMessage(err as Error, "Could not send code.")),
+                  },
+                );
+              }}
+              onValidateVerificationOtp={({ otp, onSuccess, onError }) => {
+                const v = form.getValues();
+                verifyOtp.mutate(
+                  {
+                    channel: OtpChannel.PHONE,
+                    countryCode: v.countryCode,
+                    dialCode: v.dialCode,
+                    phone: v.phone,
+                    code: otp ?? "",
+                  },
+                  {
+                    onSuccess: () => onSuccess(),
+                    onError: (err) =>
+                      onError(getErrorMessage(err as Error, "That code didn't match.")),
+                  },
+                );
+              }}
+            />
+          ) : (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Phone</label>
+              <PhoneInputWithCountry
+                form={form as never}
+                isVerified={false}
+                onChanged={() => {}}
+                placeholder="0801 234 5678"
+              />
+            </div>
+          )}
 
           <Field label="Country of residence" error={form.formState.errors.countryOfResidence?.message}>
             <select

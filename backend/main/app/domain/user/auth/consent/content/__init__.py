@@ -1,13 +1,7 @@
-"""Drafted legal-document content (PRD §3.5).
+"""Legal-document content (PRD §3.5).
 
-Single source of truth for the prose rendered on the marketing `/legal/*` pages
-and tied to versioned consent acceptance. The runtime seeder upserts each entry
-into `consent_documents` by (type, consent_version), so this module — not the
-migration — owns the editorial text.
-
-§B sign-off posture: clauses whose exact wording is on the legal sign-off list
-ship as DRAFT (built and shown with a banner; go-live, not build, is gated).
-`REPORT_DISCLAIMER` is the only FINAL document (PRD line 454).
+The seeder upserts each entry into `consent_documents` by (type, consent_version).
+Clauses still awaiting counsel sign-off ship as DRAFT; REPORT_DISCLAIMER is FINAL.
 """
 from __future__ import annotations
 
@@ -19,7 +13,6 @@ from main.app.domain.user.auth.consent.models import (
     ConsentSignoffStatus,
 )
 
-# Effective dates mirror the migration seeds.
 _PLATFORM_EFFECTIVE = datetime(2026, 1, 15, tzinfo=timezone.utc)
 _VERIFICATION_EFFECTIVE = datetime(2026, 5, 1, tzinfo=timezone.utc)
 
@@ -32,7 +25,7 @@ class LegalDocumentContent:
     title: str
     href: str
     signoff_status: ConsentSignoffStatus
-    body: str  # Markdown
+    body: str
 
 
 _PLATFORM_TERMS = """\
@@ -106,7 +99,7 @@ We share data only with the vetted agents and processors needed to deliver your
 verification, and where the law requires.
 
 ### 6. Contact
-Privacy questions: privacy@veriprops.com.
+Privacy questions: privacy@veriprops.ng.
 """
 
 _AGENT_TERMS = """\

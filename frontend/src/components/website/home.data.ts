@@ -290,7 +290,7 @@ export const footerLinks = {
     { label: "Our Story", href: ROUTES.ABOUT },
     { label: "Certification Standards", href: "#agents" },
     { label: "Become an Agent", href: buildAuthUrl(ROUTES.AUTH.GATE, { intent: AuthIntent.AGENT }) },
-    { label: "Contact Support", href: "mailto:support@veriprops.com" },
+    { label: "Contact Support", href: "mailto:support@veriprops.ng" },
   ] as FooterLink[],
   legal: [
     { label: "Privacy Policy", href: ROUTES.LEGAL.PRIVACY },

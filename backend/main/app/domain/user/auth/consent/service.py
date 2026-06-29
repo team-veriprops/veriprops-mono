@@ -52,11 +52,8 @@ class ConsentService:
     # ── Legal-document content (public marketing /legal/* pages) ─────────────
 
     async def seed_documents(self) -> None:
-        """Idempotently upsert every legal document from the code content registry.
-
-        Keyed on (type, consent_version): refreshes title/href/effective_at/body/
-        signoff_status on an existing row, or inserts a new one. Safe to run on
-        every boot (called from the runtime DataSeeder)."""
+        """Upsert every legal document from the content registry, keyed on
+        (type, consent_version). Idempotent — runs on every boot."""
         for content in LEGAL_DOCUMENT_CONTENT.values():
             existing = await self._doc_repo.get_by_type_version(
                 content.type, content.consent_version
@@ -80,10 +77,8 @@ class ConsentService:
                 ))
 
     async def get_legal_document(self, slug: str) -> Optional[LegalDocumentDto]:
-        """Published legal document (incl. body) for a `/legal/{slug}` page.
-
-        Backend owns the slug→document mapping (resolved via the stored href) so
-        the frontend never derives it."""
+        """Published legal document (incl. body) for a `/legal/{slug}` page. The
+        slug maps to a document via the stored href."""
         doc = await self._doc_repo.get_active_by_href(f"/legal/{slug}")
         if not doc:
             return None

@@ -44,27 +44,32 @@ self_audit:
   started: true
   completed: true
   findings:
-    - "Found + fixed a real runtime bug: GenericRepo.update jsonable_encodes datetimes → asyncpg rejected
-       effective_at as str. Seeder update now refreshes editorial fields only; effective_at set on create."
-    - "Baseline build was broken before S5 (missing NotificationBell import; dead mockUrlExtractor.ts).
-       Repaired minimally to satisfy the build-green requirement; both unrelated to S5."
-    - "Repo-wide `pnpm lint` still reports ~130 pre-existing problems in untouched files; all S5 files lint clean."
-    - "LegalDocument DRAFT-banner render verified live via curl rather than a testing-library unit test
-       (project has no component-render test harness); covered by build + live walkthrough."
+    - "GenericRepo.update runs the DTO through jsonable_encoder, which turned effective_at into a string and
+       asyncpg rejected it. The seeder update refreshes editorial fields only; effective_at is set on create."
+    - "Baseline build was already broken before S5 (missing NotificationBell import; dead mockUrlExtractor.ts).
+       Repaired both; unrelated to S5."
+    - "Repo-wide pnpm lint still reports ~130 pre-existing problems in untouched files; S5 files lint clean."
+    - "LegalDocument draft banner verified via the running app (the project has no component-render harness)."
 
 self_audit_s6:
   completed: true
   findings:
-    - "PHONE_VERIFICATION_ENABLED has no live enforcement site yet (phone OTP is deferred to the Phase-5 payment
-       gate, S9). Delivered the authoritative setting + public endpoint + frontend hook; S9 must consult it."
-    - "Authenticated /account UI walkthrough (revoke device, link/unlink, portal badge) verified at route/endpoint
-       level (401s + 307 login redirects); full logged-in click-through deferred (session-setup cost) — covered by
-       build + unit tests. Worth a Playwright pass with a seeded session later."
-    - "Security log uses a purpose-fit server-paginated list rather than the heavy admin DataTable (client-side
-       search/sort would mislead over a single server page). DataTable remains for admin tables."
+    - "PHONE_VERIFICATION_ENABLED now toggles the existing signup phone-verification step (email + OAuth).
+       When off, the number is collected but stored phone_verified=False; phone is verified at the Phase-5
+       payment step. Enforced in AuthService.signup/complete_profile; frontend reads /config/public."
+    - "Authenticated /account walkthrough verified at route/endpoint level (401s + 307 login redirects); a
+       logged-in click-through with a seeded session is still a useful follow-up."
+    - "Security log uses a server-paginated list, not the admin DataTable (client-side search/sort would
+       mislead over a single server page)."
+
+correction_pass:
+  completed: true
+  notes:
+    - "Fixed PHONE_VERIFICATION_ENABLED semantics; domain unified to veriprops.ng; removed AI-style comments
+       and Co-Authored-By trailers from this session's work."
 
 next_action: idle — S5 + S6 (MVP-spine Phases 1–2) complete. Resume at S7 (Phase 3 agent onboarding & KYC).
 
 started_at: 2026-06-29
-last_checkpoint: "S6 complete — auth hardening backend+frontend; backend 384 tests, frontend 241; build green;
-                  endpoints + route protection live-verified"
+last_checkpoint: "S6 + correction pass complete — phone flag wired to signup, veriprops.ng, de-AI;
+                  backend 387 tests, frontend 241; build green"

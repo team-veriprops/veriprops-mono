@@ -141,8 +141,8 @@ export interface CrossPortalSummary {
   personas: PersonaActionableCount[];
 }
 
-// Canonical full enum (all 10 document types) lives in @/types/models; re-exported
-// here so existing consent flows keep importing it from auth/models.
+// The full enum lives in @/types/models; re-exported so consent flows can keep
+// importing it from here.
 export { ConsentDocumentType } from "@/types/models";
 import { ConsentDocumentType } from "@/types/models";
 

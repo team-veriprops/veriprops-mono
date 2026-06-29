@@ -113,20 +113,29 @@ class AuthService:
         if not required.issubset(consent_types):
             raise ValidationException(message="Both Platform Terms and Privacy Policy must be accepted.")
 
-        # Server-side OTP gate — the user must have completed an OTP for both
-        # email and phone within the last 30 minutes (see OtpService.OTP_VERIFIED_TTL).
-        # Reject the signup otherwise; FE keeps the wizard on the verify step.
+        # Email must have a recent OTP marker. Phone is only required when phone
+        # verification is enabled; otherwise the number is collected here and
+        # verified later at the payment step.
+        phone_required = settings.PHONE_VERIFICATION_ENABLED
         email_recipient = EmailRecipient(email=req.email.lower())
         phone_recipient = PhoneNumber(dial_code=req.dial_code, number=req.phone)
         email_ok = await self._otp_service.is_recently_verified(
             OtpChannel.EMAIL, email_recipient.email,
         )
-        phone_ok = await self._otp_service.is_recently_verified(
-            OtpChannel.PHONE, phone_recipient.international_number,
+        phone_ok = (
+            await self._otp_service.is_recently_verified(
+                OtpChannel.PHONE, phone_recipient.international_number,
+            )
+            if phone_required
+            else False
         )
-        if not email_ok or not phone_ok:
+        if not email_ok or (phone_required and not phone_ok):
             raise ValidationException(
-                message="Please verify your email and phone before creating your account.",
+                message=(
+                    "Please verify your email and phone before creating your account."
+                    if phone_required
+                    else "Please verify your email before creating your account."
+                ),
             )
 
         password_hash = Utils.get_password_hash(req.password)
@@ -157,7 +166,8 @@ class AuthService:
         # Verified markers are single-use — drop them so a future signup attempt
         # with the same recipient must re-verify.
         await self._otp_service.consume_verified_marker(OtpChannel.EMAIL, email_recipient.email)
-        await self._otp_service.consume_verified_marker(OtpChannel.PHONE, phone_recipient.international_number)
+        if phone_required:
+            await self._otp_service.consume_verified_marker(OtpChannel.PHONE, phone_recipient.international_number)
 
         for consent in req.consents:
             await self._consent_service.record_user_consent(
@@ -267,7 +277,7 @@ class AuthService:
             phone_dial_code=dto.dial_code,
             phone=dto.phone,
             phone_e164=_phone_e164(dto.dial_code, dto.phone),
-            phone_verified=True,
+            phone_verified=settings.PHONE_VERIFICATION_ENABLED,
             country_of_residence=dto.country_of_residence,
             timezone=dto.timezone,
             preferred_currency=dto.preferred_currency,

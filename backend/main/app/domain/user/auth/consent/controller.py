@@ -21,8 +21,7 @@ consent_router = APIRouter(prefix="/consents", tags=["Consents"])
 consent_service: ConsentService = di[ConsentService]
 
 
-# ── Public legal documents (rendered on the marketing /legal/* pages) ───────
-# Unauthenticated: legal pages are public and crawlable (PRD R1.6).
+# Public legal documents — unauthenticated; legal pages are crawlable (PRD R1.6).
 
 @consent_router.get("/documents", response_model=SuccessResponse[LegalDocumentListDto])
 async def list_legal_documents():

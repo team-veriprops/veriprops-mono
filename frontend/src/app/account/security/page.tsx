@@ -9,7 +9,7 @@ import { Button } from "@3rdparty/ui/button";
 
 const PAGE_SIZE = 20;
 
-// Events that signal a security risk are visually emphasised in the log.
+// Risk-signalling events get a warning style in the log.
 const RISK_EVENTS = new Set<string>([
   SecurityEventType.LOGIN_FAILURE_WARNING,
   SecurityEventType.LOGIN_FAILURE,

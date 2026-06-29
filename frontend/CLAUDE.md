@@ -44,6 +44,18 @@ pnpm vitest run -t "test name pattern"
 Admin here `frontend\src\components\admin\nav.ts` and Agents here `frontend\src\components\agents\nav.ts`.
 * **Compulsorily**: Make sure all routes in the app is declared and that various Menu sidebars are up to date.
 
+## SEO (every public page)
+
+- Build a page's metadata with `buildMetadata({ title, description, path, image?, type?, noindex? })` from [src/lib/seo.ts](src/lib/seo.ts) — export it as `metadata` (static) or `generateMetadata` (dynamic). It sets canonical, Open Graph, Twitter, and robots from one place; don't hand-roll `Metadata`.
+- Add structured data with `<JsonLd data={...} />` ([src/components/seo/JsonLd.tsx](src/components/seo/JsonLd.tsx)) using the builders in `seo.ts` (`organizationJsonLd`, `websiteJsonLd`, `faqJsonLd`, `legalDocumentJsonLd`).
+- Keep [src/app/sitemap.ts](src/app/sitemap.ts) and [src/app/robots.ts](src/app/robots.ts) current: public marketing + legal routes are crawlable; `/portal`, `/admin`, `/agents`, `/account`, `/auth` are disallowed. VID-lookup pages pass `noindex` until `COMPLETED`.
+
+## Backend-served content & public flags
+
+- Legal pages render content the backend owns: the dynamic `/legal/[slug]` route fetches via [src/lib/legal.server.ts](src/lib/legal.server.ts) (`fetchLegalDocument`/`fetchLegalDocuments` → `/api/users/auth/consents/documents/...`) and renders Markdown through `LegalDocument`. Do not hardcode legal prose on the frontend.
+- Read runtime flags from the backend, not from `NEXT_PUBLIC_*`. `usePublicConfigQuery()` exposes `/config/public` (e.g. `phoneVerificationEnabled`, which drives whether the signup flow shows the phone-verification step).
+- The `/account/*` security surface (security log, devices, linked accounts, password) lives under `src/app/account/` on `AppShell`; the `PortalSwitcher` in the shell shows the cross-portal badge for multi-persona users.
+
 ## Layout
 
 - `src/app/` — App Router. Top-level segments are isolated user surfaces:

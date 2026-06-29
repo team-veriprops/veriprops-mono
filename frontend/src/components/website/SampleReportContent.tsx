@@ -2,11 +2,7 @@ import Link from "next/link";
 import { ShieldCheck, MapPin, FileText, Scale, Lock, ArrowRight } from "lucide-react";
 import { CTA_VERIFY_HREF } from "./home.data";
 
-/**
- * Static, redacted preview of a Veriprops certified report — so a prospective
- * buyer can see exactly what they receive before paying. Representative content
- * only; the live report (Phase 10) is generated from real verification data.
- */
+// Redacted preview of a certified report so a buyer sees what they get before paying.
 const sections = [
   {
     icon: FileText,

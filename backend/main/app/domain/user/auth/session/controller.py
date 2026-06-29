@@ -58,9 +58,9 @@ async def logout(request: Request, authorize: AuthJWT = Depends()):
 
 @session_router.post("/current", response_model=SuccessResponse[bool])
 async def refresh_session(request: Request, authorize: AuthJWT = Depends()):
-    # A revoked (or absent) device session must not be renewable, even though the
-    # refresh JWT is still cryptographically valid — this is what makes "revoke
-    # device" and reset-time "revoke all sessions" actually terminate a session.
+    # The refresh JWT stays valid until expiry, so check the device session too:
+    # a revoked one must not refresh. This is what makes device-revoke and
+    # reset-time revoke-all actually end a session.
     refresh_cookie = request.cookies.get("refresh_token")
     token_hash = Utils.sha256(refresh_cookie) if refresh_cookie else None
     device = await session_service.get_device_by_token_hash(token_hash) if token_hash else None

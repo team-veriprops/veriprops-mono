@@ -16,8 +16,6 @@ user_service: UserService = di[UserService]
 
 @cross_portal_router.get("/summary", response_model=SuccessResponse[CrossPortalSummaryDto])
 async def cross_portal_summary(authorize: AuthJWT = Depends()):
-    """Per-persona actionable counts for the authenticated user. The frontend
-    derives the 'other hat' badge from this; single-persona users get one entry."""
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
     user = await user_service.get_user_model(user_id)

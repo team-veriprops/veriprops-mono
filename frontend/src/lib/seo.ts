@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 
-/**
- * Canonical site identity used by every page's metadata and structured data.
- * Single source of truth so titles, canonicals, and Open Graph stay consistent.
- */
+/** Site identity used to build every page's metadata and structured data. */
 export const SITE = {
   name: "Veriprops",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://veriprops.ng",
@@ -36,11 +33,8 @@ export function pageTitle(title?: string): string {
   return title.includes(SITE.titleSuffix) ? title : `${title} | ${SITE.titleSuffix}`;
 }
 
-/**
- * Shared metadata builder — every public page should produce its `metadata`
- * (or `generateMetadata`) through this so canonical, Open Graph, Twitter, and
- * robots stay uniform. See the standing SEO convention in CLAUDE-adjacent docs.
- */
+/** Builds a page's Metadata (canonical, Open Graph, Twitter, robots). Every
+ *  public page should set its metadata through this. */
 export function buildMetadata(seo: PageSeo = {}): Metadata {
   const title = pageTitle(seo.title);
   const description = seo.description ?? SITE.description;

@@ -6,19 +6,13 @@ import type {
   SuccessResponse,
 } from "@app-types/models";
 
-/**
- * Server-side reads of the public legal documents. These endpoints are
- * unauthenticated and crawlable; the backend owns the document content,
- * version, and sign-off status (single source of truth). Used by the
- * `/legal/[slug]` pages and the sitemap.
- */
+// Reads the public legal documents for the /legal/[slug] pages and the sitemap.
 
 const CONSENTS_BASE = `${serverConfig.backendApi}/api/users/auth/consents`;
 
 async function getJson<T>(url: string): Promise<T | null> {
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
-    // Legal content changes rarely; revalidate hourly so edits propagate.
     next: { revalidate: 3600 },
   });
   if (!res.ok) return null;

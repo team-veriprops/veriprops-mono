@@ -1,9 +1,8 @@
 """Cross-portal actionable-count aggregator (PRD §2.14).
 
-Forward-compatible by design: actionable-count *sources* register themselves
-here. Until later slices add sources (agent tasks → S11, notifications → S16),
-the registry is empty and every persona reports 0 — so the badge is wired now
-and lights up automatically when those domains land, with no change here."""
+Count sources register themselves here. The registry starts empty (agent tasks
+and notifications register theirs in later slices), so every persona reports 0
+until then."""
 from __future__ import annotations
 
 from typing import Awaitable, Callable, ClassVar, List
@@ -26,7 +25,6 @@ class CrossPortalService:
 
     @classmethod
     def register_source(cls, source: PersonaCountSource) -> None:
-        """Register a per-persona actionable-count source (called by later slices)."""
         cls._sources.append(source)
 
     async def summary(self, user_id: str, personas: List[UserPersona]) -> CrossPortalSummaryDto:
