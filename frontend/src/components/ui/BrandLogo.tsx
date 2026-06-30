@@ -19,7 +19,9 @@ export default function BrandLogo({
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
       >
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+        <div 
+        className="flex h-10 w-10 items-center justify-center rounded-xl"
+        style={{ backgroundColor: "var(--brand-navy)", borderColor: "rgba(196,198,207,0.4)" }}>
           <Shield className="h-5 w-5 text-primary-foreground" />
         </div>
 
