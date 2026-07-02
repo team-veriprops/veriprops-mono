@@ -58,12 +58,27 @@ status: running (S1–S4 foundation)
       `/auth/admin-invite/[token]` (preview-driven signup/login/already-admin routing). Backend 431 tests;
       frontend 251; tsc+lint clean. Known gap: templated invite email deferred (link returned instead).
 
+- S9  Phase 5 — Customer submission & payment.
+      Backend: property (thin first-class §4.3), verification (central aggregate — VID/DRAFT on step-1,
+      resumable draft on the row, 24h price-lock, VERIFICATION_TERMS consent snapshot, DRAFT→SUBMITTED→
+      PAYMENT_PENDING→PAID guarded by the state machine; post-PAID projected by the derive owner), payment
+      (idempotent init + idempotent webhook on the gateway event id). Provisional per-tier pricing in NGN kobo
+      (Money minor units; FX indicative via `TransactionCurrency.fx_rate`). Geocoding facade (Stub default +
+      gated Google Places + factory) with NG autocomplete/geocode endpoints. Deterministic payment
+      (`PAYMENT_STUB_MODE` + non-prod `/payments/stub/confirm` → idempotent webhook → PAID); phone gate before
+      payment; first payment upgrades the customer to `trusted`. property/verifications/payments folded into
+      `0001`. Frontend: submission WizardOverlay at `/portal/verifications/new` (Property/Tier/Consent,
+      idempotent VID/DRAFT on load, autosave per step) → pay overlay `/portal/verifications/[id]/pay`
+      (phone-verify gate + initiate + deterministic confirm) → `/confirmed` (VID + SLA + track CTA);
+      backend-sourced pricing/FX (never recomputed on the client). Backend 453 tests; frontend 260; tsc+lint
+      clean. Gaps: live-gateway call + emailed receipt + full draft-resume UI + conditional property details
+      deferred (see runtime-state self_audit_s9). §B liability-cap copy gates go-live only.
+
 ## Current Slice
-- none — S8 (Phase 4) complete; next is S9 (Phase 5 customer submission & payment).
+- none — S9 (Phase 5) complete; Phases 3–5 (S7–S9) all delivered. Next is S10 (Phase 6 admin control panel + 6a).
 
 ## Pending Slices
-- S9  Phase 5 — Customer submission & payment  *(gated: liability-cap copy §B)*
-- S10 Phase 6 + 6a — Admin control panel & chargeback
+- S10 Phase 6 + 6a — Admin control panel & chargeback  *(introduces the task domain/table)*
 - S11 Phase 7 — Agent task execution
 - S12 Phase 8 — Admin review & report release
 - S13 Phase 9 — Customer tracking & evidence (SSE)
@@ -99,7 +114,7 @@ status: running (S1–S4 foundation)
 - S1 `bec85e1`, S2 `0465a5a`, S3 `a138219`, S4 (this commit) — foundation slices.
 
 ## Completion %
-- ~35% (8 of 23 slices; Phase-0 foundation + Phases 1–4 complete)
+- ~39% (9 of 23 slices; Phase-0 foundation + Phases 1–5 complete)
 
 ---
 

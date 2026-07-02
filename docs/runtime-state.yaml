@@ -4,7 +4,7 @@ command: resume
 status: idle
 phase: idle
 
-current_slice: null   # S8 (Phase 4 admin onboarding & RBAC) complete; next is S9 (Phase 5 customer submission & payment)
+current_slice: null   # S9 (Phase 5 customer submission & payment) complete; next is S10 (Phase 6 admin control panel + 6a chargeback)
 current_subtask: null
 
 completed_slices:
@@ -15,7 +15,35 @@ completed_slices:
   - S5   # Phase 1 marketing completion + Legal documents + footer pages
   - S6   # Phase 2 auth hardening: phone-flag + public config, revoked-session, security log, cross-portal
   - S7   # Phase 3 agent onboarding & KYC
-  - S8   # Phase 4 admin onboarding & RBAC (see below)
+  - S8   # Phase 4 admin onboarding & RBAC
+  - S9   # Phase 5 customer submission & payment (see below)
+
+# ── S9 (Phase 5) summary ──────────────────────────────────────────
+s9_submission_payment:
+  backend:
+    - "Domains: property (thin first-class, §4.3), verification (central aggregate — VID/DRAFT on step-1,
+       resumable draft on the row, 24h price-lock, VERIFICATION_TERMS consent snapshot, lifecycle
+       DRAFT->SUBMITTED->PAYMENT_PENDING->PAID guarded by the verification state machine; post-PAID projected
+       by the derive owner), payment (idempotent init + idempotent webhook on gateway event id)."
+    - "Provisional per-tier pricing (app/domain/verification/pricing.py) in NGN kobo; foreign figure indicative
+       via TransactionCurrency.fx_rate — pending admin pricing API (Phase 18). Money in integer minor units."
+    - "Geocoding facade (appodus_utils/integrations/geocoding — deterministic Stub default + gated Google
+       Places scaffold + factory); NG autocomplete/geocode endpoints on the verification router."
+    - "Deterministic payment: PAYMENT_STUB_MODE returns a synthetic checkout URL; POST /payments/stub/confirm
+       (non-prod only) routes through the idempotent webhook to drive PAID. Phone gate before payment; first
+       successful payment upgrades the customer to trusted. property/verifications/payments folded into 0001."
+  frontend:
+    - "Submission wizard in WizardOverlay at /portal/verifications/new (Property / Tier & Pricing / Consent),
+       VID/DRAFT created on load (idempotent client key), autosaved per step; Continue-to-Payment submits and
+       routes to the pay overlay at /portal/verifications/[id]/pay (step 4) — phone-verify gate (OTP) then
+       initiate + deterministic confirm; /confirmed shows VID + SLA + track CTA."
+    - "Backend-sourced pricing/FX (never recomputed on the client): currency pills, NGN-prominent quote,
+       indicative foreign range + 24h price-lock note. verification-service + hooks + types."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 453 (+22: pricing, geocoding, verification state/idempotency/consent, payment
+                    #   phone-gate/webhook-idempotency/trust); frontend 260 (+9: submission validation + service)
 
 # ── S8 (Phase 4) summary ──────────────────────────────────────────
 s8_admin_rbac:
@@ -80,22 +108,29 @@ self_audit_s7:
     - "Two frontend timezone tests (suggestTimezoneForCountry) are flaky/environment-dependent — passed on
        re-run; unrelated to S7."
 
-self_audit_s8:
+self_audit_s9:
   completed: true
   findings:
-    - "Invite email delivery is NOT wired to a template — the invite endpoint returns the invitation link
-       (inviteUrl) to the inviting Super Admin, shown as a copyable link in /admin/team. Proper templated
-       email (AvailableTemplate.ADMIN_INVITE + jinja) is a follow-up; avoided template-not-found risk."
-    - "Invitation preview endpoint is intentionally unauthenticated (token-guarded, reveals only email +
-       sub-role + scenario) so the acceptance flow can route new/existing users before login."
-    - "Full `pnpm build` still deferred (low disk); tsc --noEmit + eslint (new files) + full vitest (251) green."
+    - "Live gateway (Paystack) initialize_payment is NOT wired for PAYMENT_STUB_MODE=false — checkout_url is
+       empty in live mode. The facade + webhook idempotency are in place; wiring the real provider call +
+       signature-verified webhook is a follow-up (stub-first, deterministic default per OTP_MODE philosophy)."
+    - "Emailed receipt (§5.4) not wired (no AvailableTemplate.PAYMENT_RECEIPT) — follow-up."
+    - "Draft resume is partial: the wizard autosaves per step to the verification row, but /new always starts
+       a fresh DRAFT — a 'resume abandoned draft' list/entry is a follow-up."
+    - "Submission property step captures type/address/landmark/state; conditional Land/Building details,
+       document upload, and seller info (model supports them) are not yet surfaced in the wizard UI."
+    - "Tracking page /portal/verifications/[id] (the /confirmed 'Track' target) is Phase 9/S13 — not built here."
+    - "Pricing is provisional per-tier (pending Phase 18 admin pricing API); §B liability-cap copy gates
+       Phase-5 GO-LIVE only (build proceeds against the seeded VERIFICATION_TERMS draft copy)."
+    - "Full `pnpm build` still deferred (low disk); tsc --noEmit + eslint (new files) + full vitest (260) green."
 
-next_action: idle — S8 (Phase 4) complete. Resume at S9 (Phase 5 customer submission & payment). S9 builds
-             property/verification/task/payment domains + geocoding & payment(stub) facades, folds their
-             tables into 0001, and the route-backed submission + payment full-screen overlays. Reuse: derive
-             owner (app/core/state), VID, SLA, idempotency, Money; UserService.upgrade_trust_status_if_eligible;
-             note UserRepo.has_active_verification already forward-refs Verification(customer_id,status).
+next_action: idle — S9 (Phase 5) complete; Phases 3–5 (S7–S9) all delivered. Resume at S10 (Phase 6 admin
+             control panel + 6a chargeback): verifications list/detail, agent assignment (instantiates tasks
+             per tier via roles_for_tier / dependencies), PAID->IN_PROGRESS via the derive owner, work queue,
+             chargeback sub-process. The task domain/table is introduced there (deferred from S9 by design —
+             derive_status floors at PAID with no tasks).
 
 started_at: 2026-07-02
-last_checkpoint: "S8 complete — admin invitation+team domains, RBAC gates, invite acceptance (3 scenarios),
-                  team DetailDrawer UI; admin_invitations in 0001; backend 431 tests, frontend 251; tsc+lint clean."
+last_checkpoint: "S9 complete — property/verification/payment domains, geocoding facade, deterministic payment
+                  (idempotent webhook), submission + payment full-screen overlays; tables in 0001; backend 453
+                  tests, frontend 260; tsc+lint clean. Phases 3–5 (S7–S9) all shipped."

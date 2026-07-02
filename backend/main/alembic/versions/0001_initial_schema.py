@@ -385,6 +385,87 @@ def _create_kyc_records():
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Property / Verification / Payment (PRD §4.3, §4.4, §5)
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _create_properties():
+    op.create_table(
+        "properties",
+        sa.Column("customer_id", sa.String(length=36), nullable=False),
+        sa.Column("property_type", sa.String(length=16), nullable=False),
+        sa.Column("address", sa.String(length=512), nullable=True),
+        sa.Column("landmark", sa.String(length=512), nullable=True),
+        sa.Column("state", sa.String(length=64), nullable=True),
+        sa.Column("lga", sa.String(length=64), nullable=True),
+        sa.Column("latitude", sa.Float(), nullable=True),
+        sa.Column("longitude", sa.Float(), nullable=True),
+        sa.Column("place_id", sa.String(length=255), nullable=True),
+        sa.Column("details", JSONB_VARIANT, nullable=True),
+        sa.Column("seller", JSONB_VARIANT, nullable=True),
+        sa.Column("documents", JSONB_VARIANT, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_properties_id", "properties", ["id"], unique=True)
+    op.create_index("ix_properties_customer_id", "properties", ["customer_id"], unique=False)
+
+
+def _create_verifications():
+    op.create_table(
+        "verifications",
+        sa.Column("vid", sa.String(length=16), nullable=False),
+        sa.Column("customer_id", sa.String(length=36), nullable=False),
+        sa.Column("property_id", sa.String(length=36), nullable=True),
+        sa.Column("tier", sa.String(length=16), nullable=True),
+        sa.Column("status", sa.String(length=20), nullable=False, server_default="DRAFT"),
+        sa.Column("price_locked_minor", sa.BigInteger(), nullable=True),
+        sa.Column("currency", sa.String(length=8), nullable=False, server_default="NGN"),
+        sa.Column("charge_currency", sa.String(length=8), nullable=True),
+        sa.Column("charge_amount_minor", sa.BigInteger(), nullable=True),
+        sa.Column("fx_rate_at_quote", sa.Float(), nullable=True),
+        sa.Column("price_lock_expires_at", UTCDateTime, nullable=True),
+        sa.Column("consent_snapshot_id", sa.String(length=36), nullable=True),
+        sa.Column("draft_step", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("draft_payload", sa.Text(), nullable=True),
+        sa.Column("paid_at", UTCDateTime, nullable=True),
+        sa.Column("sla_due_date", sa.Date(), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+        sa.UniqueConstraint("vid", name="uq_verifications_vid"),
+    )
+    op.create_index("ix_verifications_id", "verifications", ["id"], unique=True)
+    op.create_index("ix_verifications_vid", "verifications", ["vid"], unique=False)
+    op.create_index("ix_verifications_customer_id", "verifications", ["customer_id"], unique=False)
+    op.create_index("ix_verifications_property_id", "verifications", ["property_id"], unique=False)
+    op.create_index("ix_verifications_status", "verifications", ["status"], unique=False)
+
+
+def _create_payments():
+    op.create_table(
+        "payments",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("customer_id", sa.String(length=36), nullable=False),
+        sa.Column("tx_ref", sa.String(length=64), nullable=False),
+        sa.Column("gateway_event_id", sa.String(length=128), nullable=True),
+        sa.Column("provider", sa.String(length=32), nullable=True),
+        sa.Column("method", sa.String(length=16), nullable=False),
+        sa.Column("status", sa.String(length=20), nullable=False, server_default="INITIATED"),
+        sa.Column("amount_minor", sa.BigInteger(), nullable=False),
+        sa.Column("currency", sa.String(length=8), nullable=False, server_default="NGN"),
+        sa.Column("charge_currency", sa.String(length=8), nullable=True),
+        sa.Column("charge_amount_minor", sa.BigInteger(), nullable=True),
+        sa.Column("checkout_url", sa.String(length=1024), nullable=True),
+        sa.Column("failure_count", sa.Integer(), nullable=False, server_default="0"),
+        *AlembicUtils.base_audit_columns(),
+        sa.UniqueConstraint("tx_ref", name="uq_payments_tx_ref"),
+    )
+    op.create_index("ix_payments_id", "payments", ["id"], unique=True)
+    op.create_index("ix_payments_verification_id", "payments", ["verification_id"], unique=False)
+    op.create_index("ix_payments_customer_id", "payments", ["customer_id"], unique=False)
+    op.create_index("ix_payments_tx_ref", "payments", ["tx_ref"], unique=False)
+    op.create_index("ix_payments_gateway_event", "payments", ["gateway_event_id"], unique=False)
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Seed data
 # ─────────────────────────────────────────────────────────────────────
 
@@ -564,6 +645,9 @@ _TABLE_BUILDERS = [
     ("agent_application_drafts", _create_agent_application_drafts),
     ("admin_invitations", _create_admin_invitations),
     ("kyc_records", _create_kyc_records),
+    ("properties", _create_properties),
+    ("verifications", _create_verifications),
+    ("payments", _create_payments),
 ]
 
 

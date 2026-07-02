@@ -86,6 +86,12 @@ class Settings(AppodusBaseSettings):
     # ACTIVES
     ACTIVE_PAYMENT_METHOD: PaymentMethod = PaymentMethod.FLUTTERWAVE
 
+    # Deterministic payment path for local/test/dev automation (mirrors OTP_MODE):
+    # initiation returns a synthetic checkout URL and a stub-confirm endpoint drives
+    # PAYMENT_PENDING -> PAID via the idempotent webhook handler, without a live
+    # gateway. Must be False in production (real gateway webhooks drive PAID).
+    PAYMENT_STUB_MODE: bool = True
+
     # Toggles the phone-verification step in the email/OAuth signup flow. When off,
     # the number is collected but verified later at the Phase-5 payment step.
     PHONE_VERIFICATION_ENABLED: bool = False
@@ -156,6 +162,9 @@ class Settings(AppodusBaseSettings):
     # Super Admin
     SUPER_ADMIN_PASSWORD: Optional[str] = None
     SUPER_ADMIN_EMAIL: Optional[str] = None
+
+    # Geocoding (PRD §5.1) — STUB (deterministic NG fixtures) | GOOGLE_PLACES
+    GEOCODING_PROVIDER: Optional[str] = "STUB"
 
     # KYC (PRD Open Q #15 / #16) — STUB | MONO | DOJAH
     KYC_PROVIDER: Optional[str] = "STUB"
