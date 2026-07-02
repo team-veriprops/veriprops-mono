@@ -2,8 +2,6 @@
 
 import { Toaster } from "@components/3rdparty/ui/toaster";
 import { isAutomationEnvironment } from "@lib/automation";
-import { publicConfig } from "@lib/config/public";
-import { LoadScript } from "@react-google-maps/api";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
@@ -23,12 +21,10 @@ export function ClientWrapperProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     if (isAutomationEnvironment()) {
-      (window as any).__app_ready__ = true;
-      (window as any).__TEST_MODE__ = true;
+      window.__app_ready__ = true;
+      window.__TEST_MODE__ = true;
     }
   }, []);
-
-  const googleLibraries: ("places")[] = ["places"];
 
   return (
     <ThemeProvider

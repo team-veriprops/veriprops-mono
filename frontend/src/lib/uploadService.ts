@@ -250,7 +250,7 @@ export function validateFile(file: File): ValidationResult {
  */
 export function trackEvent(
   eventName: string,
-  properties: Record<string, any>
+  properties: Record<string, unknown>
 ): void {
   console.log(`[Analytics] ${eventName}`, properties);
   // TODO: Implement real analytics

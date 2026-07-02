@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Menu, X, CheckCircle2 } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { navLinks, CTA_VERIFY_HREF } from "./home.data";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { UserType, UserPersona } from "@components/website/auth/models";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ export default function AccountPasswordPage() {
     defaultValues: { password: "", confirmPassword: "" },
     mode: "onBlur",
   });
-  const password = form.watch("password");
+  const password = useWatch({ control: form.control, name: "password" });
 
   const onSubmit = async (values: ResetPasswordValues) => {
     try {

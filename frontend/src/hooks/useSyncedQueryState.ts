@@ -3,43 +3,44 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-export function useSyncedQueryState<T extends Record<string, any>>(
+export function useSyncedQueryState<T extends Record<string, unknown>>(
   initialState: T,
   storageKey?: string
 ) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
 
-  // const [state, setState] = useState<T>(initialState);
-  
-  // Stabilize the initial state reference
+  // Stabilize the initial state reference — callers typically pass a fresh
+  // object literal every render, and we only want the *first* one to seed
+  // effect deps below (re-running on every render would defeat the effect).
   const initialRef = useRef(initialState);
-  const [state, setState] = useState<T>(initialRef.current);
+  const [state, setState] = useState<T>(initialState);
 
   // Parse query params on mount and whenever searchParams changes
   useEffect(() => {
-    const queryState: Partial<T> = {};
+    const queryState: Record<string, unknown> = {};
 
     for (const [key, value] of searchParams.entries()) {
       try {
         if (value.includes(",")) {
-          (queryState as any)[key] = value.split(",");
+          queryState[key] = value.split(",");
         } else if (value === "true" || value === "false") {
-          (queryState as any)[key] = value === "true";
+          queryState[key] = value === "true";
         } else if (!isNaN(Number(value)) && value !== "") {
-          (queryState as any)[key] = Number(value);
+          queryState[key] = Number(value);
         } else if (value.startsWith("{") || value.startsWith("[")) {
-          (queryState as any)[key] = JSON.parse(decodeURIComponent(value));
+          queryState[key] = JSON.parse(decodeURIComponent(value));
         } else {
-          (queryState as any)[key] = decodeURIComponent(value);
+          queryState[key] = decodeURIComponent(value);
         }
-      } catch (e) {
-        (queryState as any)[key] = value;
+      } catch {
+        queryState[key] = value;
       }
     }
 
-    let next = { ...initialRef.current, ...queryState };
+    const next = { ...initialRef.current, ...queryState } as T;
 
     // Load from localStorage if no query params
     if (storageKey && Object.keys(queryState).length === 0) {
@@ -47,7 +48,7 @@ export function useSyncedQueryState<T extends Record<string, any>>(
         const saved = localStorage.getItem(storageKey);
         if (saved) {
           const parsedSaved = JSON.parse(saved);
-          setState({ ...initialState, ...parsedSaved });
+          setState({ ...initialRef.current, ...parsedSaved });
           return;
         }
       } catch {
@@ -59,7 +60,7 @@ export function useSyncedQueryState<T extends Record<string, any>>(
     setState((prev) =>
       JSON.stringify(prev) === JSON.stringify(next) ? prev : next
     );
-  }, [JSON.stringify(searchParams.entries), initialRef.current, storageKey]);
+  }, [searchParams, searchParamsString, storageKey]);
 
   // Update URL and localStorage
   const updateState = useCallback(
@@ -95,7 +96,7 @@ export function useSyncedQueryState<T extends Record<string, any>>(
         const newUrl = `${pathname}${newSearch ? `?${newSearch}` : ""}`;
 
         // Only navigate if URL actually changed
-        if (newUrl !== `${pathname}?${searchParams.toString()}`) {
+        if (newUrl !== `${pathname}?${searchParamsString}`) {
           router.replace(newUrl);
         }
 
@@ -110,7 +111,7 @@ export function useSyncedQueryState<T extends Record<string, any>>(
         return newState;
       });
     },
-    [pathname, JSON.stringify(searchParams.entries), router, storageKey]
+    [pathname, searchParamsString, router, storageKey]
   );
 
   // Reset to initial state

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@3rdparty/ui/button";
 import { signupStep3Schema, type SignupStep3Values } from "../schemas";
@@ -33,7 +33,8 @@ export default function ResidenceStep({ defaultValues, onSubmit, onBack }: Props
     mode: "onBlur",
   });
 
-  const country = form.watch("countryOfResidence");
+  const country = useWatch({ control: form.control, name: "countryOfResidence" });
+  const preferredCurrency = useWatch({ control: form.control, name: "preferredCurrency" });
 
   useEffect(() => {
     if (!country) return;
@@ -86,7 +87,7 @@ export default function ResidenceStep({ defaultValues, onSubmit, onBack }: Props
       <Field label="Preferred currency" error={form.formState.errors.preferredCurrency?.message}>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {SUPPORTED_CURRENCIES.map((c) => {
-            const selected = form.watch("preferredCurrency") === c;
+            const selected = preferredCurrency === c;
             return (
               <button
                 key={c}

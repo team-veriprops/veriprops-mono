@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { useIsMobile } from '@hooks/use-mobile';
 import {
@@ -43,11 +43,17 @@ export function DocumentUploadModal({
   const isMobile = useIsMobile();
   const [localMedia, setLocalMedia] = useState<MediaItem[]>(mediaItems);
 
-  useEffect(() => {
+  // Reset the draft whenever the modal transitions into the open state, so
+  // reopening always starts from the latest saved media rather than a stale
+  // in-progress draft. Adjusted during render (React's documented pattern for
+  // resetting state on a prop/condition change) instead of in an effect.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setLocalMedia(mediaItems);
     }
-  }, [open, mediaItems]);
+  }
 
   const canSave =
     localMedia.length > 0 &&

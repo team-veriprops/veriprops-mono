@@ -4,7 +4,6 @@
  * Registered only in the agent surface (src/app/agents/layout.tsx).
  */
 
-const CACHE_NAME = "veriprops-agent-v1";
 const DB_NAME = "veriprops-offline";
 const STORE_UPLOADS = "uploads";
 
@@ -79,7 +78,7 @@ async function flushUploads() {
       if (res.ok) {
         await deleteUpload(db, entry.id);
       }
-    } catch (_) {
+    } catch {
       // Will retry on next sync
     }
   }

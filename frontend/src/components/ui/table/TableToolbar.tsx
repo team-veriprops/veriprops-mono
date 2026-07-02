@@ -3,7 +3,7 @@
 import { Input } from "@3rdparty/ui/input";
 import { Search } from "lucide-react";
 import { ReactNode } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useDebouncedCallback } from "use-debounce";
 import { useGlobalSettings } from "@stores/useGlobalSettings";
 
@@ -18,12 +18,9 @@ export function TableToolbar({
   children,
 }: ToolbarProps) {
   const { settings } = useGlobalSettings();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { replace } = useRouter();
 
-  const handleSearchTextChange = useDebouncedCallback((searchTerm) => {
-    console.log(`Searching... ${searchTerm}`);
+  const handleSearchTextChange = useDebouncedCallback((searchTerm: string) => {
     onSearchQueryChange(searchTerm);
   }, settings.searchDebounceSeconds);
 

@@ -6,7 +6,7 @@ import { cn } from '@lib/utils'
 interface FormFieldProps {
   name: string
   label?: string
-  children: React.ReactElement<any>
+  children: React.ReactElement<{ className?: string } & Record<string, unknown>>
 }
 
 export function FormField({ name, label, children }: FormFieldProps) {

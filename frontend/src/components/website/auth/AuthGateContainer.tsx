@@ -8,7 +8,6 @@ import AuthHeading from "./AuthHeading";
 import SocialAuthButtons, { AuthDivider } from "./SocialAuthButtons";
 import { ROUTES, isAuthIntent, buildAuthUrl} from "@lib/routes";
 import { AuthIntent } from "./models";
-import { Sign } from "node:crypto";
 
 interface IntentCopy {
   eyebrow: string;

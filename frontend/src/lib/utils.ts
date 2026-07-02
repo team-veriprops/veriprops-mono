@@ -2,7 +2,6 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { redirect } from "next/navigation";
 import { getFxRate, Measurement, Money, TransactionCurrency } from "@/types/models";
-import { HttpError } from "./FetchHttpClient";
 import { ROUTES } from "./routes";
 
 

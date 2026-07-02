@@ -88,7 +88,7 @@ class Settings(AppodusBaseSettings):
 
     # Toggles the phone-verification step in the email/OAuth signup flow. When off,
     # the number is collected but verified later at the Phase-5 payment step.
-    PHONE_VERIFICATION_ENABLED: bool = True
+    PHONE_VERIFICATION_ENABLED: bool = False
 
     # TEMPLATING
     TEMPLATE_ENGINE: Optional[str] = "jinja2"

@@ -33,7 +33,7 @@ import { findCountry } from "@components/website/auth/libs/auth/locale";
 
 const STEPS = ["Account", "Verify", "Residence", "Consent"];
 
-interface DraftPayload extends Partial<SignupStep1Values & SignupStep2Values & SignupStep3Values> {}
+type DraftPayload = Partial<SignupStep1Values & SignupStep2Values & SignupStep3Values>;
 
 export default function SignupContainer() {
   const router = useRouter();
@@ -61,7 +61,10 @@ export default function SignupContainer() {
   }, [emailParam, firstNameParam, lastNameParam]);
 
   // Derive step 3 defaults from the phone country code chosen in step 2.
-  const step3Defaults = useMemo((): Partial<SignupStep3Values> | undefined => {
+  // Left unmemoized (a plain derived value) — React Compiler auto-memoizes
+  // this at build time, and a manual useMemo here couldn't agree with the
+  // compiler's own (more precise) dependency inference.
+  const step3Defaults = ((): Partial<SignupStep3Values> | undefined => {
     if (step3) return step3;
     if (!step2?.countryCode) return undefined;
     const info = findCountry(step2.countryCode);
@@ -71,7 +74,7 @@ export default function SignupContainer() {
       timezone: info.defaultTimezone,
       preferredCurrency: info.defaultCurrency,
     };
-  }, [step3, step2?.countryCode]);
+  })();
 
   const signupMutation = useSignupMutation();
 

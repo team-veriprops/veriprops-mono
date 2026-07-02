@@ -1,16 +1,6 @@
-import type { ComponentType, CSSProperties } from "react";
-import { Upload, Search, Shield, Lock, Award } from "lucide-react";
 import { methodologySteps } from "./home.data";
 import { AuthIntent } from "./auth/models";
 import { ROUTES, buildAuthUrl } from "@lib/routes";
-
-const iconMap: Record<string, ComponentType<{ className?: string; strokeWidth?: number; style?: CSSProperties }>> = {
-  Upload,
-  Search,
-  Shield,
-  Lock,
-  Award,
-};
 
 export default function RigorousMethodology() {
   return (
@@ -42,7 +32,6 @@ export default function RigorousMethodology() {
         {/* Steps */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-2">
           {methodologySteps.map((step, idx) => {
-            const Icon = iconMap[step.icon] ?? Award;
             const isFirst = idx === 0;
             const isLast = idx === methodologySteps.length - 1;
 

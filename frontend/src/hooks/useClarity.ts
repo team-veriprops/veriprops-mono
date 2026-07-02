@@ -2,29 +2,29 @@
 
 import { useCallback } from 'react'
 
-declare global {
-  interface Window {
-    clarity?: (...args: [string, ...any[]]) => void
-  }
-}
+type ClarityQueue = NonNullable<Window['clarity']>
 
 export function useClarity() {
   const clarity = typeof window !== 'undefined' ? window.clarity : undefined
 
-const init = useCallback((projectId: string) => {
-  if (!projectId || typeof window === 'undefined') return;
+  const init = useCallback((projectId: string | undefined) => {
+    if (!projectId || typeof window === 'undefined') return
 
-  (function (c: any, l: any, a: any, r: any, i: string, t: any, y: any) {
-    c[a] = c[a] || function () {
-      (c[a].q = c[a].q || []).push(arguments)
-    }
-    t = l.createElement(r)
-    t.async = 1
-    t.src = 'https://www.clarity.ms/tag/' + i
-    y = l.getElementsByTagName(r)[0]
-    y?.parentNode?.insertBefore(t, y)
-  })(window, document, 'clarity', 'script', projectId, null, null) // ✅ supply all 7 arguments
-}, [])
+    const w = window
+    const queue: ClarityQueue =
+      w.clarity ||
+      ((...args: unknown[]) => {
+        queue.q = queue.q || []
+        queue.q.push(args)
+      })
+    w.clarity = queue
+
+    const script = document.createElement('script')
+    script.async = true
+    script.src = 'https://www.clarity.ms/tag/' + projectId
+    const first = document.getElementsByTagName('script')[0]
+    first?.parentNode?.insertBefore(script, first)
+  }, [])
 
   const identify = useCallback((userId: string, sessionId?: string, pageId?: string, name?: string) => {
     clarity?.('identify', userId, sessionId, pageId, name)

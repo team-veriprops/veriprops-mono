@@ -36,7 +36,7 @@ export function useCurrentSession(enabled = true) {
       const res = await authService.currentSession();
       if (res.data) setSession(res.data);
       if (isAutomationEnvironment()) {
-        (window as any).__auth_snapshot__ = {
+        window.__auth_snapshot__ = {
           isAuthenticated: !!res.data,
           userId: res.data?.user?.id ?? null,
           personas: res.data?.user?.personas ?? [],

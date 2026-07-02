@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@3rdparty/ui/button";
 import VerifiedInput, { VerifiedInputType } from "@components/ui/verified_input/VerifiedInput";
@@ -12,6 +12,9 @@ import { OtpChannel } from "@components/website/auth/models";
 import { getErrorMessage } from "@lib/utils";
 
 export type VerifyStepValues = VerifyFormValues;
+
+// Mirrors the `phone` field constraints in verifyFormSchema.
+const isValidPhoneNumber = (phone: string) => /^\d{7,15}$/.test(phone);
 
 interface Props {
   defaults: { email: string; countryCode?: string; dialCode?: string; phone?: string };
@@ -37,16 +40,22 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
     mode: "onBlur",
   });
 
-  // When phone verification is off the number is still collected but not OTP'd;
-  // it gets verified at payment instead. Satisfy the form so it isn't blocked.
-  useEffect(() => {
-    if (!phoneVerificationEnabled) {
-      form.setValue("phoneVerified", true, { shouldValidate: true });
-    }
-  }, [phoneVerificationEnabled, form]);
-
   const sendOtp = useSendOtpMutation();
   const verifyOtp = useVerifyOtpMutation();
+  const emailVerified = useWatch({ control: form.control, name: "emailVerified" });
+  const phoneVerified = useWatch({ control: form.control, name: "phoneVerified" });
+  const phone = useWatch({ control: form.control, name: "phone" });
+
+  // Phone is always required, whether or not it needs to be OTP-verified here.
+  // When verification is off, the number is still collected (and verified
+  // later, at payment) — so we satisfy the "verified" refine only once the
+  // number itself passes its own validation, rather than unconditionally on
+  // mount, so the Continue button doesn't enable before a phone is entered.
+  useEffect(() => {
+    if (!phoneVerificationEnabled) {
+      form.setValue("phoneVerified", isValidPhoneNumber(phone), { shouldValidate: true });
+    }
+  }, [phoneVerificationEnabled, phone, form]);
 
   return (
     <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="verify-form">
@@ -131,13 +140,21 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
         />
       ) : (
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Phone</label>
+          <label className="text-sm font-medium text-foreground">
+            Phone <span className="text-destructive">*</span>
+          </label>
           <PhoneInputWithCountry
             form={form}
             isVerified={false}
             onChanged={() => {}}
             placeholder="0801 234 5678"
           />
+          {(form.formState.touchedFields.phone || form.formState.isSubmitted) &&
+            (form.formState.errors.phone || form.formState.errors.phoneVerified) && (
+            <p className="text-sm text-destructive">
+              {form.formState.errors.phone?.message ?? "Please enter your phone number"}
+            </p>
+          )}
         </div>
       )}
 
@@ -149,7 +166,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
           type="submit"
           className="flex-1"
           size="lg"
-          disabled={!form.watch("emailVerified") || !form.watch("phoneVerified")}
+          disabled={!emailVerified || !phoneVerified}
           data-testid="verify-submit"
         >
           Continue

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Upload, Loader2, AlertCircle } from "lucide-react";
 import { Control, FieldValues, Path } from "react-hook-form";
 import {
@@ -97,24 +97,20 @@ export function DocumentUploadField<T extends FieldValues>({
           (m) => m.status === "error"
         ).length;
 
-        const handleRemove = useCallback(
-          (mediaId: string) => {
-            const updatedMedia = mediaItems.filter((m) => m.id !== mediaId);
-            const removedMedia = mediaItems.find((m) => m.id === mediaId);
-            if (removedMedia?.preview.startsWith("blob:")) {
-              URL.revokeObjectURL(removedMedia.preview);
-            }
-            field.onChange(updatedMedia);
-          },
-          [mediaItems, field]
-        );
+        // `render` is a react-hook-form callback, not a component — hooks (useCallback)
+        // can't be called here, so these stay plain functions re-created each render.
+        const handleRemove = (mediaId: string) => {
+          const updatedMedia = mediaItems.filter((m) => m.id !== mediaId);
+          const removedMedia = mediaItems.find((m) => m.id === mediaId);
+          if (removedMedia?.preview.startsWith("blob:")) {
+            URL.revokeObjectURL(removedMedia.preview);
+          }
+          field.onChange(updatedMedia);
+        };
 
-        const handleSave = useCallback(
-          (updatedMedia: MediaItem[]) => {
-            field.onChange(updatedMedia);
-          },
-          [field]
-        );
+        const handleSave = (updatedMedia: MediaItem[]) => {
+          field.onChange(updatedMedia);
+        };
 
         return (
           <FormItem>

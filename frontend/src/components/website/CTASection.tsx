@@ -57,7 +57,7 @@ export default function CTASection() {
               <h2
                 className="text-4xl md:text-5xl font-extrabold editorial-spacing font-display leading-[1.1] text-white mb-6"
               >
-                You've worked too hard{" "}
+                You&apos;ve worked too hard{" "}
                 <span style={{ color: "#a5d0b9" }}>to risk it on hearsay.</span>
               </h2>
 

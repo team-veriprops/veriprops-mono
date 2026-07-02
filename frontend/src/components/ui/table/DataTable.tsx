@@ -1,4 +1,4 @@
-import { useState, useMemo, SetStateAction, ReactNode } from "react";
+import { useState, ReactNode } from "react";
 import {
   Table,
   TableBody,
@@ -8,15 +8,6 @@ import {
   TableRow,
 } from "@3rdparty/ui/table";
 import { Button } from "@3rdparty/ui/button";
-import { Input } from "@3rdparty/ui/input";
-import { Checkbox } from "@3rdparty/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@3rdparty/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,11 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@3rdparty/ui/dropdown-menu";
 import {
-  Search,
-  ChevronUp,
-  ChevronDown,
   MoreHorizontal,
-  Download,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -46,7 +33,7 @@ export interface Column<T> {
   label: string;
   sortable?: boolean;
   filterable?: boolean;
-  render?: (value: any, item: T) => React.ReactNode;
+  render?: (value: unknown, item: T) => React.ReactNode;
   width?: string;
 }
 
@@ -58,7 +45,7 @@ export interface Action<T> {
   icon?: React.ComponentType<{ className?: string }>;
 }
 
-interface DataTableProps<T> {
+interface DataTableProps<T extends { id: string }> {
   dataPage: Page<T>;
   columns: Column<T>[];
   actions?: Action<T>[];
@@ -82,20 +69,16 @@ interface DataTableProps<T> {
   elementOfInterestId?: string;
 }
 
-export function DataTable<T extends Record<string, any>>({
+export function DataTable<T extends { id: string } & Record<string, unknown>>({
   dataPage,
   columns,
   actions = [],
   searchPlaceholder = "Search...",
   onSelectionChange,
-  bulkActions = [],
-  filters = [],
-  className,
   currentPage,
   updateFilters,
   isLoading,
   isError,
-  error,
   children,
   isRowClickable,
   onRowClick,
@@ -108,7 +91,7 @@ export function DataTable<T extends Record<string, any>>({
     columnKey,
     orderBy,
   }: {
-    columnKey: any;
+    columnKey: string;
     orderBy?: string;
   }) => {
     if (!orderBy) return <ArrowUpDown size={14} />;
@@ -121,7 +104,7 @@ export function DataTable<T extends Record<string, any>>({
     );
   };
 
-  const handleToggleSort = (key: any) => {
+  const handleToggleSort = (key: string) => {
     let newOrderBy: string;
 
     if (orderBy) {
@@ -190,11 +173,11 @@ export function DataTable<T extends Record<string, any>>({
                     `
                   }
                   style={{ width: column.width }}
-                  onClick={() => handleToggleSort(column.key)}
+                  onClick={() => handleToggleSort(String(column.key))}
                 >
                   <div className="flex items-center gap-1">
                     {column.label}
-                    <SortIcon columnKey={column.key} orderBy={orderBy} />
+                    <SortIcon columnKey={String(column.key)} orderBy={orderBy} />
                   </div>
                 </TableHead>
               ))}
@@ -248,7 +231,7 @@ export function DataTable<T extends Record<string, any>>({
               dataPage.items.map((item, index) => (
                 <AnimatedTableRow
                   key={item.id}
-                  id={item.id!}
+                  id={item.id}
                   index={index}
                   isClickable={isRowClickable}
                   onClick={() => onRowClick && onRowClick(item)}

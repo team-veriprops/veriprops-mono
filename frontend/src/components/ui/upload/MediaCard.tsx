@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -101,13 +102,15 @@ export function MediaCard({
   allPossibleTypes = [],
   "aria-label": ariaLabel,
 }: MediaCardProps) {
-  const [titleError, setTitleError] = useState("");
-  const [typeError, setTypeError] = useState("");
+  // "Touched" starts true when the card mounts with a pre-filled value (editing
+  // existing media) so validation shows immediately; a fresh upload stays quiet
+  // until the user interacts with the field.
+  const [titleTouched, setTitleTouched] = useState(!!media.metadata.title);
+  const [typeTouched, setTypeTouched] = useState(!!media.metadata.type);
   const [pdfThumbnail, setPdfThumbnail] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState(false);
   const [videoThumbnail, setVideoThumbnail] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
-  const [videoError, setVideoError] = useState(false);
 
   allPossibleTypes = allPossibleTypes.length > 0 ? allPossibleTypes : requiredTypes;
 
@@ -165,10 +168,11 @@ export function MediaCard({
 
   // Generate video thumbnail and extract duration
   useEffect(() => {
-    if (isVideo && media.file) {
+    const file = media.file;
+    if (isVideo && file) {
       const generateVideoThumbnail = async () => {
         try {
-          const videoUrl = URL.createObjectURL(media?.file!);
+          const videoUrl = URL.createObjectURL(file);
           const video = document.createElement("video");
           video.preload = "metadata";
           video.muted = true;
@@ -188,7 +192,6 @@ export function MediaCard({
               const ctx = canvas.getContext("2d");
 
               if (!ctx) {
-                setVideoError(true);
                 URL.revokeObjectURL(videoUrl);
                 return;
               }
@@ -198,21 +201,18 @@ export function MediaCard({
               URL.revokeObjectURL(videoUrl);
             } catch (error) {
               console.error("Video thumbnail generation failed:", error);
-              setVideoError(true);
               URL.revokeObjectURL(videoUrl);
             }
           };
 
           video.onerror = () => {
             console.error("Video loading failed");
-            setVideoError(true);
             URL.revokeObjectURL(videoUrl);
           };
 
           video.src = videoUrl;
         } catch (error) {
           console.error("Video processing failed:", error);
-          setVideoError(true);
         }
       };
 
@@ -223,31 +223,20 @@ export function MediaCard({
 const findMediaType = (key: string) =>
   allPossibleTypes.find((type: MediaType) => type.key === key);
 
-  const validateTitle = (value: string) => {
-    if (!value.trim()) {
-      setTitleError("Title is required");
-      return false;
-    }
-    if (value.trim().length < 3) {
-      setTitleError("Title must be at least 3 characters");
-      return false;
-    }
-    if (value.length > 120) {
-      setTitleError("Title must be less than 120 characters");
-      return false;
-    }
-    setTitleError("");
-    return true;
+  const getTitleError = (value: string): string => {
+    if (!value.trim()) return "Title is required";
+    if (value.trim().length < 3) return "Title must be at least 3 characters";
+    if (value.length > 120) return "Title must be less than 120 characters";
+    return "";
   };
 
-  const validateType = (value: string) => {
-    if (!value) {
-      setTypeError("Type is required");
-      return false;
-    }
-    setTypeError("");
-    return true;
+  const getTypeError = (value: string): string => {
+    if (!value) return "Type is required";
+    return "";
   };
+
+  const titleError = titleTouched ? getTitleError(media.metadata.title) : "";
+  const typeError = typeTouched ? getTypeError(media.metadata.type?.key ?? "") : "";
 
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -260,11 +249,6 @@ const findMediaType = (key: string) =>
     if (seconds < 3600) return `${Math.ceil(seconds / 60)}m`;
     return `${Math.ceil(seconds / 3600)}h`;
   };
-
-  useEffect(() => {
-    if (media.metadata.title) validateTitle(media.metadata.title);
-    if (media.metadata.type) validateType(media.metadata.type.key);
-  }, [media.metadata.title, media.metadata.type]);
 
   const statusConfig = {
     idle: { icon: ImageIcon, color: "text-muted-foreground", label: "Ready" },
@@ -303,11 +287,12 @@ const findMediaType = (key: string) =>
       <div className="relative aspect-video bg-muted overflow-hidden">
         {isVideo && videoThumbnail ? (
           <div className="relative w-full h-full">
-            <img
+            <Image
               src={videoThumbnail}
               alt={media.metadata.title || media.filename}
-              className="w-full h-full object-cover"
-              loading="lazy"
+              fill
+              unoptimized
+              className="object-cover"
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/30">
               <div className="bg-white/90 rounded-full p-3 sm:p-4">
@@ -341,11 +326,12 @@ const findMediaType = (key: string) =>
           </div>
         ) : isPdf && pdfThumbnail && !pdfError ? (
           <div className="relative w-full h-full">
-            <img
+            <Image
               src={pdfThumbnail}
               alt={media.metadata.title || media.filename}
-              className="w-full h-full object-cover"
-              loading="lazy"
+              fill
+              unoptimized
+              className="object-cover"
             />
             <Badge
               variant="secondary"
@@ -365,11 +351,12 @@ const findMediaType = (key: string) =>
             </div>
           </div>
         ) : (
-          <img
+          <Image
             src={media.preview}
             alt={media.metadata.title || media.filename}
-            className="w-full h-full object-cover"
-            loading="lazy"
+            fill
+            unoptimized
+            className="object-cover"
           />
         )}
 
@@ -548,10 +535,10 @@ const findMediaType = (key: string) =>
             Type <span className="text-destructive">*</span>
           </Label>
           <Select
-            value={media.metadata?.type?.key!}
+            value={media.metadata.type?.key ?? ""}
             onValueChange={(value: string) => {
               onMetadataChange(media.id, { type: findMediaType(value) });
-              validateType(value);
+              setTypeTouched(true);
             }}
           >
             <SelectTrigger
@@ -603,9 +590,9 @@ const findMediaType = (key: string) =>
             onChange={(e) => {
               const value = e.target.value;
               onMetadataChange(media.id, { title: value });
-              validateTitle(value);
+              setTitleTouched(true);
             }}
-            onBlur={(e) => validateTitle(e.target.value)}
+            onBlur={() => setTitleTouched(true)}
             placeholder="e.g., Front elevation view"
             maxLength={120}
             className={cn("h-9", titleError && "border-destructive")}
