@@ -34,12 +34,24 @@ status: running (S1–S4 foundation)
       Backend 384 tests; frontend 241 tests (incl. auth-service contract test); build green; endpoints + route
       protection live-verified.
 
+- S7  Phase 3 — Agent onboarding & KYC.
+      Backend: KYC provider facade (`appodus_utils/integrations/kyc/` — deterministic Stub default + gated
+      Dojah scaffold + factory, registered like payments); agent domain (`app/domain/user/agent/`: models,
+      repo, service, validator, controller, kyc_service) + pure `credentials.py` role-level expiry suspension
+      (§3.3a); resumable application drafts. Endpoints `/users/agents/*` — applicant draft/submit/status; admin
+      list/detail/approve/reject gated by `require_permission(APPROVE_AGENT)`. Submit runs KYC, creates PENDING
+      profile, persists credentials/coverage, records AGENT_TERMS consent, adds AGENT persona, audits. Agent/KYC
+      tables folded into `0001` (greenfield single-migration); validated downgrade base→upgrade head (61 tables).
+      Frontend: reusable full-screen `WizardOverlay` (route-backed `/agents/apply`, resumable), 4-step wizard
+      (Roles/KYC/Credentials/Review), approval-status card on `/agents/dashboard`, admin review at
+      `/admin/agents/applications` (DataTable→DetailDrawer approve/reject). Backend 418 tests; frontend 246;
+      tsc + lint clean. Known gap: KYC/credential S3 upload UI deferred (refs stored; facade supports encrypted).
+
 ## Current Slice
-- none — S5 + S6 (MVP-spine Phases 1–2) complete; next is S7 (Phase 3 agent onboarding & KYC).
+- none — S7 (Phase 3) complete; next is S8 (Phase 4 admin onboarding & RBAC).
 
 ## Pending Slices
-- S7  Phase 3 — Agent onboarding & KYC
-- S8  Phase 4 — Admin onboarding & RBAC
+- S8  Phase 4 — Admin onboarding & RBAC  *(Permission matrix + require_permission already exist)*
 - S9  Phase 5 — Customer submission & payment  *(gated: liability-cap copy §B)*
 - S10 Phase 6 + 6a — Admin control panel & chargeback
 - S11 Phase 7 — Agent task execution
@@ -77,7 +89,7 @@ status: running (S1–S4 foundation)
 - S1 `bec85e1`, S2 `0465a5a`, S3 `a138219`, S4 (this commit) — foundation slices.
 
 ## Completion %
-- ~17% (4 of 23 slices; all Phase-0 foundation primitives complete)
+- ~30% (7 of 23 slices; Phase-0 foundation + Phases 1–3 complete)
 
 ---
 

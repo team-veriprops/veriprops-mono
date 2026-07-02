@@ -1,75 +1,66 @@
-session_id: run-s5-s6-mvp-spine
+session_id: run-s7-s9-mvp-features
 command: resume
 
 status: idle
 phase: idle
 
-current_slice: null   # S5 + S6 complete; next is S7 (Phase 3 agent onboarding & KYC)
+current_slice: null   # S7 (Phase 3 agent onboarding & KYC) complete; next is S8 (Phase 4 admin onboarding & RBAC)
 current_subtask: null
 
 completed_slices:
-  - S1   # foundation reconciliation: cleaned 0001 seeds, moved app/state→app/core/state, docs, green baseline
-  - S2   # state derivation owner (derive.py) + tier task-dependency config (dependencies.py) + status enums
-  - S3   # idempotency store (+ idempotency_keys in 0001), VID generator, evidence content-hash, Money kobo tests
-  - S4   # SLA business-day calculator + Nigerian holiday calendar (app/core/sla.py)
+  - S1   # foundation reconciliation
+  - S2   # state derivation owner + tier task-dependency config + status enums
+  - S3   # idempotency store, VID generator, evidence content-hash, Money kobo tests
+  - S4   # SLA business-day calculator + Nigerian holiday calendar
   - S5   # Phase 1 marketing completion + Legal documents + footer pages
-  - S6   # Phase 2 auth hardening: phone-flag + public config, revoked-session enforcement, paginated security
-         #   log, cross-portal summary; /account pages + portal switcher
+  - S6   # Phase 2 auth hardening: phone-flag + public config, revoked-session, security log, cross-portal
+  - S7   # Phase 3 agent onboarding & KYC (see below)
 
-modified_files:
-  - backend/main/alembic/versions/0001_initial_schema.py   # consent_documents: +body, +signoff_status
-  - backend/main/app/domain/user/auth/consent/{models,repo,service,controller}.py  # body/signoff + public read API
-  - backend/main/app/db/seeder.py                          # DataSeeder now seeds legal-document content
-  - frontend/src/app/layout.tsx, src/app/(website)/about/page.tsx, src/app/(website)/page.tsx  # buildMetadata + JsonLd
-  - frontend/src/components/website/{home.data.ts,LandingFooter.tsx,HeroSection.tsx}  # FAQ, footer year/socials, sample link
-  - frontend/src/types/models.ts, src/lib/routes.ts        # LegalDocument types + SAMPLE_REPORT route
-created_files:
-  - backend/main/app/domain/user/auth/consent/content/__init__.py   # 10 drafted legal docs (PRD §3.5)
-  - backend/test/unit/app/domain/auth/{test_consent_content,test_consent_legal_documents}.py
-  - frontend/src/lib/{seo.ts,seo.test.ts,legal.server.ts}
-  - frontend/src/components/seo/JsonLd.tsx
-  - frontend/src/app/{sitemap.ts,robots.ts}
-  - frontend/src/app/(website)/legal/[slug]/page.tsx, src/app/(website)/sample-report/page.tsx
-  - frontend/src/components/website/{FaqSection.tsx,SampleReportContent.tsx,legal/LegalDocument.tsx}
-  - frontend/src/components/shared/notifications/NotificationBell.tsx   # baseline build repair (AppShell orphan)
-removed_files:
-  - frontend/src/lib/mockUrlExtractor.ts   # dead file with dangling import — blocked the build
+# ── S7 (Phase 3) summary ──────────────────────────────────────────
+s7_agent_onboarding:
+  backend:
+    - "KYC provider facade at appodus_utils/integrations/kyc/ (interface + deterministic StubKycProvider
+       default + gated DojahKycProvider scaffold + KycProviderFactory; registered like the payment facade).
+       Stores provider result + reference only — never raw biometrics."
+    - "Agent domain app/domain/user/agent/ (models, repo, service, validator, controller, kyc_service) +
+       pure credentials.py role-level expiry/suspension helper (§3.3a). Resumable application drafts."
+    - "Endpoints under /users/agents: draft get/save, submit, my status; admin applications list/detail/
+       approve/reject gated by require_permission(Permission.APPROVE_AGENT) — the existing RBAC util."
+    - "On submit: KYC run, PENDING profile, credentials+coverage persisted, AGENT_TERMS consent recorded,
+       AGENT persona added, AGENT_APPLICATION_SUBMITTED audit; draft discarded."
+    - "Agent/KYC tables folded into 0001_initial_schema (greenfield single-migration); validated
+       downgrade base -> upgrade head clean, 61 tables, all 5 agent tables present."
+  frontend:
+    - "Reusable full-screen WizardOverlay (components/ui/wizard) — fixed inset-0 z-[70] above AppShell,
+       reuses Stepper + body-scroll lock; route-backed at /agents/apply (deep-linkable, resumable)."
+    - "4-step onboarding wizard (Roles / KYC / Credentials / Review) + agent-service + React Query hooks +
+       draft resume; approval status card on /agents/dashboard."
+    - "Admin review at /admin/agents/applications: DataTable -> DetailDrawer (approve / reject) — the
+       mandated admin master-detail pattern. routes.ts AGENT.APPLY + admin nav updated."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 418 passed (+31 new); frontend 246 passed (+5 wizard-validation)
 
-tests:
-  written: true
-  executed: true
-  passing: true   # backend 373 passed; frontend seo + home.data suites green (58)
-
-self_audit:
-  started: true
+self_audit_s7:
   completed: true
   findings:
-    - "GenericRepo.update runs the DTO through jsonable_encoder, which turned effective_at into a string and
-       asyncpg rejected it. The seeder update refreshes editorial fields only; effective_at is set on create."
-    - "Baseline build was already broken before S5 (missing NotificationBell import; dead mockUrlExtractor.ts).
-       Repaired both; unrelated to S5."
-    - "Repo-wide pnpm lint still reports ~130 pre-existing problems in untouched files; S5 files lint clean."
-    - "LegalDocument draft banner verified via the running app (the project has no component-render harness)."
+    - "KYC document/selfie S3 upload UI is NOT wired in the wizard yet — the flow passes selfieReference/
+       documentRef strings and the backend stores refs (facade supports encrypted upload), but the actual
+       presigned-upload UX (via MediaUploadManager/DocumentUploadField) is deferred. PRD §3.2 'KYC docs
+       encrypted in S3' is satisfied at the storage-facade level, not yet exercised end-to-end from the UI."
+    - "DojahKycProvider is a deliberate gated scaffold: it raises until credentials + sandbox testing are in
+       place. StubKycProvider is the deterministic default (KYC_PROVIDER=STUB) per the OTP_MODE philosophy."
+    - "Full `pnpm build` was NOT run due to ~2GB free disk (.next risk). Substituted tsc --noEmit (clean)
+       + eslint on new files (clean) + full vitest (246 passed). Run the build once disk is freed."
+    - "Two frontend timezone tests (suggestTimezoneForCountry) are flaky/environment-dependent — passed on
+       re-run; unrelated to S7."
 
-self_audit_s6:
-  completed: true
-  findings:
-    - "PHONE_VERIFICATION_ENABLED now toggles the existing signup phone-verification step (email + OAuth).
-       When off, the number is collected but stored phone_verified=False; phone is verified at the Phase-5
-       payment step. Enforced in AuthService.signup/complete_profile; frontend reads /config/public."
-    - "Authenticated /account walkthrough verified at route/endpoint level (401s + 307 login redirects); a
-       logged-in click-through with a seeded session is still a useful follow-up."
-    - "Security log uses a server-paginated list, not the admin DataTable (client-side search/sort would
-       mislead over a single server page)."
+next_action: idle — S7 (Phase 3) complete. Resume at S8 (Phase 4 admin onboarding & RBAC). Note the RBAC
+             Permission matrix + require_permission already exist in app/domain/user/auth/utils/permissions.py;
+             S8 adds admin_invitation + admin_team domains, invite-acceptance, team management UI (DataTable +
+             DetailDrawer), and retrofits/【verifies】permission gates across admin endpoints.
 
-correction_pass:
-  completed: true
-  notes:
-    - "Fixed PHONE_VERIFICATION_ENABLED semantics; domain unified to veriprops.ng; removed AI-style comments
-       and Co-Authored-By trailers from this session's work."
-
-next_action: idle — S5 + S6 (MVP-spine Phases 1–2) complete. Resume at S7 (Phase 3 agent onboarding & KYC).
-
-started_at: 2026-06-29
-last_checkpoint: "S6 + correction pass complete — phone flag wired to signup, veriprops.ng, de-AI;
-                  backend 387 tests, frontend 241; build green"
+started_at: 2026-07-02
+last_checkpoint: "S7 complete — KYC facade + agent domain + folded 0001 migration + full-screen wizard +
+                  admin review DetailDrawer; backend 418 tests, frontend 246; tsc + lint clean."

@@ -279,6 +279,91 @@ def _create_idempotency_keys():
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Agent onboarding & KYC (PRD §3.1–3.2, §3.3a)
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _create_agent_profiles():
+    op.create_table(
+        "agent_profiles",
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        sa.Column("roles", JSONB_VARIANT, nullable=False),
+        sa.Column("approved_roles", JSONB_VARIANT, nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="PENDING"),
+        sa.Column("rejection_reason", sa.String(length=500), nullable=True),
+        sa.Column("bio", sa.String(length=300), nullable=True),
+        sa.Column("years_experience", sa.Integer(), nullable=True),
+        sa.Column("submitted_at", UTCDateTime, nullable=True),
+        sa.Column("reviewed_at", UTCDateTime, nullable=True),
+        sa.Column("reviewed_by", sa.String(length=36), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_agent_profiles_id", "agent_profiles", ["id"], unique=True)
+    op.create_index("ix_agent_profiles_user_id", "agent_profiles", ["user_id"], unique=False)
+    op.create_index("ix_agent_profiles_status", "agent_profiles", ["status"], unique=False)
+
+
+def _create_agent_credentials():
+    op.create_table(
+        "agent_credentials",
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        sa.Column("role", sa.String(length=16), nullable=False),
+        sa.Column("credential_type", sa.String(length=32), nullable=False),
+        sa.Column("licence_number", sa.String(length=64), nullable=True),
+        sa.Column("document_ref", sa.String(length=512), nullable=True),
+        sa.Column("expiry_date", sa.Date(), nullable=True),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="PENDING"),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_agent_credentials_id", "agent_credentials", ["id"], unique=True)
+    op.create_index("ix_agent_credentials_user_id", "agent_credentials", ["user_id"], unique=False)
+
+
+def _create_agent_coverage():
+    op.create_table(
+        "agent_coverage",
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        sa.Column("state", sa.String(length=64), nullable=False),
+        sa.Column("lga", sa.String(length=64), nullable=True),
+        sa.Column("place", sa.String(length=255), nullable=True),
+        sa.Column("travel_radius_km", sa.Integer(), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_agent_coverage_id", "agent_coverage", ["id"], unique=True)
+    op.create_index("ix_agent_coverage_user_id", "agent_coverage", ["user_id"], unique=False)
+
+
+def _create_agent_application_drafts():
+    op.create_table(
+        "agent_application_drafts",
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        sa.Column("step", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("payload", sa.Text(), nullable=False),
+        sa.Column("expires_at", UTCDateTime, nullable=False),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_agent_application_drafts_id", "agent_application_drafts", ["id"], unique=True)
+    op.create_index("ix_agent_application_drafts_user_id", "agent_application_drafts", ["user_id"], unique=False)
+
+
+def _create_kyc_records():
+    op.create_table(
+        "kyc_records",
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        sa.Column("provider", sa.String(length=16), nullable=False),
+        sa.Column("method", sa.String(length=16), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False),
+        sa.Column("provider_ref", sa.String(length=255), nullable=False),
+        sa.Column("score", sa.Integer(), nullable=True),
+        sa.Column("summary", sa.String(length=500), nullable=True),
+        sa.Column("verified_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_kyc_records_id", "kyc_records", ["id"], unique=True)
+    op.create_index("ix_kyc_records_user_id", "kyc_records", ["user_id"], unique=False)
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Seed data
 # ─────────────────────────────────────────────────────────────────────
 
@@ -452,6 +537,11 @@ _TABLE_BUILDERS = [
     ("messages", _create_messages),
     ("audit_logs", _create_audit_logs),
     ("idempotency_keys", _create_idempotency_keys),
+    ("agent_profiles", _create_agent_profiles),
+    ("agent_credentials", _create_agent_credentials),
+    ("agent_coverage", _create_agent_coverage),
+    ("agent_application_drafts", _create_agent_application_drafts),
+    ("kyc_records", _create_kyc_records),
 ]
 
 

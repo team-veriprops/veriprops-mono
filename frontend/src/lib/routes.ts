@@ -28,6 +28,7 @@ export const ROUTES = {
   AGENT: {
     GATE: '/agents',
     DASHBOARD: '/agents/dashboard',
+    APPLY: '/agents/apply',
     TASKS: '/agents/tasks',
     TASK_DETAIL: (taskId: string) => `/agents/tasks/${taskId}`,
     TASK_HISTORY: (taskId: string) => `/agents/tasks/${taskId}/history`,

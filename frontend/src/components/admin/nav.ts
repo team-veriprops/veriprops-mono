@@ -5,6 +5,7 @@ export const adminNavItems: NavItem[] = [
   { title: "Dashboard", href: ROUTES.ADMIN.DASHBOARD, icon: "dashboard", has_separator_after: false },
   { title: "Analytics", href: ROUTES.ADMIN.ANALYTICS, icon: "barChart", has_separator_after: false },
   { title: "Verifications", href: ROUTES.ADMIN.VERIFICATIONS, icon: "fileCheck", has_separator_after: false },
+  { title: "Agent Applications", href: ROUTES.ADMIN.AGENT_APPLICATIONS, icon: "userRoundKey", has_separator_after: false },
   { title: "Disputes", href: ROUTES.ADMIN.DISPUTES, icon: "alertTriangle", has_separator_after: false },
   { title: "Re-check Requests", href: ROUTES.ADMIN.RECHECKS, icon: "fileCheck", has_separator_after: false },
   { title: "Commission Rules", href: ROUTES.ADMIN.COMMISSION_RULES, icon: "fileCheck", has_separator_after: false },
