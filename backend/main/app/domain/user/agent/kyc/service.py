@@ -10,12 +10,12 @@ from typing import Optional
 
 from kink import inject
 
-from main.app.domain.user.agent.models import (
+from main.app.domain.user.agent.kyc.models import (
     CreateKycRecordDto,
     KycRecord,
     KycSubmissionDto,
 )
-from main.app.domain.user.agent.repo import KycRecordRepo
+from main.app.domain.user.agent.kyc.repo import KycRecordRepo
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger

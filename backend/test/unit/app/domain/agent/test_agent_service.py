@@ -12,12 +12,9 @@ import pytest
 
 from main.app.core.state.status import AgentRole
 from main.app.domain.audit.models import AuditActionType
-from main.app.domain.user.agent.models import (
-    AgentApplicationStatus,
-    KycSubmissionDto,
-    SaveAgentApplicationDraftDto,
-    SubmitAgentApplicationDto,
-)
+from main.app.domain.user.agent.kyc.models import KycSubmissionDto
+from main.app.domain.user.agent.models import SubmitAgentApplicationDto
+from main.app.domain.user.agent.profile.models import AgentApplicationStatus
 from main.app.domain.user.agent.service import AgentService
 from main.app.domain.user.agent.validator import AgentApplicationValidator
 from main.app.domain.user.auth.consent.models import ConsentDocumentType
@@ -47,7 +44,7 @@ def _make_service():
     svc._profile_repo = MagicMock()
     svc._credential_repo = MagicMock()
     svc._coverage_repo = MagicMock()
-    svc._draft_repo = MagicMock()
+    svc._draft_service = MagicMock()
     svc._kyc_service = MagicMock()
     svc._user_service = MagicMock()
     svc._consent_service = MagicMock()
@@ -67,8 +64,7 @@ def _make_service():
     svc._credential_repo.create = AsyncMock()
     svc._credential_repo.list_for_user = AsyncMock(return_value=[])
     svc._coverage_repo.create = AsyncMock()
-    svc._draft_repo.get_active_for_user = AsyncMock(return_value=None)
-    svc._draft_repo.soft_delete = AsyncMock()
+    svc._draft_service.discard = AsyncMock()
     return svc
 
 
@@ -117,27 +113,8 @@ class TestSubmit:
 
     async def test_discards_draft_after_submit(self):
         svc = _make_service()
-        svc._draft_repo.get_active_for_user = AsyncMock(
-            return_value=SimpleNamespace(id="d-1")
-        )
         await svc.submit_application("u-1", _valid_dto())
-        svc._draft_repo.soft_delete.assert_awaited_once_with("d-1")
-
-
-class TestDraftResume:
-    async def test_creates_draft_when_none(self):
-        svc = _make_service()
-        svc._draft_repo.create = AsyncMock()
-        out = await svc.save_draft("u-1", SaveAgentApplicationDraftDto(step=2, payload={"roles": ["FIELD"]}))
-        svc._draft_repo.create.assert_awaited_once()
-        assert out.step == 2
-
-    async def test_updates_existing_draft(self):
-        svc = _make_service()
-        svc._draft_repo.get_active_for_user = AsyncMock(return_value=SimpleNamespace(id="d-1"))
-        svc._draft_repo.update = AsyncMock()
-        await svc.save_draft("u-1", SaveAgentApplicationDraftDto(step=3, payload={}))
-        svc._draft_repo.update.assert_awaited_once()
+        svc._draft_service.discard.assert_awaited_once_with("u-1")
 
 
 class TestStatus:

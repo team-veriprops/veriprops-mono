@@ -2,10 +2,8 @@
 from kink import inject
 
 from main.app.core.state.status import AgentRole
-from main.app.domain.user.agent.models import (
-    ROLE_REQUIRED_CREDENTIAL,
-    SubmitAgentApplicationDto,
-)
+from main.app.domain.user.agent.credential.models import ROLE_REQUIRED_CREDENTIAL
+from main.app.domain.user.agent.models import SubmitAgentApplicationDto
 from main.appodus_utils.exception.exceptions import ValidationException
 
 

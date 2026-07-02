@@ -10,7 +10,7 @@ from datetime import date
 from typing import Iterable, List, Protocol, Set
 
 from main.app.core.state.status import AgentRole
-from main.app.domain.user.agent.models import (
+from main.app.domain.user.agent.credential.models import (
     ROLE_REQUIRED_CREDENTIAL,
     CredentialStatus,
     CredentialType,

@@ -64,9 +64,10 @@ Important constraints:
 - Abstract every function, class, component, etc, that are related and used in 2+ surfaces/places.
 - Reuse existing abstractions where sensible
 - Avoid introducing duplicate layout systems
-- Keep implementation scalable for future upgrades, e.g: dashboard sections
+- Keep implementation scalable for future upgrades, e.g: backend and frontend
 - Avoid hardcoded breadcrumbs/Routes where possible
 - **Enum references, never free literals.** Any value that has a defining enum (statuses, tiers, roles, channels, currencies, event types, permissions, …) must be referenced via its enum member in app code — in comparisons, dict/set keys & values, defaults, and DTOs. Free string literals duplicating an enum value are prohibited. Exceptions: enum *definitions* themselves, Alembic migrations (kept decoupled from app enums by design — raw strings / numeric `server_default`s), and tests deliberately asserting wire/DB-string compatibility.
 - Mobile-first, highly responsive implementation
 - Do not generate code until investigation is complete
 - Be explicit about tradeoffs and uncertainties
+- Always ask me questions when you lack clarity.

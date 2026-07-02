@@ -11,41 +11,26 @@ from fastapi import APIRouter, Depends, Query, Request
 from libre_fastapi_jwt import AuthJWT
 from kink import di
 
+from main.app.domain.user.agent.application_draft.controller import agent_application_draft_router
 from main.app.domain.user.agent.models import (
     AgentApplicationDetailDto,
-    AgentApplicationDraftDto,
     AgentApplicationStatusDto,
     AgentApplicationSummaryDto,
     ApproveAgentApplicationDto,
     RejectAgentApplicationDto,
-    SaveAgentApplicationDraftDto,
     SubmitAgentApplicationDto,
 )
 from main.app.domain.user.agent.service import AgentService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
+from main.appodus_utils import RouterUtils
 from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.db.models import Page, SuccessResponse
 
 agent_router = APIRouter(prefix="/agents", tags=["Agents"])
 agent_service: AgentService = di[AgentService]
 
-
-# ── Applicant: resumable wizard draft ─────────────────────────────
-
-@agent_router.get("/application/draft", response_model=SuccessResponse[Optional[AgentApplicationDraftDto]])
-async def get_application_draft(authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    draft = await agent_service.get_draft(user_id)
-    return SuccessResponse[Optional[AgentApplicationDraftDto]](data=draft)
-
-
-@agent_router.put("/application/draft", response_model=SuccessResponse[AgentApplicationDraftDto])
-async def save_application_draft(req: SaveAgentApplicationDraftDto, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    draft = await agent_service.save_draft(user_id, req)
-    return SuccessResponse[AgentApplicationDraftDto](data=draft)
+# Child domain: resumable wizard draft owns its own router (/agents/application/draft).
+RouterUtils.add_routers(agent_router, [agent_application_draft_router])
 
 
 # ── Applicant: submit + status ────────────────────────────────────

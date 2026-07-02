@@ -53,7 +53,8 @@ New domains must be wired into the **domain package hierarchy**.
 
 * Every domain package must be **imported and exposed by its parent domain package**.
 * Root parent domains must be imported and exposed in `main/app/domain/__init__.py`.
-* `main.app.domain` is the **single aggregation point** imported by Alembic, so every domain must be reachable through this package hierarchy for autogenerate to discover all models.
+* `main.app.domain` is the **single aggregation point** imported by Alembic, so every domain must be reachable through this package hierarchy for autogenerate to discover all models. Domains that has `controller.py`, don't need to register it's models directly; this would be picked from the controller.
+* A domain is defined as a single unit comprizing of models.py, optional repo.py, service.py, validator.py, optional controller.py, etc; bounded by a single entity that extends BaseEntity. No more than a single entity should be found in a domain. The codebase should be properly packaged using this pattern.  
 
 ### Routing convention
 

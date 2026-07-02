@@ -2,12 +2,12 @@
 import pytest
 
 from main.app.core.state.status import AgentRole
-from main.app.domain.user.agent.models import (
+from main.app.domain.user.agent.credential.models import (
     AgentCredentialInputDto,
     CredentialType,
-    KycSubmissionDto,
-    SubmitAgentApplicationDto,
 )
+from main.app.domain.user.agent.kyc.models import KycSubmissionDto
+from main.app.domain.user.agent.models import SubmitAgentApplicationDto
 from main.app.domain.user.agent.validator import AgentApplicationValidator
 from main.appodus_utils.integrations.kyc.models import KycMethod
 from main.appodus_utils.exception.exceptions import ValidationException

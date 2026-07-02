@@ -6,8 +6,6 @@ view, the admin approval queue, and role-level credential-expiry suspension.
 """
 from __future__ import annotations
 
-import json
-from datetime import timedelta
 from typing import List, Optional
 
 from kink import inject
@@ -15,37 +13,37 @@ from kink import inject
 from main.app.core.state.status import AgentRole
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.user.agent.credentials import active_roles
-from main.app.domain.user.agent.kyc_service import KycService
+from main.app.domain.user.agent.application_draft.service import AgentApplicationDraftService
+from main.app.domain.user.agent.coverage.models import (
+    AgentCoverageInputDto,
+    CreateAgentCoverageDto,
+)
+from main.app.domain.user.agent.coverage.repo import AgentCoverageRepo
+from main.app.domain.user.agent.credential.models import (
+    AgentCredentialDto,
+    CreateAgentCredentialDto,
+    CredentialStatus,
+    UpdateAgentCredentialDto,
+)
+from main.app.domain.user.agent.credential.repo import AgentCredentialRepo
+from main.app.domain.user.agent.credential.rules import active_roles
+from main.app.domain.user.agent.kyc.models import KycRecordDto
+from main.app.domain.user.agent.kyc.service import KycService
 from main.app.domain.user.agent.models import (
     AgentApplicationDetailDto,
-    AgentApplicationDraftDto,
-    AgentApplicationStatus,
     AgentApplicationStatusDto,
     AgentApplicationSummaryDto,
-    AgentCoverageInputDto,
-    AgentCredentialDto,
-    AgentProfile,
     ApproveAgentApplicationDto,
-    CreateAgentApplicationDraftDto,
-    CreateAgentCoverageDto,
-    CreateAgentCredentialDto,
-    CreateAgentProfileDto,
-    CredentialStatus,
-    KycRecordDto,
     RejectAgentApplicationDto,
-    SaveAgentApplicationDraftDto,
     SubmitAgentApplicationDto,
-    UpdateAgentApplicationDraftDto,
-    UpdateAgentCredentialDto,
+)
+from main.app.domain.user.agent.profile.models import (
+    AgentApplicationStatus,
+    AgentProfile,
+    CreateAgentProfileDto,
     UpdateAgentProfileDto,
 )
-from main.app.domain.user.agent.repo import (
-    AgentApplicationDraftRepo,
-    AgentCoverageRepo,
-    AgentCredentialRepo,
-    AgentProfileRepo,
-)
+from main.app.domain.user.agent.profile.repo import AgentProfileRepo
 from main.app.domain.user.agent.validator import AgentApplicationValidator
 from main.app.domain.user.auth.consent.models import ConsentDocumentType
 from main.app.domain.user.auth.consent.service import ConsentService
@@ -58,8 +56,6 @@ from main.appodus_utils.decorators.method_trace_logger import method_trace_logge
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 
-_DRAFT_TTL_DAYS = 30
-
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
@@ -70,7 +66,7 @@ class AgentService:
         profile_repo: AgentProfileRepo,
         credential_repo: AgentCredentialRepo,
         coverage_repo: AgentCoverageRepo,
-        draft_repo: AgentApplicationDraftRepo,
+        draft_service: AgentApplicationDraftService,
         kyc_service: KycService,
         user_service: UserService,
         consent_service: ConsentService,
@@ -80,45 +76,12 @@ class AgentService:
         self._profile_repo = profile_repo
         self._credential_repo = credential_repo
         self._coverage_repo = coverage_repo
-        self._draft_repo = draft_repo
+        self._draft_service = draft_service
         self._kyc_service = kyc_service
         self._user_service = user_service
         self._consent_service = consent_service
         self._audit_service = audit_service
         self._validator = validator
-
-    # ── Resumable wizard draft ────────────────────────────────────
-
-    async def get_draft(self, user_id: str) -> Optional[AgentApplicationDraftDto]:
-        draft = await self._draft_repo.get_active_for_user(user_id)
-        if not draft:
-            return None
-        return AgentApplicationDraftDto(
-            step=draft.step,
-            payload=json.loads(draft.payload) if draft.payload else {},
-            date_updated=draft.date_updated or draft.date_created,
-        )
-
-    async def save_draft(self, user_id: str, dto: SaveAgentApplicationDraftDto) -> AgentApplicationDraftDto:
-        payload_json = json.dumps(dto.payload)
-        existing = await self._draft_repo.get_active_for_user(user_id)
-        if existing:
-            await self._draft_repo.update(
-                existing.id, UpdateAgentApplicationDraftDto(step=dto.step, payload=payload_json)
-            )
-        else:
-            await self._draft_repo.create(CreateAgentApplicationDraftDto(
-                user_id=user_id,
-                step=dto.step,
-                payload=payload_json,
-                expires_at=Utils.datetime_now() + timedelta(days=_DRAFT_TTL_DAYS),
-            ))
-        return AgentApplicationDraftDto(step=dto.step, payload=dto.payload, date_updated=Utils.datetime_now())
-
-    async def _discard_draft(self, user_id: str) -> None:
-        existing = await self._draft_repo.get_active_for_user(user_id)
-        if existing:
-            await self._draft_repo.soft_delete(existing.id)
 
     # ── Submission ────────────────────────────────────────────────
 
@@ -173,7 +136,7 @@ class AgentService:
         # Persona is additive (PRD §3.2) — grants the AGENT hat without removing CUSTOMER.
         await self._user_service.add_persona(user_id, UserPersona.AGENT)
 
-        await self._discard_draft(user_id)
+        await self._draft_service.discard(user_id)
 
         self._audit_service.schedule(
             action=AuditActionType.AGENT_APPLICATION_SUBMITTED,

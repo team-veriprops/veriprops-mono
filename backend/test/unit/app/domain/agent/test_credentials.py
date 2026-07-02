@@ -7,13 +7,13 @@ from datetime import date
 from types import SimpleNamespace
 
 from main.app.core.state.status import AgentRole
-from main.app.domain.user.agent.credentials import (
+from main.app.domain.user.agent.credential.models import CredentialStatus, CredentialType
+from main.app.domain.user.agent.credential.rules import (
     active_roles,
     is_credential_expired,
     required_credential_for,
     suspended_roles,
 )
-from main.app.domain.user.agent.models import CredentialStatus, CredentialType
 
 TODAY = date(2026, 7, 2)
 
