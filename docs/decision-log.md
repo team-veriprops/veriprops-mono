@@ -249,3 +249,31 @@ are prohibited.**
 
 ### Revisit Conditions
 - N/A.
+
+---
+
+## Decision: D10 — Admin-invite acceptance elevates user_type (S8 / Phase 4)
+
+### Context
+§3.2 declares `user_type` immutable after creation; §4.1 requires an existing USER who accepts an
+admin invite to "merge the admin role". The RBAC helper (`app/domain/user/auth/utils/permissions.py`)
+gates every admin endpoint on `user_type == ADMIN`, so admin access cannot be granted by `admin_sub_role`
+alone.
+
+### Chosen Option
+Treat a validated admin-invite acceptance as the **sanctioned elevation path**: on accept, set
+`user_type = ADMIN` and `admin_sub_role = invitation.sub_role`. Acceptance requires an authenticated user
+whose email matches the invitation, a non-expired unused token, and is audited (`ADMIN_INVITE_ACCEPTED`).
+
+### Rationale
+The §3.2 immutability rule guards against *unsanctioned* self-promotion; an admin invite issued by a
+Super Admin (RBAC `INVITE_ADMIN`) is exactly the authorized exception. Keeping admin access keyed on
+`user_type == ADMIN` preserves one consistent authorization predicate across the whole admin surface.
+
+### Tradeoffs / Constraints
+- A single wire predicate (`user_type == ADMIN`) rather than two (`ADMIN` OR has-sub_role).
+- Existing CUSTOMER/AGENT personas are preserved (portal switcher still works).
+
+### Revisit
+- If product later wants admin capability without full admin `user_type`, extend `has_permission` to also
+  honour `admin_sub_role` on USER rows, and relax this.

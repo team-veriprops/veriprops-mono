@@ -346,6 +346,27 @@ def _create_agent_application_drafts():
     op.create_index("ix_agent_application_drafts_user_id", "agent_application_drafts", ["user_id"], unique=False)
 
 
+def _create_admin_invitations():
+    op.create_table(
+        "admin_invitations",
+        sa.Column("email", sa.String(length=254), nullable=False),
+        sa.Column("email_normalized", sa.String(length=254), nullable=False),
+        sa.Column("sub_role", sa.String(length=16), nullable=False),
+        sa.Column("token_hash", sa.String(length=128), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="PENDING"),
+        sa.Column("invited_by", sa.String(length=36), nullable=False),
+        sa.Column("expires_at", UTCDateTime, nullable=False),
+        sa.Column("accepted_at", UTCDateTime, nullable=True),
+        sa.Column("accepted_by", sa.String(length=36), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+        sa.UniqueConstraint("token_hash", name="uq_admin_invitation_token_hash"),
+    )
+    op.create_index("ix_admin_invitations_id", "admin_invitations", ["id"], unique=True)
+    op.create_index("ix_admin_invitations_email", "admin_invitations", ["email"], unique=False)
+    op.create_index("ix_admin_invitations_email_norm", "admin_invitations", ["email_normalized"], unique=False)
+    op.create_index("ix_admin_invitations_token_hash", "admin_invitations", ["token_hash"], unique=False)
+
+
 def _create_kyc_records():
     op.create_table(
         "kyc_records",
@@ -541,6 +562,7 @@ _TABLE_BUILDERS = [
     ("agent_credentials", _create_agent_credentials),
     ("agent_coverage", _create_agent_coverage),
     ("agent_application_drafts", _create_agent_application_drafts),
+    ("admin_invitations", _create_admin_invitations),
     ("kyc_records", _create_kyc_records),
 ]
 

@@ -47,11 +47,21 @@ status: running (S1–S4 foundation)
       `/admin/agents/applications` (DataTable→DetailDrawer approve/reject). Backend 418 tests; frontend 246;
       tsc + lint clean. Known gap: KYC/credential S3 upload UI deferred (refs stored; facade supports encrypted).
 
+- S8  Phase 4 — Admin onboarding & RBAC.
+      Backend: RBAC matrix + `require_permission` already existed (permissions.py, 19 tests). New
+      `admin_invitation` domain (tokenised 72h single-use invite, email-match guard, accept elevates to
+      `user_type=ADMIN`+sub_role per decision-log D10, unauthenticated 3-scenario preview) + `admin_team`
+      domain (list/change-sub-role/deactivate over `users`, self-deactivate guard, all audited). Endpoints
+      gated by `require_permission` (INVITE_ADMIN / VIEW_ADMIN_PANEL / MANAGE_USERS). `admin_invitations`
+      folded into `0001`. Frontend: `/admin/team` (DataTable→DetailDrawer change-role/deactivate + invite
+      form returning a copyable link + pending-invitations revoke); invite acceptance at
+      `/auth/admin-invite/[token]` (preview-driven signup/login/already-admin routing). Backend 431 tests;
+      frontend 251; tsc+lint clean. Known gap: templated invite email deferred (link returned instead).
+
 ## Current Slice
-- none — S7 (Phase 3) complete; next is S8 (Phase 4 admin onboarding & RBAC).
+- none — S8 (Phase 4) complete; next is S9 (Phase 5 customer submission & payment).
 
 ## Pending Slices
-- S8  Phase 4 — Admin onboarding & RBAC  *(Permission matrix + require_permission already exist)*
 - S9  Phase 5 — Customer submission & payment  *(gated: liability-cap copy §B)*
 - S10 Phase 6 + 6a — Admin control panel & chargeback
 - S11 Phase 7 — Agent task execution
@@ -89,7 +99,7 @@ status: running (S1–S4 foundation)
 - S1 `bec85e1`, S2 `0465a5a`, S3 `a138219`, S4 (this commit) — foundation slices.
 
 ## Completion %
-- ~30% (7 of 23 slices; Phase-0 foundation + Phases 1–3 complete)
+- ~35% (8 of 23 slices; Phase-0 foundation + Phases 1–4 complete)
 
 ---
 

@@ -4,7 +4,7 @@ command: resume
 status: idle
 phase: idle
 
-current_slice: null   # S7 (Phase 3 agent onboarding & KYC) complete; next is S8 (Phase 4 admin onboarding & RBAC)
+current_slice: null   # S8 (Phase 4 admin onboarding & RBAC) complete; next is S9 (Phase 5 customer submission & payment)
 current_subtask: null
 
 completed_slices:
@@ -14,7 +14,31 @@ completed_slices:
   - S4   # SLA business-day calculator + Nigerian holiday calendar
   - S5   # Phase 1 marketing completion + Legal documents + footer pages
   - S6   # Phase 2 auth hardening: phone-flag + public config, revoked-session, security log, cross-portal
-  - S7   # Phase 3 agent onboarding & KYC (see below)
+  - S7   # Phase 3 agent onboarding & KYC
+  - S8   # Phase 4 admin onboarding & RBAC (see below)
+
+# ── S8 (Phase 4) summary ──────────────────────────────────────────
+s8_admin_rbac:
+  backend:
+    - "RBAC matrix + require_permission already existed (app/domain/user/auth/utils/permissions.py, 19
+       tests). New: admin_invitation domain (models/repo/service/controller) + admin_team domain
+       (service/controller over the users table — no new table)."
+    - "Invitation: tokenised (sha256) 72h link, single-use, email-match guard on accept. Accept ELEVATES
+       the authenticated user to user_type=ADMIN + admin_sub_role (decision-log D10 — sanctioned path past
+       §3.2 immutability, keeps require_permission's user_type==ADMIN predicate consistent). Unauthenticated
+       preview endpoint returns the 3-scenario hint (NEW_USER / EXISTING_USER / ALREADY_ADMIN)."
+    - "Team: list (paged), change sub-role, deactivate (demote_to_user) with self-deactivate guard; all
+       audited (ADMIN_INVITED / ADMIN_INVITE_ACCEPTED / ADMIN_ROLE_CHANGED). Endpoints gated by
+       require_permission (INVITE_ADMIN / VIEW_ADMIN_PANEL / MANAGE_USERS). admin_invitations folded into 0001."
+  frontend:
+    - "admin-service + useAdminQueries; /admin/team management (DataTable -> DetailDrawer for change-role/
+       deactivate + invite form returning a copyable link); pending-invitations list with revoke."
+    - "Invite acceptance at /auth/admin-invite/[token]: preview-driven 3-scenario routing (signup pre-fill /
+       login / already-admin notice) then accept. admin nav + Admin Team item; types/admin.ts."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 431 (+13); frontend 251 (+5 admin-service contract)
 
 # ── S7 (Phase 3) summary ──────────────────────────────────────────
 s7_agent_onboarding:
@@ -56,11 +80,22 @@ self_audit_s7:
     - "Two frontend timezone tests (suggestTimezoneForCountry) are flaky/environment-dependent — passed on
        re-run; unrelated to S7."
 
-next_action: idle — S7 (Phase 3) complete. Resume at S8 (Phase 4 admin onboarding & RBAC). Note the RBAC
-             Permission matrix + require_permission already exist in app/domain/user/auth/utils/permissions.py;
-             S8 adds admin_invitation + admin_team domains, invite-acceptance, team management UI (DataTable +
-             DetailDrawer), and retrofits/【verifies】permission gates across admin endpoints.
+self_audit_s8:
+  completed: true
+  findings:
+    - "Invite email delivery is NOT wired to a template — the invite endpoint returns the invitation link
+       (inviteUrl) to the inviting Super Admin, shown as a copyable link in /admin/team. Proper templated
+       email (AvailableTemplate.ADMIN_INVITE + jinja) is a follow-up; avoided template-not-found risk."
+    - "Invitation preview endpoint is intentionally unauthenticated (token-guarded, reveals only email +
+       sub-role + scenario) so the acceptance flow can route new/existing users before login."
+    - "Full `pnpm build` still deferred (low disk); tsc --noEmit + eslint (new files) + full vitest (251) green."
+
+next_action: idle — S8 (Phase 4) complete. Resume at S9 (Phase 5 customer submission & payment). S9 builds
+             property/verification/task/payment domains + geocoding & payment(stub) facades, folds their
+             tables into 0001, and the route-backed submission + payment full-screen overlays. Reuse: derive
+             owner (app/core/state), VID, SLA, idempotency, Money; UserService.upgrade_trust_status_if_eligible;
+             note UserRepo.has_active_verification already forward-refs Verification(customer_id,status).
 
 started_at: 2026-07-02
-last_checkpoint: "S7 complete — KYC facade + agent domain + folded 0001 migration + full-screen wizard +
-                  admin review DetailDrawer; backend 418 tests, frontend 246; tsc + lint clean."
+last_checkpoint: "S8 complete — admin invitation+team domains, RBAC gates, invite acceptance (3 scenarios),
+                  team DetailDrawer UI; admin_invitations in 0001; backend 431 tests, frontend 251; tsc+lint clean."
