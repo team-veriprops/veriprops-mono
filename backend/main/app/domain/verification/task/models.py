@@ -69,6 +69,14 @@ class VerificationTask(BaseEntity):
     # live in the task_evidence child domain.
     submission_payload = Column(JSONB_VARIANT, nullable=True)
     rejection_reason = Column(String(1000), nullable=True)
+    # Admin review outcome recorded during report review (§8.3). APPROVED here is the
+    # admin's *intent*; the task only transitions SUBMITTED→APPROVED at explicit release,
+    # so all-approved never auto-completes without the release gate. REJECTED sends the
+    # task back to rework immediately.
+    review_decision = Column(String(16), nullable=True)
+    # Per-task quality (0–100) the admin sets on approval; blended into the composite
+    # trust score by the tier weights (§8.3). Defaults to 100.
+    review_quality = Column(Integer, nullable=False, server_default="100")
 
     __table_args__ = (
         # A verification has at most one task per role; reassignment/rework reuse the row.
@@ -97,6 +105,8 @@ class UpdateTaskDto(Object):
     remote_bonus_minor: Optional[int] = None
     submission_payload: Optional[Dict[str, Any]] = None
     rejection_reason: Optional[str] = None
+    review_decision: Optional[str] = None
+    review_quality: Optional[int] = None
 
 
 class SearchTaskDto(PageRequest, BaseQueryDto):

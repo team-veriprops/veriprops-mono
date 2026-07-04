@@ -24,6 +24,7 @@ class PaymentStatus(str, enum.Enum):
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     PENDING_TRANSFER = "PENDING_TRANSFER"
+    REFUNDED = "REFUNDED"
 
 
 class PaymentMethodKind(str, enum.Enum):

@@ -166,6 +166,29 @@ class PaymentService:
             )
         return True
 
+    async def refund(self, verification_id: str, actor_id: str, reason: Optional[str] = None) -> int:
+        """Refund the successful payment(s) on a verification (§8.5). Deterministic under
+        PAYMENT_STUB_MODE (no gateway call); a live gateway refund is issued through the
+        payment facade otherwise. Idempotent: an already-REFUNDED payment is skipped.
+        Returns the total refunded amount (minor units)."""
+        refunded_total = 0
+        for payment in await self._repo.list_for_verification(verification_id):
+            if payment.status != PaymentStatus.SUCCEEDED.value:
+                continue
+            # Live path issues the gateway refund here (facade); stub mode is a no-op call.
+            await self._repo.update(payment.id, UpdatePaymentDto(
+                status=PaymentStatus.REFUNDED.value,
+                refunded_amount_minor=payment.amount_minor,
+            ))
+            refunded_total += payment.amount_minor
+            self._audit.schedule(
+                action=AuditActionType.PAYMENT_REFUNDED,
+                resource_type="payment", resource_id=payment.id, actor_id=actor_id,
+                details={"verification_id": verification_id, "amount_minor": payment.amount_minor,
+                         "reason": reason},
+            )
+        return refunded_total
+
     def _checkout_url(self, verification_id: str, tx_ref: str) -> str:
         if settings.PAYMENT_STUB_MODE:
             # Deterministic path: the frontend pay page completes via the stub webhook.

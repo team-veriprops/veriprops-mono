@@ -496,6 +496,9 @@ def _create_verification_tasks():
         # Role-specific findings captured on submit (§7.3); rejection feedback on rework.
         sa.Column("submission_payload", JSONB_VARIANT, nullable=True),
         sa.Column("rejection_reason", sa.String(length=1000), nullable=True),
+        # Admin review outcome + per-task quality for the composite trust score (§8.3).
+        sa.Column("review_decision", sa.String(length=16), nullable=True),
+        sa.Column("review_quality", sa.Integer(), nullable=False, server_default="100"),
         *AlembicUtils.base_audit_columns(),
         # A verification has at most one task per role; rework reuses the row.
         sa.UniqueConstraint("verification_id", "role", name="uq_verification_tasks_role"),
@@ -585,6 +588,38 @@ def _create_task_evidence():
     op.create_index("ix_task_evidence_id", "task_evidence", ["id"], unique=True)
     op.create_index("ix_task_evidence_task", "task_evidence", ["task_id"], unique=False)
     op.create_index("ix_task_evidence_verification", "task_evidence", ["verification_id"], unique=False)
+
+
+def _create_trust_score_weight_config():
+    op.create_table(
+        "trust_score_weight_config",
+        sa.Column("tier", sa.String(length=16), nullable=False),
+        sa.Column("role", sa.String(length=16), nullable=False),
+        sa.Column("weight_percent", sa.Integer(), nullable=False, server_default="0"),
+        *AlembicUtils.base_audit_columns(),
+        # One weight per (tier, role); weights sum to 100 within a tier (app-enforced).
+        sa.UniqueConstraint("tier", "role", name="uq_trust_weight_tier_role"),
+    )
+    op.create_index("ix_trust_score_weight_config_id", "trust_score_weight_config", ["id"], unique=True)
+
+
+def _create_reports():
+    op.create_table(
+        "reports",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("report_version", sa.Integer(), nullable=False, server_default="1"),
+        sa.Column("state", sa.String(length=16), nullable=False, server_default="DRAFT"),
+        sa.Column("composite_trust_score", sa.Integer(), nullable=True),
+        sa.Column("findings", JSONB_VARIANT, nullable=True),
+        sa.Column("release_reason", sa.String(length=1000), nullable=True),
+        sa.Column("released_by", sa.String(length=36), nullable=True),
+        sa.Column("released_at", UTCDateTime, nullable=True),
+        sa.Column("superseded_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_reports_id", "reports", ["id"], unique=True)
+    op.create_index("ix_reports_verification", "reports", ["verification_id"], unique=False)
+    op.create_index("ix_reports_state", "reports", ["state"], unique=False)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -775,6 +810,8 @@ _TABLE_BUILDERS = [
     ("chargebacks", _create_chargebacks),
     ("admin_notes", _create_admin_notes),
     ("task_evidence", _create_task_evidence),
+    ("trust_score_weight_config", _create_trust_score_weight_config),
+    ("reports", _create_reports),
 ]
 
 

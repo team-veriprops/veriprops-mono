@@ -63,6 +63,13 @@ class AuditActionType(str, enum.Enum):
     TASK_STARTED = "TASK_STARTED"
     TASK_SUBMITTED = "TASK_SUBMITTED"
     EVIDENCE_CAPTURED = "EVIDENCE_CAPTURED"
+    # ── Admin review & report release (§8) ────────────────────────
+    TASK_APPROVED = "TASK_APPROVED"
+    TASK_REJECTED = "TASK_REJECTED"
+    TASK_REOPENED = "TASK_REOPENED"
+    CONFLICT_DETECTED = "CONFLICT_DETECTED"
+    REPORT_RELEASED = "REPORT_RELEASED"
+    VERIFICATION_REFUNDED = "VERIFICATION_REFUNDED"
     # ── KYC ────────────────────────────────────────────────────────
     KYC_BVN_VERIFIED = "KYC_BVN_VERIFIED"
     KYC_SELFIE_RESOLVED = "KYC_SELFIE_RESOLVED"

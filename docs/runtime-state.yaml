@@ -1,11 +1,11 @@
 session_id: run-s10-s12-control-review
 command: resume
 
-status: running
-phase: s12
+status: idle
+phase: s12-complete
 
-current_slice: S12   # Phase 8 admin review & report release
-current_subtask: S11 complete & committed; starting S12 (task review, conflict, trust-score release gate)
+current_slice: null   # S10–S12 (Phases 6–8) delivered this resume
+current_subtask: S10, S11, S12 all complete, tested, committed. Next slice is S13 (Phase 9 tracking + SSE).
 
 # ── Recovery note (this resume) ───────────────────────────────────
 recovery:
@@ -34,6 +34,41 @@ completed_slices:
   - S9   # Phase 5 customer submission & payment (see below)
   - S10  # Phase 6 admin control panel + 6a chargeback (see below)
   - S11  # Phase 7 agent task execution (see below)
+  - S12  # Phase 8 admin review & report release (see below)
+
+# ── S12 (Phase 8) summary ─────────────────────────────────────────
+s12_review_release:
+  backend:
+    - "Trust Score Weights domain (verification/scoring): trust_score_weight_config table
+       (tier×role, sum-to-100 enforced per tier), idempotent default seed via DataSeeder,
+       admin CRUD /admin/trust-score-weights (D14), deterministic compute_composite = Σ
+       (weight/100 × per-task quality)."
+    - "Report domain (verification/report): versioned Report entity (report_version — NOT the
+       optimistic-lock version), ReportState DRAFT→RELEASED→SUPERSEDED. ReportService.release
+       supersedes the live version and creates the next (§8.6); supersede_current on reopen."
+    - "Review service (verification/review) = the release gate (§8). approve_task RECORDS admin
+       intent + a quality score WITHOUT changing task state (stays SUBMITTED) — so all-approved
+       never auto-completes; reject_task SUBMITTED→REJECTED (derive→IN_PROGRESS rework). release
+       requires UNDER_REVIEW + every required task review-approved + no HIGH conflict; flips all
+       SUBMITTED→APPROVED atomically (derive→COMPLETED exactly at release), accrues CLEARING
+       commissions (price×weight×AGENT_COMMISSION_SHARE, D13), computes composite, creates the
+       RELEASED report. reopen_task APPROVED→IN_PROGRESS + supersede. fail → FAILED + gateway
+       refund (PaymentService.refund, stub default; PaymentStatus.REFUNDED added)."
+    - "Conflict detection (review/conflict.py): pure §8.2 rules (registry-encumbrance vs lawyer-
+       proceed = HIGH; high legal risk = MEDIUM). Admin endpoints /admin/review/* (RBAC). New
+       task columns review_decision/review_quality; trust_score_weight_config + reports tables
+       folded into 0001 (round-trip clean)."
+  frontend:
+    - "types/adminReview.ts; review-service + trust-weight-service + useReviewQueries. Report
+       review at /admin/verifications/[id]/report-review: per-task approve(quality)/reject(reason)/
+       reopen, conflict banners, projected trust score, findings JSON, release (gated on releasable)
+       + fail&refund. Trust Score Weights CRUD at /admin/config/trust-score-weights (per-tier edit,
+       live sum-to-100 validation). 'Report review' CTA on the admin verification detail; nav item."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 533 (+18: scoring, conflict, review services); frontend 273 (+3
+                    #   review + trust-weight contract). migration round-trip clean; tsc+lint clean.
 
 # ── S11 (Phase 7) summary ─────────────────────────────────────────
 s11_agent_task_execution:
@@ -245,14 +280,33 @@ self_audit_s11:
     - "Full `pnpm build` still deferred (low disk); tsc --noEmit + eslint (new) + full vitest (270) green.
        Backend 515 green; migration round-trip validated live."
 
-next_action: S12 (Phase 8 admin review & report release) — admin task review (approve/reject -> IN_PROGRESS
-             rework with rejection_reason), conflict detection across role submissions, release gate with the
-             composite trust score from admin Trust Score Weights (D14 — recreate trust_score_weight_config in
-             0001, CRUD + sum-to-100), release -> COMPLETED, reopen APPROVED->IN_PROGRESS, FAILED + refund
-             execution (D13 gateway refund via facade), report versioning (recompute at release only, §8.6).
+self_audit_s12:
+  completed: true
+  findings:
+    - "Composite trust score blends per-task admin quality (0–100, default 100) by the tier
+       weights; with all-100 quality a full release scores 100. A richer per-role quality rubric
+       (evidence completeness, timeliness) is a follow-up — the weight config + quality input are
+       in place."
+    - "Release model choice: admin approve records intent (task stays SUBMITTED); release flips all
+       to APPROVED atomically. This preserves the derive owner's all-approved→COMPLETED contract and
+       its 49 S2 tests untouched, while making release the sole gate (§8 — no report without release)."
+    - "Refund is deterministic (PAYMENT_STUB_MODE no-op call + PaymentStatus.REFUNDED + refunded_amount);
+       the live gateway refund call behind the facade is a follow-up (stub-first, like init payment)."
+    - "Conflict detection is a focused rule set (encumbrance-vs-proceed HIGH, high-risk MEDIUM). More
+       cross-role rules (owner mismatch, occupancy vs land-use) can extend conflict.py without API change."
+    - "Emailed 'report ready' notification (§10) not wired (no AvailableTemplate) — follow-up, like the
+       Phase-5 receipt. The final report *experience* + branded PDF is Phase 10/S14 (NBA go-live gate)."
+    - "Full `pnpm build` still deferred (low disk); tsc + eslint (new) + full vitest (273) green.
+       Backend 533 green; migration round-trip validated live."
+
+next_action: idle — S10 (Phase 6+6a), S11 (Phase 7), S12 (Phase 8) all delivered & committed this resume.
+             MVP spine now runs DRAFT→…→COMPLETED with an explicit release gate. Next slice is S13
+             (Phase 9 customer tracking & evidence layer over SSE), then S14 (Phase 10 final report + PDF,
+             gated on NBA sign-off for Legal Opinion go-live). See docs/final-audit.md for the S10–S12 audit.
 
 started_at: 2026-07-02
-last_checkpoint: "S11 complete — agent task execution (accept/decline/start/submit + capacity + first-accept),
-                  role validator (4 forms), evidence domain (content-hash + server GPS/timestamp) + stub storage
-                  provider, agent tasks dashboard + detail workflow. task_evidence + task columns in 0001
-                  (round-trip clean). Backend 515 tests, frontend 270; tsc+lint clean."
+last_checkpoint: "S12 complete — Trust Score Weights (CRUD + sum-to-100 + composite), Report domain
+                  (versioned RELEASED/SUPERSEDED), Review service (approve/reject/release gate/reopen/fail+
+                  refund) + conflict detection; commission accrual at release; report-review + weights CRUD
+                  frontend. 2 tables + 2 task columns in 0001 (round-trip clean). Backend 533 tests, frontend
+                  273; tsc+lint clean. Phases 6–8 (S10–S12) all shipped."

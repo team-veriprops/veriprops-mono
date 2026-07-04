@@ -199,6 +199,10 @@ class Settings(AppodusBaseSettings):
     SLA_SHEDDING_QUEUE_THRESHOLD: int = 50      # queue depth that triggers auto-extension
     SLA_SHEDDING_EXTENSION_DAYS: int = 1        # business days added when shedding
 
+    # Agent commission (PRD §8.3/§15.2, D13) — share of the verification price paid out
+    # to agents, split across roles by the Trust Score Weights; accrued at release.
+    AGENT_COMMISSION_SHARE: float = 0.40
+
     # Background scheduler (PRD §6.4/§7.2) — disabled in test; sweeps invoked directly.
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_SWEEP_INTERVAL_SECONDS: int = 15 * 60

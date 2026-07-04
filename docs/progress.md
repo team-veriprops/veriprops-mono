@@ -111,11 +111,28 @@ status: running (S1–S4 foundation)
       form, submit gated on required fields + evidence). Backend 515 tests; frontend 270; tsc+lint clean.
       Gaps: offline queue + image derivatives + presigned-PUT deferred (D11 fallback; see self_audit_s11).
 
+- S12 Phase 8 — Admin review & report release.
+      Backend: Trust Score Weights domain (`trust_score_weight_config`, sum-to-100 per tier,
+      idempotent default seed, admin CRUD, deterministic `compute_composite = Σ weight/100 ×
+      per-task quality`, D14). Report domain (versioned `report_version`, DRAFT→RELEASED→SUPERSEDED;
+      release supersedes the prior version §8.6). Review service = the **release gate** (§8): admin
+      `approve` records intent + quality *without* changing task state (stays SUBMITTED, so all-approved
+      never auto-completes); `reject` SUBMITTED→REJECTED (derive→IN_PROGRESS rework); `release` (requires
+      UNDER_REVIEW + all review-approved + no HIGH conflict) flips all SUBMITTED→APPROVED atomically
+      (derive→COMPLETED exactly at release), accrues CLEARING commissions (price×weight×share, D13),
+      computes the composite, creates the RELEASED report; `reopen` APPROVED→IN_PROGRESS + supersede;
+      `fail` → FAILED + refund (`PaymentService.refund`, `PaymentStatus.REFUNDED`). Conflict detection
+      (§8.2 rules). Endpoints `/admin/review/*` + `/admin/trust-score-weights` (RBAC). 2 tables + 2 task
+      columns in `0001` (round-trip clean). Frontend: report-review at
+      `/admin/verifications/[id]/report-review` (approve/reject/reopen, conflicts, trust score, release,
+      fail&refund) + Trust Score Weights CRUD at `/admin/config/trust-score-weights` (live sum-to-100).
+      Backend 533 tests; frontend 273; tsc+lint clean. Gaps: richer quality rubric + live gateway refund
+      + report-ready email deferred (see runtime-state self_audit_s12). Final report UX + PDF is S14.
+
 ## Current Slice
-- S12 (Phase 8 admin review & report release) — next.
+- none — S10–S12 (Phases 6–8) delivered & committed. Next is S13 (Phase 9 tracking + SSE).
 
 ## Pending Slices
-- S12 Phase 8 — Admin review & report release
 - S13 Phase 9 — Customer tracking & evidence (SSE)
 - S14 Phase 10 — Final report experience  *(gated: NBA sign-off for Legal Opinion go-live §B)*
 - S15–S23 Phases 11–19 — harden & scale
@@ -149,7 +166,7 @@ status: running (S1–S4 foundation)
 - S1 `bec85e1`, S2 `0465a5a`, S3 `a138219`, S4 (this commit) — foundation slices.
 
 ## Completion %
-- ~48% (11 of 23 slices; Phase-0 foundation + Phases 1–7 complete)
+- ~52% (12 of 23 slices; Phase-0 foundation + Phases 1–8 complete — MVP spine end-to-end with release gate)
 
 ---
 

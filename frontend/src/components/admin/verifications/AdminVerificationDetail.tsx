@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@3rdparty/ui/badge";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
@@ -17,6 +18,8 @@ import {
 } from "@3rdparty/ui/select";
 import { toast } from "@components/3rdparty/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import { ROUTES } from "@/lib/routes";
+import { VerificationStatus } from "@/types/verification";
 import { TransactionCurrency } from "@/types/models";
 import {
   AdminNoteCategory,
@@ -179,6 +182,7 @@ function ChargebackCard({
 }
 
 export default function AdminVerificationDetail({ verificationId }: { verificationId: string }) {
+  const router = useRouter();
   const { data, isLoading, isError } = useAdminVerificationDetailQuery(verificationId);
   const pause = usePauseMutation(verificationId);
   const resume = useResumeMutation(verificationId);
@@ -229,6 +233,15 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {(summary.status === VerificationStatus.UNDER_REVIEW ||
+            summary.status === VerificationStatus.COMPLETED) && (
+            <Button
+              onClick={() => router.push(ROUTES.ADMIN.REPORT_REVIEW(verificationId))}
+              data-testid="open-report-review"
+            >
+              Report review
+            </Button>
+          )}
           {summary.paused ? (
             <Button variant="secondary" onClick={() => resume.mutate()} disabled={resume.isPending}>
               Resume

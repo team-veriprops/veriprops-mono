@@ -10,6 +10,7 @@ export const adminNavItems: NavItem[] = [
   { title: "Disputes", href: ROUTES.ADMIN.DISPUTES, icon: "alertTriangle", has_separator_after: false },
   { title: "Re-check Requests", href: ROUTES.ADMIN.RECHECKS, icon: "fileCheck", has_separator_after: false },
   { title: "Commission Rules", href: ROUTES.ADMIN.COMMISSION_RULES, icon: "fileCheck", has_separator_after: false },
+  { title: "Trust Score Weights", href: ROUTES.ADMIN.TRUST_SCORE_WEIGHTS, icon: "settings", has_separator_after: false },
   { title: "Pricing", href: ROUTES.ADMIN.PRICING, icon: "tag", has_separator_after: false },
   { title: "Finance", href: ROUTES.ADMIN.FINANCE, icon: "dollarSign", has_separator_after: false },
   { title: "Broadcasts", href: ROUTES.ADMIN.BROADCASTS, icon: "megaphone", has_separator_after: false },
