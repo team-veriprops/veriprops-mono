@@ -28,6 +28,7 @@ from main.app.domain.user.auth.session.models import UserPersona
 from main.app.domain.user.service import UserService
 from main.app.domain.verification.models import VerificationStatus
 from main.app.domain.verification.service import VerificationService
+from main.app.domain.verification.task.service import VerificationTaskService
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
@@ -51,12 +52,14 @@ class PaymentService:
         self,
         payment_repo: PaymentRepo,
         verification_service: VerificationService,
+        task_service: VerificationTaskService,
         user_service: UserService,
         idempotency_service: IdempotencyService,
         audit_service: AuditLogService,
     ):
         self._repo = payment_repo
         self._verification_service = verification_service
+        self._task_service = task_service
         self._user_service = user_service
         self._idempotency = idempotency_service
         self._audit = audit_service
@@ -130,6 +133,8 @@ class PaymentService:
         if dto.succeeded:
             await self._repo.update(payment.id, UpdatePaymentDto(status=PaymentStatus.SUCCEEDED.value))
             await self._verification_service.mark_paid(payment.verification_id)
+            # At PAID: instantiate unlocked tasks and (if enabled) broadcast them (§6.2).
+            await self._task_service.prepare_for_paid(payment.verification_id)
             # First successful payment → trusted customer (PRD §3.3).
             await self._user_service.upgrade_trust_status_if_eligible(
                 payment.customer_id, UserPersona.CUSTOMER

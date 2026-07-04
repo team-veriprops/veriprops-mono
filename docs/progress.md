@@ -74,11 +74,30 @@ status: running (S1–S4 foundation)
       clean. Gaps: live-gateway call + emailed receipt + full draft-resume UI + conditional property details
       deferred (see runtime-state self_audit_s9). §B liability-cap copy gates go-live only.
 
+- S10 Phase 6 + 6a — Admin control panel & chargeback.
+      Backend: task domain (per-role `VerificationTask` + state machine; `instantiate_unlocked` at PAID
+      respecting §4.2 locks — Premium Lawyer skipped until siblings SUBMITTED; manual assign/reassign with
+      §6.5 capacity; broadcast pool + §7.2 no-show/starvation sweeps; every mutation re-derives
+      `verification.status` via the §4.1 derive owner). Admin control panel (paged list with SLA health,
+      composed detail, pause/resume flag, state-guarded cancel, SLA delay, notes; RBAC MANAGE_VERIFICATIONS /
+      ASSIGN_AGENT). `admin_note`, `commission` (freeze/unfreeze/reverse, D13), `chargeback` (§6a — idempotent
+      webhook flags payment + freezes commissions without touching the state machine; auto-assembled rebuttal
+      pack; won→unfreeze / lost→reverse+payment FAILED; non-prod stub-flag endpoint). Scheduler sweeps wired
+      (D12, ALWAYS_NEW wrappers, disabled under test) + admin dev sweep endpoints; `payment.handle_webhook`
+      calls `task_service.prepare_for_paid` at PAID. Four tables folded into `0001` (+`paused`,
+      `chargeback_status`, `refunded_amount_minor`); downgrade base→upgrade head clean. **Fixed a real bug**:
+      `_sla_health` OVERDUE branch was dead code (`business_days_remaining` clamps at 0) — now detects overdue
+      from the due-date. Frontend: `types/adminVerification`, `admin-verification-service` +
+      `useAdminVerificationQueries`, list at `/admin/verifications` (DataTable + status/tier/overdue filters +
+      SLA badge) → detail `/admin/verifications/[id]` (task grid + inline (re)assign, progress, property/
+      payments/commissions/chargebacks, notes, pause/resume/delay/cancel, chargeback rebuttal/resolve).
+      Backend 494 tests; frontend 266; tsc+lint clean. Gaps: agent-side accept UX + live gateway chargeback
+      webhook + agent-picker deferred (see runtime-state self_audit_s10).
+
 ## Current Slice
-- none — S9 (Phase 5) complete; Phases 3–5 (S7–S9) all delivered. Next is S10 (Phase 6 admin control panel + 6a).
+- S11 (Phase 7 agent task execution) — next.
 
 ## Pending Slices
-- S10 Phase 6 + 6a — Admin control panel & chargeback  *(introduces the task domain/table)*
 - S11 Phase 7 — Agent task execution
 - S12 Phase 8 — Admin review & report release
 - S13 Phase 9 — Customer tracking & evidence (SSE)
@@ -114,7 +133,7 @@ status: running (S1–S4 foundation)
 - S1 `bec85e1`, S2 `0465a5a`, S3 `a138219`, S4 (this commit) — foundation slices.
 
 ## Completion %
-- ~39% (9 of 23 slices; Phase-0 foundation + Phases 1–5 complete)
+- ~43% (10 of 23 slices; Phase-0 foundation + Phases 1–6/6a complete)
 
 ---
 

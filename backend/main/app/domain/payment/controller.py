@@ -19,8 +19,12 @@ from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.db.types.money import TransactionCurrency
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 
+from main.app.domain.payment.chargeback.controller import chargeback_router
+
 payment_router = APIRouter(prefix="/payments", tags=["Payments"])
 payment_service: PaymentService = di[PaymentService]
+# Chargeback ingestion is a child of the payment domain (§6a.1).
+payment_router.include_router(chargeback_router)
 
 
 def _to_dto(p: Payment) -> PaymentDto:

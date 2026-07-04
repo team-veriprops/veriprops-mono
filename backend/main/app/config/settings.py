@@ -184,6 +184,21 @@ class Settings(AppodusBaseSettings):
     # Admin invitations
     ADMIN_INVITE_TTL_HOURS: int = 72
 
+    # Task assignment, capacity & timeout sweeps (PRD §6.2, §6.5, §7.2)
+    AUTO_ASSIGNMENT_ENABLED: bool = False       # broadcast tasks to the open pool at PAID
+    AGENT_MAX_ACTIVE_TASKS: int = 5             # capacity cap enforced on assign/accept
+    TASK_NO_SHOW_TIMEOUT_HOURS: int = 12        # manual-assign accept deadline
+    TASK_POOL_TIMEOUT_HOURS: int = 24           # broadcast starvation timeout
+    REMOTE_JOB_BONUS_MINOR: int = 0             # optional flat bonus on aging pool tasks (kobo)
+
+    # Admin work-queue SLA shedding (PRD §6.4)
+    SLA_SHEDDING_QUEUE_THRESHOLD: int = 50      # queue depth that triggers auto-extension
+    SLA_SHEDDING_EXTENSION_DAYS: int = 1        # business days added when shedding
+
+    # Background scheduler (PRD §6.4/§7.2) — disabled in test; sweeps invoked directly.
+    SCHEDULER_ENABLED: bool = True
+    SCHEDULER_SWEEP_INTERVAL_SECONDS: int = 15 * 60
+
     # Wire transfer beneficiary details
     WIRE_BENEFICIARY_BANK: str = "Stanbic IBTC Bank"
     WIRE_SWIFT: str = "SBICNGLX"

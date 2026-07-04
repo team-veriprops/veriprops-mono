@@ -53,6 +53,7 @@ def _make_service(phone_verified=True, verification=None):
     svc = object.__new__(PaymentService)
     svc._repo = MagicMock()
     svc._verification_service = MagicMock()
+    svc._task_service = MagicMock()
     svc._user_service = MagicMock()
     svc._idempotency = MagicMock()
     svc._audit = MagicMock()
@@ -60,6 +61,8 @@ def _make_service(phone_verified=True, verification=None):
     svc._verification_service.get_owned = AsyncMock(return_value=verification or _verification())
     svc._verification_service.mark_payment_pending = AsyncMock()
     svc._verification_service.mark_paid = AsyncMock()
+    # At PAID the payment service instantiates/broadcasts tasks (§6.2).
+    svc._task_service.prepare_for_paid = AsyncMock()
     svc._user_service.get_user_model = AsyncMock(
         return_value=SimpleNamespace(phone_verified=phone_verified)
     )

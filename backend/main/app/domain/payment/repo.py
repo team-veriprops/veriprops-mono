@@ -1,4 +1,4 @@
-from typing import Optional, Type
+from typing import List, Optional, Type
 
 from kink import inject
 from sqlalchemy import select
@@ -34,3 +34,10 @@ class PaymentRepo(
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def list_for_verification(self, verification_id: str) -> List[Payment]:
+        stmt = select(Payment).where(
+            Payment.deleted.is_(False),
+            Payment.verification_id == verification_id,
+        )
+        return list((await self._session.execute(stmt)).scalars().all())

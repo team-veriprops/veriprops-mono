@@ -429,6 +429,8 @@ def _create_verifications():
         sa.Column("draft_payload", sa.Text(), nullable=True),
         sa.Column("paid_at", UTCDateTime, nullable=True),
         sa.Column("sla_due_date", sa.Date(), nullable=True),
+        # Admin operational hold (§7.5) — a flag, not a state (see Verification model).
+        sa.Column("paused", sa.Boolean(), nullable=False, server_default="false"),
         *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("vid", name="uq_verifications_vid"),
     )
@@ -455,6 +457,9 @@ def _create_payments():
         sa.Column("charge_amount_minor", sa.BigInteger(), nullable=True),
         sa.Column("checkout_url", sa.String(length=1024), nullable=True),
         sa.Column("failure_count", sa.Integer(), nullable=False, server_default="0"),
+        # Chargeback flag (§6a.1) — sub-process detail lives on the chargebacks row.
+        sa.Column("chargeback_status", sa.String(length=24), nullable=True),
+        sa.Column("refunded_amount_minor", sa.BigInteger(), nullable=True),
         *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("tx_ref", name="uq_payments_tx_ref"),
     )
@@ -463,6 +468,96 @@ def _create_payments():
     op.create_index("ix_payments_customer_id", "payments", ["customer_id"], unique=False)
     op.create_index("ix_payments_tx_ref", "payments", ["tx_ref"], unique=False)
     op.create_index("ix_payments_gateway_event", "payments", ["gateway_event_id"], unique=False)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Admin control panel, task execution & chargeback (PRD §6, §6a, §7)
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _create_verification_tasks():
+    op.create_table(
+        "verification_tasks",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("role", sa.String(length=16), nullable=False),
+        sa.Column("tier", sa.String(length=16), nullable=False),
+        sa.Column("state", sa.String(length=16), nullable=False, server_default="PENDING"),
+        sa.Column("assigned_agent_id", sa.String(length=36), nullable=True),
+        sa.Column("assignment_mode", sa.String(length=16), nullable=True),
+        sa.Column("in_pool", sa.Boolean(), nullable=False, server_default="false"),
+        sa.Column("pool_expires_at", UTCDateTime, nullable=True),
+        sa.Column("accept_deadline_at", UTCDateTime, nullable=True),
+        sa.Column("decline_count", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("remote_bonus_minor", sa.BigInteger(), nullable=True),
+        sa.Column("assigned_at", UTCDateTime, nullable=True),
+        sa.Column("accepted_at", UTCDateTime, nullable=True),
+        sa.Column("submitted_at", UTCDateTime, nullable=True),
+        sa.Column("approved_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+        # A verification has at most one task per role; rework reuses the row.
+        sa.UniqueConstraint("verification_id", "role", name="uq_verification_tasks_role"),
+    )
+    op.create_index("ix_verification_tasks_id", "verification_tasks", ["id"], unique=True)
+    op.create_index("ix_verification_tasks_verification_id", "verification_tasks", ["verification_id"], unique=False)
+    op.create_index("ix_verification_tasks_state", "verification_tasks", ["state"], unique=False)
+    op.create_index("ix_verification_tasks_agent", "verification_tasks", ["assigned_agent_id"], unique=False)
+
+
+def _create_commissions():
+    op.create_table(
+        "commissions",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("task_id", sa.String(length=36), nullable=True),
+        sa.Column("agent_id", sa.String(length=36), nullable=False),
+        sa.Column("role", sa.String(length=16), nullable=False),
+        sa.Column("tier", sa.String(length=16), nullable=False),
+        sa.Column("amount_minor", sa.BigInteger(), nullable=False),
+        sa.Column("currency", sa.String(length=8), nullable=False, server_default="NGN"),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="CLEARING"),
+        sa.Column("clearing_until", UTCDateTime, nullable=True),
+        sa.Column("frozen_from_status", sa.String(length=16), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_commissions_id", "commissions", ["id"], unique=True)
+    op.create_index("ix_commissions_verification", "commissions", ["verification_id"], unique=False)
+    op.create_index("ix_commissions_agent", "commissions", ["agent_id"], unique=False)
+    op.create_index("ix_commissions_status", "commissions", ["status"], unique=False)
+
+
+def _create_chargebacks():
+    op.create_table(
+        "chargebacks",
+        sa.Column("payment_id", sa.String(length=36), nullable=False),
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("gateway_event_id", sa.String(length=128), nullable=False),
+        sa.Column("status", sa.String(length=24), nullable=False, server_default="FLAGGED"),
+        sa.Column("reason", sa.String(length=500), nullable=True),
+        sa.Column("amount_minor", sa.BigInteger(), nullable=True),
+        sa.Column("currency", sa.String(length=8), nullable=False, server_default="NGN"),
+        sa.Column("rebuttal_pack", JSONB_VARIANT, nullable=True),
+        sa.Column("resolved_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+        # Idempotency key so a replayed chargeback webhook is a no-op (§4.6).
+        sa.UniqueConstraint("gateway_event_id", name="uq_chargebacks_gateway_event"),
+    )
+    op.create_index("ix_chargebacks_id", "chargebacks", ["id"], unique=True)
+    op.create_index("ix_chargebacks_payment", "chargebacks", ["payment_id"], unique=False)
+    op.create_index("ix_chargebacks_verification", "chargebacks", ["verification_id"], unique=False)
+    op.create_index("ix_chargebacks_status", "chargebacks", ["status"], unique=False)
+
+
+def _create_admin_notes():
+    op.create_table(
+        "admin_notes",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("author_id", sa.String(length=36), nullable=False),
+        sa.Column("category", sa.String(length=16), nullable=False, server_default="OPERATIONAL"),
+        sa.Column("body", sa.Text(), nullable=False),
+        sa.Column("pinned", sa.Boolean(), nullable=False, server_default="false"),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_admin_notes_id", "admin_notes", ["id"], unique=True)
+    op.create_index("ix_admin_notes_verification", "admin_notes", ["verification_id"], unique=False)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -648,6 +743,10 @@ _TABLE_BUILDERS = [
     ("properties", _create_properties),
     ("verifications", _create_verifications),
     ("payments", _create_payments),
+    ("verification_tasks", _create_verification_tasks),
+    ("commissions", _create_commissions),
+    ("chargebacks", _create_chargebacks),
+    ("admin_notes", _create_admin_notes),
 ]
 
 

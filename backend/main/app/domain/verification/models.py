@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import List, Optional
 
-from sqlalchemy import BigInteger, Column, Date, Float, Index, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, Column, Date, Float, Index, Integer, String, Text
 
 from main.app.core.state.status import VerificationStatus, VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
@@ -44,6 +44,10 @@ class Verification(BaseEntity):
 
     paid_at = Column(UTCDateTime, nullable=True)
     sla_due_date = Column(Date, nullable=True)
+
+    # Admin operational hold (§7.5) — a flag, NOT a state: the derived status is
+    # unaffected so work resumes cleanly. Set/cleared by the admin control panel.
+    paused = Column(Boolean, nullable=False, server_default="false")
 
     __table_args__ = (
         Index("ix_verifications_status", "status"),

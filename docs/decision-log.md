@@ -277,3 +277,104 @@ Super Admin (RBAC `INVITE_ADMIN`) is exactly the authorized exception. Keeping a
 ### Revisit
 - If product later wants admin capability without full admin `user_type`, extend `has_permission` to also
   honour `admin_sub_role` on USER rows, and relax this.
+
+---
+
+## Decision: D11 — S11 evidence: full presigned-S3 upload (not ref-only)
+
+### Context
+S7 deferred the real presigned-S3 upload UX (stored refs only). S11 (Phase 7) is where evidence
+carries proof-of-work weight: server-side GPS+timestamp stamping, per-item SHA-256 content hash
+(§4.5), image compression/derivatives, progressive viewing, and the offline upload queue (§7.4).
+
+### Chosen Option
+**Full S3 presigned upload** (user direction). S11 wires a real storage facade (presigned PUT +
+retained full-res original + served compressed derivatives), the evidence domain (rows with
+content-hash + server-set GPS/timestamp/capture-date), and the frontend upload manager + offline
+retry queue (Field/Surveyor).
+
+### Tradeoffs
+- Pros: §4.5/§7.3a/§7.4 exercised end-to-end; evidence layer (S13) inherits real media.
+- Cons: largest S11 sub-scope; storage-facade + upload manager + offline queue are real engineering.
+
+### Constraints
+- Deterministic default preserved: a local/stub storage provider backs tests (mirrors the OTP/payment
+  stub philosophy); real S3/R2 selected by settings behind the facade.
+
+### Revisit
+- If disk/infra constraints block, fall back to ref+hash for the binary path while keeping the domain.
+
+---
+
+## Decision: D12 — Real scheduler for time-based automation (S10/S11)
+
+### Context
+Broadcast first-accept-wins expiry, no-show/pool timeouts, starvation backstop (§7.2), and graceful
+SLA shedding (§6.4) are time-driven. They need a periodic trigger.
+
+### Chosen Option
+**Wire a real scheduler now** (user direction). Timeout/broadcast/shedding logic lives in pure,
+tested service methods; a background job-runner fires the sweeps periodically. A non-prod dev
+endpoint also triggers each sweep for deterministic tests.
+
+### Tradeoffs
+- Pros: exit criteria met with real automation, not just callable methods.
+- Cons: adds runtime/infra concerns (lifespan-managed scheduler) and shutdown handling.
+
+### Constraints
+- Sweeps must be idempotent and safe to run concurrently with request traffic (claim-based, like the
+  payment webhook). Scheduler is disabled under test env; sweeps invoked directly/via dev endpoint.
+
+### Revisit
+- If serverless deployment (NullPool) makes an in-process scheduler unsound, move sweeps to an external
+  cron hitting the dev/admin sweep endpoints.
+
+---
+
+## Decision: D13 — Pull commission + refund forward into S10/S12
+
+### Context
+Chargeback commission-freeze (R6a.2) and FAILED/REFUNDED refunds (R8.5) reference domains sequenced
+later (commissions = Phase 15/S19; gateway refunds unwired).
+
+### Chosen Option
+**Pull them forward** (user direction). S10 introduces a minimal commission domain (states
+CLEARING/AVAILABLE/FROZEN/REVERSED + freeze/reverse ops) so chargeback freeze executes for real;
+commission *accrual* wires at task-approval/report-release (S12). Refund execution (gateway refund
+call behind the payment facade) lands with FAILED/REFUNDED in S12.
+
+### Tradeoffs
+- Pros: R6a.2/R8.5 fully satisfied, not hook-only.
+- Cons: front-runs Phase 15/S19 sequencing; S19 becomes earnings/payout + rules maturity over this base.
+
+### Constraints
+- Commission money in integer minor units, NGN-contractual, reconciling to the kobo (§4.4).
+- Gateway refund goes through the provider facade with the deterministic stub default (§PAYMENT_STUB_MODE).
+- S19 (Phase 15) is re-scoped in the plan to build on this base rather than introduce commissions cold.
+
+### Revisit
+- N/A — S19 slice objective updated at its run.
+
+---
+
+## Decision: D14 — Build admin Trust Score Weights CRUD in S12
+
+### Context
+Report release (§8.3) computes the composite trust score from admin-defined Trust Score Weights
+(per tier × role, summing to 100%). Full admin config is nominally Phase 18 (R18.5).
+
+### Chosen Option
+**Build the admin weights CRUD now** (user direction). S12 recreates `trust_score_weight_config` in
+`0001`, ships default weights, and builds the admin management UI + endpoints with sum-to-100
+validation. Composite computed deterministically at release; recompute only at release (§8.6).
+
+### Tradeoffs
+- Pros: §8.3 fully admin-configurable at MVP; R18.5's weights portion delivered early.
+- Cons: pulls part of Phase 18 forward; S22 keeps the remaining system-config surface.
+
+### Constraints
+- Weights referenced via enums (tier/role); sum-to-100 enforced at save (per tier).
+- Default weights seeded idempotently (like consent docs), editable via admin CRUD.
+
+### Revisit
+- N/A — S22 (Phase 18) objective updated to exclude the weights CRUD delivered here.

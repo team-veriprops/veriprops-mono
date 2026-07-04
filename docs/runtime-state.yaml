@@ -1,11 +1,26 @@
-session_id: run-s7-s9-mvp-features
+session_id: run-s10-s12-control-review
 command: resume
 
-status: idle
-phase: idle
+status: running
+phase: s11
 
-current_slice: null   # S9 (Phase 5 customer submission & payment) complete; next is S10 (Phase 6 admin control panel + 6a chargeback)
-current_subtask: null
+current_slice: S11   # Phase 7 agent task execution
+current_subtask: S10 complete & committed; starting S11 (agent task execution + evidence upload)
+
+# ── Recovery note (this resume) ───────────────────────────────────
+recovery:
+  recovered: "Uncommitted in-flight agent-domain repackaging (flat files -> one-entity-per-domain
+    child packages: profile/credential/coverage/kyc/application_draft) not captured in prior runtime
+    state. Verified green (agent 26 tests; full backend 455) and committed as 7cec5a5 before starting S10."
+  config_note: "config.yaml is advisory (progress.md 'strict' note was stale)."
+
+# ── S10-S12 scope decisions (this resume) — see decision-log D11-D14 ─
+scope_decisions:
+  D11: "S11 evidence = full presigned-S3 upload (not ref-only)."
+  D12: "Real scheduler for broadcast expiry / no-show / pool / starvation / SLA shedding."
+  D13: "Pull commission + refund forward: minimal commission domain (freeze/reverse) in S10; gateway
+        refund execution in S12."
+  D14: "Build admin Trust Score Weights CRUD in S12 (recreate trust_score_weight_config in 0001)."
 
 completed_slices:
   - S1   # foundation reconciliation
@@ -17,6 +32,47 @@ completed_slices:
   - S7   # Phase 3 agent onboarding & KYC
   - S8   # Phase 4 admin onboarding & RBAC
   - S9   # Phase 5 customer submission & payment (see below)
+  - S10  # Phase 6 admin control panel + 6a chargeback (see below)
+
+# ── S10 (Phase 6 + 6a) summary ────────────────────────────────────
+s10_admin_control_chargeback:
+  backend:
+    - "Task domain (app/domain/verification/task): per-role VerificationTask + state machine;
+       instantiate_unlocked at PAID respecting §4.2 dependency locks (Premium Lawyer skipped
+       until siblings SUBMITTED); manual assign/reassign with §6.5 capacity cap; broadcast pool
+       + §7.2 no-show / pool-starvation sweeps; every mutation re-derives verification.status via
+       the §4.1 derive owner (single writer). PAID->IN_PROGRESS on first assign."
+    - "Admin control panel (app/domain/verification/admin): filtered paged list with SLA health,
+       composed detail (tasks/property/payments/commissions/chargebacks/notes + progress),
+       pause/resume (a flag, not a state), cancel (state-machine guarded), SLA delay/shedding,
+       admin notes. RBAC-gated (MANAGE_VERIFICATIONS / ASSIGN_AGENT)."
+    - "admin_note domain (internal-only notes, pinned-first). commission domain (D13): entity +
+       freeze/unfreeze/reverse ops backing the chargeback sub-process; accrual wired in S12."
+    - "chargeback domain (§6a): idempotent gateway webhook flags the payment + freezes commissions
+       WITHOUT touching the verification state machine; auto-assembles the rebuttal pack from audit
+       artefacts; admin rebuttal/resolve (won->unfreeze, lost->reverse+payment FAILED). Non-prod
+       deterministic stub-flag endpoint (/payments/chargebacks/stub/flag)."
+    - "Scheduler (D12): APScheduler jobs wired to the real sweeps via ALWAYS_NEW session wrappers
+       (TaskSweepJobs), disabled under ENVIRONMENT=test; admin dev sweep endpoints for on-demand
+       trigger. payment.handle_webhook now calls task_service.prepare_for_paid at PAID."
+    - "0001: verification_tasks / commissions / chargebacks / admin_notes tables folded in;
+       payments += chargeback_status/refunded_amount_minor; verifications += paused. Validated
+       downgrade base -> upgrade head clean."
+    - "BUG FOUND+FIXED: AdminVerificationService._sla_health OVERDUE branch was dead code
+       (business_days_remaining clamps at 0); now detects overdue from the due-date directly and
+       reports negative business-days-past-due. Caught by the new SLA test."
+  frontend:
+    - "types/adminVerification.ts (TaskState/SlaHealth/Commission/Chargeback/etc mirrors);
+       admin-verification-service + useAdminVerificationQueries (detail mutations seed the cache
+       from the returned detail). List at /admin/verifications (DataTable + status/tier/overdue
+       filters, SLA-health badge, row->detail). Detail at /admin/verifications/[id]: task grid with
+       inline manual (re)assign, progress bar, property/payments/commissions/chargebacks, add-note
+       + list, pause/resume + SLA-extend + cancel. Chargeback rebuttal/resolve controls."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 494 (+41: task/commission/chargeback/admin services, payment fixup);
+                    #   frontend 266 (+6 admin-verification-service contract). migration round-trip clean.
 
 # ── S9 (Phase 5) summary ──────────────────────────────────────────
 s9_submission_payment:
@@ -124,13 +180,28 @@ self_audit_s9:
        Phase-5 GO-LIVE only (build proceeds against the seeded VERIFICATION_TERMS draft copy)."
     - "Full `pnpm build` still deferred (low disk); tsc --noEmit + eslint (new files) + full vitest (260) green."
 
-next_action: idle — S9 (Phase 5) complete; Phases 3–5 (S7–S9) all delivered. Resume at S10 (Phase 6 admin
-             control panel + 6a chargeback): verifications list/detail, agent assignment (instantiates tasks
-             per tier via roles_for_tier / dependencies), PAID->IN_PROGRESS via the derive owner, work queue,
-             chargeback sub-process. The task domain/table is introduced there (deferred from S9 by design —
-             derive_status floors at PAID with no tasks).
+self_audit_s10:
+  completed: true
+  findings:
+    - "Chargeback ingestion in prod expects a signed gateway chargeback webhook; only the
+       deterministic non-prod stub-flag endpoint is wired now (mirrors PAYMENT_STUB_MODE). Real
+       provider chargeback-webhook parsing/signature-verify is a follow-up, like the live payment gateway."
+    - "Commission ACCRUAL is intentionally not triggered yet (no CLEARING rows created) — accrual
+       lands at task-approval/report-release in S12 (D13). Freeze/unfreeze/reverse are complete and tested."
+    - "Manual assignment UI takes a raw Agent ID (no agent picker/eligibility-by-coverage yet). The
+       broadcast/open-pool acceptance UX is agent-side (S11). Full agent directory picker is a follow-up."
+    - "Full `pnpm build` still deferred (low disk per prior slices); tsc --noEmit + eslint (new files)
+       + full vitest (266) green substitute. Backend 494 green; migration round-trip validated live."
+    - "Refund EXECUTION on cancel/chargeback-lost is recorded (audit + payment refunded_amount) but the
+       gateway refund call is deferred to S12 (D13), consistent with the stub-first posture."
+
+next_action: S11 (Phase 7 agent task execution) — agent dashboard, accept/decline + capacity, four role
+             submission UIs, proof-of-work/COI, evidence full presigned-S3 upload (D11) + offline queue.
+             Builds on the S10 task domain (state machine + derive owner already own IN_PROGRESS->SUBMITTED->
+             UNDER_REVIEW). Trusted-on-first-submit; all-submitted -> UNDER_REVIEW via the derive owner.
 
 started_at: 2026-07-02
-last_checkpoint: "S9 complete — property/verification/payment domains, geocoding facade, deterministic payment
-                  (idempotent webhook), submission + payment full-screen overlays; tables in 0001; backend 453
-                  tests, frontend 260; tsc+lint clean. Phases 3–5 (S7–S9) all shipped."
+last_checkpoint: "S10 complete — task/admin/admin_note/commission/chargeback domains; scheduler sweeps wired
+                  (D12); chargeback sub-process + rebuttal pack; 4 tables folded into 0001 (round-trip clean);
+                  admin control-panel frontend (list+detail+assign+actions+chargeback). Fixed a real OVERDUE
+                  SLA-health bug. Backend 494 tests, frontend 266; tsc+lint clean."

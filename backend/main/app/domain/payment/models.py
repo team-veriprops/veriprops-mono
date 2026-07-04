@@ -51,6 +51,10 @@ class Payment(BaseEntity):
 
     checkout_url = Column(String(1024), nullable=True)
     failure_count = Column(Integer, nullable=False, server_default="0")
+    # Chargeback flag (§6a.1) — the sub-process detail lives on the Chargeback row;
+    # this column marks the payment so lists/detail can surface it. Null = none.
+    chargeback_status = Column(String(24), nullable=True)
+    refunded_amount_minor = Column(BigInteger, nullable=True)
 
     __table_args__ = (
         Index("ix_payments_verification", "verification_id"),
@@ -80,6 +84,8 @@ class UpdatePaymentDto(Object):
     provider: Optional[str] = None
     checkout_url: Optional[str] = None
     failure_count: Optional[int] = None
+    chargeback_status: Optional[str] = None
+    refunded_amount_minor: Optional[int] = None
 
 
 class SearchPaymentDto(PageRequest, BaseQueryDto):
