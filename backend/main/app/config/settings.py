@@ -111,6 +111,19 @@ class Settings(AppodusBaseSettings):
     # content hash + server-stamped GPS/timestamp are computed regardless (§4.5, §7.3a).
     DOCUMENT_STORAGE_STUB_MODE: bool = True
 
+    # Report PDF (S14, §10). The real pure-Python fpdf2 renderer is the default (no
+    # native deps / creds); the deterministic stub renderer is selected when True for
+    # ultra-fast tests. Mirrors the facade pattern of payment/storage/kyc.
+    REPORT_PDF_STUB_MODE: bool = False
+    # Public base URL the report PDF's QR deep-links to (public lookup, §10.1/§13).
+    PUBLIC_APP_BASE_URL: str = "https://veriprops.ng"
+    # Brand name printed on the report cover + PDF (§10.1).
+    REPORT_BRAND_NAME: str = "Veriprops"
+    # §B go-live gate (D18): the Premium Legal Opinion report section is built but its
+    # content stays hidden until NBA counsel sign-off + lawyer-role PI cover. Never
+    # default-on. Surfaced to the frontend via GET /config/public.
+    LEGAL_OPINION_ENABLED: bool = False
+
     # ZOHO
     ZOHO_CLIENT_ID: Optional[str] = None
     ZOHO_CLIENT_SECRET: Optional[str] = None

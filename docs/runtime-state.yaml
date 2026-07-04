@@ -1,11 +1,11 @@
 session_id: run-s13-s14-tracking-report
 command: resume
 
-status: running
-phase: s13-complete
+status: idle
+phase: s14-complete
 
-current_slice: S14   # Phase 10 final report experience + PDF (D16, D18)
-current_subtask: S13 (Phase 9 tracking + evidence over SSE) complete, tested, committed. Building S14.
+current_slice: null   # S13 (Phase 9) + S14 (Phase 10) delivered this resume — MVP cut line complete
+current_subtask: S13 and S14 complete, tested, committed. Next slice is S15 (Phase 11 communication layer).
 
 # ── Recovery note (this resume) ───────────────────────────────────
 recovery:
@@ -44,6 +44,62 @@ completed_slices:
   - S11  # Phase 7 agent task execution (see below)
   - S12  # Phase 8 admin review & report release (see below)
   - S13  # Phase 9 customer tracking & evidence over SSE (see below)
+  - S14  # Phase 10 final report experience + branded PDF (see below)
+
+# ── S14 (Phase 10) summary ────────────────────────────────────────
+s14_final_report:
+  backend:
+    - "report_pdf facade (appodus_utils/integrations/report_pdf/): decoupled primitive ReportPdfContext (no app
+       DTOs — keeps the integration layer independent). Fpdf2ReportPdfProvider is the DEFAULT (pure-Python, D16;
+       branded cover + section pages + embedded QR to the public lookup + SUPERSEDED watermark; §3.5 legal
+       footer on EVERY page via footer(); compression off so the footer is verifiable). StubReportPdfProvider
+       = deterministic minimal real PDF (still carries the footer). Factory selects by REPORT_PDF_STUB_MODE."
+    - "report/content.py (pure): trust_band (90+ Safe / 60-89 Caution / 0-59 High Risk) + opinion-framed verdict
+       (final wording on §B list) + tier-gated sections (Exec Summary / Registry & Title / Physical / Boundary
+       & Survey / Legal Opinion / Risk Summary / Customer-Submitted Docs). Legal Opinion section built but its
+       content is withheld unless LEGAL_OPINION_ENABLED (D18). LEGAL_FOOTER_TEXT = the §3.5 disclaimer verbatim."
+    - "CustomerReportService: ownership gate (VerificationService.get_owned) -> get_released report (404 if none)
+       -> build content -> access-gate ack state -> PDF render. Access-gate acknowledgement child domain
+       (report/acknowledgement/: entity + repo + idempotent service, recorded against report_version;
+       report_acknowledgements folded into 0001, round-trip clean). Customer endpoints (report/controller.py,
+       child of verification): GET /report, POST /report/acknowledge, GET /report/pdf (StreamingResponse pdf)."
+    - "Wired VerificationMessages.send_report_ready into ReviewService.release (best-effort) — closes the S12
+       report-ready email follow-up. LEGAL_OPINION_ENABLED surfaced via /config/public (PublicConfigDto). New
+       settings: REPORT_PDF_STUB_MODE(False default), PUBLIC_APP_BASE_URL, REPORT_BRAND_NAME, LEGAL_OPINION_ENABLED."
+  frontend:
+    - "types/report; report-service (getReport/acknowledge/pdfUrl) + useReportQueries. Report page
+       /portal/verifications/[id]/report: one-time access-gate modal (blurs + blocks content until acknowledged,
+       POST acknowledge), verified-badge header (VID/version/date/tier/address + Download PDF link to the proxied
+       /api/.../report/pdf + Request Re-check disabled), plain-language verdict lead, trust-score band (numeric +
+       coloured band + What-does-this-mean tooltip), collapsible tier-dependent <details> sections with the Legal
+       Opinion section hidden until public-config legalOpinionEnabled (D18), per-page legal footer, superseded
+       banner. 'View report' CTA on the tracking page when COMPLETED. PublicConfig type + /config/public gain
+       legalOpinionEnabled."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 582 (+20: content, report_pdf facade real render, customer report service);
+                    #   frontend 280 (+3 report-service contract). migration round-trip clean; tsc+lint clean.
+                    #   Real fpdf2 render verified: %PDF, footer on 7/7 pages, QR embedded, tier-gated sections.
+
+self_audit_s14:
+  completed: true
+  findings:
+    - "PDF is fpdf2 (D16) — a clean branded layout, not pixel-for-pixel with the HTML view. The §10.2 exit
+       criterion (legal footer on EVERY page) is met and verified by a real render (7/7 pages); a WeasyPrint/
+       Playwright HTML-parity renderer can drop in behind the same facade later."
+    - "Legal Opinion section is BUILD-ONLY (D18): content withheld unless LEGAL_OPINION_ENABLED (default off,
+       surfaced via /config/public and hidden on the frontend). Go-live blocked on NBA sign-off + lawyer-role
+       PI cover (§B items 15, 17). The verdict wording is the safe 'opinion, not advice' default pending the
+       §B item-11 legal sign-off."
+    - "Customer-Submitted Documents appendix is a stub section — customer-vs-agent upload attribution ('which
+       roles referenced each') lands once the property-documents pipeline surfaces uploads (follow-up)."
+    - "The report shows the live RELEASED version; superseded=False for the customer view (a superseded version
+       is only reachable admin-side). The supersede state transition itself is covered by the S12 report service."
+    - "Report-ready email is wired best-effort into release (send_report_ready); actual dispatch is gated by
+       ENABLE_OUT_MESSAGING / Mailpit in non-prod, consistent with the rest of the messaging layer."
+    - "Full `pnpm build` still deferred (low disk); tsc --noEmit + eslint (src) + full vitest (280) green.
+       Backend 582 green; migration round-trip validated live; real PDF render verified end-to-end."
 
 # ── S13 (Phase 9) summary ─────────────────────────────────────────
 s13_tracking_evidence:
@@ -359,10 +415,13 @@ self_audit_s12:
     - "Full `pnpm build` still deferred (low disk); tsc + eslint (new) + full vitest (273) green.
        Backend 533 green; migration round-trip validated live."
 
-next_action: idle — S10 (Phase 6+6a), S11 (Phase 7), S12 (Phase 8) all delivered & committed this resume.
-             MVP spine now runs DRAFT→…→COMPLETED with an explicit release gate. Next slice is S13
-             (Phase 9 customer tracking & evidence layer over SSE), then S14 (Phase 10 final report + PDF,
-             gated on NBA sign-off for Legal Opinion go-live). See docs/final-audit.md for the S10–S12 audit.
+next_action: idle — S13 (Phase 9 tracking + evidence over SSE) and S14 (Phase 10 final report + branded PDF)
+             delivered & committed this resume. The MVP cut line (Phases 0–10) now ships end-to-end:
+             submission → payment → assignment → agent execution → admin review/release → live customer
+             tracking → final report + downloadable PDF. Next slice is S15 (Phase 11 communication layer).
+             Go-live gates outstanding (build-only): Legal Opinion (NBA sign-off + lawyer PI, §B); liability-cap
+             copy (Phase 5). Deferred follow-ups: Redis SSE fan-out (S16), progressive evidence images, HTML-CSS
+             PDF parity, customer-doc appendix attribution.
 
 started_at: 2026-07-02
 last_checkpoint: "S12 complete — Trust Score Weights (CRUD + sum-to-100 + composite), Report domain

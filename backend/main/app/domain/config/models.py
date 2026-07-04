@@ -7,3 +7,5 @@ from main.appodus_utils import Object
 class PublicConfigDto(Object):
     # Drives whether the signup flow shows the phone-verification step.
     phone_verification_enabled: bool
+    # §B go-live gate (D18): whether the Premium Legal Opinion report section is live.
+    legal_opinion_enabled: bool = False

@@ -298,4 +298,6 @@ export interface LegalDocument extends LegalDocumentSummary {
 // Mirrors backend PublicConfigDto.
 export interface PublicConfig {
   phoneVerificationEnabled: boolean;
+  // §B go-live gate (D18): whether the Premium Legal Opinion report section is live.
+  legalOpinionEnabled?: boolean;
 }

@@ -24,6 +24,7 @@ from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.commission.models import CreateCommissionDto
 from main.app.domain.commission.service import CommissionService
+from main.app.domain.message.verification_messages import VerificationMessages
 from main.app.domain.payment.service import PaymentService
 from main.app.domain.verification.models import UpdateVerificationDto, Verification
 from main.app.domain.verification.report.service import ReportService
@@ -58,6 +59,7 @@ class ReviewService:
         weight_service: TrustScoreWeightService,
         commission_service: CommissionService,
         payment_service: PaymentService,
+        verification_messages: VerificationMessages,
         audit_service: AuditLogService,
     ):
         self._tasks = task_repo
@@ -66,6 +68,7 @@ class ReviewService:
         self._weights = weight_service
         self._commissions = commission_service
         self._payments = payment_service
+        self._messages = verification_messages
         self._audit = audit_service
 
     # ── Per-task review (§8.1) ────────────────────────────────────
@@ -174,6 +177,12 @@ class ReviewService:
             verification_id, VerificationEventType.REPORT_RELEASED,
             {"version": report.report_version, "trustScore": composite},
         )
+        # Notify the customer their report is ready (§10). Best-effort — a messaging
+        # failure must not roll back the release.
+        try:
+            await self._messages.send_report_ready(verification.customer_id)
+        except Exception:
+            pass
         return ReviewContext(report=report, trust_score=composite, conflicts=conflicts)
 
     async def reopen_task(

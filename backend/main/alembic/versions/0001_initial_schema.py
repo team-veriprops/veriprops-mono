@@ -624,6 +624,22 @@ def _create_reports():
     op.create_index("ix_reports_state", "reports", ["state"], unique=False)
 
 
+def _create_report_acknowledgements():
+    # Customer access-gate acknowledgement, recorded against the report version (§10.1).
+    op.create_table(
+        "report_acknowledgements",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("report_id", sa.String(length=36), nullable=False),
+        sa.Column("report_version", sa.Integer(), nullable=False),
+        sa.Column("customer_id", sa.String(length=36), nullable=False),
+        sa.Column("acknowledged_at", UTCDateTime, nullable=False),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_report_ack_id", "report_acknowledgements", ["id"], unique=True)
+    op.create_index("ix_report_ack_verification", "report_acknowledgements", ["verification_id"], unique=False)
+    op.create_index("ix_report_ack_customer", "report_acknowledgements", ["customer_id"], unique=False)
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Seed data
 # ─────────────────────────────────────────────────────────────────────
@@ -814,6 +830,7 @@ _TABLE_BUILDERS = [
     ("task_evidence", _create_task_evidence),
     ("trust_score_weight_config", _create_trust_score_weight_config),
     ("reports", _create_reports),
+    ("report_acknowledgements", _create_report_acknowledgements),
 ]
 
 

@@ -8,12 +8,12 @@ supersedes the previous (§8.6). The report state machine is DRAFT → RELEASED 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Column, Integer, String
 from sqlalchemy import Index
 
-from main.app.core.state.status import ReportState
+from main.app.core.state.status import ReportState, VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
@@ -81,3 +81,41 @@ class ReportDto(Object):
     released_at: Optional[datetime] = None
     superseded_at: Optional[datetime] = None
     date_created: datetime
+
+
+# ─── Customer report experience DTOs (§10) ────────────────────────
+
+class ReportSectionDto(Object):
+    """A collapsible, tier-dependent report section (§10.1)."""
+
+    key: str            # stable identifier (executive_summary, registry_title, …)
+    title: str
+    body: str           # rendered, human-readable text
+    is_legal_opinion: bool = False
+
+
+class CustomerReportDto(Object):
+    """The customer-facing released report (§10.1). Same content object feeds the
+    on-screen view and the PDF renderer, so they stay in parity."""
+
+    id: str
+    verification_id: str
+    vid: str
+    tier: Optional[VerificationTier] = None
+    address: Optional[str] = None
+    report_version: int
+    released_at: Optional[datetime] = None
+    superseded: bool = False
+    trust_score: Optional[int] = None
+    trust_band: Optional[str] = None      # Safe / Caution / High Risk (§10.1)
+    trust_meaning: Optional[str] = None
+    verdict: str = ""                     # plain-language lead, framed as opinion (§10.1)
+    sections: List[ReportSectionDto] = []
+    legal_opinion_included: bool = False
+    acknowledged: bool = False            # has the customer accepted the access gate (§10.1)
+
+
+class AcknowledgeReportDto(Object):
+    """Customer's one-time access-gate acknowledgement, recorded against the version."""
+
+    report_version: int

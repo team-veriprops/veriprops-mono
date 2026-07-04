@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { BadgeCheck, ShieldCheck } from "lucide-react";
+import { BadgeCheck, FileText, ShieldCheck } from "lucide-react";
+import { Button } from "@3rdparty/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
 import { CopyText } from "@components/ui/CopyText";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
@@ -37,6 +38,22 @@ export default function TrackingContainer({ verificationId }: { verificationId: 
         {(t) => (
           <>
             <Header tracking={t} />
+
+            {t.status === VerificationStatus.COMPLETED && (
+              <Card className="border-primary/40 bg-primary/5">
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <FileText className="size-4 text-primary" /> Your report is ready.
+                  </div>
+                  <Button asChild size="sm">
+                    <Link href={ROUTES.PORTAL.VERIFICATION_REPORT(verificationId)} data-testid="tracking-view-report">
+                      View report
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {STATE_REASSURANCE[t.status] && (
               <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />

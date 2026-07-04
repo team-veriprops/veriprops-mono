@@ -7,6 +7,7 @@ from main.app.domain.message.controller import message_router
 from main.app.domain.user.controller import user_router
 from main.app.domain.verification.controller import verification_router
 from main.app.domain.verification.tracking.controller import customer_tracking_router
+from main.app.domain.verification.report.controller import customer_report_router
 from main.app.domain.verification.admin.controller import admin_verification_router
 from main.app.domain.verification.task.controller import agent_task_router
 from main.app.domain.verification.scoring.controller import trust_weight_router
@@ -22,6 +23,7 @@ router.include_router(message_router)
 router.include_router(user_router)
 router.include_router(verification_router)
 router.include_router(customer_tracking_router)
+router.include_router(customer_report_router)
 router.include_router(admin_verification_router)
 router.include_router(agent_task_router)
 router.include_router(trust_weight_router)

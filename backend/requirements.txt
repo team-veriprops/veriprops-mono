@@ -31,9 +31,9 @@ firebase-admin>=7.4.0,<7.5.0
 pywebpush>=2.3.0,<2.4.0
 
 #airspeed>=0.6.0,<0.7.0
-Jinja2>=3.1.6,<3.2.0  # HTML report template rendering (S36)
-weasyprint>=68.1,<69.0  # HTML→PDF for report export (S36)
-qrcode[pil]>=8.2,<9.0  # QR code embedded in PDF (S36)
+Jinja2>=3.1.6,<3.2.0  # HTML report template rendering + messaging templates
+fpdf2>=2.8,<3.0  # pure-Python server-side report PDF (S14/D16 — no native deps, Windows/CI-safe)
+qrcode[pil]>=8.2,<9.0  # QR code (public-lookup link) embedded in the report PDF (S14)
 
 beautifulsoup4>=4.12.0,<5.0.0 # HTML parsing for listing-URL scraper
 

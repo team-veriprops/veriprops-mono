@@ -12,4 +12,5 @@ config_router = APIRouter(prefix="/config", tags=["Config"])
 async def public_config():
     return SuccessResponse[PublicConfigDto](data=PublicConfigDto(
         phone_verification_enabled=settings.PHONE_VERIFICATION_ENABLED,
+        legal_opinion_enabled=settings.LEGAL_OPINION_ENABLED,
     ))

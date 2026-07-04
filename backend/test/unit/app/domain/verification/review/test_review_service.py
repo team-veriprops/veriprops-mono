@@ -43,7 +43,9 @@ def _task(role, state=TaskState.SUBMITTED, review=None, payload=None, agent="age
 
 
 def _verification(status=VerificationStatus.UNDER_REVIEW, tier=VerificationTier.STANDARD, price=1000000):
-    return SimpleNamespace(id="v-1", status=status.value, tier=tier.value, price_locked_minor=price)
+    return SimpleNamespace(
+        id="v-1", status=status.value, tier=tier.value, price_locked_minor=price, customer_id="cust-1",
+    )
 
 
 def _make_service(verification, tasks):
@@ -54,6 +56,8 @@ def _make_service(verification, tasks):
     svc._weights = MagicMock()
     svc._commissions = MagicMock()
     svc._payments = MagicMock()
+    svc._messages = MagicMock()
+    svc._messages.send_report_ready = AsyncMock()
     svc._audit = MagicMock()
 
     state = {"tasks": list(tasks), "verification": verification}

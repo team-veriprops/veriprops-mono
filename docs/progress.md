@@ -151,11 +151,29 @@ status: running (S1–S4 foundation)
       migration round-trip clean. Gaps: progressive/derivative image pipeline + messages preview (Phase 11)
       + Redis SSE fan-out (S16) deferred.
 
+- S14 Phase 10 — Final report experience *(built; Legal Opinion go-live gated on NBA sign-off §B, D18)*.
+      Backend: `report_pdf` facade (`appodus_utils/integrations/report_pdf/` — decoupled primitive
+      `ReportPdfContext`; **fpdf2** pure-Python renderer as the default (D16, per-page §3.5 legal footer via
+      `footer()` + embedded QR to the public lookup + SUPERSEDED watermark) + deterministic stub, selected by
+      `REPORT_PDF_STUB_MODE`). Pure content builder (`report/content.py` — `trust_band` 90/60 bands, opinion-framed
+      verdict, tier-gated sections; Legal Opinion section built but content withheld unless `LEGAL_OPINION_ENABLED`,
+      D18). `CustomerReportService` (ownership gate → released report → content → ack state → PDF). Access-gate
+      acknowledgement child domain (`report/acknowledgement/`, recorded against the report version;
+      `report_acknowledgements` in 0001). Customer endpoints `/verifications/{id}/report`, `/report/acknowledge`,
+      `/report/pdf` (StreamingResponse application/pdf). Wired `send_report_ready` into the release path (closes
+      the S12 email follow-up). `LEGAL_OPINION_ENABLED` surfaced via `/config/public`. Frontend: `types/report`,
+      report-service + hooks, report page `/portal/verifications/[id]/report` (one-time access-gate modal →
+      acknowledge, verified-badge header + Download PDF / Request Re-check, plain-language verdict lead,
+      trust-score band + tooltip, collapsible tier-dependent sections with the Legal Opinion section hidden until
+      the flag is on, per-page legal footer, superseded banner) + a "View report" CTA on the tracking page when
+      COMPLETED. Backend 582 tests; frontend 280; migration round-trip clean; tsc+lint clean. Real fpdf2 render
+      verified: %PDF valid, legal footer on every page (7/7), QR embedded, tier-gated sections. Gaps: pixel-perfect
+      HTML-CSS PDF + customer-vs-agent document appendix attribution deferred; Legal Opinion **build-only** until §B.
+
 ## Current Slice
-- S14 Phase 10 — Final report experience *(gated: NBA sign-off for Legal Opinion go-live §B)* — starting.
+- none — S13 (Phase 9) and S14 (Phase 10) delivered & committed. MVP cut line (Phases 0–10) complete.
 
 ## Pending Slices
-- S14 Phase 10 — Final report experience  *(gated: NBA sign-off for Legal Opinion go-live §B)*
 - S15–S23 Phases 11–19 — harden & scale
 
 ## Runtime State
@@ -187,7 +205,9 @@ status: running (S1–S4 foundation)
 - S1 `bec85e1`, S2 `0465a5a`, S3 `a138219`, S4 (this commit) — foundation slices.
 
 ## Completion %
-- ~52% (12 of 23 slices; Phase-0 foundation + Phases 1–8 complete — MVP spine end-to-end with release gate)
+- ~61% (14 of 23 slices; Phase-0 foundation + Phases 1–10 complete — the full MVP cut line ships end-to-end:
+  submission → payment → assignment → agent execution → admin review/release → live customer tracking → final
+  report + PDF). Remaining: S15–S23 (harden & scale, Phases 11–19).
 
 ---
 
