@@ -20,11 +20,13 @@ import enum
 from datetime import datetime
 from typing import Optional
 
+from typing import Any, Dict
+
 from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, String, UniqueConstraint
 
 from main.app.core.state.status import AgentRole, TaskState, VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 
 class TaskAssignmentMode(str, enum.Enum):
@@ -61,6 +63,13 @@ class VerificationTask(BaseEntity):
     submitted_at = Column(UTCDateTime, nullable=True)
     approved_at = Column(UTCDateTime, nullable=True)
 
+    # Role-specific structured findings captured on submit (§7.3) — the shape differs
+    # per role (Registry search, Field inspection, Surveyor measurement, Lawyer opinion).
+    # Held as JSON so each role form evolves without a schema change; evidence binaries
+    # live in the task_evidence child domain.
+    submission_payload = Column(JSONB_VARIANT, nullable=True)
+    rejection_reason = Column(String(1000), nullable=True)
+
     __table_args__ = (
         # A verification has at most one task per role; reassignment/rework reuse the row.
         UniqueConstraint("verification_id", "role", name="uq_verification_tasks_role"),
@@ -86,6 +95,8 @@ class UpdateTaskDto(Object):
     in_pool: Optional[bool] = None
     decline_count: Optional[int] = None
     remote_bonus_minor: Optional[int] = None
+    submission_payload: Optional[Dict[str, Any]] = None
+    rejection_reason: Optional[str] = None
 
 
 class SearchTaskDto(PageRequest, BaseQueryDto):
@@ -130,3 +141,36 @@ class AssignTaskDto(Object):
     """Admin manual assignment / reassignment of a role to a specific agent."""
 
     agent_id: str
+
+
+class DeclineTaskDto(Object):
+    """Agent declines an assigned/accepted task (§7.1). Returns it to the pool."""
+
+    reason: Optional[str] = None
+
+
+class SubmitTaskDto(Object):
+    """Agent submits role findings (§7.3). ``payload`` is the role-specific form;
+    validated by the task validator per role. Evidence binaries are uploaded separately."""
+
+    payload: Dict[str, Any]
+
+
+class AgentTaskDto(Object):
+    """A task as the owning/eligible agent sees it (agent dashboard, §7.1)."""
+
+    id: str
+    verification_id: str
+    role: AgentRole
+    tier: VerificationTier
+    state: TaskState
+    in_pool: bool = False
+    assignment_mode: Optional[TaskAssignmentMode] = None
+    accept_deadline_at: Optional[datetime] = None
+    remote_bonus_minor: Optional[int] = None
+    submission_payload: Optional[Dict[str, Any]] = None
+    rejection_reason: Optional[str] = None
+    evidence_count: int = 0
+    assigned_at: Optional[datetime] = None
+    accepted_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None

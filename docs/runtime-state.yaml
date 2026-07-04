@@ -2,10 +2,10 @@ session_id: run-s10-s12-control-review
 command: resume
 
 status: running
-phase: s11
+phase: s12
 
-current_slice: S11   # Phase 7 agent task execution
-current_subtask: S10 complete & committed; starting S11 (agent task execution + evidence upload)
+current_slice: S12   # Phase 8 admin review & report release
+current_subtask: S11 complete & committed; starting S12 (task review, conflict, trust-score release gate)
 
 # ── Recovery note (this resume) ───────────────────────────────────
 recovery:
@@ -33,6 +33,41 @@ completed_slices:
   - S8   # Phase 4 admin onboarding & RBAC
   - S9   # Phase 5 customer submission & payment (see below)
   - S10  # Phase 6 admin control panel + 6a chargeback (see below)
+  - S11  # Phase 7 agent task execution (see below)
+
+# ── S11 (Phase 7) summary ─────────────────────────────────────────
+s11_agent_task_execution:
+  backend:
+    - "Agent task execution on the S10 task domain: list_for_agent (paged), accept (broadcast
+       first-accept-wins guard + §6.5 capacity; manual = only assigned agent), decline (->pool,
+       decline_count++), start (ACCEPTED->IN_PROGRESS), submit (IN_PROGRESS->SUBMITTED). Every
+       mutation re-derives verification.status via the §4.1 owner; all-submitted -> UNDER_REVIEW.
+       First successful submit upgrades the AGENT to trusted (§3.3)."
+    - "Role submission validator (task/validator.py) — the four role forms (Registry/Field/
+       Surveyor/Lawyer) enforced as per-role required-field sets over a JSON submission_payload;
+       submit requires >=1 evidence item (proof-of-work)."
+    - "Evidence child domain (task/evidence): EvidenceService.capture computes the §4.5 SHA-256
+       content hash and stamps §7.3a server-side GPS+timestamp at receipt (client GPS is a hint),
+       uploads via the storage facade (encrypted), persists the tamper-evident row. Content-addressed
+       key (evidence/<vid>/<task>/<sha256>)."
+    - "StubDocumentStorageProvider added to the document_storage facade (FileStorage.STUB) — the
+       deterministic default under DOCUMENT_STORAGE_STUB_MODE (mirrors PAYMENT_STUB_MODE/OTP_MODE);
+       real S3/R2 selected by settings. No AWS creds needed for tests/local."
+    - "Agent task controller /agents/tasks/* (list/accept/decline/start/evidence multipart/submit)
+       mounted at the domain root; ownership-based authz via JWT subject. New audit actions
+       TASK_ACCEPTED/DECLINED/STARTED/SUBMITTED + EVIDENCE_CAPTURED. task_evidence table +
+       verification_tasks.submission_payload/rejection_reason folded into 0001 (round-trip clean)."
+  frontend:
+    - "types/agentTask.ts (+ROLE_FORM_FIELDS); agent-task-service + useAgentTaskQueries. My-tasks
+       dashboard /agents/tasks (state filter, accept/decline inline, open). Task detail
+       /agents/tasks/[taskId]: accept->start->evidence upload (multipart + geolocation GPS hint,
+       shows content-hash) -> role findings form (per-role required fields, submit gated on
+       required fields + >=1 evidence). Rework banner on rejection_reason; submitted state."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 515 (+21: agent flow, validator, evidence service); frontend 270
+                    #   (+4 agent-task-service contract). migration round-trip clean; tsc+lint clean.
 
 # ── S10 (Phase 6 + 6a) summary ────────────────────────────────────
 s10_admin_control_chargeback:
@@ -195,13 +230,29 @@ self_audit_s10:
     - "Refund EXECUTION on cancel/chargeback-lost is recorded (audit + payment refunded_amount) but the
        gateway refund call is deferred to S12 (D13), consistent with the stub-first posture."
 
-next_action: S11 (Phase 7 agent task execution) — agent dashboard, accept/decline + capacity, four role
-             submission UIs, proof-of-work/COI, evidence full presigned-S3 upload (D11) + offline queue.
-             Builds on the S10 task domain (state machine + derive owner already own IN_PROGRESS->SUBMITTED->
-             UNDER_REVIEW). Trusted-on-first-submit; all-submitted -> UNDER_REVIEW via the derive owner.
+self_audit_s11:
+  completed: true
+  findings:
+    - "Offline upload queue (§7.4) NOT implemented — evidence upload is synchronous multipart. D11's
+       fallback (ref+hash binary path, keep the domain) is honoured; the offline retry queue + image
+       compression/derivatives (progressive viewing) are documented follow-ups."
+    - "Storage is server-side multipart through the facade with the deterministic stub default, NOT
+       client-direct presigned-PUT. Content hash + server GPS/timestamp are exercised end-to-end; the
+       presigned-PUT path is a follow-up like the live payment gateway (stub-first posture)."
+    - "Agent task detail fetches the agent's task page (size 100) and finds by id — no single-task GET
+       endpoint. Fine for MVP (few active tasks/agent); add GET /agents/tasks/{id} if lists grow."
+    - "Proof-of-work COI: EvidenceKind.CERTIFICATE exists but there is no dedicated COI generation flow."
+    - "Full `pnpm build` still deferred (low disk); tsc --noEmit + eslint (new) + full vitest (270) green.
+       Backend 515 green; migration round-trip validated live."
+
+next_action: S12 (Phase 8 admin review & report release) — admin task review (approve/reject -> IN_PROGRESS
+             rework with rejection_reason), conflict detection across role submissions, release gate with the
+             composite trust score from admin Trust Score Weights (D14 — recreate trust_score_weight_config in
+             0001, CRUD + sum-to-100), release -> COMPLETED, reopen APPROVED->IN_PROGRESS, FAILED + refund
+             execution (D13 gateway refund via facade), report versioning (recompute at release only, §8.6).
 
 started_at: 2026-07-02
-last_checkpoint: "S10 complete — task/admin/admin_note/commission/chargeback domains; scheduler sweeps wired
-                  (D12); chargeback sub-process + rebuttal pack; 4 tables folded into 0001 (round-trip clean);
-                  admin control-panel frontend (list+detail+assign+actions+chargeback). Fixed a real OVERDUE
-                  SLA-health bug. Backend 494 tests, frontend 266; tsc+lint clean."
+last_checkpoint: "S11 complete — agent task execution (accept/decline/start/submit + capacity + first-accept),
+                  role validator (4 forms), evidence domain (content-hash + server GPS/timestamp) + stub storage
+                  provider, agent tasks dashboard + detail workflow. task_evidence + task columns in 0001
+                  (round-trip clean). Backend 515 tests, frontend 270; tsc+lint clean."

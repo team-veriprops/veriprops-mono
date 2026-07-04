@@ -94,11 +94,27 @@ status: running (S1–S4 foundation)
       Backend 494 tests; frontend 266; tsc+lint clean. Gaps: agent-side accept UX + live gateway chargeback
       webhook + agent-picker deferred (see runtime-state self_audit_s10).
 
+- S11 Phase 7 — Agent task execution.
+      Backend: agent execution on the S10 task domain — `list_for_agent`, `accept` (broadcast
+      first-accept-wins + §6.5 capacity; manual = assigned agent only), `decline` (→pool,
+      decline_count++), `start` (ACCEPTED→IN_PROGRESS), `submit` (IN_PROGRESS→SUBMITTED); every
+      mutation re-derives status via the §4.1 owner (all-submitted→UNDER_REVIEW); first submit upgrades
+      the AGENT to trusted. Role validator enforces the four role forms over a JSON `submission_payload`;
+      submit requires ≥1 evidence. Evidence child domain: `EvidenceService.capture` computes the §4.5
+      SHA-256 hash + stamps §7.3a server GPS/timestamp, uploads via the storage facade (encrypted,
+      content-addressed key). `StubDocumentStorageProvider` (FileStorage.STUB) = deterministic default
+      under `DOCUMENT_STORAGE_STUB_MODE`. Agent controller `/agents/tasks/*` (list/accept/decline/start/
+      evidence-multipart/submit) mounted at root; ownership authz. `task_evidence` +
+      `submission_payload`/`rejection_reason` folded into `0001` (round-trip clean). Frontend:
+      `agent-task-service` + hooks, `/agents/tasks` dashboard (accept/decline), `/agents/tasks/[taskId]`
+      workflow (accept→start→evidence upload w/ geolocation hint + content-hash display→per-role findings
+      form, submit gated on required fields + evidence). Backend 515 tests; frontend 270; tsc+lint clean.
+      Gaps: offline queue + image derivatives + presigned-PUT deferred (D11 fallback; see self_audit_s11).
+
 ## Current Slice
-- S11 (Phase 7 agent task execution) — next.
+- S12 (Phase 8 admin review & report release) — next.
 
 ## Pending Slices
-- S11 Phase 7 — Agent task execution
 - S12 Phase 8 — Admin review & report release
 - S13 Phase 9 — Customer tracking & evidence (SSE)
 - S14 Phase 10 — Final report experience  *(gated: NBA sign-off for Legal Opinion go-live §B)*
@@ -133,7 +149,7 @@ status: running (S1–S4 foundation)
 - S1 `bec85e1`, S2 `0465a5a`, S3 `a138219`, S4 (this commit) — foundation slices.
 
 ## Completion %
-- ~43% (10 of 23 slices; Phase-0 foundation + Phases 1–6/6a complete)
+- ~48% (11 of 23 slices; Phase-0 foundation + Phases 1–7 complete)
 
 ---
 

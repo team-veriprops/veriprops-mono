@@ -7,6 +7,7 @@ from main.app.domain.message.controller import message_router
 from main.app.domain.user.controller import user_router
 from main.app.domain.verification.controller import verification_router
 from main.app.domain.verification.admin.controller import admin_verification_router
+from main.app.domain.verification.task.controller import agent_task_router
 from main.app.domain.payment.controller import payment_router
 
 from main.appodus_utils.integrations.webhook import webhook_router
@@ -18,6 +19,7 @@ router.include_router(message_router)
 router.include_router(user_router)
 router.include_router(verification_router)
 router.include_router(admin_verification_router)
+router.include_router(agent_task_router)
 router.include_router(payment_router)
 router.include_router(audit_router)
 router.include_router(webhook_router)

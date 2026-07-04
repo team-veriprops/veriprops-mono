@@ -42,6 +42,8 @@ def _task(role, state=TaskState.PENDING, agent=None, **over):
         tier=VerificationTier.STANDARD.value,
         state=state.value,
         assigned_agent_id=agent,
+        assignment_mode=None,
+        in_pool=False,
         decline_count=0,
         pool_expires_at=None,
         accept_deadline_at=None,
@@ -59,10 +61,14 @@ def _make_service(verification, tasks):
     svc = object.__new__(VerificationTaskService)
     svc._repo = MagicMock()
     svc._verification_repo = MagicMock()
+    svc._evidence = MagicMock()
+    svc._user_service = MagicMock()
     svc._audit = MagicMock()
 
     svc._verification_repo.get_model = AsyncMock(return_value=verification)
     svc._verification_repo.update = AsyncMock()
+    svc._evidence.count_for_task = AsyncMock(return_value=1)
+    svc._user_service.upgrade_trust_status_if_eligible = AsyncMock()
 
     state = {"tasks": list(tasks)}
     svc._repo.list_for_verification = AsyncMock(side_effect=lambda vid: list(state["tasks"]))
@@ -177,6 +183,77 @@ class TestAssign:
         svc = _make_service(_verification(status=VerificationStatus.PAID, tier=VerificationTier.PREMIUM), [])
         with pytest.raises(InvalidResourceStateException):
             await svc.assign("v-1", AgentRole.LAWYER, "agent-1", "admin-1")
+
+
+def _valid_payload(role):
+    return {
+        AgentRole.REGISTRY: {"registered_owner": "A", "title_search_result": "clean", "search_reference": "R1"},
+        AgentRole.FIELD: {"occupancy_status": "vacant", "physical_condition": "good"},
+        AgentRole.SURVEYOR: {"area_sqm": 500, "beacon_status": "intact"},
+        AgentRole.LAWYER: {"legal_opinion": "sound", "risk_level": "low", "recommendation": "proceed"},
+    }[role]
+
+
+class TestAgentExecution:
+    async def test_accept_from_pool_first_wins(self):
+        pooled = _task(AgentRole.FIELD, TaskState.PENDING, in_pool=True)
+        svc = _make_service(_verification(), [pooled])
+        task = await svc.accept(pooled.id, "agent-1")
+        assert task.state == TaskState.ACCEPTED.value
+        assert task.assigned_agent_id == "agent-1"
+
+    async def test_accept_rejects_already_taken_pool_task(self):
+        taken = _task(AgentRole.FIELD, TaskState.ACCEPTED, agent="agent-0", in_pool=False)
+        svc = _make_service(_verification(), [taken])
+        with pytest.raises(ValidationException):
+            await svc.accept(taken.id, "agent-1")  # not owner, not pool
+
+    async def test_accept_manual_only_assigned_agent(self):
+        assigned = _task(AgentRole.REGISTRY, TaskState.ASSIGNED, agent="agent-0")
+        svc = _make_service(_verification(), [assigned])
+        with pytest.raises(ValidationException):
+            await svc.accept(assigned.id, "agent-9")
+
+    async def test_decline_returns_to_pool_and_clears_agent(self):
+        mine = _task(AgentRole.FIELD, TaskState.ACCEPTED, agent="agent-1")
+        svc = _make_service(_verification(), [mine])
+        task = await svc.decline(mine.id, "agent-1", reason="too far")
+        assert task.state == TaskState.PENDING.value
+        assert task.in_pool is True
+        assert task.assigned_agent_id is None
+        assert task.decline_count == 1
+
+    async def test_start_moves_to_in_progress(self):
+        mine = _task(AgentRole.FIELD, TaskState.ACCEPTED, agent="agent-1")
+        svc = _make_service(_verification(), [mine])
+        task = await svc.start(mine.id, "agent-1")
+        assert task.state == TaskState.IN_PROGRESS.value
+
+    async def test_submit_requires_evidence(self):
+        mine = _task(AgentRole.FIELD, TaskState.IN_PROGRESS, agent="agent-1")
+        svc = _make_service(_verification(), [mine])
+        svc._evidence.count_for_task = AsyncMock(return_value=0)
+        with pytest.raises(ValidationException):
+            await svc.submit(mine.id, "agent-1", _valid_payload(AgentRole.FIELD))
+
+    async def test_submit_validates_role_form(self):
+        mine = _task(AgentRole.SURVEYOR, TaskState.IN_PROGRESS, agent="agent-1")
+        svc = _make_service(_verification(), [mine])
+        with pytest.raises(ValidationException):
+            await svc.submit(mine.id, "agent-1", {"area_sqm": 500})  # missing beacon_status
+
+    async def test_submit_transitions_and_upgrades_trust(self):
+        mine = _task(AgentRole.FIELD, TaskState.IN_PROGRESS, agent="agent-1")
+        svc = _make_service(_verification(status=VerificationStatus.IN_PROGRESS), [mine])
+        task = await svc.submit(mine.id, "agent-1", _valid_payload(AgentRole.FIELD))
+        assert task.state == TaskState.SUBMITTED.value
+        svc._user_service.upgrade_trust_status_if_eligible.assert_awaited_once()
+
+    async def test_submit_not_owner_rejected(self):
+        mine = _task(AgentRole.FIELD, TaskState.IN_PROGRESS, agent="agent-1")
+        svc = _make_service(_verification(), [mine])
+        with pytest.raises(ValidationException):
+            await svc.submit(mine.id, "agent-9", _valid_payload(AgentRole.FIELD))
 
 
 class TestSweeps:

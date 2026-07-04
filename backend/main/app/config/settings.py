@@ -106,6 +106,10 @@ class Settings(AppodusBaseSettings):
     AWS_S3_BUCKET: Optional[str] = "veriprops-documents"
     AWS_S3_PLATFORM_NAME: Optional[str] = FileStorage.S3
     AWS_S3_PRESIGNED_URL_EXPIRES: int = 60 * 15 # 15 mins
+    # Deterministic document storage for tests/local (no external calls), like
+    # PAYMENT_STUB_MODE. When true, evidence upload uses the stub provider; the
+    # content hash + server-stamped GPS/timestamp are computed regardless (§4.5, §7.3a).
+    DOCUMENT_STORAGE_STUB_MODE: bool = True
 
     # ZOHO
     ZOHO_CLIENT_ID: Optional[str] = None

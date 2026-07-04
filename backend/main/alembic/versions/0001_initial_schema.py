@@ -493,6 +493,9 @@ def _create_verification_tasks():
         sa.Column("accepted_at", UTCDateTime, nullable=True),
         sa.Column("submitted_at", UTCDateTime, nullable=True),
         sa.Column("approved_at", UTCDateTime, nullable=True),
+        # Role-specific findings captured on submit (§7.3); rejection feedback on rework.
+        sa.Column("submission_payload", JSONB_VARIANT, nullable=True),
+        sa.Column("rejection_reason", sa.String(length=1000), nullable=True),
         *AlembicUtils.base_audit_columns(),
         # A verification has at most one task per role; rework reuses the row.
         sa.UniqueConstraint("verification_id", "role", name="uq_verification_tasks_role"),
@@ -558,6 +561,30 @@ def _create_admin_notes():
     )
     op.create_index("ix_admin_notes_id", "admin_notes", ["id"], unique=True)
     op.create_index("ix_admin_notes_verification", "admin_notes", ["verification_id"], unique=False)
+
+
+def _create_task_evidence():
+    op.create_table(
+        "task_evidence",
+        sa.Column("task_id", sa.String(length=36), nullable=False),
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("agent_id", sa.String(length=36), nullable=False),
+        sa.Column("kind", sa.String(length=16), nullable=False, server_default="PHOTO"),
+        sa.Column("storage_key", sa.String(length=512), nullable=False),
+        sa.Column("storage_url", sa.String(length=1024), nullable=True),
+        sa.Column("mime_type", sa.String(length=128), nullable=True),
+        sa.Column("size_bytes", sa.BigInteger(), nullable=True),
+        # §4.5 content hash + §7.3a server-set proof-of-presence.
+        sa.Column("content_sha256", sa.String(length=64), nullable=False),
+        sa.Column("gps_latitude", sa.Float(), nullable=True),
+        sa.Column("gps_longitude", sa.Float(), nullable=True),
+        sa.Column("captured_at", UTCDateTime, nullable=True),
+        sa.Column("uploaded_at", UTCDateTime, nullable=False),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_task_evidence_id", "task_evidence", ["id"], unique=True)
+    op.create_index("ix_task_evidence_task", "task_evidence", ["task_id"], unique=False)
+    op.create_index("ix_task_evidence_verification", "task_evidence", ["verification_id"], unique=False)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -747,6 +774,7 @@ _TABLE_BUILDERS = [
     ("commissions", _create_commissions),
     ("chargebacks", _create_chargebacks),
     ("admin_notes", _create_admin_notes),
+    ("task_evidence", _create_task_evidence),
 ]
 
 

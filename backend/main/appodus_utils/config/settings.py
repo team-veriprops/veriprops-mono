@@ -32,6 +32,7 @@ def get_absolute_path(path: str):
 class FileStorage(str, enum.Enum):
     R2 = "R2"
     S3 = "S3"
+    STUB = "STUB"  # deterministic local provider for tests/dev (no external calls)
 
 class SupportedDB(str, enum.Enum):
     MYSQL = 'MYSQL'
