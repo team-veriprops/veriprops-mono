@@ -42,6 +42,22 @@ class VerificationRepo(
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def page_for_customer(
+        self, customer_id: str, offset: int = 0, limit: int = 10
+    ) -> tuple[List[Verification], int]:
+        """The customer's own verifications, newest first (My Verifications list §9)."""
+        base = select(Verification).where(
+            Verification.deleted.is_(False),
+            Verification.customer_id == customer_id,
+        )
+        total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
+        rows = (
+            await self._session.execute(
+                base.order_by(Verification.date_created.desc()).offset(offset).limit(limit)
+            )
+        ).scalars().all()
+        return list(rows), int(total or 0)
+
     async def page_admin(
         self,
         *,

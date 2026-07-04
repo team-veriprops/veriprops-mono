@@ -6,10 +6,10 @@ into the admin list + detail views, and carries the action request shapes.
 """
 from __future__ import annotations
 
-import enum
 from datetime import date, datetime
 from typing import List, Optional
 
+from main.app.core.sla import SlaHealth  # re-exported: single SLA-health source (core/sla)
 from main.app.core.state.status import VerificationStatus, VerificationTier
 from main.app.domain.commission.models import CommissionDto
 from main.app.domain.payment.chargeback.models import ChargebackDto
@@ -18,15 +18,6 @@ from main.app.domain.property.models import PropertyDto
 from main.app.domain.verification.admin_note.models import AdminNoteDto
 from main.app.domain.verification.task.models import TaskDto
 from main.appodus_utils import Object
-
-
-class SlaHealth(str, enum.Enum):
-    """SLA countdown health surfaced in the admin list (PRD §6.1)."""
-
-    ON_TRACK = "ON_TRACK"
-    AT_RISK = "AT_RISK"
-    OVERDUE = "OVERDUE"
-    NONE = "NONE"  # pre-PAID / terminal — no active SLA clock
 
 
 class VerificationSummaryDto(Object):

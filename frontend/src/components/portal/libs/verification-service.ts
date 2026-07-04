@@ -1,5 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
-import { SuccessResponse, TransactionCurrency } from "@/types/models";
+import { Page, SuccessResponse, TransactionCurrency } from "@/types/models";
 import {
   GeoLocation,
   GeoSuggestion,
@@ -11,6 +11,11 @@ import {
   VerificationDraft,
   VerificationTier,
 } from "@/types/verification";
+import {
+  CustomerEvidence,
+  VerificationListItem,
+  VerificationTracking,
+} from "@/types/tracking";
 
 /**
  * Customer submission & payment API. Mirrors the backend controllers at
@@ -36,6 +41,26 @@ export class VerificationService {
 
   getVerification(id: string): Promise<SuccessResponse<Verification>> {
     return this.http.get(`/verifications/${id}`);
+  }
+
+  // ── Tracking & evidence (§9) — the poll fallback (/tracking) shares one snapshot
+  // shape with the /stream SSE endpoint. Backend owns every label and SLA state.
+
+  listMine(page = 0, pageSize = 10): Promise<SuccessResponse<Page<VerificationListItem>>> {
+    return this.http.get(`/verifications?page=${page}&pageSize=${pageSize}`);
+  }
+
+  getTracking(id: string): Promise<SuccessResponse<VerificationTracking>> {
+    return this.http.get(`/verifications/${id}/tracking`);
+  }
+
+  getEvidence(id: string, page = 0, pageSize = 10): Promise<SuccessResponse<Page<CustomerEvidence>>> {
+    return this.http.get(`/verifications/${id}/evidence?page=${page}&pageSize=${pageSize}`);
+  }
+
+  /** SSE stream URL (§4.9). Consumed by EventSource in useVerificationStream. */
+  streamUrl(id: string): string {
+    return `/api/verifications/${id}/stream`;
   }
 
   quote(tier: VerificationTier, currency: TransactionCurrency): Promise<SuccessResponse<PriceQuote>> {

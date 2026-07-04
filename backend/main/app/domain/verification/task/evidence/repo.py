@@ -44,5 +44,17 @@ class EvidenceRepo(
         )
         return list((await self._session.execute(stmt)).scalars().all())
 
+    async def list_for_verification(self, verification_id: str) -> List[EvidenceItem]:
+        """All evidence across a verification's tasks, newest first (customer feed §9.4)."""
+        stmt = (
+            select(EvidenceItem)
+            .where(
+                EvidenceItem.deleted.is_(False),
+                EvidenceItem.verification_id == verification_id,
+            )
+            .order_by(EvidenceItem.uploaded_at.desc())
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
     async def count_for_task(self, task_id: str) -> int:
         return len(await self.list_for_task(task_id))

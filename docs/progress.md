@@ -129,11 +129,32 @@ status: running (S1–S4 foundation)
       Backend 533 tests; frontend 273; tsc+lint clean. Gaps: richer quality rubric + live gateway refund
       + report-ready email deferred (see runtime-state self_audit_s12). Final report UX + PDF is S14.
 
+- S13 Phase 9 — Customer tracking & evidence (SSE).
+      Backend: in-process realtime emitter (`app/core/realtime`, best-effort pub/sub keyed by verification;
+      D15) wired at every status/task mutation (task accept/decline/start/submit + evidence, review
+      approve/reject/release, payment→PAID). Customer tracking sub-package (`verification/tracking/`,
+      orchestration-only): pure §9.2 label projection (`labels.py` — status/task-collapse/SLA/interim copy,
+      backend source of truth); `CustomerTrackingService` builds the shared snapshot (header + SLA tracker +
+      tier-adaptive progress + assigned agents + interim milestones + evidence preview) reused by the poll
+      endpoint and the SSE initial frame. Endpoints on `/verifications/*`: `GET /` (my list), `/tracking`
+      (poll), `/stream` (SSE `text/event-stream`, cookie-auth, ownership-gated before streaming; generator
+      forwards in-memory events + 25s heartbeats, no mid-stream DB), `/evidence` (paged, **review-approved
+      tasks only, D17**, presigned URLs via the storage facade), `/activity` (reuses `AuditLogService`).
+      **First-name-only enforced at the API** via `AssignedAgentDto` (role/first_name/avatar_url/verified
+      only). Shared SLA-health helper extracted to `core/sla.py` (admin + customer reuse). `interim_note`
+      column added to `verification_tasks` (0001) + `approve_task(interim_note=…)`. Frontend: `types/tracking`,
+      service (listMine/getTracking/getEvidence/streamUrl) + `useVerificationTracking` (60s poll +
+      `useVerificationStream` SSE refetch, D15), shared `VerificationStatusBadge` + portable
+      `VerificationProgress`, tracking dashboard `/portal/verifications/[id]`, evidence feed + full-screen
+      viewer w/ tamper-evidence hash panel `/portal/verifications/[id]/evidence`, My-Verifications list
+      `/portal/verifications` (fixes the sidebar 404). Backend 562 tests; frontend 277; tsc+lint clean;
+      migration round-trip clean. Gaps: progressive/derivative image pipeline + messages preview (Phase 11)
+      + Redis SSE fan-out (S16) deferred.
+
 ## Current Slice
-- none — S10–S12 (Phases 6–8) delivered & committed. Next is S13 (Phase 9 tracking + SSE).
+- S14 Phase 10 — Final report experience *(gated: NBA sign-off for Legal Opinion go-live §B)* — starting.
 
 ## Pending Slices
-- S13 Phase 9 — Customer tracking & evidence (SSE)
 - S14 Phase 10 — Final report experience  *(gated: NBA sign-off for Legal Opinion go-live §B)*
 - S15–S23 Phases 11–19 — harden & scale
 

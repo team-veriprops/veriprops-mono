@@ -13,6 +13,8 @@ class ApproveTaskDto(Object):
     """Admin approves a role's submission with an optional quality score (0–100, §8.3)."""
 
     quality: int = 100
+    # Optional one-line reassurance shown to the customer once approved (§9.3).
+    interim_note: Optional[str] = None
 
 
 class RejectTaskDto(Object):

@@ -45,6 +45,29 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
     expect(calls[0]).toMatchObject({ method: "post", url: "/verifications/ver-1/submit" });
   });
 
+  it("lists the customer's own verifications (paged)", async () => {
+    const { http, calls } = mockHttp();
+    await new VerificationService(http).listMine(1, 20);
+    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications?page=1&pageSize=20" });
+  });
+
+  it("fetches the tracking snapshot (poll fallback, shared shape with /stream)", async () => {
+    const { http, calls } = mockHttp();
+    await new VerificationService(http).getTracking("ver-1");
+    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications/ver-1/tracking" });
+  });
+
+  it("fetches the review-approved evidence feed (paged)", async () => {
+    const { http, calls } = mockHttp();
+    await new VerificationService(http).getEvidence("ver-1", 0, 10);
+    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications/ver-1/evidence?page=0&pageSize=10" });
+  });
+
+  it("builds the proxied SSE stream URL", () => {
+    const { http } = mockHttp();
+    expect(new VerificationService(http).streamUrl("ver-1")).toBe("/api/verifications/ver-1/stream");
+  });
+
   it("initiates payment with an Idempotency-Key and confirms via the stub webhook", async () => {
     const { http, calls } = mockHttp();
     const svc = new VerificationService(http);

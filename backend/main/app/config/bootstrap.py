@@ -17,8 +17,10 @@ class DiBootstrap(BaseDiBootstrap):
         ) if settings.REDIS_ENABLED else {}
 
     def inject_others(self):
-        """ PLease implement in the inheriting class """
-        pass
+        # Process-singleton real-time emitter (§4.9). Registered as a concrete
+        # instance (not a factory) so every subscriber/publisher shares one broker.
+        from main.app.core.realtime.emitter import VerificationEventEmitter
+        di[VerificationEventEmitter] = VerificationEventEmitter()
 
 
 di_bootstrap = DiBootstrap()

@@ -77,6 +77,10 @@ class VerificationTask(BaseEntity):
     # Per-task quality (0–100) the admin sets on approval; blended into the composite
     # trust score by the tier weights (§8.3). Defaults to 100.
     review_quality = Column(Integer, nullable=False, server_default="100")
+    # Optional one-line admin note surfaced to the customer as interim reassurance once
+    # the task is review-approved (§9.3). Never shown before approval, so a risk-bearing
+    # finding is only delivered with context after admin review.
+    interim_note = Column(String(280), nullable=True)
 
     __table_args__ = (
         # A verification has at most one task per role; reassignment/rework reuse the row.
@@ -107,6 +111,7 @@ class UpdateTaskDto(Object):
     rejection_reason: Optional[str] = None
     review_decision: Optional[str] = None
     review_quality: Optional[int] = None
+    interim_note: Optional[str] = None
 
 
 class SearchTaskDto(PageRequest, BaseQueryDto):

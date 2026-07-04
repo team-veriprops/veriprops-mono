@@ -499,6 +499,8 @@ def _create_verification_tasks():
         # Admin review outcome + per-task quality for the composite trust score (§8.3).
         sa.Column("review_decision", sa.String(length=16), nullable=True),
         sa.Column("review_quality", sa.Integer(), nullable=False, server_default="100"),
+        # Optional customer-facing interim reassurance note, set on approval (§9.3).
+        sa.Column("interim_note", sa.String(length=280), nullable=True),
         *AlembicUtils.base_audit_columns(),
         # A verification has at most one task per role; rework reuses the row.
         sa.UniqueConstraint("verification_id", "role", name="uq_verification_tasks_role"),

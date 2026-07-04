@@ -35,7 +35,7 @@ export function useVerificationStream({ vid, onEvent, enabled = true }: Options)
       if (esRef.current) {
         esRef.current.close();
       }
-      const es = new EventSource(`/api/portal/verifications/${vid}/stream`, { withCredentials: true });
+      const es = new EventSource(`/api/verifications/${vid}/stream`, { withCredentials: true });
       esRef.current = es;
 
       es.addEventListener("message", handleMsg);

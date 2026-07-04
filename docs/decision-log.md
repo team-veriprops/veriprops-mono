@@ -378,3 +378,84 @@ validation. Composite computed deterministically at release; recompute only at r
 
 ### Revisit
 - N/A — S22 (Phase 18) objective updated to exclude the weights CRUD delivered here.
+
+---
+
+## Decision: D15 — SSE transport now, event bus deferred (S13 / Phase 9)
+
+### Context
+§9 needs live tracking over §4.9 SSE, but the §4.8 in-process event bus is Phase 12 (S16). No SSE,
+emitter, or event bus exists in the backend today.
+
+### Chosen Option
+**In-process asyncio pub/sub emitter (`app/core/realtime`) + a real `text/event-stream` endpoint now,
+with the 60-second poll endpoint sharing one identical snapshot shape** as the durable fallback. Redis
+multi-instance fan-out is deferred to the Phase-12 event bus (S16). Publishing is **best-effort** and
+never breaks the emitting transaction; **poll is the source of truth, SSE is a latency-reducing hint**.
+
+### Tradeoffs
+- Pros: meets the "watch status advance in real time" exit criterion now; single-process (`python
+  veriprops.py`) is the demo reality; poll fallback keeps correctness anywhere (incl. serverless/NullPool).
+- Cons: no cross-worker fan-out until S16; emit happens pre-commit (a dropped/early push only costs a
+  60s reconciliation, never correctness).
+
+### Revisit
+- S16 replaces the emitter's internals with the §4.8 event bus without changing this public API.
+
+---
+
+## Decision: D16 — fpdf2 behind a stub-first facade for the report PDF (S14 / Phase 10)
+
+### Context
+§10 requires a server-side branded PDF with a per-page legal footer + QR. No PDF library exists; the dev
+platform is Windows, where WeasyPrint's GTK/cairo native deps are painful and Playwright is heavy.
+
+### Chosen Option
+**`fpdf2` (pure-Python, zero native deps) behind a `report_pdf` facade** with a deterministic stub default,
+mirroring the storage/payment/kyc facades. Per-page footer via `footer()`; QR via a pure-Python lib.
+
+### Tradeoffs
+- Pros: cross-platform/CI-safe, deterministic tests, satisfies the footer-parity exit criterion now.
+- Cons: not pixel-for-pixel with the HTML view; a WeasyPrint/Playwright renderer is a later enhancement
+  behind the same facade.
+
+### Revisit
+- Swap in an HTML-CSS renderer behind the facade if pixel parity becomes a requirement.
+
+---
+
+## Decision: D17 — Evidence visible only after review-approval (S13 / Phase 9)
+
+### Context
+§9.4 shows customers a chronological evidence feed; §9.3 mandates risk-bearing interim signal be withheld
+until admin review so a negative is delivered only with context.
+
+### Chosen Option
+**A role's evidence (and its interim milestone) surfaces to the customer only once that task is admin
+review-approved** (`review_decision == APPROVED`). Before then the task reads the collapsed "In Progress".
+
+### Tradeoffs
+- Pros: the §9.3 guardrail holds automatically at the API layer; positives are contextualised.
+- Cons: less immediate than a live-as-uploaded feed (deferred as a possible future toggle).
+
+### Revisit
+- Could add an admin per-item "release early" control if product wants selectively-live evidence.
+
+---
+
+## Decision: D18 — Build the Legal Opinion section, gate its go-live (S14 / Phase 10)
+
+### Context
+The Premium Legal Opinion framing is a hard go-live gate pending NBA counsel + lawyer-role PI insurance
+(§3.5/§B). It does not block MVP build, only go-live.
+
+### Chosen Option
+**Build the Premium Legal Opinion report section fully, but gate its customer display behind
+`LEGAL_OPINION_ENABLED` (default off)** surfaced via `/config/public`. Build, do not go live.
+
+### Tradeoffs
+- Pros: the tier is demoably complete; flipping one flag ships it post-sign-off.
+- Cons: the section is dark in prod until legal clears — intended.
+
+### Revisit
+- Enable the flag once NBA sign-off + lawyer PI cover are recorded (§B items 15, 17).

@@ -18,10 +18,11 @@ Holiday set per year:
 """
 from __future__ import annotations
 
+import enum
 from datetime import date, datetime, timedelta
-from typing import Dict, Iterable, Tuple, Union
+from typing import Dict, Iterable, Optional, Tuple, Union
 
-from main.app.core.state.status import VerificationTier
+from main.app.core.state.status import VerificationStatus, VerificationTier
 
 DateLike = Union[date, datetime]
 
@@ -131,3 +132,45 @@ def sla_due_date(paid_at: DateLike, tier: VerificationTier) -> date:
 def business_days_remaining(reference: DateLike, due: DateLike) -> int:
     """Business-day countdown from ``reference`` to ``due`` (0 once due/overdue)."""
     return business_days_between(reference, due)
+
+
+# ── SLA health (shared by admin control panel §6.1 + customer tracker §9.1) ──
+
+class SlaHealth(str, enum.Enum):
+    """SLA countdown health. Same computation feeds the admin list and the
+    customer-facing tracker (which relabels it On track / Running late / Delayed)."""
+
+    ON_TRACK = "ON_TRACK"
+    AT_RISK = "AT_RISK"
+    OVERDUE = "OVERDUE"
+    NONE = "NONE"  # pre-PAID / terminal — no active SLA clock
+
+
+# business-days-remaining threshold below which the clock reads "at risk".
+_SLA_AT_RISK_DAYS = 1
+# Statuses with an active SLA clock (post-PAID, pre-terminal).
+_ACTIVE_SLA_STATES = {
+    VerificationStatus.PAID.value,
+    VerificationStatus.IN_PROGRESS.value,
+    VerificationStatus.UNDER_REVIEW.value,
+}
+
+
+def compute_sla_health(
+    status: str, due: Optional[DateLike], today: date
+) -> Tuple[SlaHealth, Optional[int]]:
+    """SLA health + business-days-remaining for a verification.
+
+    ``today`` is passed in (never read from the clock here) so callers control the
+    reference date and the function stays deterministically testable. Returns a
+    negative remaining count once overdue (business days past due).
+    """
+    if status not in _ACTIVE_SLA_STATES or not due:
+        return SlaHealth.NONE, None
+    due_d = _to_date(due)
+    if due_d < today:
+        return SlaHealth.OVERDUE, -business_days_between(due_d, today)
+    remaining = business_days_remaining(today, due_d)
+    if remaining <= _SLA_AT_RISK_DAYS:
+        return SlaHealth.AT_RISK, remaining
+    return SlaHealth.ON_TRACK, remaining

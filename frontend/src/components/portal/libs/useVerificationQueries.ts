@@ -1,7 +1,9 @@
 "use client";
 
+import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
+import { useVerificationStream } from "@lib/useVerificationStream";
 import { TransactionCurrency } from "@/types/models";
 import {
   PaymentMethodKind,
@@ -15,6 +17,9 @@ const service = new VerificationService(httpClient);
 export const verificationKeys = {
   detail: (id: string) => ["verification", id] as const,
   draft: (id: string) => ["verification", id, "draft"] as const,
+  list: (page: number) => ["verification", "list", page] as const,
+  tracking: (id: string) => ["verification", id, "tracking"] as const,
+  evidence: (id: string, page: number) => ["verification", id, "evidence", page] as const,
   quote: (tier: VerificationTier, currency: TransactionCurrency) =>
     ["verification", "quote", tier, currency] as const,
 };
@@ -37,6 +42,45 @@ export function useVerificationQuery(id: string | null) {
     queryKey: verificationKeys.detail(id ?? "none"),
     enabled: !!id,
     queryFn: async () => (await service.getVerification(id as string)).data ?? null,
+  });
+}
+
+/** The customer's own verifications list (§9). */
+export function useMyVerificationsQuery(page = 0) {
+  return useQuery({
+    queryKey: verificationKeys.list(page),
+    queryFn: async () => (await service.listMine(page)).data ?? null,
+  });
+}
+
+/**
+ * Live tracking snapshot (§9.1) with the mandated real-time behaviour (§4.9):
+ * a 60-second polling fallback (`refetchInterval`) plus an SSE subscription that
+ * refetches the *same* snapshot on any pushed event. Poll is the source of truth;
+ * SSE only reduces latency, so a dropped push never leaves the UI stale.
+ */
+export function useVerificationTracking(id: string | null, enabled = true) {
+  const qc = useQueryClient();
+  const query = useQuery({
+    queryKey: verificationKeys.tracking(id ?? "none"),
+    enabled: !!id && enabled,
+    queryFn: async () => (await service.getTracking(id as string)).data ?? null,
+    refetchInterval: 60_000, // polling fallback — shares the snapshot shape
+  });
+
+  const onEvent = useCallback(() => {
+    if (id) qc.invalidateQueries({ queryKey: verificationKeys.tracking(id) });
+  }, [id, qc]);
+
+  useVerificationStream({ vid: id ?? "", onEvent, enabled: !!id && enabled });
+  return query;
+}
+
+export function useEvidenceQuery(id: string | null, page = 0, enabled = true) {
+  return useQuery({
+    queryKey: verificationKeys.evidence(id ?? "none", page),
+    enabled: !!id && enabled,
+    queryFn: async () => (await service.getEvidence(id as string, page)).data ?? null,
   });
 }
 

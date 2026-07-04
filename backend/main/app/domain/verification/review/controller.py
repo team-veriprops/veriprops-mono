@@ -77,7 +77,7 @@ async def approve_task(
     verification_id: str, role: AgentRole, req: ApproveTaskDto,
     admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
 ):
-    await review_service.approve_task(verification_id, role, req.quality, admin_id)
+    await review_service.approve_task(verification_id, role, req.quality, admin_id, req.interim_note)
     ctx = await review_service.get_review_context(verification_id)
     return SuccessResponse[ReviewStateDto](data=_state_dto(verification_id, ctx))
 

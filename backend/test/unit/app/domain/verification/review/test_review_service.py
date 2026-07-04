@@ -89,7 +89,7 @@ def _make_service(verification, tasks):
         SimpleNamespace(role=AgentRole.SURVEYOR.value, weight_percent=30),
     ])
     svc._commissions.accrue = AsyncMock()
-    svc._reports.release = AsyncMock(return_value=SimpleNamespace(id="rep-1"))
+    svc._reports.release = AsyncMock(return_value=SimpleNamespace(id="rep-1", report_version=1))
     svc._reports.get_released = AsyncMock(return_value=None)
     svc._reports.supersede_current = AsyncMock()
     svc._payments.refund = AsyncMock(return_value=1000000)

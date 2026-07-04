@@ -88,8 +88,20 @@ class EvidenceService:
     async def list_for_task(self, task_id: str) -> List[EvidenceItem]:
         return await self._repo.list_for_task(task_id)
 
+    async def list_for_verification(self, verification_id: str) -> List[EvidenceItem]:
+        """All evidence for a verification, newest first — feeds the customer feed (§9.4)."""
+        return await self._repo.list_for_verification(verification_id)
+
     async def count_for_task(self, task_id: str) -> int:
         return await self._repo.count_for_task(task_id)
+
+    async def presigned_url(self, item: EvidenceItem) -> str:
+        """Fresh short-lived read URL for an evidence object (regenerated per read).
+
+        Routes through the same provider selection as capture, so the deterministic stub
+        serves a stable synthetic URL with no bucket/creds in tests/local."""
+        provider = self._provider()
+        return await provider.get_presigned_url(item.storage_key, settings.AWS_S3_BUCKET)
 
     def _provider(self) -> IDocumentStorageProvider:
         # Deterministic default (no external calls / creds) unless a real provider is

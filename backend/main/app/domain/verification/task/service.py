@@ -14,6 +14,7 @@ from typing import List, Optional
 from kink import inject
 
 from main.app.config.settings import settings
+from main.app.core.realtime import VerificationEventType, publish_verification_event
 from main.app.core.state.dependencies import is_unlocked, roles_for_tier
 from main.app.core.state.derive import derive_status
 from main.app.core.state.machine import task_state_machine
@@ -278,6 +279,7 @@ class VerificationTaskService:
             resource_type="task_evidence", resource_id=item.id, actor_id=agent_id,
             details={"task_id": task.id, "sha256": item.content_sha256, "kind": item.kind},
         )
+        publish_verification_event(task.verification_id, VerificationEventType.TASK_UPDATED)
         return item
 
     async def submit(self, task_id: str, agent_id: str, payload: dict) -> VerificationTask:
@@ -415,6 +417,10 @@ class VerificationTaskService:
             return
         task_states = [t.state for t in await self._repo.list_for_verification(verification_id)]
         new_status = derive_status(verification.status, task_states)
+        # A generic "something on this verification changed" push (§4.9). The frontend
+        # re-reads the authoritative snapshot on any event, so this covers task moves
+        # that don't shift the global status too. Best-effort; the poll fallback reconciles.
+        publish_verification_event(verification_id, VerificationEventType.TASK_UPDATED)
         if new_status.value == verification.status:
             return
         await self._verification_repo.update(
@@ -427,6 +433,9 @@ class VerificationTaskService:
             actor_id=actor_id,
             from_state=verification.status,
             to_state=new_status.value,
+        )
+        publish_verification_event(
+            verification_id, VerificationEventType.STATUS_CHANGED, {"status": new_status.value}
         )
 
     async def _set_pool_expiry(self, task_id: str, expires_at) -> None:

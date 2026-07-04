@@ -14,6 +14,7 @@ from typing import Optional
 from kink import inject
 
 from main.app.core.idempotency.service import IdempotencyService
+from main.app.core.realtime import VerificationEventType, publish_verification_event
 from main.app.core.sla import sla_due_date
 from main.app.core.state.machine import verification_state_machine
 from main.app.core.state.status import VerificationStatus, VerificationTier
@@ -175,6 +176,10 @@ class VerificationService:
             verification_id, UpdateVerificationDto(status=VerificationStatus.PAID.value)
         )
         await self._set_paid_timestamps(verification_id, tier)
+        publish_verification_event(
+            verification_id, VerificationEventType.STATUS_CHANGED,
+            {"status": VerificationStatus.PAID.value},
+        )
         return await self._repo.get_model(verification_id)
 
     # ── helpers ───────────────────────────────────────────────────

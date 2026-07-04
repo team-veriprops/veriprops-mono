@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from kink import inject
 
-from main.app.core.sla import add_business_days, business_days_between, business_days_remaining
+from main.app.core.sla import SlaHealth, add_business_days, compute_sla_health
 from main.app.core.state.dependencies import required_task_count
 from main.app.core.state.machine import verification_state_machine
 from main.app.core.state.status import (
@@ -34,7 +34,6 @@ from main.app.domain.property.repo import PropertyRepo
 from main.app.domain.verification.admin.models import (
     CancelVerificationDto,
     SetDelayDto,
-    SlaHealth,
     VerificationDetailDto,
     VerificationSummaryDto,
 )
@@ -54,16 +53,6 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ResourceNotFoundException,
 )
-
-# SLA health thresholds (business days remaining), §6.1.
-_AT_RISK_DAYS = 1
-# Statuses with an active SLA clock (post-PAID, pre-terminal).
-_ACTIVE_SLA_STATES = {
-    VerificationStatus.PAID.value,
-    VerificationStatus.IN_PROGRESS.value,
-    VerificationStatus.UNDER_REVIEW.value,
-}
-
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
@@ -248,17 +237,7 @@ class AdminVerificationService:
         )
 
     def _sla_health(self, v: Verification) -> tuple[SlaHealth, Optional[int]]:
-        if v.status not in _ACTIVE_SLA_STATES or not v.sla_due_date:
-            return SlaHealth.NONE, None
-        today = Utils.datetime_now().date()
-        # business_days_remaining clamps at 0 on/after the due date, so detect overdue
-        # from the date directly and report a negative business-day count past due.
-        if v.sla_due_date < today:
-            return SlaHealth.OVERDUE, -business_days_between(v.sla_due_date, today)
-        remaining = business_days_remaining(today, v.sla_due_date)
-        if remaining <= _AT_RISK_DAYS:
-            return SlaHealth.AT_RISK, remaining
-        return SlaHealth.ON_TRACK, remaining
+        return compute_sla_health(v.status, v.sla_due_date, Utils.datetime_now().date())
 
     def _property_dto(self, p) -> Optional[PropertyDto]:
         if not p:

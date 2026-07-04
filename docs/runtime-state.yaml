@@ -1,11 +1,11 @@
-session_id: run-s10-s12-control-review
+session_id: run-s13-s14-tracking-report
 command: resume
 
-status: idle
-phase: s12-complete
+status: running
+phase: s13-complete
 
-current_slice: null   # S10–S12 (Phases 6–8) delivered this resume
-current_subtask: S10, S11, S12 all complete, tested, committed. Next slice is S13 (Phase 9 tracking + SSE).
+current_slice: S14   # Phase 10 final report experience + PDF (D16, D18)
+current_subtask: S13 (Phase 9 tracking + evidence over SSE) complete, tested, committed. Building S14.
 
 # ── Recovery note (this resume) ───────────────────────────────────
 recovery:
@@ -22,6 +22,14 @@ scope_decisions:
         refund execution in S12."
   D14: "Build admin Trust Score Weights CRUD in S12 (recreate trust_score_weight_config in 0001)."
 
+# ── S13-S14 scope decisions (this resume) — see decision-log D15-D18 ─
+scope_decisions_s13_s14:
+  D15: "SSE now via in-process asyncio emitter + poll fallback (shared shape); Redis fan-out → S16. Poll
+        is source of truth; emit best-effort, never breaks the transaction."
+  D16: "Report PDF = fpdf2 (pure-Python) behind a stub-first report_pdf facade; per-page footer + QR."
+  D17: "Customer sees a role's evidence + interim milestone only after admin review-approval (§9.3 guardrail)."
+  D18: "Build the Premium Legal Opinion report section fully but gate display behind LEGAL_OPINION_ENABLED."
+
 completed_slices:
   - S1   # foundation reconciliation
   - S2   # state derivation owner + tier task-dependency config + status enums
@@ -35,6 +43,58 @@ completed_slices:
   - S10  # Phase 6 admin control panel + 6a chargeback (see below)
   - S11  # Phase 7 agent task execution (see below)
   - S12  # Phase 8 admin review & report release (see below)
+  - S13  # Phase 9 customer tracking & evidence over SSE (see below)
+
+# ── S13 (Phase 9) summary ─────────────────────────────────────────
+s13_tracking_evidence:
+  backend:
+    - "Realtime transport (app/core/realtime): in-process asyncio VerificationEventEmitter (per-verification
+       queues, bounded, best-effort/exception-free publish, DI singleton). Event names match the frontend
+       hook (status_changed/task_updated/conflict_detected/report_released/heartbeat). publish_verification_event
+       wired at every mutation choke point (task _derive_and_persist + evidence, review approve/_derive/release,
+       payment mark_paid). D15: poll is source of truth, SSE is a latency hint; Redis fan-out → S16."
+    - "Customer tracking sub-package (verification/tracking/, orchestration-only like admin/): pure §9.2 label
+       projection (labels.py — customer_status_label/customer_task_state/customer_sla_label/interim_message,
+       all backend-owned). CustomerTrackingService builds the shared snapshot (header, SLA tracker w/
+       elapsed/total business days, tier-adaptive progress, interim milestones, evidence preview) + list +
+       evidence feed + activity. Endpoints /verifications/{GET list, /tracking, /stream(SSE), /evidence,
+       /activity}; ownership via VerificationService.get_owned."
+    - "SECURITY (§9.5 exit): AssignedAgentDto exposes ONLY role/first_name/avatar_url/verified — first-name
+       enforced at the API (test asserts no last_name/email/phone in payload). Evidence gated to
+       review_decision==APPROVED (D17); presigned URLs via storage facade; tamper-evidence hash carried through."
+    - "Shared SLA-health extracted to core/sla.py (SlaHealth + compute_sla_health) — admin control panel now
+       reuses it (DRY; admin/models re-exports SlaHealth). interim_note column on verification_tasks folded
+       into 0001 (round-trip clean); ReviewService.approve_task accepts optional interim_note + ApproveTaskDto."
+  frontend:
+    - "types/tracking; verification-service (listMine/getTracking/getEvidence/streamUrl) + hooks incl.
+       useVerificationTracking (TanStack 60s refetchInterval + useVerificationStream SSE → invalidate; D15).
+       Shared VerificationStatusBadge + portable VerificationProgress (tier-adaptive steps, locked-Lawyer
+       'Awaiting other stages'). Tracking dashboard /portal/verifications/[id] (header, state-reassurance
+       banner §9.3, SLA card, progress, interim 'what we've found so far', agents, evidence preview + View
+       all). Evidence feed + full-screen viewer w/ SHA-256 tamper-evidence metadata panel
+       /portal/verifications/[id]/evidence. My-Verifications list /portal/verifications (fixes sidebar 404).
+       SSE hook URL fixed to /api/verifications/{id}/stream."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 562 (+29: emitter, labels, tracking service); frontend 277 (+4 service
+                    #   contract). migration round-trip clean; tsc+lint clean.
+
+self_audit_s13:
+  completed: true
+  findings:
+    - "Emission is pre-commit inside the transaction (best-effort). A push may arrive marginally before the
+       row is committed; the customer is a passive subscriber and refetches, and the 60s poll reconciles, so
+       this only costs latency, never correctness (D15). Post-commit emission lands with the S16 event bus."
+    - "No Redis multi-instance fan-out — single-process only (D15). Correct on `python veriprops.py`; the
+       poll fallback keeps multi-worker/serverless correct. S16 swaps the emitter internals, not its API."
+    - "Progressive low-res-first + derivative image pipeline (§9.4) NOT built — the full-resolution original
+       is served via a single presigned URL (documented follow-up, consistent with S11)."
+    - "Messages preview (§9.1) is a placeholder — the communication layer is Phase 11 (S15)."
+    - "SSE endpoint checks ownership up front (session-backed) then streams with no mid-stream DB; safe after
+       the per-request session closes. `is_disconnected` polling ends the generator on client disconnect."
+    - "Full `pnpm build` still deferred (low disk per prior slices); tsc --noEmit + eslint (src) + full
+       vitest (277) green substitute. Backend 562 green; migration round-trip validated live."
 
 # ── S12 (Phase 8) summary ─────────────────────────────────────────
 s12_review_release:

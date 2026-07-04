@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from kink import inject
 
 from main.app.config.settings import settings
+from main.app.core.realtime import VerificationEventType, publish_verification_event
 from main.app.core.state.dependencies import required_task_count, roles_for_tier
 from main.app.core.state.derive import derive_status
 from main.app.core.state.machine import task_state_machine
@@ -70,10 +71,15 @@ class ReviewService:
     # ── Per-task review (§8.1) ────────────────────────────────────
 
     async def approve_task(
-        self, verification_id: str, role: AgentRole, quality: int, admin_id: str
+        self, verification_id: str, role: AgentRole, quality: int, admin_id: str,
+        interim_note: Optional[str] = None,
     ) -> VerificationTask:
         """Record admin approval + a quality score. The task stays SUBMITTED — it only
-        transitions to APPROVED at explicit release, so nothing auto-completes (§8)."""
+        transitions to APPROVED at explicit release, so nothing auto-completes (§8).
+
+        ``interim_note`` is an optional one-line reassurance shown to the customer once
+        approved (§9.3) — captured here so a positive milestone is delivered with context.
+        """
         if not 0 <= quality <= 100:
             raise ValidationException(message="Quality score must be between 0 and 100.")
         task = await self._get_task(verification_id, role)
@@ -83,12 +89,17 @@ class ReviewService:
             )
         await self._tasks.update(task.id, UpdateTaskDto(
             review_decision=_APPROVED_REVIEW, review_quality=quality,
+            interim_note=interim_note,
         ))
         self._audit.schedule(
             action=AuditActionType.TASK_APPROVED,
             resource_type="verification_task", resource_id=task.id, actor_id=admin_id,
             details={"role": role.value, "quality": quality},
         )
+        # Approval records intent without a state change, so it never reaches
+        # _derive_and_persist — push a refresh signal here so the customer's interim
+        # reassurance milestone (§9.3) surfaces live once admin review-approves.
+        publish_verification_event(verification_id, VerificationEventType.TASK_UPDATED)
         return await self._tasks.get_model(task.id)
 
     async def reject_task(
@@ -159,6 +170,10 @@ class ReviewService:
             composite_trust_score=composite, released_by=admin_id, reason=reason,
         )
         await self._derive_and_persist(verification_id, admin_id)
+        publish_verification_event(
+            verification_id, VerificationEventType.REPORT_RELEASED,
+            {"version": report.report_version, "trustScore": composite},
+        )
         return ReviewContext(report=report, trust_score=composite, conflicts=conflicts)
 
     async def reopen_task(
@@ -292,6 +307,9 @@ class ReviewService:
             action=AuditActionType.VERIFICATION_STATE_CHANGED,
             resource_type="verification", resource_id=verification_id, actor_id=actor_id,
             from_state=verification.status, to_state=new_status.value,
+        )
+        publish_verification_event(
+            verification_id, VerificationEventType.STATUS_CHANGED, {"status": new_status.value}
         )
 
 
