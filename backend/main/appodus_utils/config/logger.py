@@ -49,7 +49,13 @@ class LoggerFactory:
         # Remove default handler
         logger.remove()
 
-        # Console handler
+        # Console handler. Reconfigure stdout to UTF-8 (replacing any un-encodable
+        # char) so log content with non-ASCII characters (e.g. "↔") never crashes the
+        # sink on a Windows cp1252 console.
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
         logger.add(
             sys.stdout,
             level=log_level,

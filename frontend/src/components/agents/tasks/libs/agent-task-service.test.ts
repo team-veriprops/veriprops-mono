@@ -28,6 +28,12 @@ describe("AgentTaskService contract (mirrors /agents/tasks backend routes)", () 
     expect(calls[0].url).toBe("/agents/tasks?state=PENDING&page=1&page_size=10");
   });
 
+  it("fetches the agent dashboard summary from /agents/tasks/summary", async () => {
+    const { http, calls } = mockHttp();
+    await new AgentTaskService(http).getSummary();
+    expect(calls[0]).toMatchObject({ method: "get", url: "/agents/tasks/summary" });
+  });
+
   it("accepts / declines / starts a task", async () => {
     const { http, calls } = mockHttp();
     const svc = new AgentTaskService(http);

@@ -18,6 +18,8 @@ from main.app.domain.verification.models import (
     VerificationDto,
 )
 from main.app.domain.verification.service import VerificationService
+from main.app.domain.verification.tracking.models import CustomerDashboardDto
+from main.app.domain.verification.tracking.service import CustomerTrackingService
 from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.db.types.money import TransactionCurrency
@@ -26,6 +28,7 @@ from main.appodus_utils.integrations.geocoding.models import GeoLocation, GeoSug
 
 verification_router = APIRouter(prefix="/verifications", tags=["Verifications"])
 verification_service: VerificationService = di[VerificationService]
+tracking_service: CustomerTrackingService = di[CustomerTrackingService]
 geocoder_factory: GeocoderFactory = di[GeocoderFactory]
 
 
@@ -99,6 +102,16 @@ async def get_quote(
 ):
     await authorize.jwt_required()
     return SuccessResponse[PriceQuoteDto](data=verification_service.quote(tier, currency))
+
+
+@verification_router.get("/summary", response_model=SuccessResponse[CustomerDashboardDto])
+async def get_dashboard_summary(authorize: AuthJWT = Depends()):
+    """Portal home summary (§9). Registered on this root router *before* the greedy
+    ``/{verification_id}`` route so the literal path wins; delegates to the tracking
+    service which owns the customer-facing projection."""
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    return SuccessResponse[CustomerDashboardDto](data=await tracking_service.summary(customer_id))
 
 
 @verification_router.get("/{verification_id}", response_model=SuccessResponse[VerificationDto])

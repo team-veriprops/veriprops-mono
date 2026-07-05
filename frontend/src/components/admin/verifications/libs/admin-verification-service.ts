@@ -2,6 +2,7 @@ import { HttpClient } from "@lib/FetchHttpClient";
 import { Page, SuccessResponse } from "@/types/models";
 import { AgentRole } from "@/types/agent";
 import {
+  AdminDashboard,
   AdminNoteCategory,
   ChargebackDto,
   VerificationDetail,
@@ -29,9 +30,15 @@ export class AdminVerificationService {
     if (filters.tier) params.set("tier", filters.tier);
     if (filters.stateRegion) params.set("state_region", filters.stateRegion);
     if (filters.overdueOnly) params.set("overdue_only", "true");
+    if (filters.query) params.set("query", filters.query);
     params.set("page", String(page));
     params.set("page_size", String(pageSize));
     return this.http.get(`${this.base}?${params.toString()}`);
+  }
+
+  /** Admin operations home summary (§6) — backend-owned queue health rollups. */
+  getSummary(): Promise<SuccessResponse<AdminDashboard>> {
+    return this.http.get(`${this.base}/summary`);
   }
 
   getDetail(verificationId: string): Promise<SuccessResponse<VerificationDetail>> {

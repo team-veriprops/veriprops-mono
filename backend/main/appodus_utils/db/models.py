@@ -1,7 +1,8 @@
+import uuid
 from datetime import datetime, timezone
 from typing import TypeVar, Optional, Generic, List, Union, Any
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from sqlalchemy import Column, Boolean, UUID, Integer, String, DateTime, TypeDecorator, JSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -109,6 +110,24 @@ class CamelModel(BaseModel):
         extra="ignore",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _stringify_uuids(cls, data):
+        """Coerce raw ``uuid.UUID`` inputs (e.g. hand-built DTOs doing ``id=entity.id``)
+        to their hex string form.
+
+        Entity primary keys are ``uuid.UUID`` objects, but DTO id fields are typed
+        ``str``. The generic-repo path already emits ``uuid.hex`` via ``Utils.uuid_to_hex``;
+        this mirrors that format so hand-built and repo-built DTOs stay consistent and
+        no ``str`` id field crashes on a ``UUID`` input.
+        """
+        if isinstance(data, dict):
+            return {
+                key: (value.hex if isinstance(value, uuid.UUID) else value)
+                for key, value in data.items()
+            }
+        return data
+
 
 class Object(CamelModel, AutoRepr):
     """
@@ -180,7 +199,22 @@ class UTCDateTime(TypeDecorator[datetime]):
 # JSON column that renders as JSONB on PostgreSQL (indexable, supports the @>
 # containment operator) and falls back to plain JSON on other dialects, so the
 # dual-DB support in settings.SupportedDB still holds.
-JSONB_VARIANT = JSON().with_variant(JSONB(), "postgresql")
+def jsonb_variant():
+    """A *fresh* JSON/JSONB variant instance.
+
+    Use this — never the shared ``JSONB_VARIANT`` singleton — for any column wrapped in
+    ``Mutable*.as_mutable(...)``. ``Mutable.as_mutable`` installs a process-global listener
+    that binds its coercion to every mapped column whose type *is the same instance* (identity
+    match). Reusing one shared instance across dict-, list-, and plain-JSON columns leaks the
+    wrong coercion (e.g. ``MutableList``) onto unrelated columns, so assigning a ``dict`` to a
+    plain JSON column then raises "Attribute 'x' does not accept objects of type <class 'dict'>".
+    Giving each mutable column its own instance scopes the listener to that one column.
+    """
+    return JSON().with_variant(JSONB(), "postgresql")
+
+
+# Shared instance for PLAIN JSON columns and Alembic migrations. Never pass to as_mutable().
+JSONB_VARIANT = jsonb_variant()
 
 
 class Base(DeclarativeBase):

@@ -41,6 +41,12 @@ describe("AdminVerificationService contract (mirrors /admin/verifications backen
     expect(calls[0].url).toBe("/admin/verifications?page=0&page_size=10");
   });
 
+  it("forwards the VID search term as the query param", async () => {
+    const { http, calls } = mockHttp();
+    await new AdminVerificationService(http).list({ query: "VP-42" }, 0, 10);
+    expect(calls[0].url).toBe("/admin/verifications?query=VP-42&page=0&page_size=10");
+  });
+
   it("assigns an agent to a role with a camelCase body", async () => {
     const { http, calls } = mockHttp();
     await new AdminVerificationService(http).assign("v-1", AgentRole.FIELD, "agent-9");
@@ -66,6 +72,12 @@ describe("AdminVerificationService contract (mirrors /admin/verifications backen
       url: "/admin/verifications/v-1/delay",
       body: { extraBusinessDays: 2, reason: "holiday" },
     });
+  });
+
+  it("fetches the dashboard summary from /admin/verifications/summary", async () => {
+    const { http, calls } = mockHttp();
+    await new AdminVerificationService(http).getSummary();
+    expect(calls[0]).toMatchObject({ method: "get", url: "/admin/verifications/summary" });
   });
 
   it("adds an internal note with category + pinned", async () => {

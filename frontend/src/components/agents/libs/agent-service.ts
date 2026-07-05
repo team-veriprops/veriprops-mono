@@ -39,9 +39,11 @@ export class AgentService {
     status: string | undefined,
     page: number,
     pageSize: number,
+    query?: string,
   ): Promise<SuccessResponse<Page<AgentApplicationSummary>>> {
     const search = new URLSearchParams();
     if (status) search.set("status", status);
+    if (query) search.set("query", query);
     search.set("page", String(page));
     search.set("page_size", String(pageSize));
     return this.http.get(`${this.base}/applications?${search.toString()}`);

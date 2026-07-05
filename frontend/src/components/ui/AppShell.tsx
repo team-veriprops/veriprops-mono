@@ -90,7 +90,7 @@ function SidebarNav({
 }: SidebarNavProps) {
   return (
     <div className="flex flex-col h-full">
-      <BrandLogo />
+      <BrandLogo variant="light" />
 
       {/* Nav items */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">

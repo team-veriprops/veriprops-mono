@@ -1,4 +1,6 @@
 import TrackingContainer from "@components/portal/verifications/TrackingContainer";
+import DrawerRoutePage from "@components/ui/DrawerRoutePage";
+import { ROUTES } from "@lib/routes";
 
 export default async function VerificationTrackingPage({
   params,
@@ -6,5 +8,11 @@ export default async function VerificationTrackingPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <TrackingContainer verificationId={id} />;
+  return (
+    <DrawerRoutePage title="Verification" reference={id} fallbackHref={ROUTES.PORTAL.VERIFICATIONS}>
+      <div className="p-6">
+        <TrackingContainer verificationId={id} />
+      </div>
+    </DrawerRoutePage>
+  );
 }

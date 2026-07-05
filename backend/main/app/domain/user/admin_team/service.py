@@ -31,8 +31,15 @@ class AdminTeamService:
         self._user_service = user_service
         self._audit_service = audit_service
 
-    async def list_team(self, page: int = 0, page_size: int = 10) -> AdminTeamPageDto:
-        admins = await self._user_repo.list_admins()
+    async def list_team(
+        self,
+        page: int = 0,
+        page_size: int = 10,
+        query: Optional[str] = None,
+        sub_role: Optional[str] = None,
+    ) -> AdminTeamPageDto:
+        sub_role_filter = AdminSubRole(sub_role) if sub_role else None
+        admins = await self._user_repo.list_admins(sub_role_filter=sub_role_filter, query=query)
         total = len(admins)
         start = page * page_size
         window = admins[start:start + page_size]

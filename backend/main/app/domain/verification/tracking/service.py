@@ -13,6 +13,7 @@ from typing import List, Optional
 from kink import inject
 
 from main.app.core.sla import (
+    ACTIVE_SLA_STATES,
     SLA_BUSINESS_DAYS,
     business_days_between,
     compute_sla_health,
@@ -37,6 +38,7 @@ from main.app.domain.verification.tracking.labels import (
 )
 from main.app.domain.verification.tracking.models import (
     AssignedAgentDto,
+    CustomerDashboardDto,
     CustomerEvidenceDto,
     InterimMilestoneDto,
     SlaTrackerDto,
@@ -58,6 +60,14 @@ _REVIEW_APPROVED = "APPROVED"
 # UNDER_REVIEW (every required task SUBMITTED), matching §9.3.
 _SETTLED_STATES = {TaskState.SUBMITTED.value, TaskState.APPROVED.value}
 _EVIDENCE_PREVIEW_LIMIT = 3
+# Number of most-recent verifications surfaced on the portal dashboard.
+_DASHBOARD_RECENT_LIMIT = 5
+# Portal dashboard rollups (§9). "In progress" reuses the SLA-active set so the number
+# always matches the SLA countdown surface.
+_AWAITING_PAYMENT_STATUSES = {
+    VerificationStatus.SUBMITTED.value,
+    VerificationStatus.PAYMENT_PENDING.value,
+}
 
 
 @inject
@@ -102,6 +112,22 @@ class CustomerTrackingService:
                 prev_page=page - 1 if page > 0 else None,
                 next_page=page + 1 if (page + 1) < total_pages else None,
             ),
+        )
+
+    async def summary(self, customer_id: str) -> CustomerDashboardDto:
+        """Portal home rollups (§9): counts by status + the most recent verifications.
+        Every number is derived server-side; the client only renders."""
+        raw = await self._verification_repo.count_by_status_for_customer(customer_id)
+        status_counts = {VerificationStatus(s): c for s, c in raw.items()}
+        recent_page = await self.list_my_verifications(customer_id, 0, _DASHBOARD_RECENT_LIMIT)
+        return CustomerDashboardDto(
+            total=sum(status_counts.values()),
+            draft=raw.get(VerificationStatus.DRAFT.value, 0),
+            awaiting_payment=sum(raw.get(s, 0) for s in _AWAITING_PAYMENT_STATUSES),
+            in_progress=sum(raw.get(s, 0) for s in ACTIVE_SLA_STATES),
+            completed=raw.get(VerificationStatus.COMPLETED.value, 0),
+            status_counts=status_counts,
+            recent=recent_page.items,
         )
 
     async def _list_item(self, v) -> VerificationListItemDto:

@@ -1,5 +1,7 @@
 """AdminTeamService (PRD §4.1) — repos mocked, no DB."""
+import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -44,6 +46,30 @@ def _admin(**over):
     base = dict(user_type=UserType.ADMIN.value, admin_sub_role=AdminSubRole.OPERATIONS.value)
     base.update(over)
     return SimpleNamespace(**base)
+
+
+class TestListTeam:
+    async def test_forwards_search_and_sub_role_filter(self):
+        svc = _make_service()
+        svc._user_repo.list_admins = AsyncMock(return_value=[])
+        await svc.list_team(page=0, page_size=10, query="ada", sub_role=AdminSubRole.FINANCE.value)
+        svc._user_repo.list_admins.assert_awaited_once_with(
+            sub_role_filter=AdminSubRole.FINANCE, query="ada"
+        )
+
+    async def test_builds_dto_from_real_uuid_id(self):
+        """Real entity ids are ``uuid.UUID``; the member DTO must expose them as hex strings."""
+        admin_id = uuid.uuid4()
+        admin = _admin(
+            id=admin_id, first_name="Ada", last_name="Lovelace",
+            email="ada@veriprops.io", deleted=False,
+            date_created=datetime(2026, 7, 5, tzinfo=timezone.utc),
+        )
+        svc = _make_service()
+        svc._user_repo.list_admins = AsyncMock(return_value=[admin])
+        page = await svc.list_team(page=0, page_size=10)
+        assert page.items[0].id == admin_id.hex
+        assert page.items[0].sub_role == AdminSubRole.OPERATIONS
 
 
 class TestChangeSubRole:

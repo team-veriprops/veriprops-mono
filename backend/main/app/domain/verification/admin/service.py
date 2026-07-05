@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from kink import inject
 
-from main.app.core.sla import SlaHealth, add_business_days, compute_sla_health
+from main.app.core.sla import ACTIVE_SLA_STATES, SlaHealth, add_business_days, compute_sla_health
 from main.app.core.state.dependencies import required_task_count
 from main.app.core.state.machine import verification_state_machine
 from main.app.core.state.status import (
@@ -31,7 +31,9 @@ from main.app.domain.payment.models import PaymentDto, PaymentMethodKind, Paymen
 from main.app.domain.payment.repo import PaymentRepo
 from main.app.domain.property.models import PropertyDto, PropertyType
 from main.app.domain.property.repo import PropertyRepo
+from main.app.domain.user.agent.service import AgentService
 from main.app.domain.verification.admin.models import (
+    AdminDashboardDto,
     CancelVerificationDto,
     SetDelayDto,
     VerificationDetailDto,
@@ -54,6 +56,10 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
 )
 
+# Number of most-recent verifications surfaced on the admin dashboard.
+_DASHBOARD_RECENT_LIMIT = 8
+
+
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
@@ -67,6 +73,7 @@ class AdminVerificationService:
         admin_note_service: AdminNoteService,
         commission_service: CommissionService,
         chargeback_service: ChargebackService,
+        agent_service: AgentService,
         audit_service: AuditLogService,
     ):
         self._repo = verification_repo
@@ -76,7 +83,28 @@ class AdminVerificationService:
         self._notes = admin_note_service
         self._commissions = commission_service
         self._chargebacks = chargeback_service
+        self._agents = agent_service
         self._audit = audit_service
+
+    # ── Dashboard summary (§6) ────────────────────────────────────
+
+    async def summary(self) -> AdminDashboardDto:
+        """Admin operations home rollups (§6): queue counts by status, overdue count,
+        open pool tasks, pending agent applications, open chargebacks, and the most
+        recent verifications. Every figure is derived here (backend source of truth)."""
+        raw = await self._repo.count_by_status()
+        status_counts = {VerificationStatus(s): c for s, c in raw.items()}
+        today = Utils.datetime_now().date()
+        recent_rows, _ = await self._repo.page_admin(offset=0, limit=_DASHBOARD_RECENT_LIMIT)
+        return AdminDashboardDto(
+            total=sum(status_counts.values()),
+            status_counts=status_counts,
+            overdue=await self._repo.count_overdue(list(ACTIVE_SLA_STATES), today),
+            unassigned_pool_tasks=await self._task_service.count_pool_pending(),
+            pending_agent_applications=await self._agents.count_pending_applications(),
+            open_chargebacks=await self._chargebacks.count_open(),
+            recent=[await self._summary(v) for v in recent_rows],
+        )
 
     # ── List (§6.1) ───────────────────────────────────────────────
 
@@ -86,13 +114,14 @@ class AdminVerificationService:
         status: Optional[str] = None,
         tier: Optional[str] = None,
         state_region: Optional[str] = None,
+        query: Optional[str] = None,
         overdue_only: bool = False,
         page: int = 0,
         page_size: int = 10,
     ) -> Page[VerificationSummaryDto]:
         due_before = Utils.datetime_now().date() if overdue_only else None
         rows, total = await self._repo.page_admin(
-            status=status, tier=tier, state_region=state_region,
+            status=status, tier=tier, state_region=state_region, query=query,
             due_before=due_before, offset=page * page_size, limit=page_size,
         )
         items = [await self._summary(v) for v in rows]

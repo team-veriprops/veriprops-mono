@@ -18,11 +18,20 @@ export const verificationKeys = {
   detail: (id: string) => ["verification", id] as const,
   draft: (id: string) => ["verification", id, "draft"] as const,
   list: (page: number) => ["verification", "list", page] as const,
+  summary: () => ["verification", "summary"] as const,
   tracking: (id: string) => ["verification", id, "tracking"] as const,
   evidence: (id: string, page: number) => ["verification", id, "evidence", page] as const,
   quote: (tier: VerificationTier, currency: TransactionCurrency) =>
     ["verification", "quote", tier, currency] as const,
 };
+
+/** Portal dashboard summary (§9) — backend-owned rollups over the customer's work. */
+export function useCustomerDashboardQuery() {
+  return useQuery({
+    queryKey: verificationKeys.summary(),
+    queryFn: async () => (await service.getSummary()).data ?? null,
+  });
+}
 
 export function useCreateDraftMutation() {
   return useMutation({

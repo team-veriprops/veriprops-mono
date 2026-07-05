@@ -68,6 +68,17 @@ export interface VerificationSummary {
   dateCreated: string;
 }
 
+/** Admin operations home summary (§6) — backend-owned queue health. */
+export interface AdminDashboard {
+  total: number;
+  statusCounts: Partial<Record<VerificationStatus, number>>;
+  overdue: number;
+  unassignedPoolTasks: number;
+  pendingAgentApplications: number;
+  openChargebacks: number;
+  recent: VerificationSummary[];
+}
+
 export interface AdminPropertyDto {
   id: string;
   propertyType: PropertyKind;
@@ -167,4 +178,5 @@ export interface VerificationListFilters {
   tier?: VerificationTier;
   stateRegion?: string;
   overdueOnly?: boolean;
+  query?: string;
 }

@@ -6,7 +6,7 @@ Every DTO here is customer-facing, so agent identity is reduced to the four safe
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from main.app.core.sla import SlaHealth
 from main.app.core.state.status import AgentRole, VerificationStatus, VerificationTier
@@ -115,3 +115,17 @@ class VerificationListItemDto(Object):
     address: Optional[str] = None
     sla_due_date: Optional[date] = None
     date_created: datetime
+
+
+class CustomerDashboardDto(Object):
+    """The customer portal home summary (§9) — backend-owned rollups over the
+    customer's verifications plus the most recent rows. Every count is derived here so
+    the client renders numbers, never computes them."""
+
+    total: int = 0
+    draft: int = 0            # DRAFT — awaiting submission
+    awaiting_payment: int = 0  # SUBMITTED / PAYMENT_PENDING
+    in_progress: int = 0       # PAID / IN_PROGRESS / UNDER_REVIEW — work underway
+    completed: int = 0         # COMPLETED — report released
+    status_counts: Dict[VerificationStatus, int] = {}
+    recent: List[VerificationListItemDto] = []

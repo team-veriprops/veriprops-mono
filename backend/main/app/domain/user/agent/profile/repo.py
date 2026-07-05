@@ -1,7 +1,7 @@
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.user.agent.profile.models import (
@@ -41,13 +41,32 @@ class AgentProfileRepo(
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def count_by_status(self, status: str) -> int:
+        """Agent profiles/applications in a given status (admin dashboard §6)."""
+        stmt = select(func.count()).select_from(AgentProfile).where(
+            AgentProfile.deleted.is_(False),
+            AgentProfile.status == status,
+        )
+        return int(await self._session.scalar(stmt) or 0)
+
     async def page_applications(
-        self, status: Optional[str], offset: int, limit: int
+        self, status: Optional[str], offset: int, limit: int, query: Optional[str] = None
     ) -> tuple[List[AgentProfile], int]:
         conditions = [AgentProfile.deleted.is_(False)]
         if status:
             conditions.append(AgentProfile.status == status)
         base = select(AgentProfile).where(*conditions)
+        if query and query.strip():
+            # Applicant name/email live on the User; join (application-level, no FK) to search them.
+            from main.app.domain.user.models import User
+            like = f"%{query.strip()}%"
+            base = base.join(User, User.id == AgentProfile.user_id).where(
+                or_(
+                    User.first_name.ilike(like),
+                    User.last_name.ilike(like),
+                    User.email.ilike(like),
+                )
+            )
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
         rows = (
             await self._session.execute(

@@ -189,3 +189,15 @@ class AgentTaskDto(Object):
     assigned_at: Optional[datetime] = None
     accepted_at: Optional[datetime] = None
     submitted_at: Optional[datetime] = None
+
+
+class AgentDashboardDto(Object):
+    """Agent home summary (§7) — backend-derived counts over the agent's own tasks so the
+    dashboard renders workload at a glance."""
+
+    assigned: int = 0      # ASSIGNED — awaiting the agent's accept
+    active: int = 0        # ACCEPTED + IN_PROGRESS + REJECTED (rework) — work in hand
+    submitted: int = 0     # SUBMITTED — awaiting admin review
+    approved: int = 0      # APPROVED — released
+    total: int = 0
+    state_counts: Dict[TaskState, int] = {}

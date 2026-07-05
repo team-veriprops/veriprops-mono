@@ -7,7 +7,7 @@ into the admin list + detail views, and carries the action request shapes.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from main.app.core.sla import SlaHealth  # re-exported: single SLA-health source (core/sla)
 from main.app.core.state.status import VerificationStatus, VerificationTier
@@ -49,6 +49,19 @@ class VerificationDetailDto(Object):
     progress_percent: int = 0
     required_task_count: int = 0
     approved_task_count: int = 0
+
+
+class AdminDashboardDto(Object):
+    """Admin operations home summary (§6) — backend-owned queue health so the console
+    renders counts without deriving anything client-side."""
+
+    total: int = 0
+    status_counts: Dict[VerificationStatus, int] = {}
+    overdue: int = 0                    # active verifications past their SLA due date
+    unassigned_pool_tasks: int = 0      # broadcast tasks unclaimed in the open pool
+    pending_agent_applications: int = 0
+    open_chargebacks: int = 0
+    recent: List[VerificationSummaryDto] = []
 
 
 # ── action request DTOs ───────────────────────────────────────────

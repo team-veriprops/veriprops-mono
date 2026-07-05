@@ -33,7 +33,7 @@ Frontend reads `API_BASE_URL` (server-only) from its env to build the proxy targ
 ## Pagination Convention
 Every list that can grow, should be implemented a page as follows:
 1. **Backend** -  The API must accept page (zero index) and page_size params, defaulted to 0 and 10 respectively. The API should also return an Object of Page[T], implemented in the file `backend\main\appodus_utils\db\models.py`. The GenericRepo returns this Object through get_page
-2. **Frontend** - The frontend receives the value as an Object of Page<T>, implemented in the file `frontend\src\types\models.ts`. It must also implement paginated rendering of the values. For main Table in the Admin pages, use our existing DataTable implemented here `frontend\src\components\ui\DataTable.tsx`
+2. **Frontend** - The frontend receives the value as an Object of Page<T>, implemented in the file `frontend\src\types\models.ts`. It must also implement paginated rendering of the values. For main Table in the Admin pages, use our existing DataTable implemented here `frontend\src\components\ui\table\DataTable.tsx`. The DataTable is fully controlled and server-driven: consumers own `{ page, query, orderBy, ...filters }` and forward all of them to the backend list endpoint (which accepts `page`/`page_size`/`query`) — search, filtering, and pagination are all server-side, never client-only. Any `page.tsx` hosting a DataTable must wrap its client component in `<Suspense>` (Next 16 `useSearchParams` requirement). See [frontend/CLAUDE.md](frontend/CLAUDE.md) for the full pattern.
 
 ## Workflow
 

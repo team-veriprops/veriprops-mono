@@ -51,6 +51,12 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
     expect(calls[0]).toMatchObject({ method: "get", url: "/verifications?page=1&pageSize=20" });
   });
 
+  it("fetches the portal dashboard summary from /verifications/summary", async () => {
+    const { http, calls } = mockHttp();
+    await new VerificationService(http).getSummary();
+    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications/summary" });
+  });
+
   it("fetches the tracking snapshot (poll fallback, shared shape with /stream)", async () => {
     const { http, calls } = mockHttp();
     await new VerificationService(http).getTracking("ver-1");

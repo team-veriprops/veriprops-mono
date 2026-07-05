@@ -173,6 +173,19 @@ status: running (S1–S4 foundation)
 ## Current Slice
 - none — S13 (Phase 9) and S14 (Phase 10) delivered & committed. MVP cut line (Phases 0–10) complete.
 
+## Post-MVP hardening (S1–S14 review pass)
+- **Persona dashboards completed.** `/portal/dashboard` and `/admin/dashboard` did not exist (both
+  landing redirects 404'd); the agent dashboard was a thin status card. Added backend-owned summary
+  endpoints — `GET /verifications/summary` (`CustomerDashboardDto`), `GET /admin/verifications/summary`
+  (`AdminDashboardDto`, RBAC `VIEW_ADMIN_PANEL`), `GET /agents/tasks/summary` (`AgentDashboardDto`) —
+  each deriving all counts server-side (status rollups, overdue via `core/sla.ACTIVE_SLA_STATES`,
+  open pool tasks, pending applications, open chargebacks). Frontend: shared `ui/StatCard`, dashboard
+  pages for all three personas, services/hooks + contract tests. Nav sidebars trimmed to built routes
+  (S15+ items restored as their slices land) so nothing 404s.
+- **Full build verified both ends** (closes final-audit follow-up #6): backend `pytest` 587 passed;
+  frontend `pnpm lint` clean, `tsc --noEmit` clean, `vitest` 286 passed, and a real `pnpm build`
+  succeeds (both dashboard routes prerender).
+
 ## Pending Slices
 - S15–S23 Phases 11–19 — harden & scale
 

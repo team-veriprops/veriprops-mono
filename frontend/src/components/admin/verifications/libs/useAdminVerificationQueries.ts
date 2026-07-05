@@ -12,7 +12,16 @@ export const adminVerificationKeys = {
   list: (filters: VerificationListFilters, page: number, pageSize: number) =>
     ["admin", "verifications", filters, page, pageSize] as const,
   detail: (id: string) => ["admin", "verifications", "detail", id] as const,
+  summary: () => ["admin", "verifications", "summary"] as const,
 };
+
+/** Admin dashboard summary (§6) — backend-owned queue health rollups. */
+export function useAdminDashboardQuery() {
+  return useQuery({
+    queryKey: adminVerificationKeys.summary(),
+    queryFn: async () => (await service.getSummary()).data ?? null,
+  });
+}
 
 export function useAdminVerificationsQuery(
   filters: VerificationListFilters,

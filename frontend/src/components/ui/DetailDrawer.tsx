@@ -12,6 +12,8 @@ export enum DetailDrawerWidth {
   MEDIUM = "850px",
   LARGE = "1200px",
 }
+/** Which edge the drawer slides in from. Defaults to the right. */
+export type DetailDrawerSide = "right" | "left";
 interface DetailDrawerProps {
   title: string;
   reference: string;
@@ -20,6 +22,7 @@ interface DetailDrawerProps {
   onOpenChange: (open: boolean) => void;
   children: ReactNode;
   drawerWidth?: DetailDrawerWidth;
+  side?: DetailDrawerSide;
 }
 export default function DetailDrawer({
   title,
@@ -29,9 +32,13 @@ export default function DetailDrawer({
   onOpenChange,
   children,
   drawerWidth = DetailDrawerWidth.SMALL,
+  side = "right",
 }: DetailDrawerProps) {
   // Lock body scroll when modal is open
   useBodyOverflowHidden(open);
+
+  // Slide in from the chosen edge; off-screen is +100% (right) or -100% (left).
+  const offscreenX = side === "left" ? "-100%" : "100%";
 
   return (
     <AnimatePresence>
@@ -42,24 +49,23 @@ export default function DetailDrawer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => onOpenChange(open)}
+            onClick={() => onOpenChange(false)}
             className="fixed inset-0 w-full h-full bg-background/80 backdrop-blur-sm z-50"
           />
 
           {/* Drawer */}
           <motion.div
-            initial={{ x: "100%" }}
+            initial={{ x: offscreenX }}
             animate={{ x: 0 }}
-            exit={{ x: "100%" }}
+            exit={{ x: offscreenX }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
             className={cn(
-              "fixed right-0 top-0 h-full w-full bg-card border-l border-border shadow-2xl z-50 overflow-y-auto",
+              "fixed top-0 h-full w-full bg-card shadow-2xl z-50 overflow-y-auto",
+              side === "left" ? "left-0 border-r border-border" : "right-0 border-l border-border",
               drawerWidth === DetailDrawerWidth.SMALL && "sm:max-w-150",
               drawerWidth === DetailDrawerWidth.MEDIUM && "sm:max-w-212.5",
               drawerWidth === DetailDrawerWidth.LARGE && "sm:max-w-300"
             )}
-            //   className={`fixed right-0 top-0 h-full w-full sm:max-w-none bg-card border-l border-border shadow-2xl z-50 overflow-y-auto`}
-            // style={{ maxWidth: drawerWidth }}
           >
             <div className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border z-10 p-6">
               <div className="flex items-center justify-between">
@@ -71,7 +77,7 @@ export default function DetailDrawer({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => onOpenChange(open)}
+                  onClick={() => onOpenChange(false)}
                 >
                   <X className="h-5 w-5" />
                 </Button>

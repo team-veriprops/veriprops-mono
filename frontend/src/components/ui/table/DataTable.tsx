@@ -1,4 +1,4 @@
-import { useState, ReactNode } from "react";
+import { ReactNode, Suspense } from "react";
 import {
   Table,
   TableBody,
@@ -45,21 +45,33 @@ export interface Action<T> {
   icon?: React.ComponentType<{ className?: string }>;
 }
 
+/** A single toolbar filter (rendered as a Select inside the table toolbar). */
+export interface TableFilter {
+  key: string;
+  label: string;
+  value?: string; // current selection; undefined/"" means "no filter" (ALL)
+  options: { label: string; value: string }[];
+}
+
+/** Filter/search/sort/pagination intents are all emitted through one callback.
+    Includes PageRequest keys (page/query/orderBy) plus any parent-defined filter keys. */
+export type TableFilterUpdate = Partial<PageRequest> & Record<string, unknown>;
+
 interface DataTableProps<T extends { id: string }> {
   dataPage: Page<T>;
   columns: Column<T>[];
   actions?: Action<T>[];
   searchPlaceholder?: string;
+  /** Controlled search text (URL-synced by the parent). */
+  searchValue?: string;
+  /** Controlled sort, e.g. "name asc" (URL-synced by the parent). */
+  orderBy?: string;
   onSelectionChange?: (selectedItems: T[]) => void;
   bulkActions?: Action<T[]>[];
-  filters?: {
-    key: keyof T;
-    label: string;
-    options: { label: string; value: string }[];
-  }[];
+  filters?: TableFilter[];
   className?: string;
   currentPage: number;
-  updateFilters: (updates: Partial<PageRequest>) => void;
+  updateFilters: (updates: TableFilterUpdate) => void;
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
@@ -74,6 +86,9 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
   columns,
   actions = [],
   searchPlaceholder = "Search...",
+  searchValue,
+  orderBy,
+  filters = [],
   onSelectionChange,
   currentPage,
   updateFilters,
@@ -85,7 +100,6 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
   elementOfInterestId
 }: DataTableProps<T>) {
   const { settings } = useGlobalSettings();
-  const [orderBy, setOrderBy] = useState<string>();
 
   const SortIcon = ({
     columnKey,
@@ -120,8 +134,11 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
       newOrderBy = `${key} asc`;
     }
 
-    setOrderBy(newOrderBy);
     updateFilters({ orderBy: newOrderBy, page: settings.firstPage });
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    updateFilters({ [key]: value, page: settings.firstPage });
   };
 
   const handleNextPage = () => {
@@ -147,13 +164,20 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
   return (
     <Card className="border-border">
       <CardContent className="p-6">
-        {/* Toolbar */}
-        <TableToolbar
-          onSearchQueryChange={onSearchQueryChange}
-          searchPlaceholder={searchPlaceholder}
-        >
-          {children}
-        </TableToolbar>
+        {/* Toolbar — wrapped in Suspense because TableToolbar reads useSearchParams,
+            which Next 16 requires to sit under a Suspense boundary or the page
+            throws on prerender/hard navigation. */}
+        <Suspense fallback={<div className="mb-6 h-10" />}>
+          <TableToolbar
+            onSearchQueryChange={onSearchQueryChange}
+            searchPlaceholder={searchPlaceholder}
+            searchValue={searchValue}
+            filters={filters}
+            onFilterChange={handleFilterChange}
+          >
+            {children}
+          </TableToolbar>
+        </Suspense>
         <Table>
           <TableHeader className="bg-muted/50 border-b">
             <TableRow>
@@ -173,7 +197,7 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
                     `
                   }
                   style={{ width: column.width }}
-                  onClick={() => handleToggleSort(String(column.key))}
+                  onClick={() => column.sortable && handleToggleSort(String(column.key))}
                 >
                   <div className="flex items-center gap-1">
                     {column.label}

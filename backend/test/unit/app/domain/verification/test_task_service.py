@@ -273,3 +273,35 @@ class TestSweeps:
         count = await svc.sweep_pool_starvation()
         assert count == 1
         assert stale.in_pool is False
+
+
+class TestAgentDashboardSummary:
+    def _summary_service(self, state_counts):
+        svc = object.__new__(VerificationTaskService)
+        svc._repo = MagicMock()
+        svc._repo.count_by_state_for_agent = AsyncMock(return_value=state_counts)
+        svc._repo.count_pool_pending = AsyncMock(return_value=6)
+        return svc
+
+    async def test_agent_summary_rolls_up_states(self):
+        counts = {
+            TaskState.ASSIGNED.value: 1,
+            TaskState.ACCEPTED.value: 2,
+            TaskState.IN_PROGRESS.value: 1,
+            TaskState.REJECTED.value: 1,
+            TaskState.SUBMITTED.value: 3,
+            TaskState.APPROVED.value: 5,
+        }
+        svc = self._summary_service(counts)
+        dto = await svc.agent_summary("agent-1")
+
+        assert dto.assigned == 1
+        assert dto.active == 4          # ACCEPTED + IN_PROGRESS + REJECTED
+        assert dto.submitted == 3
+        assert dto.approved == 5
+        assert dto.total == 13
+        assert dto.state_counts[TaskState.SUBMITTED] == 3
+
+    async def test_count_pool_pending_delegates(self):
+        svc = self._summary_service({})
+        assert await svc.count_pool_pending() == 6

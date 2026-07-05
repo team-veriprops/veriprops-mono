@@ -1,17 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@3rdparty/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@3rdparty/ui/select";
-import { Column, DataTable } from "@components/ui/table/DataTable";
-import { Page, PageRequest } from "@/types/models";
+import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
+import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { Page } from "@/types/models";
 import { ROUTES } from "@/lib/routes";
 import { VerificationStatus, VerificationTier } from "@/types/verification";
 import {
@@ -22,7 +15,8 @@ import {
 import { useAdminVerificationsQuery } from "./libs/useAdminVerificationQueries";
 
 const PAGE_SIZE = 10;
-const ALL = "ALL";
+// Sentinel used in table state to mean "overdue filter on".
+const OVERDUE = "OVERDUE";
 
 const SLA_VARIANT: Record<SlaHealth, "default" | "secondary" | "destructive" | "outline"> = {
   [SlaHealth.ON_TRACK]: "secondary",
@@ -69,10 +63,35 @@ const columns: Column<VerificationSummary & Record<string, unknown>>[] = [
   },
 ];
 
+interface VerificationTableState extends Record<string, unknown> {
+  page: number;
+  query: string;
+  status: string;
+  tier: string;
+  overdue: string;
+}
+
 export default function AdminVerificationList() {
   const router = useRouter();
-  const [page, setPage] = useState(0);
-  const [filters, setFilters] = useState<VerificationListFilters>({});
+  const [tableState, updateTableState] = useSyncedQueryState<VerificationTableState>({
+    page: 0,
+    query: "",
+    status: "",
+    tier: "",
+    overdue: "",
+  });
+  const page = tableState.page ?? 0;
+  const query = tableState.query ?? "";
+  const status = tableState.status ?? "";
+  const tier = tableState.tier ?? "";
+  const overdue = tableState.overdue ?? "";
+
+  const filters: VerificationListFilters = {
+    status: status ? (status as VerificationStatus) : undefined,
+    tier: tier ? (tier as VerificationTier) : undefined,
+    overdueOnly: overdue === OVERDUE,
+    query: query || undefined,
+  };
 
   const { data, isLoading, isError, error } = useAdminVerificationsQuery(filters, page, PAGE_SIZE);
 
@@ -91,13 +110,8 @@ export default function AdminVerificationList() {
     },
   };
 
-  const updateFilters = (u: Partial<PageRequest>) => {
-    if (u.page !== undefined) setPage(u.page);
-  };
-
-  const setFilter = (patch: Partial<VerificationListFilters>) => {
-    setPage(0);
-    setFilters((f) => ({ ...f, ...patch }));
+  const updateFilters = (u: TableFilterUpdate) => {
+    updateTableState(u as Partial<VerificationTableState>);
   };
 
   return (
@@ -106,62 +120,32 @@ export default function AdminVerificationList() {
         <h1 className="text-2xl font-bold text-foreground">Verifications</h1>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Select
-          value={filters.status ?? ALL}
-          onValueChange={(v) =>
-            setFilter({ status: v === ALL ? undefined : (v as VerificationStatus) })
-          }
-        >
-          <SelectTrigger className="w-44" data-testid="admin-verif-status-filter">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>All statuses</SelectItem>
-            {Object.values(VerificationStatus).map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={filters.tier ?? ALL}
-          onValueChange={(v) => setFilter({ tier: v === ALL ? undefined : (v as VerificationTier) })}
-        >
-          <SelectTrigger className="w-40" data-testid="admin-verif-tier-filter">
-            <SelectValue placeholder="Tier" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>All tiers</SelectItem>
-            {Object.values(VerificationTier).map((t) => (
-              <SelectItem key={t} value={t}>
-                {t}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={filters.overdueOnly ? "OVERDUE" : ALL}
-          onValueChange={(v) => setFilter({ overdueOnly: v === "OVERDUE" })}
-        >
-          <SelectTrigger className="w-40" data-testid="admin-verif-overdue-filter">
-            <SelectValue placeholder="SLA" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>All SLA</SelectItem>
-            <SelectItem value="OVERDUE">Overdue only</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       <DataTable<VerificationSummary & Record<string, unknown>>
         dataPage={dataPage}
         columns={columns}
         currentPage={page}
         updateFilters={updateFilters}
+        searchValue={query}
+        filters={[
+          {
+            key: "status",
+            label: "Status",
+            value: status,
+            options: Object.values(VerificationStatus).map((s) => ({ label: s, value: s })),
+          },
+          {
+            key: "tier",
+            label: "Tier",
+            value: tier,
+            options: Object.values(VerificationTier).map((t) => ({ label: t, value: t })),
+          },
+          {
+            key: "overdue",
+            label: "SLA",
+            value: overdue,
+            options: [{ label: "Overdue only", value: OVERDUE }],
+          },
+        ]}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}

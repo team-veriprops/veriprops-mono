@@ -32,6 +32,16 @@ export interface AgentTask {
   submittedAt?: string;
 }
 
+/** Agent home summary (§7) — backend-derived counts over the agent's own tasks. */
+export interface AgentDashboard {
+  assigned: number;
+  active: number;
+  submitted: number;
+  approved: number;
+  total: number;
+  stateCounts: Partial<Record<TaskState, number>>;
+}
+
 export interface EvidenceItem {
   id: string;
   taskId: string;

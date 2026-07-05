@@ -11,7 +11,7 @@ from sqlalchemy.ext.mutable import MutableList
 
 from main.app.domain.user.auth.session.models import UserType, UserPersona
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
+from main.appodus_utils.db.models import UTCDateTime, jsonb_variant
 from main.appodus_utils.db.types.money import TransactionCurrency
 
 
@@ -50,7 +50,7 @@ class User(BaseEntity):
     preferred_currency = Column(String(8), nullable=False, default="NGN")
 
     user_type = Column(String(8), nullable=False, default=UserType.USER.value)
-    personas = Column(MutableList.as_mutable(JSONB_VARIANT), nullable=False, default=list)
+    personas = Column(MutableList.as_mutable(jsonb_variant()), nullable=False, default=list)
     admin_sub_role = Column(String(16), nullable=True)
 
     trust_status = Column(String(16), nullable=False, default=TrustStatus.UNTRUSTED.value)

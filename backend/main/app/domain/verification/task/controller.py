@@ -17,6 +17,7 @@ from main.app.core.state.status import AgentRole, VerificationTier
 from main.app.domain.verification.task.evidence.models import EvidenceDto, EvidenceItem, EvidenceKind
 from main.app.domain.verification.task.evidence.service import EvidenceService
 from main.app.domain.verification.task.models import (
+    AgentDashboardDto,
     AgentTaskDto,
     DeclineTaskDto,
     SubmitTaskDto,
@@ -76,6 +77,13 @@ async def list_my_tasks(
             next_page=page + 1 if (page + 1) < total_pages else None,
         ),
     ))
+
+
+@agent_task_router.get("/summary", response_model=SuccessResponse[AgentDashboardDto])
+async def get_dashboard_summary(authorize: AuthJWT = Depends()):
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
+    return SuccessResponse[AgentDashboardDto](data=await task_service.agent_summary(agent_id))
 
 
 @agent_task_router.post("/{task_id}/accept", response_model=SuccessResponse[AgentTaskDto])

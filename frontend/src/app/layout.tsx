@@ -37,7 +37,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // next-themes sets `class`/`color-scheme` on <html> client-side before hydration,
+    // so the server markup intentionally differs — suppress the expected mismatch here.
+    <html lang="en" suppressHydrationWarning>
       <body className="">
         <ClientWrapperProvider>{children}</ClientWrapperProvider>
       </body>

@@ -27,6 +27,7 @@ async def invite_admin(
 ):
     raw_token = await invitation_service.invite(
         email=req.email, sub_role=req.sub_role, invited_by=admin_id,
+        first_name=req.first_name, last_name=req.last_name,
         ip_address=ClientUtils.get_client_ip(request),
     )
     domain = ClientUtils.get_referer_domain(request)

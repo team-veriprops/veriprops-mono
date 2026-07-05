@@ -148,12 +148,14 @@ class SlaHealth(str, enum.Enum):
 
 # business-days-remaining threshold below which the clock reads "at risk".
 _SLA_AT_RISK_DAYS = 1
-# Statuses with an active SLA clock (post-PAID, pre-terminal).
-_ACTIVE_SLA_STATES = {
+# Statuses with an active SLA clock (post-PAID, pre-terminal). Public — dashboards reuse
+# this single definition for "work underway" rollups and the overdue count.
+ACTIVE_SLA_STATES = {
     VerificationStatus.PAID.value,
     VerificationStatus.IN_PROGRESS.value,
     VerificationStatus.UNDER_REVIEW.value,
 }
+_ACTIVE_SLA_STATES = ACTIVE_SLA_STATES
 
 
 def compute_sla_health(

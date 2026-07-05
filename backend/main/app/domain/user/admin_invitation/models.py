@@ -36,6 +36,8 @@ class AdminInvitation(BaseEntity):
 
     email = Column(String(254), nullable=False, index=True)
     email_normalized = Column(String(254), nullable=False, index=True)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
     sub_role = Column(String(16), nullable=False)
     token_hash = Column(String(128), nullable=False, unique=True, index=True)
     status = Column(String(16), nullable=False, default=AdminInvitationStatus.PENDING.value)
@@ -54,6 +56,8 @@ class AdminInvitation(BaseEntity):
 class CreateAdminInvitationDto(Object):
     email: str
     email_normalized: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     sub_role: AdminSubRole
     token_hash: str
     invited_by: str
@@ -83,12 +87,16 @@ class QueryAdminInvitationDto(BaseQueryDto):
 
 class InviteAdminRequestDto(Object):
     email: EmailStr
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     sub_role: AdminSubRole
 
 
 class AdminInvitationSummaryDto(Object):
     id: str
     email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     sub_role: AdminSubRole
     status: AdminInvitationStatus
     invited_by: str
@@ -100,6 +108,8 @@ class InvitePreviewDto(Object):
     """Unauthenticated preview so the frontend can route the acceptance flow."""
 
     email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     sub_role: AdminSubRole
     status: AdminInvitationStatus
     expired: bool

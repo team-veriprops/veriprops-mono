@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { AdminService } from "./admin-service";
 import { AdminSubRole } from "@/types/admin";
 import { HttpClient } from "@lib/FetchHttpClient";
@@ -58,5 +58,23 @@ describe("AdminService contract (mirrors /users/admins backend routes)", () => {
     await svc.listInvitations(0, 25);
     expect(calls[0].url).toBe("/users/admins/team?page=2&page_size=10");
     expect(calls[1].url).toBe("/users/admins/invitations?page=0&page_size=25");
+  });
+
+  it("forwards team search + sub-role filter as snake_case query params", async () => {
+    const { http, calls } = mockHttp();
+    await new AdminService(http).listTeam(0, 10, "ada", AdminSubRole.FINANCE);
+    expect(calls[0].url).toBe(
+      `/users/admins/team?page=0&page_size=10&query=ada&sub_role=${AdminSubRole.FINANCE}`,
+    );
+  });
+
+  it("posts an invitation including first and last name", async () => {
+    const { http, calls } = mockHttp();
+    await new AdminService(http).inviteAdmin("a@b.com", AdminSubRole.OPERATIONS, "Ada", "Lovelace");
+    expect(calls[0]).toMatchObject({
+      method: "post",
+      url: "/users/admins/invitations",
+      body: { email: "a@b.com", subRole: AdminSubRole.OPERATIONS, firstName: "Ada", lastName: "Lovelace" },
+    });
   });
 });

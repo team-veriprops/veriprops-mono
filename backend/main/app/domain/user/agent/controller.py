@@ -58,11 +58,14 @@ async def my_application_status(authorize: AuthJWT = Depends()):
 @agent_router.get("/applications", response_model=SuccessResponse[Page[AgentApplicationSummaryDto]])
 async def list_applications(
     status: Optional[str] = Query(default=None),
+    query: Optional[str] = Query(default=None),
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=10, ge=1, le=100),
     _admin_id: str = Depends(require_permission(Permission.APPROVE_AGENT)),
 ):
-    result = await agent_service.list_applications(status=status, page=page, page_size=page_size)
+    result = await agent_service.list_applications(
+        status=status, page=page, page_size=page_size, query=query,
+    )
     return SuccessResponse[Page[AgentApplicationSummaryDto]](data=result)
 
 

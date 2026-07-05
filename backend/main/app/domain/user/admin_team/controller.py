@@ -1,6 +1,8 @@
 """Admin team management controller (PRD §4.1). URL shape: /users/admins/team/..."""
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Query
 from kink import di
 
@@ -15,11 +17,15 @@ team_service: AdminTeamService = di[AdminTeamService]
 
 @admin_team_router.get("", response_model=SuccessResponse[AdminTeamPageDto])
 async def list_team(
+    query: Optional[str] = Query(default=None),
+    sub_role: Optional[str] = Query(default=None),
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=10, ge=1, le=100),
     _admin_id: str = Depends(require_permission(Permission.VIEW_ADMIN_PANEL)),
 ):
-    result = await team_service.list_team(page=page, page_size=page_size)
+    result = await team_service.list_team(
+        page=page, page_size=page_size, query=query, sub_role=sub_role,
+    )
     return SuccessResponse[AdminTeamPageDto](data=result)
 
 

@@ -11,7 +11,17 @@ export const agentTaskKeys = {
   list: (state: string | undefined, page: number, pageSize: number) =>
     ["agent", "tasks", state, page, pageSize] as const,
   evidence: (taskId: string) => ["agent", "tasks", taskId, "evidence"] as const,
+  summary: () => ["agent", "tasks", "summary"] as const,
 };
+
+/** Agent dashboard summary (§7) — backend-derived counts over the agent's own tasks. */
+export function useAgentDashboardQuery(enabled = true) {
+  return useQuery({
+    queryKey: agentTaskKeys.summary(),
+    queryFn: async () => (await service.getSummary()).data ?? null,
+    enabled,
+  });
+}
 
 export function useAgentTasksQuery(state: string | undefined, page = 0, pageSize = 10) {
   return useQuery({

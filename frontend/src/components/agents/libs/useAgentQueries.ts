@@ -11,8 +11,8 @@ const agentService = new AgentService(httpClient);
 export const agentKeys = {
   draft: ["agent", "application", "draft"] as const,
   status: ["agent", "application", "status"] as const,
-  applications: (status: string | undefined, page: number, pageSize: number) =>
-    ["agent", "applications", status ?? "all", page, pageSize] as const,
+  applications: (status: string | undefined, page: number, pageSize: number, query: string) =>
+    ["agent", "applications", status ?? "all", page, pageSize, query] as const,
   application: (id: string) => ["agent", "application", id] as const,
 };
 
@@ -52,10 +52,15 @@ export function useAgentStatusQuery(enabled = true) {
   });
 }
 
-export function useAgentApplicationsQuery(status: string | undefined, page: number, pageSize: number) {
+export function useAgentApplicationsQuery(
+  status: string | undefined,
+  page: number,
+  pageSize: number,
+  query = "",
+) {
   return useQuery({
-    queryKey: agentKeys.applications(status, page, pageSize),
-    queryFn: () => agentService.listApplications(status, page, pageSize),
+    queryKey: agentKeys.applications(status, page, pageSize, query),
+    queryFn: () => agentService.listApplications(status, page, pageSize, query),
     placeholderData: (prev) => prev,
   });
 }

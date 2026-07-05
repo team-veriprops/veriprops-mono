@@ -8,15 +8,16 @@ import { AdminSubRole } from "@/types/admin";
 const adminService = new AdminService(httpClient);
 
 export const adminKeys = {
-  team: (page: number, pageSize: number) => ["admin", "team", page, pageSize] as const,
+  team: (page: number, pageSize: number, query: string, subRole: string) =>
+    ["admin", "team", page, pageSize, query, subRole] as const,
   invitations: (page: number, pageSize: number) => ["admin", "invitations", page, pageSize] as const,
   invitePreview: (token: string) => ["admin", "invite-preview", token] as const,
 };
 
-export function useAdminTeamQuery(page = 0, pageSize = 10) {
+export function useAdminTeamQuery(page = 0, pageSize = 10, query = "", subRole = "") {
   return useQuery({
-    queryKey: adminKeys.team(page, pageSize),
-    queryFn: async () => (await adminService.listTeam(page, pageSize)).data ?? null,
+    queryKey: adminKeys.team(page, pageSize, query, subRole),
+    queryFn: async () => (await adminService.listTeam(page, pageSize, query, subRole)).data ?? null,
     placeholderData: (prev) => prev,
   });
 }
@@ -32,8 +33,17 @@ export function useAdminInvitationsQuery(page = 0, pageSize = 10) {
 export function useInviteAdminMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ email, subRole }: { email: string; subRole: AdminSubRole }) =>
-      adminService.inviteAdmin(email, subRole),
+    mutationFn: ({
+      email,
+      subRole,
+      firstName,
+      lastName,
+    }: {
+      email: string;
+      subRole: AdminSubRole;
+      firstName?: string;
+      lastName?: string;
+    }) => adminService.inviteAdmin(email, subRole, firstName, lastName),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "invitations"] }),
   });
 }

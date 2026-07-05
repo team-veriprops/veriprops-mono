@@ -12,6 +12,7 @@ import {
   VerificationTier,
 } from "@/types/verification";
 import {
+  CustomerDashboard,
   CustomerEvidence,
   VerificationListItem,
   VerificationTracking,
@@ -48,6 +49,11 @@ export class VerificationService {
 
   listMine(page = 0, pageSize = 10): Promise<SuccessResponse<Page<VerificationListItem>>> {
     return this.http.get(`/verifications?page=${page}&pageSize=${pageSize}`);
+  }
+
+  /** Portal home summary (§9) — backend-derived counts + most-recent verifications. */
+  getSummary(): Promise<SuccessResponse<CustomerDashboard>> {
+    return this.http.get(`/verifications/summary`);
   }
 
   getTracking(id: string): Promise<SuccessResponse<VerificationTracking>> {

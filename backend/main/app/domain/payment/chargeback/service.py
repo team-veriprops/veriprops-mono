@@ -170,6 +170,14 @@ class ChargebackService:
     async def list_for_verification(self, verification_id: str):
         return await self._repo.list_for_verification(verification_id)
 
+    async def count_open(self) -> int:
+        """Unresolved chargebacks needing admin attention (§6a) — flagged or with a
+        rebuttal submitted but not yet won/lost."""
+        return await self._repo.count_by_status([
+            ChargebackStatus.FLAGGED.value,
+            ChargebackStatus.REBUTTAL_SUBMITTED.value,
+        ])
+
     # ── rebuttal pack (§6a.2) ─────────────────────────────────────
 
     async def _assemble_rebuttal_pack(self, verification_id: str, customer_id: str) -> dict:

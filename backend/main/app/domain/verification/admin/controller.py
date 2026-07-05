@@ -16,6 +16,7 @@ from main.app.domain.payment.chargeback.models import ChargebackDto, ResolveChar
 from main.app.domain.payment.chargeback.service import ChargebackService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
 from main.app.domain.verification.admin.models import (
+    AdminDashboardDto,
     CancelVerificationDto,
     SetDelayDto,
     VerificationDetailDto,
@@ -49,16 +50,26 @@ async def list_verifications(
     status: Optional[str] = Query(default=None),
     tier: Optional[str] = Query(default=None),
     state_region: Optional[str] = Query(default=None),
+    query: Optional[str] = Query(default=None),
     overdue_only: bool = Query(default=False),
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=10, ge=1, le=100),
     _admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
 ):
     result = await admin_service.list_verifications(
-        status=status, tier=tier, state_region=state_region,
+        status=status, tier=tier, state_region=state_region, query=query,
         overdue_only=overdue_only, page=page, page_size=page_size,
     )
     return SuccessResponse[Page[VerificationSummaryDto]](data=result)
+
+
+@admin_verification_router.get("/summary", response_model=SuccessResponse[AdminDashboardDto])
+async def get_dashboard_summary(
+    _admin_id: str = Depends(require_permission(Permission.VIEW_ADMIN_PANEL)),
+):
+    """Admin operations home summary (§6). Registered before ``/{verification_id}`` so the
+    literal path wins over the path-param route."""
+    return SuccessResponse[AdminDashboardDto](data=await admin_service.summary())
 
 
 @admin_verification_router.get("/{verification_id}", response_model=SuccessResponse[VerificationDetailDto])

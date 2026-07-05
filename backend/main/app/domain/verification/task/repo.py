@@ -75,6 +75,28 @@ class VerificationTaskRepo(
         )
         return int(await self._session.scalar(stmt) or 0)
 
+    async def count_pool_pending(self) -> int:
+        """Broadcast tasks sitting unclaimed in the open pool (admin dashboard §6.3)."""
+        stmt = select(func.count()).select_from(VerificationTask).where(
+            VerificationTask.deleted.is_(False),
+            VerificationTask.in_pool.is_(True),
+            VerificationTask.state == TaskState.PENDING.value,
+        )
+        return int(await self._session.scalar(stmt) or 0)
+
+    async def count_by_state_for_agent(self, agent_id: str) -> dict[str, int]:
+        """state → count over an agent's assigned tasks (agent dashboard §7)."""
+        stmt = (
+            select(VerificationTask.state, func.count())
+            .where(
+                VerificationTask.deleted.is_(False),
+                VerificationTask.assigned_agent_id == agent_id,
+            )
+            .group_by(VerificationTask.state)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {state: int(count) for state, count in rows}
+
     async def list_pool_expired(self, now: datetime) -> List[VerificationTask]:
         """Broadcast tasks still unclaimed past their pool timeout (§7.2 starvation)."""
         stmt = select(VerificationTask).where(

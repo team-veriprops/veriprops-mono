@@ -1,6 +1,6 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { Page, SuccessResponse } from "@/types/models";
-import { AgentTask, EvidenceItem, EvidenceKind } from "@/types/agentTask";
+import { AgentDashboard, AgentTask, EvidenceItem, EvidenceKind } from "@/types/agentTask";
 
 /**
  * Agent task-execution API. Mirrors the backend controller at
@@ -18,6 +18,11 @@ export class AgentTaskService {
     params.set("page", String(page));
     params.set("page_size", String(pageSize));
     return this.http.get(`${this.base}?${params.toString()}`);
+  }
+
+  /** Agent home summary (§7) — backend-derived counts over the agent's own tasks. */
+  getSummary(): Promise<SuccessResponse<AgentDashboard>> {
+    return this.http.get(`${this.base}/summary`);
   }
 
   accept(taskId: string): Promise<SuccessResponse<AgentTask>> {

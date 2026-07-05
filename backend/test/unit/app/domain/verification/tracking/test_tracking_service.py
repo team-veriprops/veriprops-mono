@@ -132,6 +132,59 @@ class TestSnapshot:
         assert lawyer.state_label == LAWYER_AWAITING_LABEL
 
 
+class TestDashboardSummary:
+    def _summary_service(self, counts, recent_rows):
+        svc = object.__new__(CustomerTrackingService)
+        svc._verification_repo = MagicMock()
+        svc._properties = MagicMock()
+        svc._verification_repo.count_by_status_for_customer = AsyncMock(return_value=counts)
+        svc._verification_repo.page_for_customer = AsyncMock(
+            return_value=(list(recent_rows), len(recent_rows))
+        )
+        svc._properties.get_model = AsyncMock(return_value=SimpleNamespace(address="1 Main St"))
+        return svc
+
+    async def test_rollups_are_derived_server_side(self):
+        counts = {
+            VerificationStatus.DRAFT.value: 2,
+            VerificationStatus.PAYMENT_PENDING.value: 1,
+            VerificationStatus.SUBMITTED.value: 1,
+            VerificationStatus.IN_PROGRESS.value: 3,
+            VerificationStatus.UNDER_REVIEW.value: 1,
+            VerificationStatus.PAID.value: 1,
+            VerificationStatus.COMPLETED.value: 4,
+        }
+        svc = self._summary_service(counts, [])
+        dto = await svc.summary("cust-1")
+
+        assert dto.total == 13
+        assert dto.draft == 2
+        assert dto.awaiting_payment == 2   # SUBMITTED + PAYMENT_PENDING
+        assert dto.in_progress == 5        # PAID + IN_PROGRESS + UNDER_REVIEW
+        assert dto.completed == 4
+        assert dto.status_counts[VerificationStatus.COMPLETED] == 4
+
+    async def test_recent_is_limited_and_projected(self):
+        now = Utils.datetime_now()
+        rows = [
+            SimpleNamespace(
+                id=f"v-{i}", vid=f"VP-{i}", tier=VerificationTier.STANDARD.value,
+                status=VerificationStatus.IN_PROGRESS.value, property_id="p-1",
+                sla_due_date=now.date(), date_created=now,
+            )
+            for i in range(5)
+        ]
+        svc = self._summary_service({VerificationStatus.IN_PROGRESS.value: 5}, rows)
+        dto = await svc.summary("cust-1")
+
+        assert len(dto.recent) == 5
+        assert dto.recent[0].status == VerificationStatus.IN_PROGRESS
+        # recent uses the dashboard limit, not the full list
+        svc._verification_repo.page_for_customer.assert_awaited_once()
+        _, kwargs = svc._verification_repo.page_for_customer.call_args
+        assert kwargs["limit"] == 5
+
+
 class TestEvidenceGate:
     async def test_evidence_feed_only_from_review_approved_tasks(self):
         tasks = [

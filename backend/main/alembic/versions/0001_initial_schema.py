@@ -351,6 +351,8 @@ def _create_admin_invitations():
         "admin_invitations",
         sa.Column("email", sa.String(length=254), nullable=False),
         sa.Column("email_normalized", sa.String(length=254), nullable=False),
+        sa.Column("first_name", sa.String(length=100), nullable=True),
+        sa.Column("last_name", sa.String(length=100), nullable=True),
         sa.Column("sub_role", sa.String(length=16), nullable=False),
         sa.Column("token_hash", sa.String(length=128), nullable=False),
         sa.Column("status", sa.String(length=16), nullable=False, server_default="PENDING"),

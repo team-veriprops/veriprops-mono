@@ -17,8 +17,13 @@ export class AdminService {
 
   constructor(private readonly http: HttpClient) {}
 
-  inviteAdmin(email: string, subRole: AdminSubRole): Promise<SuccessResponse<{ inviteUrl: string }>> {
-    return this.http.post(`${this.base}/invitations`, { email, subRole });
+  inviteAdmin(
+    email: string,
+    subRole: AdminSubRole,
+    firstName?: string,
+    lastName?: string,
+  ): Promise<SuccessResponse<{ inviteUrl: string }>> {
+    return this.http.post(`${this.base}/invitations`, { email, subRole, firstName, lastName });
   }
 
   listInvitations(page: number, pageSize: number): Promise<SuccessResponse<Page<AdminInvitationSummary>>> {
@@ -37,8 +42,18 @@ export class AdminService {
     return this.http.post(`${this.base}/invitations/accept`, { token });
   }
 
-  listTeam(page: number, pageSize: number): Promise<SuccessResponse<AdminTeamPage>> {
-    return this.http.get(`${this.base}/team?page=${page}&page_size=${pageSize}`);
+  listTeam(
+    page: number,
+    pageSize: number,
+    query?: string,
+    subRole?: string,
+  ): Promise<SuccessResponse<AdminTeamPage>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("page_size", String(pageSize));
+    if (query) params.set("query", query);
+    if (subRole) params.set("sub_role", subRole);
+    return this.http.get(`${this.base}/team?${params.toString()}`);
   }
 
   changeSubRole(userId: string, subRole: AdminSubRole): Promise<SuccessResponse<boolean>> {

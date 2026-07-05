@@ -70,6 +70,46 @@ def _make_service(verification):
     return svc
 
 
+class TestDashboardSummary:
+    def _summary_service(self, status_counts, recent_rows):
+        svc = object.__new__(AdminVerificationService)
+        svc._repo = MagicMock()
+        svc._property_repo = MagicMock()
+        svc._task_service = MagicMock()
+        svc._agents = MagicMock()
+        svc._chargebacks = MagicMock()
+        svc._repo.count_by_status = AsyncMock(return_value=status_counts)
+        svc._repo.count_overdue = AsyncMock(return_value=3)
+        svc._repo.page_admin = AsyncMock(return_value=(list(recent_rows), len(recent_rows)))
+        svc._property_repo.get_model = AsyncMock(return_value=None)
+        svc._task_service.count_pool_pending = AsyncMock(return_value=4)
+        svc._agents.count_pending_applications = AsyncMock(return_value=2)
+        svc._chargebacks.count_open = AsyncMock(return_value=1)
+        return svc
+
+    async def test_summary_aggregates_all_sources(self):
+        counts = {
+            VerificationStatus.PAID.value: 2,
+            VerificationStatus.IN_PROGRESS.value: 5,
+            VerificationStatus.COMPLETED.value: 10,
+        }
+        svc = self._summary_service(counts, [_verification()])
+        dto = await svc.summary()
+
+        assert dto.total == 17
+        assert dto.status_counts[VerificationStatus.IN_PROGRESS] == 5
+        assert dto.overdue == 3
+        assert dto.unassigned_pool_tasks == 4
+        assert dto.pending_agent_applications == 2
+        assert dto.open_chargebacks == 1
+        assert len(dto.recent) == 1
+        # overdue is computed against the SLA-active statuses only
+        _, kwargs = svc._repo.count_overdue.call_args
+        assert not kwargs  # positional call
+        active_arg = svc._repo.count_overdue.call_args.args[0]
+        assert VerificationStatus.IN_PROGRESS.value in active_arg
+
+
 class TestSlaHealth:
     def test_none_when_no_clock(self):
         svc = _make_service(_verification(status=VerificationStatus.PAID, due=None))

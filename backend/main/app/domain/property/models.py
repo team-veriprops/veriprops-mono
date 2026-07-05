@@ -13,7 +13,7 @@ from sqlalchemy import Column, Float, Index, String, Text
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-from main.appodus_utils.db.models import JSONB_VARIANT
+from main.appodus_utils.db.models import jsonb_variant
 
 
 class PropertyType(str, enum.Enum):
@@ -37,9 +37,9 @@ class Property(BaseEntity):
     longitude = Column(Float, nullable=True)
     place_id = Column(String(255), nullable=True)
     # Conditional facts (Land: size/use/survey status; Building: floors/age/occupancy/C-of-O).
-    details = Column(MutableDict.as_mutable(JSONB_VARIANT), nullable=True)
-    seller = Column(MutableDict.as_mutable(JSONB_VARIANT), nullable=True)
-    documents = Column(MutableList.as_mutable(JSONB_VARIANT), nullable=True)
+    details = Column(MutableDict.as_mutable(jsonb_variant()), nullable=True)
+    seller = Column(MutableDict.as_mutable(jsonb_variant()), nullable=True)
+    documents = Column(MutableList.as_mutable(jsonb_variant()), nullable=True)
 
     __table_args__ = (
         Index("ix_properties_customer_id", "customer_id"),

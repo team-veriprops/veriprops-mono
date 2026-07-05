@@ -39,6 +39,8 @@ export interface AdminTeamPage {
 export interface AdminInvitationSummary {
   id: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
   subRole: AdminSubRole;
   status: AdminInvitationStatus;
   invitedBy: string;
@@ -48,6 +50,8 @@ export interface AdminInvitationSummary {
 
 export interface InvitePreview {
   email: string;
+  firstName?: string;
+  lastName?: string;
   subRole: AdminSubRole;
   status: AdminInvitationStatus;
   expired: boolean;

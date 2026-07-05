@@ -82,6 +82,17 @@ export interface VerificationListItem {
   dateCreated: string;
 }
 
+/** Portal home summary (§9) — every count is derived by the backend. */
+export interface CustomerDashboard {
+  total: number;
+  draft: number;
+  awaitingPayment: number;
+  inProgress: number;
+  completed: number;
+  statusCounts: Partial<Record<VerificationStatus, number>>;
+  recent: VerificationListItem[];
+}
+
 /** SSE event names emitted by the backend (§4.9) — must match useVerificationStream. */
 export enum VerificationStreamEventName {
   STATUS_CHANGED = "status_changed",

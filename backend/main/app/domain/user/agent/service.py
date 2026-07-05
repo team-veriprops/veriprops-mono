@@ -172,11 +172,16 @@ class AgentService:
 
     # ── Admin approval queue ──────────────────────────────────────
 
+    async def count_pending_applications(self) -> int:
+        """Agent applications awaiting admin review (admin dashboard §6)."""
+        return await self._profile_repo.count_by_status(AgentApplicationStatus.PENDING.value)
+
     async def list_applications(
-        self, status: Optional[str] = None, page: int = 0, page_size: int = 10
+        self, status: Optional[str] = None, page: int = 0, page_size: int = 10,
+        query: Optional[str] = None,
     ) -> Page[AgentApplicationSummaryDto]:
         rows, total = await self._profile_repo.page_applications(
-            status=status, offset=page * page_size, limit=page_size
+            status=status, offset=page * page_size, limit=page_size, query=query,
         )
         items: List[AgentApplicationSummaryDto] = []
         for p in rows:

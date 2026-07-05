@@ -1,4 +1,6 @@
 import AdminVerificationDetail from "@components/admin/verifications/AdminVerificationDetail";
+import DrawerRoutePage from "@components/ui/DrawerRoutePage";
+import { ROUTES } from "@lib/routes";
 
 export default async function AdminVerificationDetailPage({
   params,
@@ -7,8 +9,10 @@ export default async function AdminVerificationDetailPage({
 }) {
   const { id } = await params;
   return (
-    <div className="p-4 sm:p-6">
-      <AdminVerificationDetail verificationId={id} />
-    </div>
+    <DrawerRoutePage title="Verification" reference={id} fallbackHref={ROUTES.ADMIN.VERIFICATIONS}>
+      <div className="p-6">
+        <AdminVerificationDetail verificationId={id} />
+      </div>
+    </DrawerRoutePage>
   );
 }

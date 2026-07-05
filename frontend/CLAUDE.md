@@ -44,6 +44,23 @@ pnpm vitest run -t "test name pattern"
 Admin here `frontend\src\components\admin\nav.ts` and Agents here `frontend\src\components\agents\nav.ts`.
 * **Compulsorily**: Make sure all routes in the app is declared and that various Menu sidebars are up to date.
 
+## Tables (DataTable)
+
+The shared table lives at [src/components/ui/table/DataTable.tsx](src/components/ui/table/DataTable.tsx). It is **controlled and presentational** — it fetches nothing and holds no query state.
+
+- The parent owns `{ page, query, orderBy, ...filters }` via `useSyncedQueryState` ([src/hooks/useSyncedQueryState.ts](src/hooks/useSyncedQueryState.ts)) so the state is URL-synced, and passes `searchValue`, `orderBy`, `filters`, and `updateFilters`. `updateFilters` must forward **all** keys it receives (not just `page`) to the query hook — search/sort/filter/pagination are emitted through that one callback.
+- Filters render **inside** the toolbar via the `filters` prop (a `TableFilter[]` — `{ key, label, value, options }`). Don't build a separate external filter bar.
+- Search, filtering, and pagination are **server-side**. The backend list endpoint accepts `page`/`page_size`/`query` (see the root [CLAUDE.md](../CLAUDE.md) pagination convention); the frontend service just forwards them. Do not filter client-side.
+- **Suspense rule (Next 16):** any `page.tsx` that renders a DataTable — or anything else reading `useSearchParams`/`useSyncedQueryState` — must wrap its client component in `<Suspense>`, or the page throws "missing-suspense-with-csr-bailout" on hard navigation.
+- Representative consumers: [src/components/admin/team/AdminTeamManagement.tsx](src/components/admin/team/AdminTeamManagement.tsx), [src/components/admin/verifications/AdminVerificationList.tsx](src/components/admin/verifications/AdminVerificationList.tsx), [src/components/admin/agents/AgentApplicationsAdmin.tsx](src/components/admin/agents/AgentApplicationsAdmin.tsx).
+
+## Drawers
+
+Record-detail views and one-off forms / centered modals use the shared right-side slide-over [src/components/ui/DetailDrawer.tsx](src/components/ui/DetailDrawer.tsx) (`side?: "right" | "left"`, default right; size via `DetailDrawerWidth`). Don't hand-roll `fixed inset-0` modals.
+
+- Deep-linkable detail **routes** wrap their content in [src/components/ui/DrawerRoutePage.tsx](src/components/ui/DrawerRoutePage.tsx) — open on mount, close → `router.back()` (with a fallback href) — so the URL stays deep-linkable and refresh-safe while presenting as a drawer.
+- Multi-step `WizardOverlay` flows (agent apply, portal submission/pay) stay **full-screen** — do not convert them to drawers.
+
 ## SEO (every public page)
 
 - Build a page's metadata with `buildMetadata({ title, description, path, image?, type?, noindex? })` from [src/lib/seo.ts](src/lib/seo.ts) — export it as `metadata` (static) or `generateMetadata` (dynamic). It sets canonical, Open Graph, Twitter, and robots from one place; don't hand-roll `Metadata`.

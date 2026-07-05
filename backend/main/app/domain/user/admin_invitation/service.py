@@ -50,7 +50,13 @@ class AdminInvitationService:
         self._audit_service = audit_service
 
     async def invite(
-        self, email: str, sub_role: AdminSubRole, invited_by: str, ip_address: Optional[str] = None
+        self,
+        email: str,
+        sub_role: AdminSubRole,
+        invited_by: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        ip_address: Optional[str] = None,
     ) -> str:
         """Create an invitation; returns the raw token for the caller to email."""
         raw_token = Utils.random_str(36)
@@ -58,6 +64,8 @@ class AdminInvitationService:
         invitation = await self._repo.create_return_model(CreateAdminInvitationDto(
             email=email,
             email_normalized=email.strip().lower(),
+            first_name=first_name,
+            last_name=last_name,
             sub_role=sub_role,
             token_hash=token_hash,
             invited_by=invited_by,
@@ -85,6 +93,8 @@ class AdminInvitationService:
             scenario = InviteAcceptScenario.NEW_USER
         return InvitePreviewDto(
             email=invitation.email,
+            first_name=invitation.first_name,
+            last_name=invitation.last_name,
             sub_role=AdminSubRole(invitation.sub_role),
             status=AdminInvitationStatus(invitation.status),
             expired=expired,
@@ -130,6 +140,8 @@ class AdminInvitationService:
             AdminInvitationSummaryDto(
                 id=r.id,
                 email=r.email,
+                first_name=r.first_name,
+                last_name=r.last_name,
                 sub_role=AdminSubRole(r.sub_role),
                 status=AdminInvitationStatus(r.status),
                 invited_by=r.invited_by,

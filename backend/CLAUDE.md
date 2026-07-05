@@ -83,6 +83,7 @@ A domain is **not considered complete** until:
 * Alembic migrations must never emit ALTER TABLE ... ADD FOREIGN KEY
 * Don't create duplicate indexes, prefer UniqueConstraint to create_index.
 * When mapping date/datetime, don't use DateTime or TIMESTAMP directly, instead use UTCDateTime in the file `backend/main/appodus_utils/db/models.py`
+* **JSON columns.** Plain JSON columns use the shared `JSONB_VARIANT` singleton (`Column(JSONB_VARIANT)`) — renders as JSONB on Postgres, JSON elsewhere. **Mutable JSON columns must use a fresh `jsonb_variant()` instance per column** — `Column(MutableDict.as_mutable(jsonb_variant()))`, `Column(MutableList.as_mutable(jsonb_variant()))`. Never pass the shared `JSONB_VARIANT` singleton to `as_mutable(...)`: `Mutable.as_mutable` installs a process-global listener that binds its coercion to every column whose type *is that same instance* (identity match), so reusing one instance leaks (e.g.) `MutableList` coercion onto unrelated dict columns and a `dict` assignment then raises `Attribute 'x' does not accept objects of type <class 'dict'>`. Both `JSONB_VARIANT` and `jsonb_variant()` live in `appodus_utils/db/models.py`; the type instance is irrelevant to generated DDL, so migrations keep using `JSONB_VARIANT`.
 * Always use the pattern implemented in alembic migrations here `backend\main\alembic\versions\0001_initial_schema.py`, including the use separate utility methods for each migration and the use of utility methods, and DRY principle.
 
 

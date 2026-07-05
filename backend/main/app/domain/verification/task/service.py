@@ -27,6 +27,7 @@ from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.models import UpdateVerificationDto, Verification
 from main.app.domain.verification.task.evidence.service import EvidenceService
 from main.app.domain.verification.task.models import (
+    AgentDashboardDto,
     CreateTaskDto,
     TaskAssignmentMode,
     UpdateTaskDto,
@@ -181,6 +182,26 @@ class VerificationTaskService:
         """Assigned/owned tasks for the agent dashboard (paged)."""
         return await self._repo.page_for_agent(
             agent_id, states, offset=page * page_size, limit=page_size
+        )
+
+    async def count_pool_pending(self) -> int:
+        """Unclaimed broadcast tasks in the open pool (admin dashboard §6.3)."""
+        return await self._repo.count_pool_pending()
+
+    async def agent_summary(self, agent_id: str) -> AgentDashboardDto:
+        """Agent home rollups (§7): the agent's own tasks counted by state, server-side."""
+        raw = await self._repo.count_by_state_for_agent(agent_id)
+        state_counts = {TaskState(s): c for s, c in raw.items()}
+        active = sum(raw.get(s, 0) for s in (
+            TaskState.ACCEPTED.value, TaskState.IN_PROGRESS.value, TaskState.REJECTED.value,
+        ))
+        return AgentDashboardDto(
+            assigned=raw.get(TaskState.ASSIGNED.value, 0),
+            active=active,
+            submitted=raw.get(TaskState.SUBMITTED.value, 0),
+            approved=raw.get(TaskState.APPROVED.value, 0),
+            total=sum(raw.values()),
+            state_counts=state_counts,
         )
 
     async def accept(self, task_id: str, agent_id: str) -> VerificationTask:

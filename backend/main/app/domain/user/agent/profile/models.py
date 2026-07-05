@@ -14,7 +14,7 @@ from sqlalchemy.ext.mutable import MutableList
 
 from main.app.core.state.status import AgentRole
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
+from main.appodus_utils.db.models import UTCDateTime, jsonb_variant
 
 
 class AgentApplicationStatus(str, enum.Enum):
@@ -32,9 +32,9 @@ class AgentProfile(BaseEntity):
 
     user_id = Column(String(36), nullable=False, index=True)
     # Roles the applicant is being reviewed for (PRD §3.1 step 1, multi-select).
-    roles = Column(MutableList.as_mutable(JSONB_VARIANT), nullable=False, default=list)
+    roles = Column(MutableList.as_mutable(jsonb_variant()), nullable=False, default=list)
     # Roles cleared by admin — the subset of ``roles`` the agent may work.
-    approved_roles = Column(MutableList.as_mutable(JSONB_VARIANT), nullable=False, default=list)
+    approved_roles = Column(MutableList.as_mutable(jsonb_variant()), nullable=False, default=list)
     status = Column(String(16), nullable=False, default=AgentApplicationStatus.PENDING.value, index=True)
     rejection_reason = Column(String(500), nullable=True)
     bio = Column(String(300), nullable=True)

@@ -54,6 +54,8 @@ def _invitation(**over):
         id="inv-1",
         email="new@example.com",
         email_normalized="new@example.com",
+        first_name="New",
+        last_name="Admin",
         sub_role=AdminSubRole.OPERATIONS.value,
         status=AdminInvitationStatus.PENDING.value,
         expires_at=Utils.datetime_now() + timedelta(hours=1),
@@ -69,6 +71,16 @@ class TestInvite:
         assert isinstance(raw, str) and len(raw) >= 20
         svc._repo.create_return_model.assert_awaited_once()
         assert svc._audit_service.schedule.call_args.kwargs["action"] == AuditActionType.ADMIN_INVITED
+
+    async def test_persists_first_and_last_name(self):
+        svc = _make_service()
+        await svc.invite(
+            "new@example.com", AdminSubRole.OPERATIONS, invited_by="super-1",
+            first_name="Ada", last_name="Lovelace",
+        )
+        create_dto = svc._repo.create_return_model.call_args.args[0]
+        assert create_dto.first_name == "Ada"
+        assert create_dto.last_name == "Lovelace"
 
 
 class TestPreview:

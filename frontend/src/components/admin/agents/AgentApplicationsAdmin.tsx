@@ -5,9 +5,9 @@ import { Badge } from "@3rdparty/ui/badge";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
 import { toast } from "@components/3rdparty/ui/use-toast";
-import { Column, DataTable } from "@components/ui/table/DataTable";
+import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import DetailDrawer, { DetailDrawerWidth } from "@components/ui/DetailDrawer";
-import { PageRequest } from "@/types/models";
+import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
 import { AgentApplicationStatus, AgentApplicationSummary } from "@/types/agent";
 import {
   useAgentApplicationQuery,
@@ -41,20 +41,38 @@ const columns: Column<AgentApplicationSummary & Record<string, unknown>>[] = [
   },
 ];
 
+interface AgentApplicationsTableState extends Record<string, unknown> {
+  page: number;
+  query: string;
+  status: string;
+}
+
 export default function AgentApplicationsAdmin() {
-  const [page, setPage] = useState(0);
-  const [status] = useState<string | undefined>(AgentApplicationStatus.PENDING);
+  const [tableState, updateTableState] = useSyncedQueryState<AgentApplicationsTableState>({
+    page: 0,
+    query: "",
+    status: AgentApplicationStatus.PENDING,
+  });
+  const page = tableState.page ?? 0;
+  const query = tableState.query ?? "";
+  const status = tableState.status ?? "";
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
   const pageSize = 10;
-  const { data: pageData, isLoading, isError, error } = useAgentApplicationsQuery(status, page, pageSize);
+  const { data: pageData, isLoading, isError, error } = useAgentApplicationsQuery(
+    status || undefined,
+    page,
+    pageSize,
+    query,
+  );
   const { data: detail } = useAgentApplicationQuery(selectedId);
   const approve = useApproveAgentMutation();
   const reject = useRejectAgentMutation();
 
-  const updateFilters = (updates: Partial<PageRequest>) => {
-    if (updates.page !== undefined) setPage(updates.page);
+  const updateFilters = (updates: TableFilterUpdate) => {
+    updateTableState(updates as Partial<AgentApplicationsTableState>);
   };
 
   const onApprove = async () => {
@@ -90,6 +108,15 @@ export default function AgentApplicationsAdmin() {
         columns={columns}
         currentPage={page}
         updateFilters={updateFilters}
+        searchValue={query}
+        filters={[
+          {
+            key: "status",
+            label: "Status",
+            value: status,
+            options: Object.values(AgentApplicationStatus).map((s) => ({ label: s, value: s })),
+          },
+        ]}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
