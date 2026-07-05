@@ -433,6 +433,8 @@ def _create_verifications():
         sa.Column("sla_due_date", sa.Date(), nullable=True),
         # Admin operational hold (§7.5) — a flag, not a state (see Verification model).
         sa.Column("paused", sa.Boolean(), nullable=False, server_default="false"),
+        # Public VID-lookup visibility (§13.1 "Public" sharing mode).
+        sa.Column("public_lookup_enabled", sa.Boolean(), nullable=False, server_default="false"),
         *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("vid", name="uq_verifications_vid"),
     )
@@ -716,6 +718,28 @@ def _create_notification_preferences():
     op.create_index("ix_notif_prefs_user", "notification_preferences", ["user_id"], unique=False)
 
 
+def _create_verification_shares():
+    # Tokenised, revocable, time-limited report shares (§13.2).
+    op.create_table(
+        "verification_shares",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("share_type", sa.String(length=16), nullable=False),
+        sa.Column("token", sa.String(length=64), nullable=False),
+        sa.Column("recipient_email", sa.String(length=254), nullable=True),
+        sa.Column("expires_at", UTCDateTime, nullable=True),
+        sa.Column("revoked_at", UTCDateTime, nullable=True),
+        sa.Column("first_viewed_at", UTCDateTime, nullable=True),
+        sa.Column("disclaimer_acked_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+        sa.UniqueConstraint("token", name="uq_verification_shares_token"),
+    )
+    op.create_index("ix_verification_shares_id", "verification_shares", ["id"], unique=True)
+    op.create_index(
+        "ix_verification_shares_verification", "verification_shares", ["verification_id"], unique=False
+    )
+    op.create_index("ix_verification_shares_token", "verification_shares", ["token"], unique=False)
+
+
 def _create_report_acknowledgements():
     # Customer access-gate acknowledgement, recorded against the report version (§10.1).
     op.create_table(
@@ -922,6 +946,7 @@ _TABLE_BUILDERS = [
     ("task_evidence", _create_task_evidence),
     ("trust_score_weight_config", _create_trust_score_weight_config),
     ("reports", _create_reports),
+    ("verification_shares", _create_verification_shares),
     ("report_acknowledgements", _create_report_acknowledgements),
     ("conversations", _create_conversations),
     ("conversation_participants", _create_conversation_participants),

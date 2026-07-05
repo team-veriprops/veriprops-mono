@@ -71,6 +71,19 @@ class VerificationTier(str, enum.Enum):
     PREMIUM = "PREMIUM"
 
 
+class ShareType(str, enum.Enum):
+    """How a released report is shared beyond the owning customer (PRD §13.2).
+
+    ``LINK_SUMMARY`` — anyone holding the tokenised link sees the public *summary*.
+    ``NAMED_FULL`` — a specific email recipient sees the *full* report, after a one-time
+    disclaimer acknowledgement. Both are time-limited and revocable. (Private = no share
+    row; Public = the verification's ``public_lookup_enabled`` flag on the VID lookup.)
+    """
+
+    LINK_SUMMARY = "LINK_SUMMARY"
+    NAMED_FULL = "NAMED_FULL"
+
+
 class AgentRole(str, enum.Enum):
     """Agent / task role (PRD §1.4, §7.3)."""
 

@@ -38,6 +38,8 @@ class MessageContext(str, Enum):
     DISPUTE_RESOLUTION_OUTCOME = "DISPUTE_RESOLUTION_OUTCOME"    # dispute_resolved — REJECTED / FULL_REFUND / PARTIAL_RECHECK
     PAYOUT_HOLD_REASON = "PAYOUT_HOLD_REASON"                    # payout_held — admin-supplied hold reason
     ABANDONMENT_VID = "ABANDONMENT_VID"                          # abandonment_recovery — VID of the abandoned verification
+    SHARE_VID = "SHARE_VID"                                      # report_share — VID of the shared verification
+    SHARE_URL = "SHARE_URL"                                      # report_share — tokenised link to the shared report
     BROADCAST_SUBJECT = "BROADCAST_SUBJECT"                      # admin_broadcast — subject line
     BROADCAST_BODY_HTML = "BROADCAST_BODY_HTML"                  # admin_broadcast — HTML body
 

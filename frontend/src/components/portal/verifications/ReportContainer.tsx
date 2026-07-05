@@ -1,6 +1,7 @@
 "use client";
 
-import { BadgeCheck, Download, HelpCircle, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { BadgeCheck, Download, RefreshCw, Share2 } from "lucide-react";
 import { Button } from "@3rdparty/ui/button";
 import { Card, CardContent } from "@3rdparty/ui/card";
 import { CopyText } from "@components/ui/CopyText";
@@ -11,20 +12,10 @@ import {
   useReportQuery,
 } from "@components/portal/libs/useReportQueries";
 import { reportService } from "@components/portal/libs/useReportQueries";
+import { ReportShareModal } from "@components/portal/verifications/ReportShareModal";
+import { ReportView } from "@components/portal/verifications/ReportView";
 import { CustomerReport } from "@/types/report";
 import { cn } from "@lib/utils";
-
-// §3.5 legal footer — shown on every report page and PDF page (parity, §10.2).
-const LEGAL_FOOTER =
-  "This report represents a professional opinion, not a legal guarantee. Findings are based on " +
-  "information available at the time of verification. Veriprops — Jurisdiction: Nigeria. " +
-  '"We reduce uncertainty. We do not eliminate it."';
-
-const BAND_CLASS: Record<string, string> = {
-  Safe: "text-emerald-600",
-  Caution: "text-amber-600",
-  "High Risk": "text-red-600",
-};
 
 export default function ReportContainer({ verificationId }: { verificationId: string }) {
   const { data, isLoading, isError } = useReportQuery(verificationId);
@@ -58,23 +49,7 @@ export default function ReportContainer({ verificationId }: { verificationId: st
               )}
 
               <Header report={report} verificationId={verificationId} />
-              <Verdict report={report} />
-              <TrustScore report={report} />
-
-              <div className="mt-4 space-y-2">
-                {report.sections
-                  .filter((s) => !s.isLegalOpinion || legalOpinionEnabled)
-                  .map((s) => (
-                    <details key={s.key} className="rounded-lg border p-3" open={s.key === "executive_summary"}>
-                      <summary className="cursor-pointer text-sm font-semibold">{s.title}</summary>
-                      <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">{s.body}</p>
-                    </details>
-                  ))}
-              </div>
-
-              <p className="mt-6 border-t pt-3 text-[11px] leading-relaxed text-muted-foreground">
-                {LEGAL_FOOTER}
-              </p>
+              <ReportView report={report} legalOpinionEnabled={legalOpinionEnabled} />
             </div>
           </>
         )}
@@ -104,6 +79,7 @@ function AccessGate({ onAccept, pending }: { onAccept: () => void; pending: bool
 }
 
 function Header({ report, verificationId }: { report: CustomerReport; verificationId: string }) {
+  const [shareOpen, setShareOpen] = useState(false);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -128,41 +104,19 @@ function Header({ report, verificationId }: { report: CustomerReport; verificati
             <Download className="size-4" /> Download PDF
           </a>
         </Button>
+        <Button size="sm" variant="outline" onClick={() => setShareOpen(true)} data-testid="report-share">
+          <Share2 className="size-4" /> Share
+        </Button>
         <Button size="sm" variant="outline" disabled title="Available soon">
           <RefreshCw className="size-4" /> Request Re-check
         </Button>
       </div>
-    </div>
-  );
-}
-
-function Verdict({ report }: { report: CustomerReport }) {
-  return (
-    <Card className="mt-4">
-      <CardContent className="pt-6">
-        <p className="text-base leading-relaxed">{report.verdict}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TrustScore({ report }: { report: CustomerReport }) {
-  const band = report.trustBand ?? "";
-  return (
-    <div className="mt-4 flex items-center gap-4 rounded-lg border p-4">
-      <div className="text-center">
-        <div className={cn("text-3xl font-bold", BAND_CLASS[band])}>{report.trustScore ?? "—"}</div>
-        <div className="text-[10px] uppercase text-muted-foreground">/ 100</div>
-      </div>
-      <div className="min-w-0">
-        <div className={cn("flex items-center gap-1 font-semibold", BAND_CLASS[band])}>
-          {band}
-          <span title="90+ Safe · 60–89 Caution · 0–59 High Risk">
-            <HelpCircle className="size-3.5 text-muted-foreground" />
-          </span>
-        </div>
-        <p className="text-sm text-muted-foreground">{report.trustMeaning}</p>
-      </div>
+      <ReportShareModal
+        verificationId={verificationId}
+        vid={report.vid}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
     </div>
   );
 }

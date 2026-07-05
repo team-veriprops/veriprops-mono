@@ -94,6 +94,14 @@ class VerificationService:
     async def get_owned(self, verification_id: str, customer_id: str) -> Verification:
         return await self._require_owned(verification_id, customer_id)
 
+    async def get_by_id(self, verification_id: str) -> Verification:
+        """Ownership-free fetch for internal service callers (e.g. tokenised report shares,
+        where the share token — not the JWT — is the authorization)."""
+        verification = await self._repo.get_model(verification_id)
+        if not verification:
+            raise ResourceNotFoundException(resource="verification")
+        return verification
+
     # ── Pricing quote (PRD §5.2) ──────────────────────────────────
 
     def quote(self, tier: VerificationTier, currency: TransactionCurrency) -> PriceQuoteDto:

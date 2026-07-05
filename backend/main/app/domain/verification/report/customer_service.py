@@ -66,11 +66,26 @@ class CustomerReportService:
         provider = self._pdf_factory.get_active_provider()
         return provider.render(self._to_pdf_context(content))
 
+    async def build_shared_content(self, verification_id: str) -> CustomerReportDto:
+        """The full released report for a named-recipient share (§13.2) — the share token
+        is the authorization, so no customer-ownership gate. Acknowledgement is handled by
+        the share's own disclaimer, not the customer access gate."""
+        v = await self._verifications.get_by_id(verification_id)
+        return await self._content_from_verification(v)
+
     # ── helpers ───────────────────────────────────────────────────
 
     async def _build(self, verification_id: str, customer_id: str):
         v = await self._verifications.get_owned(verification_id, customer_id)
+        content = await self._content_from_verification(v)
         report = await self._reports.get_released(verification_id)
+        content.acknowledged = await self._acks.is_acknowledged(
+            customer_id, verification_id, report.report_version
+        )
+        return content, report
+
+    async def _content_from_verification(self, v) -> CustomerReportDto:
+        report = await self._reports.get_released(v.id)
         if report is None:
             raise ResourceNotFoundException(
                 resource="report", message="No released report is available for this verification yet."
@@ -80,15 +95,10 @@ class CustomerReportService:
         if v.property_id:
             prop = await self._properties.get_model(v.property_id)
             address = prop.address if prop else None
-
-        content = build_report_content(
+        return build_report_content(
             report=report, vid=v.vid, tier=tier, address=address,
             legal_opinion_enabled=settings.LEGAL_OPINION_ENABLED,
         )
-        content.acknowledged = await self._acks.is_acknowledged(
-            customer_id, verification_id, report.report_version
-        )
-        return content, report
 
     def _to_pdf_context(self, content: CustomerReportDto) -> ReportPdfContext:
         return ReportPdfContext(

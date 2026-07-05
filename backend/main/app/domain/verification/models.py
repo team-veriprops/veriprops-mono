@@ -49,6 +49,10 @@ class Verification(BaseEntity):
     # unaffected so work resumes cleanly. Set/cleared by the admin control panel.
     paused = Column(Boolean, nullable=False, server_default="false")
 
+    # Public VID-lookup visibility (§13.1/§13.2 "Public" mode): when true, anyone who
+    # knows the VID sees the report *summary* at /verify/{vid}. Default private.
+    public_lookup_enabled = Column(Boolean, nullable=False, server_default="false")
+
     __table_args__ = (
         Index("ix_verifications_status", "status"),
         Index("ix_verifications_customer", "customer_id"),
@@ -75,6 +79,7 @@ class UpdateVerificationDto(Object):
     consent_snapshot_id: Optional[str] = None
     draft_step: Optional[int] = None
     draft_payload: Optional[str] = None
+    public_lookup_enabled: Optional[bool] = None
 
 
 class SearchVerificationDto(PageRequest, BaseQueryDto):

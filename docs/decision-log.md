@@ -625,3 +625,89 @@ all now fixed:
 3. **Get-after-create returns None.** `ReportService.release` re-fetched a report created in the same
    uncommitted transaction (`get_model(report.id)` → `None` → crash). It now sets the timestamp on the
    attached row and returns it directly.
+
+---
+
+## Decision: D26 — Re-check pricing = % of original; tier-upgrade = tier-price delta (S18 / Phase 14)
+
+### Context
+PRD Open Question #4 (line 1554) explicitly leaves the Phase-14 re-check pricing model unresolved
+(flat / per-agent / % of original). §14.2 fixes tier-upgrade pricing as "delta pricing only".
+
+### Chosen Option
+Re-check fee = **a configurable percentage of the original tier price** (`recheck_price_pct`, default
+30, held in the S18 system-config store; helper `pricing.recheck_price_kobo`). Tier-upgrade charge =
+**`price(to_tier) − price(from_tier)`** (`pricing.upgrade_delta_kobo`), reusing the existing per-tier
+prices.
+
+### Rationale
+A percentage scales fairly across tiers (a Premium re-check reruns costlier scoped work than a Basic
+one) and reconciles cleanly to the kobo. Centralised in `pricing.py` so the Phase-18 admin pricing API
+is a single-call-site swap, consistent with the provisional-pricing posture.
+
+### Revisit
+Switch models once the Phase-18 admin pricing API lands; the percentage lives in system-config already.
+
+---
+
+## Decision: D27 — Named-recipient sharing built in S17 (full §13.2 table)
+
+### Context
+§13.2 defines four sharing modes; the named-recipient mode (full report emailed to a specific address,
+time-limited, revocable, disclaimer-ack on first view) is the largest sub-surface.
+
+### Chosen Option
+**Build all four modes now**, including named-recipient: a tokenised `VerificationShare` row emails a
+magic link; a public full-report-by-token view is gated on a one-time disclaimer acknowledgement;
+shares are revocable (token dead immediately) with a 30-day default expiry.
+
+### Tradeoffs
+- Pros: the whole proof-sharing surface ships together; §13.3 revocation exit criterion exercised end-to-end.
+- Cons: larger S17 (public full-report view + per-recipient ack + share-invite email template).
+
+### Revisit
+N/A.
+
+---
+
+## Decision: D28 — Build a minimal admin System-Config domain now (mirrors D14)
+
+### Context
+§14 references `dispute_window_days` (default 30), re-check pricing, and upgrade deltas as
+admin-configured values. Full Mission-Control system config is Phase 18 (S22).
+
+### Chosen Option
+**Build a minimal `system_config` domain now** (user direction): a typed key-value store
+(`SystemConfig(key, value_json, description)`) with `ConfigService.get_int/get_bool/set`, seeded
+idempotently by `DataSeeder`, and an RBAC-gated admin CRUD. Holds `dispute_window_days`,
+`recheck_price_pct`, `agent_dispute_defence_hours`. Pulls the config-store portion of Phase 18 forward,
+exactly as D14 pulled the trust-weights CRUD forward.
+
+### Tradeoffs
+- Pros: §14 values are admin-configurable at MVP; S22 builds the broader ops config on this base.
+- Cons: front-runs part of Phase 18; S22 re-scoped to exclude the config store delivered here.
+
+### Revisit
+S22 (Phase 18) objective updated at its run to build on this store.
+
+---
+
+## Decision: D29 — Report re-versioning via version_label + revision_kind (S18 / Phase 14)
+
+### Context
+§10.1/§14 want the report to display v1.0 / v1.1 (minor admin revision) / v2.0 (re-check) / v3.0 (tier
+upgrade). The `Report` model carries only a monotonic integer `report_version`.
+
+### Chosen Option
+**Add a `version_label` (string) + `revision_kind` enum (INITIAL / ADMIN_REVISION / RECHECK /
+TIER_UPGRADE) to `Report`.** `ReportService.release(..., revision_kind=…)` computes the label
+(INITIAL→"1.0", ADMIN_REVISION→minor bump, RECHECK/TIER_UPGRADE→+1 major). The integer
+`report_version` stays the monotonic counter and PK-ordering key; the label is the display convention.
+
+### Rationale
+Keeps the existing monotonic counter (and its supersede/versioning tests) intact while giving the
+customer-facing semantic label the PRD specifies. Decoupled so the label scheme can evolve without
+touching the counter.
+
+### Revisit
+N/A.

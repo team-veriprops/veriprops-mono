@@ -79,6 +79,7 @@ export const ROUTES = {
   },
   PUBLIC: {
     VERIFY: (id: string) => `/verify/${id}`,
+    SHARED: (token: string) => `/shared/${token}`,
   },
   PORTAL: {
     GATE: '/portal',
