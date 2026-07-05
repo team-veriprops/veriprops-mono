@@ -304,7 +304,27 @@ Medium-High (legal gate).
 ### Commit Message
 `feat(report): final report experience, branded PDF, versioning, legal-opinion framing`
 
-## Slices S15–S23 — Harden & Scale (Phases 11–19)
+## Slice S15 — Phase 11 Communication Layer *(expanded at run; full, D19)*
+### Objective
+Structured, admin-mediated, fraud-scanned in-app chat: Customer↔Admin + task-tagged Admin↔Agent +
+general support threads, the §4.7 fraud-hold state machine, admin hold review, structured
+clarifications, per-user SSE, first-name-only identity.
+### Files Impacted
+new `app/domain/communication/{conversation,conversation_participant,chat_message}/**` +
+`communication/{fraud_scan,service,controller}.py`; `app/core/state/{status,machine}.py`
+(ChatMessageState); `app/core/realtime/user_emitter.py`; `ReviewService.reject_task` (auto-post hook);
+`0001` (+3 tables); frontend `types/chat`, `components/chat/**`, thread/support/held pages, `AppShell` (ChatButton).
+### Tests Required
+fraud-scan rules + fast lane; message state-machine transitions; send hold vs deliver; admin
+approve/reject journey; first-name-only sender projection (§11.3); clarification OPEN status;
+agent authz (assigned + read-only-when-approved); frontend service contract.
+### Acceptance Criteria
+No customer endpoint leaks agent last name/phone/email; held→approved/rejected verified;
+routine messages bump the Chat counter only.
+### Commit Message
+`feat(comms): admin-mediated chat, fraud-hold state machine, clarifications, per-user SSE`
+
+## Slices S16–S23 — Harden & Scale (Phases 12–19)
 
 | Slice | Phase | Scope (reqs) | Deps | Risk |
 |---|---|---|---|---|

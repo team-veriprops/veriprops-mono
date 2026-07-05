@@ -459,3 +459,107 @@ The Premium Legal Opinion framing is a hard go-live gate pending NBA counsel + l
 
 ### Revisit
 - Enable the flag once NBA sign-off + lawyer PI cover are recorded (§B items 15, 17).
+
+---
+
+## Decision: D19 — S15 delivers full Phase 11, including structured clarifications
+
+### Context
+Phase 11 spans the Customer↔Admin thread, the task-tagged Admin↔Agent thread, general support,
+and the §11.1 "structured, fraud-scanned clarification request/response" refinement.
+
+### Chosen Option
+**Full Phase 11** (user direction): all channels plus the clarification flow. Clarifications are
+modelled as `ChatMessage`s with `message_kind = CLARIFICATION_REQUEST/RESPONSE` and a
+`clarification_status` (OPEN→ANSWERED) — they run the same send-time fraud scan, so no separate
+pipeline is needed.
+
+### Tradeoffs
+- Pros: the whole mediated-comms surface ships together; clarifications reuse the message machine.
+- Cons: larger S15 UI + state than a threads-only cut.
+
+### Revisit
+- N/A.
+
+---
+
+## Decision: D20 — S16 routes the existing emitter + external dispatch through the event bus
+
+### Context
+S13 scattered `publish_verification_event(...)` calls at every mutation, and the outbound
+`VerificationMessages.send_*` methods are called ad hoc. §4.8 wants each domain event published
+**once**, with subscribers deciding surfacing. D15 promised the emitter's internals would be
+swapped for the bus without changing its public behaviour.
+
+### Chosen Option
+**Full refactor** (user direction): S16 introduces `app/core/events` and replaces the scattered
+emitter calls and the best-effort external-dispatch calls with a single `event_bus.publish(...)`.
+A `RealtimeSubscriber` re-emits the same SSE event names (S13 frontend hooks untouched); a
+`NotificationSubscriber` fans out per the rule table; a `ChatCounterSubscriber` handles §12.3.
+
+### Tradeoffs
+- Pros: one publish point; honours the no-orphan/refactor-everything non-negotiable.
+- Cons: touches task/review/payment/tracking services — more churn now.
+
+### Revisit
+- Redis fan-out replaces the in-process dispatcher internals later without an API change.
+
+---
+
+## Decision: D21 — Rule table covers all §12.2 events; publish only what exists today
+
+### Context
+Several §12.2 notification triggers (dispute, payout, re-check) reference source domains not yet
+built (S18/S19).
+
+### Chosen Option
+**Declare the full §12.2 set** in the event enum + declarative rule table, but wire `publish(...)`
+calls only at choke points that exist today (payment, status, agents-assigned, evidence, report
+ready/versioned, task-rejected, conflict, no-show, fraud-message, new chat message). Dispute /
+payout / re-check entries are declared-but-unfired until their slices add the sources.
+
+### Tradeoffs
+- Pros: the routing table is complete and reviewable now; later slices just publish an existing event.
+- Cons: some rule-table rows are dormant until S17–S19.
+
+### Revisit
+- N/A — later slices publish the already-declared events.
+
+---
+
+## Decision: D22 — Chat is text + fraud-scan only in S15; attachments deferred
+
+### Context
+§11.1 allows attachments in the Customer↔Admin thread. Full presigned upload is a real sub-surface.
+
+### Chosen Option
+**Text + fraud-scan only** this slice (user direction). The `attachments` JSONB column is kept on
+`chat_messages` for forward-compat, but no upload UI/endpoint is built. Attachment upload is a
+documented follow-up (reuses the S11 storage facade when built).
+
+### Tradeoffs
+- Pros: S15 stays focused on the state-machine + routing correctness (the risky part).
+- Cons: attachments arrive in a follow-up, not this slice.
+
+### Revisit
+- Wire presigned attachment upload behind the existing storage facade in a later slice.
+
+---
+
+## Decision: D23 — Minimal SLA-breach emitter sweep so the notification actually fires
+
+### Context
+There is no SLA-breach detector firing today — only the S4 business-day calculator and the admin
+SLA-health projection. Without an emitter the §12.2 SLA-breach notification would be dark.
+
+### Chosen Option
+**Add a minimal SLA-breach sweep** (S16) reusing the S10 scheduler pattern (`ALWAYS_NEW` session,
+disabled under test, on-demand dev endpoint): a periodic job finds newly-overdue verifications and
+publishes `SlaBreached` **once** per verification through the event bus.
+
+### Tradeoffs
+- Pros: the SLA-breach notification is real, not a dormant rule-table row.
+- Cons: adds one more scheduled sweep to maintain.
+
+### Revisit
+- Fold into a richer ops/analytics scheduler in S22 if needed.

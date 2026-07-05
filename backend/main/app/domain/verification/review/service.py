@@ -122,8 +122,30 @@ class ReviewService:
             from_state=task.state, to_state=TaskState.REJECTED.value,
             details={"role": role.value, "reason": reason},
         )
+        # A rejection reason auto-posts to the admin↔agent thread, tagged to that task (§11.1).
+        await self._auto_post_rejection(verification_id, task, role, reason)
         await self._derive_and_persist(verification_id, admin_id)
         return await self._tasks.get_model(task.id)
+
+    async def _auto_post_rejection(
+        self, verification_id: str, task, role: AgentRole, reason: str
+    ) -> None:
+        """Best-effort system auto-post of the revision instructions (§11.1). Resolved lazily
+        so the review service never hard-depends on the communication layer; a comms failure
+        must never break the rejection transaction."""
+        try:
+            from kink import di
+            from main.app.domain.communication.service import CommunicationService
+
+            comms = di[CommunicationService]
+            await comms.auto_post_agent(
+                verification_id,
+                task.assigned_agent_id,
+                f"Revision requested for the {role.value.title()} task: {reason}",
+                task_id=task.id,
+            )
+        except Exception:  # noqa: BLE001 — auto-post is best-effort, never fatal
+            pass
 
     # ── Release gate (§8.3, §8.6) ─────────────────────────────────
 

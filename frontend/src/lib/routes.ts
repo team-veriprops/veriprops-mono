@@ -48,6 +48,7 @@ export const ROUTES = {
     VERIFICATIONS: '/admin/verifications',
     VERIFICATION_DETAIL: (vid: string) => `/admin/verifications/${vid}`,
     VERIFICATION_MESSAGES: (vid: string) => `/admin/verifications/${vid}/messages`,
+    HELD_MESSAGES: '/admin/messages',
     REPORT_REVIEW: (vid: string) => `/admin/verifications/${vid}/report-review`,
     TASK_REVIEW: (taskId: string) => `/admin/tasks/${taskId}/review`,
     CONFIG: '/admin/config',
@@ -97,6 +98,7 @@ export const ROUTES = {
     NOTIFICATIONS: '/portal/notifications',
     PAYMENTS: '/portal/account/payments',
     SUPPORT: '/portal/support',
+    CHAT: '/portal/chat',
   },
 
   FORBIDDEN: '/forbidden',

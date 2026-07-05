@@ -48,6 +48,21 @@ class ReportState(str, enum.Enum):
     SUPERSEDED = "SUPERSEDED"
 
 
+class ChatMessageState(str, enum.Enum):
+    """In-app chat message lifecycle (PRD §4.7, §11.2).
+
+    Every message is scanned at send time. Unflagged messages take the fast lane
+    straight to ``DELIVERED``; a flagged message is ``HELD`` for admin review, then
+    either ``DELIVERED`` (approved) or ``BLOCKED`` (rejected). ``DELIVERED`` and
+    ``BLOCKED`` are terminal.
+    """
+
+    PENDING_SCAN = "PENDING_SCAN"
+    HELD = "HELD"
+    DELIVERED = "DELIVERED"
+    BLOCKED = "BLOCKED"
+
+
 class VerificationTier(str, enum.Enum):
     """Verification tier (PRD §1.4)."""
 

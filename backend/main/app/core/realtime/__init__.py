@@ -14,9 +14,17 @@ from main.app.core.realtime.emitter import (
     VerificationEventType,
     publish_verification_event,
 )
+from main.app.core.realtime.user_emitter import (
+    UserEventEmitter,
+    UserEventType,
+    publish_user_event,
+)
 
 __all__ = [
     "VerificationEventEmitter",
     "VerificationEventType",
     "publish_verification_event",
+    "UserEventEmitter",
+    "UserEventType",
+    "publish_user_event",
 ]

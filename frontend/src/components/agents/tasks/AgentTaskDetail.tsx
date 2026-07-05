@@ -15,6 +15,8 @@ import {
 } from "@3rdparty/ui/select";
 import { toast } from "@components/3rdparty/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
+import { ROUTES } from "@lib/routes";
 import { TaskState } from "@/types/adminVerification";
 import { EvidenceKind, ROLE_FORM_FIELDS } from "@/types/agentTask";
 import {
@@ -92,6 +94,9 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
           </div>
         </div>
         <div className="flex gap-2">
+          <Button asChild variant="secondary" data-testid="detail-messages">
+            <Link href={ROUTES.AGENT.TASK_MESSAGES(task.id)}>Messages</Link>
+          </Button>
           {(task.state === TaskState.PENDING || task.inPool) && (
             <Button
               onClick={async () => {

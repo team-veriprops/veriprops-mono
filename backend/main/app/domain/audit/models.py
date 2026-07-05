@@ -76,6 +76,11 @@ class AuditActionType(str, enum.Enum):
     KYC_ADMIN_REVIEWED = "KYC_ADMIN_REVIEWED"
     # ── Admin config ───────────────────────────────────────────────
     ADMIN_CONFIG_CHANGED = "ADMIN_CONFIG_CHANGED"
+    # ── Communication layer (§11, S15) ─────────────────────────────
+    MESSAGE_SENT = "MESSAGE_SENT"
+    MESSAGE_HELD = "MESSAGE_HELD"
+    MESSAGE_APPROVED = "MESSAGE_APPROVED"
+    MESSAGE_REJECTED = "MESSAGE_REJECTED"
     # ── Data retention / erasure (S58) ─────────────────────────────
     DATA_ERASURE_REQUESTED = "DATA_ERASURE_REQUESTED"
     DATA_ERASURE_APPROVED = "DATA_ERASURE_APPROVED"

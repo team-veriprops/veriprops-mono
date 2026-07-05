@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Dict, Set
 
-from main.app.core.state.status import ReportState, TaskState, VerificationStatus
+from main.app.core.state.status import ChatMessageState, ReportState, TaskState, VerificationStatus
 from main.appodus_utils.exception.exceptions import IllegalStateTransitionException
 
 
@@ -127,4 +127,24 @@ REPORT_TERMINAL: Set[str] = {_R.SUPERSEDED}
 report_state_machine = StateMachine(
     transitions=REPORT_TRANSITIONS,
     terminal=REPORT_TERMINAL,
+)
+
+
+# ── Chat-message state machine (PRD §4.7, §11.2) ──────────────────────────────
+#
+# Fast lane:  PENDING_SCAN → DELIVERED          (no flaggable content)
+# Held path:  PENDING_SCAN → HELD → DELIVERED    (admin approves a flagged message)
+#             PENDING_SCAN → HELD → BLOCKED      (admin rejects a flagged message)
+# Terminal:   DELIVERED, BLOCKED — a message settles exactly once.
+
+_M = ChatMessageState
+CHAT_MESSAGE_TRANSITIONS: Dict[str, Set[str]] = {
+    _M.PENDING_SCAN: {_M.DELIVERED, _M.HELD},
+    _M.HELD: {_M.DELIVERED, _M.BLOCKED},
+}
+CHAT_MESSAGE_TERMINAL: Set[str] = {_M.DELIVERED, _M.BLOCKED}
+
+chat_message_state_machine = StateMachine(
+    transitions=CHAT_MESSAGE_TRANSITIONS,
+    terminal=CHAT_MESSAGE_TERMINAL,
 )

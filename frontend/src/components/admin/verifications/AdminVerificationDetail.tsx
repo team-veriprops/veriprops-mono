@@ -233,6 +233,13 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => router.push(ROUTES.ADMIN.VERIFICATION_MESSAGES(verificationId))}
+            data-testid="open-messages"
+          >
+            Messages
+          </Button>
           {(summary.status === VerificationStatus.UNDER_REVIEW ||
             summary.status === VerificationStatus.COMPLETED) && (
             <Button

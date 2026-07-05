@@ -626,6 +626,65 @@ def _create_reports():
     op.create_index("ix_reports_state", "reports", ["state"], unique=False)
 
 
+def _create_conversations():
+    # Communication threads (§11.1): one per verification per channel + per-user general support.
+    op.create_table(
+        "conversations",
+        sa.Column("type", sa.String(length=20), nullable=False),
+        sa.Column("verification_id", sa.String(length=36), nullable=True),
+        sa.Column("subject", sa.String(length=200), nullable=True),
+        sa.Column("last_message_at", UTCDateTime, nullable=True),
+        sa.Column("closed", sa.Boolean(), nullable=False, server_default="false"),
+        # ``created_by`` (thread opener) comes from base_audit_columns.
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_conversations_id", "conversations", ["id"], unique=True)
+    op.create_index("ix_conversations_verification", "conversations", ["verification_id"], unique=False)
+
+
+def _create_conversation_participants():
+    # Per-user membership + read state — backs the Chat unread counter (§N.3).
+    op.create_table(
+        "conversation_participants",
+        sa.Column("conversation_id", sa.String(length=36), nullable=False),
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        sa.Column("role", sa.String(length=20), nullable=True),
+        sa.Column("last_read_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_conv_participants_id", "conversation_participants", ["id"], unique=True)
+    op.create_index("ix_conv_participants_user", "conversation_participants", ["user_id"], unique=False)
+    op.create_index(
+        "ix_conv_participants_conversation", "conversation_participants", ["conversation_id"], unique=False
+    )
+
+
+def _create_chat_messages():
+    # In-app messages + the §4.7 fraud-hold state machine.
+    op.create_table(
+        "chat_messages",
+        sa.Column("conversation_id", sa.String(length=36), nullable=False),
+        sa.Column("sender_user_id", sa.String(length=36), nullable=True),
+        sa.Column("sender_kind", sa.String(length=16), nullable=False, server_default="SYSTEM"),
+        sa.Column("body", sa.Text(), nullable=False),
+        sa.Column("task_id", sa.String(length=36), nullable=True),
+        sa.Column("state", sa.String(length=20), nullable=False, server_default="PENDING_SCAN"),
+        sa.Column("message_kind", sa.String(length=24), nullable=False, server_default="CHAT"),
+        sa.Column("clarification_status", sa.String(length=16), nullable=True),
+        sa.Column("flagged_categories", JSONB_VARIANT, nullable=True),
+        sa.Column("attachments", JSONB_VARIANT, nullable=True),
+        sa.Column("delivered_at", UTCDateTime, nullable=True),
+        sa.Column("held_at", UTCDateTime, nullable=True),
+        sa.Column("reviewed_by", sa.String(length=36), nullable=True),
+        sa.Column("reviewed_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_chat_messages_id", "chat_messages", ["id"], unique=True)
+    op.create_index("ix_chat_messages_conversation", "chat_messages", ["conversation_id"], unique=False)
+    op.create_index("ix_chat_messages_task", "chat_messages", ["task_id"], unique=False)
+    op.create_index("ix_chat_messages_state", "chat_messages", ["state"], unique=False)
+
+
 def _create_report_acknowledgements():
     # Customer access-gate acknowledgement, recorded against the report version (§10.1).
     op.create_table(
@@ -833,6 +892,9 @@ _TABLE_BUILDERS = [
     ("trust_score_weight_config", _create_trust_score_weight_config),
     ("reports", _create_reports),
     ("report_acknowledgements", _create_report_acknowledgements),
+    ("conversations", _create_conversations),
+    ("conversation_participants", _create_conversation_participants),
+    ("chat_messages", _create_chat_messages),
 ]
 
 

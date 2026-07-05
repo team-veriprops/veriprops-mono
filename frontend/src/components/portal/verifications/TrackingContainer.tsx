@@ -54,6 +54,17 @@ export default function TrackingContainer({ verificationId }: { verificationId: 
               </Card>
             )}
 
+            <div>
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={ROUTES.PORTAL.VERIFICATION_MESSAGES(verificationId)}
+                  data-testid="tracking-messages"
+                >
+                  Messages
+                </Link>
+              </Button>
+            </div>
+
             {STATE_REASSURANCE[t.status] && (
               <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />

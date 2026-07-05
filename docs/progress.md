@@ -170,8 +170,28 @@ status: running (S1–S4 foundation)
       verified: %PDF valid, legal footer on every page (7/7), QR embedded, tier-gated sections. Gaps: pixel-perfect
       HTML-CSS PDF + customer-vs-agent document appendix attribution deferred; Legal Opinion **build-only** until §B.
 
+- S15 Phase 11 — Communication layer *(full, incl. structured clarifications, D19)*.
+      Backend: new `app/domain/communication/` parent with one-entity-per-domain children — `conversation/`
+      (thread: CUSTOMER_ADMIN / ADMIN_AGENT / GENERAL_SUPPORT), `conversation_participant/` (per-user read
+      state → the §N.3 Chat unread counter), `chat_message/` (ChatMessage + §4.7 fraud-hold state). Pure
+      deterministic `fraud_scan.py` (phone/email/URL/banking/social/off-platform → categories; clean = fast
+      lane DELIVERED, any flag = HELD). `ChatMessageState` in `core/state/status.py` + transition table in
+      `machine.py` (PENDING_SCAN→{DELIVERED,HELD}; HELD→{DELIVERED,BLOCKED}; DELIVERED/BLOCKED terminal).
+      `CommunicationService` façade (ownership + thread resolution + send). Admin hold review
+      (`/admin/messages/held` + approve/reject, audit-logged). Structured clarifications (CLARIFICATION_
+      REQUEST/RESPONSE + clarification_status). Rejection reason auto-posts tagged to the task (§11.1,
+      best-effort hook in ReviewService). Per-user SSE (`UserEventEmitter` + `/chat/stream`). §11.3 identity
+      guard: customer-facing sender = first_name/avatar only. Read-only-when-approved for agents. Attachments
+      column kept, no upload (D22). 3 tables in 0001 (round-trip clean; `created_by` inherited from BaseEntity).
+      Frontend: `types/chat`, `chat-service` + `useChatQueries` (+`useChatRealtime`), `useUserStream`;
+      `ChatButton` in the top nav (Support→Chat→Notifications→Account, 9+ cap, hidden at 0); shared `ChatThread`;
+      thread pages (portal/agent/admin verification messages, `/portal/chat` list, `/portal/support` FAQ +
+      general support, `/admin/messages` hold queue); contextual Messages CTAs + nav items. Backend 627 tests
+      (+36); frontend 296 (+7); migration round-trip clean; tsc+lint clean. Gaps: attachments + customer
+      status-change auto-posts (land via the S16 event bus) + admin chat counter deferred.
+
 ## Current Slice
-- none — S13 (Phase 9) and S14 (Phase 10) delivered & committed. MVP cut line (Phases 0–10) complete.
+- S16 (Phase 12 notifications & event bus) — in progress. S15 (Phase 11) delivered & committed.
 
 ## Post-MVP hardening (S1–S14 review pass)
 - **Persona dashboards completed.** `/portal/dashboard` and `/admin/dashboard` did not exist (both

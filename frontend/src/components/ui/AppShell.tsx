@@ -28,6 +28,7 @@ import {
   CheckCircle2, LogOut, Menu, X
 } from "lucide-react";
 import NotificationBell from "@components/shared/notifications/NotificationBell";
+import ChatButton from "@components/chat/ChatButton";
 import PortalSwitcher from "@components/ui/PortalSwitcher";
 import { useLogoutMutation } from "@components/website/auth/libs/useAuthQueries";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
@@ -254,6 +255,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
           <TopNavBreadcrumb />
           <div className="flex items-center gap-1">
             <PortalSwitcher />
+            <ChatButton />
             <NotificationBell />
             <TopNavUserMenu
               user={user}
@@ -287,6 +289,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
           </div>
           <div className="flex items-center gap-1">
             <PortalSwitcher />
+            <ChatButton />
             <NotificationBell />
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"

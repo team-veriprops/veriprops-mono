@@ -1,18 +1,30 @@
-session_id: run-s13-s14-tracking-report
+session_id: run-s15-s16-comms-notifications
 command: resume
 
-status: idle
-phase: s14-complete
+status: running
+phase: s15-complete
 
-current_slice: null   # S13 (Phase 9) + S14 (Phase 10) delivered this resume — MVP cut line complete
-current_subtask: S13 and S14 complete, tested, committed. Next slice is S15 (Phase 11 communication layer).
+current_slice: S16   # Phase 12 notifications + event bus (full refactor, D20). S15 done + committed.
+current_subtask: "S15 (Phase 11 communication layer) delivered, tested, committed. Next: S16 backend
+  (event bus + subscribers + notification/preference domains + SLA-breach sweep + emitter/dispatch refactor)."
 
 # ── Recovery note (this resume) ───────────────────────────────────
 recovery:
-  recovered: "Uncommitted in-flight agent-domain repackaging (flat files -> one-entity-per-domain
-    child packages: profile/credential/coverage/kyc/application_draft) not captured in prior runtime
-    state. Verified green (agent 26 tests; full backend 455) and committed as 7cec5a5 before starting S10."
+  recovered: "Uncommitted post-MVP hardening pass (persona dashboard summary endpoints for all three
+    personas, StatCard, DrawerRoutePage, DataTable/TableToolbar server-side upgrades, DetailDrawer
+    left-side, JSON-column coercion + camel-model tests) documented in progress.md but not captured in
+    prior runtime state. Verified green (backend 595, frontend 289) and committed as f881754 before S15."
   config_note: "config.yaml is advisory (progress.md 'strict' note was stale)."
+
+# ── S15-S16 scope decisions (this resume) — see decision-log D19-D23 ─
+scope_decisions_s15_s16:
+  D19: "S15 = full Phase 11, including the §11.1 structured clarification request/response flow."
+  D20: "S16 = full event-bus refactor: S13 publish_verification_event + best-effort VerificationMessages
+        dispatch both become event-bus publishes (D15 'swap internals, not API'); publish once, fan out."
+  D21: "Notification enum + declarative rule table cover the full §12.2 set; publishes wire only at
+        choke points that exist today. Dispute/payout/re-check (S18/S19) declared-but-unfired."
+  D22: "Chat is text + fraud-scan only this slice; attachment upload deferred (column kept forward-compat)."
+  D23: "Minimal SLA-breach emitter sweep (S10 scheduler pattern) so the §12.2 SLA-breach notification fires."
 
 # ── S10-S12 scope decisions (this resume) — see decision-log D11-D14 ─
 scope_decisions:
@@ -30,6 +42,58 @@ scope_decisions_s13_s14:
   D17: "Customer sees a role's evidence + interim milestone only after admin review-approval (§9.3 guardrail)."
   D18: "Build the Premium Legal Opinion report section fully but gate display behind LEGAL_OPINION_ENABLED."
 
+# ── S15 (Phase 11) summary ────────────────────────────────────────
+s15_communication_layer:
+  backend:
+    - "communication/ parent domain, one entity per child: conversation/ (Conversation thread,
+       CUSTOMER_ADMIN/ADMIN_AGENT/GENERAL_SUPPORT), conversation_participant/ (per-user read state —
+       backs the §N.3 Chat unread counter), chat_message/ (ChatMessage + §4.7 fraud-hold state).
+       CommunicationService façade orchestrates ownership + thread resolution + send."
+    - "fraud_scan.py (pure, deterministic §4.7): phone/email/URL/banking/social/off-platform regex →
+       matched categories; clean = fast lane (DELIVERED), any flag = HELD. ChatMessageState added to
+       core/state/status.py + transition table in machine.py (PENDING_SCAN→{DELIVERED,HELD}; HELD→
+       {DELIVERED,BLOCKED}; DELIVERED/BLOCKED terminal)."
+    - "Admin hold review: /admin/messages/held queue + approve(→DELIVERED)/reject(→BLOCKED),
+       audit-logged (MESSAGE_SENT/HELD/APPROVED/REJECTED). Structured clarifications (D19):
+       CLARIFICATION_REQUEST/RESPONSE kinds + clarification_status (OPEN→ANSWERED). Rejection reason
+       auto-posts to the admin↔agent thread tagged to the task (§11.1, best-effort hook in ReviewService)."
+    - "Per-user SSE: UserEventEmitter + publish_user_event in core/realtime (mirrors the verification
+       emitter; chat_message/chat_unread/notification events) + GET /chat/stream. §11.3 identity guard:
+       customer-facing sender projection returns first_name/avatar only — never last name/email/phone.
+       Read-only-when-approved enforced for agents (§11.1). D22: attachments column kept, no upload built.
+       3 tables folded into 0001 (round-trip clean; created_by inherited from BaseEntity)."
+  frontend:
+    - "types/chat; chat-service + useChatQueries (+useChatRealtime per-user SSE → invalidate counter);
+       useUserStream hook. ChatButton in AppShell top nav (Support→Chat→Notifications→Account, 9+ cap,
+       hidden at 0). Shared ChatThread (message list + composer + held notice + clarification toggle +
+       mark-read). Thread pages: portal/agent/admin verification messages; /portal/chat conversation list;
+       /portal/support (FAQ reuse + general support thread); /admin/messages hold-review queue. Contextual
+       Messages CTAs on customer tracking, admin detail, agent task detail. Nav items added."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 627 (+36: fraud scan, state machine, chat service, comms authz);
+                    #   frontend 296 (+7 chat-service contract). migration round-trip clean; tsc+lint clean.
+
+self_audit_s15:
+  completed: true
+  findings:
+    - "Customer status-change auto-posts (§11.1) are wired via the S16 event bus (one publish point),
+       not scattered across every mutation. The task-rejection auto-post is wired now (single call site
+       in ReviewService). Net state after S16 is complete; done this resume (S15→S16 straight through)."
+    - "Chat unread counter is accurate for the users who rely on it (customers + agents, who are enrolled
+       as participants). Admins use the global hold queue + the admin verification-detail thread view
+       rather than a personal chat counter; enrolling every admin as a per-thread participant is a
+       documented follow-up if an admin chat counter is wanted."
+    - "Attachments deferred (D22) — the column exists; presigned upload reuses the S11 storage facade later."
+    - "Fraud scanner is deterministic regex (single hold behaviour, §4.7). Severity tiers are the
+       documented fast-follow once false-positive data exists; every held/approve/reject is audit-logged."
+    - "Emission/auto-post are best-effort and exception-isolated — a comms failure never breaks the
+       emitting transaction (mirrors the S13 emitter contract)."
+    - "Full live drive-through (send flagged → held → admin approve → delivered over SSE) deferred to the
+       end-of-resume verification after S16 (cadence: S15→S16 straight through). Backend 627 + frontend
+       296 + migration round-trip + tsc/lint are the S15 gate."
+
 completed_slices:
   - S1   # foundation reconciliation
   - S2   # state derivation owner + tier task-dependency config + status enums
@@ -45,6 +109,7 @@ completed_slices:
   - S12  # Phase 8 admin review & report release (see below)
   - S13  # Phase 9 customer tracking & evidence over SSE (see below)
   - S14  # Phase 10 final report experience + branded PDF (see below)
+  - S15  # Phase 11 communication layer (see above)
 
 # ── S14 (Phase 10) summary ────────────────────────────────────────
 s14_final_report:
