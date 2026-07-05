@@ -435,6 +435,8 @@ def _create_verifications():
         sa.Column("paused", sa.Boolean(), nullable=False, server_default="false"),
         # Public VID-lookup visibility (§13.1 "Public" sharing mode).
         sa.Column("public_lookup_enabled", sa.Boolean(), nullable=False, server_default="false"),
+        # Pending report re-version reason for the next release (§14): RECHECK / TIER_UPGRADE.
+        sa.Column("pending_revision_kind", sa.String(length=16), nullable=True),
         *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("vid", name="uq_verifications_vid"),
     )
@@ -450,6 +452,8 @@ def _create_payments():
         "payments",
         sa.Column("verification_id", sa.String(length=36), nullable=False),
         sa.Column("customer_id", sa.String(length=36), nullable=False),
+        # What the charge is for (§14): INITIAL / RECHECK / UPGRADE.
+        sa.Column("purpose", sa.String(length=16), nullable=False, server_default="INITIAL"),
         sa.Column("tx_ref", sa.String(length=64), nullable=False),
         sa.Column("gateway_event_id", sa.String(length=128), nullable=True),
         sa.Column("provider", sa.String(length=32), nullable=True),
@@ -614,6 +618,9 @@ def _create_reports():
         "reports",
         sa.Column("verification_id", sa.String(length=36), nullable=False),
         sa.Column("report_version", sa.Integer(), nullable=False, server_default="1"),
+        # Semantic version label + why the version was produced (§10.1 / §14).
+        sa.Column("version_label", sa.String(length=12), nullable=False, server_default="1.0"),
+        sa.Column("revision_kind", sa.String(length=16), nullable=False, server_default="INITIAL"),
         sa.Column("state", sa.String(length=16), nullable=False, server_default="DRAFT"),
         sa.Column("composite_trust_score", sa.Integer(), nullable=True),
         sa.Column("findings", JSONB_VARIANT, nullable=True),
@@ -738,6 +745,88 @@ def _create_verification_shares():
         "ix_verification_shares_verification", "verification_shares", ["verification_id"], unique=False
     )
     op.create_index("ix_verification_shares_token", "verification_shares", ["token"], unique=False)
+
+
+def _create_recheck_requests():
+    # Customer re-check requests (§14.1).
+    op.create_table(
+        "recheck_requests",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("customer_id", sa.String(length=36), nullable=False),
+        sa.Column("reason", sa.Text(), nullable=False),
+        sa.Column("documents", JSONB_VARIANT, nullable=True),
+        sa.Column("scope_roles", JSONB_VARIANT, nullable=True),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="PENDING"),
+        sa.Column("price_minor", sa.BigInteger(), nullable=False, server_default="0"),
+        sa.Column("payment_id", sa.String(length=36), nullable=True),
+        sa.Column("decision_note", sa.String(length=1000), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_recheck_requests_id", "recheck_requests", ["id"], unique=True)
+    op.create_index("ix_recheck_verification", "recheck_requests", ["verification_id"], unique=False)
+    op.create_index("ix_recheck_requests_status", "recheck_requests", ["status"], unique=False)
+    op.create_index("ix_recheck_requests_payment", "recheck_requests", ["payment_id"], unique=False)
+
+
+def _create_upgrade_requests():
+    # Customer tier-upgrade requests (§14.2).
+    op.create_table(
+        "upgrade_requests",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("customer_id", sa.String(length=36), nullable=False),
+        sa.Column("from_tier", sa.String(length=16), nullable=False),
+        sa.Column("to_tier", sa.String(length=16), nullable=False),
+        sa.Column("delta_minor", sa.BigInteger(), nullable=False, server_default="0"),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="PENDING"),
+        sa.Column("payment_id", sa.String(length=36), nullable=True),
+        sa.Column("idempotency_key", sa.String(length=80), nullable=False),
+        *AlembicUtils.base_audit_columns(),
+        sa.UniqueConstraint("idempotency_key", name="uq_upgrade_requests_key"),
+    )
+    op.create_index("ix_upgrade_requests_id", "upgrade_requests", ["id"], unique=True)
+    op.create_index("ix_upgrade_verification", "upgrade_requests", ["verification_id"], unique=False)
+    op.create_index("ix_upgrade_requests_status", "upgrade_requests", ["status"], unique=False)
+    op.create_index("ix_upgrade_requests_payment", "upgrade_requests", ["payment_id"], unique=False)
+
+
+def _create_disputes():
+    # Customer disputes + admin-mediated agent defence + resolution (§14.3).
+    op.create_table(
+        "disputes",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("customer_id", sa.String(length=36), nullable=False),
+        sa.Column("dispute_type", sa.String(length=24), nullable=False),
+        sa.Column("description", sa.Text(), nullable=False),
+        sa.Column("evidence", JSONB_VARIANT, nullable=True),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="OPEN"),
+        sa.Column("target_role", sa.String(length=16), nullable=True),
+        sa.Column("agent_id", sa.String(length=36), nullable=True),
+        sa.Column("agent_defence_text", sa.Text(), nullable=True),
+        sa.Column("agent_defence_at", UTCDateTime, nullable=True),
+        sa.Column("resolution_outcome", sa.String(length=24), nullable=True),
+        sa.Column("resolution_note", sa.Text(), nullable=True),
+        sa.Column("resolved_by", sa.String(length=36), nullable=True),
+        sa.Column("resolved_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_disputes_id", "disputes", ["id"], unique=True)
+    op.create_index("ix_disputes_verification", "disputes", ["verification_id"], unique=False)
+    op.create_index("ix_disputes_status", "disputes", ["status"], unique=False)
+    op.create_index("ix_disputes_agent", "disputes", ["agent_id"], unique=False)
+
+
+def _create_system_config():
+    # Admin-editable operational config for §14 (dispute window, re-check pricing, …) — D28.
+    op.create_table(
+        "system_config",
+        sa.Column("key", sa.String(length=64), nullable=False),
+        sa.Column("value_json", JSONB_VARIANT, nullable=True),
+        sa.Column("description", sa.Text(), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+        sa.UniqueConstraint("key", name="uq_system_config_key"),
+    )
+    op.create_index("ix_system_config_id", "system_config", ["id"], unique=True)
+    op.create_index("ix_system_config_key", "system_config", ["key"], unique=False)
 
 
 def _create_report_acknowledgements():
@@ -953,6 +1042,10 @@ _TABLE_BUILDERS = [
     ("chat_messages", _create_chat_messages),
     ("notifications", _create_notifications),
     ("notification_preferences", _create_notification_preferences),
+    ("recheck_requests", _create_recheck_requests),
+    ("upgrade_requests", _create_upgrade_requests),
+    ("disputes", _create_disputes),
+    ("system_config", _create_system_config),
 ]
 
 

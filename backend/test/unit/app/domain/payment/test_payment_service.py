@@ -100,7 +100,7 @@ class TestWebhook:
         svc = _make_service()
         svc._idempotency.claim = AsyncMock(return_value=True)
         svc._repo.get_by_tx_ref = AsyncMock(
-            return_value=SimpleNamespace(id="pay-1", verification_id="ver-1", customer_id="cust-1", failure_count=0)
+            return_value=SimpleNamespace(id="pay-1", verification_id="ver-1", customer_id="cust-1", failure_count=0, purpose="INITIAL")
         )
         processed = await svc.handle_webhook(
             PaymentWebhookDto(event_id="evt-1", tx_ref="VP-2026-ABC123-xyz", succeeded=True)
@@ -122,7 +122,7 @@ class TestWebhook:
         svc = _make_service()
         svc._idempotency.claim = AsyncMock(return_value=True)
         svc._repo.get_by_tx_ref = AsyncMock(
-            return_value=SimpleNamespace(id="pay-1", verification_id="ver-1", customer_id="cust-1", failure_count=0)
+            return_value=SimpleNamespace(id="pay-1", verification_id="ver-1", customer_id="cust-1", failure_count=0, purpose="INITIAL")
         )
         await svc.handle_webhook(
             PaymentWebhookDto(event_id="evt-1", tx_ref="VP-2026-ABC123-xyz", succeeded=False)

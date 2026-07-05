@@ -10,6 +10,13 @@ from main.app.domain.verification.tracking.controller import customer_tracking_r
 from main.app.domain.verification.report.controller import customer_report_router
 from main.app.domain.verification.share.controller import share_router
 from main.app.domain.verification.share.public_controller import public_share_router
+from main.app.domain.verification.recheck.controller import recheck_router, admin_recheck_router
+from main.app.domain.verification.upgrade.controller import upgrade_router
+from main.app.domain.verification.dispute.controller import (
+    dispute_router,
+    agent_dispute_router,
+    admin_dispute_router,
+)
 from main.app.domain.verification.admin.controller import admin_verification_router
 from main.app.domain.verification.task.controller import agent_task_router
 from main.app.domain.verification.scoring.controller import trust_weight_router
@@ -21,6 +28,7 @@ from main.app.domain.communication.controller import (
 )
 from main.app.domain.notification.controller import notification_router
 from main.app.domain.notification_preference.controller import notification_preference_router
+from main.app.domain.system_config.controller import system_config_router
 from main.app.domain.payment.controller import payment_router
 
 from main.appodus_utils.integrations.webhook import webhook_router
@@ -36,6 +44,12 @@ router.include_router(customer_tracking_router)
 router.include_router(customer_report_router)
 router.include_router(share_router)
 router.include_router(public_share_router)
+router.include_router(recheck_router)
+router.include_router(admin_recheck_router)
+router.include_router(upgrade_router)
+router.include_router(dispute_router)
+router.include_router(agent_dispute_router)
+router.include_router(admin_dispute_router)
 router.include_router(admin_verification_router)
 router.include_router(agent_task_router)
 router.include_router(trust_weight_router)
@@ -45,6 +59,7 @@ router.include_router(verification_chat_router)
 router.include_router(admin_chat_router)
 router.include_router(notification_router)
 router.include_router(notification_preference_router)
+router.include_router(system_config_router)
 router.include_router(payment_router)
 router.include_router(audit_router)
 router.include_router(webhook_router)

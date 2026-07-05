@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import Column, Integer, String
 from sqlalchemy import Index
 
-from main.app.core.state.status import ReportState, VerificationTier
+from main.app.core.state.status import ReportRevisionKind, ReportState, VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
@@ -27,6 +27,10 @@ class Report(BaseEntity):
     # Monotonic per-verification document version (NOT BaseEntity.version, which is the
     # optimistic-lock counter). A re-release increments this and supersedes the prior.
     report_version = Column(Integer, nullable=False, default=1)
+    # Customer-facing semantic label (v1.0 / v1.1 / v2.0 / v3.0, §10.1) + why the version
+    # was produced (§14). The integer above stays the monotonic counter; the label is display.
+    version_label = Column(String(12), nullable=False, default="1.0")
+    revision_kind = Column(String(16), nullable=False, default=ReportRevisionKind.INITIAL.value)
     state = Column(String(16), nullable=False, default=ReportState.DRAFT.value, index=True)
     composite_trust_score = Column(Integer, nullable=True)
     # Immutable snapshot of the per-role submission findings at release time.
@@ -46,6 +50,8 @@ class Report(BaseEntity):
 class CreateReportDto(Object):
     verification_id: str
     report_version: int = 1
+    version_label: str = "1.0"
+    revision_kind: ReportRevisionKind = ReportRevisionKind.INITIAL
     state: ReportState = ReportState.DRAFT
     composite_trust_score: Optional[int] = None
     findings: Optional[Dict[str, Any]] = None
@@ -74,6 +80,8 @@ class ReportDto(Object):
     id: str
     verification_id: str
     report_version: int
+    version_label: str = "1.0"
+    revision_kind: ReportRevisionKind = ReportRevisionKind.INITIAL
     state: ReportState
     composite_trust_score: Optional[int] = None
     findings: Optional[Dict[str, Any]] = None

@@ -32,11 +32,22 @@ class PaymentMethodKind(str, enum.Enum):
     BANK_TRANSFER = "BANK_TRANSFER"
 
 
+class PaymentPurpose(str, enum.Enum):
+    """What a charge is for, so the idempotent webhook routes a confirmed payment to the
+    right post-payment handler (§5.4 initial vs §14.1 re-check vs §14.2 tier upgrade)."""
+
+    INITIAL = "INITIAL"
+    RECHECK = "RECHECK"
+    UPGRADE = "UPGRADE"
+
+
 class Payment(BaseEntity):
     __tablename__ = "payments"
 
     verification_id = Column(String(36), nullable=False, index=True)
     customer_id = Column(String(36), nullable=False, index=True)
+    # What the charge is for (§14) — routes the confirmed webhook to the right handler.
+    purpose = Column(String(16), nullable=False, default=PaymentPurpose.INITIAL.value)
     tx_ref = Column(String(64), nullable=False, unique=True, index=True)
     # Gateway event id — the idempotency key for webhook processing (§4.6).
     gateway_event_id = Column(String(128), nullable=True, index=True)
@@ -70,6 +81,7 @@ class CreatePaymentDto(Object):
     customer_id: str
     tx_ref: str
     method: PaymentMethodKind
+    purpose: PaymentPurpose = PaymentPurpose.INITIAL
     amount_minor: int
     currency: TransactionCurrency = TransactionCurrency.NGN
     charge_currency: Optional[TransactionCurrency] = None
@@ -113,6 +125,7 @@ class PaymentDto(Object):
     verification_id: str
     tx_ref: str
     method: PaymentMethodKind
+    purpose: PaymentPurpose = PaymentPurpose.INITIAL
     status: PaymentStatus
     amount_minor: int
     currency: TransactionCurrency

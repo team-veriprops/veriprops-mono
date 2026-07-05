@@ -20,7 +20,13 @@ from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.dependencies import required_task_count, roles_for_tier
 from main.app.core.state.derive import derive_status
 from main.app.core.state.machine import task_state_machine
-from main.app.core.state.status import AgentRole, TaskState, VerificationStatus, VerificationTier
+from main.app.core.state.status import (
+    AgentRole,
+    ReportRevisionKind,
+    TaskState,
+    VerificationStatus,
+    VerificationTier,
+)
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.commission.models import CreateCommissionDto
@@ -46,6 +52,15 @@ from main.appodus_utils.exception.exceptions import (
 
 _APPROVED_REVIEW = "APPROVED"
 _REJECTED_REVIEW = "REJECTED"
+
+
+def _release_ready(task) -> bool:
+    """A task is ready to (re-)release when it is already APPROVED (untouched since the last
+    release — e.g. a partial re-check reopened only some tasks, §14.1) or it is SUBMITTED and
+    admin review-approved. First release: every task is SUBMITTED+approved; re-release: a mix."""
+    if task.state == TaskState.APPROVED.value:
+        return True
+    return task.state == TaskState.SUBMITTED.value and task.review_decision == _APPROVED_REVIEW
 
 
 @inject
@@ -177,7 +192,7 @@ class ReviewService:
         if len(tasks) != required_task_count(tier):
             raise ValidationException(message="Not all required tasks are present.")
         for t in tasks:
-            if t.state != TaskState.SUBMITTED.value or t.review_decision != _APPROVED_REVIEW:
+            if not _release_ready(t):
                 raise ValidationException(
                     message=f"The {t.role} task is not review-approved yet."
                 )
@@ -201,10 +216,21 @@ class ReviewService:
         composite = await self._weights.compute_composite(tier, role_quality)
 
         await self._accrue_commissions(verification, tasks)
+        # A re-check / tier-upgrade cycle records why this release bumps the version (§14).
+        revision_kind = (
+            ReportRevisionKind(verification.pending_revision_kind)
+            if verification.pending_revision_kind else ReportRevisionKind.INITIAL
+        )
         report = await self._reports.release(
             verification_id=verification_id, findings=submissions_as_json(submissions),
             composite_trust_score=composite, released_by=admin_id, reason=reason,
+            revision_kind=revision_kind,
         )
+        if verification.pending_revision_kind:
+            # Clear to NULL on the model — the update DTO path drops None (exclude_none).
+            row = await self._verification_repo.get_model(verification_id)
+            if row is not None:
+                row.pending_revision_kind = None
         await self._derive_and_persist(verification_id, admin_id)
         # One publish (§4.8): the realtime subscriber re-emits the report-released SSE and the
         # notification subscriber fans out the "report ready" in-app + email/SMS (§10, §12.2) —
@@ -272,10 +298,9 @@ class ReviewService:
         submissions = self._submissions_by_role(tasks)
         conflicts = detect_conflicts(submissions)
 
-        all_approved = bool(tasks) and all(
-            t.state == TaskState.SUBMITTED.value and t.review_decision == _APPROVED_REVIEW
-            for t in tasks
-        ) and (tier is not None and len(tasks) == required_task_count(tier))
+        all_approved = bool(tasks) and all(_release_ready(t) for t in tasks) and (
+            tier is not None and len(tasks) == required_task_count(tier)
+        )
 
         projected = None
         if tier and all_approved:

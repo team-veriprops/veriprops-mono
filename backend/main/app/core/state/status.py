@@ -48,6 +48,19 @@ class ReportState(str, enum.Enum):
     SUPERSEDED = "SUPERSEDED"
 
 
+class ReportRevisionKind(str, enum.Enum):
+    """Why a report version was produced (PRD §10.1 / §14) — drives the ``version_label``.
+
+    ``INITIAL`` → v1.0. ``ADMIN_REVISION`` → a minor bump (v1.1). ``RECHECK`` (§14.1) and
+    ``TIER_UPGRADE`` (§14.2) → a new major (v2.0 / v3.0). Prior versions move to SUPERSEDED.
+    """
+
+    INITIAL = "INITIAL"
+    ADMIN_REVISION = "ADMIN_REVISION"
+    RECHECK = "RECHECK"
+    TIER_UPGRADE = "TIER_UPGRADE"
+
+
 class ChatMessageState(str, enum.Enum):
     """In-app chat message lifecycle (PRD §4.7, §11.2).
 

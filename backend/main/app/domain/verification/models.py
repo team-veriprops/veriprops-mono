@@ -53,6 +53,11 @@ class Verification(BaseEntity):
     # knows the VID sees the report *summary* at /verify/{vid}. Default private.
     public_lookup_enabled = Column(Boolean, nullable=False, server_default="false")
 
+    # Why the next report release should bump the version (§14): a re-check sets RECHECK,
+    # a tier upgrade sets TIER_UPGRADE. Consumed + cleared by ReviewService.release. Null =
+    # the ordinary initial release (v1.0).
+    pending_revision_kind = Column(String(16), nullable=True)
+
     __table_args__ = (
         Index("ix_verifications_status", "status"),
         Index("ix_verifications_customer", "customer_id"),
@@ -80,6 +85,7 @@ class UpdateVerificationDto(Object):
     draft_step: Optional[int] = None
     draft_payload: Optional[str] = None
     public_lookup_enabled: Optional[bool] = None
+    pending_revision_kind: Optional[str] = None
 
 
 class SearchVerificationDto(PageRequest, BaseQueryDto):

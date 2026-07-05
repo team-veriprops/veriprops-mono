@@ -19,6 +19,7 @@ from main.app.domain.payment.models import (
     CreatePaymentDto,
     Payment,
     PaymentMethodKind,
+    PaymentPurpose,
     PaymentStatus,
     PaymentWebhookDto,
     UpdatePaymentDto,
@@ -118,6 +119,43 @@ class PaymentService:
             await self._idempotency.complete(idempotency_key, resource_id=payment.id)
         return payment
 
+    async def initiate_secondary(
+        self,
+        verification_id: str,
+        customer_id: str,
+        amount_minor: int,
+        purpose: PaymentPurpose,
+        method: PaymentMethodKind = PaymentMethodKind.CARD,
+    ) -> Payment:
+        """Create a secondary charge (§14 re-check / tier upgrade) on an existing verification
+        WITHOUT touching the verification state machine — the new work cycle starts only when
+        this charge is confirmed (routed by ``purpose`` in the webhook). Deterministic under
+        PAYMENT_STUB_MODE via the same stub checkout + confirm path as the initial payment."""
+        verification = await self._verification_service.get_by_id(verification_id)
+        if verification.customer_id != customer_id:
+            raise ValidationException(message="This verification belongs to another customer.")
+        if amount_minor <= 0:
+            raise ValidationException(message="A positive charge amount is required.")
+
+        tx_ref = f"{verification.vid}-{purpose.value[:3]}-{Utils.random_str(8)}"
+        payment = await self._repo.create_return_model(CreatePaymentDto(
+            verification_id=verification_id,
+            customer_id=customer_id,
+            tx_ref=tx_ref,
+            method=method,
+            purpose=purpose,
+            amount_minor=amount_minor,
+            currency=verification.currency,
+            status=PaymentStatus.INITIATED,
+            checkout_url=self._checkout_url(verification_id, tx_ref),
+        ))
+        self._audit.schedule(
+            action=AuditActionType.PAYMENT_INITIATED,
+            resource_type="payment", resource_id=payment.id, actor_id=customer_id,
+            details={"verification_id": verification_id, "tx_ref": tx_ref, "purpose": purpose.value},
+        )
+        return payment
+
     async def handle_webhook(self, dto: PaymentWebhookDto) -> bool:
         """Idempotent gateway webhook (§4.6): drives PAYMENT_PENDING → PAID exactly once."""
         # One-shot dedup on the gateway event id — a replay returns without effect.
@@ -132,27 +170,32 @@ class PaymentService:
 
         if dto.succeeded:
             await self._repo.update(payment.id, UpdatePaymentDto(status=PaymentStatus.SUCCEEDED.value))
-            await self._verification_service.mark_paid(payment.verification_id)
-            # At PAID: instantiate unlocked tasks and (if enabled) broadcast them (§6.2).
-            await self._task_service.prepare_for_paid(payment.verification_id)
-            # First successful payment → trusted customer (PRD §3.3).
-            await self._user_service.upgrade_trust_status_if_eligible(
-                payment.customer_id, UserPersona.CUSTOMER
-            )
             self._audit.schedule(
                 action=AuditActionType.PAYMENT_SUCCEEDED,
                 resource_type="payment",
                 resource_id=payment.id,
                 actor_id=payment.customer_id,
-                details={"verification_id": payment.verification_id},
+                details={"verification_id": payment.verification_id, "purpose": payment.purpose},
             )
-            self._audit.schedule(
-                action=AuditActionType.VERIFICATION_STATE_CHANGED,
-                resource_type="verification",
-                resource_id=payment.verification_id,
-                actor_id=payment.customer_id,
-                to_state=VerificationStatus.PAID.value,
-            )
+            if payment.purpose == PaymentPurpose.RECHECK.value:
+                await self._on_secondary_paid(payment, PaymentPurpose.RECHECK)
+            elif payment.purpose == PaymentPurpose.UPGRADE.value:
+                await self._on_secondary_paid(payment, PaymentPurpose.UPGRADE)
+            else:
+                await self._verification_service.mark_paid(payment.verification_id)
+                # At PAID: instantiate unlocked tasks and (if enabled) broadcast them (§6.2).
+                await self._task_service.prepare_for_paid(payment.verification_id)
+                # First successful payment → trusted customer (PRD §3.3).
+                await self._user_service.upgrade_trust_status_if_eligible(
+                    payment.customer_id, UserPersona.CUSTOMER
+                )
+                self._audit.schedule(
+                    action=AuditActionType.VERIFICATION_STATE_CHANGED,
+                    resource_type="verification",
+                    resource_id=payment.verification_id,
+                    actor_id=payment.customer_id,
+                    to_state=VerificationStatus.PAID.value,
+                )
         else:
             await self._repo.update(payment.id, UpdatePaymentDto(
                 status=PaymentStatus.FAILED.value,
@@ -165,6 +208,9 @@ class PaymentService:
                 actor_id=payment.customer_id,
             )
         return True
+
+    async def get_payment(self, payment_id: str) -> Optional[Payment]:
+        return await self._repo.get_model(payment_id)
 
     async def refund(self, verification_id: str, actor_id: str, reason: Optional[str] = None) -> int:
         """Refund the successful payment(s) on a verification (§8.5). Deterministic under
@@ -188,6 +234,19 @@ class PaymentService:
                          "reason": reason},
             )
         return refunded_total
+
+    async def _on_secondary_paid(self, payment: Payment, purpose: PaymentPurpose) -> None:
+        """Route a confirmed re-check / tier-upgrade charge to its domain service. Resolved
+        lazily via the DI container so the payment domain never imports those services at
+        module load (they depend back on payment/verification), avoiding an import cycle."""
+        from kink import di
+
+        if purpose == PaymentPurpose.RECHECK:
+            from main.app.domain.verification.recheck.service import RecheckService
+            await di[RecheckService].on_payment_confirmed(payment.id)
+        elif purpose == PaymentPurpose.UPGRADE:
+            from main.app.domain.verification.upgrade.service import UpgradeService
+            await di[UpgradeService].on_payment_confirmed(payment.id)
 
     def _checkout_url(self, verification_id: str, tx_ref: str) -> str:
         if settings.PAYMENT_STUB_MODE:

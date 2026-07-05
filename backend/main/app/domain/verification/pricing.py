@@ -20,10 +20,34 @@ TIER_PRICE_NGN_KOBO: dict[VerificationTier, int] = {
     VerificationTier.PREMIUM: 30_000_000,
 }
 
+# Tier ordering for upgrade eligibility (§14.2) — a higher rank is a richer tier.
+TIER_RANK: dict[VerificationTier, int] = {
+    VerificationTier.BASIC: 1,
+    VerificationTier.STANDARD: 2,
+    VerificationTier.PREMIUM: 3,
+}
+
+
+def is_upgrade(current: VerificationTier, target: VerificationTier) -> bool:
+    """True when ``target`` is a strictly higher tier than ``current`` (§14.2)."""
+    return TIER_RANK[target] > TIER_RANK[current]
+
 
 def price_ngn_kobo(tier: VerificationTier) -> int:
     """Contractual NGN price for a tier, in kobo."""
     return TIER_PRICE_NGN_KOBO[tier]
+
+
+def recheck_price_kobo(tier: VerificationTier, pct: int) -> int:
+    """Re-check fee (§14.1, D26) — a percentage of the original tier price, in NGN kobo.
+    ``pct`` comes from the ``recheck_price_pct`` system-config knob."""
+    return int(price_ngn_kobo(tier) * (pct / 100))
+
+
+def upgrade_delta_kobo(current: VerificationTier, target: VerificationTier) -> int:
+    """Tier-upgrade charge (§14.2) — the delta between the target and current tier prices,
+    in NGN kobo. Non-positive when the target is not an upgrade (guarded by the caller)."""
+    return price_ngn_kobo(target) - price_ngn_kobo(current)
 
 
 def indicative_charge_minor(ngn_kobo: int, currency: TransactionCurrency) -> tuple[int, float]:

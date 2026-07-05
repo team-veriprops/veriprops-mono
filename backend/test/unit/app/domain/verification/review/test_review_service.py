@@ -45,6 +45,7 @@ def _task(role, state=TaskState.SUBMITTED, review=None, payload=None, agent="age
 def _verification(status=VerificationStatus.UNDER_REVIEW, tier=VerificationTier.STANDARD, price=1000000):
     return SimpleNamespace(
         id="v-1", status=status.value, tier=tier.value, price_locked_minor=price, customer_id="cust-1",
+        pending_revision_kind=None,
     )
 
 
@@ -172,6 +173,25 @@ class TestRelease:
         svc = _make_service(_verification(status=VerificationStatus.IN_PROGRESS), _standard_tasks())
         with pytest.raises(InvalidResourceStateException):
             await svc.release("v-1", "admin-1")
+
+    async def test_release_passes_pending_revision_kind(self):
+        """§14.1: a re-check cycle records RECHECK so the report bumps to v2.0."""
+        from main.app.core.state.status import ReportRevisionKind
+        v = _verification()
+        v.pending_revision_kind = ReportRevisionKind.RECHECK.value
+        svc = _make_service(v, _standard_tasks(review="APPROVED"))
+        await svc.release("v-1", "admin-1")
+        kind = svc._reports.release.await_args.kwargs["revision_kind"]
+        assert kind == ReportRevisionKind.RECHECK
+
+    async def test_release_accepts_already_approved_tasks(self):
+        """A partial re-check reopens some tasks; on re-release the untouched tasks are still
+        APPROVED and must not block the gate."""
+        tasks = _standard_tasks(review="APPROVED")
+        tasks[0].state = TaskState.APPROVED.value  # untouched since the prior release
+        svc = _make_service(_verification(), tasks)
+        await svc.release("v-1", "admin-1")
+        svc._reports.release.assert_awaited_once()
 
     async def test_blocks_on_high_conflict(self):
         tasks = [
