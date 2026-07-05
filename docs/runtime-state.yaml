@@ -544,17 +544,17 @@ self_audit_s12:
     - "Full `pnpm build` still deferred (low disk); tsc + eslint (new) + full vitest (273) green.
        Backend 533 green; migration round-trip validated live."
 
-next_action: idle — S13 (Phase 9 tracking + evidence over SSE) and S14 (Phase 10 final report + branded PDF)
-             delivered & committed this resume. The MVP cut line (Phases 0–10) now ships end-to-end:
-             submission → payment → assignment → agent execution → admin review/release → live customer
-             tracking → final report + downloadable PDF. Next slice is S15 (Phase 11 communication layer).
-             Go-live gates outstanding (build-only): Legal Opinion (NBA sign-off + lawyer PI, §B); liability-cap
-             copy (Phase 5). Deferred follow-ups: Redis SSE fan-out (S16), progressive evidence images, HTML-CSS
-             PDF parity, customer-doc appendix attribution.
+next_action: idle — S15 (Phase 11 communication layer) and S16 (Phase 12 notifications & event bus)
+             delivered & committed this resume. Phases 0–12 now ship end-to-end: submission → payment →
+             assignment → agent execution → admin review/release → live tracking → final report + PDF →
+             admin-mediated fraud-scanned chat → in-app/email/SMS notifications over one §4.8 event bus.
+             Next slice is S17 (Phase 13 public lookup & sharing). Deferred follow-ups: customer status-change
+             chat auto-post + admin SLA-breach notification (S16 self-audit); chat attachments (D22); Redis SSE
+             fan-out; live UI drive-through; dispute/payout/re-check event sources (S18/S19).
 
 started_at: 2026-07-02
-last_checkpoint: "S12 complete — Trust Score Weights (CRUD + sum-to-100 + composite), Report domain
-                  (versioned RELEASED/SUPERSEDED), Review service (approve/reject/release gate/reopen/fail+
-                  refund) + conflict detection; commission accrual at release; report-review + weights CRUD
-                  frontend. 2 tables + 2 task columns in 0001 (round-trip clean). Backend 533 tests, frontend
-                  273; tsc+lint clean. Phases 6–8 (S10–S12) all shipped."
+last_checkpoint: "S16 complete — §4.8 EventBus + 3 subscribers (realtime re-emit / notification rule-table
+                  fan-out / chat counter), notification + notification_preference domains, SLA-breach sweep;
+                  every publish_verification_event refactored to one DomainEvent publish (D20). 2 tables in
+                  0001 (round-trip clean). Backend 644 tests, frontend 299; tsc+lint clean. Recovery hardening
+                  pass committed first (f881754). S15 (comms) 315268d, S16 (notifications) 4e9072e."
