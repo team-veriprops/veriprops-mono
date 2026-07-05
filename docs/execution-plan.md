@@ -324,12 +324,31 @@ routine messages bump the Chat counter only.
 ### Commit Message
 `feat(comms): admin-mediated chat, fraud-hold state machine, clarifications, per-user SSE`
 
-## Slices S16–S23 — Harden & Scale (Phases 12–19)
+## Slice S16 — Phase 12 Notification System & Event Bus *(expanded at run; full refactor, D20)*
+### Objective
+The single §4.8 in-process event bus; the declarative Chat-vs-Notification rule table; the
+in-app notification feed + counter + per-event email/SMS preferences; the SLA-breach sweep;
+and routing the S13 emitter + external dispatch through the bus (publish once, fan out).
+### Files Impacted
+new `app/core/events/**` (bus, events, subscribers); `app/domain/notification/**` (+rules,
+content, dispatcher); `app/domain/notification_preference/**`; `app/domain/verification/sla_monitor.py`;
+`app/jobs/scheduled.py` (+SLA sweep); refactored emit sites in `verification/{service,review/service,
+task/service}`; `0001` (+2 tables); frontend `types/notification`, `components/notifications/**`,
+`NotificationBell` (stub→real), notifications + preferences pages.
+### Tests Required
+bus fan-out + best-effort isolation; rule-table routing (chat-only vs notification); notification
+service in-app + email/SMS opt-out; subscriber preserves the S13 SSE event names; SLA sweep
+idempotency; frontend notification service contract.
+### Acceptance Criteria
+All Phase 2–11 events flow through the bus to ≥ the in-app channel; fan-out + Chat-vs-Notification
+rule unit-tested.
+### Commit Message
+`feat(notifications): §4.8 event bus, rule-table fan-out, in-app feed + preferences, SLA-breach sweep`
+
+## Slices S17–S23 — Harden & Scale (Phases 13–19)
 
 | Slice | Phase | Scope (reqs) | Deps | Risk |
 |---|---|---|---|---|
-| S15 | 11 | Communication layer + message fraud holds (R11.1–11.3) | S12 | H |
-| S16 | 12 | Event bus + notification fan-out + Chat-vs-Notification rule (R12.1–12.4) | S6+ | M |
 | S17 | 13 | Public lookup + sharing + lookup safety (R13.1–13.2) | S14 | H |
 | S18 | 14 | Re-check / tier upgrade / disputes (R14.1–14.3) | S14 | H |
 | S19 | 15 | Earnings, commission clearance/reserve, payouts (R15.1–15.3) | S11,S12,S8 | H |
@@ -338,8 +357,8 @@ routine messages bump the Chat counter only.
 | S22 | 18 | Mission Control, analytics, pricing/finance/broadcasts, system config (R18.1–18.5) | S9–S20 | M |
 | S23 | 19 | Audit export, activity logs, NDPA erasure + pseudonymisation (R19.1–19.3) | all | H |
 
-> Each S15–S23 slice expands into objective/files/schema/tests/acceptance/commit at the start of its `run`,
-> following the same template as S1–S14.
+> Each S17–S23 slice expands into objective/files/schema/tests/acceptance/commit at the start of its `run`,
+> following the same template as S1–S16.
 
 ## Cross-slice non-negotiables (every slice)
 - Write tests first (TDD); after changes run tests, build, and lint **both** ends.

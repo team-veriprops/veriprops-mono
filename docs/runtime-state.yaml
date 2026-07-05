@@ -1,12 +1,75 @@
 session_id: run-s15-s16-comms-notifications
 command: resume
 
-status: running
-phase: s15-complete
+status: idle
+phase: s16-complete
 
-current_slice: S16   # Phase 12 notifications + event bus (full refactor, D20). S15 done + committed.
-current_subtask: "S15 (Phase 11 communication layer) delivered, tested, committed. Next: S16 backend
-  (event bus + subscribers + notification/preference domains + SLA-breach sweep + emitter/dispatch refactor)."
+current_slice: null   # S15 (Phase 11) + S16 (Phase 12) delivered this resume. Next slice is S17 (Phase 13).
+current_subtask: "S15 + S16 complete, tested, committed. Communication layer + notification/event-bus
+  ship end-to-end. Next slice is S17 (Phase 13 public lookup & sharing)."
+
+# ── S16 (Phase 12) summary ────────────────────────────────────────
+s16_notifications_event_bus:
+  backend:
+    - "app/core/events/: §4.8 in-process synchronous EventBus (DomainEvent + EventType full §12.2 set;
+       publish once, best-effort per subscriber). publish_domain_event helper. Three subscribers
+       registered at bootstrap: realtime_subscriber (re-emits the EXACT S13 verification SSE event name —
+       frontend hooks untouched, D15/D20), notification_subscriber (rule-table fan-out), chat_counter_
+       subscriber (per-user Chat counter for MESSAGE_SENT, §12.3). DomainEvent.type is Optional so a pure
+       SSE-refresh nudge carries only sse_event (no notification)."
+    - "notification/ domain: Notification entity + feed (paged) + unread counter + mark-read/all.
+       rules.py = the single declarative Chat-vs-Notification rule table (full §12.2; MESSAGE_SENT is
+       chat_only → Chat counter only, never a notification — FR-6/7). content.py = backend-owned copy +
+       deep links. dispatcher.py (NotificationDispatcher extends BaseMessageSender) sends the template on a
+       computed channel set. notification_preference/ domain: per-event email/SMS opt-out (in-app never
+       disableable). Endpoints /notifications/* + /notification-preferences."
+    - "REFACTOR (D20): every publish_verification_event(...) call (review/task/verification services)
+       now publishes a DomainEvent once → realtime_subscriber re-emits the SSE. Notification-worthy events
+       carry the customer recipient + type (PAYMENT_CONFIRMED at PAID, STATUS_CHANGED on derive, REPORT_READY
+       at release). The direct send_report_ready call is removed — the notification subscriber dispatches it.
+       Chat delivery publishes MESSAGE_SENT through the bus (chat_counter_subscriber pushes the counter)."
+    - "SLA-breach sweep (D23): SlaMonitorService.sweep_sla_breaches publishes SlaBreached once per newly-
+       overdue verification (idempotent on an existing SLA-breach notification). Wired into the S10
+       scheduler (SlaMonitorJobs, ALWAYS_NEW, 30-min interval, disabled under test) + admin dev endpoint
+       /admin/verifications/sweeps/sla-breach. 2 tables folded into 0001 (round-trip clean)."
+  frontend:
+    - "types/notification; notification-service + useNotificationQueries (+useNotificationRealtime SSE →
+       invalidate counter/feed). Real NotificationBell (replaces the stub): counter (9+ cap, hidden at 0) +
+       dropdown (recent + mark-all + View all) → /portal/notifications history. Notification-preferences
+       page (portal + agent) with per-event email/SMS toggles (in-app locked on). Reuses the S15 useUserStream."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 644 (+17: event bus fan-out/best-effort, rule routing, notification service
+                    #   opt-out, subscriber SSE-name preservation, SLA sweep idempotency); frontend 299
+                    #   (+3 notification-service contract). migration round-trip clean; tsc+lint clean.
+
+self_audit_s16:
+  completed: true
+  findings:
+    - "One publish point (D20): the S13 emitter calls + the report-ready external dispatch now flow through
+       the bus. The realtime_subscriber re-emits the identical SSE event names, so the S13 frontend hooks and
+       their 49+ tests are untouched (verified: full suite green). Redis fan-out swaps the dispatcher
+       internals later without an API change (D15)."
+    - "Rule table covers the full §12.2 set (D21); dispute/payout/re-check rows are declared but unfired
+       until S18/S19 add their source domains. Publishing today: payment/status/agents-assigned/report/
+       SLA-breach (customer) + task-rejected (agent, via the S15 auto-post + a notification hook is a
+       follow-up) + MESSAGE_SENT (chat counter)."
+    - "Customer status-change chat AUTO-POST (§11.1, the S15-deferred item) is NOT yet wired as a bus
+       subscriber — the STATUS_CHANGED event drives the notification + SSE, but the SYSTEM_AUTO message into
+       the customer↔admin thread is a small documented follow-up (a chat_autopost subscriber on STATUS_CHANGED).
+       The task-rejection auto-post IS wired (S15). Corrects the S15 self-audit's optimistic wording."
+    - "External email/SMS dispatch is best-effort and globally gated by ENABLE_OUT_MESSAGING (off in non-prod
+       → Mailpit/log). Per-event email/SMS opt-out is honoured; in-app is always on (§12.1). Admin SLA-breach
+       notification (§12.2 admin) not wired — enrolling all admins as recipients is a follow-up; admins see
+       overdue on the dashboard + the SLA-breach fires for the customer."
+    - "SLA-breach idempotency is notification-existence based (no schema flag) — safe for the single-threaded
+       30-min sweep; a stricter claim would need a per-verification flag if the sweep ever parallelises."
+    - "Full live UI drive-through (flagged→held→approve→delivered over SSE; status-change→notification in the
+       bell) NOT run this resume — verified instead by 644 backend + 299 frontend tests (incl. full event-bus
+       fan-out, rule routing, subscriber SSE-name preservation, fraud hold→approve journey, SLA sweep
+       idempotency), migration round-trip, and import/DI wiring smoke tests. Consistent with the S13/S14
+       test-substitute gate. A scripted end-to-end is the recommended next verification."
 
 # ── Recovery note (this resume) ───────────────────────────────────
 recovery:
@@ -110,6 +173,7 @@ completed_slices:
   - S13  # Phase 9 customer tracking & evidence over SSE (see below)
   - S14  # Phase 10 final report experience + branded PDF (see below)
   - S15  # Phase 11 communication layer (see above)
+  - S16  # Phase 12 notifications & event bus (see above)
 
 # ── S14 (Phase 10) summary ────────────────────────────────────────
 s14_final_report:

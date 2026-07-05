@@ -14,7 +14,8 @@ from typing import Optional
 from kink import inject
 
 from main.app.core.idempotency.service import IdempotencyService
-from main.app.core.realtime import VerificationEventType, publish_verification_event
+from main.app.core.realtime import VerificationEventType
+from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.sla import sla_due_date
 from main.app.core.state.machine import verification_state_machine
 from main.app.core.state.status import VerificationStatus, VerificationTier
@@ -176,10 +177,14 @@ class VerificationService:
             verification_id, UpdateVerificationDto(status=VerificationStatus.PAID.value)
         )
         await self._set_paid_timestamps(verification_id, tier)
-        publish_verification_event(
-            verification_id, VerificationEventType.STATUS_CHANGED,
-            {"status": VerificationStatus.PAID.value},
-        )
+        # PAID is the payment-confirmed moment (§12.2): SSE re-emit (status_changed) + the
+        # customer payment-confirmed notification + email/SMS, one publish (§4.8, D20).
+        await publish_domain_event(DomainEvent(
+            type=EventType.PAYMENT_CONFIRMED, verification_id=verification_id,
+            recipient_user_ids=(verification.customer_id,),
+            sse_event=VerificationEventType.STATUS_CHANGED.value,
+            data={"status": VerificationStatus.PAID.value},
+        ))
         return await self._repo.get_model(verification_id)
 
     # ── helpers ───────────────────────────────────────────────────

@@ -685,6 +685,37 @@ def _create_chat_messages():
     op.create_index("ix_chat_messages_state", "chat_messages", ["state"], unique=False)
 
 
+def _create_notifications():
+    # In-app system notifications (§12, §N.4).
+    op.create_table(
+        "notifications",
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        sa.Column("type", sa.String(length=40), nullable=False),
+        sa.Column("title", sa.String(length=200), nullable=False),
+        sa.Column("body", sa.Text(), nullable=True),
+        sa.Column("link", sa.String(length=300), nullable=True),
+        sa.Column("read", sa.Boolean(), nullable=False, server_default="false"),
+        sa.Column("event_ref", sa.String(length=36), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_notifications_id", "notifications", ["id"], unique=True)
+    op.create_index("ix_notifications_user", "notifications", ["user_id"], unique=False)
+
+
+def _create_notification_preferences():
+    # Per-user, per-event email/SMS opt-out (§12.4). In-app is never disableable.
+    op.create_table(
+        "notification_preferences",
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        sa.Column("event_type", sa.String(length=40), nullable=False),
+        sa.Column("email_enabled", sa.Boolean(), nullable=False, server_default="true"),
+        sa.Column("sms_enabled", sa.Boolean(), nullable=False, server_default="true"),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_notif_prefs_id", "notification_preferences", ["id"], unique=True)
+    op.create_index("ix_notif_prefs_user", "notification_preferences", ["user_id"], unique=False)
+
+
 def _create_report_acknowledgements():
     # Customer access-gate acknowledgement, recorded against the report version (§10.1).
     op.create_table(
@@ -895,6 +926,8 @@ _TABLE_BUILDERS = [
     ("conversations", _create_conversations),
     ("conversation_participants", _create_conversation_participants),
     ("chat_messages", _create_chat_messages),
+    ("notifications", _create_notifications),
+    ("notification_preferences", _create_notification_preferences),
 ]
 
 

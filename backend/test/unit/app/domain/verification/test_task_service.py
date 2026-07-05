@@ -54,7 +54,7 @@ def _task(role, state=TaskState.PENDING, agent=None, **over):
 
 
 def _verification(status=VerificationStatus.PAID, tier=VerificationTier.STANDARD):
-    return SimpleNamespace(id="v-1", status=status.value, tier=tier.value)
+    return SimpleNamespace(id="v-1", status=status.value, tier=tier.value, customer_id="cust-1")
 
 
 def _make_service(verification, tasks):

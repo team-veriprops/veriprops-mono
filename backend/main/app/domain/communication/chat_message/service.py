@@ -14,7 +14,7 @@ from typing import List, Optional
 
 from kink import inject
 
-from main.app.core.realtime.user_emitter import UserEventType, publish_user_event
+from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.machine import chat_message_state_machine
 from main.app.core.state.status import ChatMessageState
 from main.app.domain.audit.models import AuditActionType
@@ -213,18 +213,18 @@ class ChatMessageService:
     async def _deliver_effects(
         self, conversation: Conversation, message: ChatMessage, sender_user_id: Optional[str]
     ) -> None:
-        """Bump the thread timestamp and push a best-effort SSE hint to other participants."""
+        """Bump the thread timestamp and publish MESSAGE_SENT on the §4.8 bus. The
+        chat-counter subscriber pushes the Chat counter to the other participants; the rule
+        table keeps a routine message out of Notifications (§12.3)."""
         await self._conversations.touch(conversation.id, message.delivered_at or Utils.datetime_now())
         participants = await self._participants._repo.list_for_conversation(conversation.id)
-        for participant in participants:
-            if participant.user_id == sender_user_id:
-                continue
-            publish_user_event(
-                participant.user_id,
-                UserEventType.CHAT_MESSAGE,
-                {"conversation_id": conversation.id},
-            )
-            publish_user_event(participant.user_id, UserEventType.CHAT_UNREAD, {})
+        recipients = tuple(p.user_id for p in participants if p.user_id != sender_user_id)
+        await publish_domain_event(DomainEvent(
+            type=EventType.MESSAGE_SENT,
+            verification_id=conversation.verification_id,
+            recipient_user_ids=recipients,
+            data={"conversation_id": conversation.id},
+        ))
 
     async def _to_dto(self, message: ChatMessage, viewer_id: Optional[str]) -> ChatMessageDto:
         held_notice = None

@@ -190,8 +190,30 @@ status: running (S1–S4 foundation)
       (+36); frontend 296 (+7); migration round-trip clean; tsc+lint clean. Gaps: attachments + customer
       status-change auto-posts (land via the S16 event bus) + admin chat counter deferred.
 
+- S16 Phase 12 — Notification system & event bus *(full refactor, D20)*.
+      Backend: `app/core/events/` = the §4.8 in-process synchronous `EventBus` (`DomainEvent` + `EventType`
+      full §12.2 set; publish once, best-effort per subscriber). Three subscribers registered at bootstrap:
+      `realtime_subscriber` (re-emits the **exact S13 verification SSE event name** — frontend hooks
+      untouched), `notification_subscriber` (declarative rule-table fan-out), `chat_counter_subscriber`
+      (per-user Chat counter for `MESSAGE_SENT`, §12.3). `notification/` domain (feed + counter + mark-read;
+      `rules.py` = the single Chat-vs-Notification table; `content.py` = backend-owned copy + links;
+      `dispatcher.py` sends the template on a computed channel set). `notification_preference/` domain
+      (per-event email/SMS opt-out; in-app always on). **Refactor:** every `publish_verification_event(...)`
+      (review/task/verification) now publishes a `DomainEvent` once; notification-worthy events carry the
+      customer recipient + type (`PAYMENT_CONFIRMED` at PAID, `STATUS_CHANGED` on derive, `REPORT_READY` at
+      release — the direct `send_report_ready` call removed); chat delivery publishes `MESSAGE_SENT`.
+      SLA-breach sweep (`SlaMonitorService`, D23) publishes `SlaBreached` once per overdue verification
+      (idempotent), wired into the S10 scheduler (30-min, ALWAYS_NEW, off under test) + admin dev endpoint.
+      2 tables in 0001 (round-trip clean). Frontend: `types/notification`, `notification-service` +
+      `useNotificationQueries` (+`useNotificationRealtime`); real `NotificationBell` (counter 9+/hidden-at-0
+      + dropdown + "View all") replacing the stub; `/portal/notifications` history; notification-preferences
+      page (portal + agent, per-event email/SMS toggles). Backend 644 tests (+17); frontend 299 (+3);
+      migration round-trip clean; tsc+lint clean. Gaps: customer status-change chat auto-post + admin
+      SLA-breach notification + dispute/payout/re-check sources (S18/S19) are documented follow-ups; full
+      live UI drive-through deferred (test-substitute gate, per S13/S14).
+
 ## Current Slice
-- S16 (Phase 12 notifications & event bus) — in progress. S15 (Phase 11) delivered & committed.
+- none — S15 (Phase 11) + S16 (Phase 12) delivered & committed. Communication + notifications ship end-to-end.
 
 ## Post-MVP hardening (S1–S14 review pass)
 - **Persona dashboards completed.** `/portal/dashboard` and `/admin/dashboard` did not exist (both
@@ -238,9 +260,10 @@ status: running (S1–S4 foundation)
 - S1 `bec85e1`, S2 `0465a5a`, S3 `a138219`, S4 (this commit) — foundation slices.
 
 ## Completion %
-- ~61% (14 of 23 slices; Phase-0 foundation + Phases 1–10 complete — the full MVP cut line ships end-to-end:
-  submission → payment → assignment → agent execution → admin review/release → live customer tracking → final
-  report + PDF). Remaining: S15–S23 (harden & scale, Phases 11–19).
+- ~70% (16 of 23 slices; Phase-0 foundation + Phases 1–12 complete — the MVP cut line plus the communication
+  layer (admin-mediated fraud-scanned chat) and the notification/event-bus surface ship end-to-end:
+  submission → payment → assignment → agent execution → admin review/release → live tracking → final report +
+  PDF → mediated chat → in-app/email/SMS notifications). Remaining: S17–S23 (harden & scale, Phases 13–19).
 
 ---
 

@@ -17,6 +17,8 @@ from main.app.domain.communication.controller import (
     verification_chat_router,
     admin_chat_router,
 )
+from main.app.domain.notification.controller import notification_router
+from main.app.domain.notification_preference.controller import notification_preference_router
 from main.app.domain.payment.controller import payment_router
 
 from main.appodus_utils.integrations.webhook import webhook_router
@@ -36,6 +38,8 @@ router.include_router(review_router)
 router.include_router(chat_router)
 router.include_router(verification_chat_router)
 router.include_router(admin_chat_router)
+router.include_router(notification_router)
+router.include_router(notification_preference_router)
 router.include_router(payment_router)
 router.include_router(audit_router)
 router.include_router(webhook_router)

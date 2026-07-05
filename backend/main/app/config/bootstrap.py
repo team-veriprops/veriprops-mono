@@ -24,6 +24,13 @@ class DiBootstrap(BaseDiBootstrap):
         di[VerificationEventEmitter] = VerificationEventEmitter()
         di[UserEventEmitter] = UserEventEmitter()
 
+        # Process-singleton §4.8 event bus with its standard subscribers registered once.
+        from main.app.core.events.bus import EventBus
+        from main.app.core.events.subscribers import register_subscribers
+        bus = EventBus()
+        register_subscribers(bus)
+        di[EventBus] = bus
+
 
 di_bootstrap = DiBootstrap()
 di_bootstrap.init()

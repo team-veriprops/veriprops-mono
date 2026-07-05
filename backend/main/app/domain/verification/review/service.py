@@ -15,7 +15,8 @@ from typing import Any, Dict, List, Optional
 from kink import inject
 
 from main.app.config.settings import settings
-from main.app.core.realtime import VerificationEventType, publish_verification_event
+from main.app.core.realtime import VerificationEventType
+from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.dependencies import required_task_count, roles_for_tier
 from main.app.core.state.derive import derive_status
 from main.app.core.state.machine import task_state_machine
@@ -101,8 +102,11 @@ class ReviewService:
         )
         # Approval records intent without a state change, so it never reaches
         # _derive_and_persist — push a refresh signal here so the customer's interim
-        # reassurance milestone (§9.3) surfaces live once admin review-approves.
-        publish_verification_event(verification_id, VerificationEventType.TASK_UPDATED)
+        # reassurance milestone (§9.3) surfaces live once admin review-approves. Pure SSE
+        # nudge (no notification): a typed event is not needed.
+        await publish_domain_event(DomainEvent(
+            verification_id=verification_id, sse_event=VerificationEventType.TASK_UPDATED.value,
+        ))
         return await self._tasks.get_model(task.id)
 
     async def reject_task(
@@ -195,16 +199,15 @@ class ReviewService:
             composite_trust_score=composite, released_by=admin_id, reason=reason,
         )
         await self._derive_and_persist(verification_id, admin_id)
-        publish_verification_event(
-            verification_id, VerificationEventType.REPORT_RELEASED,
-            {"version": report.report_version, "trustScore": composite},
-        )
-        # Notify the customer their report is ready (§10). Best-effort — a messaging
-        # failure must not roll back the release.
-        try:
-            await self._messages.send_report_ready(verification.customer_id)
-        except Exception:
-            pass
+        # One publish (§4.8): the realtime subscriber re-emits the report-released SSE and the
+        # notification subscriber fans out the "report ready" in-app + email/SMS (§10, §12.2) —
+        # replacing the previous direct send_report_ready call (D20).
+        await publish_domain_event(DomainEvent(
+            type=EventType.REPORT_READY, verification_id=verification_id,
+            recipient_user_ids=(verification.customer_id,),
+            sse_event=VerificationEventType.REPORT_RELEASED.value,
+            data={"version": report.report_version, "trustScore": composite},
+        ))
         return ReviewContext(report=report, trust_score=composite, conflicts=conflicts)
 
     async def reopen_task(
@@ -339,9 +342,13 @@ class ReviewService:
             resource_type="verification", resource_id=verification_id, actor_id=actor_id,
             from_state=verification.status, to_state=new_status.value,
         )
-        publish_verification_event(
-            verification_id, VerificationEventType.STATUS_CHANGED, {"status": new_status.value}
-        )
+        # One publish (§4.8): SSE re-emit + customer status-change notification (§12.2).
+        await publish_domain_event(DomainEvent(
+            type=EventType.STATUS_CHANGED, verification_id=verification_id,
+            recipient_user_ids=(verification.customer_id,),
+            sse_event=VerificationEventType.STATUS_CHANGED.value,
+            data={"status": new_status.value},
+        ))
 
 
 class ReviewContext:

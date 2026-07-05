@@ -157,6 +157,17 @@ async def sweep_pool_starvation(
     return SuccessResponse[dict](data={"escalated": escalated})
 
 
+@admin_verification_router.post("/sweeps/sla-breach", response_model=SuccessResponse[dict])
+async def sweep_sla_breach(
+    _admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
+):
+    """Publish an SLA-breach notification for each newly-overdue verification (§12.2, D23).
+    Runs on a schedule in non-test envs; this endpoint triggers it on demand (idempotent)."""
+    from main.app.domain.verification.sla_monitor import SlaMonitorService
+    flagged = await di[SlaMonitorService].sweep_sla_breaches()
+    return SuccessResponse[dict](data={"flagged": flagged})
+
+
 # ── Chargeback sub-process (§6a) ──────────────────────────────────
 
 @admin_verification_router.post(
