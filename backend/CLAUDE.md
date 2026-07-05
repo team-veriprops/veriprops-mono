@@ -101,6 +101,9 @@ A domain is **not considered complete** until:
 
 - **`version` is the optimistic-lock counter — never reuse it for domain versioning.** A versioned entity needs its own purpose-named column (e.g. `consent_version` on `ConsentDocument`).
 - **`update()` runs the DTO through `jsonable_encoder`**, which turns `datetime`/enum values into strings before binding. Don't push `datetime` fields through the update path (asyncpg rejects a string for a timestamp column) — set those on `create()` instead and keep `Update*Dto` to editable text/scalar fields.
+- **ID formats — the two-string-forms gotcha.** `BaseEntity.id` is a native `UUID(as_uuid=True)`, so `entity.id` is a `uuid.UUID`. Reference columns are `String(36)`, and two string forms are in play: **entity ids travel as `.hex` (32-char)** — the `Object` base coerces a `UUID` id field to `.hex`, so that is what DTOs return and the frontend echoes back — while **user ids are `str(uuid)` (36-char)** because the JWT subject is `str(user.id)`. When you use a *freshly-created or fetched* entity's `.id` as a reference (or query a `String` ref column), coerce it: `Utils.uuid_to_hex(entity_id)` for entity refs (conversation/verification/property/…), `str(user_id)` for user refs. Passing a raw `uuid.UUID` to a `String` column makes asyncpg raise `expected str, got UUID`; passing `str(uuid)` (36-char) where the wire uses `.hex` (32-char) silently mismatches. PK lookups (`get_model`) accept any form via `_ensure_uuid`.
+- **`build_page` validates its items as DTOs — never hand it ORM models.** For a custom paged query, return `(rows, total)` from the repo and build the page in the service from DTOs (`self._repo._db_utils.build_page(dtos, total, page, page_size)`). The stock `get_page` already passes DTOs; a hand-written repo method that passes ORM models fails Pydantic validation at response time.
+- **Don't re-fetch a row you created in the same (uncommitted) transaction.** `get_model(new.id)` right after `create_return_model(...)` can return `None`. Set fields on the returned attached object and return it directly (e.g. `ReportService.release`).
 
 ### Transaction management
 
@@ -205,6 +208,29 @@ All external channel dispatch (email, SMS, push, WhatsApp) goes through the mess
    ```
 
 **Non-negotiable:** Every `AvailableTemplate` entry must have a matching template file for every channel it declares. Registering the enum entry without the template file will cause a runtime error when the notification fires.
+
+### Event bus & notifications (§4.8 / §12)
+
+Every domain event is published **once** on the in-process synchronous bus (`app/core/events/`); subscribers decide surfacing. **Services never call the SSE emitter or an email sender directly** — they publish a `DomainEvent`:
+
+```python
+from main.app.core.events import DomainEvent, EventType, publish_domain_event
+await publish_domain_event(DomainEvent(
+    type=EventType.STATUS_CHANGED,          # None = a pure SSE-refresh nudge (no notification)
+    verification_id=vid,                    # scopes the verification-keyed SSE re-emit
+    recipient_user_ids=(customer_id,),      # who gets the in-app notification + per-user SSE (str/36-char)
+    sse_event=VerificationEventType.STATUS_CHANGED.value,  # preserves the exact S13 SSE event name
+    data={"status": new_status.value},
+))
+```
+
+Publishing is **best-effort per subscriber** (one failure never breaks another or the emitting transaction). The standard subscribers (registered at bootstrap in `app/core/events/subscribers.py`): `realtime` (re-emits the verification + user SSE), `notification` (rule-table fan-out → in-app + email/SMS), `chat_counter` (Chat counter for `MESSAGE_SENT`), `chat_autopost` (SYSTEM breadcrumb into the customer thread on `STATUS_CHANGED`).
+
+**To make an event notify a user:** add an `EventType`, a row in `notification/rules.py` (`in_app`/`email`/`sms`/`chat_only` + the `AvailableTemplate`), copy + link in `notification/content.py`, and publish the event. The rule table covers the full §12.2 set; some rows are declared-but-unfired until their source slices land. Time-driven events (e.g. `SlaBreached`) fire from a scheduler sweep (`app/jobs/scheduled.py`, `ALWAYS_NEW`, disabled under test, with an admin dev endpoint).
+
+## Dev/QA endpoints (non-production only)
+
+`POST /dev/reset` + `POST /dev/seed` (`app/domain/dev/`) are the automation-determinism contract: reset clears domain data (keeping the super-admin + reference seeds), seed builds a deterministic scenario (customer + approved agents + an `UNDER_REVIEW`, SLA-overdue verification). **Production-gated twice** — the router only mounts when `settings.ENVIRONMENT != PRODUCTION`, and `_require_non_prod()` 404s in prod. Never remove either guard. The committed live drive-through `backend/scripts/e2e_drive_through.py` exercises the S15/S16 chat + notification stack end-to-end over HTTP against a running server.
 
 ## Redis
 We don't use Redis directly, rather we rely on `RedisUtils` in `backend/main/appodus_utils/db/redis_utils.py`. This uses Redis when available, but fallback to an SQL implementation when not available.

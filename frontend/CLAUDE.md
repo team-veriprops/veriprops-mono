@@ -61,6 +61,12 @@ Record-detail views and one-off forms / centered modals use the shared right-sid
 - Deep-linkable detail **routes** wrap their content in [src/components/ui/DrawerRoutePage.tsx](src/components/ui/DrawerRoutePage.tsx) — open on mount, close → `router.back()` (with a fallback href) — so the URL stays deep-linkable and refresh-safe while presenting as a drawer.
 - Multi-step `WizardOverlay` flows (agent apply, portal submission/pay) stay **full-screen** — do not convert them to drawers.
 
+## Real-time, Chat & Notifications (top nav)
+
+- **One SSE transport.** Server→client pushes ride Server-Sent Events (§4.9); sends are ordinary HTTP POST. Two hooks: [src/lib/useVerificationStream.ts](src/lib/useVerificationStream.ts) (verification-scoped, `/api/verifications/{id}/stream`) and [src/lib/useUserStream.ts](src/lib/useUserStream.ts) (per-user, `/api/chat/stream` — carries `chat_message`/`chat_unread`/`notification`/`notification_unread`). SSE only *invalidates* queries; a 60-second `refetchInterval` poll is the durable fallback, so a dropped push never leaves the UI stale.
+- **Top-nav order is fixed: Support → Chat → Notifications → Account** (`AppShell`). `ChatButton` ([src/components/chat/ChatButton.tsx](src/components/chat/ChatButton.tsx)) and the real `NotificationBell` ([src/components/shared/notifications/NotificationBell.tsx](src/components/shared/notifications/NotificationBell.tsx)) each mount the per-user SSE subscription (`useChatRealtime`/`useNotificationRealtime`) so their counters stay live app-wide. Counters are numeric, cap at "9+", and hide at zero.
+- **Backend owns chat + notification copy, routing, counters, and the fraud-hold state** — the frontend renders what it receives. Chat threads reuse the shared [src/components/chat/ChatThread.tsx](src/components/chat/ChatThread.tsx); a held message shows its backend-supplied `heldNotice`. Services mirror the backend contracts: `chat-service` / `notification-service` under `components/{chat,notifications}/libs/`.
+
 ## SEO (every public page)
 
 - Build a page's metadata with `buildMetadata({ title, description, path, image?, type?, noindex? })` from [src/lib/seo.ts](src/lib/seo.ts) — export it as `metadata` (static) or `generateMetadata` (dynamic). It sets canonical, Open Graph, Twitter, and robots from one place; don't hand-roll `Metadata`.

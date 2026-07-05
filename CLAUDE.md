@@ -28,7 +28,8 @@ Frontend reads `API_BASE_URL` (server-only) from its env to build the proxy targ
 - **Package managers.** Frontend is `pnpm` (lockfile committed); never use `npm` or `yarn`. Backend is plain `pip` against `requirements.txt`, but `test-requirements.txt` during test as it included extra test dependencies.
 - **Session Propagation.** The auth session is propagated through a HttpOnly JWT cookie created by the backend.
 - **Path handling.** Use `path.join` / `pathlib` / POSIX-safe APIs — never hardcode `\` or `/` separators.
-- **Real-time channel**: SSE (live dashboard updates, notifications, metrics counters, audit feed), WS (collaborative workflow,chat,presence,two-way realtime commands).
+- **Real-time channel**: **SSE everywhere** (§4.9) — live dashboards, notifications, chat receive, metrics, audit feed. Chat is **admin-mediated + fraud-scanned** so there is deliberately no WebSocket/presence layer; message *sends* are ordinary HTTP POST. Two emitters: verification-keyed (`app/core/realtime/emitter.py`) and per-user (`user_emitter.py`).
+- **Event bus (§4.8).** Every domain event is published **once** through the in-process bus (`app/core/events/`); subscribers fan out (SSE re-emit, in-app/email/SMS notifications via a declarative rule table, chat counter). Don't call the SSE emitter or an email sender directly from a service — `await publish_domain_event(DomainEvent(...))` and let the subscribers decide surfacing. See [backend/CLAUDE.md](backend/CLAUDE.md).
 
 ## Pagination Convention
 Every list that can grow, should be implemented a page as follows:
