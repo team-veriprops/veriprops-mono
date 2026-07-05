@@ -133,23 +133,24 @@ class RecheckService:
             verification_id=recheck.verification_id, customer_id=recheck.customer_id,
             amount_minor=recheck.price_minor, purpose=PaymentPurpose.RECHECK,
         )
+        payment_ref = Utils.uuid_to_hex(payment.id)  # entity ref → .hex (32-char)
         await self._repo.update(recheck.id, UpdateRecheckDto(
             status=RecheckStatus.APPROVED.value, scope_roles=roles,
-            payment_id=payment.id, decision_note=dto.note,
+            payment_id=payment_ref, decision_note=dto.note,
         ))
         await self._notify_decision(recheck, approved=True)
         self._audit.schedule(
             action=AuditActionType.RECHECK_APPROVED,
             resource_type="recheck", resource_id=recheck.id, actor_id=admin_id,
             details={"verification_id": recheck.verification_id, "roles": roles,
-                     "payment_id": payment.id},
+                     "payment_id": payment_ref},
         )
         return await self._repo.get_model(recheck.id)
 
     async def on_payment_confirmed(self, payment_id: str) -> None:
         """The scoped tasks reopen once the re-check fee is paid (webhook, §14.1). Idempotent:
         a replayed confirmation for an already-started re-check is a no-op."""
-        recheck = await self._repo.get_by_payment(payment_id)
+        recheck = await self._repo.get_by_payment(Utils.uuid_to_hex(payment_id))
         if recheck is None or recheck.status != RecheckStatus.APPROVED.value:
             return
         # Record the version-bump reason so the next release becomes v2.0.

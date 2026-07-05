@@ -172,11 +172,11 @@
 | R12.2 | 12 | Notification fan-out (in-app/email/SMS) via declarative rule table | 12.1 | notification | M | M | pending |
 | R12.3 | 12 | Chat-vs-Notification routing rule (FR-6/FR-7) | 12.1 | notification | M | M | pending |
 | R12.4 | 12 | Notification preferences (per-event opt-out; in-app non-disableable) | 12.2 | notification | M | L | pending |
-| R13.1 | 13 | Public lookup `/verify/[id]` (summary only; band not number) + lookup safety §4.10 | 10 | verification | M | H | pending |
-| R13.2 | 13 | Sharing modes (private/link/public/named-recipient; revocable; 30-day) | 13.1 | verification | M | M | pending |
-| R14.1 | 14 | Re-check (new cycle; report→v2.0; pricing configured) | 10 | verification | M | M | pending |
-| R14.2 | 14 | Tier upgrade (delta pricing; preserve approved; →v3.0; idempotent) | 10 | verification | M | M | pending |
-| R14.3 | 14 | Dispute flow (window; COMPLETED→DISPUTED; agent defence; 3 outcomes) | 10 | verification/dispute | H | H | pending |
+| R13.1 | 13 | Public lookup `/verify/[id]` (summary only; band not number) + lookup safety §4.10 | 10 | verification | M | H | complete |
+| R13.2 | 13 | Sharing modes (private/link/public/named-recipient; revocable; 30-day) | 13.1 | verification | M | M | complete |
+| R14.1 | 14 | Re-check (new cycle; report→v2.0; pricing configured) | 10 | verification | M | M | complete |
+| R14.2 | 14 | Tier upgrade (delta pricing; preserve approved; →v3.0; idempotent) | 10 | verification | M | M | complete |
+| R14.3 | 14 | Dispute flow (window; COMPLETED→DISPUTED; agent defence; 3 outcomes) | 10 | verification/dispute | H | H | complete |
 | R15.1 | 15 | Earnings dashboard ("Available now" hero; clearing/reserve/lifetime) | 7,8,4 | commission | M | M | pending |
 | R15.2 | 15 | Commission rules (per role×tier) + clearance hold + chargeback reserve + freeze/reverse §15.2 | 15.1 | commission | H | H | pending |
 | R15.3 | 15 | Payouts (request/approve/hold/adjust; 2-day SLA; reconcile to kobo) | 15.2 | payout | H | H | pending |

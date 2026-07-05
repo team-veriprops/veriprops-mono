@@ -1,6 +1,6 @@
 # Progress Tracker
 
-status: running (S1–S4 foundation)
+status: running (S17–S18 delivered; live-verified end-to-end; next is S19)
 
 ## Completed Slices
 - S1  Foundation reconciliation & doc fixes — cleaned 0001 orphaned seeds (pricing + trust-weights),
@@ -225,8 +225,53 @@ status: running (S1–S4 foundation)
       runtime bugs** mocked tests missed: UUID-vs-String reference coercion, ORM models passed to `build_page`,
       and a get-after-create-returns-None in `ReportService.release`. Backend 649 tests green; frontend 299.
 
+- S17 Phase 13 — Public lookup & sharing *(full §13.2 table incl. named recipient, D27)*.
+      Backend: new `app/domain/verification/share/` — `VerificationShare` (LINK_SUMMARY / NAMED_FULL),
+      tokenised, revocable, 30-day default expiry + a `public_lookup_enabled` flag on the verification
+      (PUBLIC mode). Unauthenticated `public_controller` (`/public/verify/{vid}` summary-only with §13.1
+      state routing — shared/private/in-progress/disputed/not-found, never the numeric score or full
+      address; `/public/shared/{token}` = summary for a link, full report for a named recipient after a
+      one-time disclaimer ack). Customer share management `/verifications/{id}/shares` + public-visibility
+      toggle. Named-recipient share invite email (`VERIFICATION_REPORT_SHARE`, raw-email send). Reuses
+      `report/content.trust_band` + a new `CustomerReportService.build_shared_content`. `verification_shares`
+      + `verifications.public_lookup_enabled` in 0001 (round-trip clean). Frontend: public `/verify/[vid]`
+      (SSR, `noindex` unless completed+public) + `/shared/[token]` pages, reusable `ReportView`, a
+      `ReportShareModal` on the report page, `share-service` + hooks + types. Backend 665 tests (+16);
+      frontend tsc/lint clean, vitest 306 (+7). Committed `5024aa5`.
+
+- S18 Phase 14 — Revision, re-verification & disputes *(re-check % pricing D26, admin config CRUD D28,
+      report re-versioning D29)*.
+      Backend: **system_config** domain (typed key-value store — `dispute_window_days`, `recheck_price_pct`,
+      `agent_dispute_defence_hours`; seeded idempotently; RBAC admin CRUD `CONFIGURE_SYSTEM`). Report
+      re-versioning (`version_label` + `revision_kind` on `Report`; `ReportService.release` computes
+      v1.0→v2.0 re-check→v3.0 upgrade; the release gate generalised to accept already-APPROVED tasks so a
+      partial re-check re-releases). `Payment.purpose` routes the idempotent webhook; `initiate_secondary`
+      charges a completed verification without touching its state machine. **recheck** (request→admin
+      approve+scope→pay % of tier price→reopen scoped tasks→v2.0), **upgrade** (delta pricing, idempotent
+      resubmit, on-pay raises the tier + adds the new scope's tasks with approved work preserved + extends
+      SLA→v3.0), **dispute** (window + ≥100-char guard, COMPLETED→DISPUTED + commission freeze,
+      admin-mediated agent defence, three outcomes: reject→COMPLETED / full refund→REFUNDED / partial→
+      IN_PROGRESS free re-check; mandatory resolution note delivered verbatim). Fires the pre-declared
+      RECHECK_DECISION / DISPUTE_OPENED / DISPUTE_RESOLVED events (D21). 6 tables in 0001 (round-trip clean).
+      Frontend: customer `ReportActions` (re-check / upgrade / dispute modals on the report page), admin
+      System Config CRUD + Disputes (3-outcome resolve) + Re-checks (approve/scope/reject) pages, agent
+      dispute-defence page; `revision-service` + `system-config-service` + hooks + contract tests; nav +
+      routes updated. Backend 700 tests (+35); frontend tsc/lint clean, vitest 315 (+9). Committed `e3372f7`
+      (backend) + this commit (frontend + fixes + e2e).
+
+- Live e2e drive-through *(S17/S18 verification)*.
+      Extended `backend/scripts/e2e_drive_through.py` to cover §13 + §14 end-to-end against a real server:
+      release→public lookup (private→enable→summary, no score leak)→link + named-recipient share (ack→full
+      report)→revoke (token dead)→dispute (open→admin reject→COMPLETED, DISPUTE_OPENED/RESOLVED notifs)→
+      re-check (request→approve+scope→pay→IN_PROGRESS)→tier upgrade (pay delta→PREMIUM). **ALL PASSED (32
+      checks).** The live run **surfaced and fixed 3 runtime bugs** mocked tests missed (see decision-log
+      note): `get_released` called with a native UUID (broke the customer report endpoint for everyone),
+      payment-reference two-string-forms in re-check/upgrade, and a get-after-create-returns-None in
+      `UpgradeService.request`. Backend 700 green after fixes.
+
 ## Current Slice
-- none — S15 (Phase 11) + S16 (Phase 12) + gap-closures delivered, committed, and **live-verified** end-to-end.
+- none — S17 (Phase 13) + S18 (Phase 14) delivered, committed, and **live-verified** end-to-end
+  (32-check drive-through ALL PASSED). Next slice is S19 (Phase 15 agent earnings & commission).
 
 ## Post-MVP hardening (S1–S14 review pass)
 - **Persona dashboards completed.** `/portal/dashboard` and `/admin/dashboard` did not exist (both
@@ -242,7 +287,7 @@ status: running (S1–S4 foundation)
   succeeds (both dashboard routes prerender).
 
 ## Pending Slices
-- S15–S23 Phases 11–19 — harden & scale
+- S19–S23 Phases 15–19 — harden & scale (earnings/commission, reputation/coverage, growth, admin ops, audit/compliance)
 
 ## Runtime State
 - idle (S1–S4 committed; checkpoint clean)
@@ -270,13 +315,15 @@ status: running (S1–S4 foundation)
 - Strict commit mode + dirty worktree: `run` is blocked until committed (see below).
 
 ## Last Commit
-- S1 `bec85e1`, S2 `0465a5a`, S3 `a138219`, S4 (this commit) — foundation slices.
+- S17 `5024aa5` (public lookup & sharing), S18 backend `e3372f7` (re-check/upgrade/dispute + config),
+  S18 frontend + runtime-bug fixes + e2e (this commit).
 
 ## Completion %
-- ~70% (16 of 23 slices; Phase-0 foundation + Phases 1–12 complete — the MVP cut line plus the communication
-  layer (admin-mediated fraud-scanned chat) and the notification/event-bus surface ship end-to-end:
+- ~78% (18 of 23 slices; Phase-0 foundation + Phases 1–14 complete — the MVP cut line plus communication,
+  notifications/event-bus, public lookup & sharing, and revision/re-verification/disputes ship end-to-end:
   submission → payment → assignment → agent execution → admin review/release → live tracking → final report +
-  PDF → mediated chat → in-app/email/SMS notifications). Remaining: S17–S23 (harden & scale, Phases 13–19).
+  PDF → mediated chat → notifications → public proof + sharing → re-check/upgrade/dispute). Remaining: S19–S23
+  (harden & scale, Phases 15–19).
 
 ---
 

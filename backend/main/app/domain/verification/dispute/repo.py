@@ -39,6 +39,17 @@ class DisputeRepo(
         )
         return list((await self._session.execute(stmt)).scalars().all())
 
+    async def list_open_for_agent(self, agent_id: str) -> List[Dispute]:
+        stmt = (
+            select(Dispute)
+            .where(
+                Dispute.deleted.is_(False), Dispute.agent_id == agent_id,
+                Dispute.status == DisputeStatus.OPEN.value,
+            )
+            .order_by(desc(Dispute.date_created))
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
     async def get_open_for_agent(self, dispute_id: str, agent_id: str) -> Optional[Dispute]:
         stmt = select(Dispute).where(
             Dispute.deleted.is_(False), Dispute.id == dispute_id,

@@ -95,18 +95,20 @@ class UpgradeService:
             verification_id=Utils.uuid_to_hex(v.id), customer_id=customer_id,
             from_tier=current, to_tier=target, delta_minor=delta, idempotency_key=key,
         ))
-        await self._repo.update(upgrade.id, UpdateUpgradeDto(payment_id=payment.id))
+        payment_ref = Utils.uuid_to_hex(payment.id)  # entity ref → .hex (32-char)
+        await self._repo.update(upgrade.id, UpdateUpgradeDto(payment_id=payment_ref))
+        upgrade.payment_id = payment_ref  # reflect on the attached row (don't re-fetch in-txn)
         self._audit.schedule(
             action=AuditActionType.TIER_UPGRADE_REQUESTED,
             resource_type="upgrade", resource_id=upgrade.id, actor_id=customer_id,
             details={"verification_id": verification_id, "from": current.value,
-                     "to": target.value, "delta_minor": delta, "payment_id": payment.id},
+                     "to": target.value, "delta_minor": delta, "payment_id": payment_ref},
         )
-        return await self._repo.get_model(upgrade.id)
+        return upgrade
 
     async def on_payment_confirmed(self, payment_id: str) -> None:
         """Apply the upgrade once the delta is paid (webhook, §14.2). Idempotent."""
-        upgrade = await self._repo.get_by_payment(payment_id)
+        upgrade = await self._repo.get_by_payment(Utils.uuid_to_hex(payment_id))
         if upgrade is None or upgrade.status != UpgradeStatus.PENDING.value:
             return
         verification = await self._verification_repo.get_model(upgrade.verification_id)

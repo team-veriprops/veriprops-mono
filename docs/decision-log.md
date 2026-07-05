@@ -711,3 +711,23 @@ touching the counter.
 
 ### Revisit
 N/A.
+
+---
+
+## Note: three runtime bugs the S17/S18 live drive-through surfaced (mocked tests couldn't)
+
+Extending `backend/scripts/e2e_drive_through.py` to cover the §13 sharing + §14 revision flows
+against a live backend caught three defects the mocked unit tests missed — the same class of
+UUID/transaction gotchas as the S15/S16 gap-closure, all now fixed:
+1. **`get_released` called with a native UUID.** The S17 `CustomerReportService` refactor
+   (`_content_from_verification`) and `ShareService._build_summary` passed `verification.id`
+   (a `uuid.UUID`) into `ReportRepo.get_released`, whose `verification_id` column is `String(36)`
+   — asyncpg raised "expected str, got UUID". Both now coerce with `Utils.uuid_to_hex`. This had
+   broken the customer report endpoint for *all* customers, not just shares.
+2. **Payment reference two-string-forms.** Re-check/upgrade stored/looked-up the linking
+   `payment_id` inconsistently (a fresh entity's `.id` is a `uuid.UUID`; the update path
+   json-encodes it to `str(uuid)` 36-char, while lookups used `.hex` 32-char). Standardised on
+   `Utils.uuid_to_hex(payment.id)` for storage, audit-detail JSON, and `get_by_payment` lookup.
+3. **Get-after-create returns None.** `UpgradeService.request` re-fetched the upgrade row it had
+   just created in the same uncommitted transaction (`get_model` → `None`), so the controller
+   dereferenced `None.status`. It now sets `payment_id` on the attached row and returns it directly.

@@ -1,12 +1,90 @@
-session_id: run-s15-s16-comms-notifications
+session_id: run-s17-s18-sharing-revision-disputes
 command: resume
 
 status: idle
-phase: s16-complete + gap-closure + live-e2e-verified
+phase: s18-complete + live-e2e-verified
 
-current_slice: null   # S15 + S16 + gap-closures delivered & live-verified. Next slice is S17 (Phase 13).
-current_subtask: "S15 + S16 complete; deferred gaps closed (G1-G4); /dev/reset+seed restored; live HTTP
-  drive-through ALL PASSED (surfaced + fixed 3 runtime bugs). Next slice is S17 (Phase 13)."
+current_slice: null   # S17 + S18 delivered & live-verified. Next slice is S19 (Phase 15 earnings/commission).
+current_subtask: "S17 (Phase 13 public lookup & sharing) + S18 (Phase 14 revision/re-verification/disputes)
+  complete; extended live HTTP drive-through ALL PASSED (32 checks; surfaced + fixed 3 runtime bugs).
+  Next slice is S19 (Phase 15 agent earnings & commission)."
+
+# ── S17 + S18 (Phases 13-14) summary — see decision-log D26-D29 ──
+s17_public_lookup_sharing:
+  backend: "verification/share/ domain: VerificationShare (LINK_SUMMARY/NAMED_FULL, tokenised, revocable,
+    30-day default expiry) + verifications.public_lookup_enabled (PUBLIC mode). Unauthenticated
+    public_controller: GET /public/verify/{vid} (summary-only §13.1 state routing — never the numeric
+    score/full address) + GET /public/shared/{token} (link summary / named full report after a one-time
+    disclaimer ack) + POST ack. Customer /verifications/{id}/shares + public-visibility toggle. Named share
+    invite email (VERIFICATION_REPORT_SHARE, raw-email send). Reuses report/content.trust_band +
+    CustomerReportService.build_shared_content. verification_shares + public_lookup_enabled in 0001."
+  frontend: "public /verify/[vid] (SSR, noindex unless completed+public) + /shared/[token]; reusable
+    ReportView; ReportShareModal on the report page; share-service + hooks + types."
+  tests: "backend 665 (+16: token validity/revocation, summary no-leak, state routing, named ack);
+    frontend vitest 306 (+7 share-service contract). Committed 5024aa5."
+s18_revision_disputes:
+  backend: "system_config domain (typed key-value store: dispute_window_days/recheck_price_pct/
+    agent_dispute_defence_hours; seeded idempotently; RBAC CRUD CONFIGURE_SYSTEM, D28). Report re-versioning
+    (version_label + revision_kind; ReportService.release computes v1.0->v2.0 recheck->v3.0 upgrade; release
+    gate generalised to accept already-APPROVED tasks for partial re-check, D29). Payment.purpose routes the
+    idempotent webhook; initiate_secondary charges a completed verification off the state machine. recheck
+    (request->approve+scope->pay % of tier price [D26]->reopen scoped tasks->v2.0), upgrade (delta pricing,
+    idempotent resubmit, on-pay raises tier + adds new-scope tasks preserving approved work + extends SLA->
+    v3.0), dispute (window + >=100-char, COMPLETED->DISPUTED + commission freeze, admin-mediated agent
+    defence, 3 outcomes reject/full-refund/partial-recheck + mandatory verbatim note). Fires RECHECK_DECISION
+    / DISPUTE_OPENED / DISPUTE_RESOLVED (D21). 6 tables in 0001 (round-trip clean)."
+  frontend: "customer ReportActions (recheck/upgrade/dispute modals on the report page); admin System Config
+    CRUD + Disputes (3-outcome resolve) + Re-checks (approve/scope/reject) pages; agent dispute-defence page;
+    revision-service + system-config-service + hooks + contract tests; nav + routes updated."
+  tests: "backend 700 (+35: config, pricing/versioning, recheck v2.0, upgrade idempotent v3.0, dispute 3
+    outcomes + window + freeze); frontend vitest 315 (+9). Committed e3372f7 (backend) + this commit (frontend)."
+  live_e2e: "Extended backend/scripts/e2e_drive_through.py — real HTTP: release -> public lookup (private->
+    enable->summary, no score leak) -> link + named share (ack->full report) -> revoke (token dead) ->
+    dispute (open->admin reject->COMPLETED, DISPUTE_OPENED/RESOLVED) -> re-check (approve+scope->pay->
+    IN_PROGRESS) -> tier upgrade (pay delta->PREMIUM). ALL 32 checks PASS."
+  bugs_fixed_by_e2e:
+    - "get_released called with a native UUID (CustomerReportService._content_from_verification +
+       ShareService._build_summary) — broke the customer report endpoint for ALL customers; now coerced
+       with Utils.uuid_to_hex."
+    - "Payment reference two-string-forms in re-check/upgrade (entity .id is a uuid.UUID; update path
+       json-encodes to str(uuid) 36-char while lookups used .hex 32-char) — standardised on
+       Utils.uuid_to_hex(payment.id) for storage/audit-json/get_by_payment."
+    - "Get-after-create-returns-None in UpgradeService.request (re-fetched the row created in the same
+       uncommitted txn) — now returns the attached row directly."
+
+self_audit_s17:
+  completed: true
+  findings:
+    - "Public summary is structurally leak-proof: PublicSummaryDto has no address/score/agent fields, and a
+       test asserts the serialized payload carries the trust BAND (string) but never trustScore or the street
+       address. §4.10 lookup safety rides the existing non-sequential VID (S3); no enumeration surface added."
+    - "Named-recipient share tokens are stored raw (bearer-capability model, like an unguessable share link)
+       rather than hashed — acceptable for a revocable, expiring, summary-or-disclaimer-gated capability;
+       revocation invalidates immediately (§13.3, live-verified). Admin invites remain sha256-hashed."
+    - "Share-invite email is best-effort (a comms failure never breaks share creation); external dispatch is
+       gated by ENABLE_OUT_MESSAGING (Mailpit/log in non-prod)."
+    - "Full pnpm build deferred (low disk, per prior slices); tsc + eslint + vitest are the frontend gate."
+
+self_audit_s18:
+  completed: true
+  findings:
+    - "Re-check pricing = % of original tier price (D26, the PRD open-question resolution); re-check/upgrade
+       pricing centralised in pricing.py so the Phase-18 admin pricing API is a single-call-site swap."
+    - "Report re-versioning uses version_label + revision_kind (D29); the integer report_version stays the
+       monotonic counter. ADMIN_REVISION (v1.1 minor) is supported by the label helper but not produced by
+       an S18 flow (re-check/upgrade are major bumps) — an admin minor-revision trigger is a follow-up."
+    - "Commission handling on resolve: reject unfreezes, full-refund reverses, partial-recheck unfreezes (the
+       same agents redo the work). Re-release re-runs _accrue_commissions, so a re-checked release re-accrues
+       CLEARING rows — a double-accrual guard (skip roles that already have a live commission) is a documented
+       S19 follow-up when the earnings ledger lands."
+    - "Agent dispute-defence is admin-mediated (the agent thread breadcrumb + a GET /agents/disputes list +
+       POST defence, bounded by agent_dispute_defence_hours); the customer's identity is never exposed. The
+       agent is reached via the chat auto-post + the disputes list — a dedicated agent notification event is a
+       small follow-up (no agent-facing DISPUTE_* template yet)."
+    - "System-config is a minimal typed key-value store (D28) — the broader Phase-18 Mission-Control config
+       (pricing, commission rules, upgrade-delta matrix) stays S22, building on this store."
+    - "Live drive-through ALL PASSED (32 checks) and caught 3 real runtime bugs unit tests missed — the
+       decisive gate for this slice, consistent with the S15/S16 gap-closure cadence."
 
 # ── Gap-closure + live-e2e follow-up (this turn) — see decision-log D24-D25 ──
 gap_closure_and_e2e:
@@ -203,6 +281,8 @@ completed_slices:
   - S14  # Phase 10 final report experience + branded PDF (see below)
   - S15  # Phase 11 communication layer (see above)
   - S16  # Phase 12 notifications & event bus (see above)
+  - S17  # Phase 13 public lookup & sharing (see above)
+  - S18  # Phase 14 revision / re-verification / disputes (see above)
 
 # ── S14 (Phase 10) summary ────────────────────────────────────────
 s14_final_report:
@@ -573,17 +653,21 @@ self_audit_s12:
     - "Full `pnpm build` still deferred (low disk); tsc + eslint (new) + full vitest (273) green.
        Backend 533 green; migration round-trip validated live."
 
-next_action: idle — S15 (Phase 11 communication layer) and S16 (Phase 12 notifications & event bus)
-             delivered & committed this resume. Phases 0–12 now ship end-to-end: submission → payment →
-             assignment → agent execution → admin review/release → live tracking → final report + PDF →
-             admin-mediated fraud-scanned chat → in-app/email/SMS notifications over one §4.8 event bus.
-             Next slice is S17 (Phase 13 public lookup & sharing). Deferred follow-ups: customer status-change
-             chat auto-post + admin SLA-breach notification (S16 self-audit); chat attachments (D22); Redis SSE
-             fan-out; live UI drive-through; dispute/payout/re-check event sources (S18/S19).
+next_action: idle — S17 (Phase 13 public lookup & sharing) and S18 (Phase 14 revision/re-verification/
+             disputes) delivered, committed, and live-verified this resume. Phases 0–14 now ship end-to-end:
+             submission → payment → assignment → agent execution → admin review/release → live tracking →
+             final report + PDF → mediated chat → notifications → public proof + sharing (link/public/named
+             recipient) → re-check/tier-upgrade/dispute (3 outcomes). Next slice is S19 (Phase 15 agent
+             earnings & commission — re-scoped to build the earnings ledger + payouts on the existing
+             commission domain, D13). Deferred follow-ups: re-checked-release commission double-accrual guard
+             (S18 self-audit); dedicated agent DISPUTE_* notification template; admin minor-revision (v1.1)
+             trigger; chat attachments (D22); Redis SSE fan-out; live UI (Playwright) drive-through.
 
-started_at: 2026-07-02
-last_checkpoint: "S16 complete — §4.8 EventBus + 3 subscribers (realtime re-emit / notification rule-table
-                  fan-out / chat counter), notification + notification_preference domains, SLA-breach sweep;
-                  every publish_verification_event refactored to one DomainEvent publish (D20). 2 tables in
-                  0001 (round-trip clean). Backend 644 tests, frontend 299; tsc+lint clean. Recovery hardening
-                  pass committed first (f881754). S15 (comms) 315268d, S16 (notifications) 4e9072e."
+started_at: 2026-07-05
+last_checkpoint: "S18 complete — system_config domain + admin CRUD (D28); report re-versioning
+                  version_label/revision_kind (D29); Payment.purpose + initiate_secondary; recheck (v2.0),
+                  upgrade (idempotent v3.0), dispute (3 outcomes + agent defence) domains; RECHECK_DECISION/
+                  DISPUTE_OPENED/DISPUTE_RESOLVED fired (D21). 6 tables in 0001 (round-trip clean). Backend
+                  700 tests, frontend vitest 315; tsc+lint clean. Extended live drive-through ALL PASSED
+                  (32 checks; fixed 3 runtime bugs). S17 5024aa5, S18 backend e3372f7, S18 frontend+fixes+e2e
+                  (this commit)."

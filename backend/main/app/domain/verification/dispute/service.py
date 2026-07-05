@@ -224,6 +224,10 @@ class DisputeService:
         v = await self._verifications.get_owned(verification_id, customer_id)
         return await self._repo.list_for_verification(Utils.uuid_to_hex(v.id))
 
+    async def list_open_for_agent(self, agent_id: str) -> List[Dispute]:
+        """Open disputes awaiting the agent's admin-mediated defence (§14.3)."""
+        return await self._repo.list_open_for_agent(agent_id)
+
     async def page_open(self, page: int, page_size: int):
         """Admin queue of open disputes (paged), including any agent defence for review."""
         rows, total = await self._repo.page_open(offset=page * page_size, limit=page_size)

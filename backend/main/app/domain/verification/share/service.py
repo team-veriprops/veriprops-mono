@@ -236,7 +236,8 @@ class ShareService:
         }.get(state)
 
     async def _build_summary(self, verification) -> PublicSummaryDto:
-        report = await self._reports.get_released(verification.id)
+        # verification.id is a native UUID; report/verification ref columns use the .hex form.
+        report = await self._reports.get_released(Utils.uuid_to_hex(verification.id))
         band = None
         if report is not None and report.composite_trust_score is not None:
             band, _ = trust_band(report.composite_trust_score)

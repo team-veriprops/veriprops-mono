@@ -1,9 +1,10 @@
-"""Live end-to-end drive-through of the S15/S16 communication + notification stack.
+"""Live end-to-end drive-through of the S15–S18 stack.
 
 Runs against a real backend on :8000. Exercises: dev reset+seed, customer login, the §4.7
 fraud fast-lane + hold, admin hold-review approve, release → §12.2 status/report notifications
-+ §11.1 status auto-post, the SLA-breach sweep (customer + admin, G3), and the admin shared-inbox
-Chat counter (G4). Prints PASS/FAIL per step; exits non-zero on any failure.
++ §11.1 status auto-post, the SLA-breach sweep (customer + admin, G3), the admin shared-inbox
+Chat counter (G4), then the S17 public lookup + link/named-recipient sharing (§13) and the S18
+dispute → re-check → tier-upgrade flows (§14). Prints PASS/FAIL per step; exits non-zero on failure.
 
 How to run (non-prod only — uses /dev/reset + /dev/seed):
     # 1. migrate the local DB (base→head recreates the current 0001 schema):
@@ -16,6 +17,8 @@ How to run (non-prod only — uses /dev/reset + /dev/seed):
 from __future__ import annotations
 
 import sys
+from urllib.parse import parse_qs, urlparse
+
 import httpx
 
 try:
@@ -130,8 +133,87 @@ def main() -> int:
     check("admin Chat counter reflects unread verification threads (G4)", admin_unread > 0,
           f"count={admin_unread}")
 
+    # ── S17: Public lookup + sharing (§13) — the verification is now COMPLETED ──
+    report = customer.get(f"/verifications/{vid_id}/report").json()["data"]
+    vid = report["vid"]
+    public = httpx.Client(base_url=BASE, timeout=30.0)  # unauthenticated
+
+    private_lookup = public.get(f"/public/verify/{vid}").json()["data"]
+    check("public lookup is PRIVATE before sharing is enabled (§13.1)",
+          private_lookup["state"] == "PRIVATE", f"state={private_lookup['state']}")
+
+    customer.put(f"/verifications/{vid_id}/public-visibility", json={"enabled": True}).raise_for_status()
+    summary = public.get(f"/public/verify/{vid}").json()["data"]
+    check("public lookup returns the summary once public (§13.1)", summary["state"] == "SHARED")
+    check("public summary exposes the trust BAND, never the number (§13.1)",
+          bool(summary.get("trustBand")) and "trustScore" not in summary)
+
+    link = customer.post(f"/verifications/{vid_id}/shares",
+                         json={"shareType": "LINK_SUMMARY"}).json()["data"]
+    link_view = public.get(f"/public/shared/{link['token']}").json()["data"]
+    check("a link share resolves to the summary (§13.2)", link_view["state"] == "SHARED"
+          and link_view.get("summary") is not None)
+
+    named = customer.post(f"/verifications/{vid_id}/shares",
+                          json={"shareType": "NAMED_FULL", "recipientEmail": "friend@example.com"}).json()["data"]
+    gated = public.get(f"/public/shared/{named['token']}").json()["data"]
+    check("a named share is gated on the disclaimer before the full report (§13.2)",
+          gated["requiresAcknowledgement"] is True and gated.get("report") is None)
+    acked = public.post(f"/public/shared/{named['token']}/acknowledge").json()["data"]
+    check("acknowledging the disclaimer unlocks the full report (§13.2)", acked.get("report") is not None)
+
+    customer.post(f"/verifications/{vid_id}/shares/{link['id']}/revoke").raise_for_status()
+    revoked = public.get(f"/public/shared/{link['token']}").json()["data"]
+    check("revoking a share invalidates the token immediately (§13.3)",
+          revoked["state"] == "NOT_FOUND", f"state={revoked['state']}")
+
+    # ── S18: Dispute → resolve reject → back to COMPLETED (§14.3) ──
+    disp = customer.post(f"/verifications/{vid_id}/disputes", json={
+        "disputeType": "INACCURATE_FINDING", "description": "d" * 120,
+        "targetRole": "SURVEYOR",
+    }).json()["data"]
+    check("dispute opens (COMPLETED → DISPUTED, §14.3)", disp["status"] == "OPEN")
+    open_disputes = admin_c.get("/admin/disputes").json()["data"]["items"]
+    check("dispute appears in the admin queue", any(d["id"] == disp["id"] for d in open_disputes))
+    resolved = admin_c.post(f"/admin/disputes/{disp['id']}/resolve", json={
+        "outcome": "REJECTED", "note": "Reviewed the survey evidence; the finding stands.",
+    }).json()["data"]
+    check("admin rejects the dispute (DISPUTED → COMPLETED)", resolved["status"] == "RESOLVED")
+    disp_types = {n["type"] for n in customer.get("/notifications").json()["data"]["items"]}
+    check("customer got DISPUTE_OPENED + DISPUTE_RESOLVED notifications (§12.2)",
+          {"DISPUTE_OPENED", "DISPUTE_RESOLVED"} <= disp_types, str(disp_types))
+
+    # ── S18: Re-check request → admin approve + scope → pay → scoped reopen (§14.1) ──
+    recheck = customer.post(f"/verifications/{vid_id}/rechecks",
+                            json={"reason": "The survey plan does not match the plot I visited."}).json()["data"]
+    check("re-check priced as a % of the original (§14.1, D26)", recheck["priceMinor"] > 0)
+    decided = admin_c.post(f"/admin/rechecks/{recheck['id']}/decide",
+                           json={"approve": True, "scopeRoles": ["SURVEYOR"]}).json()["data"]
+    check("admin approves + scopes the re-check", decided["status"] == "APPROVED"
+          and bool(decided.get("checkoutUrl")))
+    _stub_pay(customer, decided["checkoutUrl"])
+    reopened = admin_c.get(f"/admin/review/{vid_id}").json()["data"]
+    check("re-check reopened the scoped task (verification → IN_PROGRESS, §14.1)",
+          reopened["status"] == "IN_PROGRESS", f"status={reopened['status']}")
+
+    # ── S18: Tier upgrade from IN_PROGRESS → PREMIUM (delta pricing, §14.2) ──
+    upgrade = customer.post(f"/verifications/{vid_id}/upgrades",
+                            json={"toTier": "PREMIUM"}).json()["data"]
+    check("tier upgrade charges the delta only (§14.2)", upgrade["deltaMinor"] > 0
+          and bool(upgrade.get("checkoutUrl")))
+    _stub_pay(customer, upgrade["checkoutUrl"])
+    upgraded = admin_c.get(f"/admin/review/{vid_id}").json()["data"]
+    check("tier upgrade raised the tier to PREMIUM (§14.2)", upgraded["tier"] == "PREMIUM",
+          f"tier={upgraded['tier']}")
+
     print("\n" + ("ALL PASSED" if not _failures else f"FAILURES: {_failures}"))
     return 0 if not _failures else 1
+
+
+def _stub_pay(root: httpx.Client, checkout_url: str) -> None:
+    """Drive a secondary (re-check / upgrade) charge to PAID via the deterministic stub webhook."""
+    tx_ref = parse_qs(urlparse(checkout_url).query).get("txRef", [""])[0]
+    root.post("/payments/stub/confirm", json={"tx_ref": tx_ref}).raise_for_status()
 
 
 if __name__ == "__main__":

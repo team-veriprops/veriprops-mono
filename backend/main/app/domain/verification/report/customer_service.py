@@ -20,6 +20,7 @@ from main.app.domain.verification.report.service import ReportService
 from main.app.domain.verification.service import VerificationService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
+from main.appodus_utils import Utils
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 from main.appodus_utils.integrations.report_pdf import (
@@ -85,7 +86,8 @@ class CustomerReportService:
         return content, report
 
     async def _content_from_verification(self, v) -> CustomerReportDto:
-        report = await self._reports.get_released(v.id)
+        # v.id is a native UUID; the report's verification_id column is String(36) (.hex form).
+        report = await self._reports.get_released(Utils.uuid_to_hex(v.id))
         if report is None:
             raise ResourceNotFoundException(
                 resource="report", message="No released report is available for this verification yet."

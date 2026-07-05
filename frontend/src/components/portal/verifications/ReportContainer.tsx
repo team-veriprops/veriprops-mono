@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BadgeCheck, Download, RefreshCw, Share2 } from "lucide-react";
+import { BadgeCheck, Download, Share2 } from "lucide-react";
 import { Button } from "@3rdparty/ui/button";
 import { Card, CardContent } from "@3rdparty/ui/card";
 import { CopyText } from "@components/ui/CopyText";
@@ -13,6 +13,7 @@ import {
 } from "@components/portal/libs/useReportQueries";
 import { reportService } from "@components/portal/libs/useReportQueries";
 import { ReportShareModal } from "@components/portal/verifications/ReportShareModal";
+import { ReportActions } from "@components/portal/verifications/ReportActions";
 import { ReportView } from "@components/portal/verifications/ReportView";
 import { CustomerReport } from "@/types/report";
 import { cn } from "@lib/utils";
@@ -107,10 +108,8 @@ function Header({ report, verificationId }: { report: CustomerReport; verificati
         <Button size="sm" variant="outline" onClick={() => setShareOpen(true)} data-testid="report-share">
           <Share2 className="size-4" /> Share
         </Button>
-        <Button size="sm" variant="outline" disabled title="Available soon">
-          <RefreshCw className="size-4" /> Request Re-check
-        </Button>
       </div>
+      <ReportActions verificationId={verificationId} tier={report.tier} />
       <ReportShareModal
         verificationId={verificationId}
         vid={report.vid}
