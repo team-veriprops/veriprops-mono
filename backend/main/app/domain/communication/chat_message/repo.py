@@ -1,7 +1,7 @@
 """Chat message data access."""
 from __future__ import annotations
 
-from typing import Optional, Type
+from typing import List, Optional, Tuple, Type
 
 from kink import inject
 from sqlalchemy import and_, asc, desc, func, select
@@ -15,7 +15,7 @@ from main.app.domain.communication.chat_message.models import (
     SearchChatMessageDto,
     UpdateChatMessageDto,
 )
-from main.appodus_utils.db.models import Page
+from main.appodus_utils import Utils
 from main.appodus_utils.db.repo import GenericRepo
 
 
@@ -40,10 +40,15 @@ class ChatMessageRepo(
 
     async def list_delivered_page(
         self, conversation_id: str, viewer_id: Optional[str], page: int, page_size: int
-    ) -> Page[ChatMessage]:
+    ) -> Tuple[List[ChatMessage], int]:
         """Thread messages a viewer may see: everything DELIVERED, plus the viewer's own
-        still-HELD messages (so a sender sees their message pending review, §11.2)."""
+        still-HELD messages (so a sender sees their message pending review, §11.2).
+
+        Returns ``(rows, total)`` — the service converts rows to DTOs before paginating, so
+        ORM models never reach ``build_page`` (which validates its items as DTOs)."""
         offset = page * page_size
+        conversation_id = Utils.uuid_to_hex(conversation_id)
+        viewer_id = str(viewer_id) if viewer_id is not None else None
         base = and_(
             ChatMessage.deleted.is_(False),
             ChatMessage.conversation_id == conversation_id,
@@ -72,10 +77,10 @@ class ChatMessageRepo(
             .limit(page_size)
         )
         items = list((await self._session.execute(stmt)).scalars().all())
-        return self._db_utils.build_page(items, total, page, page_size)
+        return items, total
 
-    async def list_held_page(self, page: int, page_size: int) -> Page[ChatMessage]:
-        """The admin hold-review queue (§11.2) — oldest-held first."""
+    async def list_held_page(self, page: int, page_size: int) -> Tuple[List[ChatMessage], int]:
+        """The admin hold-review queue (§11.2) — oldest-held first. Returns ``(rows, total)``."""
         offset = page * page_size
         where = and_(
             ChatMessage.deleted.is_(False),
@@ -90,7 +95,7 @@ class ChatMessageRepo(
             .limit(page_size)
         )
         items = list((await self._session.execute(stmt)).scalars().all())
-        return self._db_utils.build_page(items, total, page, page_size)
+        return items, total
 
     async def held_count(self) -> int:
         where = and_(
@@ -107,7 +112,7 @@ class ChatMessageRepo(
             .where(
                 and_(
                     ChatMessage.deleted.is_(False),
-                    ChatMessage.conversation_id == conversation_id,
+                    ChatMessage.conversation_id == Utils.uuid_to_hex(conversation_id),
                     ChatMessage.state == ChatMessageState.DELIVERED.value,
                 )
             )

@@ -18,6 +18,8 @@ from typing import List, Optional
 from kink import inject
 
 from main.app.core.state.status import TaskState
+from main.app.domain.user.auth.session.models import UserType
+from main.app.domain.user.repo import UserRepo
 from main.app.domain.communication.chat_message.models import (
     ChatMessage,
     ChatMessageDto,
@@ -51,30 +53,43 @@ class CommunicationService:
         chat_message_service: ChatMessageService,
         verification_service: VerificationService,
         task_repo: VerificationTaskRepo,
+        user_repo: UserRepo,
     ):
         self._conversations = conversation_service
         self._participants = participant_service
         self._chat = chat_message_service
         self._verifications = verification_service
         self._tasks = task_repo
+        self._users = user_repo
+
+    async def _is_admin(self, user_id: str) -> bool:
+        user = await self._users.get_model(user_id)
+        return bool(user and user.user_type == UserType.ADMIN.value)
 
     # ── Conversation list & read state (§N.3) ─────────────────────────
 
     async def list_conversations(self, user_id: str) -> List[ConversationDto]:
+        # Admins are a shared inbox — they see every verification thread (§N.3, G4).
+        if await self._is_admin(user_id):
+            return await self._conversations.list_for_admin(user_id)
         return await self._conversations.list_for_user(user_id)
 
     async def unread_count(self, user_id: str) -> int:
+        if await self._is_admin(user_id):
+            return await self._conversations.unread_count_for_admin(user_id)
         return await self._participants.unread_conversation_count(user_id)
 
     async def mark_read(self, conversation_id: str, user_id: str) -> None:
-        # Membership-gated: a non-participant cannot mark a thread read.
-        await self._conversations.get_owned_participant(conversation_id, user_id)
+        # Admins may read any verification thread; others must be a participant.
+        if not await self._is_admin(user_id):
+            await self._conversations.get_owned_participant(conversation_id, user_id)
         await self._participants.mark_read(conversation_id, user_id)
 
     async def list_messages(
         self, conversation_id: str, user_id: str, page: int, page_size: int
     ) -> Page[ChatMessageDto]:
-        await self._conversations.get_owned_participant(conversation_id, user_id)
+        if not await self._is_admin(user_id):
+            await self._conversations.get_owned_participant(conversation_id, user_id)
         return await self._chat.list_messages(conversation_id, user_id, page, page_size)
 
     async def post_message(

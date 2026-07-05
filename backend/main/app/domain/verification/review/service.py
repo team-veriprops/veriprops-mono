@@ -128,6 +128,13 @@ class ReviewService:
         )
         # A rejection reason auto-posts to the admin↔agent thread, tagged to that task (§11.1).
         await self._auto_post_rejection(verification_id, task, role, reason)
+        # Notify the agent of the revision request (§12.2 agent) — in-app + email, one publish.
+        if task.assigned_agent_id:
+            await publish_domain_event(DomainEvent(
+                type=EventType.TASK_REJECTED, verification_id=verification_id,
+                recipient_user_ids=(task.assigned_agent_id,),
+                data={"role": role.value, "reason": reason},
+            ))
         await self._derive_and_persist(verification_id, admin_id)
         return await self._tasks.get_model(task.id)
 

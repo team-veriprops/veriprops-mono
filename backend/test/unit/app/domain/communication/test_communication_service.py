@@ -29,7 +29,7 @@ def mock_db_session():
     db_session_ctx.reset(token)
 
 
-def _service(tasks):
+def _service(tasks, user_type="USER"):
     svc = object.__new__(CommunicationService)
     svc._conversations = MagicMock()
     svc._participants = MagicMock()
@@ -37,6 +37,8 @@ def _service(tasks):
     svc._verifications = MagicMock()
     svc._tasks = MagicMock()
     svc._tasks.list_for_verification = AsyncMock(return_value=list(tasks))
+    svc._users = MagicMock()
+    svc._users.get_model = AsyncMock(return_value=SimpleNamespace(user_type=user_type))
     return svc
 
 
@@ -64,6 +66,35 @@ async def test_approved_task_thread_is_read_only_for_agent():
     )
     with pytest.raises(ForbiddenException):
         await svc._assert_task_writable("t1", "agent-1")
+
+
+async def test_admin_sees_shared_inbox_and_counter():
+    """G4: an admin's conversation list + counter cover every verification thread, not just
+    ones they've personally joined."""
+    svc = _service(tasks=[], user_type="ADMIN")
+    svc._conversations.list_for_admin = AsyncMock(return_value=["all-threads"])
+    svc._conversations.unread_count_for_admin = AsyncMock(return_value=3)
+    svc._conversations.list_for_user = AsyncMock(return_value=[])
+    svc._participants.unread_conversation_count = AsyncMock(return_value=0)
+
+    convos = await svc.list_conversations("admin-1")
+    count = await svc.unread_count("admin-1")
+
+    assert convos == ["all-threads"]
+    assert count == 3
+    svc._conversations.list_for_admin.assert_awaited_with("admin-1")
+    svc._conversations.list_for_user.assert_not_called()
+
+
+async def test_non_admin_uses_participant_inbox():
+    svc = _service(tasks=[], user_type="USER")
+    svc._conversations.list_for_admin = AsyncMock(return_value=["all"])
+    svc._participants.unread_conversation_count = AsyncMock(return_value=1)
+
+    count = await svc.unread_count("cust-1")
+
+    assert count == 1
+    svc._conversations.list_for_admin.assert_not_called()
 
 
 async def test_customer_send_delegates_through_ownership_gate():

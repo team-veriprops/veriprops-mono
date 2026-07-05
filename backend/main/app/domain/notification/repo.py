@@ -1,7 +1,7 @@
 """Notification data access — the per-user feed, unread counter, and mark-read."""
 from __future__ import annotations
 
-from typing import Type
+from typing import List, Tuple, Type
 
 from kink import inject
 from sqlalchemy import and_, desc, func, select, update
@@ -14,7 +14,7 @@ from main.app.domain.notification.models import (
     SearchNotificationDto,
     UpdateNotificationDto,
 )
-from main.appodus_utils.db.models import Page
+from main.appodus_utils import Utils
 from main.appodus_utils.db.repo import GenericRepo
 
 
@@ -37,9 +37,13 @@ class NotificationRepo(
         super().__init__(db, model, query_dto)
         self.db = db
 
-    async def list_for_user(self, user_id: str, page: int, page_size: int) -> Page[Notification]:
+    async def list_for_user(
+        self, user_id: str, page: int, page_size: int
+    ) -> Tuple[List[Notification], int]:
+        """Returns ``(rows, total)`` — the service builds the typed page from DTOs so ORM
+        models never reach ``build_page``."""
         offset = page * page_size
-        where = and_(Notification.deleted.is_(False), Notification.user_id == user_id)
+        where = and_(Notification.deleted.is_(False), Notification.user_id == str(user_id))
         total = int((await self._session.execute(
             select(func.count(Notification.id)).where(where)
         )).scalar() or 0)
@@ -51,7 +55,7 @@ class NotificationRepo(
             .limit(page_size)
         )
         items = list((await self._session.execute(stmt)).scalars().all())
-        return self._db_utils.build_page(items, total, page, page_size)
+        return items, total
 
     async def exists_for_ref(self, notification_type: str, event_ref: str) -> bool:
         """True if a notification of this type already exists for this reference — used to
@@ -59,7 +63,7 @@ class NotificationRepo(
         where = and_(
             Notification.deleted.is_(False),
             Notification.type == notification_type,
-            Notification.event_ref == event_ref,
+            Notification.event_ref == Utils.uuid_to_hex(event_ref),
         )
         count = int((await self._session.execute(
             select(func.count(Notification.id)).where(where)

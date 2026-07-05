@@ -15,6 +15,7 @@ from main.app.domain.communication.conversation_participant.models import (
     SearchConversationParticipantDto,
     UpdateConversationParticipantDto,
 )
+from main.appodus_utils import Utils
 from main.appodus_utils.db.repo import GenericRepo
 
 
@@ -38,11 +39,14 @@ class ConversationParticipantRepo(
         self.db = db
 
     async def get_for(self, conversation_id: str, user_id: str) -> Optional[ConversationParticipant]:
+        # Reference columns are String(36). Entity ids travel as `.hex` (32-char, the DTO
+        # wire form) while user ids are `str(uuid)` (36-char, the JWT form) — coerce each to
+        # its canonical string so a freshly-created entity's `uuid.UUID` matches the stored ref.
         stmt = select(ConversationParticipant).where(
             and_(
                 ConversationParticipant.deleted.is_(False),
-                ConversationParticipant.conversation_id == conversation_id,
-                ConversationParticipant.user_id == user_id,
+                ConversationParticipant.conversation_id == Utils.uuid_to_hex(conversation_id),
+                ConversationParticipant.user_id == str(user_id),
             )
         )
         return (await self._session.execute(stmt)).scalars().first()
@@ -60,7 +64,7 @@ class ConversationParticipantRepo(
         stmt = select(ConversationParticipant).where(
             and_(
                 ConversationParticipant.deleted.is_(False),
-                ConversationParticipant.conversation_id == conversation_id,
+                ConversationParticipant.conversation_id == Utils.uuid_to_hex(conversation_id),
             )
         )
         return list((await self._session.execute(stmt)).scalars().all())

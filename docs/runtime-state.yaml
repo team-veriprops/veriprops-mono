@@ -2,11 +2,40 @@ session_id: run-s15-s16-comms-notifications
 command: resume
 
 status: idle
-phase: s16-complete
+phase: s16-complete + gap-closure + live-e2e-verified
 
-current_slice: null   # S15 (Phase 11) + S16 (Phase 12) delivered this resume. Next slice is S17 (Phase 13).
-current_subtask: "S15 + S16 complete, tested, committed. Communication layer + notification/event-bus
-  ship end-to-end. Next slice is S17 (Phase 13 public lookup & sharing)."
+current_slice: null   # S15 + S16 + gap-closures delivered & live-verified. Next slice is S17 (Phase 13).
+current_subtask: "S15 + S16 complete; deferred gaps closed (G1-G4); /dev/reset+seed restored; live HTTP
+  drive-through ALL PASSED (surfaced + fixed 3 runtime bugs). Next slice is S17 (Phase 13)."
+
+# ── Gap-closure + live-e2e follow-up (this turn) — see decision-log D24-D25 ──
+gap_closure_and_e2e:
+  gaps_closed:
+    G1: "Customer status-change chat auto-post: chat_autopost_subscriber on STATUS_CHANGED →
+         CommunicationService.auto_post_customer (reuses customer_status_label). Registered as the 4th bus
+         subscriber. Verified live (SYSTEM_AUTO breadcrumb appears in the customer thread on release)."
+    G2: "Task-rejection agent notification: ReviewService.reject_task publishes TASK_REJECTED to the
+         assigned agent (rule → VERIFICATION_REVISION_REQUEST email). Unit-tested."
+    G3: "Admin SLA-breach notification: SlaMonitorService adds UserRepo.list_admins ids to SlaBreached
+         recipients. Verified live (customer AND admin get SLA_BREACHED)."
+    G4: "Admin Chat unread counter (shared-inbox, D25): CommunicationService._is_admin →
+         ConversationRepo.list_verification_threads + per-admin read state; admins bypass membership on
+         read. Verified live (admin sees the thread + a non-zero counter)."
+  dev_seed: "Restored app/domain/dev/ (D24): /dev/reset + /dev/seed, prod-gated twice. Seeds a customer +
+             approved agents + an UNDER_REVIEW, SLA-overdue verification with review-approved tasks."
+  live_e2e: "backend/scripts/e2e_drive_through.py — real HTTP run against `python veriprops.py` (local):
+             reset→seed→customer login→clean fast-lane→phone-number HELD→admin approve→delivered→SLA sweep
+             (customer+admin SLA_BREACHED)→release (COMPLETED)→REPORT_READY+STATUS_CHANGED notifications
+             (counter=3)+§11.1 SYSTEM auto-post→admin shared-inbox+counter. ALL 19 checks PASS."
+  bugs_fixed_by_e2e:
+    - "UUID-vs-String references: entity.id is a native uuid.UUID but ref columns are String(36);
+       wire form is .hex (entities) vs str(uuid) (users). Coerced with Utils.uuid_to_hex / str at the
+       communication+notification repo/DTO boundaries (mocked unit tests could not catch this)."
+    - "ORM models passed to build_page (which validates DTOs) — chat/notification list repos now return
+       (rows, total) and the service builds the typed page from DTOs."
+    - "ReportService.release re-fetched a report created in the same uncommitted txn (get_model → None →
+       crash); now sets released_at on the attached row and returns it directly."
+  verification: "Backend 649 tests green after fixes; live e2e ALL PASS; frontend unchanged (299)."
 
 # ── S16 (Phase 12) summary ────────────────────────────────────────
 s16_notifications_event_bus:

@@ -563,3 +563,65 @@ publishes `SlaBreached` **once** per verification through the event bus.
 
 ### Revisit
 - Fold into a richer ops/analytics scheduler in S22 if needed.
+
+---
+
+## Decision: D24 — Restore the `/dev/reset` + `/dev/seed` contract (gap-closure follow-up)
+
+### Context
+CLAUDE.md's automation-determinism section declares `POST /dev/reset` + `POST /dev/seed` as a
+permanent contract for autonomous QA, but the `dev` domain was cleared in the greenfield rebuild
+and never restored — so a deterministic live drive-through had no way to seed data.
+
+### Chosen Option
+**Rebuild `app/domain/dev/`** (controller + service, no entity), production-gated twice (router
+mounts only in non-prod; `_require_non_prod()` 404s in prod). `reset()` clears domain rows keeping
+the super-admin + reference seeds; `seed()` builds a deterministic scenario (customer + approved
+agents + a `PAID`/`UNDER_REVIEW` verification with review-approved tasks, SLA overdue) and returns
+credentials/ids. Reuses `Utils.get_password_hash`, the domain models, and `VerificationTaskService`.
+
+### Tradeoffs
+- Pros: restores the documented QA contract; enables the live HTTP drive-through + future automation.
+- Cons: a seed must stay in step with the domain schema (it writes rows directly for determinism).
+
+### Revisit
+- Extend the seed as later slices add domains (disputes, payouts).
+
+---
+
+## Decision: D25 — Admin Chat counter is a shared-inbox model (gap-closure follow-up)
+
+### Context
+The §N.3 Chat counter is per-participant, but admins are not enrolled as participants of every
+verification thread — so without special handling an admin would see no Chat counter.
+
+### Chosen Option
+**Treat admins as a shared inbox:** `CommunicationService` detects `user_type == ADMIN` and returns
+*all* verification threads (`ConversationRepo.list_verification_threads`) with unread computed from
+that admin's own `ConversationParticipant.last_read_at` (a never-opened thread reads as unread).
+Admins bypass participant-membership on read/mark-read. Live SSE bumps for admins ride the 60-second
+poll rather than per-message fan-out (bounded).
+
+### Tradeoffs
+- Pros: admins get a meaningful, per-admin Chat counter without enrolling every admin per thread.
+- Cons: an extra id-type branch; admin counter latency is poll-bound (≤60s), not instant.
+
+### Revisit
+- Add per-admin SSE fan-out if instant admin counters become important.
+
+---
+
+## Note: three runtime bugs the live drive-through surfaced (mocked tests couldn't)
+
+The first real end-to-end run against a live backend caught defects unit tests (mocked repos) missed,
+all now fixed:
+1. **UUID-vs-String references.** `BaseEntity.id` is a native `UUID(as_uuid=True)` (so `entity.id` is
+   a `uuid.UUID`), but reference columns are `String(36)`; the wire form is `.hex` (32-char) for
+   entities and `str(uuid)` (36-char) for user ids (JWT). Communication/notification code now coerces
+   with `Utils.uuid_to_hex` (entity refs) / `str` (user refs) at the repo/DTO boundaries.
+2. **ORM models into `build_page`.** `build_page` validates its items as DTOs; the chat/notification
+   list repos were passing ORM models. They now return `(rows, total)` and the service builds the
+   typed page from DTOs.
+3. **Get-after-create returns None.** `ReportService.release` re-fetched a report created in the same
+   uncommitted transaction (`get_model(report.id)` → `None` → crash). It now sets the timestamp on the
+   attached row and returns it directly.

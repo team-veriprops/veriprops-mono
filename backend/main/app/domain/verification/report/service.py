@@ -63,14 +63,16 @@ class ReportService:
             release_reason=reason,
             released_by=released_by,
         ))
-        await self._set_released_at(report.id)
+        # Set the timestamp on the attached row and return it directly — re-fetching a row
+        # created in this same (uncommitted) transaction can miss it.
+        report.released_at = Utils.datetime_now()
         self._audit.schedule(
             action=AuditActionType.REPORT_RELEASED,
             resource_type="report", resource_id=report.id, actor_id=released_by,
             details={"verification_id": verification_id, "version": next_version,
                      "trust_score": composite_trust_score, "reason": reason},
         )
-        return await self._repo.get_model(report.id)
+        return report
 
     async def supersede_current(self, verification_id: str, actor_id: str) -> Optional[Report]:
         """Move the live RELEASED report to SUPERSEDED (e.g. on reopen, §8.6). The report

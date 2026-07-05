@@ -70,3 +70,22 @@ class ConversationRepo(
             .order_by(desc(Conversation.last_message_at))
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_verification_threads(self) -> List[Conversation]:
+        """Every verification-scoped thread that has a message — the admin shared-inbox
+        source (§N.3). Admins see all customer↔admin + admin↔agent threads, not only ones
+        they have personally sent into."""
+        stmt = (
+            select(Conversation)
+            .where(
+                and_(
+                    Conversation.deleted.is_(False),
+                    Conversation.type.in_(
+                        [ConversationType.CUSTOMER_ADMIN.value, ConversationType.ADMIN_AGENT.value]
+                    ),
+                    Conversation.last_message_at.is_not(None),
+                )
+            )
+            .order_by(desc(Conversation.last_message_at))
+        )
+        return list((await self._session.execute(stmt)).scalars().all())

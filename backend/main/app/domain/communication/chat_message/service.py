@@ -103,7 +103,7 @@ class ChatMessageService:
 
         message = await self._repo.create_return_model(
             CreateChatMessageDto(
-                conversation_id=conversation.id,
+                conversation_id=Utils.uuid_to_hex(conversation.id),
                 sender_user_id=sender_user_id,
                 sender_kind=sender_kind,
                 body=body,
@@ -196,14 +196,14 @@ class ChatMessageService:
     async def list_messages(
         self, conversation_id: str, viewer_id: Optional[str], page: int, page_size: int
     ) -> Page[ChatMessageDto]:
-        raw = await self._repo.list_delivered_page(conversation_id, viewer_id, page, page_size)
-        dtos = [await self._to_dto(m, viewer_id) for m in raw.items]
-        return Page[ChatMessageDto](items=dtos, meta=raw.meta)
+        rows, total = await self._repo.list_delivered_page(conversation_id, viewer_id, page, page_size)
+        dtos = [await self._to_dto(m, viewer_id) for m in rows]
+        return self._repo._db_utils.build_page(dtos, total, page, page_size)
 
     async def held_queue(self, page: int, page_size: int) -> Page[HeldMessageDto]:
-        raw = await self._repo.list_held_page(page, page_size)
-        items = [await self._to_held_dto(m) for m in raw.items]
-        return Page[HeldMessageDto](items=items, meta=raw.meta)
+        rows, total = await self._repo.list_held_page(page, page_size)
+        dtos = [await self._to_held_dto(m) for m in rows]
+        return self._repo._db_utils.build_page(dtos, total, page, page_size)
 
     async def held_count(self) -> int:
         return await self._repo.held_count()

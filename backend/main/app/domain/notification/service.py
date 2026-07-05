@@ -89,9 +89,9 @@ class NotificationService:
     # ── Feed / counter / read ─────────────────────────────────────────
 
     async def feed(self, user_id: str, page: int, page_size: int) -> Page[NotificationDto]:
-        raw = await self._repo.list_for_user(user_id, page, page_size)
-        items = [self._to_dto(n) for n in raw.items]
-        return Page[NotificationDto](items=items, meta=raw.meta)
+        rows, total = await self._repo.list_for_user(user_id, page, page_size)
+        dtos = [self._to_dto(n) for n in rows]
+        return self._repo._db_utils.build_page(dtos, total, page, page_size)
 
     async def unread_count(self, user_id: str) -> int:
         return await self._repo.unread_count(user_id)

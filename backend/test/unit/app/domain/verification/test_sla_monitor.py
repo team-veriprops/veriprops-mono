@@ -28,12 +28,16 @@ def mock_db_session():
     db_session_ctx.reset(token)
 
 
-def _service(overdue, already_notified):
+def _service(overdue, already_notified, admins=()):
     svc = object.__new__(SlaMonitorService)
     svc._verifications = MagicMock()
     svc._verifications.list_active_overdue = AsyncMock(return_value=overdue)
     svc._notifications = MagicMock()
     svc._notifications.exists_for_ref = AsyncMock(return_value=already_notified)
+    svc._users = MagicMock()
+    svc._users.list_admins = AsyncMock(
+        return_value=[SimpleNamespace(id=a) for a in admins]
+    )
     return svc
 
 
@@ -47,13 +51,14 @@ async def test_publishes_sla_breach_for_new_overdue(monkeypatch):
         sla_monitor_mod, "publish_domain_event",
         AsyncMock(side_effect=lambda e: published.append(e)),
     )
-    svc = _service(overdue=[_verification()], already_notified=False)
+    svc = _service(overdue=[_verification()], already_notified=False, admins=["admin-1"])
 
     flagged = await svc.sweep_sla_breaches()
 
     assert flagged == 1
     assert published[0].type == EventType.SLA_BREACHED
-    assert published[0].recipient_user_ids == ("cust-1",)
+    # §12.2: the customer AND the ops team are notified (G3).
+    assert published[0].recipient_user_ids == ("cust-1", "admin-1")
 
 
 async def test_skips_already_notified_verifications(monkeypatch):

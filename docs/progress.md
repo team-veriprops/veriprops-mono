@@ -212,8 +212,21 @@ status: running (S1–S4 foundation)
       SLA-breach notification + dispute/payout/re-check sources (S18/S19) are documented follow-ups; full
       live UI drive-through deferred (test-substitute gate, per S13/S14).
 
+- Gap-closure + live e2e *(follow-up to S15/S16)*.
+      Closed the deferred gaps: **G1** customer status-change chat auto-post (`chat_autopost_subscriber` on
+      STATUS_CHANGED → `auto_post_customer`, 4th bus subscriber); **G2** task-rejection agent notification
+      (`reject_task` publishes TASK_REJECTED); **G3** admin SLA-breach notification (`SlaMonitorService` adds
+      `UserRepo.list_admins` to recipients); **G4** admin Chat unread counter as a shared-inbox model (D25).
+      Restored the **`/dev/reset` + `/dev/seed`** contract (`app/domain/dev/`, prod-gated twice, D24) seeding
+      a customer + approved agents + an UNDER_REVIEW SLA-overdue verification. Ran a **live HTTP drive-through**
+      (`backend/scripts/e2e_drive_through.py`) against a real server — **all 19 checks PASS** (fraud
+      fast-lane/hold → admin approve → delivered; SLA sweep → customer+admin; release → REPORT_READY +
+      STATUS_CHANGED + §11.1 auto-post; admin shared-inbox counter). The live run **surfaced and fixed 3
+      runtime bugs** mocked tests missed: UUID-vs-String reference coercion, ORM models passed to `build_page`,
+      and a get-after-create-returns-None in `ReportService.release`. Backend 649 tests green; frontend 299.
+
 ## Current Slice
-- none — S15 (Phase 11) + S16 (Phase 12) delivered & committed. Communication + notifications ship end-to-end.
+- none — S15 (Phase 11) + S16 (Phase 12) + gap-closures delivered, committed, and **live-verified** end-to-end.
 
 ## Post-MVP hardening (S1–S14 review pass)
 - **Persona dashboards completed.** `/portal/dashboard` and `/admin/dashboard` did not exist (both

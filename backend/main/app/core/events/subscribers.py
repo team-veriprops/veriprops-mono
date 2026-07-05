@@ -53,9 +53,33 @@ async def chat_counter_subscriber(event: DomainEvent) -> None:
         pass
 
 
+async def chat_autopost_subscriber(event: DomainEvent) -> None:
+    """Auto-post the status change into the customer↔admin thread (§11.1). Best-effort — the
+    notification + SSE already fire; this is the human-readable thread breadcrumb."""
+    if event.type != EventType.STATUS_CHANGED or not event.verification_id:
+        return
+    if not event.recipient_user_ids:
+        return
+    try:
+        from main.app.core.state.status import VerificationStatus
+        from main.app.domain.communication.service import CommunicationService
+        from main.app.domain.verification.tracking.labels import customer_status_label
+
+        customer_id = event.recipient_user_ids[0]
+        status = event.data.get("status")
+        label = customer_status_label(VerificationStatus(status)) if status else "updated"
+        comms = di[CommunicationService]
+        await comms.auto_post_customer(
+            event.verification_id, customer_id, f"Status update: {label}"
+        )
+    except Exception:  # noqa: BLE001 — auto-post is a best-effort breadcrumb, never fatal
+        pass
+
+
 def register_subscribers(bus: EventBus) -> None:
     """Wire the standard subscribers onto the bus (idempotent — clears first)."""
     bus.clear()
     bus.subscribe(realtime_subscriber)
     bus.subscribe(notification_subscriber)
     bus.subscribe(chat_counter_subscriber)
+    bus.subscribe(chat_autopost_subscriber)

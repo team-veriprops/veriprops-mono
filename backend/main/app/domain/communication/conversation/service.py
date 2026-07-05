@@ -99,18 +99,40 @@ class ConversationService:
         for convo in conversations:
             membership = by_conv.get(convo.id)
             unread = self._unread_for(convo, membership.last_read_at if membership else None)
-            result.append(
-                ConversationDto(
-                    id=convo.id,
-                    type=ConversationType(convo.type),
-                    verification_id=convo.verification_id,
-                    subject=convo.subject,
-                    last_message_at=convo.last_message_at,
-                    closed=convo.closed,
-                    unread=unread,
-                )
-            )
+            result.append(self._to_dto(convo, unread))
         return result
+
+    async def list_for_admin(self, admin_id: str) -> List[ConversationDto]:
+        """Admin shared inbox (§N.3): every verification thread, unread computed against this
+        admin's own read state (a thread the admin has never opened reads as unread)."""
+        threads = await self._repo.list_verification_threads()
+        result: List[ConversationDto] = []
+        for convo in threads:
+            participant = await self._participants.get_for(convo.id, admin_id)
+            unread = self._unread_for(convo, participant.last_read_at if participant else None)
+            result.append(self._to_dto(convo, unread))
+        return result
+
+    async def unread_count_for_admin(self, admin_id: str) -> int:
+        threads = await self._repo.list_verification_threads()
+        count = 0
+        for convo in threads:
+            participant = await self._participants.get_for(convo.id, admin_id)
+            if self._unread_for(convo, participant.last_read_at if participant else None):
+                count += 1
+        return count
+
+    @staticmethod
+    def _to_dto(convo: Conversation, unread: int) -> ConversationDto:
+        return ConversationDto(
+            id=convo.id,
+            type=ConversationType(convo.type),
+            verification_id=convo.verification_id,
+            subject=convo.subject,
+            last_message_at=convo.last_message_at,
+            closed=convo.closed,
+            unread=unread,
+        )
 
     @staticmethod
     def _unread_for(convo: Conversation, last_read_at: Optional[datetime]) -> int:

@@ -27,6 +27,7 @@ class ConversationParticipantService:
         self, conversation_id: str, user_id: str, role: Optional[str] = None
     ) -> ConversationParticipant:
         """Idempotently add a user to a thread (no-op if already a participant)."""
+        conversation_id, user_id = Utils.uuid_to_hex(conversation_id), str(user_id)
         existing = await self._repo.get_for(conversation_id, user_id)
         if existing:
             return existing

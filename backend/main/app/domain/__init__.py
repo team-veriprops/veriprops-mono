@@ -23,6 +23,7 @@ from main.app.domain.payment.controller import payment_router
 
 from main.appodus_utils.integrations.webhook import webhook_router
 from main.app.domain.audit.controller import audit_router
+from main.appodus_utils.config.settings import Environment
 
 router = APIRouter()
 router.include_router(config_router)
@@ -43,3 +44,9 @@ router.include_router(notification_preference_router)
 router.include_router(payment_router)
 router.include_router(audit_router)
 router.include_router(webhook_router)
+
+# Dev/QA reset+seed — first production gate: the router only mounts in non-prod. The
+# handlers also call `_require_non_prod()` (404 in prod) as the second gate.
+if settings.ENVIRONMENT != Environment.PRODUCTION:
+    from main.app.domain.dev.controller import dev_router
+    router.include_router(dev_router)

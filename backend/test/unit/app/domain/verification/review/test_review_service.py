@@ -132,6 +132,22 @@ class TestApproveReject:
         # derive → IN_PROGRESS persisted
         assert svc._verification_repo.update.await_args.args[1].status == VerificationStatus.IN_PROGRESS.value
 
+    async def test_reject_notifies_the_agent(self, monkeypatch):
+        """G2: a rejection publishes a TASK_REJECTED event to the assigned agent (§12.2)."""
+        import main.app.domain.verification.review.service as review_mod
+        from main.app.core.events.events import EventType
+
+        published = []
+        monkeypatch.setattr(
+            review_mod, "publish_domain_event",
+            AsyncMock(side_effect=lambda e: published.append(e)),
+        )
+        svc = _make_service(_verification(), _standard_tasks(review=None))
+        await svc.reject_task("v-1", AgentRole.FIELD, "blurry photos", "admin-1")
+
+        rejected = [e for e in published if e.type == EventType.TASK_REJECTED]
+        assert rejected and rejected[0].recipient_user_ids == ("agent-1",)
+
 
 class TestRelease:
     async def test_happy_path_flips_approved_and_completes(self):
