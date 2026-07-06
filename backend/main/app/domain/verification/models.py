@@ -36,6 +36,12 @@ class Verification(BaseEntity):
     fx_rate_at_quote = Column(Float, nullable=True)
     price_lock_expires_at = Column(UTCDateTime, nullable=True)
 
+    # Growth discounts (§17.1) recorded at submit, in NGN kobo. price_locked_minor is the
+    # NET (post-discount) contractual amount actually charged. These break it down for the
+    # customer and drive the referral-credit debit at PAID.
+    first_time_discount_minor = Column(BigInteger, nullable=False, server_default="0")
+    referral_credit_applied_minor = Column(BigInteger, nullable=False, server_default="0")
+
     consent_snapshot_id = Column(String(36), nullable=True)
 
     # Resumable wizard state (VID/DRAFT created on step-1 load, autosaved per step).
@@ -44,6 +50,10 @@ class Verification(BaseEntity):
 
     paid_at = Column(UTCDateTime, nullable=True)
     sla_due_date = Column(Date, nullable=True)
+
+    # Abandoned-draft recovery (§17.1): set the first time a recovery reminder fires so the
+    # email is sent exactly once per abandoned draft; also flips the customer-facing banner.
+    recovery_reminded_at = Column(UTCDateTime, nullable=True)
 
     # Admin operational hold (§7.5) — a flag, NOT a state: the derived status is
     # unaffected so work resumes cleanly. Set/cleared by the admin control panel.
@@ -81,6 +91,8 @@ class UpdateVerificationDto(Object):
     charge_currency: Optional[str] = None
     charge_amount_minor: Optional[int] = None
     fx_rate_at_quote: Optional[float] = None
+    first_time_discount_minor: Optional[int] = None
+    referral_credit_applied_minor: Optional[int] = None
     consent_snapshot_id: Optional[str] = None
     draft_step: Optional[int] = None
     draft_payload: Optional[str] = None
@@ -127,6 +139,20 @@ class PriceQuoteDto(Object):
     currency: TransactionCurrency
     charge_amount_minor: int
     fx_rate: float
+    # Growth discounts (§17.1, §5.2) — all in NGN kobo. ``net_price_ngn_minor`` is what the
+    # customer will actually be charged; the breakdown lines are shown in the quote.
+    first_time_discount_minor: int = 0
+    referral_credit_applied_minor: int = 0
+    total_discount_minor: int = 0
+    net_price_ngn_minor: int = 0
+    discount_cap_hit: bool = False
+
+
+class LineItemDto(Object):
+    """A single itemized pricing line for a tier (§5.2, §18.1 pricing config)."""
+
+    label: str
+    amount_minor: int
 
 
 class VerificationDto(Object):
@@ -141,9 +167,25 @@ class VerificationDto(Object):
     charge_amount_minor: Optional[int] = None
     fx_rate_at_quote: Optional[float] = None
     price_lock_expires_at: Optional[datetime] = None
+    first_time_discount_minor: int = 0
+    referral_credit_applied_minor: int = 0
     paid_at: Optional[datetime] = None
     sla_due_date: Optional[date] = None
     draft_step: int = 0
+
+
+class PriceRefreshDto(Object):
+    """Result of re-locking an expired price before payment (§17.1 re-lock guard).
+
+    ``price_changed`` drives the mandatory "price updated" interstitial — the customer is
+    never silently charged a different amount than they last saw."""
+
+    price_changed: bool
+    previous_price_minor: int
+    net_price_minor: int
+    first_time_discount_minor: int
+    referral_credit_applied_minor: int
+    price_lock_expires_at: Optional[datetime] = None
 
 
 class VerificationDraftDto(Object):

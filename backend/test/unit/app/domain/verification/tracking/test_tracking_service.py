@@ -141,6 +141,7 @@ class TestDashboardSummary:
         svc._verification_repo.page_for_customer = AsyncMock(
             return_value=(list(recent_rows), len(recent_rows))
         )
+        svc._verification_repo.latest_unpaid_for_customer = AsyncMock(return_value=None)
         svc._properties.get_model = AsyncMock(return_value=SimpleNamespace(address="1 Main St"))
         return svc
 

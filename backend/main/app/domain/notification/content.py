@@ -37,6 +37,9 @@ _CONTENT = {
     EventType.PAYOUT_APPROVED: ("Payout approved", "Your payout has been approved.", lambda _v: "/agents/payouts"),
     EventType.PAYOUT_HELD: ("Payout on hold", "Your payout is on hold pending review.", lambda _v: "/agents/payouts"),
     EventType.COMMISSION_CLEARED: ("Earnings available", "Funds have cleared and are now available to withdraw.", lambda _v: "/agents/earnings"),
+    EventType.REFERRAL_CREDIT_EARNED: ("Referral credit earned", "A referral credit has cleared and is ready to use at checkout.", lambda _v: "/portal/referrals"),
+    EventType.ABANDONMENT_RECOVERY: ("Finish your verification", "Your saved verification is waiting — pick up where you left off.", _portal_link),
+    EventType.BROADCAST_ANNOUNCEMENT: ("Announcement", None, lambda _v: "/portal/notifications"),
     EventType.CONFLICT_FLAGGED: ("Conflict detected", "A conflict was flagged on a verification.", _admin_link),
     EventType.AGENT_NO_SHOW: ("Agent no-show", "An assigned agent did not accept in time.", _admin_link),
     EventType.FRAUD_FLAGGED_MESSAGE: ("Message held for review", "A message was flagged and is awaiting review.", lambda _v: "/admin/messages"),
@@ -66,6 +69,11 @@ _CONTEXT_KEYS = {
     EventType.DISPUTE_OPENED: {MessageContext.DISPUTE_VERIFICATION_ID.value: "vid"},
     EventType.DISPUTE_RESOLVED: {MessageContext.DISPUTE_RESOLUTION_OUTCOME.value: "outcome"},
     EventType.PAYOUT_HELD: {MessageContext.PAYOUT_HOLD_REASON.value: "reason"},
+    EventType.ABANDONMENT_RECOVERY: {MessageContext.ABANDONMENT_VID.value: "vid"},
+    EventType.BROADCAST_ANNOUNCEMENT: {
+        MessageContext.BROADCAST_SUBJECT.value: "subject",
+        MessageContext.BROADCAST_BODY_HTML.value: "body",
+    },
 }
 
 

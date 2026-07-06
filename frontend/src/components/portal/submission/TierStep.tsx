@@ -72,21 +72,55 @@ export default function TierStep({ tier, currency, onChange }: Props) {
 
       {quote && (
         <div className="rounded-lg border border-border p-4">
-          {/* NGN is the prominent, certain, contractual figure (§4.4). */}
-          <p className="text-2xl font-bold text-foreground" data-testid="verify-new-price-ngn">
-            {getCurrencySymbol(TransactionCurrency.NGN)}
-            {major(quote.priceNgnMinor)}
-          </p>
-          {isForeign && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              You&apos;ll be charged in Naira; your bank converts this — typically around{" "}
-              {getCurrencySymbol(currency)}
-              {major(quote.chargeAmountMinor)} (indicative, ±3%).
-            </p>
-          )}
-          <p className="mt-3 text-xs text-muted-foreground">
-            The price and rate lock for 24 hours when you continue to payment.
-          </p>
+          {(() => {
+            const hasDiscount = quote.totalDiscountMinor > 0;
+            const ngn = getCurrencySymbol(TransactionCurrency.NGN);
+            return (
+              <>
+                {/* NGN is the prominent, certain, contractual figure (§4.4). */}
+                <p className="text-2xl font-bold text-foreground" data-testid="verify-new-price-ngn">
+                  {ngn}
+                  {major(quote.netPriceNgnMinor)}
+                </p>
+
+                {/* Discount breakdown (§17.1) — auto-applied, shown as line items. */}
+                {hasDiscount && (
+                  <div className="mt-2 space-y-1 text-sm" data-testid="verify-new-discount">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Price</span>
+                      <span>{ngn}{major(quote.priceNgnMinor)}</span>
+                    </div>
+                    {quote.firstTimeDiscountMinor > 0 && (
+                      <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                        <span>First-time discount</span>
+                        <span>−{ngn}{major(quote.firstTimeDiscountMinor)}</span>
+                      </div>
+                    )}
+                    {quote.referralCreditAppliedMinor > 0 && (
+                      <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                        <span>Referral credit</span>
+                        <span>−{ngn}{major(quote.referralCreditAppliedMinor)}</span>
+                      </div>
+                    )}
+                    {quote.discountCapHit && (
+                      <p className="text-xs text-muted-foreground">Maximum discount applied.</p>
+                    )}
+                  </div>
+                )}
+
+                {isForeign && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    You&apos;ll be charged in Naira; your bank converts this — typically around{" "}
+                    {getCurrencySymbol(currency)}
+                    {major(quote.chargeAmountMinor)} (indicative, ±3%).
+                  </p>
+                )}
+                <p className="mt-3 text-xs text-muted-foreground">
+                  The price and rate lock for 24 hours when you continue to payment.
+                </p>
+              </>
+            );
+          })()}
         </div>
       )}
     </div>

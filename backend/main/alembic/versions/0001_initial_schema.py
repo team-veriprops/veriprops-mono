@@ -65,10 +65,13 @@ def _create_users():
         sa.Column("failed_login_count", sa.Integer(), nullable=False, server_default="0"),
         # folded from a7b8c9d0e1f2 (S51-S52)
         sa.Column("credit_balance_kobo", sa.BigInteger(), nullable=False, server_default="0"),
+        # §17.1 referral linkage — the referrer this user signed up under (S21).
+        sa.Column("referred_by", sa.String(length=36), nullable=True),
         *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("email_normalized", name="uq_users_email"),
     )
     op.create_index("ix_users_phone_e164", "users", ["phone_e164"], unique=False)
+    op.create_index("ix_users_referred_by", "users", ["referred_by"], unique=False)
     op.create_index("ix_users_deleted", "users", ["deleted"], unique=False)
     op.create_index("ix_users_id", "users", ["id"], unique=True)
 
@@ -427,11 +430,16 @@ def _create_verifications():
         sa.Column("charge_amount_minor", sa.BigInteger(), nullable=True),
         sa.Column("fx_rate_at_quote", sa.Float(), nullable=True),
         sa.Column("price_lock_expires_at", UTCDateTime, nullable=True),
+        # Growth discounts recorded at submit (§17.1, S21); price_locked_minor is the NET.
+        sa.Column("first_time_discount_minor", sa.BigInteger(), nullable=False, server_default="0"),
+        sa.Column("referral_credit_applied_minor", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("consent_snapshot_id", sa.String(length=36), nullable=True),
         sa.Column("draft_step", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("draft_payload", sa.Text(), nullable=True),
         sa.Column("paid_at", UTCDateTime, nullable=True),
         sa.Column("sla_due_date", sa.Date(), nullable=True),
+        # Abandoned-draft recovery marker (§17.1, S21) — one reminder ever.
+        sa.Column("recovery_reminded_at", UTCDateTime, nullable=True),
         # Admin operational hold (§7.5) — a flag, not a state (see Verification model).
         sa.Column("paused", sa.Boolean(), nullable=False, server_default="false"),
         # Public VID-lookup visibility (§13.1 "Public" sharing mode).
@@ -465,6 +473,9 @@ def _create_payments():
         sa.Column("charge_currency", sa.String(length=8), nullable=True),
         sa.Column("charge_amount_minor", sa.BigInteger(), nullable=True),
         sa.Column("checkout_url", sa.String(length=1024), nullable=True),
+        # Anti-farming instrument marker (§17.1 / D34, S21) — gateway card fingerprint, never
+        # raw card data. Null under PAYMENT_STUB_MODE.
+        sa.Column("card_fingerprint", sa.String(length=128), nullable=True),
         sa.Column("failure_count", sa.Integer(), nullable=False, server_default="0"),
         # Chargeback flag (§6a.1) — sub-process detail lives on the chargebacks row.
         sa.Column("chargeback_status", sa.String(length=24), nullable=True),
@@ -477,6 +488,7 @@ def _create_payments():
     op.create_index("ix_payments_customer_id", "payments", ["customer_id"], unique=False)
     op.create_index("ix_payments_tx_ref", "payments", ["tx_ref"], unique=False)
     op.create_index("ix_payments_gateway_event", "payments", ["gateway_event_id"], unique=False)
+    op.create_index("ix_payments_card_fingerprint", "payments", ["card_fingerprint"], unique=False)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -885,6 +897,43 @@ def _create_payouts():
     op.create_index("ix_payouts_status", "payouts", ["status"], unique=False)
 
 
+def _create_referrals():
+    # A user's shareable referral link/code (§17.1, S21).
+    op.create_table(
+        "referrals",
+        sa.Column("referrer_user_id", sa.String(length=36), nullable=False),
+        sa.Column("code", sa.String(length=16), nullable=False),
+        *AlembicUtils.base_audit_columns(),
+        sa.UniqueConstraint("referrer_user_id", name="uq_referrals_referrer"),
+        sa.UniqueConstraint("code", name="uq_referrals_code"),
+    )
+    op.create_index("ix_referrals_id", "referrals", ["id"], unique=True)
+    op.create_index("ix_referrals_referrer", "referrals", ["referrer_user_id"], unique=False)
+    op.create_index("ix_referrals_code", "referrals", ["code"], unique=False)
+
+
+def _create_referral_credits():
+    # Referral-credit ledger — PENDING until the invitee's payment clears the chargeback
+    # window, then CLEARED to the referrer's balance (§17.1 / D35, S21).
+    op.create_table(
+        "referral_credits",
+        sa.Column("referrer_user_id", sa.String(length=36), nullable=False),
+        sa.Column("invitee_user_id", sa.String(length=36), nullable=False),
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("amount_minor", sa.BigInteger(), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="PENDING"),
+        sa.Column("clearing_until", UTCDateTime, nullable=True),
+        sa.Column("cleared_at", UTCDateTime, nullable=True),
+        sa.Column("void_reason", sa.String(length=64), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_referral_credits_id", "referral_credits", ["id"], unique=True)
+    op.create_index("ix_referral_credits_referrer", "referral_credits", ["referrer_user_id"], unique=False)
+    op.create_index("ix_referral_credits_invitee", "referral_credits", ["invitee_user_id"], unique=False)
+    op.create_index("ix_referral_credits_verification", "referral_credits", ["verification_id"], unique=False)
+    op.create_index("ix_referral_credits_status", "referral_credits", ["status"], unique=False)
+
+
 def _create_report_acknowledgements():
     # Customer access-gate acknowledgement, recorded against the report version (§10.1).
     op.create_table(
@@ -1105,6 +1154,8 @@ _TABLE_BUILDERS = [
     ("commission_rules", _create_commission_rules),
     ("agent_bank_accounts", _create_agent_bank_accounts),
     ("payouts", _create_payouts),
+    ("referrals", _create_referrals),
+    ("referral_credits", _create_referral_credits),
 ]
 
 

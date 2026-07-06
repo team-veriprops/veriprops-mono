@@ -31,6 +31,11 @@ class EventType(str, enum.Enum):
     PAYOUT_APPROVED = "PAYOUT_APPROVED"        # source: S19
     PAYOUT_HELD = "PAYOUT_HELD"                # source: S19
     COMMISSION_CLEARED = "COMMISSION_CLEARED"  # source: S19 — earnings moved to available (§15.1)
+    REFERRAL_CREDIT_EARNED = "REFERRAL_CREDIT_EARNED"  # source: S21 — referral credit cleared (§17.1)
+    # Growth (§17)
+    ABANDONMENT_RECOVERY = "ABANDONMENT_RECOVERY"  # source: S21 — abandoned-draft recovery email (§17.1)
+    # Admin broadcast (§18.1) — an admin announcement fanned out to an audience (S22)
+    BROADCAST_ANNOUNCEMENT = "BROADCAST_ANNOUNCEMENT"
     # Admin lifecycle
     CONFLICT_FLAGGED = "CONFLICT_FLAGGED"
     AGENT_NO_SHOW = "AGENT_NO_SHOW"

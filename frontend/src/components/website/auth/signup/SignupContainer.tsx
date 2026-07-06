@@ -42,6 +42,8 @@ export default function SignupContainer() {
   const intent = isAuthIntent(intentParam) ? intentParam : AuthIntent.DEFAULT;
   const tier = searchParams.get("tier");
   const redirect = searchParams.get("redirect");
+  // §17.1 referral capture — an unknown code is ignored server-side, never blocks signup.
+  const referralCode = searchParams.get("ref") ?? undefined;
   const emailParam = searchParams.get("email") ?? "";
   const firstNameParam = searchParams.get("firstName") ?? "";
   const lastNameParam = searchParams.get("lastName") ?? "";
@@ -202,6 +204,7 @@ export default function SignupContainer() {
         consents,
         intent,
         deviceFingerprint: getDeviceFingerprint(),
+        referralCode,
       });
 
       clearLocalDraft(step1.email);

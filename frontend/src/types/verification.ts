@@ -82,6 +82,22 @@ export interface PriceQuote {
   currency: TransactionCurrency;
   chargeAmountMinor: number;
   fxRate: number;
+  // Growth discounts (§17.1). netPriceNgnMinor is what the customer is actually charged.
+  firstTimeDiscountMinor: number;
+  referralCreditAppliedMinor: number;
+  totalDiscountMinor: number;
+  netPriceNgnMinor: number;
+  discountCapHit: boolean;
+}
+
+/** Re-lock result before payment (§17.1 re-lock guard) — priceChanged drives the interstitial. */
+export interface PriceRefresh {
+  priceChanged: boolean;
+  previousPriceMinor: number;
+  netPriceMinor: number;
+  firstTimeDiscountMinor: number;
+  referralCreditAppliedMinor: number;
+  priceLockExpiresAt?: string;
 }
 
 export interface SubmitVerificationRequest {
@@ -103,6 +119,8 @@ export interface Verification {
   chargeAmountMinor?: number;
   fxRateAtQuote?: number;
   priceLockExpiresAt?: string;
+  firstTimeDiscountMinor: number;
+  referralCreditAppliedMinor: number;
   paidAt?: string;
   slaDueDate?: string;
   draftStep: number;

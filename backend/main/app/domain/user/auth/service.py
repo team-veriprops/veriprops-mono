@@ -147,6 +147,10 @@ class AuthService:
             else []
         )
 
+        # §17.1 referral linkage — resolve the (optional) referral code to a referrer id.
+        # An unknown/invalid code is silently ignored (never blocks signup).
+        referred_by = await self._resolve_referrer(req.referral_code)
+
         user = await self._user_service.create_user(CreateUserDto(
             first_name=req.first_name,
             last_name=req.last_name,
@@ -161,6 +165,7 @@ class AuthService:
             personas=intent_persona,
             email_verified=email_ok,
             phone_verified=phone_ok,
+            referred_by=referred_by,
         ))
 
         # Verified markers are single-use — drop them so a future signup attempt
@@ -186,6 +191,16 @@ class AuthService:
             device_fingerprint=req.device_fingerprint,
         )
         return user
+
+    async def _resolve_referrer(self, referral_code: Optional[str]) -> Optional[str]:
+        """Map a referral code to the referrer's user id (§17.1). Resolved lazily via DI so
+        the auth domain never imports the referral service at module load. Unknown → None."""
+        if not referral_code:
+            return None
+        from kink import di
+
+        from main.app.domain.referral.service import ReferralService
+        return await di[ReferralService].resolve_referrer_id(referral_code)
 
     # ── OAuth ─────────────────────────────────────────────────────
     async def find_or_create_oauth_user(

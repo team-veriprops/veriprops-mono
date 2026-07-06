@@ -6,6 +6,7 @@ import {
   Payment,
   PaymentMethodKind,
   PriceQuote,
+  PriceRefresh,
   SubmitVerificationRequest,
   Verification,
   VerificationDraft,
@@ -83,6 +84,11 @@ export class VerificationService {
 
   submit(id: string, payload: SubmitVerificationRequest): Promise<SuccessResponse<Verification>> {
     return this.http.post(`/verifications/${id}/submit`, payload);
+  }
+
+  /** Re-lock an expired price before payment (§17.1). priceChanged drives the interstitial. */
+  refreshLock(id: string): Promise<SuccessResponse<PriceRefresh>> {
+    return this.http.post(`/verifications/${id}/refresh-lock`);
   }
 
   initiatePayment(

@@ -57,6 +57,8 @@ class User(BaseEntity):
 
     # Phase 17 — referral credits (stored in kobo to avoid float precision issues)
     credit_balance_kobo = Column(BigInteger, nullable=False, default=0)
+    # Phase 17 — the referrer this user signed up under (§17.1), user id (str form). Null = organic.
+    referred_by = Column(String(36), nullable=True, index=True)
 
     password_hash = Column(String(255), nullable=True)  # nullable for OAuth-only users
     avatar_url = Column(String(512), nullable=True)
@@ -88,6 +90,7 @@ class CreateUserDto(UserBaseDto):
     admin_sub_role: Optional[AdminSubRole] = None
     email_verified: bool = False
     phone_verified: bool = False
+    referred_by: Optional[str] = None
 
 
 class _CreateUserDto(CreateUserDto):
@@ -114,6 +117,7 @@ class UpdateUserDto(Object):
     admin_sub_role: Optional[str] = None
     trust_status: Optional[str] = None
     credit_balance_kobo: Optional[int] = None
+    referred_by: Optional[str] = None
     password_hash: Optional[str] = None
     avatar_url: Optional[str] = None
     locked_until: Optional[datetime] = None

@@ -48,6 +48,14 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.PAYOUT_HELD: NotificationRule(email=True, template=_T.VERIFICATION_PAYOUT_HELD),
     # Positive-movement earnings alert (§15.1): in-app only, no external template.
     EventType.COMMISSION_CLEARED: NotificationRule(in_app=True),
+    # Referral credit cleared to the referrer's balance (§17.1): in-app only.
+    EventType.REFERRAL_CREDIT_EARNED: NotificationRule(in_app=True),
+    # Abandoned-draft recovery (§17.1): one email, no in-app entry (it's a re-engagement nudge).
+    EventType.ABANDONMENT_RECOVERY: NotificationRule(
+        in_app=False, email=True, template=_T.VERIFICATION_ABANDONMENT_RECOVERY
+    ),
+    # Admin broadcast to an audience (§18.1): in-app + email, per-recipient (S22).
+    EventType.BROADCAST_ANNOUNCEMENT: NotificationRule(email=True, template=_T.ADMIN_BROADCAST),
     # Admin
     EventType.CONFLICT_FLAGGED: NotificationRule(in_app=True),
     EventType.AGENT_NO_SHOW: NotificationRule(in_app=True),

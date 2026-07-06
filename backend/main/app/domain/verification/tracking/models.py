@@ -117,6 +117,18 @@ class VerificationListItemDto(Object):
     date_created: datetime
 
 
+class ResumableDraftDto(Object):
+    """The customer's most recent still-completable verification, backing the §17.1
+    abandonment-recovery banner. ``needs_payment`` routes the CTA to pay vs. the wizard."""
+
+    id: str
+    vid: str
+    status: VerificationStatus
+    tier: Optional[VerificationTier] = None
+    draft_step: int = 0
+    needs_payment: bool = False
+
+
 class CustomerDashboardDto(Object):
     """The customer portal home summary (§9) — backend-owned rollups over the
     customer's verifications plus the most recent rows. Every count is derived here so
@@ -129,3 +141,6 @@ class CustomerDashboardDto(Object):
     completed: int = 0         # COMPLETED — report released
     status_counts: Dict[VerificationStatus, int] = {}
     recent: List[VerificationListItemDto] = []
+    # The most recent unpaid verification the customer can resume (§17.1). None when
+    # nothing is pending — the recovery banner only shows when this is set.
+    resumable_draft: Optional[ResumableDraftDto] = None

@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, ClipboardList, CreditCard, FileCheck2, Plus, ShieldCheck } from "lucide-react";
+import { ChevronRight, ClipboardList, CreditCard, FileCheck2, Gift, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@3rdparty/ui/button";
 import { Card } from "@3rdparty/ui/card";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { StatCard } from "@components/ui/StatCard";
 import { VerificationStatusBadge } from "@components/portal/verifications/VerificationStatusBadge";
 import { useCustomerDashboardQuery } from "@components/portal/libs/useVerificationQueries";
+import { useReferralSummaryQuery } from "@components/portal/referrals/libs/useReferralQueries";
 import { ROUTES } from "@lib/routes";
-import { CustomerDashboard } from "@/types/tracking";
+import { formatMinor } from "@lib/utils";
+import { CustomerDashboard, ResumableDraft } from "@/types/tracking";
 
 /**
  * Portal home (§9). A quick-glance summary of the customer's verifications — every
@@ -17,6 +19,7 @@ import { CustomerDashboard } from "@/types/tracking";
  */
 export default function PortalDashboard() {
   const { data, isLoading, isError } = useCustomerDashboardQuery();
+  const { data: referral } = useReferralSummaryQuery();
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6" data-testid="portal-dashboard">
@@ -36,12 +39,25 @@ export default function PortalDashboard() {
       >
         {(summary) => (
           <div className="space-y-6">
+            {summary.resumableDraft && <RecoveryBanner draft={summary.resumableDraft} />}
+
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <StatCard label="Total" value={summary.total} icon={ClipboardList} href={ROUTES.PORTAL.VERIFICATIONS} />
               <StatCard label="In progress" value={summary.inProgress} icon={FileCheck2} tone="warning" />
               <StatCard label="Awaiting payment" value={summary.awaitingPayment} icon={CreditCard} />
               <StatCard label="Completed" value={summary.completed} icon={ShieldCheck} tone="success" />
             </div>
+
+            {referral && (referral.availableCreditMinor > 0 || referral.pendingCreditMinor > 0) && (
+              <StatCard
+                label="Referral credit"
+                value={formatMinor(referral.availableCreditMinor) ?? "—"}
+                icon={Gift}
+                tone="success"
+                href={ROUTES.PORTAL.REFERRALS}
+                hint={referral.pendingCreditMinor > 0 ? `${formatMinor(referral.pendingCreditMinor)} pending` : undefined}
+              />
+            )}
 
             <section className="space-y-3">
               <div className="flex items-center justify-between">
@@ -83,6 +99,32 @@ export default function PortalDashboard() {
         )}
       </AsyncStateComponent>
     </div>
+  );
+}
+
+/**
+ * Abandonment-recovery banner (§17.1): a saved but incomplete verification can be
+ * resumed exactly where the customer left off — at payment, or in the wizard.
+ */
+function RecoveryBanner({ draft }: { draft: ResumableDraft }) {
+  const href = draft.needsPayment
+    ? ROUTES.PORTAL.VERIFICATION_PAY(draft.id)
+    : ROUTES.PORTAL.VERIFICATIONS_NEW;
+  return (
+    <Card
+      className="flex flex-col gap-3 border-amber-500/40 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+      data-testid="portal-recovery-banner"
+    >
+      <div className="min-w-0 space-y-1">
+        <p className="font-medium text-foreground">Pick up where you left off</p>
+        <p className="text-sm text-muted-foreground">
+          Your verification {draft.vid} is saved and ready to complete.
+        </p>
+      </div>
+      <Button asChild size="sm">
+        <Link href={href}>{draft.needsPayment ? "Complete payment" : "Resume"}</Link>
+      </Button>
+    </Card>
   );
 }
 

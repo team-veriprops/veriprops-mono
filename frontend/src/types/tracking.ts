@@ -83,6 +83,16 @@ export interface VerificationListItem {
 }
 
 /** Portal home summary (§9) — every count is derived by the backend. */
+/** The most recent still-completable verification, for the §17.1 recovery banner. */
+export interface ResumableDraft {
+  id: string;
+  vid: string;
+  status: VerificationStatus;
+  tier?: VerificationTier;
+  draftStep: number;
+  needsPayment: boolean;
+}
+
 export interface CustomerDashboard {
   total: number;
   draft: number;
@@ -91,6 +101,7 @@ export interface CustomerDashboard {
   completed: number;
   statusCounts: Partial<Record<VerificationStatus, number>>;
   recent: VerificationListItem[];
+  resumableDraft?: ResumableDraft;
 }
 
 /** SSE event names emitted by the backend (§4.9) — must match useVerificationStream. */

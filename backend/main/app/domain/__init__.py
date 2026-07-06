@@ -36,6 +36,7 @@ from main.app.domain.user.agent.reputation.controller import (
     agent_reputation_router,
     admin_suggested_agents_router,
 )
+from main.app.domain.referral.controller import referral_router
 from main.app.domain.payment.controller import payment_router
 
 from main.appodus_utils.integrations.webhook import webhook_router
@@ -73,6 +74,7 @@ router.include_router(payout_router)
 router.include_router(admin_payout_router)
 router.include_router(agent_reputation_router)
 router.include_router(admin_suggested_agents_router)
+router.include_router(referral_router)
 router.include_router(payment_router)
 router.include_router(audit_router)
 router.include_router(webhook_router)

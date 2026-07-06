@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from main.app.core.state.status import VerificationStatus
 from main.app.domain.verification.models import (
     CreateVerificationDto,
     QueryVerificationDto,
@@ -13,6 +14,13 @@ from main.app.domain.verification.models import (
     Verification,
 )
 from main.appodus_utils.db.repo import GenericRepo
+
+# Pre-payment statuses a customer can still return to and complete (§17.1 abandonment).
+_UNPAID_STATUSES = (
+    VerificationStatus.DRAFT.value,
+    VerificationStatus.SUBMITTED.value,
+    VerificationStatus.PAYMENT_PENDING.value,
+)
 
 
 @inject
@@ -57,6 +65,49 @@ class VerificationRepo(
             )
         ).scalars().all()
         return list(rows), int(total or 0)
+
+    async def has_paid_verification(self, customer_id: str, exclude_id: Optional[str] = None) -> bool:
+        """True if the customer has ever paid for a verification (§17.1 first-time eligibility)."""
+        conditions = [
+            Verification.deleted.is_(False),
+            Verification.customer_id == customer_id,
+            Verification.paid_at.is_not(None),
+        ]
+        if exclude_id:
+            conditions.append(Verification.id != exclude_id)
+        stmt = select(func.count()).select_from(Verification).where(*conditions)
+        return int(await self._session.scalar(stmt) or 0) > 0
+
+    async def latest_unpaid_for_customer(self, customer_id: str) -> Optional[Verification]:
+        """The customer's most recent still-completable verification, for the recovery
+        banner (§17.1). A DRAFT with no progress (step 0) is ignored."""
+        stmt = select(Verification).where(
+            Verification.deleted.is_(False),
+            Verification.customer_id == customer_id,
+            Verification.paid_at.is_(None),
+            Verification.status.in_(_UNPAID_STATUSES),
+            or_(
+                Verification.status != VerificationStatus.DRAFT.value,
+                Verification.draft_step >= 1,
+            ),
+        ).order_by(Verification.date_updated.desc()).limit(1)
+        return (await self._session.execute(stmt)).scalars().first()
+
+    async def list_abandoned_drafts(self, cutoff: datetime) -> List[Verification]:
+        """Unpaid, un-reminded verifications last touched before ``cutoff`` (§17.1 recovery
+        sweep). One reminder ever — ``recovery_reminded_at`` gates re-sends."""
+        stmt = select(Verification).where(
+            Verification.deleted.is_(False),
+            Verification.paid_at.is_(None),
+            Verification.recovery_reminded_at.is_(None),
+            Verification.status.in_(_UNPAID_STATUSES),
+            Verification.date_updated < cutoff,
+            or_(
+                Verification.status != VerificationStatus.DRAFT.value,
+                Verification.draft_step >= 1,
+            ),
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
 
     async def count_by_status_for_customer(self, customer_id: str) -> dict[str, int]:
         """status → count over a customer's own verifications (portal dashboard §9)."""

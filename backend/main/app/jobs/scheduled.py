@@ -18,6 +18,8 @@ from kink import di, inject
 from main.app.config.settings import settings
 from main.appodus_utils.config.settings import Environment
 from main.app.domain.earnings.service import EarningsService
+from main.app.domain.referral.service import ReferralService
+from main.app.domain.verification.service import VerificationService
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.app.domain.verification.sla_monitor import SlaMonitorService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -78,6 +80,25 @@ class EarningsSweepJobs:
         return await self._earnings.sweep_cleared()
 
 
+@inject
+@decorate_all_methods(
+    transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW), exclude=['__init__']
+)
+class GrowthSweepJobs:
+    """Fresh-session wrappers around the §17.1 growth sweeps — abandoned-draft recovery
+    (one email per abandoned draft) + referral-credit clearance (S21)."""
+
+    def __init__(self, verification_service: VerificationService, referral_service: ReferralService):
+        self._verification = verification_service
+        self._referral = referral_service
+
+    async def run_abandonment_sweep(self) -> int:
+        return await self._verification.sweep_abandoned_drafts()
+
+    async def run_referral_credit_sweep(self) -> int:
+        return await self._referral.sweep_referral_credits()
+
+
 async def check_sla_breaches() -> None:
     flagged = await di[SlaMonitorJobs].run_sla_breach_sweep()
     if flagged:
@@ -102,11 +123,26 @@ async def check_task_pool_timeouts() -> None:
         logger.info("pool-starvation sweep escalated {} task(s)", escalated)
 
 
+async def check_abandoned_drafts() -> None:
+    reminded = await di[GrowthSweepJobs].run_abandonment_sweep()
+    if reminded:
+        logger.info("abandonment sweep reminded {} draft(s)", reminded)
+
+
+async def check_referral_credits() -> None:
+    cleared = await di[GrowthSweepJobs].run_referral_credit_sweep()
+    if cleared:
+        logger.info("referral-credit sweep cleared {} credit(s)", cleared)
+
+
 # Register task-monitor background jobs (pool timeout + no-show reclaim) + SLA-breach sweep.
 scheduler.add_job(check_task_pool_timeouts, "interval", minutes=15, id="pool_timeout_check")
 scheduler.add_job(check_task_no_show_timeouts, "interval", minutes=15, id="no_show_check")
 scheduler.add_job(check_sla_breaches, "interval", minutes=30, id="sla_breach_check")
 scheduler.add_job(check_commission_clearance, "interval", minutes=60, id="commission_clearance_check")
+# Growth sweeps (§17.1): abandonment recovery (hourly) + referral-credit clearance (daily-ish).
+scheduler.add_job(check_abandoned_drafts, "interval", minutes=60, id="abandonment_recovery_check")
+scheduler.add_job(check_referral_credits, "interval", minutes=180, id="referral_credit_check")
 
 
 def start_scheduler():

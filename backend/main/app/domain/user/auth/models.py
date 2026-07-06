@@ -37,6 +37,8 @@ class SignupRequestDto(Object):
     consents: List[UserConsentInputDto] = Field(default_factory=list)
     intent: Optional[AuthIntent] = None
     device_fingerprint: Optional[str] = None
+    # §17.1 — an optional referral code (from ?ref=…); an unknown code is ignored, never fatal.
+    referral_code: Optional[str] = None
 
 
 class OtpSendDto(Object):

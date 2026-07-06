@@ -119,6 +119,15 @@ export function useSubmitVerificationMutation() {
   });
 }
 
+/** Re-lock an expired price before payment (§17.1). Result.priceChanged gates the interstitial. */
+export function useRefreshLockMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => service.refreshLock(id),
+    onSuccess: (_res, id) => qc.invalidateQueries({ queryKey: verificationKeys.detail(id) }),
+  });
+}
+
 export function useInitiatePaymentMutation() {
   return useMutation({
     mutationFn: ({ id, method, idempotencyKey }: { id: string; method: PaymentMethodKind; idempotencyKey: string }) =>

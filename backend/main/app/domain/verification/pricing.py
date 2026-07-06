@@ -8,6 +8,7 @@ swap is a single call-site change.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 
 from main.app.core.state.status import VerificationTier
@@ -48,6 +49,61 @@ def upgrade_delta_kobo(current: VerificationTier, target: VerificationTier) -> i
     """Tier-upgrade charge (§14.2) — the delta between the target and current tier prices,
     in NGN kobo. Non-positive when the target is not an upgrade (guarded by the caller)."""
     return price_ngn_kobo(target) - price_ngn_kobo(current)
+
+
+@dataclass(frozen=True)
+class Discount:
+    """A resolved discount breakdown for a quote, all amounts in NGN kobo (§17.1).
+
+    The combined first-time + referral discount is capped at ``max_discount_percent``
+    of the base price; when the cap binds, the referral portion is trimmed first (the
+    first-time discount is a fixed percentage the product always honours)."""
+
+    base_minor: int
+    first_time_minor: int
+    referral_applied_minor: int
+    total_discount_minor: int
+    net_minor: int
+    cap_hit: bool
+
+
+def apply_discounts(
+    base_kobo: int,
+    *,
+    first_time: bool,
+    first_time_pct: int,
+    referral_credit_kobo: int,
+    max_discount_pct: int,
+) -> Discount:
+    """Resolve the discount breakdown for a base price (§17.1, §5.2).
+
+    - ``first_time`` applies ``first_time_pct`` of the base (auto, never a code).
+    - ``referral_credit_kobo`` is the customer's spendable referral credit; it is
+      applied on top, but the *combined* discount never exceeds ``max_discount_pct``
+      of the base. Reconciles exactly to the kobo (integer minor units, §4.4).
+    """
+    first_time_minor = int(base_kobo * first_time_pct / 100) if first_time else 0
+    cap_minor = int(base_kobo * max_discount_pct / 100)
+
+    # Referral credit fills the remaining head-room under the cap, bounded by the
+    # customer's available credit and by never driving the price below zero.
+    remaining_cap = max(0, cap_minor - first_time_minor)
+    max_referral = min(remaining_cap, max(0, base_kobo - first_time_minor))
+    referral_applied_minor = min(referral_credit_kobo, max_referral)
+
+    total_discount_minor = first_time_minor + referral_applied_minor
+    cap_hit = total_discount_minor >= cap_minor and (
+        first_time_minor + referral_credit_kobo > cap_minor
+    )
+    net_minor = base_kobo - total_discount_minor
+    return Discount(
+        base_minor=base_kobo,
+        first_time_minor=first_time_minor,
+        referral_applied_minor=referral_applied_minor,
+        total_discount_minor=total_discount_minor,
+        net_minor=net_minor,
+        cap_hit=cap_hit,
+    )
 
 
 def indicative_charge_minor(ngn_kobo: int, currency: TransactionCurrency) -> tuple[int, float]:

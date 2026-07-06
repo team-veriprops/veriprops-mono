@@ -41,6 +41,7 @@ from main.app.domain.verification.tracking.models import (
     CustomerDashboardDto,
     CustomerEvidenceDto,
     InterimMilestoneDto,
+    ResumableDraftDto,
     SlaTrackerDto,
     TrackingTaskDto,
     VerificationListItemDto,
@@ -128,6 +129,20 @@ class CustomerTrackingService:
             completed=raw.get(VerificationStatus.COMPLETED.value, 0),
             status_counts=status_counts,
             recent=recent_page.items,
+            resumable_draft=await self._resumable_draft(customer_id),
+        )
+
+    async def _resumable_draft(self, customer_id: str):
+        """The most recent unpaid verification the customer can resume (§17.1 recovery)."""
+        v = await self._verification_repo.latest_unpaid_for_customer(customer_id)
+        if v is None:
+            return None
+        return ResumableDraftDto(
+            id=v.id, vid=v.vid, status=VerificationStatus(v.status),
+            tier=VerificationTier(v.tier) if v.tier else None,
+            draft_step=v.draft_step or 0,
+            # SUBMITTED / PAYMENT_PENDING resume at pay; a DRAFT resumes in the wizard.
+            needs_payment=v.status in _AWAITING_PAYMENT_STATUSES,
         )
 
     async def _list_item(self, v) -> VerificationListItemDto:

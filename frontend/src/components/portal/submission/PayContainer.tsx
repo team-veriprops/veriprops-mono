@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
@@ -9,7 +9,7 @@ import { toast } from "@components/3rdparty/ui/use-toast";
 import WizardOverlay from "@components/ui/wizard/WizardOverlay";
 import { ROUTES } from "@lib/routes";
 import { getCurrencySymbol, TransactionCurrency } from "@/types/models";
-import { PaymentMethodKind, VerificationStatus } from "@/types/verification";
+import { PaymentMethodKind, PriceRefresh, VerificationStatus } from "@/types/verification";
 import { OtpChannel } from "@components/website/auth/models";
 import {
   useCurrentSession,
@@ -18,6 +18,7 @@ import {
 } from "@components/website/auth/libs/useAuthQueries";
 import {
   useInitiatePaymentMutation,
+  useRefreshLockMutation,
   useStubConfirmMutation,
   useVerificationQuery,
 } from "@components/portal/libs/useVerificationQueries";
@@ -35,14 +36,30 @@ export default function PayContainer({ verificationId }: { verificationId: strin
   const verifyOtp = useVerifyOtpMutation();
   const initiate = useInitiatePaymentMutation();
   const stubConfirm = useStubConfirmMutation();
+  const refreshLock = useRefreshLockMutation();
 
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [txRef, setTxRef] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  // Re-lock guard (§17.1): a price that changed since the customer last saw it must be
+  // acknowledged before payment — never a silent re-charge.
+  const [priceUpdate, setPriceUpdate] = useState<PriceRefresh | null>(null);
+  const relockRan = useRef(false);
 
   const phoneVerified = !!session?.user?.phoneVerified;
   const idemKey = `${verificationId}-pay`;
+
+  // On entry, re-lock an expired price. If the fresh price differs from the last shown
+  // one, surface the mandatory "price updated" interstitial before allowing payment.
+  useEffect(() => {
+    if (relockRan.current) return;
+    relockRan.current = true;
+    refreshLock.mutateAsync(verificationId).then(async (res) => {
+      if (res.data?.priceChanged) setPriceUpdate(res.data);
+      await refetchVerification();
+    }).catch(() => undefined);
+  }, [verificationId, refreshLock, refetchVerification]);
 
   const onSendOtp = async () => {
     await sendOtp.mutateAsync({ channel: OtpChannel.PHONE });
@@ -93,10 +110,44 @@ export default function PayContainer({ verificationId }: { verificationId: strin
               {getCurrencySymbol(TransactionCurrency.NGN)}
               {major(verification.priceLockedMinor)}
             </p>
+            {/* Applied-discount summary (§17.1). */}
+            {((verification.firstTimeDiscountMinor ?? 0) + (verification.referralCreditAppliedMinor ?? 0)) > 0 && (
+              <div className="mt-2 space-y-1 text-sm text-emerald-600 dark:text-emerald-400" data-testid="verify-pay-discount">
+                {verification.firstTimeDiscountMinor > 0 && (
+                  <div className="flex justify-between">
+                    <span>First-time discount</span>
+                    <span>−{getCurrencySymbol(TransactionCurrency.NGN)}{major(verification.firstTimeDiscountMinor)}</span>
+                  </div>
+                )}
+                {verification.referralCreditAppliedMinor > 0 && (
+                  <div className="flex justify-between">
+                    <span>Referral credit</span>
+                    <span>−{getCurrencySymbol(TransactionCurrency.NGN)}{major(verification.referralCreditAppliedMinor)}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {!phoneVerified ? (
+        {/* Re-lock guard (§17.1): the customer must accept the updated price before paying. */}
+        {priceUpdate && (
+          <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4" data-testid="verify-pay-price-updated">
+            <p className="text-sm font-semibold text-foreground">Price updated</p>
+            <p className="text-sm text-muted-foreground">
+              Your 24-hour price lock expired, so we refreshed your quote. The amount is now{" "}
+              <span className="font-semibold text-foreground">
+                {getCurrencySymbol(TransactionCurrency.NGN)}{major(priceUpdate.netPriceMinor)}
+              </span>{" "}
+              (was {getCurrencySymbol(TransactionCurrency.NGN)}{major(priceUpdate.previousPriceMinor)}).
+            </p>
+            <Button onClick={() => setPriceUpdate(null)} data-testid="verify-pay-accept-price">
+              Continue with new price
+            </Button>
+          </div>
+        )}
+
+        {priceUpdate ? null : !phoneVerified ? (
           <div className="space-y-3 rounded-lg border border-border p-4" data-testid="verify-pay-phone-gate">
             <p className="text-sm text-foreground">Verify your phone number before paying.</p>
             {!otpSent ? (

@@ -11,6 +11,7 @@ from libre_fastapi_jwt import AuthJWT
 from main.app.core.state.status import VerificationTier
 from main.app.domain.verification.models import (
     PriceQuoteDto,
+    PriceRefreshDto,
     SaveVerificationDraftDto,
     SubmitVerificationDto,
     Verification,
@@ -45,6 +46,8 @@ def _to_dto(v: Verification) -> VerificationDto:
         charge_amount_minor=v.charge_amount_minor,
         fx_rate_at_quote=v.fx_rate_at_quote,
         price_lock_expires_at=v.price_lock_expires_at,
+        first_time_discount_minor=v.first_time_discount_minor or 0,
+        referral_credit_applied_minor=v.referral_credit_applied_minor or 0,
         paid_at=v.paid_at,
         sla_due_date=v.sla_due_date,
         draft_step=v.draft_step or 0,
@@ -101,7 +104,8 @@ async def get_quote(
     authorize: AuthJWT = Depends(),
 ):
     await authorize.jwt_required()
-    return SuccessResponse[PriceQuoteDto](data=verification_service.quote(tier, currency))
+    customer_id = str(authorize.get_jwt_subject())
+    return SuccessResponse[PriceQuoteDto](data=await verification_service.quote(customer_id, tier, currency))
 
 
 @verification_router.get("/summary", response_model=SuccessResponse[CustomerDashboardDto])
@@ -128,6 +132,16 @@ async def get_draft(verification_id: str, authorize: AuthJWT = Depends()):
     customer_id = str(authorize.get_jwt_subject())
     v = await verification_service.get_owned(verification_id, customer_id)
     return SuccessResponse[VerificationDraftDto](data=_to_draft_dto(v))
+
+
+@verification_router.post("/{verification_id}/refresh-lock", response_model=SuccessResponse[PriceRefreshDto])
+async def refresh_price_lock(verification_id: str, authorize: AuthJWT = Depends()):
+    """Re-lock an expired price before payment (§17.1). The response's ``priceChanged`` drives
+    the mandatory "price updated" interstitial so the customer is never silently re-charged."""
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    result = await verification_service.refresh_price_lock_if_expired(verification_id, customer_id)
+    return SuccessResponse[PriceRefreshDto](data=result)
 
 
 @verification_router.post("/{verification_id}/submit", response_model=SuccessResponse[VerificationDto])

@@ -62,6 +62,10 @@ class Payment(BaseEntity):
     charge_amount_minor = Column(BigInteger, nullable=True)
 
     checkout_url = Column(String(1024), nullable=True)
+    # Anti-farming instrument marker (§17.1, D34) — a gateway-surfaced card fingerprint/
+    # authorization token, never raw card data. Null under PAYMENT_STUB_MODE (no live
+    # gateway); the referral anti-farming check reads it once the live gateway fills it in.
+    card_fingerprint = Column(String(128), nullable=True, index=True)
     failure_count = Column(Integer, nullable=False, server_default="0")
     # Chargeback flag (§6a.1) — the sub-process detail lives on the Chargeback row;
     # this column marks the payment so lists/detail can surface it. Null = none.
@@ -96,6 +100,7 @@ class UpdatePaymentDto(Object):
     gateway_event_id: Optional[str] = None
     provider: Optional[str] = None
     checkout_url: Optional[str] = None
+    card_fingerprint: Optional[str] = None
     failure_count: Optional[int] = None
     chargeback_status: Optional[str] = None
     refunded_amount_minor: Optional[int] = None

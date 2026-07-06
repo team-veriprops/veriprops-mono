@@ -189,6 +189,10 @@ class PaymentService:
                 await self._user_service.upgrade_trust_status_if_eligible(
                     payment.customer_id, UserPersona.CUSTOMER
                 )
+                # Referral credit (§17.1): a referred invitee's first payment earns the
+                # referrer a credit that clears after the chargeback window. Best-effort —
+                # a referral hiccup must never fail the payment webhook.
+                await self._award_referral_credit(payment)
                 self._audit.schedule(
                     action=AuditActionType.VERIFICATION_STATE_CHANGED,
                     resource_type="verification",
@@ -234,6 +238,18 @@ class PaymentService:
                          "reason": reason},
             )
         return refunded_total
+
+    async def _award_referral_credit(self, payment: Payment) -> None:
+        """Route a confirmed first payment to the referral service (best-effort). Resolved
+        lazily via DI so the payment domain never imports the referral service at module load."""
+        from kink import di
+
+        from main.app.domain.referral.service import ReferralService
+        try:
+            await di[ReferralService].on_invitee_first_payment(payment)
+        except Exception:  # pragma: no cover - defensive; never break the payment webhook
+            from kink import di as _di
+            _di["logger"].exception("Referral credit award failed for payment {}", payment.id)
 
     async def _on_secondary_paid(self, payment: Payment, purpose: PaymentPurpose) -> None:
         """Route a confirmed re-check / tier-upgrade charge to its domain service. Resolved

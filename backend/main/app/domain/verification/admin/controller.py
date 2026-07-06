@@ -168,6 +168,28 @@ async def sweep_sla_breach(
     return SuccessResponse[dict](data={"flagged": flagged})
 
 
+@admin_verification_router.post("/sweeps/abandonment", response_model=SuccessResponse[dict])
+async def sweep_abandonment(
+    _admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
+):
+    """Fire a one-time recovery email for each unpaid verification untouched for 24h (§17.1).
+    Runs on a schedule in non-test envs; this endpoint triggers it on demand (idempotent)."""
+    from main.app.domain.verification.service import VerificationService
+    reminded = await di[VerificationService].sweep_abandoned_drafts()
+    return SuccessResponse[dict](data={"reminded": reminded})
+
+
+@admin_verification_router.post("/sweeps/referral-credits", response_model=SuccessResponse[dict])
+async def sweep_referral_credits(
+    _admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
+):
+    """Clear referral credits past their chargeback window into referrer balances (§17.1).
+    Runs on a schedule in non-test envs; this endpoint triggers it on demand (idempotent)."""
+    from main.app.domain.referral.service import ReferralService
+    cleared = await di[ReferralService].sweep_referral_credits()
+    return SuccessResponse[dict](data={"cleared": cleared})
+
+
 # ── Chargeback sub-process (§6a) ──────────────────────────────────
 
 @admin_verification_router.post(

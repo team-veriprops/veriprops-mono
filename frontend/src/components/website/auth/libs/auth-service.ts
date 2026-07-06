@@ -23,6 +23,8 @@ export interface SignupRequest {
   consents: UserConsent[];
   intent?: AuthIntent;
   deviceFingerprint?: string;
+  // §17.1 — an optional referral code (from ?ref=…); an unknown code is ignored server-side.
+  referralCode?: string;
 }
 
 export interface LoginRequest {
