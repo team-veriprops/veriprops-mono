@@ -28,8 +28,9 @@ class EventType(str, enum.Enum):
     NEW_JOB = "NEW_JOB"
     TASK_REASSIGNED = "TASK_REASSIGNED"
     TASK_REJECTED = "TASK_REJECTED"            # admin revision request
-    PAYOUT_APPROVED = "PAYOUT_APPROVED"        # source: S19 (declared, unfired)
-    PAYOUT_HELD = "PAYOUT_HELD"                # source: S19 (declared, unfired)
+    PAYOUT_APPROVED = "PAYOUT_APPROVED"        # source: S19
+    PAYOUT_HELD = "PAYOUT_HELD"                # source: S19
+    COMMISSION_CLEARED = "COMMISSION_CLEARED"  # source: S19 — earnings moved to available (§15.1)
     # Admin lifecycle
     CONFLICT_FLAGGED = "CONFLICT_FLAGGED"
     AGENT_NO_SHOW = "AGENT_NO_SHOW"

@@ -531,6 +531,9 @@ def _create_commissions():
         sa.Column("currency", sa.String(length=8), nullable=False, server_default="NGN"),
         sa.Column("status", sa.String(length=16), nullable=False, server_default="CLEARING"),
         sa.Column("clearing_until", UTCDateTime, nullable=True),
+        sa.Column("reserve_amount_minor", sa.BigInteger(), nullable=False, server_default="0"),
+        sa.Column("reserve_until", UTCDateTime, nullable=True),
+        sa.Column("reserve_released_at", UTCDateTime, nullable=True),
         sa.Column("frozen_from_status", sa.String(length=16), nullable=True),
         *AlembicUtils.base_audit_columns(),
     )
@@ -829,6 +832,58 @@ def _create_system_config():
     op.create_index("ix_system_config_key", "system_config", ["key"], unique=False)
 
 
+def _create_commission_rules():
+    # Admin per-role×tier agent commission rates in basis points (§15.1 / D30).
+    op.create_table(
+        "commission_rules",
+        sa.Column("role", sa.String(length=16), nullable=False),
+        sa.Column("tier", sa.String(length=16), nullable=False),
+        sa.Column("rate_bps", sa.Integer(), nullable=False, server_default="0"),
+        *AlembicUtils.base_audit_columns(),
+        sa.UniqueConstraint("role", "tier", name="uq_commission_rule_role_tier"),
+    )
+    op.create_index("ix_commission_rules_id", "commission_rules", ["id"], unique=True)
+
+
+def _create_agent_bank_accounts():
+    # Stored payout beneficiaries for an agent (§15.1).
+    op.create_table(
+        "agent_bank_accounts",
+        sa.Column("agent_id", sa.String(length=36), nullable=False),
+        sa.Column("bank_name", sa.String(length=128), nullable=False),
+        sa.Column("account_number", sa.String(length=32), nullable=False),
+        sa.Column("account_name", sa.String(length=128), nullable=False),
+        sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.false()),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_agent_bank_accounts_id", "agent_bank_accounts", ["id"], unique=True)
+    op.create_index("ix_agent_bank_accounts_agent", "agent_bank_accounts", ["agent_id"], unique=False)
+
+
+def _create_payouts():
+    # Agent withdrawals of cleared earnings; Finance approve/hold/adjust/reject (§15.1).
+    op.create_table(
+        "payouts",
+        sa.Column("agent_id", sa.String(length=36), nullable=False),
+        sa.Column("amount_minor", sa.BigInteger(), nullable=False),
+        sa.Column("currency", sa.String(length=8), nullable=False, server_default="NGN"),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="REQUESTED"),
+        sa.Column("bank_name", sa.String(length=128), nullable=False),
+        sa.Column("account_number", sa.String(length=32), nullable=False),
+        sa.Column("account_name", sa.String(length=128), nullable=False),
+        sa.Column("requested_at", UTCDateTime, nullable=True),
+        sa.Column("sla_due_at", UTCDateTime, nullable=True),
+        sa.Column("decided_at", UTCDateTime, nullable=True),
+        sa.Column("decided_by", sa.String(length=36), nullable=True),
+        sa.Column("adjustment_minor", sa.BigInteger(), nullable=False, server_default="0"),
+        sa.Column("note", sa.Text(), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_payouts_id", "payouts", ["id"], unique=True)
+    op.create_index("ix_payouts_agent", "payouts", ["agent_id"], unique=False)
+    op.create_index("ix_payouts_status", "payouts", ["status"], unique=False)
+
+
 def _create_report_acknowledgements():
     # Customer access-gate acknowledgement, recorded against the report version (§10.1).
     op.create_table(
@@ -1046,6 +1101,9 @@ _TABLE_BUILDERS = [
     ("upgrade_requests", _create_upgrade_requests),
     ("disputes", _create_disputes),
     ("system_config", _create_system_config),
+    ("commission_rules", _create_commission_rules),
+    ("agent_bank_accounts", _create_agent_bank_accounts),
+    ("payouts", _create_payouts),
 ]
 
 

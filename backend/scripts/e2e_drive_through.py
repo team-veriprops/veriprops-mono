@@ -86,6 +86,12 @@ def main() -> int:
 
     # 5. Admin logs in, finds it in the hold queue, approves it.
     admin_c = login(admin["email"], admin["password"])
+
+    # S19: zero the commission clearance + reserve windows up front so the commissions accrued
+    # at release (step 8) clear immediately on the sweep below — lets the earnings→payout flow
+    # complete in a single run (§15.2 windows are otherwise days long).
+    admin_c.put("/admin/config/settings/commission_clearance_days", json={"value": 0}).raise_for_status()
+    admin_c.put("/admin/config/settings/commission_reserve_pct", json={"value": 0}).raise_for_status()
     held = admin_c.get("/admin/messages/held").json()["data"]["items"]
     held_ids = [m["id"] for m in held]
     check("held message appears in the admin queue (§11.2)", flagged["id"] in held_ids)
@@ -205,6 +211,41 @@ def main() -> int:
     upgraded = admin_c.get(f"/admin/review/{vid_id}").json()["data"]
     check("tier upgrade raised the tier to PREMIUM (§14.2)", upgraded["tier"] == "PREMIUM",
           f"tier={upgraded['tier']}")
+
+    # ── S19: Earnings clearance → agent payout → finance approve (§15.1/§15.2) ──
+    # The release in step 8 accrued CLEARING commissions to the assigned agents; with the
+    # windows zeroed, the sweep moves them to available.
+    swept_c = admin_c.post("/admin/payouts/sweeps/commission-clearance").json()["data"]
+    check("commission clearance sweep advanced cleared commissions (§15.2)",
+          swept_c["advanced"] >= 1, f"advanced={swept_c['advanced']}")
+
+    agent = login("qa-agent-registry@veriprops.io", "Test1234!")
+    earnings = agent.get("/agents/earnings").json()["data"]
+    check("agent has an available balance after clearance (§15.1)",
+          earnings["availableMinor"] > 0, f"available={earnings['availableMinor']}")
+
+    agent.post("/agents/payouts/bank-accounts", json={
+        "bankName": "GTBank", "accountNumber": "0123456789", "accountName": "QA Agent"}).raise_for_status()
+    bank = agent.get("/agents/payouts/bank-accounts").json()["data"][0]
+    payout = agent.post("/agents/payouts", json={
+        "amountMinor": earnings["availableMinor"], "bankAccountId": bank["id"]}).json()["data"]
+    check("agent requests a withdrawal (REQUESTED, §15.1)", payout["status"] == "REQUESTED",
+          f"status={payout['status']}")
+
+    # Requesting locks the funds — available drops to 0 so nothing can be double-spent.
+    after_request = agent.get("/agents/earnings").json()["data"]
+    check("requesting a payout locks the funds out of available (§15.2)",
+          after_request["availableMinor"] == 0, f"available={after_request['availableMinor']}")
+
+    paid = admin_c.post(f"/admin/payouts/{payout['id']}/approve", json={}).json()["data"]
+    check("finance approves + disburses the payout (→ PAID, §15.1)", paid["status"] == "PAID",
+          f"status={paid['status']}")
+    agent_notifs = {n["type"] for n in agent.get("/notifications").json()["data"]["items"]}
+    check("agent got the PAYOUT_APPROVED notification (§12.2)", "PAYOUT_APPROVED" in agent_notifs,
+          str(agent_notifs))
+    final = agent.get("/agents/earnings").json()["data"]
+    check("paid-out amount is reflected in total paid (§15.1)", final["totalPaidMinor"] > 0,
+          f"totalPaid={final['totalPaidMinor']}")
 
     print("\n" + ("ALL PASSED" if not _failures else f"FAILURES: {_failures}"))
     return 0 if not _failures else 1

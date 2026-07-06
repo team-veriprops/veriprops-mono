@@ -36,6 +36,7 @@ _CONTENT = {
     EventType.TASK_REJECTED: ("Revision requested", "An admin has requested a revision on your task.", lambda _v: "/agents/tasks"),
     EventType.PAYOUT_APPROVED: ("Payout approved", "Your payout has been approved.", lambda _v: "/agents/payouts"),
     EventType.PAYOUT_HELD: ("Payout on hold", "Your payout is on hold pending review.", lambda _v: "/agents/payouts"),
+    EventType.COMMISSION_CLEARED: ("Earnings available", "Funds have cleared and are now available to withdraw.", lambda _v: "/agents/earnings"),
     EventType.CONFLICT_FLAGGED: ("Conflict detected", "A conflict was flagged on a verification.", _admin_link),
     EventType.AGENT_NO_SHOW: ("Agent no-show", "An assigned agent did not accept in time.", _admin_link),
     EventType.FRAUD_FLAGGED_MESSAGE: ("Message held for review", "A message was flagged and is awaiting review.", lambda _v: "/admin/messages"),

@@ -56,6 +56,8 @@ def _make_service(verification, tasks):
     svc._reports = MagicMock()
     svc._weights = MagicMock()
     svc._commissions = MagicMock()
+    svc._commission_rules = MagicMock()
+    svc._config = MagicMock()
     svc._payments = MagicMock()
     svc._messages = MagicMock()
     svc._messages.send_report_ready = AsyncMock()
@@ -94,6 +96,10 @@ def _make_service(verification, tasks):
         SimpleNamespace(role=AgentRole.SURVEYOR.value, weight_percent=30),
     ])
     svc._commissions.accrue = AsyncMock()
+    svc._commissions.get_live_for_task = AsyncMock(return_value=None)
+    svc._commission_rules.commission_minor = AsyncMock(return_value=100000)
+    # commission_clearance_days / commission_reserve_pct / chargeback_window_days
+    svc._config.get_int = AsyncMock(return_value=10)
     svc._reports.release = AsyncMock(return_value=SimpleNamespace(id="rep-1", report_version=1))
     svc._reports.get_released = AsyncMock(return_value=None)
     svc._reports.supersede_current = AsyncMock()
@@ -208,6 +214,30 @@ class TestRelease:
         svc = _make_service(_verification(tier=VerificationTier.PREMIUM), tasks)
         with pytest.raises(ValidationException):
             await svc.release("v-1", "admin-1")
+
+
+class TestCommissionAccrual:
+    async def test_double_accrual_guard_skips_existing_commission(self):
+        """A re-release must not accrue a second commission for a task that already has one
+        (§S18 double-accrual follow-up). Only the reopened (uncommissioned) task accrues."""
+        tasks = _standard_tasks(review="APPROVED")
+        svc = _make_service(_verification(), tasks)
+        already = {tasks[0].id, tasks[1].id}
+        svc._commissions.get_live_for_task = AsyncMock(
+            side_effect=lambda vid, tid: object() if tid in already else None
+        )
+        await svc.release("v-1", "admin-1")
+        assert svc._commissions.accrue.await_count == 1  # only the third task
+
+    async def test_accrual_sets_clearing_and_reserve(self):
+        tasks = _standard_tasks(review="APPROVED")
+        svc = _make_service(_verification(), tasks)
+        await svc.release("v-1", "admin-1")
+        dto = svc._commissions.accrue.await_args_list[0].args[0]
+        assert dto.amount_minor == 100000
+        assert dto.reserve_amount_minor == 10000   # 10% reserve (get_int stub → 10)
+        assert dto.clearing_until is not None
+        assert dto.reserve_until is not None
 
 
 class TestReopenFail:

@@ -44,8 +44,14 @@ class Commission(BaseEntity):
     amount_minor = Column(BigInteger, nullable=False)
     currency = Column(String(8), nullable=False, default=TransactionCurrency.NGN.value)
     status = Column(String(16), nullable=False, default=CommissionStatus.CLEARING.value, index=True)
-    # When a CLEARING commission becomes AVAILABLE (past the chargeback window).
+    # When the bulk of a CLEARING commission clears to AVAILABLE (approved_at + clearance days, §15.2).
     clearing_until = Column(UTCDateTime, nullable=True)
+    # Portion held back until the chargeback window closes (§15.2 reserve).
+    reserve_amount_minor = Column(BigInteger, nullable=False, default=0)
+    # When the reserve portion is released (accrued + chargeback window). NULL until released.
+    reserve_until = Column(UTCDateTime, nullable=True)
+    # Idempotency marker: set once the reserve has been released to available.
+    reserve_released_at = Column(UTCDateTime, nullable=True)
     # Prior status captured on freeze so an un-freeze restores it exactly (§6a.2).
     frozen_from_status = Column(String(16), nullable=True)
 
@@ -67,6 +73,9 @@ class CreateCommissionDto(Object):
     amount_minor: int
     currency: TransactionCurrency = TransactionCurrency.NGN
     status: CommissionStatus = CommissionStatus.CLEARING
+    clearing_until: Optional[datetime] = None
+    reserve_amount_minor: int = 0
+    reserve_until: Optional[datetime] = None
 
 
 class UpdateCommissionDto(Object):
@@ -98,4 +107,7 @@ class CommissionDto(Object):
     currency: TransactionCurrency
     status: CommissionStatus
     clearing_until: Optional[datetime] = None
+    reserve_amount_minor: int = 0
+    reserve_until: Optional[datetime] = None
+    reserve_released_at: Optional[datetime] = None
     date_created: datetime

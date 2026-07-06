@@ -1,13 +1,41 @@
-session_id: run-s17-s18-sharing-revision-disputes
+session_id: run-s19-s20-earnings-reputation
 command: resume
 
-status: idle
-phase: s18-complete + live-e2e-verified
+status: in-progress
+phase: s19-complete + live-e2e-verified; s20 pending
 
-current_slice: null   # S17 + S18 delivered & live-verified. Next slice is S19 (Phase 15 earnings/commission).
-current_subtask: "S17 (Phase 13 public lookup & sharing) + S18 (Phase 14 revision/re-verification/disputes)
-  complete; extended live HTTP drive-through ALL PASSED (32 checks; surfaced + fixed 3 runtime bugs).
-  Next slice is S19 (Phase 15 agent earnings & commission)."
+current_slice: S20   # S19 (Phase 15 earnings/commission/payouts) delivered & live-verified. S20 next.
+current_subtask: "S19 (Phase 15 agent earnings & commission) complete: commission_rule CRUD (D30),
+  two-stage clearance/reserve + derived-by-date earnings + clearance sweep + payout domain + finance
+  panel + double-accrual guard (D31). Backend 728, frontend 325; migration round-trip clean; extended
+  live drive-through ALL PASSED (41 checks; surfaced + fixed 3 runtime UUID/seed bugs). Next slice is
+  S20 (Phase 16 agent reputation & coverage)."
+
+# ── S19 (Phase 15) summary — see decision-log D30-D31 ──
+s19_earnings_commission:
+  backend: "commission_rule domain (per-role×tier rate in bps, admin CRUD CONFIGURE_PRICING, seeded from a
+    static role-weight map × AGENT_COMMISSION_SHARE to reproduce the flat model, D30). Commission += reserve_
+    amount_minor/reserve_until/reserve_released_at; accrual now uses the rule, stamps clearing/reserve dates,
+    and SKIPS a task already carrying a live commission (double-accrual guard, S18 follow-up). earnings/ domain
+    (no entity): derive-by-date balance (available/clearing/reserve/on-hold/lifetime/paid, reconciles to kobo,
+    D31) + GET /agents/earnings[/jobs] + claim-based clearance sweep (CLEARING→AVAILABLE, reserve release)
+    firing COMMISSION_CLEARED + scheduler job + admin sweep endpoint. payout/ domain (Payout + child bank_
+    account/): agent request (locks funds out of available) / cancel / stored+one-time beneficiary; finance
+    approve→PAID (stub disburse, PAYOUT_APPROVED) / hold (PAYOUT_HELD) / adjust / reject, APPROVE_PAYOUT,
+    2-business-day SLA. 3 tables + commission cols in 0001 (round-trip clean)."
+  frontend: "types earnings/payout/commission; earnings-service + payout-service + admin finance (payout +
+    commission-rule) services + hooks + contract tests. /agents/earnings (hero Available StatCard + secondary
+    lines + per-job list + earnings realtime), /agents/payouts (request + bank accounts + history),
+    /admin/finance/payouts (finance panel), /admin/commission-rules (rate grid). formatMinor util; agent+admin
+    nav items."
+  tests: "backend 728 (+28: earnings calc, commission-rule, earnings sweep, payout service, double-accrual +
+    accrual dates); frontend vitest 325 (+10 service contracts). tsc+lint clean."
+  live_e2e: "Extended e2e_drive_through.py: release→accrue→clearance sweep→available→payout request (locks
+    funds)→finance approve→PAID + PAYOUT_APPROVED/COMMISSION_CLEARED notifications. ALL 41 checks PASS."
+  bugs_fixed_by_e2e:
+    - "get_live_for_task called with native UUIDs (String(36) ref cols) — 500'd EVERY release; coerced with Utils.uuid_to_hex."
+    - "CommissionRuleService.seed_defaults read trust weights mid-seed-txn before visible → all rates 0, no accrual; now static role-weight map."
+    - "Payout _resolve_beneficiary keyed stored accounts by raw uuid.UUID not the .hex wire id; now Utils.uuid_to_hex(a.id)."
 
 # ── S17 + S18 (Phases 13-14) summary — see decision-log D26-D29 ──
 s17_public_lookup_sharing:
@@ -283,6 +311,7 @@ completed_slices:
   - S16  # Phase 12 notifications & event bus (see above)
   - S17  # Phase 13 public lookup & sharing (see above)
   - S18  # Phase 14 revision / re-verification / disputes (see above)
+  - S19  # Phase 15 agent earnings & commission (see above)
 
 # ── S14 (Phase 10) summary ────────────────────────────────────────
 s14_final_report:

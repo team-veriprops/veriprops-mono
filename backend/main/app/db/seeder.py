@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 
 from kink import di, inject
 
+from main.app.domain.commission_rule.service import CommissionRuleService
 from main.app.domain.system_config.service import ConfigService
 from main.app.domain.user.auth.consent.service import ConsentService
 from main.app.domain.verification.scoring.service import TrustScoreWeightService
@@ -27,11 +28,13 @@ class DataSeeder:
         consent_service: ConsentService,
         trust_weight_service: TrustScoreWeightService,
         config_service: ConfigService,
+        commission_rule_service: CommissionRuleService,
     ):
         self.seeded = False
         self._consent_service = consent_service
         self._trust_weight_service = trust_weight_service
         self._config_service = config_service
+        self._commission_rule_service = commission_rule_service
 
     async def run_data_seed(self):
         if self.seeded:
@@ -39,4 +42,6 @@ class DataSeeder:
         await self._consent_service.seed_documents()
         await self._trust_weight_service.seed_defaults()
         await self._config_service.seed_defaults()
+        # Commission-rule defaults derive from the trust weights above, so seed them after.
+        await self._commission_rule_service.seed_defaults()
         self.seeded = True

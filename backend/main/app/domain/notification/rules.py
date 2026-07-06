@@ -46,6 +46,8 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.TASK_REJECTED: NotificationRule(email=True, template=_T.VERIFICATION_REVISION_REQUEST),
     EventType.PAYOUT_APPROVED: NotificationRule(email=True, template=_T.VERIFICATION_PAYOUT_APPROVED),
     EventType.PAYOUT_HELD: NotificationRule(email=True, template=_T.VERIFICATION_PAYOUT_HELD),
+    # Positive-movement earnings alert (§15.1): in-app only, no external template.
+    EventType.COMMISSION_CLEARED: NotificationRule(in_app=True),
     # Admin
     EventType.CONFLICT_FLAGGED: NotificationRule(in_app=True),
     EventType.AGENT_NO_SHOW: NotificationRule(in_app=True),

@@ -18,6 +18,15 @@ class ConfigKey(str, enum.Enum):
     DISPUTE_WINDOW_DAYS = "dispute_window_days"          # §14.3 dispute window after COMPLETED
     RECHECK_PRICE_PCT = "recheck_price_pct"              # §14.1 re-check fee = pct of original (D26)
     AGENT_DISPUTE_DEFENCE_HOURS = "agent_dispute_defence_hours"  # §14.3 agent defence window
+    # §15.2 commission clearance / reserve (S19)
+    COMMISSION_CLEARANCE_DAYS = "commission_clearance_days"      # days a commission clears (bulk → available)
+    COMMISSION_RESERVE_PCT = "commission_reserve_pct"            # % held back until the chargeback window closes
+    CHARGEBACK_WINDOW_DAYS = "chargeback_window_days"            # card-chargeback window (reserve release)
+    # §16.1 agent reputation / timeliness (S20)
+    TASK_SLA_HOURS = "task_sla_hours"                            # per-task turnaround target (timeliness metric)
+    AGENT_LOW_PERFORMANCE_THRESHOLD = "agent_low_performance_threshold"   # composite below → reduced job feed
+    AGENT_TOP_AGENT_ACCURACY_THRESHOLD = "agent_top_agent_accuracy_threshold"  # accuracy at/above → Top Agent
+    AGENT_WIDE_COVERAGE_STATES = "agent_wide_coverage_states"    # coverage state-count above → flagged for review
 
 
 # Seeded defaults (idempotent, via DataSeeder). Values are stored as JSON scalars.
@@ -25,12 +34,26 @@ CONFIG_DEFAULTS: dict[ConfigKey, Any] = {
     ConfigKey.DISPUTE_WINDOW_DAYS: 30,
     ConfigKey.RECHECK_PRICE_PCT: 30,
     ConfigKey.AGENT_DISPUTE_DEFENCE_HOURS: 48,
+    ConfigKey.COMMISSION_CLEARANCE_DAYS: 7,
+    ConfigKey.COMMISSION_RESERVE_PCT: 10,
+    ConfigKey.CHARGEBACK_WINDOW_DAYS: 120,
+    ConfigKey.TASK_SLA_HOURS: 48,
+    ConfigKey.AGENT_LOW_PERFORMANCE_THRESHOLD: 40,
+    ConfigKey.AGENT_TOP_AGENT_ACCURACY_THRESHOLD: 90,
+    ConfigKey.AGENT_WIDE_COVERAGE_STATES: 6,
 }
 
 CONFIG_DESCRIPTIONS: dict[ConfigKey, str] = {
     ConfigKey.DISPUTE_WINDOW_DAYS: "Days after a report is completed during which a dispute may be filed.",
     ConfigKey.RECHECK_PRICE_PCT: "Re-check fee as a percentage of the original tier price.",
     ConfigKey.AGENT_DISPUTE_DEFENCE_HOURS: "Hours an agent has to respond to a dispute targeting their task.",
+    ConfigKey.COMMISSION_CLEARANCE_DAYS: "Days after task approval before the bulk of a commission becomes withdrawable.",
+    ConfigKey.COMMISSION_RESERVE_PCT: "Percentage of a commission retained in reserve until the chargeback window closes.",
+    ConfigKey.CHARGEBACK_WINDOW_DAYS: "Card-chargeback window; the commission reserve is released only after it passes.",
+    ConfigKey.TASK_SLA_HOURS: "Target hours from task acceptance to submission, used for the agent timeliness metric.",
+    ConfigKey.AGENT_LOW_PERFORMANCE_THRESHOLD: "Composite score below which an agent's job-feed visibility is reduced.",
+    ConfigKey.AGENT_TOP_AGENT_ACCURACY_THRESHOLD: "Accuracy score at/above which an agent earns the Top Agent badge.",
+    ConfigKey.AGENT_WIDE_COVERAGE_STATES: "Number of declared coverage states above which coverage is flagged for admin review.",
 }
 
 

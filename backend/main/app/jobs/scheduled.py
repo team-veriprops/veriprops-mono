@@ -17,6 +17,7 @@ from kink import di, inject
 
 from main.app.config.settings import settings
 from main.appodus_utils.config.settings import Environment
+from main.app.domain.earnings.service import EarningsService
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.app.domain.verification.sla_monitor import SlaMonitorService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -63,10 +64,30 @@ class SlaMonitorJobs:
         return await self._sla_monitor.sweep_sla_breaches()
 
 
+@inject
+@decorate_all_methods(
+    transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW), exclude=['__init__']
+)
+class EarningsSweepJobs:
+    """Fresh-session wrapper around the commission clearance/reserve sweep (§15.2, S19)."""
+
+    def __init__(self, earnings_service: EarningsService):
+        self._earnings = earnings_service
+
+    async def run_commission_clearance_sweep(self) -> int:
+        return await self._earnings.sweep_cleared()
+
+
 async def check_sla_breaches() -> None:
     flagged = await di[SlaMonitorJobs].run_sla_breach_sweep()
     if flagged:
         logger.info("SLA-breach sweep flagged {} verification(s)", flagged)
+
+
+async def check_commission_clearance() -> None:
+    advanced = await di[EarningsSweepJobs].run_commission_clearance_sweep()
+    if advanced:
+        logger.info("commission clearance sweep advanced {} commission(s)", advanced)
 
 
 async def check_task_no_show_timeouts() -> None:
@@ -85,6 +106,7 @@ async def check_task_pool_timeouts() -> None:
 scheduler.add_job(check_task_pool_timeouts, "interval", minutes=15, id="pool_timeout_check")
 scheduler.add_job(check_task_no_show_timeouts, "interval", minutes=15, id="no_show_check")
 scheduler.add_job(check_sla_breaches, "interval", minutes=30, id="sla_breach_check")
+scheduler.add_job(check_commission_clearance, "interval", minutes=60, id="commission_clearance_check")
 
 
 def start_scheduler():

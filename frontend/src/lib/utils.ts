@@ -77,6 +77,13 @@ export const formatMoney = (money: Money | null) => {
     }).format(money.getValue());
 };
 
+/**
+ * Format an integer minor-unit amount (kobo) as currency. Backend money crosses the wire
+ * in minor units (§4.4); this converts to major units and delegates to {@link formatMoney}.
+ */
+export const formatMinor = (minor: number, currency: TransactionCurrency = TransactionCurrency.NGN) =>
+  formatMoney(Money.from({ value: (minor ?? 0) / 100, currency }));
+
 export const formatMoneyFxAware = (currency: TransactionCurrency, money: Money | null) => {
     const formattedMoney = convertMoney(money)
     const fxRateAwareMoney = currency === TransactionCurrency.NGN ? formattedMoney : Money.from({value: (formattedMoney?.getValue() ?? 1) * getFxRate(currency), currency: currency});

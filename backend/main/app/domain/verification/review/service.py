@@ -10,11 +10,11 @@ task back to work; fail marks FAILED and refunds (§8.5).
 """
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from kink import inject
 
-from main.app.config.settings import settings
 from main.app.core.realtime import VerificationEventType
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.dependencies import required_task_count, roles_for_tier
@@ -31,6 +31,9 @@ from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.commission.models import CreateCommissionDto
 from main.app.domain.commission.service import CommissionService
+from main.app.domain.commission_rule.service import CommissionRuleService
+from main.app.domain.system_config.models import ConfigKey
+from main.app.domain.system_config.service import ConfigService
 from main.app.domain.message.verification_messages import VerificationMessages
 from main.app.domain.payment.service import PaymentService
 from main.app.domain.verification.models import UpdateVerificationDto, Verification
@@ -74,6 +77,8 @@ class ReviewService:
         report_service: ReportService,
         weight_service: TrustScoreWeightService,
         commission_service: CommissionService,
+        commission_rule_service: CommissionRuleService,
+        config_service: ConfigService,
         payment_service: PaymentService,
         verification_messages: VerificationMessages,
         audit_service: AuditLogService,
@@ -83,6 +88,8 @@ class ReviewService:
         self._reports = report_service
         self._weights = weight_service
         self._commissions = commission_service
+        self._commission_rules = commission_rule_service
+        self._config = config_service
         self._payments = payment_service
         self._messages = verification_messages
         self._audit = audit_service
@@ -319,22 +326,39 @@ class ReviewService:
     # ── helpers ───────────────────────────────────────────────────
 
     async def _accrue_commissions(self, verification: Verification, tasks: List[VerificationTask]) -> None:
-        """Accrue a CLEARING commission per approved task = price × weight × agent share (D13)."""
+        """Accrue a CLEARING commission per approved task, at the admin per-role×tier rate
+        (§15.1/D30), on a two-stage clearance schedule (§15.2/D31): the bulk clears after
+        ``commission_clearance_days``, a ``commission_reserve_pct`` reserve after the chargeback
+        window. Idempotent on a re-release: a task that already carries a live (non-reversed)
+        commission is skipped (closes the S18 double-accrual follow-up)."""
         price = verification.price_locked_minor or 0
         if price <= 0:
             return
         tier = VerificationTier(verification.tier)
-        weights = {AgentRole(w.role): w.weight_percent for w in await self._weights.list_for_tier(tier)}
+        clearance_days = await self._config.get_int(ConfigKey.COMMISSION_CLEARANCE_DAYS)
+        reserve_pct = await self._config.get_int(ConfigKey.COMMISSION_RESERVE_PCT)
+        chargeback_days = await self._config.get_int(ConfigKey.CHARGEBACK_WINDOW_DAYS)
+        now = Utils.datetime_now()
         for t in tasks:
             if not t.assigned_agent_id:
                 continue
-            weight = weights.get(AgentRole(t.role), 0)
-            amount = int(price * (weight / 100) * settings.AGENT_COMMISSION_SHARE)
+            # Double-accrual guard: never accrue twice for the same task across re-release cycles.
+            # Ref columns are String(36) and store the .hex form — coerce so the lookup matches
+            # what accrue stored (the two-string-forms gotcha; caught live, not by mocked tests).
+            if await self._commissions.get_live_for_task(
+                Utils.uuid_to_hex(verification.id), Utils.uuid_to_hex(t.id)
+            ):
+                continue
+            amount = await self._commission_rules.commission_minor(price, AgentRole(t.role), tier)
             if amount <= 0:
                 continue
+            reserve = round(amount * reserve_pct / 100)
             await self._commissions.accrue(CreateCommissionDto(
                 verification_id=verification.id, task_id=t.id, agent_id=t.assigned_agent_id,
                 role=AgentRole(t.role), tier=tier, amount_minor=amount,
+                clearing_until=now + timedelta(days=clearance_days),
+                reserve_amount_minor=reserve,
+                reserve_until=now + timedelta(days=chargeback_days),
             ))
 
     def _submissions_by_role(

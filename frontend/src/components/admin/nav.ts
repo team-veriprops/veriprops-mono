@@ -12,6 +12,8 @@ export const adminNavItems: NavItem[] = [
   { title: "Message Review", href: ROUTES.ADMIN.HELD_MESSAGES, icon: "messageSquare", has_separator_after: false },
   { title: "Agent Applications", href: ROUTES.ADMIN.AGENT_APPLICATIONS, icon: "userRoundKey", has_separator_after: false },
   { title: "Admin Team", href: ROUTES.ADMIN.TEAM, icon: "users", has_separator_after: false },
+  { title: "Payouts", href: ROUTES.ADMIN.FINANCE_PAYOUTS, icon: "creditCard", has_separator_after: false },
+  { title: "Commission Rules", href: ROUTES.ADMIN.COMMISSION_RULES, icon: "dollarSign", has_separator_after: false },
   { title: "Trust Score Weights", href: ROUTES.ADMIN.TRUST_SCORE_WEIGHTS, icon: "settings", has_separator_after: false },
   { title: "System Config", href: ROUTES.ADMIN.SYSTEM_CONFIG, icon: "settings", has_separator_after: false },
 ];

@@ -731,3 +731,71 @@ UUID/transaction gotchas as the S15/S16 gap-closure, all now fixed:
 3. **Get-after-create returns None.** `UpgradeService.request` re-fetched the upgrade row it had
    just created in the same uncommitted transaction (`get_model` → `None`), so the controller
    dereferenced `None.status`. It now sets `payment_id` on the attached row and returns it directly.
+
+---
+
+## Decision: D30 — Commission rules = per-role×tier table + admin CRUD (S19 / Phase 15)
+
+### Context
+§15.1 wants the agent commission "admin-configured per role × tier," shown on job-accept. The base
+built at S10/S12 (D13) accrued a flat `AGENT_COMMISSION_SHARE (0.40) × trust-weight`.
+
+### Chosen Option
+**Build a `commission_rule` table + admin CRUD** (mirrors the D14 Trust-Score-Weights CRUD), rate in
+**basis points** for exact kobo math (`commission = price_locked_minor × rate_bps / 10_000`). Defaults
+seeded to reproduce the prior flat model (`weight_percent/100 × AGENT_COMMISSION_SHARE` = `weight × 40`
+bps). RBAC `CONFIGURE_PRICING` (Finance). Accrual reads the rule; the rate shows on the job-accept preview.
+
+### Tradeoffs / Constraints
+- Defaults are seeded from a **static** role-weight map (not a live trust-weight DB read) so seeding is
+  deterministic and never depends on trust-weight rows being visible mid-seed-transaction (the live
+  drive-through caught a zero-rate seed when the read ran before the weights were flushed).
+- Admin edits after seed; the Phase-18 pricing API builds on this table.
+
+### Revisit
+Fold into the broader Phase-18 pricing/finance config (S22).
+
+---
+
+## Decision: D31 — Earnings balance is derived-by-date; two-stage clearance; stub payouts (S19)
+
+### Context
+§15.2 defines a two-stage commission hold: the bulk clears after `commission_clearance_days`, a
+`commission_reserve_pct` reserve after the chargeback window. §15.3 requires payout math to reconcile to
+the kobo. No payout/withdrawal concept existed.
+
+### Chosen Option
+**Derive the agent balance by date on read** (never a stored running total): available = cleared bulk +
+released reserve − paid − in-flight-locked payouts; clearing / in-reserve / on-hold / lifetime / paid are
+the §15.1 line items. Accrual stamps `clearing_until` and `reserve_until`; a **claim-based clearance
+sweep** flips CLEARING→AVAILABLE and releases the reserve, firing `COMMISSION_CLEARED` (the positive-
+movement notification, §15.1). A new **payout domain** (agent bank account + payout, `APPROVE_PAYOUT`
+finance panel) draws down available (a REQUESTED/APPROVED/HELD payout locks funds so nothing is double-
+spent) with a 2-business-day SLA. Disbursement is **stub-first** (approval marks PAID + fires
+`PAYOUT_APPROVED`); a real transfer gateway drops in behind this later.
+
+### Tradeoffs
+- Deriving-by-date reconciles to the kobo and can't drift; the sweep exists only to fire the notification
+  and give a coarse status. Available is clamped at 0 (a late reversal after payout is the accepted,
+  bounded §15.2 tail risk).
+- Also closes the S18 double-accrual follow-up: `_accrue_commissions` skips a task that already carries a
+  live (non-reversed) commission, so a re-checked re-release never double-accrues.
+
+### Revisit
+Swap the stub disbursement for a real transfer provider behind the payment facade.
+
+---
+
+## Note: three runtime bugs the S19 live drive-through surfaced (mocked tests couldn't)
+
+Extending `backend/scripts/e2e_drive_through.py` to cover the §15 earnings→payout flow against a live
+backend caught three defects the mocked unit tests missed — again the UUID/transaction-boundary class:
+1. **`get_live_for_task` called with native UUIDs.** The double-accrual guard passed `verification.id` /
+   `task.id` (`uuid.UUID`) into `String(36)` ref-column filters — asyncpg "expected str, got UUID", which
+   500'd **every** report release. Both now coerce with `Utils.uuid_to_hex`.
+2. **Zero-rate commission seed.** `CommissionRuleService.seed_defaults` read the trust weights via the DB
+   mid-seed-transaction before they were visible, so every rate seeded to 0 and no commission accrued. Now
+   seeded from a static role-weight map (D30) — no cross-table read ordering dependency.
+3. **Payout beneficiary id-form mismatch.** `_resolve_beneficiary` keyed stored accounts by the raw
+   `uuid.UUID` `a.id` but the client sends the `.hex` wire id, so a saved account never matched. Now keyed
+   by `Utils.uuid_to_hex(a.id)`.

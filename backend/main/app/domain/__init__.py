@@ -29,6 +29,9 @@ from main.app.domain.communication.controller import (
 from main.app.domain.notification.controller import notification_router
 from main.app.domain.notification_preference.controller import notification_preference_router
 from main.app.domain.system_config.controller import system_config_router
+from main.app.domain.commission_rule.controller import commission_rule_router
+from main.app.domain.earnings.controller import earnings_router
+from main.app.domain.payout.controller import payout_router, admin_payout_router
 from main.app.domain.payment.controller import payment_router
 
 from main.appodus_utils.integrations.webhook import webhook_router
@@ -60,6 +63,10 @@ router.include_router(admin_chat_router)
 router.include_router(notification_router)
 router.include_router(notification_preference_router)
 router.include_router(system_config_router)
+router.include_router(commission_rule_router)
+router.include_router(earnings_router)
+router.include_router(payout_router)
+router.include_router(admin_payout_router)
 router.include_router(payment_router)
 router.include_router(audit_router)
 router.include_router(webhook_router)
