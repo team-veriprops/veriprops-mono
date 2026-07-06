@@ -45,6 +45,9 @@ class AuditActionType(str, enum.Enum):
     COMMISSION_FROZEN = "COMMISSION_FROZEN"
     COMMISSION_UNFROZEN = "COMMISSION_UNFROZEN"
     COMMISSION_REVERSED = "COMMISSION_REVERSED"
+    # ── Agent reputation & coverage (§16) ──────────────────────────
+    AGENT_AVAILABILITY_CHANGED = "AGENT_AVAILABILITY_CHANGED"
+    AGENT_COVERAGE_UPDATED = "AGENT_COVERAGE_UPDATED"
     # ── Payouts (§15.1) ────────────────────────────────────────────
     PAYOUT_REQUESTED = "PAYOUT_REQUESTED"
     PAYOUT_APPROVED = "PAYOUT_APPROVED"

@@ -247,6 +247,30 @@ def main() -> int:
     check("paid-out amount is reflected in total paid (§15.1)", final["totalPaidMinor"] > 0,
           f"totalPaid={final['totalPaidMinor']}")
 
+    # ── S20: Agent reputation, availability, coverage + ranked assignment (§16) ──
+    metrics = agent.get("/agents/me/metrics").json()["data"]
+    check("agent metrics are derived on read (§16.1)", isinstance(metrics["compositeScore"], int)
+          and metrics["totalJobs"] >= 1, f"metrics={metrics}")
+
+    eff = agent.put("/agents/me/availability", json={"availability": "AMBER"}).json()["data"]
+    check("agent sets availability (below capacity → honoured, §16.1)", eff == "AMBER", f"effective={eff}")
+
+    bad = agent.put("/agents/me/coverage", json=[{"state": "atlantis"}])
+    check("coverage rejects an unknown state (§16.1)", bad.status_code >= 400, f"http {bad.status_code}")
+    cov = agent.put("/agents/me/coverage", json=[{"state": "lagos", "travelRadiusKm": 30}]).json()["data"]
+    check("agent declares coverage on the canonical states (§16.1, D33)",
+          any(c["state"] == "lagos" for c in cov), f"coverage={cov}")
+
+    locations = root.get("/config/nigeria-locations").json()["data"]
+    check("backend owns the canonical Nigerian states (§16.1, D33)", len(locations["states"]) == 37,
+          f"states={len(locations['states'])}")
+
+    suggested = admin_c.get(
+        f"/admin/agents/suggested?verification_id={vid_id}&role=REGISTRY"
+    ).json()["data"]
+    check("admin suggested-agents ranks eligible candidates (§16.1)", len(suggested) >= 1
+          and "compositeScore" in suggested[0], f"suggested={len(suggested)}")
+
     print("\n" + ("ALL PASSED" if not _failures else f"FAILURES: {_failures}"))
     return 0 if not _failures else 1
 

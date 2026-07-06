@@ -21,6 +21,8 @@ from main.app.core.state.status import (
 )
 from main.app.core.vid import generate_vid
 from main.app.domain.property.models import Property
+from main.app.domain.user.agent.coverage.models import AgentCoverage
+from main.app.domain.user.agent.profile.models import AgentProfile
 from main.app.domain.user.auth.session.models import UserType
 from main.app.domain.user.models import User
 from main.app.domain.verification.models import Verification
@@ -99,6 +101,15 @@ class DevSeedService:
             )
             session.add(agent)
             agents[role] = agent
+            # An APPROVED agent profile + coverage (§16) so reputation/ranking has real data.
+            session.add(self._new(
+                AgentProfile,
+                user_id=str(agent.id), roles=[role.value], approved_roles=[role.value],
+                status="APPROVED", availability="GREEN", submitted_at=now, reviewed_at=now,
+            ))
+            session.add(self._new(
+                AgentCoverage, user_id=str(agent.id), state="lagos", lga="eti-osa",
+            ))
 
         prop = self._new(
             Property,

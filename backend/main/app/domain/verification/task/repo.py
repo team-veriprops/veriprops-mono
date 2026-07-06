@@ -66,6 +66,14 @@ class VerificationTaskRepo(
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def list_all_for_agent(self, agent_id: str) -> List[VerificationTask]:
+        """Every task ever assigned to an agent — feeds the reputation metrics (§16.1)."""
+        stmt = select(VerificationTask).where(
+            VerificationTask.deleted.is_(False),
+            VerificationTask.assigned_agent_id == agent_id,
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
     async def count_active_for_agent(self, agent_id: str) -> int:
         """Tasks that count against ``agent_max_active_tasks`` (§6.5)."""
         stmt = select(func.count()).select_from(VerificationTask).where(

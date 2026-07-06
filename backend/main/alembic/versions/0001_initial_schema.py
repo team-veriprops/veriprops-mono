@@ -293,6 +293,7 @@ def _create_agent_profiles():
         sa.Column("rejection_reason", sa.String(length=500), nullable=True),
         sa.Column("bio", sa.String(length=300), nullable=True),
         sa.Column("years_experience", sa.Integer(), nullable=True),
+        sa.Column("availability", sa.String(length=8), nullable=False, server_default="GREEN"),
         sa.Column("submitted_at", UTCDateTime, nullable=True),
         sa.Column("reviewed_at", UTCDateTime, nullable=True),
         sa.Column("reviewed_by", sa.String(length=36), nullable=True),

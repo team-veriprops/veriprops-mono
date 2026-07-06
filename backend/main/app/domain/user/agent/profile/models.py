@@ -25,6 +25,16 @@ class AgentApplicationStatus(str, enum.Enum):
     REJECTED = "REJECTED"
 
 
+class AvailabilityStatus(str, enum.Enum):
+    """Agent availability signal (PRD §16.1). 🟢 accepting work, 🟡 limited, 🔴 unavailable.
+    The *effective* availability is forced to RED at ``agent_max_active_tasks`` regardless of
+    the agent's set value."""
+
+    GREEN = "GREEN"
+    AMBER = "AMBER"
+    RED = "RED"
+
+
 # ─── ORM ──────────────────────────────────────────────────────────
 
 class AgentProfile(BaseEntity):
@@ -39,6 +49,8 @@ class AgentProfile(BaseEntity):
     rejection_reason = Column(String(500), nullable=True)
     bio = Column(String(300), nullable=True)
     years_experience = Column(Integer, nullable=True)
+    # Agent-set availability signal (§16.1); effective value is forced RED at capacity.
+    availability = Column(String(8), nullable=False, default=AvailabilityStatus.GREEN.value)
     submitted_at = Column(UTCDateTime, nullable=True)
     reviewed_at = Column(UTCDateTime, nullable=True)
     reviewed_by = Column(String(36), nullable=True)
@@ -66,6 +78,7 @@ class UpdateAgentProfileDto(Object):
     rejection_reason: Optional[str] = None
     bio: Optional[str] = None
     years_experience: Optional[int] = None
+    availability: Optional[str] = None
     reviewed_by: Optional[str] = None
 
 

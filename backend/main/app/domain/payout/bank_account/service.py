@@ -40,7 +40,7 @@ class BankAccountService:
 
     async def remove(self, agent_id: str, account_id: str) -> None:
         account = await self._get_owned(account_id, agent_id)
-        await self._repo.delete(account.id)
+        await self._repo.soft_delete(account.id)
 
     async def make_default(self, agent_id: str, account_id: str) -> AgentBankAccount:
         account = await self._get_owned(account_id, agent_id)

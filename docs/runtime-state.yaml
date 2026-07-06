@@ -1,15 +1,41 @@
 session_id: run-s19-s20-earnings-reputation
 command: resume
 
-status: in-progress
-phase: s19-complete + live-e2e-verified; s20 pending
+status: idle
+phase: s19+s20-complete + live-e2e-verified
 
-current_slice: S20   # S19 (Phase 15 earnings/commission/payouts) delivered & live-verified. S20 next.
-current_subtask: "S19 (Phase 15 agent earnings & commission) complete: commission_rule CRUD (D30),
-  two-stage clearance/reserve + derived-by-date earnings + clearance sweep + payout domain + finance
-  panel + double-accrual guard (D31). Backend 728, frontend 325; migration round-trip clean; extended
-  live drive-through ALL PASSED (41 checks; surfaced + fixed 3 runtime UUID/seed bugs). Next slice is
-  S20 (Phase 16 agent reputation & coverage)."
+current_slice: null   # S19 + S20 delivered & live-verified. Next slice is S21 (Phase 17 growth & conversion).
+current_subtask: "S19 (Phase 15 earnings/commission/payouts, D30/D31) + S20 (Phase 16 agent reputation &
+  coverage, D32/D33) complete. Backend 744, frontend 330; migration round-trip clean; extended live
+  drive-through ALL PASSED (47 checks; surfaced + fixed 5 runtime bugs across the two slices). Next slice
+  is S21 (Phase 17 growth & conversion — referral anti-farming, first-time discount, abandonment recovery)."
+
+# ── S20 (Phase 16) summary — see decision-log D32-D33 ──
+s20_reputation_coverage:
+  backend: "reputation/ domain (no entity, D32): pure metrics.py (completion/accuracy-5pt-from-review_quality/
+    timeliness-vs-task_sla_hours/composite/decline-penalty, derived on read) + AgentReputationService
+    (get_metrics, get_profile_summary, set_availability [effective forced RED at agent_max_active_tasks],
+    coverage CRUD validated against the states canon, suggested_agents ranking). AgentProfile += availability
+    column. Config knobs task_sla_hours/agent_low_performance_threshold/agent_top_agent_accuracy_threshold/
+    agent_wide_coverage_states. Backend-owned 37-state canon (config/nigeria_locations.py + GET
+    /config/nigeria-locations, D33); coverage role-differentiated (Field/Surveyor location-bound, Registry/
+    Lawyer remote). Suggested-agents = approved + active-role + coverage + capacity → composite order + Top-
+    Agent/low-perf flags (ASSIGN_AGENT). Endpoints /agents/me/{metrics,profile,availability,coverage} +
+    /admin/agents/suggested. availability col in 0001 (round-trip clean). Dev seed now creates APPROVED
+    agent profiles + Lagos coverage."
+  frontend: "types/agentReputation; reputation-service (agent + admin suggested) + hooks + contract test.
+    Interactive Nigeria SVG coverage map (schematic 37-state geo-grid, clickable); /agents/settings/coverage
+    (map + chips + travel radius) + /agents/profile (metrics StatCards + availability + coverage). Unified
+    dashboard enhanced (reputation + availability). Admin verification-detail assign flow gains a ranked
+    suggested-agents picker (score/accuracy/availability/Top-Agent/in-area). AvailabilityToggle shared."
+  tests: "backend 744 (+16: metrics math, ranking filter/order, availability effective, coverage validation);
+    frontend vitest 330 (+5 reputation-service contract). tsc+lint clean."
+  live_e2e: "Drive-through extended (§16): agent metrics derived on read (composite 98) → set availability →
+    coverage reject-unknown + declare-on-canon → 37-state canon → admin ranked suggested-agents. Full
+    S15-S20 run ALL 47 checks PASS."
+  bugs_fixed_by_e2e:
+    - "Dev seed created AGENT users but no agent_profiles/agent_coverage → profile/availability/coverage 404, empty ranking; seed now creates APPROVED profile + coverage per agent."
+    - "GenericRepo soft-delete is soft_delete(_id) not delete(); set_coverage + bank-account remove fixed; set_coverage echoes written rows (same-txn re-list read stale)."
 
 # ── S19 (Phase 15) summary — see decision-log D30-D31 ──
 s19_earnings_commission:
@@ -312,6 +338,7 @@ completed_slices:
   - S17  # Phase 13 public lookup & sharing (see above)
   - S18  # Phase 14 revision / re-verification / disputes (see above)
   - S19  # Phase 15 agent earnings & commission (see above)
+  - S20  # Phase 16 agent reputation & coverage (see above)
 
 # ── S14 (Phase 10) summary ────────────────────────────────────────
 s14_final_report:

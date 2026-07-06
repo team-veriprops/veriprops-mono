@@ -30,6 +30,7 @@ import {
   TaskState,
   VerificationDetail,
 } from "@/types/adminVerification";
+import { useSuggestedAgentsQuery } from "@components/agents/reputation/libs/useReputationQueries";
 import {
   useAddNoteMutation,
   useAdminVerificationDetailQuery,
@@ -76,13 +77,16 @@ function TaskRow({
   verificationId: string;
 }) {
   const [agentId, setAgentId] = useState("");
+  const [showSuggested, setShowSuggested] = useState(false);
   const assign = useAssignAgentMutation(verificationId);
+  const suggested = useSuggestedAgentsQuery(showSuggested ? verificationId : null, showSuggested ? task.role : null);
 
-  const onAssign = async () => {
-    if (!agentId) return;
-    await assign.mutateAsync({ role: task.role, agentId });
+  const doAssign = async (id: string) => {
+    if (!id) return;
+    await assign.mutateAsync({ role: task.role, agentId: id });
     toast({ title: `${task.role} assigned` });
     setAgentId("");
+    setShowSuggested(false);
   };
 
   return (
@@ -99,17 +103,47 @@ function TaskRow({
         {task.declineCount > 0 && ` · ${task.declineCount} decline(s)`}
       </p>
       {ASSIGNABLE_STATES.has(task.state) && (
-        <div className="mt-2 flex gap-2">
-          <Input
-            placeholder="Agent ID"
-            value={agentId}
-            onChange={(e) => setAgentId(e.target.value)}
-            data-testid={`assign-agent-${task.role}`}
-          />
-          <Button size="sm" onClick={onAssign} disabled={assign.isPending || !agentId}>
-            {task.assignedAgentId ? "Reassign" : "Assign"}
-          </Button>
-        </div>
+        <>
+          <div className="mt-2 flex gap-2">
+            <Input
+              placeholder="Agent ID"
+              value={agentId}
+              onChange={(e) => setAgentId(e.target.value)}
+              data-testid={`assign-agent-${task.role}`}
+            />
+            <Button size="sm" onClick={() => doAssign(agentId)} disabled={assign.isPending || !agentId}>
+              {task.assignedAgentId ? "Reassign" : "Assign"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowSuggested((v) => !v)}
+              data-testid={`suggest-agents-${task.role}`}>
+              {showSuggested ? "Hide" : "Suggest"}
+            </Button>
+          </div>
+          {showSuggested && (
+            <div className="mt-2 space-y-1" data-testid={`suggested-agents-${task.role}`}>
+              {(suggested.data ?? []).length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {suggested.isLoading ? "Ranking eligible agents…" : "No eligible agents in coverage."}
+                </p>
+              ) : (
+                (suggested.data ?? []).map((a) => (
+                  <button key={a.userId} onClick={() => doAssign(a.userId)}
+                    className="flex w-full items-center justify-between gap-2 rounded-md border p-2 text-left text-sm hover:bg-muted/50">
+                    <span className="flex items-center gap-2">
+                      <span className="font-medium">{a.name || a.userId.slice(0, 8)}</span>
+                      {a.topAgent && <Badge variant="secondary">Top agent</Badge>}
+                      {a.lowPerformance && <Badge variant="outline">Low</Badge>}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      score {a.compositeScore} · ★{a.accuracyScore.toFixed(1)} · {a.availability}
+                      {a.coversArea ? " · in area" : ""}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -799,3 +799,71 @@ backend caught three defects the mocked unit tests missed — again the UUID/tra
 3. **Payout beneficiary id-form mismatch.** `_resolve_beneficiary` keyed stored accounts by the raw
    `uuid.UUID` `a.id` but the client sends the `.hex` wire id, so a saved account never matched. Now keyed
    by `Utils.uuid_to_hex(a.id)`.
+
+---
+
+## Decision: D32 — Reputation metrics derived on read (S20 / Phase 16)
+
+### Context
+§16.1 wants agent metrics: completion rate, accuracy (1–5, admin-assigned), timeliness. The backend
+already stores per-task `review_quality` (0–100, admin-set at approval) and task timestamps; no metrics
+table exists.
+
+### Chosen Option
+**Compute metrics on read** from an agent's verification tasks (no stored metrics — can't drift).
+Accuracy = the existing `review_quality` aggregated and shown on a **5-point scale** (reuses the admin
+input already captured; no second scoring step). Timeliness = the fraction of submissions within a new
+`task_sla_hours` system-config knob (`submitted_at − accepted_at`). A composite (completion + accuracy +
+timeliness − decline penalty) drives the assignment ranking. Pure arithmetic in `reputation/metrics.py`.
+
+### Tradeoffs
+- Reuses one admin score instead of adding a distinct 1–5 rating action; a richer per-role rubric can
+  layer on later without a schema change.
+- Metrics recompute per request over an agent's tasks — fine at MVP volume; cache if it grows.
+
+### Revisit
+Add a stored/snapshot metrics table only if the per-read aggregation becomes a hotspot.
+
+---
+
+## Decision: D33 — Full coverage + interactive map; backend-owned states canon; unified dashboard (S20)
+
+### Context
+§16.1 coverage lets agents declare states + LGAs + travel distance with a "Nigeria map preview," and
+specifies role-specific dashboards (Field/Registry/Lawyer). No Nigerian-locations canon existed on the
+backend (only a static frontend list).
+
+### Chosen Option
+**Full coverage** (states + LGAs + travel radius) with an **interactive Nigeria SVG map** picker. The
+backend owns the canonical **37-state** list (`config/nigeria_locations.py`, served at
+`GET /config/nigeria-locations`) — the matching-critical field — and validates coverage against it; LGA
+stays a free-text convenience. Coverage is **role-differentiated**: Field/Surveyor are location-bound
+(coverage gates matching), Registry/Lawyer are remote-capable (coverage does not gate). Availability is
+🟢/🟡/🔴, **forced RED at `agent_max_active_tasks`**. Assignment gains a ranked **suggested-agents**
+endpoint (role eligibility + credential status + coverage + capacity → composite order; Top-Agent +
+low-performance annotations) feeding the admin picker. **One unified enhanced agent dashboard** now (metrics
++ availability + tasks, with Lawyer dependency-gating already visible via the S13 progress component);
+the distinct Field/Registry/Lawyer dashboard variants are a documented follow-up.
+
+### Tradeoffs / Constraints
+- The SVG map is a **schematic geo-grid** of the 37 states (approximate positions, not cartographic paths)
+  — interactive and highlight-driven; an exact GeoJSON path set can drop in behind the same component API.
+- "Reduced job-feed visibility" for low performers is realised in the **ranking** (excluded/sunk); the
+  broadcast pool is untargeted accept-by-id today, so per-agent pool-feed reduction is a follow-up pending
+  a targeted/browsable pool.
+
+### Revisit
+Build the role-specific dashboard variants + a precise map + targeted pool visibility when prioritised.
+
+---
+
+## Note: two runtime bugs the S20 live drive-through surfaced
+
+Extending the drive-through to the §16 reputation/coverage/ranking flow caught two the unit tests missed:
+1. **Dev seed created AGENT users but no `agent_profiles`/`agent_coverage` rows**, so the profile /
+   availability / coverage endpoints 404'd and suggested-agents returned empty. The seed now creates an
+   APPROVED profile + Lagos coverage per agent (D24 — the seed extends as slices land).
+2. **`AgentCoverageRepo.delete` / `BankAccountRepo.delete` don't exist** — `GenericRepo`'s soft-delete is
+   `soft_delete(_id)`. `set_coverage` (and the S19 bank-account remove) now call `soft_delete`. Also, a
+   same-transaction re-list read stale rows after the replace, so `set_coverage` now echoes the just-written
+   coverage instead of re-querying.

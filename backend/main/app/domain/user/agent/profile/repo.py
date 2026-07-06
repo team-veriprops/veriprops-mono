@@ -41,6 +41,14 @@ class AgentProfileRepo(
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def list_by_status(self, status: str) -> List[AgentProfile]:
+        """All agent profiles in a status — feeds the reputation ranking (§16.1)."""
+        stmt = select(AgentProfile).where(
+            AgentProfile.deleted.is_(False),
+            AgentProfile.status == status,
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
     async def count_by_status(self, status: str) -> int:
         """Agent profiles/applications in a given status (admin dashboard §6)."""
         stmt = select(func.count()).select_from(AgentProfile).where(
