@@ -18,6 +18,7 @@ import {
   VerificationListItem,
   VerificationTracking,
 } from "@/types/tracking";
+import { AuditActivityPage } from "@/types/audit";
 
 /**
  * Customer submission & payment API. Mirrors the backend controllers at
@@ -68,6 +69,11 @@ export class VerificationService {
   /** SSE stream URL (§4.9). Consumed by EventSource in useVerificationStream. */
   streamUrl(id: string): string {
     return `/api/verifications/${id}/stream`;
+  }
+
+  /** PII-safe activity log for the customer (§19.2) — reuses the backend audit read model. */
+  getActivity(id: string, page = 0, pageSize = 20): Promise<SuccessResponse<AuditActivityPage>> {
+    return this.http.get(`/verifications/${id}/activity?page=${page}&page_size=${pageSize}`);
   }
 
   quote(tier: VerificationTier, currency: TransactionCurrency): Promise<SuccessResponse<PriceQuote>> {

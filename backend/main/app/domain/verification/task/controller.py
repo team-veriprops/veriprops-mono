@@ -14,6 +14,7 @@ from kink import di
 from libre_fastapi_jwt import AuthJWT
 
 from main.app.core.state.status import AgentRole, VerificationTier
+from main.app.domain.audit.models import AuditActivityPageDto
 from main.app.domain.verification.task.evidence.models import EvidenceDto, EvidenceItem, EvidenceKind
 from main.app.domain.verification.task.evidence.service import EvidenceService
 from main.app.domain.verification.task.models import (
@@ -144,3 +145,19 @@ async def submit_task(task_id: str, req: SubmitTaskDto, authorize: AuthJWT = Dep
     agent_id = str(authorize.get_jwt_subject())
     task = await task_service.submit(task_id, agent_id, req.payload)
     return SuccessResponse[AgentTaskDto](data=await _to_agent_dto(task))
+
+
+@agent_task_router.get(
+    "/{task_id}/history", response_model=SuccessResponse[AuditActivityPageDto]
+)
+async def get_task_history(
+    task_id: str,
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=20, ge=1, le=100),
+    authorize: AuthJWT = Depends(),
+):
+    """PII-safe state-transition history for one of the agent's own tasks (§19.3 / R19.3)."""
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
+    result = await task_service.task_history(task_id, agent_id, page, page_size)
+    return SuccessResponse[AuditActivityPageDto](data=result)

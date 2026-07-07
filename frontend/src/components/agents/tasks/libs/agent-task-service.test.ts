@@ -69,4 +69,11 @@ describe("AgentTaskService contract (mirrors /agents/tasks backend routes)", () 
       body: { payload: { occupancy_status: "vacant" } },
     });
   });
+
+  it("fetches PII-safe task history with snake_case pagination (§19.3)", async () => {
+    const { http, calls } = mockHttp();
+    await new AgentTaskService(http).getHistory("t-1", 0, 20);
+    expect(calls[0]).toMatchObject({ method: "get" });
+    expect(calls[0].url).toBe("/agents/tasks/t-1/history?page=0&page_size=20");
+  });
 });

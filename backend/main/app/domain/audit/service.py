@@ -9,9 +9,6 @@ and agent task history (R19.3).
 """
 from __future__ import annotations
 
-import csv
-import io
-import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -114,32 +111,26 @@ class AuditLogService:
         ]
         return AuditActivityPageDto(items=items, total=total, page=page, page_size=page_size)
 
-    async def export_verification_pack_csv(
-        self,
-        vid: str,
-        task_ids: List[str],
-    ) -> bytes:
-        """Return a CSV byte string with the full audit trail for a verification."""
-        rows = await self._repo.list_for_verification_pack(vid=vid, task_ids=task_ids)
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow([
-            "occurred_at", "action", "actor_id", "resource_type", "resource_id",
-            "from_state", "to_state", "ip_address", "details",
-        ])
-        for r in rows:
-            writer.writerow([
-                r.occurred_at.isoformat() if r.occurred_at else "",
-                r.action,
-                r.actor_id or "",
-                r.resource_type,
-                r.resource_id,
-                r.from_state or "",
-                r.to_state or "",
-                r.ip_address or "",
-                json.dumps(r.details) if r.details else "",
-            ])
-        return buf.getvalue().encode("utf-8")
+    async def list_pack_transitions(self, resource_ids: List[str]) -> List[AuditPackRowDto]:
+        """Full audit rows (with actor_id/IP) for a set of resource ids — the
+        transition backbone of the §19.3 verification audit pack. CSV assembly
+        lives in VerificationAuditPackService."""
+        rows = await self._repo.list_by_resource_ids(resource_ids)
+        return [
+            AuditPackRowDto(
+                id=str(r.id),
+                actor_id=r.actor_id,
+                action=r.action,
+                resource_type=r.resource_type,
+                resource_id=r.resource_id,
+                from_state=r.from_state,
+                to_state=r.to_state,
+                occurred_at=r.occurred_at,
+                ip_address=r.ip_address,
+                details=r.details,
+            )
+            for r in rows
+        ]
 
     async def list_admin_actions(
         self,

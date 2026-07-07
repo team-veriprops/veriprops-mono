@@ -10,9 +10,11 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import Depends, Query
+from fastapi.responses import StreamingResponse
 from kink import di
 
 from main.app.domain.audit.models import AdminActionLogPageDto
+from main.app.domain.audit.pack_service import VerificationAuditPackService
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
 from main.appodus_utils.db.models import SuccessResponse
@@ -42,3 +44,21 @@ async def list_admin_actions(
         page_size=page_size,
     )
     return SuccessResponse.ok(result)
+
+
+@audit_router.get(
+    "/verifications/{verification_id}/export",
+    summary="Download the full CSV audit pack for a verification (§19.3)",
+)
+async def export_verification_pack(
+    verification_id: str,
+    _: str = Depends(require_permission(Permission.VIEW_ADMIN_PANEL)),
+):
+    pack: VerificationAuditPackService = di[VerificationAuditPackService]
+    csv_bytes = await pack.build_pack_csv(verification_id)
+    filename = f"veriprops-audit-pack-{verification_id}.csv"
+    return StreamingResponse(
+        iter([csv_bytes]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

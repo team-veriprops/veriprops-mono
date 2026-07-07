@@ -372,6 +372,19 @@ class VerificationTaskService:
     async def list_for_verification(self, verification_id: str) -> List[VerificationTask]:
         return await self._repo.list_for_verification(verification_id)
 
+    async def task_history(
+        self, task_id: str, agent_id: str, page: int = 0, page_size: int = 20
+    ):
+        """PII-safe transition history for one of the agent's own tasks (§19.3 / R19.3).
+
+        Ownership-gated (the task must be assigned to the requesting agent), then the
+        audit read model is reused — the agent sees state transitions with no actor_id.
+        """
+        await self._get_owned_task(task_id, agent_id)
+        return await self._audit.get_activity_log(
+            resource_type="verification_task", resource_id=task_id, page=page, page_size=page_size
+        )
+
     # ── helpers ───────────────────────────────────────────────────
 
     async def _get_task(self, task_id: str) -> VerificationTask:

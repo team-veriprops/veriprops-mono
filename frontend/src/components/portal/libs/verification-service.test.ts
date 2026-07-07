@@ -34,6 +34,13 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
     expect(calls[0].url).toBe("/verifications/quote?tier=STANDARD&currency=USD");
   });
 
+  it("fetches the PII-safe activity log with snake_case pagination (§19.2)", async () => {
+    const { http, calls } = mockHttp();
+    await new VerificationService(http).getActivity("v-1", 0, 20);
+    expect(calls[0].method).toBe("get");
+    expect(calls[0].url).toBe("/verifications/v-1/activity?page=0&page_size=20");
+  });
+
   it("submits with property + tier + consent", async () => {
     const { http, calls } = mockHttp();
     await new VerificationService(http).submit("ver-1", {

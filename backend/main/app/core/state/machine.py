@@ -7,7 +7,13 @@ from __future__ import annotations
 
 from typing import Dict, Set
 
-from main.app.core.state.status import ChatMessageState, ReportState, TaskState, VerificationStatus
+from main.app.core.state.status import (
+    ChatMessageState,
+    ErasureRequestState,
+    ReportState,
+    TaskState,
+    VerificationStatus,
+)
 from main.appodus_utils.exception.exceptions import IllegalStateTransitionException
 
 
@@ -147,4 +153,23 @@ CHAT_MESSAGE_TERMINAL: Set[str] = {_M.DELIVERED, _M.BLOCKED}
 chat_message_state_machine = StateMachine(
     transitions=CHAT_MESSAGE_TRANSITIONS,
     terminal=CHAT_MESSAGE_TERMINAL,
+)
+
+
+# ── Data-erasure request state machine (PRD §18.1, §19.1) ─────────────────────
+#
+# Review path:  PENDING → APPROVED → EXECUTED   (admin approves, then pseudonymises)
+#               PENDING → REJECTED              (admin declines)
+# Terminal:     EXECUTED, REJECTED — a request is resolved exactly once.
+
+_E = ErasureRequestState
+ERASURE_REQUEST_TRANSITIONS: Dict[str, Set[str]] = {
+    _E.PENDING: {_E.APPROVED, _E.REJECTED},
+    _E.APPROVED: {_E.EXECUTED},
+}
+ERASURE_REQUEST_TERMINAL: Set[str] = {_E.EXECUTED, _E.REJECTED}
+
+erasure_request_state_machine = StateMachine(
+    transitions=ERASURE_REQUEST_TRANSITIONS,
+    terminal=ERASURE_REQUEST_TERMINAL,
 )

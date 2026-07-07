@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple, Type
 
 from kink import inject
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.audit.models import (
@@ -59,21 +59,23 @@ class AuditLogRepo(
         ).scalars().all()
         return list(rows), total or 0
 
-    async def list_for_verification_pack(
-        self,
-        vid: str,
-        task_ids: List[str],
-    ) -> List[AuditLog]:
-        conditions = [
-            (AuditLog.resource_type == "VERIFICATION") & (AuditLog.resource_id == vid)
-        ]
-        if task_ids:
-            conditions.append(
-                (AuditLog.resource_type == "TASK") & (AuditLog.resource_id.in_(task_ids))
-            )
+    async def list_by_resource_ids(self, resource_ids: List[str]) -> List[AuditLog]:
+        """All audit rows for a set of resource ids, oldest-first.
+
+        Resource ids are globally unique UUIDs, so filtering by id alone (no
+        resource_type) captures every transition across a verification's whole
+        object graph — the verification plus its tasks, payments, disputes,
+        re-checks, upgrades, reports, shares, commissions, chargebacks and
+        evidence — for the §19.3 legal audit pack.
+        """
+        if not resource_ids:
+            return []
         stmt = (
             select(AuditLog)
-            .where(AuditLog.deleted.is_(False), or_(*conditions))
+            .where(
+                AuditLog.deleted.is_(False),
+                AuditLog.resource_id.in_(resource_ids),
+            )
             .order_by(AuditLog.occurred_at.asc())
         )
         result = await self._session.execute(stmt)

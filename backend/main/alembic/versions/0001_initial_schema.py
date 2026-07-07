@@ -1153,6 +1153,31 @@ def _seed_super_admin() -> None:
     )
 
 
+def _create_data_erasure_requests():
+    # NDPA data-erasure requests + pseudonymisation trail (§18.1, §19.1, §4.11) — S23.
+    op.create_table(
+        "data_erasure_requests",
+        sa.Column("subject_user_id", sa.String(length=36), nullable=False),
+        sa.Column("requested_by_user_id", sa.String(length=36), nullable=False),
+        sa.Column("reason", sa.Text(), nullable=True),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="PENDING"),
+        sa.Column("sla_due_at", UTCDateTime, nullable=True),
+        sa.Column("reviewed_by_user_id", sa.String(length=36), nullable=True),
+        sa.Column("reviewed_at", UTCDateTime, nullable=True),
+        sa.Column("decision_note", sa.Text(), nullable=True),
+        sa.Column("executed_at", UTCDateTime, nullable=True),
+        sa.Column("pseudonym_token", sa.String(length=64), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_data_erasure_requests_id", "data_erasure_requests", ["id"], unique=True)
+    op.create_index(
+        "ix_data_erasure_requests_subject", "data_erasure_requests", ["subject_user_id"], unique=False
+    )
+    op.create_index(
+        "ix_data_erasure_requests_status", "data_erasure_requests", ["status"], unique=False
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Table registry (build order). Drops run in reverse.
 # ─────────────────────────────────────────────────────────────────────
@@ -1205,6 +1230,7 @@ _TABLE_BUILDERS = [
     ("pricing_tier_config", _create_pricing_tier_config),
     ("pricing_line_items", _create_pricing_line_items),
     ("broadcasts", _create_broadcasts),
+    ("data_erasure_requests", _create_data_erasure_requests),
 ]
 
 

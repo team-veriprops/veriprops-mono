@@ -76,6 +76,21 @@ class ChatMessageState(str, enum.Enum):
     BLOCKED = "BLOCKED"
 
 
+class ErasureRequestState(str, enum.Enum):
+    """NDPA data-erasure request lifecycle (PRD §18.1, §19.1).
+
+    A data subject (or an admin on their behalf) opens a request as ``PENDING``.
+    An admin with ``MANAGE_COMPLIANCE`` either ``REJECTED`` it or moves it to
+    ``APPROVED``; approval is then carried out by the irreversible pseudonymisation
+    step, landing on ``EXECUTED``. ``EXECUTED`` and ``REJECTED`` are terminal.
+    """
+
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    EXECUTED = "EXECUTED"
+    REJECTED = "REJECTED"
+
+
 class VerificationTier(str, enum.Enum):
     """Verification tier (PRD §1.4)."""
 

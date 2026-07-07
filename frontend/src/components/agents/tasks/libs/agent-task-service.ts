@@ -1,6 +1,7 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { Page, SuccessResponse } from "@/types/models";
 import { AgentDashboard, AgentTask, EvidenceItem, EvidenceKind } from "@/types/agentTask";
+import { AuditActivityPage } from "@/types/audit";
 
 /**
  * Agent task-execution API. Mirrors the backend controller at
@@ -59,5 +60,10 @@ export class AgentTaskService {
 
   submit(taskId: string, payload: Record<string, unknown>): Promise<SuccessResponse<AgentTask>> {
     return this.http.post(`${this.base}/${taskId}/submit`, { payload });
+  }
+
+  /** PII-safe state-transition history for one of the agent's own tasks (§19.3). */
+  getHistory(taskId: string, page = 0, pageSize = 20): Promise<SuccessResponse<AuditActivityPage>> {
+    return this.http.get(`${this.base}/${taskId}/history?page=${page}&page_size=${pageSize}`);
   }
 }

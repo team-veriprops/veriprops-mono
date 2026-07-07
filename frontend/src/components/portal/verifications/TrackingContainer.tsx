@@ -133,6 +133,14 @@ export default function TrackingContainer({ verificationId }: { verificationId: 
                 )}
               </CardContent>
             </Card>
+
+            <Link
+              href={ROUTES.PORTAL.VERIFICATION_ACTIVITY(verificationId)}
+              className="text-sm text-primary hover:underline"
+              data-testid="view-activity"
+            >
+              View full activity history
+            </Link>
           </>
         )}
       </AsyncStateComponent>

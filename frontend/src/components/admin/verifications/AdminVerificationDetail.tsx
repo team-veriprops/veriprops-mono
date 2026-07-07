@@ -274,6 +274,14 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
           >
             Messages
           </Button>
+          <a
+            href={ROUTES.ADMIN.VERIFICATION_AUDIT_EXPORT(verificationId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="export-audit-pack"
+          >
+            <Button variant="outline">Export audit pack</Button>
+          </a>
           {(summary.status === VerificationStatus.UNDER_REVIEW ||
             summary.status === VerificationStatus.COMPLETED) && (
             <Button

@@ -45,6 +45,10 @@ from main.app.domain.payment.controller import payment_router
 
 from main.appodus_utils.integrations.webhook import webhook_router
 from main.app.domain.audit.controller import audit_router
+from main.app.domain.compliance.erasure.controller import (
+    erasure_router,
+    admin_erasure_router,
+)
 from main.appodus_utils.config.settings import Environment
 
 router = APIRouter()
@@ -85,6 +89,8 @@ router.include_router(broadcast_router)
 router.include_router(finance_router)
 router.include_router(payment_router)
 router.include_router(audit_router)
+router.include_router(erasure_router)
+router.include_router(admin_erasure_router)
 router.include_router(webhook_router)
 
 # Dev/QA reset+seed — first production gate: the router only mounts in non-prod. The

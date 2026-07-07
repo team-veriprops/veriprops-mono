@@ -97,6 +97,9 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
           <Button asChild variant="secondary" data-testid="detail-messages">
             <Link href={ROUTES.AGENT.TASK_MESSAGES(task.id)}>Messages</Link>
           </Button>
+          <Button asChild variant="outline" data-testid="detail-history">
+            <Link href={ROUTES.AGENT.TASK_HISTORY(task.id)}>History</Link>
+          </Button>
           {(task.state === TaskState.PENDING || task.inPool) && (
             <Button
               onClick={async () => {

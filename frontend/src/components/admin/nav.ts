@@ -1,8 +1,6 @@
 import { ROUTES } from "@/lib/routes";
 import { NavItem } from "@/components/nav/MenuSidebar";
 
-// Only routes with a built page appear here — the remaining items (Audit Log, Erasure) are
-// restored as their slices land, so nothing in the sidebar 404s.
 export const adminNavItems: NavItem[] = [
   { title: "Dashboard", href: ROUTES.ADMIN.DASHBOARD, icon: "dashboard", has_separator_after: false },
   { title: "Analytics", href: ROUTES.ADMIN.ANALYTICS, icon: "barChart", has_separator_after: true },
@@ -18,5 +16,8 @@ export const adminNavItems: NavItem[] = [
   { title: "Commission Rules", href: ROUTES.ADMIN.COMMISSION_RULES, icon: "dollarSign", has_separator_after: false },
   { title: "Pricing", href: ROUTES.ADMIN.PRICING, icon: "tag", has_separator_after: true },
   { title: "Trust Score Weights", href: ROUTES.ADMIN.TRUST_SCORE_WEIGHTS, icon: "settings", has_separator_after: false },
-  { title: "System Config", href: ROUTES.ADMIN.SYSTEM_CONFIG, icon: "settings", has_separator_after: false },
+  { title: "System Config", href: ROUTES.ADMIN.SYSTEM_CONFIG, icon: "settings", has_separator_after: true },
+  // §19 audit & compliance maturity
+  { title: "Audit Log", href: ROUTES.ADMIN.AUDIT_ACTIONS, icon: "clipboardList", has_separator_after: false },
+  { title: "Erasure Requests", href: ROUTES.ADMIN.ERASURE_REQUESTS, icon: "alertTriangle", has_separator_after: false },
 ];

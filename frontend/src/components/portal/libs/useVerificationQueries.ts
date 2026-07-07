@@ -21,9 +21,18 @@ export const verificationKeys = {
   summary: () => ["verification", "summary"] as const,
   tracking: (id: string) => ["verification", id, "tracking"] as const,
   evidence: (id: string, page: number) => ["verification", id, "evidence", page] as const,
+  activity: (id: string, page: number) => ["verification", id, "activity", page] as const,
   quote: (tier: VerificationTier, currency: TransactionCurrency) =>
     ["verification", "quote", tier, currency] as const,
 };
+
+/** Customer verification activity log (§19.2) — PII-safe transition history. */
+export function useVerificationActivityQuery(id: string, page = 0) {
+  return useQuery({
+    queryKey: verificationKeys.activity(id, page),
+    queryFn: async () => (await service.getActivity(id, page, 20)).data ?? null,
+  });
+}
 
 /** Portal dashboard summary (§9) — backend-owned rollups over the customer's work. */
 export function useCustomerDashboardQuery() {

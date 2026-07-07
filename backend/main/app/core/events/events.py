@@ -45,6 +45,8 @@ class EventType(str, enum.Enum):
     PAYMENT_SETTLED = "PAYMENT_SETTLED"
     # Chat (§12.3 routing)
     MESSAGE_SENT = "MESSAGE_SENT"              # routine → Chat counter only (not a notification)
+    # Compliance (§19) — NDPA data-erasure request state change (source: S23), in-app only
+    ERASURE_STATUS_CHANGED = "ERASURE_STATUS_CHANGED"
 
 
 @dataclass

@@ -20,6 +20,7 @@ from main.app.core.state.status import (
     VerificationTier,
 )
 from main.app.core.vid import generate_vid
+from main.app.domain.audit.models import AuditActionType, AuditLog
 from main.app.domain.payment.models import Payment, PaymentMethodKind, PaymentPurpose, PaymentStatus
 from main.app.domain.property.models import Property
 from main.app.domain.user.agent.coverage.models import AgentCoverage
@@ -39,6 +40,10 @@ from main.appodus_utils.decorators.transactional import transactional
 CUSTOMER_EMAIL = "qa-customer@veriprops.io"
 CUSTOMER_PASSWORD = "Test1234!"
 AGENT_PASSWORD = "Test1234!"
+# A disposable second customer used only by the §19 data-erasure e2e — erasing this
+# account (login fail + tokenised PII) never disturbs the primary scenario checks.
+ERASABLE_EMAIL = "qa-erasable@veriprops.io"
+ERASABLE_PASSWORD = "Test1234!"
 _REVIEW_APPROVED = "APPROVED"
 
 # Domain tables cleared by reset() (order-independent — no FKs). Reference tables
@@ -53,6 +58,8 @@ _RESET_TABLES = [
     # Growth (§17) + broadcasts (§18) — domain data, cleared for a clean scenario. Pricing
     # config + commission rules + system config are reference-like and preserved (seeded at start).
     "referral_credits", "referrals", "broadcasts",
+    # Compliance (§19) — erasure requests are per-run scenario data.
+    "data_erasure_requests",
 ]
 
 
@@ -156,9 +163,44 @@ class DevSeedService:
             session.add(task)
             task_ids[role.value] = str(task.id)
 
+        # A few audit transitions for the verification so the §19.3 export pack has a real
+        # trail (the seed builds rows directly, bypassing the services that normally audit).
+        vid_hex = Utils.uuid_to_hex(verification.id)
+        for action, frm, to in (
+            (AuditActionType.VERIFICATION_SUBMITTED, None, VerificationStatus.SUBMITTED.value),
+            (AuditActionType.VERIFICATION_STATE_CHANGED,
+             VerificationStatus.PAID.value, VerificationStatus.IN_PROGRESS.value),
+        ):
+            session.add(self._new(
+                AuditLog, actor_id=str(customer.id), action=action.value,
+                resource_type="verification", resource_id=vid_hex,
+                from_state=frm, to_state=to, ip_address="203.0.113.5", occurred_at=now,
+            ))
+
+        # A disposable customer for the data-erasure e2e, plus audit rows it is the actor of
+        # (so pseudonymisation of the audit actor identity is observable, §4.11).
+        erasable = self._new(
+            User,
+            first_name="Ngozi", last_name="Eze",
+            email=ERASABLE_EMAIL, email_normalized=ERASABLE_EMAIL, email_verified=True,
+            phone_country_code="NG", phone_dial_code="+234", phone="8030009999",
+            phone_e164="+2348030009999", phone_verified=True,
+            country_of_residence="NG", timezone="Africa/Lagos", preferred_currency="NGN",
+            user_type=UserType.USER.value, personas=["CUSTOMER"], trust_status="TRUSTED",
+            password_hash=Utils.get_password_hash(ERASABLE_PASSWORD),
+        )
+        session.add(erasable)
+        for action in (AuditActionType.CONSENT_RECORDED, AuditActionType.PAYMENT_INITIATED):
+            session.add(self._new(
+                AuditLog, actor_id=str(erasable.id), action=action.value,
+                resource_type="user", resource_id=str(erasable.id),
+                ip_address="198.51.100.7", occurred_at=now,
+            ))
+
         await session.flush()
         return {
             "customer": {"id": str(customer.id), "email": CUSTOMER_EMAIL, "password": CUSTOMER_PASSWORD},
+            "erasable": {"id": str(erasable.id), "email": ERASABLE_EMAIL, "password": ERASABLE_PASSWORD},
             "admin": {"email": settings.SUPER_ADMIN_EMAIL, "password": settings.SUPER_ADMIN_PASSWORD},
             "agents": {r.value: str(agents[r].id) for r in roles},
             "verification": {"id": Utils.uuid_to_hex(verification.id), "vid": verification.vid,

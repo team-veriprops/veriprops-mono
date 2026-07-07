@@ -11,8 +11,17 @@ export const agentTaskKeys = {
   list: (state: string | undefined, page: number, pageSize: number) =>
     ["agent", "tasks", state, page, pageSize] as const,
   evidence: (taskId: string) => ["agent", "tasks", taskId, "evidence"] as const,
+  history: (taskId: string, page: number) => ["agent", "tasks", taskId, "history", page] as const,
   summary: () => ["agent", "tasks", "summary"] as const,
 };
+
+/** Agent task transition history (§19.3) — PII-safe, ownership-gated on the backend. */
+export function useTaskHistoryQuery(taskId: string, page = 0) {
+  return useQuery({
+    queryKey: agentTaskKeys.history(taskId, page),
+    queryFn: async () => (await service.getHistory(taskId, page, 20)).data ?? null,
+  });
+}
 
 /** Agent dashboard summary (§7) — backend-derived counts over the agent's own tasks. */
 export function useAgentDashboardQuery(enabled = true) {

@@ -32,6 +32,9 @@ class ConfigKey(str, enum.Enum):
     REFERRAL_CREDIT_NGN = "referral_credit_ngn"                  # referrer credit (whole NGN) on invitee's first payment
     MAX_DISCOUNT_PERCENT = "max_discount_percent"                # combined discount cap (first-time + referral)
     CANCELLATION_SURCHARGE_PCT = "cancellation_surcharge_pct"    # surcharge on cancellation after assignment
+    # §19 audit & compliance maturity (S23)
+    PII_RETENTION_DAYS = "pii_retention_days"                    # PII retention before the NDPA erasure window (§19.2)
+    ERASURE_REQUEST_REVIEW_SLA_DAYS = "erasure_request_review_sla_days"  # SLA to review a data-erasure request (§19.1)
 
 
 # Seeded defaults (idempotent, via DataSeeder). Values are stored as JSON scalars.
@@ -50,6 +53,8 @@ CONFIG_DEFAULTS: dict[ConfigKey, Any] = {
     ConfigKey.REFERRAL_CREDIT_NGN: 5_000,
     ConfigKey.MAX_DISCOUNT_PERCENT: 25,
     ConfigKey.CANCELLATION_SURCHARGE_PCT: 20,
+    ConfigKey.PII_RETENTION_DAYS: 2555,  # ≈ 7 years
+    ConfigKey.ERASURE_REQUEST_REVIEW_SLA_DAYS: 30,
 }
 
 CONFIG_DESCRIPTIONS: dict[ConfigKey, str] = {
@@ -67,6 +72,8 @@ CONFIG_DESCRIPTIONS: dict[ConfigKey, str] = {
     ConfigKey.REFERRAL_CREDIT_NGN: "Referrer credit, in whole NGN, earned when an invitee's first payment clears.",
     ConfigKey.MAX_DISCOUNT_PERCENT: "Cap on the combined first-time + referral discount as a percentage of the price.",
     ConfigKey.CANCELLATION_SURCHARGE_PCT: "Surcharge percentage applied when a verification is cancelled after assignment.",
+    ConfigKey.PII_RETENTION_DAYS: "Days personal data is retained before it is eligible for NDPA erasure (pseudonymisation).",
+    ConfigKey.ERASURE_REQUEST_REVIEW_SLA_DAYS: "Target days for an admin to review a submitted data-erasure request.",
 }
 
 

@@ -46,6 +46,7 @@ _CONTENT = {
     EventType.DISPUTE_OPENED: ("Dispute opened", "A dispute was opened on a verification.", _admin_link),
     EventType.DISPUTE_RESOLVED: ("Dispute resolved", "A dispute has been resolved.", _admin_link),
     EventType.PAYMENT_SETTLED: ("Payment settled", "A payment has settled.", _admin_link),
+    EventType.ERASURE_STATUS_CHANGED: ("Data & privacy", "{message}", lambda _v: "/account/data-privacy"),
 }
 
 
