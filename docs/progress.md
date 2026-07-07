@@ -1,6 +1,6 @@
 # Progress Tracker
 
-status: running (S17–S18 delivered; live-verified end-to-end; next is S19)
+status: COMPLETE — all 23 slices (Phases 0–19) delivered & live-verified; PRD spine done. Next: final system audit.
 
 ## Completed Slices
 - S1  Foundation reconciliation & doc fixes — cleaned 0001 orphaned seeds (pricing + trust-weights),
@@ -269,9 +269,37 @@ status: running (S17–S18 delivered; live-verified end-to-end; next is S19)
       payment-reference two-string-forms in re-check/upgrade, and a get-after-create-returns-None in
       `UpgradeService.request`. Backend 700 green after fixes.
 
+- S19–S22 Phases 15–18 — earnings/commission + payouts, reputation/coverage, growth (referral + abandonment),
+  admin ops & analytics (mission control, DB pricing, broadcasts, finance). All delivered & live-verified
+  (see runtime-state s19–s22 blocks + decision-log D30–D38).
+
+- S23 Phase 19 — Audit & compliance maturity *(completes Phase 19; reconciles the S56/S57/S58 pre-build, D39)*.
+      Backend: fixed the latent bug in the pre-built audit export (uppercase `resource_type` filter → empty
+      pack) → id-based `AuditLogRepo.list_by_resource_ids` + a new `VerificationAuditPackService`
+      (`audit/pack_service.py`) that gathers the whole verification object graph (every related repo exposes
+      `list_for_verification`) into one flat §19.3 legal-pack CSV (transitions + evidence content hashes +
+      consent snapshots), wired at `GET /admin/audit/verifications/{vid}/export` (`VIEW_ADMIN_PANEL`). Agent
+      task-history `GET /agents/tasks/{taskId}/history` (ownership-gated, reuses the PII-safe audit read
+      model). Two compliance config keys (`pii_retention_days`, `erasure_request_review_sla_days`). New
+      `Permission.MANAGE_COMPLIANCE` (SUPER-only, D40). New `compliance/erasure` domain: `DataErasureRequest`
+      + `ErasureRequestState` machine; self-service request + admin approve/reject/execute; `PiiPseudonymiser`
+      (D41) scrubs 8 surfaces to a stable opaque token (users / audit_logs actor / device_sessions+revoked /
+      security_events / user_consents / oauth_identities / kyc_records / agent_bank_accounts) — the account can
+      no longer authenticate and the audit actor is severed while events are retained (§4.11). In-app
+      `ERASURE_STATUS_CHANGED` notification. `data_erasure_requests` in `0001` (round-trip clean); dev seed +
+      `e2e_s23.py` extended. Frontend: types audit/erasure/consentHistory; shared `ErasureService` + admin
+      `AuditService` + account `ConsentHistoryService` + `getActivity`/`getHistory`; **7 surfaces** — admin
+      Audit Log + Erasure Requests (+ Export audit-pack button), account Data & Privacy + Consents, portal
+      activity + agent task history (shared `ActivityTimeline`) + nav. Backend 814 tests (+23); frontend vitest
+      348 (+9); tsc+lint clean; migration round-trip clean. **Live `e2e_s23.py` ALL 15 CHECKS PASS** (export
+      pack → activity → task history → consent download → config keys → self-request → approve → execute →
+      login fails → audit actor pseudonymised). §19.3 exit criterion met. Gaps: secondary PII (card
+      fingerprints, third-party share emails, property addresses) + true anonymisation are documented
+      follow-ups; §B item 12 legal-basis sign-off is a launch gate.
+
 ## Current Slice
-- none — S17 (Phase 13) + S18 (Phase 14) delivered, committed, and **live-verified** end-to-end
-  (32-check drive-through ALL PASSED). Next slice is S19 (Phase 15 agent earnings & commission).
+- none — **all 23 slices complete.** S23 (Phase 19) delivered and **live-verified** (15-check drive-through
+  ALL PASSED). The recommended next step is the final system audit (`docs/final-audit.md`).
 
 ## Post-MVP hardening (S1–S14 review pass)
 - **Persona dashboards completed.** `/portal/dashboard` and `/admin/dashboard` did not exist (both
@@ -321,13 +349,14 @@ status: running (S17–S18 delivered; live-verified end-to-end; next is S19)
   seed Payment row).
 
 ## Completion %
-- ~96% (22 of 23 slices; Phase-0 foundation + Phases 1–18 complete). End-to-end: submission → payment (+
+- **100% (23 of 23 slices; Phase-0 foundation + Phases 1–19 complete).** End-to-end: submission → payment (+
   first-time & referral discounts) → assignment → agent execution → admin review/release → live tracking →
   final report + PDF → mediated chat → notifications → public proof + sharing → re-check/upgrade/dispute →
   agent earnings/payouts → reputation/coverage → referral program + abandonment recovery → mission control +
-  analytics + DB-configurable pricing (§18.2 exit criterion live-verified) + broadcasts + finance. Remaining:
-  S23 (Phase 19 audit & compliance maturity — audit export per VID, NDPA data-erasure workflow, versioned
-  consent download).
+  analytics + DB-configurable pricing + broadcasts + finance → **audit & compliance maturity (legally
+  defensible audit pack per VID [§19.3, live-verified], customer/agent activity logs, versioned consent
+  download, NDPA data-erasure workflow with §4.11 pseudonymisation).** The recommended next step is the final
+  system audit (`docs/final-audit.md`).
 
 ---
 

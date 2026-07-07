@@ -190,10 +190,10 @@
 | R18.2 | 18 | Analytics (funnel, time-by-tier, agent trends, revenue by location/tier) | 5–16 | analytics | H | M | pending |
 | R18.3 | 18 | Pricing & tier config + upgrade deltas (no-deploy effect) | 5 | admin_config | M | M | pending |
 | R18.4 | 18 | Finance (payments/commissions/payouts) + commission rules + broadcasts | 15 | analytics/broadcast | H | M | pending |
-| R18.5 | 18 | System config — Trust Score Weights (sum 100%) + General keys + Data Erasure Requests | 19 | admin_config/retention | M | M | pending |
-| R19.1 | 19 | Full audit export per VID (PDF/CSV incl. evidence hashes) | all | audit | M | M | pending |
-| R19.2 | 19 | Customer activity log / agent task history / downloadable consent records | all | audit | M | L | pending |
-| R19.3 | 19 | NDPA data-erasure workflow + pseudonymisation on erasure (§4.11) | all | retention | H | H | pending |
+| R18.5 | 18 | System config — Trust Score Weights (sum 100%) + General keys + Data Erasure Requests | 19 | admin_config/retention | M | M | done (S22 config + S23 erasure queue) |
+| R19.1 | 19 | Full audit export per VID (CSV incl. evidence hashes) | all | audit | M | M | done (S23 — /admin/audit/verifications/{vid}/export, §19.3 live-verified) |
+| R19.2 | 19 | Customer activity log / agent task history / downloadable consent records | all | audit | M | L | done (S23 — /verifications/{id}/activity, /agents/tasks/{id}/history, consent history CSV) |
+| R19.3 | 19 | NDPA data-erasure workflow + pseudonymisation on erasure (§4.11) | all | retention | H | H | done (S23 — compliance/erasure + PiiPseudonymiser, 8 surfaces; legal-basis sign-off is a launch gate) |
 
 ## Summary counts (initial)
 

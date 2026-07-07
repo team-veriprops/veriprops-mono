@@ -980,3 +980,77 @@ Add a stored/rollup table if the per-read aggregation becomes a hotspot.
 2. **Seed had no Payment row.** The dev seed set `verifications.paid_at` but created no `Payment`,
    so revenue analytics / finance / mission-control all read 0. The seed now records a SUCCEEDED
    Payment (D24 extension); reset clears the growth + broadcast tables.
+
+---
+
+## Decision: D39 — S23 completes Phase 19; reconcile the S56/S57/S58 pre-build (S23 / Phase 19)
+
+### Context
+Resuming to implement S23 (Phase 19 audit & compliance maturity), exploration found Phase 19 was
+already ~40% built and committed under a finer, **undocumented** "S56/S57/S58" code numbering that the
+orchestrator docs (which marked S23 fully pending) did not reflect: the customer activity endpoint
+(`/verifications/{id}/activity`), consent history + CSV download (`/users/auth/consents/history[/download]`),
+the admin action log (`/admin/audit/actions`), and the four `DATA_ERASURE_*` audit action types.
+
+### Chosen Option
+S23 **completes** Phase 19 rather than rebuilding it: wire the missing audit-pack export, add the agent
+task-history endpoint + the two compliance config keys, build the data-erasure workflow + pseudonymisation,
+and build every Phase-19 frontend surface (all routes were pre-declared in `routes.ts`). The S56/S57/S58
+work is folded into the S23 record.
+
+### Tradeoffs / Constraints
+The pre-built `list_for_verification_pack` was **latently broken** (filtered `resource_type` on uppercase
+`"VERIFICATION"`/`"TASK"` while the codebase stores lowercase `"verification"`/`"verification_task"`, so the
+§19.3 pack would have been empty) and too narrow. Replaced with an id-based `list_by_resource_ids` and a
+`VerificationAuditPackService` that gathers the whole verification object graph (every related repo exposes
+`list_for_verification`) into one flat legal-pack CSV (transitions + evidence hashes + consent snapshots).
+
+### Revisit
+If the audit dataset grows, the id-set pack query can be indexed/materialised (consistent with D32/D38).
+
+---
+
+## Decision: D40 — MANAGE_COMPLIANCE (SUPER-only) + self-service erasure (S23 / Phase 19)
+
+### Context
+Data erasure irreversibly pseudonymises PII. It needs an RBAC gate, and an initiation model.
+
+### Chosen Option
+New `Permission.MANAGE_COMPLIANCE`, granted to **SUPER only** (SUPER already holds `set(Permission)`, so no
+matrix change was needed — OPERATIONS/FINANCE explicitly do not receive it), gates the admin erasure
+approve/reject/execute + the admin erasure page. The audit-log read/export stays on `VIEW_ADMIN_PANEL`
+(consistent with the existing action-log). Erasure requests are **self-service** — the data subject opens a
+request from Account → Data & privacy (§N.5); an admin reviews → approve → execute, or reject.
+
+### Tradeoffs / Constraints
+Concentrating the irreversible action on SUPER limits blast radius. A confirm dialog guards `execute` on the
+frontend; one open request per subject is enforced server-side.
+
+### Revisit
+Grant MANAGE_COMPLIANCE to OPERATIONS if day-to-day NDPA volume warrants delegated processing.
+
+---
+
+## Decision: D41 — Erasure = pseudonymisation, not deletion; execute is built, legal sign-off is a launch gate (S23)
+
+### Context
+§4.11 resolves the audit-retention-vs-NDPA-erasure tension via **pseudonymisation, not deletion**: replace
+the subject's identifying PII with a stable opaque token while retaining the events. §B item 12 flags the
+post-erasure legal basis + re-identification risk as needing legal sign-off.
+
+### Chosen Option
+`PiiPseudonymiser` derives a deterministic per-subject token (`erased-{sha256(user_id + AUTHJWT_SECRET_KEY)[:16]}`)
+and scrubs eight surfaces in one transaction — `users` (name/email/phone/avatar/password → login impossible),
+`audit_logs` (**actor_id → token, ip → null**, events retained, §4.11), `device_sessions` (+revoked),
+`security_events`, `user_consents`, `oauth_identities`, `kyc_records`, `agent_bank_accounts`. Execute works in
+all non-prod envs (the live e2e proves it end-to-end); the §B legal-basis sign-off is a documented **launch
+gate**, consistent with D18 (Legal Opinion build-behind-flag) and the S9/S14 legal gates.
+
+### Tradeoffs / Constraints
+Runs via `get_db_session_from_context()` bulk `update()`s (sanctioned for transactional service code) — avoids
+scattering near-identical scrub methods across eight repos. Secondary PII (payment card fingerprints,
+third-party share-recipient emails, property addresses) is a documented follow-up — each needs its own
+retention basis. True anonymisation (§4.11 caveat: context can re-identify) is out of scope by design.
+
+### Revisit
+Extend the scrub set + revisit the token/retention basis once §B item 12 legal sign-off lands.

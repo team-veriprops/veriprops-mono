@@ -68,3 +68,45 @@ both ends.
 6. Full `pnpm build` on a freed disk (tsc + eslint + vitest substituted).
 7. **Launch gates (business, not code):** §B liability-cap copy (Phase 5), NBA counsel sign-off for the
    Legal Opinion tier (Phase 10), admin staffing (§6.4).
+
+---
+
+# Final System Audit — All 23 Slices (Phases 0–19) Complete
+
+Scope: the whole PRD spine, now that S23 (Phase 19) lands the final slice. Audited against the mandatory
+dimensions after each S13–S23 slice (per-slice self-audits captured in `runtime-state.yaml`).
+
+## Verdict
+**PASS with documented launch gates + non-blocking follow-ups.** Veriprops runs the entire product lifecycle
+end-to-end and is live-verified by scripted HTTP drive-throughs at every stage (S15–S20 48 checks, S21/S22 22
+checks, S23 15 checks — all PASS). Final state: **backend 814 tests, frontend vitest 348**, migration
+round-trip (`downgrade base` → `upgrade head`) clean, tsc + eslint clean both ends.
+
+## What ships end-to-end
+Marketing/SEO → auth hardening → agent onboarding + KYC → admin RBAC → customer submission + gateway payment
+(+ first-time/referral discounts) → admin control panel + chargeback → agent task execution + tamper-evident
+evidence → admin review + trust-score release gate → live SSE tracking → branded PDF report → admin-mediated
+fraud-scanned chat → event-bus notifications → public lookup + sharing → re-check/upgrade/dispute → agent
+earnings/commission + payouts → reputation/coverage → growth (referral anti-farming, abandonment recovery) →
+mission control + analytics + DB-configurable pricing + broadcasts + finance → **audit & compliance maturity.**
+
+## S23 (Phase 19) audit
+- **§19.3 exit criterion met + live-verified:** an admin exports a legally-defensible CSV pack for any VID —
+  the verification plus every child resource's transitions (id-set query over globally-unique UUIDs), evidence
+  content hashes (§4.5), and the customer's versioned consent snapshots. The pre-built export was latently
+  broken (uppercase `resource_type` filter → empty pack); the live e2e caught and proved the fix (D39).
+- **§4.11 pseudonymisation, not deletion:** `PiiPseudonymiser` scrubs 8 surfaces to a stable opaque token in
+  one transaction; the account can no longer authenticate; the audit actor is severed while the events are
+  retained. Self-service request + SUPER-only `MANAGE_COMPLIANCE` review/execute (D40/D41).
+- **Security:** activity/task-history read models are PII-safe (no actor id); erasure execute is
+  SUPER-gated + confirm-guarded + idempotent; one open request per subject.
+
+## Launch gates (business, not code) — full list
+- §B liability-cap copy (Phase 5 go-live); NBA counsel sign-off for the Legal Opinion tier (Phase 10);
+  admin staffing (§6.4); **§B item 12 — post-erasure legal basis + re-identification risk sign-off (Phase 19).**
+
+## Remaining non-blocking follow-ups
+- Live gateway providers (payment/chargeback/refund) still stub-first; real report PDF HTML-parity renderer;
+  offline evidence queue + image derivatives; Redis multi-instance SSE fan-out; secondary-PII erasure scope
+  (card fingerprints, third-party share emails, property addresses) each pending a retention basis; full
+  `pnpm build` on freed disk (tsc + eslint + vitest are the substitute gate throughout).

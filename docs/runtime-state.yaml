@@ -1,15 +1,71 @@
-session_id: run-s21-s22-growth-admin-ops
+session_id: run-s23-audit-compliance
 command: resume
 
 status: idle
-phase: s21+s22-complete + live-e2e-verified
+phase: s23-complete + live-e2e-verified — ALL 23 SLICES DONE (Phases 0-19)
 
-current_slice: null   # S21 (Phase 17 growth) + S22 (Phase 18 admin ops & analytics) delivered & live-verified.
-current_subtask: "S21 (Phase 17 growth & conversion — referral + anti-farming + first-time discount +
-  abandonment recovery, D34/D35) + S22 (Phase 18 admin ops & analytics — DB pricing config, mission control,
-  analytics, broadcasts, finance, D36/D37/D38) complete. Backend 791, frontend 339; migration round-trip
-  clean; both live drive-throughs ALL PASSED (S15-S20 48 checks + S21/S22 22 checks; surfaced + fixed 2
-  runtime bugs). Phases 0-18 now ship end-to-end. Next slice is S23 (Phase 19 audit & compliance maturity)."
+current_slice: null   # S23 (Phase 19 audit & compliance maturity) delivered & live-verified — the PRD spine is complete.
+current_subtask: "S23 (Phase 19 audit & compliance maturity, D39/D40/D41) COMPLETE — completes Phase 19 on
+  top of the pre-built S56/S57 audit-read + consent-download (reconciled per D39). Backend 814 (+23),
+  frontend 348 (+9); migration round-trip clean; live drive-through e2e_s23.py ALL 15 CHECKS PASS. §19.3
+  exit criterion met (admin exports a legally defensible audit pack per VID). All 23 slices (Phases 0-19)
+  now ship end-to-end. Recommended next step: final system audit (docs/final-audit.md)."
+
+# ── S23 (Phase 19) summary — see decision-log D39-D41 ──
+s23_audit_compliance:
+  backend: "Completed Phase 19 (D39: reconciled the undocumented S56/S57/S58 pre-build). Fixed the latent
+    bug in the pre-built export (list_for_verification_pack filtered UPPERCASE resource_type while the DB
+    stores lowercase — pack would have been empty) → id-based AuditLogRepo.list_by_resource_ids +
+    VerificationAuditPackService (audit/pack_service.py) gathering the whole verification object graph
+    (every related repo exposes list_for_verification) into one flat legal-pack CSV (transitions + evidence
+    content hashes + consent snapshots) at GET /admin/audit/verifications/{vid}/export (VIEW_ADMIN_PANEL).
+    Agent task-history GET /agents/tasks/{taskId}/history (ownership-gated, reuses the PII-safe audit read
+    model). 2 config keys (pii_retention_days=2555, erasure_request_review_sla_days=30). New
+    Permission.MANAGE_COMPLIANCE (SUPER-only, D40). compliance/erasure domain: DataErasureRequest entity +
+    ErasureRequestState machine (PENDING->{APPROVED,REJECTED}, APPROVED->EXECUTED); self-service request +
+    admin approve/reject/execute; PiiPseudonymiser (D41) scrubs 8 surfaces to a stable token
+    (users/audit_logs actor/device_sessions+revoked/security_events/user_consents/oauth_identities/
+    kyc_records/agent_bank_accounts) — login impossible after, audit actor severed but events retained
+    (§4.11). EventType.ERASURE_STATUS_CHANGED (in-app rule + content). data_erasure_requests table in 0001
+    (round-trip clean). Dev seed extended (erasable customer + verification audit rows)."
+  frontend: "types audit/erasure/consentHistory; shared ErasureService (self + admin) + hooks; admin
+    AuditService + hooks; account ConsentHistoryService + hook; verification-service.getActivity +
+    agent-task-service.getHistory. 7 surfaces: admin Audit Log (/admin/audit/actions, DataTable) + Erasure
+    Requests (/admin/erasure-requests, DataTable + approve/reject/execute w/ irreversible confirm) + Export
+    audit-pack button on the verification detail; account Data & Privacy (self-service erasure) + Consents
+    (history + CSV download); portal activity (/portal/verifications/[id]/activity) + agent task history
+    (/agents/tasks/[taskId]/history) via a shared ActivityTimeline; contextual links + admin/account nav."
+  tests: "backend 814 (+23: erasure lifecycle/state-guards/idempotency, pseudonymiser token stability +
+    8-surface scrub, pack CSV shape + id-universe, task-history authz, MANAGE_COMPLIANCE matrix, refactored
+    audit pack test); frontend vitest 348 (+9 service contracts). migration round-trip clean; tsc+lint clean."
+  live_e2e: "backend/scripts/e2e_s23.py — reset->seed->admin export VID pack (transitions) -> customer activity
+    (PII-safe) -> agent task history -> consent CSV download -> config keys seeded -> self-service erasure PENDING
+    (dup blocked, customer 403 on admin queue) -> admin approve -> execute (EXECUTED) -> erased account login
+    fails -> DATA_ERASURE_EXECUTED audited with 8 pseudonymised surfaces. ALL 15 CHECKS PASS."
+
+self_audit_s23:
+  completed: true
+  findings:
+    - "§19.3 exit criterion MET and live-verified: the admin audit pack for a VID is one flat CSV covering
+       the verification + every child resource's transitions (id-set query — resource ids are globally-unique
+       UUIDs, so no resource_type coupling), plus evidence content hashes and the customer's consent snapshots.
+       Refund/dispute records ride the transitions (PAYMENT_REFUNDED / DISPUTE_* are audit events on their ids)."
+    - "The pre-built S56 export was latently broken (uppercase resource_type filter -> empty pack) and untested
+       end-to-end; the live e2e is what proved the fix. Consistent with every prior slice's live-run catching
+       what mocked unit tests could not."
+    - "Erasure = pseudonymisation, not deletion (§4.11, D41). Eight surfaces scrubbed to a deterministic token
+       in one transaction; the account can no longer authenticate; the audit actor is severed while events are
+       retained. §B item 12 (post-erasure legal basis + re-identification risk) is a documented LAUNCH GATE,
+       not a build blocker — execute is fully built and works in non-prod (proven by the e2e)."
+    - "Pseudonymisation scope is bounded to identity + auth + audit + KYC + agent bank details. Secondary PII —
+       payment card fingerprints, verification-share recipient emails (third-party, not the subject), property
+       addresses — is a documented follow-up; each needs its own retention basis. True anonymisation is out of
+       scope by design (§4.11 caveat: context can re-identify)."
+    - "MANAGE_COMPLIANCE is SUPER-only (D40) for the irreversible action; audit read/export stays
+       VIEW_ADMIN_PANEL. A frontend confirm dialog guards execute; one open request per subject is enforced
+       server-side. Erasure decisions notify the subject in-app (no email templates — the account is being erased)."
+    - "Full `pnpm build` deferred (low disk, per every prior slice); tsc --noEmit + eslint + vitest 348 are the
+       frontend gate. Backend 814 green; migration round-trip validated live; e2e ALL 15 PASS."
 
 # ── S22 (Phase 18) summary — see decision-log D36-D38 ──
 s22_admin_ops_analytics:
@@ -388,6 +444,7 @@ completed_slices:
   - S20  # Phase 16 agent reputation & coverage (see above)
   - S21  # Phase 17 growth & conversion (see above)
   - S22  # Phase 18 admin ops & analytics (see above)
+  - S23  # Phase 19 audit & compliance maturity (see above) — FINAL SLICE, PRD spine complete
 
 # ── S14 (Phase 10) summary ────────────────────────────────────────
 s14_final_report:
