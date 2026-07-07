@@ -37,6 +37,15 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def list_recipient_rows(self) -> List[tuple]:
+        """(user_id_str, user_type, personas) for every active user — the broadcast audience
+        resolver (§18.1). User ids are the 36-char str form used by notifications."""
+        stmt = select(User.id, User.user_type, User.personas).where(User.deleted.is_(False))
+        return [
+            (str(uid), ut, list(personas or []))
+            for uid, ut, personas in (await self._session.execute(stmt)).all()
+        ]
+
     async def list_admins(
         self,
         sub_role_filter: Optional[AdminSubRole] = None,

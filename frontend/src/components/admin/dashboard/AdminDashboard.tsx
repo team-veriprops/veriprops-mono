@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ChevronRight, ClipboardList, CreditCard, Inbox, UserRoundCheck } from "lucide-react";
+import {
+  AlertTriangle, BarChart3, ChevronRight, ClipboardList, Clock, CreditCard,
+  DollarSign, Inbox, UserRoundCheck, Users,
+} from "lucide-react";
 import { Card } from "@3rdparty/ui/card";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { StatCard } from "@components/ui/StatCard";
 import { VerificationStatusBadge } from "@components/portal/verifications/VerificationStatusBadge";
 import { useAdminDashboardQuery } from "@components/admin/verifications/libs/useAdminVerificationQueries";
 import { ROUTES } from "@lib/routes";
+import { formatMinor } from "@lib/utils";
 import { AdminDashboard as AdminDashboardData, SlaHealth } from "@/types/adminVerification";
 
 /**
@@ -20,7 +24,15 @@ export default function AdminDashboard() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6" data-testid="admin-dashboard">
-      <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-foreground">Mission Control</h1>
+        <Link
+          href={ROUTES.ADMIN.ANALYTICS}
+          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+        >
+          <BarChart3 className="size-4" /> Analytics
+        </Link>
+      </div>
 
       <AsyncStateComponent<AdminDashboardData>
         isLoading={isLoading}
@@ -29,32 +41,16 @@ export default function AdminDashboard() {
       >
         {(summary) => (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <StatCard
-                label="Verifications"
-                value={summary.total}
-                icon={ClipboardList}
-                href={ROUTES.ADMIN.VERIFICATIONS}
-              />
-              <StatCard
-                label="Overdue"
-                value={summary.overdue}
-                icon={AlertTriangle}
-                tone={summary.overdue > 0 ? "danger" : "default"}
-              />
+            {/* Mission Control: live business + queue health (§18.1). */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <StatCard label="Revenue" value={formatMinor(summary.revenueMinor) ?? "—"} icon={DollarSign} tone="success" href={ROUTES.ADMIN.FINANCE} />
+              <StatCard label="Verifications" value={summary.total} icon={ClipboardList} href={ROUTES.ADMIN.VERIFICATIONS} />
+              <StatCard label="Available agents" value={summary.availableAgents} icon={Users} tone="success" />
+              <StatCard label="SLA at risk" value={summary.slaAtRisk} icon={Clock} tone={summary.slaAtRisk > 0 ? "warning" : "default"} />
+              <StatCard label="Overdue" value={summary.overdue} icon={AlertTriangle} tone={summary.overdue > 0 ? "danger" : "default"} />
               <StatCard label="Unassigned tasks" value={summary.unassignedPoolTasks} icon={Inbox} tone="warning" />
-              <StatCard
-                label="Pending applications"
-                value={summary.pendingAgentApplications}
-                icon={UserRoundCheck}
-                href={ROUTES.ADMIN.AGENT_APPLICATIONS}
-              />
-              <StatCard
-                label="Open chargebacks"
-                value={summary.openChargebacks}
-                icon={CreditCard}
-                tone={summary.openChargebacks > 0 ? "danger" : "default"}
-              />
+              <StatCard label="Pending applications" value={summary.pendingAgentApplications} icon={UserRoundCheck} href={ROUTES.ADMIN.AGENT_APPLICATIONS} />
+              <StatCard label="Open chargebacks" value={summary.openChargebacks} icon={CreditCard} tone={summary.openChargebacks > 0 ? "danger" : "default"} />
             </div>
 
             <section className="space-y-3">

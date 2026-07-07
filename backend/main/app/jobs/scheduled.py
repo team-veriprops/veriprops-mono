@@ -17,6 +17,7 @@ from kink import di, inject
 
 from main.app.config.settings import settings
 from main.appodus_utils.config.settings import Environment
+from main.app.domain.broadcast.service import BroadcastService
 from main.app.domain.earnings.service import EarningsService
 from main.app.domain.referral.service import ReferralService
 from main.app.domain.verification.service import VerificationService
@@ -99,6 +100,20 @@ class GrowthSweepJobs:
         return await self._referral.sweep_referral_credits()
 
 
+@inject
+@decorate_all_methods(
+    transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW), exclude=['__init__']
+)
+class BroadcastSweepJobs:
+    """Fresh-session wrapper around the scheduled-broadcast send sweep (§18.1, S22)."""
+
+    def __init__(self, broadcast_service: BroadcastService):
+        self._broadcast = broadcast_service
+
+    async def run_scheduled_broadcast_sweep(self) -> int:
+        return await self._broadcast.sweep_scheduled_broadcasts()
+
+
 async def check_sla_breaches() -> None:
     flagged = await di[SlaMonitorJobs].run_sla_breach_sweep()
     if flagged:
@@ -135,6 +150,12 @@ async def check_referral_credits() -> None:
         logger.info("referral-credit sweep cleared {} credit(s)", cleared)
 
 
+async def check_scheduled_broadcasts() -> None:
+    sent = await di[BroadcastSweepJobs].run_scheduled_broadcast_sweep()
+    if sent:
+        logger.info("broadcast sweep sent {} scheduled broadcast(s)", sent)
+
+
 # Register task-monitor background jobs (pool timeout + no-show reclaim) + SLA-breach sweep.
 scheduler.add_job(check_task_pool_timeouts, "interval", minutes=15, id="pool_timeout_check")
 scheduler.add_job(check_task_no_show_timeouts, "interval", minutes=15, id="no_show_check")
@@ -143,6 +164,8 @@ scheduler.add_job(check_commission_clearance, "interval", minutes=60, id="commis
 # Growth sweeps (§17.1): abandonment recovery (hourly) + referral-credit clearance (daily-ish).
 scheduler.add_job(check_abandoned_drafts, "interval", minutes=60, id="abandonment_recovery_check")
 scheduler.add_job(check_referral_credits, "interval", minutes=180, id="referral_credit_check")
+# Scheduled admin broadcasts (§18.1): send those whose time has passed.
+scheduler.add_job(check_scheduled_broadcasts, "interval", minutes=5, id="scheduled_broadcast_check")
 
 
 def start_scheduler():

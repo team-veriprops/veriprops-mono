@@ -8,6 +8,7 @@ is audit-logged.
 """
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import List, Optional
 
 from kink import inject
@@ -58,6 +59,8 @@ from main.appodus_utils.exception.exceptions import (
 
 # Number of most-recent verifications surfaced on the admin dashboard.
 _DASHBOARD_RECENT_LIMIT = 8
+# Active verifications due within this many days count as SLA-at-risk (§18.1 Mission Control).
+_SLA_AT_RISK_DAYS = 2
 
 
 @inject
@@ -95,14 +98,18 @@ class AdminVerificationService:
         raw = await self._repo.count_by_status()
         status_counts = {VerificationStatus(s): c for s, c in raw.items()}
         today = Utils.datetime_now().date()
+        horizon = today + timedelta(days=_SLA_AT_RISK_DAYS)
         recent_rows, _ = await self._repo.page_admin(offset=0, limit=_DASHBOARD_RECENT_LIMIT)
         return AdminDashboardDto(
             total=sum(status_counts.values()),
             status_counts=status_counts,
             overdue=await self._repo.count_overdue(list(ACTIVE_SLA_STATES), today),
+            sla_at_risk=await self._repo.count_due_within(list(ACTIVE_SLA_STATES), today, horizon),
             unassigned_pool_tasks=await self._task_service.count_pool_pending(),
             pending_agent_applications=await self._agents.count_pending_applications(),
             open_chargebacks=await self._chargebacks.count_open(),
+            available_agents=await self._agents.count_available_agents(),
+            revenue_minor=await self._payment_repo.sum_succeeded_amount(),
             recent=[await self._summary(v) for v in recent_rows],
         )
 

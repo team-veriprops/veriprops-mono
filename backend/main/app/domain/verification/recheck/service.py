@@ -34,6 +34,7 @@ from main.app.domain.verification.recheck.models import (
     RequestRecheckDto,
     UpdateRecheckDto,
 )
+from main.app.domain.verification.pricing_config.service import PricingConfigService
 from main.app.domain.verification.recheck.repo import RecheckRepo
 from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.review.service import ReviewService
@@ -63,6 +64,7 @@ class RecheckService:
         review_service: ReviewService,
         payment_service: PaymentService,
         config_service: ConfigService,
+        pricing_config_service: PricingConfigService,
         audit_service: AuditLogService,
     ):
         self._repo = recheck_repo
@@ -71,6 +73,7 @@ class RecheckService:
         self._reviews = review_service
         self._payments = payment_service
         self._config = config_service
+        self._pricing = pricing_config_service
         self._audit = audit_service
 
     async def request(
@@ -87,7 +90,8 @@ class RecheckService:
             raise ValidationException(message="A reason is required for a re-check.")
 
         pct = await self._config.get_int(ConfigKey.RECHECK_PRICE_PCT)
-        price = recheck_price_kobo(VerificationTier(v.tier), pct)
+        base = await self._pricing.tier_price_kobo(VerificationTier(v.tier))
+        price = recheck_price_kobo(base, pct)
         recheck = await self._repo.create_return_model(CreateRecheckDto(
             verification_id=Utils.uuid_to_hex(v.id),
             customer_id=customer_id,

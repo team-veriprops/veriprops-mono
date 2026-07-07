@@ -58,9 +58,12 @@ class AdminDashboardDto(Object):
     total: int = 0
     status_counts: Dict[VerificationStatus, int] = {}
     overdue: int = 0                    # active verifications past their SLA due date
+    sla_at_risk: int = 0                # active + due within the next 2 days (§18.1)
     unassigned_pool_tasks: int = 0      # broadcast tasks unclaimed in the open pool
     pending_agent_applications: int = 0
     open_chargebacks: int = 0
+    available_agents: int = 0           # approved agents currently accepting work (§18.1)
+    revenue_minor: int = 0              # total collected revenue, NGN kobo (§18.1)
     recent: List[VerificationSummaryDto] = []
 
 

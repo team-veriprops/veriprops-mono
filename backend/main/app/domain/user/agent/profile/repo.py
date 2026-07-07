@@ -57,6 +57,15 @@ class AgentProfileRepo(
         )
         return int(await self._session.scalar(stmt) or 0)
 
+    async def count_available(self, approved_status: str, availability: str) -> int:
+        """Approved agents currently signalling the given availability (Mission Control §18.1)."""
+        stmt = select(func.count()).select_from(AgentProfile).where(
+            AgentProfile.deleted.is_(False),
+            AgentProfile.status == approved_status,
+            AgentProfile.availability == availability,
+        )
+        return int(await self._session.scalar(stmt) or 0)
+
     async def page_applications(
         self, status: Optional[str], offset: int, limit: int, query: Optional[str] = None
     ) -> tuple[List[AgentProfile], int]:

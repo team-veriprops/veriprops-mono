@@ -28,6 +28,8 @@ OPERATIONS_ALLOWED = {
     Permission.VIEW_ADMIN_PANEL,
     Permission.MANAGE_VERIFICATIONS,
     Permission.MANAGE_USERS,
+    Permission.VIEW_ANALYTICS,   # §18.1 Mission Control + analytics
+    Permission.BROADCAST,        # §18.1 admin announcements
 }
 
 FINANCE_ALLOWED = {
@@ -35,6 +37,7 @@ FINANCE_ALLOWED = {
     Permission.CONFIGURE_PRICING,
     Permission.CONFIRM_WIRE_PAYMENT,
     Permission.VIEW_ADMIN_PANEL,
+    Permission.VIEW_ANALYTICS,   # §18.1 finance analytics
 }
 
 

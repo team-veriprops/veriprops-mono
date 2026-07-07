@@ -67,3 +67,10 @@ class PayoutRepo(
         stmt = base.order_by(Payout.date_created.desc()).offset(page * page_size).limit(page_size)
         rows = list((await self._session.execute(stmt)).scalars().all())
         return rows, total
+
+    async def count_by_status(self) -> dict:
+        """status → count over all payouts (Finance panel §18.1)."""
+        stmt = select(Payout.status, func.count()).where(
+            Payout.deleted.is_(False)
+        ).group_by(Payout.status)
+        return {s: int(c) for s, c in (await self._session.execute(stmt)).all()}

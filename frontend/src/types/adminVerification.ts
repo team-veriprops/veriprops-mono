@@ -73,9 +73,12 @@ export interface AdminDashboard {
   total: number;
   statusCounts: Partial<Record<VerificationStatus, number>>;
   overdue: number;
+  slaAtRisk: number;
   unassignedPoolTasks: number;
   pendingAgentApplications: number;
   openChargebacks: number;
+  availableAgents: number;
+  revenueMinor: number;
   recent: VerificationSummary[];
 }
 

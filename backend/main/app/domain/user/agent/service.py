@@ -40,6 +40,7 @@ from main.app.domain.user.agent.models import (
 from main.app.domain.user.agent.profile.models import (
     AgentApplicationStatus,
     AgentProfile,
+    AvailabilityStatus,
     CreateAgentProfileDto,
     UpdateAgentProfileDto,
 )
@@ -175,6 +176,12 @@ class AgentService:
     async def count_pending_applications(self) -> int:
         """Agent applications awaiting admin review (admin dashboard §6)."""
         return await self._profile_repo.count_by_status(AgentApplicationStatus.PENDING.value)
+
+    async def count_available_agents(self) -> int:
+        """Approved agents currently accepting work (🟢) — Mission Control §18.1."""
+        return await self._profile_repo.count_available(
+            AgentApplicationStatus.APPROVED.value, AvailabilityStatus.GREEN.value
+        )
 
     async def list_applications(
         self, status: Optional[str] = None, page: int = 0, page_size: int = 10,

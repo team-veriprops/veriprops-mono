@@ -75,15 +75,19 @@ class TestDashboardSummary:
         svc = object.__new__(AdminVerificationService)
         svc._repo = MagicMock()
         svc._property_repo = MagicMock()
+        svc._payment_repo = MagicMock()
         svc._task_service = MagicMock()
         svc._agents = MagicMock()
         svc._chargebacks = MagicMock()
         svc._repo.count_by_status = AsyncMock(return_value=status_counts)
         svc._repo.count_overdue = AsyncMock(return_value=3)
+        svc._repo.count_due_within = AsyncMock(return_value=6)
         svc._repo.page_admin = AsyncMock(return_value=(list(recent_rows), len(recent_rows)))
         svc._property_repo.get_model = AsyncMock(return_value=None)
+        svc._payment_repo.sum_succeeded_amount = AsyncMock(return_value=99_000_000)
         svc._task_service.count_pool_pending = AsyncMock(return_value=4)
         svc._agents.count_pending_applications = AsyncMock(return_value=2)
+        svc._agents.count_available_agents = AsyncMock(return_value=7)
         svc._chargebacks.count_open = AsyncMock(return_value=1)
         return svc
 
@@ -99,9 +103,12 @@ class TestDashboardSummary:
         assert dto.total == 17
         assert dto.status_counts[VerificationStatus.IN_PROGRESS] == 5
         assert dto.overdue == 3
+        assert dto.sla_at_risk == 6
         assert dto.unassigned_pool_tasks == 4
         assert dto.pending_agent_applications == 2
         assert dto.open_chargebacks == 1
+        assert dto.available_agents == 7
+        assert dto.revenue_minor == 99_000_000
         assert len(dto.recent) == 1
         # overdue is computed against the SLA-active statuses only
         _, kwargs = svc._repo.count_overdue.call_args

@@ -10,19 +10,21 @@ from main.app.domain.verification.pricing import (
 
 class TestRecheckPricing:
     def test_recheck_is_pct_of_original(self):
-        # STANDARD = ₦120k = 12_000_000 kobo; 30% = 3_600_000.
-        assert recheck_price_kobo(VerificationTier.STANDARD, 30) == 3_600_000
+        # STANDARD = ₦120k = 12_000_000 kobo; 30% = 3_600_000. Helper takes the resolved base.
+        base = TIER_PRICE_NGN_KOBO[VerificationTier.STANDARD]
+        assert recheck_price_kobo(base, 30) == 3_600_000
 
     def test_recheck_scales_with_tier(self):
-        basic = recheck_price_kobo(VerificationTier.BASIC, 30)
-        premium = recheck_price_kobo(VerificationTier.PREMIUM, 30)
+        basic = recheck_price_kobo(TIER_PRICE_NGN_KOBO[VerificationTier.BASIC], 30)
+        premium = recheck_price_kobo(TIER_PRICE_NGN_KOBO[VerificationTier.PREMIUM], 30)
         assert premium > basic
 
 
 class TestUpgradeDelta:
     def test_delta_is_price_difference(self):
-        expected = TIER_PRICE_NGN_KOBO[VerificationTier.PREMIUM] - TIER_PRICE_NGN_KOBO[VerificationTier.STANDARD]
-        assert upgrade_delta_kobo(VerificationTier.STANDARD, VerificationTier.PREMIUM) == expected
+        std = TIER_PRICE_NGN_KOBO[VerificationTier.STANDARD]
+        prem = TIER_PRICE_NGN_KOBO[VerificationTier.PREMIUM]
+        assert upgrade_delta_kobo(std, prem) == prem - std
 
     def test_is_upgrade_ordering(self):
         assert is_upgrade(VerificationTier.BASIC, VerificationTier.STANDARD)

@@ -12,6 +12,7 @@ from main.app.domain.verification.recheck.models import (
     RecheckStatus,
     RequestRecheckDto,
 )
+from main.app.domain.verification.pricing import TIER_PRICE_NGN_KOBO
 from main.app.domain.verification.recheck.service import RecheckService
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import (
@@ -57,12 +58,14 @@ def _service(verification=None, recheck=None):
     svc._reviews = MagicMock()
     svc._payments = MagicMock()
     svc._config = MagicMock()
+    svc._pricing = MagicMock()
     svc._audit = MagicMock()
     svc._audit.schedule = MagicMock()
 
     v = verification if verification is not None else _verification()
     svc._verifications.get_owned = AsyncMock(return_value=v)
     svc._config.get_int = AsyncMock(return_value=30)
+    svc._pricing.tier_price_kobo = AsyncMock(side_effect=lambda tier: TIER_PRICE_NGN_KOBO[tier])
     svc._repo.create_return_model = AsyncMock(return_value=_recheck())
     svc._repo.get_model = AsyncMock(return_value=recheck or _recheck())
     svc._repo.get_by_payment = AsyncMock(return_value=recheck)

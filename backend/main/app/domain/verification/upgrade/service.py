@@ -22,6 +22,7 @@ from main.app.domain.payment.models import PaymentPurpose
 from main.app.domain.payment.service import PaymentService
 from main.app.domain.verification.models import UpdateVerificationDto
 from main.app.domain.verification.pricing import is_upgrade, upgrade_delta_kobo
+from main.app.domain.verification.pricing_config.service import PricingConfigService
 from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.service import VerificationService
 from main.app.domain.verification.task.service import VerificationTaskService
@@ -57,6 +58,7 @@ class UpgradeService:
         verification_repo: VerificationRepo,
         task_service: VerificationTaskService,
         payment_service: PaymentService,
+        pricing_config_service: PricingConfigService,
         audit_service: AuditLogService,
     ):
         self._repo = upgrade_repo
@@ -64,6 +66,7 @@ class UpgradeService:
         self._verification_repo = verification_repo
         self._tasks = task_service
         self._payments = payment_service
+        self._pricing = pricing_config_service
         self._audit = audit_service
 
     async def request(
@@ -86,7 +89,10 @@ class UpgradeService:
         if existing is not None and existing.status == UpgradeStatus.PENDING.value:
             return existing  # idempotent — reuse the pending request + its charge
 
-        delta = upgrade_delta_kobo(current, target)
+        delta = upgrade_delta_kobo(
+            await self._pricing.tier_price_kobo(current),
+            await self._pricing.tier_price_kobo(target),
+        )
         payment = await self._payments.initiate_secondary(
             verification_id=Utils.uuid_to_hex(v.id), customer_id=customer_id,
             amount_minor=delta, purpose=PaymentPurpose.UPGRADE,

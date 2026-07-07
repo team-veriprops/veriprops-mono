@@ -20,6 +20,7 @@ from main.app.domain.verification.dispute.controller import (
 from main.app.domain.verification.admin.controller import admin_verification_router
 from main.app.domain.verification.task.controller import agent_task_router
 from main.app.domain.verification.scoring.controller import trust_weight_router
+from main.app.domain.verification.pricing_config.controller import admin_pricing_router
 from main.app.domain.verification.review.controller import review_router
 from main.app.domain.communication.controller import (
     chat_router,
@@ -37,6 +38,9 @@ from main.app.domain.user.agent.reputation.controller import (
     admin_suggested_agents_router,
 )
 from main.app.domain.referral.controller import referral_router
+from main.app.domain.analytics.controller import analytics_router
+from main.app.domain.broadcast.controller import broadcast_router
+from main.app.domain.finance.controller import finance_router
 from main.app.domain.payment.controller import payment_router
 
 from main.appodus_utils.integrations.webhook import webhook_router
@@ -61,6 +65,7 @@ router.include_router(admin_dispute_router)
 router.include_router(admin_verification_router)
 router.include_router(agent_task_router)
 router.include_router(trust_weight_router)
+router.include_router(admin_pricing_router)
 router.include_router(review_router)
 router.include_router(chat_router)
 router.include_router(verification_chat_router)
@@ -75,6 +80,9 @@ router.include_router(admin_payout_router)
 router.include_router(agent_reputation_router)
 router.include_router(admin_suggested_agents_router)
 router.include_router(referral_router)
+router.include_router(analytics_router)
+router.include_router(broadcast_router)
+router.include_router(finance_router)
 router.include_router(payment_router)
 router.include_router(audit_router)
 router.include_router(webhook_router)

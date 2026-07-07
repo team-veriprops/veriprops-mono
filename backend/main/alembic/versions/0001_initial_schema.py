@@ -897,6 +897,52 @@ def _create_payouts():
     op.create_index("ix_payouts_status", "payouts", ["status"], unique=False)
 
 
+def _create_pricing_tier_config():
+    # Admin-editable per-tier NGN price (§18.1 / D36, S22). Replaces the hardcoded dict.
+    op.create_table(
+        "pricing_tier_config",
+        sa.Column("tier", sa.String(length=16), nullable=False),
+        sa.Column("price_ngn_kobo", sa.BigInteger(), nullable=False),
+        *AlembicUtils.base_audit_columns(),
+        sa.UniqueConstraint("tier", name="uq_pricing_tier_config_tier"),
+    )
+    op.create_index("ix_pricing_tier_config_id", "pricing_tier_config", ["id"], unique=True)
+    op.create_index("ix_pricing_tier_config_tier", "pricing_tier_config", ["tier"], unique=False)
+
+
+def _create_pricing_line_items():
+    # Itemized per-tier price breakdown (§5.2 / §18.1, S22).
+    op.create_table(
+        "pricing_line_items",
+        sa.Column("tier", sa.String(length=16), nullable=False),
+        sa.Column("label", sa.String(length=128), nullable=False),
+        sa.Column("amount_minor", sa.BigInteger(), nullable=False),
+        sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_pricing_line_items_id", "pricing_line_items", ["id"], unique=True)
+    op.create_index("ix_pricing_line_items_tier", "pricing_line_items", ["tier"], unique=False)
+
+
+def _create_broadcasts():
+    # Admin announcements to an audience — send-now or scheduled (§18.1 / D37, S22).
+    op.create_table(
+        "broadcasts",
+        sa.Column("audience", sa.String(length=16), nullable=False),
+        sa.Column("subject", sa.String(length=255), nullable=False),
+        sa.Column("body", sa.Text(), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="DRAFT"),
+        sa.Column("scheduled_at", UTCDateTime, nullable=True),
+        sa.Column("sent_at", UTCDateTime, nullable=True),
+        sa.Column("recipient_count", sa.Integer(), nullable=False, server_default="0"),
+        # created_by is provided by base_audit_columns() (inherited from BaseEntity).
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_broadcasts_id", "broadcasts", ["id"], unique=True)
+    op.create_index("ix_broadcasts_status", "broadcasts", ["status"], unique=False)
+    op.create_index("ix_broadcasts_created_by", "broadcasts", ["created_by"], unique=False)
+
+
 def _create_referrals():
     # A user's shareable referral link/code (§17.1, S21).
     op.create_table(
@@ -1156,6 +1202,9 @@ _TABLE_BUILDERS = [
     ("payouts", _create_payouts),
     ("referrals", _create_referrals),
     ("referral_credits", _create_referral_credits),
+    ("pricing_tier_config", _create_pricing_tier_config),
+    ("pricing_line_items", _create_pricing_line_items),
+    ("broadcasts", _create_broadcasts),
 ]
 
 

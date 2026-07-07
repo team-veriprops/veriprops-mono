@@ -38,7 +38,8 @@ from main.app.domain.verification.models import (
     UpdateVerificationDto,
     Verification,
 )
-from main.app.domain.verification.pricing import Discount, apply_discounts, indicative_charge_minor, price_ngn_kobo
+from main.app.domain.verification.pricing import Discount, apply_discounts, indicative_charge_minor
+from main.app.domain.verification.pricing_config.service import PricingConfigService
 from main.app.domain.verification.repo import VerificationRepo
 from main.appodus_utils import Utils
 from main.appodus_utils.db.types.money import TransactionCurrency
@@ -65,6 +66,7 @@ class VerificationService:
         audit_service: AuditLogService,
         config_service: ConfigService,
         user_service: UserService,
+        pricing_config_service: PricingConfigService,
     ):
         self._repo = verification_repo
         self._property_service = property_service
@@ -73,6 +75,7 @@ class VerificationService:
         self._audit = audit_service
         self._config = config_service
         self._users = user_service
+        self._pricing = pricing_config_service
 
     # ── Draft (VID/DRAFT on step-1 load; idempotent create) ───────
 
@@ -117,7 +120,7 @@ class VerificationService:
     async def quote(
         self, customer_id: str, tier: VerificationTier, currency: TransactionCurrency
     ) -> PriceQuoteDto:
-        ngn = price_ngn_kobo(tier)
+        ngn = await self._pricing.tier_price_kobo(tier)
         discount = await self._compute_discount(customer_id, ngn)
         # The foreign figure is indicative on the NET amount the customer will be charged.
         charge_minor, fx = indicative_charge_minor(discount.net_minor, currency)
@@ -158,7 +161,7 @@ class VerificationService:
 
         prop = await self._property_service.create(customer_id, dto.property)
 
-        ngn = price_ngn_kobo(dto.tier)
+        ngn = await self._pricing.tier_price_kobo(dto.tier)
         # Apply first-time + referral discounts (§17.1); the NET amount is the locked price.
         discount = await self._compute_discount(customer_id, ngn, exclude_verification_id=verification_id)
         charge_minor, fx = indicative_charge_minor(discount.net_minor, dto.currency)
@@ -258,7 +261,8 @@ class VerificationService:
 
         tier = VerificationTier(verification.tier)
         discount = await self._compute_discount(
-            customer_id, price_ngn_kobo(tier), exclude_verification_id=verification_id
+            customer_id, await self._pricing.tier_price_kobo(tier),
+            exclude_verification_id=verification_id,
         )
         charge_minor, fx = indicative_charge_minor(
             discount.net_minor, TransactionCurrency(verification.charge_currency)

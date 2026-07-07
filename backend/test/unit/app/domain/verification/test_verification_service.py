@@ -19,6 +19,7 @@ from main.app.domain.property.models import PropertyInputDto, PropertyType
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.user.auth.consent.models import ConsentDocumentType
 from main.app.domain.verification import service as verification_module
+from main.app.domain.verification.pricing import TIER_PRICE_NGN_KOBO
 from main.app.domain.verification.models import (
     SubmitVerificationDto,
     VerificationConsentDto,
@@ -79,6 +80,7 @@ def _make_service(credit_balance_kobo=0, has_paid=False):
     svc._audit = MagicMock()
     svc._config = MagicMock()
     svc._users = MagicMock()
+    svc._pricing = MagicMock()
     svc._repo.create_return_model = AsyncMock(return_value=_verification())
     svc._repo.update = AsyncMock()
     svc._repo.has_paid_verification = AsyncMock(return_value=has_paid)
@@ -87,6 +89,7 @@ def _make_service(credit_balance_kobo=0, has_paid=False):
     svc._config.get_int = AsyncMock(side_effect=lambda key: _CONFIG_VALUES[key])
     svc._users.get_user_model = AsyncMock(return_value=_user(credit_balance_kobo))
     svc._users.update_user = AsyncMock()
+    svc._pricing.tier_price_kobo = AsyncMock(side_effect=lambda tier: TIER_PRICE_NGN_KOBO[tier])
     return svc
 
 

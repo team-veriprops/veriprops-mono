@@ -8,6 +8,7 @@ import pytest
 
 from main.app.core.state.status import ReportRevisionKind, VerificationStatus, VerificationTier
 from main.app.domain.verification.upgrade.models import RequestUpgradeDto, UpgradeStatus
+from main.app.domain.verification.pricing import TIER_PRICE_NGN_KOBO
 from main.app.domain.verification.upgrade.service import UpgradeService
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import (
@@ -52,11 +53,13 @@ def _service(verification=None, existing_key=None, upgrade=None):
     svc._verification_repo = MagicMock()
     svc._tasks = MagicMock()
     svc._payments = MagicMock()
+    svc._pricing = MagicMock()
     svc._audit = MagicMock()
     svc._audit.schedule = MagicMock()
 
     v = verification if verification is not None else _verification()
     svc._verifications.get_owned = AsyncMock(return_value=v)
+    svc._pricing.tier_price_kobo = AsyncMock(side_effect=lambda tier: TIER_PRICE_NGN_KOBO[tier])
     svc._repo.get_by_key = AsyncMock(return_value=existing_key)
     svc._repo.get_by_payment = AsyncMock(return_value=upgrade)
     svc._repo.create_return_model = AsyncMock(return_value=_upgrade())

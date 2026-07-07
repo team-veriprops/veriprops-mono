@@ -108,3 +108,11 @@ class CommissionRepo(
             Commission.reserve_until <= now,
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def count_by_status(self) -> dict:
+        """status → count over all commissions (Finance panel §18.1)."""
+        from sqlalchemy import func, select
+        stmt = select(Commission.status, func.count()).where(
+            Commission.deleted.is_(False)
+        ).group_by(Commission.status)
+        return {s: int(c) for s, c in (await self._session.execute(stmt)).all()}

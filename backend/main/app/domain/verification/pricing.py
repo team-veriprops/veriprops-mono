@@ -1,10 +1,11 @@
-"""Verification pricing (PRD §5.2, §4.4).
+"""Verification pricing (PRD §5.2, §4.4, §18.1).
 
 NGN is the contractual amount, stored in integer minor units (kobo). Foreign
 figures are **indicative only**, derived from the NGN amount at the quote-time FX
-rate. Prices here are provisional per-tier defaults until the admin-configured
-pricing API lands (Phase 18); they are intentionally centralised so that later
-swap is a single call-site change.
+rate. The per-tier prices below are the **seed defaults / fallback** — the live,
+admin-editable prices live in the ``pricing_config`` domain (S22) and are resolved
+through ``PricingConfigService.tier_price_kobo``. The pure helpers here operate on an
+already-resolved base price so they stay DB-agnostic and testable.
 """
 from __future__ import annotations
 
@@ -39,16 +40,16 @@ def price_ngn_kobo(tier: VerificationTier) -> int:
     return TIER_PRICE_NGN_KOBO[tier]
 
 
-def recheck_price_kobo(tier: VerificationTier, pct: int) -> int:
-    """Re-check fee (§14.1, D26) — a percentage of the original tier price, in NGN kobo.
-    ``pct`` comes from the ``recheck_price_pct`` system-config knob."""
-    return int(price_ngn_kobo(tier) * (pct / 100))
+def recheck_price_kobo(base_kobo: int, pct: int) -> int:
+    """Re-check fee (§14.1, D26) — a percentage of the (already-resolved) tier price, in
+    NGN kobo. ``pct`` comes from the ``recheck_price_pct`` system-config knob."""
+    return int(base_kobo * (pct / 100))
 
 
-def upgrade_delta_kobo(current: VerificationTier, target: VerificationTier) -> int:
-    """Tier-upgrade charge (§14.2) — the delta between the target and current tier prices,
-    in NGN kobo. Non-positive when the target is not an upgrade (guarded by the caller)."""
-    return price_ngn_kobo(target) - price_ngn_kobo(current)
+def upgrade_delta_kobo(from_price_kobo: int, to_price_kobo: int) -> int:
+    """Tier-upgrade charge (§14.2) — the delta between the (already-resolved) target and
+    current tier prices, in NGN kobo. Non-positive when the target is not an upgrade."""
+    return to_price_kobo - from_price_kobo
 
 
 @dataclass(frozen=True)

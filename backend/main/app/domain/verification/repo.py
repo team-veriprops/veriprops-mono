@@ -142,6 +142,18 @@ class VerificationRepo(
         )
         return int(await self._session.scalar(stmt) or 0)
 
+    async def count_due_within(self, active_statuses: List[str], today: date, horizon: date) -> int:
+        """Active verifications due between today and ``horizon`` (inclusive) but not yet
+        overdue — the SLA-at-risk count for Mission Control (§18.1)."""
+        stmt = select(func.count()).select_from(Verification).where(
+            Verification.deleted.is_(False),
+            Verification.status.in_(active_statuses),
+            Verification.sla_due_date.is_not(None),
+            Verification.sla_due_date >= today,
+            Verification.sla_due_date <= horizon,
+        )
+        return int(await self._session.scalar(stmt) or 0)
+
     async def list_active_overdue(self, active_statuses: List[str], today: date) -> List[Verification]:
         """Active verifications past their SLA due date — the SLA-breach sweep source (§12.2)."""
         stmt = select(Verification).where(
@@ -151,6 +163,23 @@ class VerificationRepo(
             Verification.sla_due_date < today,
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def analytics_snapshot(self) -> List[dict]:
+        """Lightweight per-verification rows for analytics aggregation (§18.1): tier, status,
+        paid_at, last-update (completion proxy for COMPLETED), and the property's state.
+        Aggregated in the service — fine at MVP volume (cache/materialise if it grows)."""
+        from main.app.domain.property.models import Property
+        stmt = select(
+            Verification.id, Verification.tier, Verification.status,
+            Verification.paid_at, Verification.date_updated, Property.state,
+        ).select_from(Verification).join(
+            Property, Property.id == Verification.property_id, isouter=True
+        ).where(Verification.deleted.is_(False))
+        rows = (await self._session.execute(stmt)).all()
+        return [
+            {"id": r[0], "tier": r[1], "status": r[2], "paid_at": r[3], "updated": r[4], "state": r[5]}
+            for r in rows
+        ]
 
     async def page_admin(
         self,

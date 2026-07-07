@@ -143,3 +143,13 @@ class VerificationTaskRepo(
             )
         ).scalars().all()
         return list(rows), int(total or 0)
+
+    async def list_approved_since(self, cutoff: datetime) -> List[tuple]:
+        """(approved_at, review_quality) for tasks approved since ``cutoff`` — the agent
+        performance-trend series (§18.1 analytics, 6-month window)."""
+        stmt = select(VerificationTask.approved_at, VerificationTask.review_quality).where(
+            VerificationTask.deleted.is_(False),
+            VerificationTask.approved_at.is_not(None),
+            VerificationTask.approved_at >= cutoff,
+        )
+        return [(a, q) for a, q in (await self._session.execute(stmt)).all()]

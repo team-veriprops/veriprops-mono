@@ -50,3 +50,13 @@ class ReportRepo(
     async def latest_version(self, verification_id: str) -> int:
         reports = await self.list_for_verification(verification_id)
         return reports[0].report_version if reports else 0
+
+    async def list_released_scores(self) -> dict:
+        """verification_id → composite trust score for the RELEASED report, for the
+        regional average-trust analytic (§18.1)."""
+        stmt = select(Report.verification_id, Report.composite_trust_score).where(
+            Report.deleted.is_(False),
+            Report.state == ReportState.RELEASED.value,
+            Report.composite_trust_score.is_not(None),
+        )
+        return {vid: int(score) for vid, score in (await self._session.execute(stmt)).all()}
