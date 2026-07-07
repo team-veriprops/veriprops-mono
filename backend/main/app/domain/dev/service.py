@@ -20,6 +20,7 @@ from main.app.core.state.status import (
     VerificationTier,
 )
 from main.app.core.vid import generate_vid
+from main.app.domain.payment.models import Payment, PaymentMethodKind, PaymentPurpose, PaymentStatus
 from main.app.domain.property.models import Property
 from main.app.domain.user.agent.coverage.models import AgentCoverage
 from main.app.domain.user.agent.profile.models import AgentProfile
@@ -49,6 +50,9 @@ _RESET_TABLES = [
     "commissions", "chargebacks", "admin_notes", "payments", "verifications", "properties",
     "agent_application_drafts", "agent_coverage", "agent_credentials", "kyc_records",
     "agent_profiles",
+    # Growth (§17) + broadcasts (§18) — domain data, cleared for a clean scenario. Pricing
+    # config + commission rules + system config are reference-like and preserved (seeded at start).
+    "referral_credits", "referrals", "broadcasts",
 ]
 
 
@@ -128,6 +132,16 @@ class DevSeedService:
             paid_at=now, sla_due_date=Utils.datetime_now_minus(days=3).date(),
         )
         session.add(verification)
+
+        # A SUCCEEDED payment so revenue analytics / finance / mission-control reflect real
+        # collected money (§18.1) — the seed is paid, not just marked paid_at (D24 extension).
+        session.add(self._new(
+            Payment,
+            verification_id=Utils.uuid_to_hex(verification.id), customer_id=str(customer.id),
+            purpose=PaymentPurpose.INITIAL.value, tx_ref=f"{verification.vid}-SEED",
+            method=PaymentMethodKind.CARD.value, status=PaymentStatus.SUCCEEDED.value,
+            amount_minor=15_000_000, currency=TransactionCurrency.NGN.value,
+        ))
 
         task_ids = {}
         for role in roles:

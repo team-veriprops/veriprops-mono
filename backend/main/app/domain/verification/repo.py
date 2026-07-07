@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import func, or_, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.core.state.status import VerificationStatus
@@ -169,11 +169,13 @@ class VerificationRepo(
         paid_at, last-update (completion proxy for COMPLETED), and the property's state.
         Aggregated in the service — fine at MVP volume (cache/materialise if it grows)."""
         from main.app.domain.property.models import Property
+        # verifications.property_id is String(36) while properties.id is a native UUID —
+        # cast the UUID to text so asyncpg can compare them (the two-string-forms gotcha).
         stmt = select(
             Verification.id, Verification.tier, Verification.status,
             Verification.paid_at, Verification.date_updated, Property.state,
         ).select_from(Verification).join(
-            Property, Property.id == Verification.property_id, isouter=True
+            Property, cast(Property.id, String) == Verification.property_id, isouter=True
         ).where(Verification.deleted.is_(False))
         rows = (await self._session.execute(stmt)).all()
         return [
