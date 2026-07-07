@@ -867,3 +867,116 @@ Extending the drive-through to the §16 reputation/coverage/ranking flow caught 
    `soft_delete(_id)`. `set_coverage` (and the S19 bank-account remove) now call `soft_delete`. Also, a
    same-transaction re-list read stale rows after the replace, so `set_coverage` now echoes the just-written
    coverage instead of re-querying.
+
+---
+
+## Decision: D34 — Referral anti-farming under stub payments (S21 / Phase 17)
+
+### Context
+§17.1 requires referral discount/credit eligibility to need a **distinct verified human**: a
+unique verified phone **and** a unique payment instrument (card fingerprint). Payments run in
+`PAYMENT_STUB_MODE` and the `Payment` model deliberately holds no raw card data.
+
+### Chosen Option
+**Enforce unique-verified-phone anti-farming now; add a forward-compatible nullable
+`card_fingerprint` on `Payment`** that stays null under the stub and is checked once the live
+gateway surfaces it. `ReferralService._anti_farming_reason` voids a credit on a shared verified
+phone (and on a shared card fingerprint when non-null); self-referral is rejected.
+
+### Tradeoffs / Constraints
+Consistent with the stub-first posture (KYC/payment/PDF/storage). The card half is dark until a
+live gateway fills the fingerprint — phone-uniqueness is the enforced gate at MVP.
+
+### Revisit
+Wire real gateway fingerprint capture with the live payment provider.
+
+---
+
+## Decision: D35 — Referral credit uses the §15.2 clearance model (S21 / Phase 17)
+
+### Context
+§17.1: the referrer credit must **not** pay out until the invitee's payment clears the
+chargeback-window reserve, closing the refer-then-charge-back loop.
+
+### Chosen Option
+A **`referral_credits` ledger** (child of `referral/`) mirrors the commission reserve fields: a
+credit is created **PENDING** on the invitee's first payment with `clearing_until = paid_at +
+chargeback_window_days`, and a swept `sweep_referral_credits()` clears PENDING→CLEARED past that
+horizon, crediting the referrer's spendable `credit_balance_kobo` and firing
+`REFERRAL_CREDIT_EARNED`. One credit per invitee (idempotency guard). Spent credit is debited from
+the customer's balance at PAID (idempotent via `mark_paid`).
+
+### Revisit
+N/A — reuses the S19 reserve machinery.
+
+---
+
+## Decision: D36 — Pricing config = DB-backed tier prices + line items (S22 / Phase 18)
+
+### Context
+§18.2 exit criterion: pricing controls change customer pricing **without a deploy**. Tier prices
+were a hardcoded `TIER_PRICE_NGN_KOBO` dict.
+
+### Chosen Option
+Recreate `pricing_tier_config` (tier→price) + `pricing_line_items` in `0001`, seeded from the
+static defaults. `PricingConfigService.tier_price_kobo` is the **single resolver** every pricing
+path reads (quote/submit/recheck/upgrade), falling back to the static default. The pure
+`pricing.py` helpers now take an already-resolved base price (`recheck_price_kobo(base, pct)`,
+`upgrade_delta_kobo(from, to)`) so they stay DB-agnostic. Admin CRUD at `/admin/pricing`; edits
+take effect on the **next quote** — existing 24h price locks (on the verification row) are honoured.
+
+### Revisit
+N/A — the exit criterion is live-verified (an admin edit reflects in the next quote; a locked
+price is untouched).
+
+---
+
+## Decision: D37 — Broadcasts = send-now + scheduled, event-bus fan-out (S22 / Phase 18)
+
+### Context
+§18.1 broadcasts: audience (All/Admins/Customers/Agents), compose, preview, send now **or**
+schedule, manage.
+
+### Chosen Option
+A `broadcast` domain (compose→DRAFT/SCHEDULED, preview reach, send-now, cancel, paged list).
+Fan-out publishes **one** `BROADCAST_ANNOUNCEMENT` event per send carrying the resolved recipient
+ids — the notification subscriber creates the per-user in-app + email, reusing the §4.8 pipeline.
+Scheduled sends fire from a swept `BroadcastSweepJobs` (`ALWAYS_NEW`, off under test) + an admin
+dev sweep endpoint. Audience resolved from `UserRepo.list_recipient_rows` (user_type + personas).
+
+### Revisit
+Batched/queued fan-out if audiences grow large.
+
+---
+
+## Decision: D38 — Full analytics set, server-derived (S22 / Phase 18)
+
+### Context
+§18.1 analytics: conversion funnel, avg verification time by tier, agent performance trends
+(6-month), revenue by location & tier, regional performance.
+
+### Chosen Option
+An `analytics` domain (no entity) computes all five metrics in Python over targeted repo pulls
+(`analytics_snapshot`, `revenue_by_verification`, `list_approved_since`, `list_released_scores`).
+Endpoints `/admin/analytics/*`, RBAC `VIEW_ANALYTICS`. Backend is the only source of truth; the
+dashboard renders lightweight, theme-aware, accessible CSS-bar charts (no charting dependency).
+
+### Tradeoffs / Constraints
+Per-request aggregation over the operational tables is fine at MVP volume; materialise/cache if
+the dataset grows (consistent with the reputation-metrics posture, D32).
+
+### Revisit
+Add a stored/rollup table if the per-read aggregation becomes a hotspot.
+
+---
+
+## Note: two runtime bugs the S21/S22 live drive-through surfaced (mocked tests couldn't)
+
+`backend/scripts/e2e_s21_s22.py` against a live backend caught two the unit tests missed:
+1. **`uuid = character varying` join.** `analytics_snapshot` joined `properties.id` (native UUID)
+   to `verifications.property_id` (`String(36)`) — asyncpg refused the type mismatch and 500'd
+   every time-by-tier/revenue/regional call. Fixed by `cast(Property.id, String)` in the join
+   (the two-string-forms gotcha again).
+2. **Seed had no Payment row.** The dev seed set `verifications.paid_at` but created no `Payment`,
+   so revenue analytics / finance / mission-control all read 0. The seed now records a SUCCEEDED
+   Payment (D24 extension); reset clears the growth + broadcast tables.

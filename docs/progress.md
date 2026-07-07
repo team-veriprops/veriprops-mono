@@ -315,15 +315,19 @@ status: running (S17–S18 delivered; live-verified end-to-end; next is S19)
 - Strict commit mode + dirty worktree: `run` is blocked until committed (see below).
 
 ## Last Commit
-- S17 `5024aa5` (public lookup & sharing), S18 backend `e3372f7` (re-check/upgrade/dispute + config),
-  S18 frontend + runtime-bug fixes + e2e (this commit).
+- S19 earnings/payouts + S20 reputation/coverage (prior resume); S21 `846b1fa` (growth: referral +
+  anti-farming + first-time discount + abandonment recovery), S22 `01a6ed1` (admin ops: mission control,
+  analytics, DB pricing config, broadcasts, finance), live-e2e fixes `11f5943` (uuid=varchar analytics join +
+  seed Payment row).
 
 ## Completion %
-- ~78% (18 of 23 slices; Phase-0 foundation + Phases 1–14 complete — the MVP cut line plus communication,
-  notifications/event-bus, public lookup & sharing, and revision/re-verification/disputes ship end-to-end:
-  submission → payment → assignment → agent execution → admin review/release → live tracking → final report +
-  PDF → mediated chat → notifications → public proof + sharing → re-check/upgrade/dispute). Remaining: S19–S23
-  (harden & scale, Phases 15–19).
+- ~96% (22 of 23 slices; Phase-0 foundation + Phases 1–18 complete). End-to-end: submission → payment (+
+  first-time & referral discounts) → assignment → agent execution → admin review/release → live tracking →
+  final report + PDF → mediated chat → notifications → public proof + sharing → re-check/upgrade/dispute →
+  agent earnings/payouts → reputation/coverage → referral program + abandonment recovery → mission control +
+  analytics + DB-configurable pricing (§18.2 exit criterion live-verified) + broadcasts + finance. Remaining:
+  S23 (Phase 19 audit & compliance maturity — audit export per VID, NDPA data-erasure workflow, versioned
+  consent download).
 
 ---
 

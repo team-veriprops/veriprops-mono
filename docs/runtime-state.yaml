@@ -1,14 +1,61 @@
-session_id: run-s19-s20-earnings-reputation
+session_id: run-s21-s22-growth-admin-ops
 command: resume
 
 status: idle
-phase: s19+s20-complete + live-e2e-verified
+phase: s21+s22-complete + live-e2e-verified
 
-current_slice: null   # S19 + S20 delivered & live-verified. Next slice is S21 (Phase 17 growth & conversion).
-current_subtask: "S19 (Phase 15 earnings/commission/payouts, D30/D31) + S20 (Phase 16 agent reputation &
-  coverage, D32/D33) complete. Backend 744, frontend 330; migration round-trip clean; extended live
-  drive-through ALL PASSED (47 checks; surfaced + fixed 5 runtime bugs across the two slices). Next slice
-  is S21 (Phase 17 growth & conversion — referral anti-farming, first-time discount, abandonment recovery)."
+current_slice: null   # S21 (Phase 17 growth) + S22 (Phase 18 admin ops & analytics) delivered & live-verified.
+current_subtask: "S21 (Phase 17 growth & conversion — referral + anti-farming + first-time discount +
+  abandonment recovery, D34/D35) + S22 (Phase 18 admin ops & analytics — DB pricing config, mission control,
+  analytics, broadcasts, finance, D36/D37/D38) complete. Backend 791, frontend 339; migration round-trip
+  clean; both live drive-throughs ALL PASSED (S15-S20 48 checks + S21/S22 22 checks; surfaced + fixed 2
+  runtime bugs). Phases 0-18 now ship end-to-end. Next slice is S23 (Phase 19 audit & compliance maturity)."
+
+# ── S22 (Phase 18) summary — see decision-log D36-D38 ──
+s22_admin_ops_analytics:
+  backend: "RBAC += VIEW_ANALYTICS + BROADCAST (OPERATIONS + FINANCE/SUPER). pricing_config domain (D36:
+    pricing_tier_config + pricing_line_items child, admin CRUD /admin/pricing, seeded from static defaults);
+    pricing.py helpers now take a resolved base price and quote/submit/recheck/upgrade resolve via
+    PricingConfigService.tier_price_kobo (DB, static fallback) — edits hit the NEXT quote, locks honoured
+    (§18.2 exit criterion, live-verified). Mission Control: AdminDashboardDto += revenue_minor/sla_at_risk/
+    available_agents. analytics domain (D38, no entity): funnel, time-by-tier, revenue by tier & location,
+    per-state regional, 6-month agent trend — all server-derived, /admin/analytics/* (VIEW_ANALYTICS).
+    broadcast domain (D37): audience/compose/preview/send-now + scheduled (BroadcastSweepJobs) + cancel/list,
+    fan-out via BROADCAST_ANNOUNCEMENT on the event bus. finance summary /admin/finance/summary. 3 tables in
+    0001 (round-trip clean)."
+  frontend: "types analytics/pricing/broadcast/finance + AdminDashboard mission-control fields. Mission
+    Control tiles (revenue/SLA-at-risk/available-agents). /admin/analytics (funnel + theme-aware accessible
+    CSS-bar charts + regional table), /admin/pricing (tier editors + line items + upgrade deltas),
+    /admin/broadcasts (+ /new compose: audience/preview/send-now/schedule), /admin/finance (summary tiles).
+    Services + hooks + 4 contract tests; admin nav items restored (Analytics/Broadcasts/Finance/Pricing)."
+  tests: "backend 791 (+24: pricing-config resolve/seed/line-items, analytics funnel/time/revenue/regional/
+    trends, broadcast compose/send/audience/sweep, mission-control counts, permission matrix); frontend
+    vitest 339 (+8 service contracts). migration round-trip clean; tsc+lint clean."
+  live_e2e: "e2e_s21_s22.py — admin price edit reflects in next quote (§18.2, locked untouched) → analytics
+    funnel/revenue derived → broadcast send-now fan-out + scheduled sweep → finance + mission-control revenue.
+    ALL 22 checks PASS."
+
+# ── S21 (Phase 17) summary — see decision-log D34-D35 ──
+s21_growth_conversion:
+  backend: "system_config += growth keys (first_time_discount_percent/referral_credit_ngn/max_discount_percent/
+    cancellation_surcharge_pct). pricing.apply_discounts (pure, kobo-reconciling, capped at max_discount_percent)
+    wired into quote/submit — price_locked_minor is the NET; breakdown recorded. referral/ domain (link) +
+    referral/credit/ ledger: D34 anti-farming (unique verified phone now; forward-compatible card_fingerprint
+    hook, null under stub), D35 two-stage clearance (PENDING on invitee first payment → CLEARED after the
+    chargeback window into referrer credit_balance_kobo) + sweep firing REFERRAL_CREDIT_EARNED. Payment +=
+    card_fingerprint; webhook awards referral credit best-effort; mark_paid debits applied credit once.
+    Abandoned-draft recovery: sweep_abandoned_drafts (one email ever via recovery_reminded_at) +
+    ABANDONMENT_RECOVERY event; re-lock guard (refresh_price_lock_if_expired → price_changed) so a customer is
+    never silently re-charged. GrowthSweepJobs + admin dev sweep endpoints. Signup accepts referral_code
+    (users.referred_by). 2 tables + cols in 0001 (round-trip clean)."
+  frontend: "types/referral + discount fields on PriceQuote/Verification + PriceRefresh. /portal/referrals
+    (link + credit balances + history) + referral-service/hooks/contract test + nav item; referral-credit
+    StatCard + abandonment recovery banner on the dashboard; discount lines in TierStep + PayContainer;
+    'price updated' interstitial (re-lock guard); signup ?ref= capture."
+  tests: "backend 767 (+23: discount math + cap, first-time eligibility, referral anti-farming, credit
+    clearance sweep, abandonment once, re-lock flag); frontend vitest 331 (+1 referral contract)."
+  live_e2e: "e2e_s21_s22.py — growth quote fields + net reconcile, referral link issued, re-lock no-change,
+    sweeps callable. ALL PASS (folded into the S21/S22 run)."
 
 # ── S20 (Phase 16) summary — see decision-log D32-D33 ──
 s20_reputation_coverage:
@@ -339,6 +386,8 @@ completed_slices:
   - S18  # Phase 14 revision / re-verification / disputes (see above)
   - S19  # Phase 15 agent earnings & commission (see above)
   - S20  # Phase 16 agent reputation & coverage (see above)
+  - S21  # Phase 17 growth & conversion (see above)
+  - S22  # Phase 18 admin ops & analytics (see above)
 
 # ── S14 (Phase 10) summary ────────────────────────────────────────
 s14_final_report:
@@ -709,21 +758,28 @@ self_audit_s12:
     - "Full `pnpm build` still deferred (low disk); tsc + eslint (new) + full vitest (273) green.
        Backend 533 green; migration round-trip validated live."
 
-next_action: idle — S17 (Phase 13 public lookup & sharing) and S18 (Phase 14 revision/re-verification/
-             disputes) delivered, committed, and live-verified this resume. Phases 0–14 now ship end-to-end:
-             submission → payment → assignment → agent execution → admin review/release → live tracking →
-             final report + PDF → mediated chat → notifications → public proof + sharing (link/public/named
-             recipient) → re-check/tier-upgrade/dispute (3 outcomes). Next slice is S19 (Phase 15 agent
-             earnings & commission — re-scoped to build the earnings ledger + payouts on the existing
-             commission domain, D13). Deferred follow-ups: re-checked-release commission double-accrual guard
-             (S18 self-audit); dedicated agent DISPUTE_* notification template; admin minor-revision (v1.1)
-             trigger; chat attachments (D22); Redis SSE fan-out; live UI (Playwright) drive-through.
+next_action: idle — S21 (Phase 17 growth & conversion) and S22 (Phase 18 admin ops & analytics) delivered,
+             committed, and live-verified this resume. Phases 0–18 now ship end-to-end: submission → payment
+             (+ first-time & referral discounts) → assignment → agent execution → admin review/release → live
+             tracking → final report + PDF → mediated chat → notifications → public proof + sharing →
+             re-check/tier-upgrade/dispute → earnings/payouts → reputation/coverage → referral program +
+             abandonment recovery → mission control + analytics + DB-configurable pricing + broadcasts +
+             finance. Next slice is S23 (Phase 19 audit & compliance maturity — audit export per VID, NDPA
+             data-erasure workflow + pseudonymisation, versioned consent download). Deferred follow-ups:
+             live card-fingerprint anti-farming (D34, needs live gateway); pricing line-item admin editor UI
+             (backend CRUD exists; frontend shows read-only breakdown); analytics rollup/cache if volume grows
+             (D38); broadcast batched fan-out for large audiences (D37); seed↔real property_id form
+             consistency (seed uses .hex, real uses str(uuid) — regional analytic lumps seeded rows as
+             Unknown); Redis SSE fan-out; live UI (Playwright) drive-through.
 
 started_at: 2026-07-05
-last_checkpoint: "S18 complete — system_config domain + admin CRUD (D28); report re-versioning
-                  version_label/revision_kind (D29); Payment.purpose + initiate_secondary; recheck (v2.0),
-                  upgrade (idempotent v3.0), dispute (3 outcomes + agent defence) domains; RECHECK_DECISION/
-                  DISPUTE_OPENED/DISPUTE_RESOLVED fired (D21). 6 tables in 0001 (round-trip clean). Backend
-                  700 tests, frontend vitest 315; tsc+lint clean. Extended live drive-through ALL PASSED
-                  (32 checks; fixed 3 runtime bugs). S17 5024aa5, S18 backend e3372f7, S18 frontend+fixes+e2e
-                  (this commit)."
+last_checkpoint: "S21 + S22 complete. S21 (Phase 17): growth config keys, apply_discounts wired into
+                  quote/submit (NET price locked), referral/ + referral/credit/ domains (D34 anti-farming +
+                  D35 two-stage clearance), Payment.card_fingerprint, abandonment recovery sweep + re-lock
+                  guard, GrowthSweepJobs, signup referral_code. S22 (Phase 18): VIEW_ANALYTICS/BROADCAST perms,
+                  pricing_config domain (D36 DB tier prices + line items, pricing.py resolves via DB — §18.2
+                  exit criterion), mission-control extension, analytics domain (D38), broadcast domain (D37 +
+                  sweep), finance summary. 5 tables in 0001 (round-trip clean). Backend 791 tests, frontend
+                  vitest 339; tsc+lint clean. Two live drive-throughs ALL PASSED (S15-S20 48 checks + new
+                  e2e_s21_s22.py 22 checks; fixed 2 runtime bugs — uuid=varchar analytics join, seed missing
+                  Payment). S21 846b1fa, S22 01a6ed1, live-e2e fixes 11f5943."
