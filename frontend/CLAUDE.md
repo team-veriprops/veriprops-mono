@@ -86,6 +86,15 @@ Record-detail views and one-off forms / centered modals use the shared right-sid
 - Read runtime flags from the backend, not from `NEXT_PUBLIC_*`. `usePublicConfigQuery()` exposes `/config/public` (e.g. `phoneVerificationEnabled`, which drives whether the signup flow shows the phone-verification step).
 - The `/account/*` security surface (security log, devices, linked accounts, password) lives under `src/app/account/` on `AppShell`; the `PortalSwitcher` in the shell shows the cross-portal badge for multi-persona users.
 
+## Design system (shared UI primitives)
+
+Reach for the shared primitive before hand-rolling markup — the card/tile visual language is centralized so every surface stays consistent.
+
+- **Card-style choosers** use [src/components/ui/SelectableCard.tsx](src/components/ui/SelectableCard.tsx): an icon tile + title/description with a primary selection ring. Pass `selectionMode="radio"` (single-select) or `"checkbox"` (multi-select) — it sets the ARIA role + `aria-checked` and shows a check badge when a checkbox is selected. Optional `badge` (inline pill by the title) and `footer` (block below, e.g. a licence-required pill) slots. Consumers: submission property-type ([PropertyStep](src/components/portal/submission/PropertyStep.tsx)), agent role + KYC-method ([RolesStep](src/components/agents/onboarding/RolesStep.tsx), [KycStep](src/components/agents/onboarding/KycStep.tsx)). Do **not** re-roll the `rounded-xl border … ring-1 ring-primary` markup inline.
+- **Stat tiles** use [src/components/ui/StatCard.tsx](src/components/ui/StatCard.tsx) (label + value, optional `href`/`icon`).
+- **Rendering enum values.** Never print a raw enum/DB string (`GOV_ID`, `UNDER_REVIEW`, `FIELD`) in the UI. Route it through `humanizeEnumLabel` from [src/lib/utils.ts](src/lib/utils.ts) (→ "Under Review"), or a small explicit label map when the humanized form is wrong (e.g. `BVN`). This pairs with the enum-reference rule below — compare on the enum, display via `humanizeEnumLabel`.
+- **Full-screen wizards** (submission, agent apply) share [src/components/ui/wizard/WizardOverlay.tsx](src/components/ui/wizard/WizardOverlay.tsx) — a stepper + footer shell; keep step content in per-step components and thread a `testIdPrefix`.
+
 ## Layout
 
 - `src/app/` — App Router. Top-level segments are isolated user surfaces:
