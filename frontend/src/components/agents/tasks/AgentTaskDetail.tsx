@@ -17,6 +17,7 @@ import { toast } from "@components/3rdparty/ui/use-toast";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { ROUTES } from "@lib/routes";
+import { humanizeEnumLabel } from "@lib/utils";
 import { TaskState } from "@/types/adminVerification";
 import { EvidenceKind, ROLE_FORM_FIELDS } from "@/types/agentTask";
 import {
@@ -87,10 +88,10 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
     <div className="space-y-6" data-testid="agent-task-detail">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{task.role} task</h1>
+          <h1 className="text-2xl font-bold text-foreground">{humanizeEnumLabel(task.role)} task</h1>
           <div className="mt-1 flex items-center gap-2">
-            <Badge variant="outline">{task.state}</Badge>
-            <Badge variant="secondary">{task.tier}</Badge>
+            <Badge variant="outline">{humanizeEnumLabel(task.state)}</Badge>
+            <Badge variant="secondary">{humanizeEnumLabel(task.tier)}</Badge>
           </div>
         </div>
         <div className="flex gap-2">
@@ -153,7 +154,7 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
                     <SelectContent>
                       {Object.values(EvidenceKind).map((k) => (
                         <SelectItem key={k} value={k}>
-                          {k}
+                          {humanizeEnumLabel(k)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -170,7 +171,7 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
                 {(evidence ?? []).map((e) => (
                   <div key={e.id} className="flex items-center justify-between rounded border border-border p-2 text-sm">
                     <span>
-                      <Badge variant="secondary">{e.kind}</Badge>{" "}
+                      <Badge variant="secondary">{humanizeEnumLabel(e.kind)}</Badge>{" "}
                       <span className="font-mono text-xs text-muted-foreground">
                         {e.contentSha256.slice(0, 12)}…
                       </span>
@@ -188,7 +189,7 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
 
           <Card>
             <CardHeader>
-              <CardTitle>{task.role} findings</CardTitle>
+              <CardTitle>{humanizeEnumLabel(task.role)} findings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {fields.map((f) => (

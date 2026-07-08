@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight, ImageIcon, Sparkles } from "lucide-react";
 import { Badge } from "@3rdparty/ui/badge";
 import { Button } from "@3rdparty/ui/button";
-import { Card, CardContent } from "@3rdparty/ui/card";
 import {
   Select,
   SelectContent,
@@ -12,11 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@3rdparty/ui/select";
+import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { toast } from "@components/3rdparty/ui/use-toast";
-import { Loader2 } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
 import { TaskState } from "@/types/adminVerification";
 import { AgentTask } from "@/types/agentTask";
+import { Page } from "@/types/models";
+import { cn, humanizeEnumLabel } from "@lib/utils";
 import {
   useAcceptTaskMutation,
   useAgentTasksQuery,
@@ -26,23 +28,41 @@ import {
 const ALL = "ALL";
 const PAGE_SIZE = 10;
 
+// Task-state → pill styling. Terminal/approval states read positive, rejection negative,
+// active work states neutral-primary, and the not-yet-started states muted.
+const STATE_TONE: Record<TaskState, string> = {
+  [TaskState.PENDING]: "bg-muted text-muted-foreground",
+  [TaskState.ASSIGNED]: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  [TaskState.ACCEPTED]: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  [TaskState.IN_PROGRESS]: "bg-primary/10 text-primary",
+  [TaskState.SUBMITTED]: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  [TaskState.REJECTED]: "bg-destructive/10 text-destructive",
+  [TaskState.APPROVED]: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+};
+
 export default function AgentTaskList() {
   const router = useRouter();
   const [stateFilter, setStateFilter] = useState<string | undefined>();
-  const { data, isLoading } = useAgentTasksQuery(stateFilter, 0, PAGE_SIZE);
+  const [page, setPage] = useState(0);
+  const { data, isLoading, isError } = useAgentTasksQuery(stateFilter, page, PAGE_SIZE);
   const accept = useAcceptTaskMutation();
   const decline = useDeclineTaskMutation();
 
-  const tasks = data?.items ?? [];
+  const onFilterChange = (v: string) => {
+    setStateFilter(v === ALL ? undefined : v);
+    setPage(0); // a new filter resets to the first page
+  };
 
   return (
-    <div className="space-y-6" data-testid="agent-tasks">
+    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6" data-testid="agent-tasks">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-foreground">My tasks</h1>
-        <Select
-          value={stateFilter ?? ALL}
-          onValueChange={(v) => setStateFilter(v === ALL ? undefined : v)}
-        >
+        <div>
+          <h1 className="text-lg font-semibold text-foreground">My tasks</h1>
+          <p className="text-sm text-muted-foreground">
+            Accept assignments, capture evidence on-site, and submit your findings.
+          </p>
+        </div>
+        <Select value={stateFilter ?? ALL} onValueChange={onFilterChange}>
           <SelectTrigger className="w-44" data-testid="agent-task-state-filter">
             <SelectValue placeholder="State" />
           </SelectTrigger>
@@ -50,77 +70,145 @@ export default function AgentTaskList() {
             <SelectItem value={ALL}>All states</SelectItem>
             {Object.values(TaskState).map((s) => (
               <SelectItem key={s} value={s}>
-                {s}
+                {humanizeEnumLabel(s)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading tasks…
-        </div>
-      ) : tasks.length === 0 ? (
-        <p className="py-16 text-center text-muted-foreground">No tasks yet.</p>
-      ) : (
-        <div className="grid gap-3">
-          {tasks.map((task: AgentTask) => (
-            <Card key={task.id} data-testid={`agent-task-${task.id}`}>
-              <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{task.role}</span>
-                    <Badge variant="outline">{task.state}</Badge>
-                    <Badge variant="secondary">{task.tier}</Badge>
-                    {task.inPool && <Badge>Open pool</Badge>}
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Verification {task.verificationId.slice(0, 8)} · {task.evidenceCount} evidence
-                    {task.remoteBonusMinor ? " · remote bonus" : ""}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  {(task.state === TaskState.PENDING || task.inPool) && (
-                    <Button
-                      size="sm"
-                      onClick={async () => {
-                        await accept.mutateAsync(task.id);
-                        toast({ title: "Task accepted" });
-                      }}
-                      disabled={accept.isPending}
-                      data-testid={`accept-${task.id}`}
+      <AsyncStateComponent<Page<AgentTask>>
+        isLoading={isLoading}
+        isError={isError}
+        data={data}
+        loadingText="Loading tasks…"
+        emptyText="No tasks yet."
+      >
+        {(pageData) =>
+          pageData.items.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border py-16 text-center">
+              <p className="text-sm text-muted-foreground">
+                {stateFilter ? "No tasks in this state." : "No tasks assigned yet — check back soon."}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-3">
+                {pageData.items.map((task) => {
+                  const canAccept = task.state === TaskState.PENDING || task.inPool;
+                  const canDecline =
+                    task.state === TaskState.ASSIGNED || task.state === TaskState.ACCEPTED;
+                  return (
+                    <div
+                      key={task.id}
+                      className="rounded-xl border border-border p-4 transition-colors hover:border-primary/40"
+                      data-testid={`agent-task-${task.id}`}
                     >
-                      Accept
-                    </Button>
-                  )}
-                  {(task.state === TaskState.ASSIGNED || task.state === TaskState.ACCEPTED) && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={async () => {
-                        await decline.mutateAsync({ taskId: task.id });
-                        toast({ title: "Task declined" });
-                      }}
-                      disabled={decline.isPending}
-                      data-testid={`decline-${task.id}`}
-                    >
-                      Decline
-                    </Button>
-                  )}
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-foreground">
+                              {humanizeEnumLabel(task.role)}
+                            </span>
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs font-medium",
+                                STATE_TONE[task.state],
+                              )}
+                            >
+                              {humanizeEnumLabel(task.state)}
+                            </span>
+                            <Badge variant="secondary">{humanizeEnumLabel(task.tier)}</Badge>
+                            {task.inPool && (
+                              <Badge className="gap-1">
+                                <Sparkles className="size-3" /> Open pool
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
+                            <span>Verification {task.verificationId.slice(0, 8)}</span>
+                            <span aria-hidden>·</span>
+                            <span className="inline-flex items-center gap-1">
+                              <ImageIcon className="size-3.5" /> {task.evidenceCount} evidence
+                            </span>
+                            {task.remoteBonusMinor ? (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span className="text-emerald-600 dark:text-emerald-400">remote bonus</span>
+                              </>
+                            ) : null}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-2">
+                          {canAccept && (
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                await accept.mutateAsync(task.id);
+                                toast({ title: "Task accepted" });
+                              }}
+                              disabled={accept.isPending}
+                              data-testid={`accept-${task.id}`}
+                            >
+                              Accept
+                            </Button>
+                          )}
+                          {canDecline && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={async () => {
+                                await decline.mutateAsync({ taskId: task.id });
+                                toast({ title: "Task declined" });
+                              }}
+                              disabled={decline.isPending}
+                              data-testid={`decline-${task.id}`}
+                            >
+                              Decline
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="gap-1"
+                            onClick={() => router.push(ROUTES.AGENT.TASK_DETAIL(task.id))}
+                          >
+                            Open <ArrowRight className="size-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {(page > 0 || pageData.meta.nextPage != null) && (
+                <div className="flex items-center justify-between pt-1">
                   <Button
+                    variant="outline"
                     size="sm"
-                    variant="secondary"
-                    onClick={() => router.push(ROUTES.AGENT.TASK_DETAIL(task.id))}
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
                   >
-                    Open
+                    Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Page {page + 1} of {Math.max(pageData.meta.totalPages, 1)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pageData.meta.nextPage == null}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+              )}
+            </>
+          )
+        }
+      </AsyncStateComponent>
     </div>
   );
 }
