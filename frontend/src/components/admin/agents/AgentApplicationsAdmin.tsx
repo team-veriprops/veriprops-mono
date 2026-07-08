@@ -136,9 +136,9 @@ export default function AgentApplicationsAdmin() {
         {detail && (
           <div className="space-y-6 p-6" data-testid="admin-agent-detail">
             <section className="space-y-2 text-sm">
-              <Row label="Status" value={detail.status} />
-              <Row label="Applied roles" value={detail.roles.join(", ")} />
-              <Row label="Approved roles" value={detail.approvedRoles.join(", ") || "—"} />
+              <Row label="Status" value={humanizeEnumLabel(detail.status)} />
+              <Row label="Applied roles" value={detail.roles.map(humanizeEnumLabel).join(", ")} />
+              <Row label="Approved roles" value={detail.approvedRoles.map(humanizeEnumLabel).join(", ") || "—"} />
               {detail.bio && <Row label="Bio" value={detail.bio} />}
               {detail.yearsExperience != null && (
                 <Row label="Experience" value={`${detail.yearsExperience} years`} />
@@ -149,8 +149,8 @@ export default function AgentApplicationsAdmin() {
               <h3 className="mb-2 font-medium">KYC</h3>
               {detail.kyc ? (
                 <div className="rounded-lg border border-border p-3 text-sm">
-                  <Row label="Method" value={detail.kyc.method} />
-                  <Row label="Result" value={detail.kyc.status} />
+                  <Row label="Method" value={humanizeEnumLabel(detail.kyc.method)} />
+                  <Row label="Result" value={humanizeEnumLabel(detail.kyc.status)} />
                   {detail.kyc.score != null && <Row label="Score" value={String(detail.kyc.score)} />}
                 </div>
               ) : (
@@ -164,7 +164,7 @@ export default function AgentApplicationsAdmin() {
                 <ul className="space-y-1 text-sm">
                   {detail.credentials.map((c) => (
                     <li key={c.role} className="rounded border border-border p-2">
-                      {c.role} — {c.credentialType} ({c.status})
+                      {humanizeEnumLabel(c.role)} — {humanizeEnumLabel(c.credentialType)} ({humanizeEnumLabel(c.status)})
                       {c.expiryDate ? ` · expires ${c.expiryDate}` : ""}
                     </li>
                   ))}

@@ -9,7 +9,7 @@ import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { usePricingQuery, useSetTierPriceMutation } from "./libs/usePricingQueries";
 import { PricingTier, TierPricingView } from "@/types/pricing";
 import { VerificationTier } from "@/types/verification";
-import { formatMinor } from "@lib/utils";
+import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 
 /**
  * Pricing config (§18.1, D36). Admin-editable per-tier price + itemized breakdown + the
@@ -62,13 +62,13 @@ function TierEditor({ tier }: { tier: PricingTier }) {
       return;
     }
     await setPriceMutation.mutateAsync({ tier: tier.tier as VerificationTier, priceNgnMinor: Math.round(major * 100) });
-    toast({ title: "Price updated", description: `${tier.tier} now ${formatMinor(Math.round(major * 100))}.` });
+    toast({ title: "Price updated", description: `${humanizeEnumLabel(tier.tier)} now ${formatMinor(Math.round(major * 100))}.` });
   };
 
   return (
     <Card className="space-y-3 p-5" data-testid={`admin-pricing-tier-${tier.tier.toLowerCase()}`}>
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">{tier.tier}</h2>
+        <h2 className="text-sm font-semibold text-foreground">{humanizeEnumLabel(tier.tier)}</h2>
         <span className="text-xs text-muted-foreground">Current: {formatMinor(tier.priceNgnMinor)}</span>
       </div>
       <div className="flex items-end gap-3">

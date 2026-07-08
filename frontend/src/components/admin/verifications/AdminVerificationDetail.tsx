@@ -19,6 +19,8 @@ import {
 import { toast } from "@components/3rdparty/ui/use-toast";
 import { Loader2 } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
+import { humanizeEnumLabel } from "@lib/utils";
+import { VerificationStatusBadge } from "@components/portal/verifications/VerificationStatusBadge";
 import { VerificationStatus } from "@/types/verification";
 import { TransactionCurrency } from "@/types/models";
 import {
@@ -84,7 +86,7 @@ function TaskRow({
   const doAssign = async (id: string) => {
     if (!id) return;
     await assign.mutateAsync({ role: task.role, agentId: id });
-    toast({ title: `${task.role} assigned` });
+    toast({ title: `${humanizeEnumLabel(task.role)} assigned` });
     setAgentId("");
     setShowSuggested(false);
   };
@@ -92,9 +94,9 @@ function TaskRow({
   return (
     <div className="rounded-lg border border-border p-3" data-testid={`task-${task.role}`}>
       <div className="flex items-center justify-between">
-        <span className="font-medium">{task.role}</span>
+        <span className="font-medium">{humanizeEnumLabel(task.role)}</span>
         <span className="flex items-center gap-2">
-          <Badge variant="outline">{task.state}</Badge>
+          <Badge variant="outline">{humanizeEnumLabel(task.state)}</Badge>
           {task.inPool && <Badge variant="secondary">In pool</Badge>}
         </span>
       </div>
@@ -165,7 +167,7 @@ function ChargebackCard({
         <span className="text-sm">
           {formatMinor(chargeback.amountMinor, chargeback.currency)} — {chargeback.reason ?? "—"}
         </span>
-        <Badge variant="destructive">{chargeback.status}</Badge>
+        <Badge variant="destructive">{humanizeEnumLabel(chargeback.status)}</Badge>
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
         {chargeback.status === ChargebackStatus.FLAGGED && (
@@ -257,8 +259,8 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
         <div>
           <h1 className="text-2xl font-bold text-foreground">{summary.vid}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <Badge variant="outline">{summary.status}</Badge>
-            {summary.tier && <Badge variant="secondary">{summary.tier}</Badge>}
+            <VerificationStatusBadge status={summary.status} />
+            {summary.tier && <Badge variant="secondary">{humanizeEnumLabel(summary.tier)}</Badge>}
             {summary.paused && <Badge variant="destructive">Paused</Badge>}
             <span className="text-sm text-muted-foreground">
               SLA: {SLA_LABEL[summary.slaHealth]}
@@ -365,7 +367,7 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
               detail.payments.map((p) => (
                 <div key={p.id} className="flex items-center justify-between">
                   <span>{formatMinor(p.amountMinor, p.currency)}</span>
-                  <Badge variant="outline">{p.status}</Badge>
+                  <Badge variant="outline">{humanizeEnumLabel(p.status)}</Badge>
                 </div>
               ))
             )}
@@ -386,9 +388,9 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
               detail.commissions.map((c) => (
                 <div key={c.id} className="flex items-center justify-between">
                   <span>
-                    {c.role} — {formatMinor(c.amountMinor, c.currency)}
+                    {humanizeEnumLabel(c.role)} — {formatMinor(c.amountMinor, c.currency)}
                   </span>
-                  <Badge variant="outline">{c.status}</Badge>
+                  <Badge variant="outline">{humanizeEnumLabel(c.status)}</Badge>
                 </div>
               ))
             )}

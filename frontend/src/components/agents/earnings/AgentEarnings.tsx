@@ -7,7 +7,7 @@ import { Button } from "@3rdparty/ui/button";
 import { StatCard } from "@components/ui/StatCard";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { ROUTES } from "@/lib/routes";
-import { formatMinor } from "@lib/utils";
+import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 import { EarningJob, EarningsSummary } from "@/types/earnings";
 import { Page } from "@/types/models";
 import {
@@ -96,7 +96,7 @@ export default function AgentEarnings() {
                     <li key={j.id} className="flex items-center justify-between gap-3 p-3 text-sm">
                       <div className="min-w-0">
                         <p className="truncate font-medium">
-                          {j.role} · {j.tier}
+                          {humanizeEnumLabel(j.role)} · {humanizeEnumLabel(j.tier)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {JOB_STATUS_LABEL[j.status] ?? j.status}

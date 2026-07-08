@@ -8,6 +8,7 @@ import { Label } from "@3rdparty/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
 import { toast } from "@components/3rdparty/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import { humanizeEnumLabel } from "@lib/utils";
 import { AgentRole } from "@/types/agent";
 import { TaskState } from "@/types/adminVerification";
 import { ReviewState } from "@/types/adminReview";
@@ -36,10 +37,14 @@ function ReviewTaskRow({ verificationId, task, findings }: {
   return (
     <div className="rounded-lg border border-border p-3" data-testid={`review-task-${task.role}`}>
       <div className="flex items-center justify-between">
-        <span className="font-medium">{task.role}</span>
+        <span className="font-medium">{humanizeEnumLabel(task.role)}</span>
         <span className="flex items-center gap-2">
-          <Badge variant="outline">{task.state}</Badge>
-          {reviewed && <Badge variant={reviewed === "APPROVED" ? "secondary" : "destructive"}>{reviewed}</Badge>}
+          <Badge variant="outline">{humanizeEnumLabel(task.state)}</Badge>
+          {reviewed && (
+            <Badge variant={reviewed === TaskState.APPROVED ? "secondary" : "destructive"}>
+              {humanizeEnumLabel(reviewed)}
+            </Badge>
+          )}
         </span>
       </div>
 
@@ -67,7 +72,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
             size="sm"
             onClick={async () => {
               await approve.mutateAsync({ role: task.role, quality });
-              toast({ title: `${task.role} approved` });
+              toast({ title: `${humanizeEnumLabel(task.role)} approved` });
             }}
             disabled={approve.isPending}
             data-testid={`approve-${task.role}`}
@@ -86,7 +91,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
             variant="destructive"
             onClick={async () => {
               await reject.mutateAsync({ role: task.role, reason });
-              toast({ title: `${task.role} sent to rework` });
+              toast({ title: `${humanizeEnumLabel(task.role)} sent to rework` });
               setReason("");
             }}
             disabled={reject.isPending || !reason.trim()}
@@ -104,7 +109,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
           className="mt-2"
           onClick={async () => {
             await reopen.mutateAsync({ role: task.role });
-            toast({ title: `${task.role} reopened` });
+            toast({ title: `${humanizeEnumLabel(task.role)} reopened` });
           }}
           disabled={reopen.isPending}
           data-testid={`reopen-${task.role}`}
@@ -142,8 +147,8 @@ export default function AdminReportReview({ verificationId }: { verificationId: 
         <div>
           <h1 className="text-2xl font-bold text-foreground">Report review</h1>
           <div className="mt-1 flex items-center gap-2">
-            <Badge variant="outline">{review.status}</Badge>
-            {review.tier && <Badge variant="secondary">{review.tier}</Badge>}
+            <Badge variant="outline">{humanizeEnumLabel(review.status)}</Badge>
+            {review.tier && <Badge variant="secondary">{humanizeEnumLabel(review.tier)}</Badge>}
             {review.projectedTrustScore != null && (
               <Badge>Trust score: {review.projectedTrustScore}</Badge>
             )}

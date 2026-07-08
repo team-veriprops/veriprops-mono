@@ -10,7 +10,7 @@ import { VerificationStatusBadge } from "@components/portal/verifications/Verifi
 import { useCustomerDashboardQuery } from "@components/portal/libs/useVerificationQueries";
 import { useReferralSummaryQuery } from "@components/portal/referrals/libs/useReferralQueries";
 import { ROUTES } from "@lib/routes";
-import { formatMinor } from "@lib/utils";
+import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 import { CustomerDashboard, ResumableDraft } from "@/types/tracking";
 
 /**
@@ -81,7 +81,7 @@ export default function PortalDashboard() {
                           <div className="min-w-0 space-y-1">
                             <p className="truncate font-medium">{v.address ?? v.vid}</p>
                             <p className="text-xs text-muted-foreground">
-                              {v.vid}{v.tier ? ` · ${v.tier}` : ""}
+                              {v.vid}{v.tier ? ` · ${humanizeEnumLabel(v.tier)}` : ""}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">

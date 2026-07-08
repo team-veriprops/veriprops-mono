@@ -6,6 +6,7 @@ import { Button } from "@3rdparty/ui/button";
 import { Card } from "@3rdparty/ui/card";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { ROUTES } from "@lib/routes";
+import { humanizeEnumLabel } from "@lib/utils";
 import { useMyVerificationsQuery } from "@components/portal/libs/useVerificationQueries";
 import { Page } from "@/types/models";
 import { VerificationListItem } from "@/types/tracking";
@@ -44,7 +45,7 @@ export default function MyVerificationsList() {
                       <div className="min-w-0 space-y-1">
                         <p className="truncate font-medium">{v.address ?? v.vid}</p>
                         <p className="text-xs text-muted-foreground">
-                          {v.vid}{v.tier ? ` · ${v.tier}` : ""}
+                          {v.vid}{v.tier ? ` · ${humanizeEnumLabel(v.tier)}` : ""}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

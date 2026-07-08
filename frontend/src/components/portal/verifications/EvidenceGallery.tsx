@@ -5,7 +5,7 @@ import { FileText, ImageIcon, ShieldCheck, Video } from "lucide-react";
 import DetailDrawer, { DetailDrawerWidth } from "@components/ui/DetailDrawer";
 import { EvidenceKind } from "@/types/agentTask";
 import { CustomerEvidence } from "@/types/tracking";
-import { cn } from "@lib/utils";
+import { cn, humanizeEnumLabel } from "@lib/utils";
 
 const KIND_ICON: Record<string, typeof ImageIcon> = {
   [EvidenceKind.PHOTO]: ImageIcon,
@@ -41,11 +41,11 @@ export function EvidenceGallery({ items }: { items: CustomerEvidence[] }) {
             >
               {isRenderableImage(e) ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={e.url} alt={`${e.role} evidence`} className="h-full w-full object-cover" />
+                <img src={e.url} alt={`${humanizeEnumLabel(e.role)} evidence`} className="h-full w-full object-cover" />
               ) : (
                 <Icon className="size-8 text-muted-foreground" />
               )}
-              <span className="text-[10px] font-medium uppercase text-muted-foreground">{e.role}</span>
+              <span className="text-[10px] font-medium uppercase text-muted-foreground">{humanizeEnumLabel(e.role)}</span>
             </button>
           );
         })}
@@ -54,7 +54,7 @@ export function EvidenceGallery({ items }: { items: CustomerEvidence[] }) {
       <DetailDrawer
         open={!!active}
         onOpenChange={(o) => !o && setActive(null)}
-        title={active ? `${active.role} · ${active.kind}` : "Evidence"}
+        title={active ? `${humanizeEnumLabel(active.role)} · ${humanizeEnumLabel(active.kind)}` : "Evidence"}
         reference={active?.contentSha256 ?? ""}
         drawerWidth={DetailDrawerWidth.SMALL}
       >

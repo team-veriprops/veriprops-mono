@@ -18,6 +18,7 @@ import { CopyText } from "@components/ui/CopyText";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import DetailDrawer, { DetailDrawerWidth } from "@components/ui/DetailDrawer";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { humanizeEnumLabel } from "@lib/utils";
 import { Page } from "@/types/models";
 import { AdminInvitationStatus, AdminMember, AdminSubRole } from "@/types/admin";
 import {
@@ -38,7 +39,7 @@ const columns: Column<AdminMember & Record<string, unknown>>[] = [
   {
     key: "subRole",
     label: "Role",
-    render: (_v, item) => <Badge>{item.subRole ?? "—"}</Badge>,
+    render: (_v, item) => <Badge>{item.subRole ? humanizeEnumLabel(item.subRole) : "—"}</Badge>,
   },
 ];
 
@@ -183,7 +184,7 @@ export default function AdminTeamManagement() {
               <SelectContent>
                 {ASSIGNABLE_ROLES.map((r) => (
                   <SelectItem key={r} value={r}>
-                    {r}
+                    {humanizeEnumLabel(r)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -216,7 +217,7 @@ export default function AdminTeamManagement() {
             key: "subRole",
             label: "Role",
             value: subRole,
-            options: ASSIGNABLE_ROLES.map((r) => ({ label: r, value: r })),
+            options: ASSIGNABLE_ROLES.map((r) => ({ label: humanizeEnumLabel(r), value: r })),
           },
         ]}
         isLoading={isLoading}
@@ -244,8 +245,8 @@ export default function AdminTeamManagement() {
                 <span>
                   {[inv.firstName, inv.lastName].filter(Boolean).join(" ") &&
                     `${[inv.firstName, inv.lastName].filter(Boolean).join(" ")} · `}
-                  {inv.email} — <Badge variant="secondary">{inv.subRole}</Badge>{" "}
-                  <span className="text-muted-foreground">({inv.status})</span>
+                  {inv.email} — <Badge variant="secondary">{humanizeEnumLabel(inv.subRole)}</Badge>{" "}
+                  <span className="text-muted-foreground">({humanizeEnumLabel(inv.status)})</span>
                 </span>
                 {inv.status === AdminInvitationStatus.PENDING && (
                   <Button
@@ -281,7 +282,7 @@ export default function AdminTeamManagement() {
                 <SelectContent>
                   {ASSIGNABLE_ROLES.map((r) => (
                     <SelectItem key={r} value={r}>
-                      {r}
+                      {humanizeEnumLabel(r)}
                     </SelectItem>
                   ))}
                 </SelectContent>

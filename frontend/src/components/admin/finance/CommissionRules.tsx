@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
+import { humanizeEnumLabel } from "@lib/utils";
 import { CommissionRule } from "@/types/commission";
 import { AgentRole } from "@/types/agent";
 import { VerificationTier } from "@/types/verification";
@@ -75,8 +76,8 @@ function RuleRow({ rule }: { rule: CommissionRule }) {
 
   return (
     <tr data-testid={`rule-${rule.tier}-${rule.role}`}>
-      <td className="p-3 font-medium">{rule.tier}</td>
-      <td className="p-3">{rule.role}</td>
+      <td className="p-3 font-medium">{humanizeEnumLabel(rule.tier)}</td>
+      <td className="p-3">{humanizeEnumLabel(rule.role)}</td>
       <td className="p-3">
         <Input value={pct} inputMode="decimal" onChange={(e) => setPct(e.target.value)}
           className="h-8 w-24" data-testid={`rule-input-${rule.tier}-${rule.role}`} />

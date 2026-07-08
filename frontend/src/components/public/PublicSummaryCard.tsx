@@ -2,6 +2,7 @@ import { BadgeCheck, ShieldQuestion } from "lucide-react";
 import Link from "next/link";
 import { PublicLookupState, PublicSummary } from "@/types/share";
 import { ROUTES, buildAuthUrl } from "@lib/routes";
+import { humanizeEnumLabel } from "@lib/utils";
 import { AuthIntent } from "@components/website/auth/models";
 
 const BAND_CLASS: Record<string, string> = {
@@ -34,8 +35,8 @@ export function PublicSummaryCard({ summary }: { summary: PublicSummary }) {
       <dl className="mt-5 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
         <Field label="Verification ID" value={summary.vid} mono />
         <Field label="Trust band" value={band} className={BAND_CLASS[band]} />
-        <Field label="Tier" value={summary.tier} />
-        <Field label="Property type" value={summary.propertyType} />
+        <Field label="Tier" value={humanizeEnumLabel(summary.tier)} />
+        <Field label="Property type" value={humanizeEnumLabel(summary.propertyType)} />
         <Field label="State" value={summary.stateRegion} />
         <Field label="LGA" value={summary.lga} />
         <Field

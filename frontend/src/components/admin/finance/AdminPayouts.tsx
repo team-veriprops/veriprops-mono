@@ -7,7 +7,7 @@ import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import DetailDrawer from "@components/ui/DetailDrawer";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
-import { formatMinor } from "@lib/utils";
+import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 import { Payout, PayoutStatus } from "@/types/payout";
 import { Page } from "@/types/models";
 import { useAdminPayoutsQuery, usePayoutDecisionMutation } from "./libs/useFinanceQueries";
@@ -51,7 +51,7 @@ export default function AdminPayouts() {
                       <p className="font-semibold tabular-nums">{formatMinor(p.amountMinor, p.currency)}</p>
                       <p className="truncate text-xs text-muted-foreground">{p.bankName} · {p.accountNumber} · {p.accountName}</p>
                     </div>
-                    <span className="shrink-0 text-xs font-medium text-muted-foreground">{p.status}</span>
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground">{humanizeEnumLabel(p.status)}</span>
                   </button>
                 ))}
               </ul>
@@ -99,7 +99,7 @@ function DecisionPanel({ payout, onDone }: { payout: Payout; onDone: () => void 
       <section className="rounded-lg border p-3">
         <p className="text-lg font-semibold tabular-nums">{formatMinor(payout.amountMinor, payout.currency)}</p>
         <p className="text-muted-foreground">{payout.bankName} · {payout.accountNumber} · {payout.accountName}</p>
-        <p className="mt-1 text-xs text-muted-foreground">Status: {payout.status}</p>
+        <p className="mt-1 text-xs text-muted-foreground">Status: {humanizeEnumLabel(payout.status)}</p>
       </section>
 
       {decided ? (

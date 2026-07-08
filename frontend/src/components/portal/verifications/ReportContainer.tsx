@@ -16,7 +16,7 @@ import { ReportShareModal } from "@components/portal/verifications/ReportShareMo
 import { ReportActions } from "@components/portal/verifications/ReportActions";
 import { ReportView } from "@components/portal/verifications/ReportView";
 import { CustomerReport } from "@/types/report";
-import { cn } from "@lib/utils";
+import { cn, humanizeEnumLabel } from "@lib/utils";
 
 export default function ReportContainer({ verificationId }: { verificationId: string }) {
   const { data, isLoading, isError } = useReportQuery(verificationId);
@@ -90,7 +90,7 @@ function Header({ report, verificationId }: { report: CustomerReport; verificati
         <span className="text-xs text-muted-foreground">
           v{report.reportVersion}.0
           {report.releasedAt ? ` · ${new Date(report.releasedAt).toLocaleDateString()}` : ""}
-          {report.tier ? ` · ${report.tier}` : ""}
+          {report.tier ? ` · ${humanizeEnumLabel(report.tier)}` : ""}
         </span>
       </div>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">

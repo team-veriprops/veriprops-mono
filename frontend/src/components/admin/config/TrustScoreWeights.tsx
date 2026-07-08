@@ -8,6 +8,7 @@ import { Label } from "@3rdparty/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
 import { toast } from "@components/3rdparty/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import { humanizeEnumLabel } from "@lib/utils";
 import { AgentRole } from "@/types/agent";
 import { VerificationTier } from "@/types/verification";
 import { TierWeights } from "@/types/adminReview";
@@ -32,19 +33,19 @@ function TierCard({ tier }: { tier: TierWeights }) {
       tier: tier.tier as VerificationTier,
       weights: values as Record<AgentRole, number>,
     });
-    toast({ title: `${tier.tier} weights saved` });
+    toast({ title: `${humanizeEnumLabel(tier.tier)} weights saved` });
   };
 
   return (
     <Card data-testid={`weights-${tier.tier}`}>
       <CardHeader className="flex-row items-center justify-between">
-        <CardTitle>{tier.tier}</CardTitle>
+        <CardTitle>{humanizeEnumLabel(tier.tier)}</CardTitle>
         <Badge variant={valid ? "secondary" : "destructive"}>Total: {total}%</Badge>
       </CardHeader>
       <CardContent className="space-y-3">
         {tier.weights.map((w) => (
           <div key={w.role} className="flex items-center justify-between gap-3">
-            <Label className="w-28">{w.role}</Label>
+            <Label className="w-28">{humanizeEnumLabel(w.role)}</Label>
             <Input
               type="number"
               min={0}
@@ -61,7 +62,7 @@ function TierCard({ tier }: { tier: TierWeights }) {
           disabled={setWeights.isPending || !valid}
           data-testid={`save-${tier.tier}`}
         >
-          Save {tier.tier} weights
+          Save {humanizeEnumLabel(tier.tier)} weights
         </Button>
         {!valid && <p className="text-xs text-destructive">Weights must sum to 100%.</p>}
       </CardContent>

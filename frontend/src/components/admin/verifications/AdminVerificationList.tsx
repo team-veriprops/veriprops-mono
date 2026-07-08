@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { Badge } from "@3rdparty/ui/badge";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
+import { VerificationStatusBadge } from "@components/portal/verifications/VerificationStatusBadge";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { humanizeEnumLabel } from "@lib/utils";
 import { Page } from "@/types/models";
 import { ROUTES } from "@/lib/routes";
 import { VerificationStatus, VerificationTier } from "@/types/verification";
@@ -39,14 +41,14 @@ const columns: Column<VerificationSummary & Record<string, unknown>>[] = [
   {
     key: "tier",
     label: "Tier",
-    render: (_v, item) => <span>{item.tier ?? "—"}</span>,
+    render: (_v, item) => <span>{item.tier ? humanizeEnumLabel(item.tier) : "—"}</span>,
   },
   {
     key: "status",
     label: "Status",
     render: (_v, item) => (
       <span className="inline-flex items-center gap-1">
-        <Badge variant="outline">{item.status}</Badge>
+        <VerificationStatusBadge status={item.status} />
         {item.paused && <Badge variant="destructive">Paused</Badge>}
       </span>
     ),

@@ -8,7 +8,7 @@ import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import { Card } from "@3rdparty/ui/card";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
-import { formatMinor } from "@lib/utils";
+import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 import { BankAccount, Payout, PayoutStatus } from "@/types/payout";
 import { Page } from "@/types/models";
 import {
@@ -198,7 +198,7 @@ function PayoutHistory() {
                       <p className="text-xs text-muted-foreground">{p.bankName} · {p.accountNumber}</p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`text-xs font-medium ${STATUS_TONE[p.status]}`}>{p.status}</span>
+                      <span className={`text-xs font-medium ${STATUS_TONE[p.status]}`}>{humanizeEnumLabel(p.status)}</span>
                       {p.status === PayoutStatus.REQUESTED && (
                         <Button variant="ghost" size="sm" onClick={() => cancel.mutate(p.id)}>Cancel</Button>
                       )}

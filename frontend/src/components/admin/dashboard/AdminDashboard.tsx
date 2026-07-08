@@ -11,7 +11,7 @@ import { StatCard } from "@components/ui/StatCard";
 import { VerificationStatusBadge } from "@components/portal/verifications/VerificationStatusBadge";
 import { useAdminDashboardQuery } from "@components/admin/verifications/libs/useAdminVerificationQueries";
 import { ROUTES } from "@lib/routes";
-import { formatMinor } from "@lib/utils";
+import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 import { AdminDashboard as AdminDashboardData, SlaHealth } from "@/types/adminVerification";
 
 /**
@@ -77,7 +77,7 @@ export default function AdminDashboard() {
                           <div className="min-w-0 space-y-1">
                             <p className="truncate font-medium">{v.vid}</p>
                             <p className="text-xs text-muted-foreground">
-                              {v.stateRegion ?? "—"}{v.tier ? ` · ${v.tier}` : ""}
+                              {v.stateRegion ?? "—"}{v.tier ? ` · ${humanizeEnumLabel(v.tier)}` : ""}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">

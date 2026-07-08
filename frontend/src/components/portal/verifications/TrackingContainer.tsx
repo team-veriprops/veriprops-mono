@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
 import { CopyText } from "@components/ui/CopyText";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { ROUTES } from "@lib/routes";
+import { humanizeEnumLabel } from "@lib/utils";
 import { useVerificationTracking } from "@components/portal/libs/useVerificationQueries";
 import { VerificationStatus } from "@/types/verification";
 import { VerificationTracking } from "@/types/tracking";
@@ -105,7 +106,7 @@ export default function TrackingContainer({ verificationId }: { verificationId: 
                   {t.agents.map((a, i) => (
                     <div key={`${a.role}-${i}`} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                       <span className="font-medium">{a.firstName}</span>
-                      <span className="text-muted-foreground">· {a.role}</span>
+                      <span className="text-muted-foreground">· {humanizeEnumLabel(a.role)}</span>
                       {a.verified && <BadgeCheck className="size-4 text-primary" aria-label="Verified" />}
                     </div>
                   ))}
@@ -153,7 +154,7 @@ function Header({ tracking: t }: { tracking: VerificationTracking }) {
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <VerificationStatusBadge status={t.status} label={t.statusLabel} />
-        {t.tier && <span className="text-xs text-muted-foreground">{t.tier} tier</span>}
+        {t.tier && <span className="text-xs text-muted-foreground">{humanizeEnumLabel(t.tier)} tier</span>}
       </div>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <span>Verification ID</span>
