@@ -30,6 +30,7 @@ export default function SubmissionContainer() {
   // call is idempotent on this client key, so a refresh won't create a duplicate.
   const idempotencyKey = useRef<string>("");
   const created = useRef(false);
+  const [draftFailed, setDraftFailed] = useState(false);
 
   const createDraft = useCreateDraftMutation();
   const saveDraft = useSaveDraftMutation();
@@ -37,14 +38,25 @@ export default function SubmissionContainer() {
   const { data: terms } = useVerificationTermsQuery();
 
   // VID/DRAFT created on step-1 load (idempotent on the client key → no dup on refresh).
+  const startDraft = () => {
+    setDraftFailed(false);
+    if (!idempotencyKey.current) {
+      idempotencyKey.current =
+        typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+    }
+    createDraft
+      .mutateAsync(idempotencyKey.current)
+      .then((res) => {
+        if (res.data) setVerificationId(res.data.id);
+        else setDraftFailed(true);
+      })
+      .catch(() => setDraftFailed(true));
+  };
+
   useEffect(() => {
     if (created.current) return;
     created.current = true;
-    idempotencyKey.current =
-      typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-    createDraft.mutateAsync(idempotencyKey.current).then((res) => {
-      if (res.data) setVerificationId(res.data.id);
-    });
+    startDraft();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -71,6 +83,7 @@ export default function SubmissionContainer() {
     }
     // Consent → submit → payment overlay.
     if (!verificationId) return;
+    const detailEntries = Object.entries(state.property.details).filter(([, v]) => v);
     const payload: SubmitVerificationRequest = {
       property: {
         propertyType: state.property.propertyType,
@@ -80,6 +93,7 @@ export default function SubmissionContainer() {
         latitude: state.property.latitude,
         longitude: state.property.longitude,
         placeId: state.property.placeId,
+        details: detailEntries.length ? Object.fromEntries(detailEntries) : undefined,
       },
       tier: state.tier,
       currency: state.currency,
@@ -120,6 +134,19 @@ export default function SubmissionContainer() {
       footer={footer}
       testIdPrefix="verify-new"
     >
+      {draftFailed && (
+        <div
+          className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm"
+          data-testid="verify-new-draft-error"
+        >
+          <span className="text-destructive">
+            We couldn&apos;t start your verification. Please check your connection and retry.
+          </span>
+          <Button size="sm" variant="outline" onClick={startDraft} disabled={createDraft.isPending}>
+            Retry
+          </Button>
+        </div>
+      )}
       {step === 0 && <PropertyStep value={state.property} onChange={updateProperty} />}
       {step === 1 && (
         <TierStep tier={state.tier} currency={state.currency} onChange={update} />

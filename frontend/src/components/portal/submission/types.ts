@@ -11,6 +11,8 @@ export interface SubmissionState {
     latitude?: number;
     longitude?: number;
     placeId?: string;
+    // Conditional facts (PRD §5.1) — Land vs Building specifics the agent verifies on the ground.
+    details: Record<string, string>;
   };
   tier: VerificationTier;
   currency: TransactionCurrency;
@@ -18,7 +20,7 @@ export interface SubmissionState {
 }
 
 export const EMPTY_SUBMISSION: SubmissionState = {
-  property: { propertyType: PropertyKind.LAND, address: "", landmark: "", state: "" },
+  property: { propertyType: PropertyKind.LAND, address: "", landmark: "", state: "", details: {} },
   tier: VerificationTier.STANDARD,
   currency: TransactionCurrency.NGN,
   consentAccepted: false,
