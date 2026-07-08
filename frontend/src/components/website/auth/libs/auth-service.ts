@@ -96,6 +96,17 @@ export class AuthService {
     return this.http.post(`${this.base}/otp/verify`, payload);
   }
 
+  /** Phase-5 phone verification for the logged-in user: sends an OTP to their profile phone.
+   *  Unlike sendOtp, the backend reads the phone from the session, not the request (§5). */
+  sendPhoneOtp(): Promise<SuccessResponse<{ resendIn: number }>> {
+    return this.http.post(`${this.base}/phone/otp/send`, {});
+  }
+
+  /** Verifies the logged-in user's phone and flips phoneVerified so payment can proceed (§5). */
+  verifyPhone(code: string): Promise<SuccessResponse<{ verified: true }>> {
+    return this.http.post(`${this.base}/phone/verify`, { code });
+  }
+
   forgotPassword(payload: ForgotPasswordRequest): Promise<SuccessResponse<null>> {
     return this.http.post(`${this.base}/password/forgot`, payload);
   }

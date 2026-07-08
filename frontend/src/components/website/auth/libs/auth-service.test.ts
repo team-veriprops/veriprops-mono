@@ -45,4 +45,16 @@ describe("AuthService endpoint contracts (S6)", () => {
     new AuthService(http).getPublicConfig();
     expect(http.get).toHaveBeenCalledWith("/config/public");
   });
+
+  it("sendPhoneOtp posts to the authenticated Phase-5 phone-otp endpoint (§5)", () => {
+    const { http } = makeHttp();
+    new AuthService(http).sendPhoneOtp();
+    expect(http.post).toHaveBeenCalledWith("/users/auth/phone/otp/send", {});
+  });
+
+  it("verifyPhone posts the code to the authenticated phone-verify endpoint (§5)", () => {
+    const { http } = makeHttp();
+    new AuthService(http).verifyPhone("654123");
+    expect(http.post).toHaveBeenCalledWith("/users/auth/phone/verify", { code: "654123" });
+  });
 });

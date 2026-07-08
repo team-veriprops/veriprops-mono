@@ -91,6 +91,13 @@ export const useSendOtpMutation = () =>
 export const useVerifyOtpMutation = () =>
   useMutation({ mutationFn: (payload: OtpVerifyRequest) => authService.verifyOtp(payload) });
 
+/** Phase-5 phone verification for the logged-in user (§5) — the phone comes from the session. */
+export const useSendPhoneOtpMutation = () =>
+  useMutation({ mutationFn: () => authService.sendPhoneOtp() });
+
+export const useVerifyPhoneMutation = () =>
+  useMutation({ mutationFn: (code: string) => authService.verifyPhone(code) });
+
 export const useForgotPasswordMutation = () =>
   useMutation({ mutationFn: (payload: ForgotPasswordRequest) => authService.forgotPassword(payload) });
 

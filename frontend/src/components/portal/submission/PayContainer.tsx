@@ -10,11 +10,10 @@ import WizardOverlay from "@components/ui/wizard/WizardOverlay";
 import { ROUTES } from "@lib/routes";
 import { getCurrencySymbol, TransactionCurrency } from "@/types/models";
 import { PaymentMethodKind, PriceRefresh, VerificationStatus } from "@/types/verification";
-import { OtpChannel } from "@components/website/auth/models";
 import {
   useCurrentSession,
-  useSendOtpMutation,
-  useVerifyOtpMutation,
+  useSendPhoneOtpMutation,
+  useVerifyPhoneMutation,
 } from "@components/website/auth/libs/useAuthQueries";
 import {
   useInitiatePaymentMutation,
@@ -32,8 +31,8 @@ export default function PayContainer({ verificationId }: { verificationId: strin
   const router = useRouter();
   const { data: session, refetch: refetchSession } = useCurrentSession();
   const { data: verification, refetch: refetchVerification } = useVerificationQuery(verificationId);
-  const sendOtp = useSendOtpMutation();
-  const verifyOtp = useVerifyOtpMutation();
+  const sendPhoneOtp = useSendPhoneOtpMutation();
+  const verifyPhone = useVerifyPhoneMutation();
   const initiate = useInitiatePaymentMutation();
   const stubConfirm = useStubConfirmMutation();
   const refreshLock = useRefreshLockMutation();
@@ -62,13 +61,14 @@ export default function PayContainer({ verificationId }: { verificationId: strin
   }, [verificationId, refreshLock, refetchVerification]);
 
   const onSendOtp = async () => {
-    await sendOtp.mutateAsync({ channel: OtpChannel.PHONE });
+    await sendPhoneOtp.mutateAsync();
     setOtpSent(true);
     toast({ title: "Code sent", description: "Enter the code sent to your phone." });
   };
 
   const onVerifyOtp = async () => {
-    await verifyOtp.mutateAsync({ channel: OtpChannel.PHONE, code: otp });
+    // Authenticated Phase-5 verification — flips the user's phoneVerified server-side (§5).
+    await verifyPhone.mutateAsync(otp);
     await refetchSession();
     toast({ title: "Phone verified" });
   };
@@ -151,14 +151,14 @@ export default function PayContainer({ verificationId }: { verificationId: strin
           <div className="space-y-3 rounded-lg border border-border p-4" data-testid="verify-pay-phone-gate">
             <p className="text-sm text-foreground">Verify your phone number before paying.</p>
             {!otpSent ? (
-              <Button onClick={onSendOtp} disabled={sendOtp.isPending} data-testid="verify-pay-send-otp">
+              <Button onClick={onSendOtp} disabled={sendPhoneOtp.isPending} data-testid="verify-pay-send-otp">
                 Send code
               </Button>
             ) : (
               <div className="space-y-2">
                 <Label>Enter code</Label>
                 <Input value={otp} onChange={(e) => setOtp(e.target.value)} data-testid="verify-pay-otp" />
-                <Button onClick={onVerifyOtp} disabled={verifyOtp.isPending || !otp} data-testid="verify-pay-verify-otp">
+                <Button onClick={onVerifyOtp} disabled={verifyPhone.isPending || !otp} data-testid="verify-pay-verify-otp">
                   Verify phone
                 </Button>
               </div>
