@@ -4,6 +4,7 @@ import { CheckCircle2, XCircle, Trash2 } from "lucide-react";
 import { Badge } from "@3rdparty/ui/badge";
 import { Action, Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { humanizeEnumLabel } from "@lib/utils";
 import { Page } from "@/types/models";
 import { DataErasureRequest, ErasureRequestStatus } from "@/types/erasure";
 import {
@@ -31,7 +32,7 @@ const columns: Column<DataErasureRequest & Record<string, unknown>>[] = [
   {
     key: "status",
     label: "Status",
-    render: (_v, item) => <Badge variant={STATUS_VARIANT[item.status]}>{item.status}</Badge>,
+    render: (_v, item) => <Badge variant={STATUS_VARIANT[item.status]}>{humanizeEnumLabel(item.status)}</Badge>,
   },
   { key: "reason", label: "Reason", render: (_v, item) => <span>{item.reason ?? "—"}</span> },
   {

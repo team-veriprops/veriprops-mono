@@ -285,6 +285,21 @@ export function capitalizeFirst(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+/**
+ * Humanize a SCREAMING_SNAKE_CASE enum value for display, e.g. "UNDER_REVIEW" → "Under Review".
+ * A presentation-only mapping of a backend enum (not a derived business fact) — safe as a
+ * fallback wherever the backend hasn't supplied a display label (internal admin surfaces).
+ */
+export function humanizeEnumLabel(value: string | null | undefined): string {
+  if (!value) return "";
+  return value
+    .toLowerCase()
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 export function getErrorMessage(error: Error, defaultMessage?: string): string {
   return (
     error?.message || defaultMessage ||

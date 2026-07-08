@@ -1,5 +1,6 @@
 import { Badge } from "@3rdparty/ui/badge";
 import { VerificationStatus } from "@/types/verification";
+import { humanizeEnumLabel } from "@lib/utils";
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
 
@@ -21,16 +22,18 @@ const VARIANT: Record<VerificationStatus, BadgeVariant> = {
 
 interface Props {
   status: VerificationStatus;
-  /** Backend-provided customer label (§9.2). Falls back to the raw status. */
+  /** Backend-provided customer label (§9.2). Falls back to a humanized status enum. */
   label?: string;
   className?: string;
 }
 
-/** Shared verification status chip (§9.1) — used by the tracking header and the list. */
+/** Shared verification status chip (§9.1) — used by the tracking header, the customer list,
+ *  and admin surfaces. Customer views pass the backend statusLabel; admin views omit it and
+ *  get a humanized enum ("Under Review") rather than the raw "UNDER_REVIEW". */
 export function VerificationStatusBadge({ status, label, className }: Props) {
   return (
     <Badge variant={VARIANT[status]} className={className}>
-      {label ?? status}
+      {label ?? humanizeEnumLabel(status)}
     </Badge>
   );
 }

@@ -8,6 +8,7 @@ import { toast } from "@components/3rdparty/ui/use-toast";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import DetailDrawer, { DetailDrawerWidth } from "@components/ui/DetailDrawer";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { humanizeEnumLabel } from "@lib/utils";
 import { AgentApplicationStatus, AgentApplicationSummary } from "@/types/agent";
 import {
   useAgentApplicationQuery,
@@ -32,7 +33,7 @@ const columns: Column<AgentApplicationSummary & Record<string, unknown>>[] = [
   {
     key: "status",
     label: "Status",
-    render: (_v, item) => <Badge variant={STATUS_VARIANT[item.status]}>{item.status}</Badge>,
+    render: (_v, item) => <Badge variant={STATUS_VARIANT[item.status]}>{humanizeEnumLabel(item.status)}</Badge>,
   },
   {
     key: "submittedAt",

@@ -14,6 +14,7 @@ import {
 import { Broadcast, BroadcastStatus } from "@/types/broadcast";
 import { Page } from "@/types/models";
 import { ROUTES } from "@lib/routes";
+import { humanizeEnumLabel } from "@lib/utils";
 
 const STATUS_TONE: Record<BroadcastStatus, string> = {
   [BroadcastStatus.DRAFT]: "bg-muted text-muted-foreground",
@@ -61,7 +62,7 @@ export default function AdminBroadcasts() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_TONE[b.status]}`}>
-                        {b.status}
+                        {humanizeEnumLabel(b.status)}
                       </span>
                       {(b.status === BroadcastStatus.DRAFT || b.status === BroadcastStatus.SCHEDULED) && (
                         <>
