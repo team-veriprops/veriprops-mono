@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LucideIcon } from "lucide-react";
+import { ArrowUpRight, LucideIcon } from "lucide-react";
 import { Card } from "@3rdparty/ui/card";
 import { cn } from "@lib/utils";
 
@@ -40,10 +40,20 @@ export function StatCard({ label, value, icon: Icon, href, hint, tone = "default
     >
       <div className="min-w-0 space-y-1">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className={cn("text-2xl font-bold tabular-nums", TONE[tone])}>{value}</p>
+        <p className={cn("flex items-center gap-2 text-2xl font-bold tabular-nums", TONE[tone])}>
+          {/* When the tile is a link, the metric icon sits inline with the value so the
+              top-right corner is free for the link affordance. */}
+          {Icon && href ? <Icon className="size-5 shrink-0" aria-hidden /> : null}
+          <span className="min-w-0 truncate">{value}</span>
+        </p>
         {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       </div>
-      {Icon ? <Icon className={cn("size-5 shrink-0", TONE[tone])} aria-hidden /> : null}
+      {href ? (
+        // Persistent link affordance — a linked tile must read as clickable, not rely on hover.
+        <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      ) : Icon ? (
+        <Icon className={cn("size-5 shrink-0", TONE[tone])} aria-hidden />
+      ) : null}
     </Card>
   );
 
