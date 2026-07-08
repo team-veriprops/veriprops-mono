@@ -1,7 +1,7 @@
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import Uuid, cast, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.user.agent.profile.models import (
@@ -75,9 +75,11 @@ class AgentProfileRepo(
         base = select(AgentProfile).where(*conditions)
         if query and query.strip():
             # Applicant name/email live on the User; join (application-level, no FK) to search them.
+            # user_id is stored as str(user.id); cast it back to UUID to match the native User.id
+            # PK (a bare `User.id == AgentProfile.user_id` raises uuid = varchar on Postgres).
             from main.app.domain.user.models import User
             like = f"%{query.strip()}%"
-            base = base.join(User, User.id == AgentProfile.user_id).where(
+            base = base.join(User, User.id == cast(AgentProfile.user_id, Uuid)).where(
                 or_(
                     User.first_name.ilike(like),
                     User.last_name.ilike(like),

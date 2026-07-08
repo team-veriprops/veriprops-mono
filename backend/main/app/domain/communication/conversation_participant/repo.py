@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import Uuid, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.communication.conversation.models import Conversation
@@ -79,8 +79,11 @@ class ConversationParticipantRepo(
         c = Conversation
         stmt = (
             select(func.count())
+            # conversation_id is stored as the conversation's .hex (32-char, no hyphens) while
+            # Conversation.id is a native UUID — cast the ref back to UUID to join (a bare
+            # `c.id == p.conversation_id` raises "operator does not exist: uuid = varchar").
             .select_from(p)
-            .join(c, c.id == p.conversation_id)
+            .join(c, c.id == cast(p.conversation_id, Uuid))
             .where(
                 and_(
                     p.deleted.is_(False),
