@@ -8,7 +8,6 @@ vi.mock("@components/portal/libs/useVerificationQueries", () => ({
   useGeoAutocompleteQuery: () => ({ data: [] }),
 }));
 
-// eslint-disable-next-line import/first
 import PropertyStep from "./PropertyStep";
 
 function render(kind: PropertyKind): string {
