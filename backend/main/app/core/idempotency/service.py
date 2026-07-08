@@ -29,6 +29,7 @@ from main.app.core.idempotency.models import (
 )
 from main.app.core.idempotency.repo import IdempotencyKeyRepo
 from main.appodus_utils import Utils
+from main.appodus_utils.db.session import get_db_session_from_context
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -95,6 +96,10 @@ class IdempotencyService:
                 expires_at=Utils.datetime_now() + timedelta(hours=ttl_hours),
             )
         )
+        # The session runs with autoflush=False, so flush the reservation now — otherwise the
+        # matching `complete(key, ...)` later in the same transaction can't see this row via
+        # get_by_key and raises "unknown idempotency key" (breaks every idempotent create).
+        await get_db_session_from_context().flush()
         return IdempotencyOutcome(is_replay=False)
 
     async def complete(

@@ -82,14 +82,20 @@ def main() -> int:
     check("signup created the account + session (Phase 2)", r.status_code in (200, 201), f"http {r.status_code}: {r.text[:200]}")
     _pin_session_cookies(client)
 
-    # 3. Create a fresh verification draft → DRAFT with a VID (§5.1).
-    r = client.post("/verifications/draft")
-    check("verification draft created (§5.1)", r.status_code == 200, f"http {r.status_code}: {r.text[:200]}")
+    # 3. Create a fresh verification draft → DRAFT with a VID (§5.1). The wizard always sends
+    # an Idempotency-Key (§4.6), so drive it here — a regression that broke the key path once
+    # made this endpoint 404 and silently disabled the whole wizard.
+    idem_key = uuid.uuid4().hex
+    r = client.post("/verifications/draft", headers={"Idempotency-Key": idem_key})
+    check("verification draft created with Idempotency-Key (§5.1/§4.6)", r.status_code == 200, f"http {r.status_code}: {r.text[:200]}")
     draft = r.json()["data"]
     vid_id = draft["id"]
     check("draft starts in DRAFT with a VID (§2.1/§4.10)",
           draft.get("status") == "DRAFT" and str(draft.get("vid", "")).startswith("VP-"),
           f"status={draft.get('status')} vid={draft.get('vid')}")
+    r = client.post("/verifications/draft", headers={"Idempotency-Key": idem_key})
+    check("replaying the Idempotency-Key returns the same draft, not a duplicate (§4.6)",
+          r.status_code == 200 and r.json()["data"]["id"] == vid_id, f"http {r.status_code}")
 
     # 4. Quote the STANDARD tier (§5.2).
     r = client.get("/verifications/quote", params={"tier": "STANDARD", "currency": "NGN"})
