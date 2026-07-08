@@ -46,9 +46,9 @@ describe("PropertyStep", () => {
     expect(html).not.toContain("verify-new-land-use");
   });
 
-  it("marks the active type card via aria-pressed", () => {
+  it("marks the active type card as checked", () => {
     const land = render(PropertyKind.LAND);
-    // The land card is pressed when LAND is selected.
-    expect(land).toMatch(/verify-new-type-land[\s\S]*?aria-pressed="true"|aria-pressed="true"[\s\S]*?verify-new-type-land/);
+    // The land card exposes aria-checked when LAND is selected (radio semantics).
+    expect(land).toMatch(/verify-new-type-land[\s\S]*?aria-checked="true"|aria-checked="true"[\s\S]*?verify-new-type-land/);
   });
 });

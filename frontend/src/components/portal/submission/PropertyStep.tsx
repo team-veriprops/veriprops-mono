@@ -6,8 +6,8 @@ import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import { PropertyKind } from "@/types/verification";
 import { useGeoAutocompleteQuery } from "@components/portal/libs/useVerificationQueries";
+import { SelectableCard } from "@components/ui/SelectableCard";
 import { useDebounce } from "@hooks/useDebounce";
-import { cn } from "@lib/utils";
 import { SubmissionState } from "./types";
 
 interface Props {
@@ -42,37 +42,18 @@ export default function PropertyStep({ value, onChange }: Props) {
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium text-foreground">What are you verifying?</legend>
         <div className="grid gap-3 sm:grid-cols-2">
-          {PROPERTY_TYPES.map(({ kind, title, blurb, icon: Icon }) => {
-            const selected = value.propertyType === kind;
-            return (
-              <button
-                key={kind}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => onChange({ propertyType: kind })}
-                className={cn(
-                  "flex items-start gap-3 rounded-xl border p-4 text-left transition-all",
-                  selected
-                    ? "border-primary bg-primary/5 ring-1 ring-primary"
-                    : "border-border hover:border-primary/40 hover:bg-accent",
-                )}
-                data-testid={`verify-new-type-${kind.toLowerCase()}`}
-              >
-                <span
-                  className={cn(
-                    "flex size-10 shrink-0 items-center justify-center rounded-lg",
-                    selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  <Icon className="size-5" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block font-semibold text-foreground">{title}</span>
-                  <span className="block text-sm text-muted-foreground">{blurb}</span>
-                </span>
-              </button>
-            );
-          })}
+          {PROPERTY_TYPES.map(({ kind, title, blurb, icon }) => (
+            <SelectableCard
+              key={kind}
+              selectionMode="radio"
+              selected={value.propertyType === kind}
+              onSelect={() => onChange({ propertyType: kind })}
+              icon={icon}
+              title={title}
+              description={blurb}
+              testId={`verify-new-type-${kind.toLowerCase()}`}
+            />
+          ))}
         </div>
       </fieldset>
 

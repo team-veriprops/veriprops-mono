@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@3rdparty/ui/select";
-import { cn } from "@lib/utils";
+import { SelectableCard } from "@components/ui/SelectableCard";
 import { AgentWizardState } from "./types";
 
 interface Props {
@@ -55,45 +55,25 @@ export default function KycStep({ value, onChange }: Props) {
 
       {/* Method choice — selectable cards (single-select, radio semantics). */}
       <div className="grid gap-3 sm:grid-cols-2">
-        {METHODS.map(({ method, title, blurb, icon: Icon, testId, badge }) => {
-          const selected = value.method === method;
-          return (
-            <button
-              key={method}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => set({ method })}
-              className={cn(
-                "flex items-start gap-3 rounded-xl border p-4 text-left transition-all",
-                selected
-                  ? "border-primary bg-primary/5 ring-1 ring-primary"
-                  : "border-border hover:border-primary/40 hover:bg-accent",
-              )}
-              data-testid={testId}
-            >
-              <span
-                className={cn(
-                  "flex size-10 shrink-0 items-center justify-center rounded-lg",
-                  selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-                )}
-              >
-                <Icon className="size-5" />
-              </span>
-              <span className="min-w-0">
-                <span className="flex items-center gap-2 font-semibold text-foreground">
-                  {title}
-                  {badge && (
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                      {badge}
-                    </span>
-                  )}
+        {METHODS.map(({ method, title, blurb, icon, testId, badge }) => (
+          <SelectableCard
+            key={method}
+            selectionMode="radio"
+            selected={value.method === method}
+            onSelect={() => set({ method })}
+            icon={icon}
+            title={title}
+            description={blurb}
+            testId={testId}
+            badge={
+              badge && (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  {badge}
                 </span>
-                <span className="block text-sm text-muted-foreground">{blurb}</span>
-              </span>
-            </button>
-          );
-        })}
+              )
+            }
+          />
+        ))}
       </div>
 
       {value.method === KycMethod.BVN ? (
