@@ -11,7 +11,7 @@ from typing import Optional
 
 from sqlalchemy import Boolean, Column, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
 # ─── ORM ──────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ class QueryBankAccountDto(BaseQueryDto):
     agent_id: Optional[str] = None
 
 
-class SearchBankAccountDto(PageRequest, BaseQueryDto):
+class SearchBankAccountDto(InternalPageRequest, BaseQueryDto):
     agent_id: Optional[str] = None
 
 

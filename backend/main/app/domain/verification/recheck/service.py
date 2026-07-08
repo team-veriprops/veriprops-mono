@@ -67,7 +67,7 @@ class RecheckService:
         pricing_config_service: PricingConfigService,
         audit_service: AuditLogService,
     ):
-        self._repo = recheck_repo
+        self._recheck_repo = recheck_repo
         self._verifications = verification_service
         self._verification_repo = verification_repo
         self._reviews = review_service
@@ -92,7 +92,7 @@ class RecheckService:
         pct = await self._config.get_int(ConfigKey.RECHECK_PRICE_PCT)
         base = await self._pricing.tier_price_kobo(VerificationTier(v.tier))
         price = recheck_price_kobo(base, pct)
-        recheck = await self._repo.create_return_model(CreateRecheckDto(
+        recheck = await self._recheck_repo.create_return_model(CreateRecheckDto(
             verification_id=Utils.uuid_to_hex(v.id),
             customer_id=customer_id,
             reason=dto.reason.strip(),
@@ -118,7 +118,7 @@ class RecheckService:
             )
 
         if not dto.approve:
-            await self._repo.update(recheck.id, UpdateRecheckDto(
+            await self._recheck_repo.update(recheck.id, UpdateRecheckDto(
                 status=RecheckStatus.REJECTED.value, decision_note=dto.note,
             ))
             await self._notify_decision(recheck, approved=False)
@@ -127,7 +127,7 @@ class RecheckService:
                 resource_type="recheck", resource_id=recheck.id, actor_id=admin_id,
                 details={"verification_id": recheck.verification_id, "note": dto.note},
             )
-            return await self._repo.get_model(recheck.id)
+            return await self._recheck_repo.get_model(recheck.id)
 
         roles = [r.value for r in (dto.scope_roles or [])]
         if not roles:
@@ -138,7 +138,7 @@ class RecheckService:
             amount_minor=recheck.price_minor, purpose=PaymentPurpose.RECHECK,
         )
         payment_ref = Utils.uuid_to_hex(payment.id)  # entity ref → .hex (32-char)
-        await self._repo.update(recheck.id, UpdateRecheckDto(
+        await self._recheck_repo.update(recheck.id, UpdateRecheckDto(
             status=RecheckStatus.APPROVED.value, scope_roles=roles,
             payment_id=payment_ref, decision_note=dto.note,
         ))
@@ -149,12 +149,12 @@ class RecheckService:
             details={"verification_id": recheck.verification_id, "roles": roles,
                      "payment_id": payment_ref},
         )
-        return await self._repo.get_model(recheck.id)
+        return await self._recheck_repo.get_model(recheck.id)
 
     async def on_payment_confirmed(self, payment_id: str) -> None:
         """The scoped tasks reopen once the re-check fee is paid (webhook, §14.1). Idempotent:
         a replayed confirmation for an already-started re-check is a no-op."""
-        recheck = await self._repo.get_by_payment(Utils.uuid_to_hex(payment_id))
+        recheck = await self._recheck_repo.get_by_payment(Utils.uuid_to_hex(payment_id))
         if recheck is None or recheck.status != RecheckStatus.APPROVED.value:
             return
         # Record the version-bump reason so the next release becomes v2.0.
@@ -166,7 +166,7 @@ class RecheckService:
             await self._reviews.reopen_task(
                 recheck.verification_id, AgentRole(role_value), recheck.customer_id
             )
-        await self._repo.update(recheck.id, UpdateRecheckDto(status=RecheckStatus.STARTED.value))
+        await self._recheck_repo.update(recheck.id, UpdateRecheckDto(status=RecheckStatus.STARTED.value))
         self._audit.schedule(
             action=AuditActionType.RECHECK_STARTED,
             resource_type="recheck", resource_id=recheck.id, actor_id=recheck.customer_id,
@@ -175,12 +175,12 @@ class RecheckService:
 
     async def list_for_verification(self, verification_id: str, customer_id: str) -> List[RecheckRequest]:
         v = await self._verifications.get_owned(verification_id, customer_id)
-        return await self._repo.list_for_verification(Utils.uuid_to_hex(v.id))
+        return await self._recheck_repo.list_for_verification(Utils.uuid_to_hex(v.id))
 
     async def page_pending(self, page: int, page_size: int):
         """Admin queue of pending re-check requests (paged). Checkout URL is omitted — the
         admin decides, the customer pays."""
-        rows, total = await self._repo.page_pending(offset=page * page_size, limit=page_size)
+        rows, total = await self._recheck_repo.page_pending(offset=page * page_size, limit=page_size)
         dtos = [
             RecheckDto(
                 id=r.id, verification_id=r.verification_id, reason=r.reason, documents=r.documents,
@@ -189,12 +189,12 @@ class RecheckService:
             )
             for r in rows
         ]
-        return self._repo._db_utils.build_page(dtos, total, page, page_size)
+        return self._recheck_repo._db_utils.build_page(dtos, total, page, page_size)
 
     # ── helpers ───────────────────────────────────────────────────
 
     async def _get(self, recheck_id: str) -> RecheckRequest:
-        recheck = await self._repo.get_model(recheck_id)
+        recheck = await self._recheck_repo.get_model(recheck_id)
         if recheck is None:
             raise ResourceNotFoundException(resource="recheck")
         return recheck

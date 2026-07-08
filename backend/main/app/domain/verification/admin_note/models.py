@@ -13,7 +13,7 @@ from typing import Optional
 
 from sqlalchemy import Boolean, Column, Index, String, Text
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
 class AdminNoteCategory(str, enum.Enum):
@@ -57,7 +57,7 @@ class UpdateAdminNoteDto(Object):
     pinned: Optional[bool] = None
 
 
-class SearchAdminNoteDto(PageRequest, BaseQueryDto):
+class SearchAdminNoteDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
     category: Optional[str] = None
 

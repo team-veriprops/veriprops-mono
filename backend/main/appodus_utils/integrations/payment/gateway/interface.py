@@ -6,25 +6,6 @@ from main.appodus_utils.integrations.payment.gateway.models import (PaymentInitR
                                                           CountryBanksResponse, RefundRequest, TransferFeeRequest)
 
 
-# class IEscrowGateway(ABC):
-#     @abstractmethod
-#     def create_escrow(self, escrow: QueryEscrowDto) -> QueryEscrowDto:
-#         pass
-#
-#     @abstractmethod
-#     def release_escrow(self, escrow_id: str) -> QueryEscrowDto:
-#         pass
-#
-#     @abstractmethod
-#     def cancel_escrow(self, escrow_id: str, reason: str) -> QueryEscrowDto:
-#         pass
-#
-#     @property
-#     @abstractmethod
-#     async def platform(self) -> EscrowMethod:
-#         pass
-
-
 class IPaymentGateway(ABC):
     @property
     @abstractmethod

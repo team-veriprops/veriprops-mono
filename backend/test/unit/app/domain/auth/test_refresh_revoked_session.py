@@ -6,12 +6,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from main.app.config.settings import settings
 from main.app.domain.user.auth.session import controller as session_controller
 from main.appodus_utils.exception.exceptions import UnauthorizedException
 
 
 def _request_with_refresh(token: str | None):
-    return SimpleNamespace(cookies={"refresh_token": token} if token else {})
+    # The refresh cookie is issued under the configured key (__Host-refresh_token),
+    # not the bare "refresh_token" — the controller must read the configured name.
+    cookie_key = settings.AUTHJWT_REFRESH_COOKIE_KEY
+    return SimpleNamespace(cookies={cookie_key: token} if token else {})
 
 
 class TestRefreshRevokedSession:

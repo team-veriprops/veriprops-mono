@@ -9,10 +9,10 @@ from __future__ import annotations
 import enum
 from typing import List, Optional
 
-from sqlalchemy import Column, Float, Index, String, Text
+from sqlalchemy import Column, Float, String, Text
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import jsonb_variant
 
 
@@ -40,10 +40,8 @@ class Property(BaseEntity):
     details = Column(MutableDict.as_mutable(jsonb_variant()), nullable=True)
     seller = Column(MutableDict.as_mutable(jsonb_variant()), nullable=True)
     documents = Column(MutableList.as_mutable(jsonb_variant()), nullable=True)
-
-    __table_args__ = (
-        Index("ix_properties_customer_id", "customer_id"),
-    )
+    # customer_id's index is declared inline (index=True) — it auto-names to
+    # ix_properties_customer_id, matching the migration. Don't re-declare it here.
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -99,7 +97,7 @@ class UpdatePropertyDto(Object):
     documents: Optional[List[dict]] = None
 
 
-class SearchPropertyDto(PageRequest, BaseQueryDto):
+class SearchPropertyDto(InternalPageRequest, BaseQueryDto):
     customer_id: Optional[str] = None
 
 

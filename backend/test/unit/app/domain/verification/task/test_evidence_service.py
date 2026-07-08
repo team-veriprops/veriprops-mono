@@ -29,7 +29,7 @@ def mock_db_session():
 
 def _make_service():
     svc = object.__new__(EvidenceService)
-    svc._repo = MagicMock()
+    svc._evidence_repo = MagicMock()
     svc._storage_factory = MagicMock()
 
     created = {}
@@ -38,7 +38,7 @@ def _make_service():
         created["dto"] = dto
         return MagicMock(id="ev-1", content_sha256=dto.content_sha256, kind=dto.kind.value)
 
-    svc._repo.create_return_model = AsyncMock(side_effect=_create)
+    svc._evidence_repo.create_return_model = AsyncMock(side_effect=_create)
 
     provider = MagicMock()
     provider.upload = AsyncMock(return_value="stub-storage://bucket/key")

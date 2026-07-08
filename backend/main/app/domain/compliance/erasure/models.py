@@ -14,7 +14,7 @@ from typing import Optional
 from sqlalchemy import Column, Index, String, Text
 
 from main.app.core.state.status import ErasureRequestState
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -65,7 +65,7 @@ class QueryDataErasureRequestDto(BaseQueryDto):
     status: Optional[str] = None
 
 
-class SearchDataErasureRequestDto(PageRequest, BaseQueryDto):
+class SearchDataErasureRequestDto(InternalPageRequest, BaseQueryDto):
     status: Optional[str] = None
 
 

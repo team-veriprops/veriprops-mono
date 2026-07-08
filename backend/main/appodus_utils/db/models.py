@@ -355,8 +355,26 @@ class Page(Object, Generic[T]):
 
 # @dataclass  # use instead of Object for pydantic data validation
 class PageRequest(Object):
+    """Client-safe pagination request.
+
+    Only ``page``/``page_size`` are safe to bind from the wire. The flexible query
+    controls (``where``/``order_by``/``query_fields``) live on `InternalPageRequest`
+    and must be set server-side only — they can filter/sort on any model column, which
+    is an authorization/oracle surface if a client could set them. Any request DTO that
+    is bound from the wire (FastAPI ``Depends()``/body) must inherit ``PageRequest``,
+    never ``InternalPageRequest``.
+    """
     page: int = 0
     page_size: int = 10
+
+
+class InternalPageRequest(PageRequest):
+    """Server-only pagination request carrying the flexible query controls.
+
+    Search DTOs constructed inside services/repos inherit this. Never bind an
+    ``InternalPageRequest`` (or a Search DTO derived from it) directly from a request —
+    that would let a client supply ``where``/``order_by``/``query_fields``.
+    """
     query_fields: Optional[str] = Field(None, description='Comma separated list of return fields')
     exact_string_values: Optional[bool] = True
     order_by: Optional[str] = Field('date_created desc', description='e.g: username asc, firstname desc')

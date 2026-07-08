@@ -58,7 +58,7 @@ class PaymentService:
         idempotency_service: IdempotencyService,
         audit_service: AuditLogService,
     ):
-        self._repo = payment_repo
+        self._payment_repo = payment_repo
         self._verification_service = verification_service
         self._task_service = task_service
         self._user_service = user_service
@@ -87,12 +87,12 @@ class PaymentService:
         if idempotency_key:
             outcome = await self._idempotency.begin_or_replay(idempotency_key, _INITIATE_SCOPE)
             if outcome.is_replay and outcome.resource_id:
-                existing = await self._repo.get_model(outcome.resource_id)
+                existing = await self._payment_repo.get_model(outcome.resource_id)
                 if existing:
                     return existing
 
         tx_ref = f"{verification.vid}-{Utils.random_str(8)}"
-        payment = await self._repo.create_return_model(CreatePaymentDto(
+        payment = await self._payment_repo.create_return_model(CreatePaymentDto(
             verification_id=verification_id,
             customer_id=customer_id,
             tx_ref=tx_ref,
@@ -138,7 +138,7 @@ class PaymentService:
             raise ValidationException(message="A positive charge amount is required.")
 
         tx_ref = f"{verification.vid}-{purpose.value[:3]}-{Utils.random_str(8)}"
-        payment = await self._repo.create_return_model(CreatePaymentDto(
+        payment = await self._payment_repo.create_return_model(CreatePaymentDto(
             verification_id=verification_id,
             customer_id=customer_id,
             tx_ref=tx_ref,
@@ -162,14 +162,14 @@ class PaymentService:
         if not await self._idempotency.claim(dto.event_id, _WEBHOOK_SCOPE):
             return False
 
-        payment = await self._repo.get_by_tx_ref(dto.tx_ref)
+        payment = await self._payment_repo.get_by_tx_ref(dto.tx_ref)
         if not payment:
             raise ResourceNotFoundException(resource="payment")
 
-        await self._repo.update(payment.id, UpdatePaymentDto(gateway_event_id=dto.event_id))
+        await self._payment_repo.update(payment.id, UpdatePaymentDto(gateway_event_id=dto.event_id))
 
         if dto.succeeded:
-            await self._repo.update(payment.id, UpdatePaymentDto(status=PaymentStatus.SUCCEEDED.value))
+            await self._payment_repo.update(payment.id, UpdatePaymentDto(status=PaymentStatus.SUCCEEDED.value))
             self._audit.schedule(
                 action=AuditActionType.PAYMENT_SUCCEEDED,
                 resource_type="payment",
@@ -201,7 +201,7 @@ class PaymentService:
                     to_state=VerificationStatus.PAID.value,
                 )
         else:
-            await self._repo.update(payment.id, UpdatePaymentDto(
+            await self._payment_repo.update(payment.id, UpdatePaymentDto(
                 status=PaymentStatus.FAILED.value,
                 failure_count=(payment.failure_count or 0) + 1,
             ))
@@ -214,7 +214,7 @@ class PaymentService:
         return True
 
     async def get_payment(self, payment_id: str) -> Optional[Payment]:
-        return await self._repo.get_model(payment_id)
+        return await self._payment_repo.get_model(payment_id)
 
     async def refund(self, verification_id: str, actor_id: str, reason: Optional[str] = None) -> int:
         """Refund the successful payment(s) on a verification (§8.5). Deterministic under
@@ -222,11 +222,11 @@ class PaymentService:
         payment facade otherwise. Idempotent: an already-REFUNDED payment is skipped.
         Returns the total refunded amount (minor units)."""
         refunded_total = 0
-        for payment in await self._repo.list_for_verification(verification_id):
+        for payment in await self._payment_repo.list_for_verification(verification_id):
             if payment.status != PaymentStatus.SUCCEEDED.value:
                 continue
             # Live path issues the gateway refund here (facade); stub mode is a no-op call.
-            await self._repo.update(payment.id, UpdatePaymentDto(
+            await self._payment_repo.update(payment.id, UpdatePaymentDto(
                 status=PaymentStatus.REFUNDED.value,
                 refunded_amount_minor=payment.amount_minor,
             ))

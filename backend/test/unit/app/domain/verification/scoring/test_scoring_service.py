@@ -33,7 +33,7 @@ def _weight(tier, role, pct):
 
 def _make_service(existing=None):
     svc = object.__new__(TrustScoreWeightService)
-    svc._repo = MagicMock()
+    svc._weight_repo = MagicMock()
     svc._audit = MagicMock()
     state = {"rows": list(existing or [])}
 
@@ -54,10 +54,10 @@ def _make_service(existing=None):
         state["rows"].append(w)
         return w
 
-    svc._repo.get_for_tier_role = AsyncMock(side_effect=_get)
-    svc._repo.list_for_tier = AsyncMock(side_effect=_list_for_tier)
-    svc._repo.update = AsyncMock(side_effect=_update)
-    svc._repo.create_return_model = AsyncMock(side_effect=_create)
+    svc._weight_repo.get_for_tier_role = AsyncMock(side_effect=_get)
+    svc._weight_repo.list_for_tier = AsyncMock(side_effect=_list_for_tier)
+    svc._weight_repo.update = AsyncMock(side_effect=_update)
+    svc._weight_repo.create_return_model = AsyncMock(side_effect=_create)
     svc._state = state
     return svc
 

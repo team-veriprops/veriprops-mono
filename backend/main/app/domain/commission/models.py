@@ -16,7 +16,7 @@ from typing import Optional
 from sqlalchemy import BigInteger, Column, Index, String
 
 from main.app.core.state.status import AgentRole, VerificationTier
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 from main.appodus_utils.db.types.money import TransactionCurrency
 
@@ -58,7 +58,7 @@ class Commission(BaseEntity):
     __table_args__ = (
         Index("ix_commissions_verification", "verification_id"),
         Index("ix_commissions_agent", "agent_id"),
-        Index("ix_commissions_status", "status"),
+        # status index is declared inline (index=True) → ix_commissions_status.
     )
 
 
@@ -83,7 +83,7 @@ class UpdateCommissionDto(Object):
     frozen_from_status: Optional[str] = None
 
 
-class SearchCommissionDto(PageRequest, BaseQueryDto):
+class SearchCommissionDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
     agent_id: Optional[str] = None
     status: Optional[str] = None

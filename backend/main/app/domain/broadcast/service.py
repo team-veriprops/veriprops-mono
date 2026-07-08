@@ -41,13 +41,13 @@ from main.appodus_utils.exception.exceptions import (
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class BroadcastService:
     def __init__(self, broadcast_repo: BroadcastRepo, user_repo: UserRepo, audit_service: AuditLogService):
-        self._repo = broadcast_repo
+        self._broadcast_repo = broadcast_repo
         self._users = user_repo
         self._audit = audit_service
 
     async def compose(self, dto: ComposeBroadcastDto, admin_id: str) -> Broadcast:
         status = BroadcastStatus.SCHEDULED if dto.scheduled_at is not None else BroadcastStatus.DRAFT
-        broadcast = await self._repo.create_return_model(CreateBroadcastDto(
+        broadcast = await self._broadcast_repo.create_return_model(CreateBroadcastDto(
             audience=dto.audience.value, subject=dto.subject, body=dto.body,
             status=status, scheduled_at=dto.scheduled_at, created_by=admin_id,
         ))
@@ -62,7 +62,7 @@ class BroadcastService:
         return BroadcastPreviewDto(audience=audience, recipient_count=len(await self._resolve_recipients(audience)))
 
     async def send_now(self, broadcast_id: str, admin_id: str) -> Broadcast:
-        broadcast = await self._repo.get_model(broadcast_id)
+        broadcast = await self._broadcast_repo.get_model(broadcast_id)
         if broadcast is None:
             raise ResourceNotFoundException(resource="broadcast")
         if broadcast.status == BroadcastStatus.SENT.value:
@@ -75,22 +75,22 @@ class BroadcastService:
             resource_type="broadcast", resource_id=broadcast.id, actor_id=admin_id,
             details={"action": "send_now"},
         )
-        return await self._repo.get_model(broadcast_id)
+        return await self._broadcast_repo.get_model(broadcast_id)
 
     async def cancel(self, broadcast_id: str, admin_id: str) -> Broadcast:
-        broadcast = await self._repo.get_model(broadcast_id)
+        broadcast = await self._broadcast_repo.get_model(broadcast_id)
         if broadcast is None:
             raise ResourceNotFoundException(resource="broadcast")
         if broadcast.status == BroadcastStatus.SENT.value:
             raise InvalidResourceStateException(resource="broadcast", message="A sent broadcast cannot be cancelled.")
-        await self._repo.update(broadcast_id, UpdateBroadcastDto(status=BroadcastStatus.CANCELLED.value))
-        return await self._repo.get_model(broadcast_id)
+        await self._broadcast_repo.update(broadcast_id, UpdateBroadcastDto(status=BroadcastStatus.CANCELLED.value))
+        return await self._broadcast_repo.get_model(broadcast_id)
 
     async def list_page(self, page: int, page_size: int, status: str | None = None) -> Tuple[List[Broadcast], int]:
-        return await self._repo.page_all(page, page_size, status)
+        return await self._broadcast_repo.page_all(page, page_size, status)
 
     async def get(self, broadcast_id: str) -> Broadcast:
-        broadcast = await self._repo.get_model(broadcast_id)
+        broadcast = await self._broadcast_repo.get_model(broadcast_id)
         if broadcast is None:
             raise ResourceNotFoundException(resource="broadcast")
         return broadcast
@@ -100,8 +100,8 @@ class BroadcastService:
         broadcast is never revisited. Returns the number dispatched."""
         now = Utils.datetime_now()
         sent = 0
-        for broadcast in await self._repo.list_due_scheduled(now):
-            row = await self._repo.get_model(broadcast.id)
+        for broadcast in await self._broadcast_repo.list_due_scheduled(now):
+            row = await self._broadcast_repo.get_model(broadcast.id)
             if row is None or row.status != BroadcastStatus.SCHEDULED.value:
                 continue
             await self._dispatch(row)
@@ -119,7 +119,7 @@ class BroadcastService:
             recipient_user_ids=tuple(recipients),
             data={"subject": broadcast.subject, "body": broadcast.body},
         ))
-        row = await self._repo.get_model(broadcast.id)
+        row = await self._broadcast_repo.get_model(broadcast.id)
         row.status = BroadcastStatus.SENT.value
         row.sent_at = Utils.datetime_now()
         row.recipient_count = len(recipients)

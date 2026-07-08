@@ -32,14 +32,14 @@ from main.appodus_utils.exception.exceptions import ValidationException
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class ConfigService:
     def __init__(self, config_repo: SystemConfigRepo, audit_service: AuditLogService):
-        self._repo = config_repo
+        self._config_repo = config_repo
         self._audit = audit_service
 
     async def seed_defaults(self) -> None:
         """Idempotently create a row for every known config key at its default value."""
         for key, default in CONFIG_DEFAULTS.items():
-            if await self._repo.get_by_key(key.value) is None:
-                await self._repo.create(CreateSystemConfigDto(
+            if await self._config_repo.get_by_key(key.value) is None:
+                await self._config_repo.create(CreateSystemConfigDto(
                     key=key.value, value_json=default, description=CONFIG_DESCRIPTIONS.get(key),
                 ))
 
@@ -57,14 +57,14 @@ class ConfigService:
     async def set(self, key: ConfigKey, value: Any, admin_id: str) -> SystemConfig:
         """Update (or create) a config value, coercing to the default's type."""
         coerced = self._coerce(key, value)
-        existing = await self._repo.get_by_key(key.value)
+        existing = await self._config_repo.get_by_key(key.value)
         if existing is None:
-            row = await self._repo.create_return_model(CreateSystemConfigDto(
+            row = await self._config_repo.create_return_model(CreateSystemConfigDto(
                 key=key.value, value_json=coerced, description=CONFIG_DESCRIPTIONS.get(key),
             ))
         else:
-            await self._repo.update(existing.id, UpdateSystemConfigDto(value_json=coerced))
-            row = await self._repo.get_model(existing.id)
+            await self._config_repo.update(existing.id, UpdateSystemConfigDto(value_json=coerced))
+            row = await self._config_repo.get_model(existing.id)
         self._audit.schedule(
             action=AuditActionType.ADMIN_CONFIG_CHANGED,
             resource_type="system_config", resource_id=row.id, actor_id=admin_id,
@@ -74,7 +74,7 @@ class ConfigService:
 
     async def list_all(self) -> List[SystemConfigDto]:
         """Every known key at its effective value (stored row, else default)."""
-        stored = {c.key: c for c in await self._repo.list_all()}
+        stored = {c.key: c for c in await self._config_repo.list_all()}
         out: List[SystemConfigDto] = []
         for key in ConfigKey:
             row = stored.get(key.value)
@@ -89,7 +89,7 @@ class ConfigService:
     # ── helpers ───────────────────────────────────────────────────
 
     async def _raw(self, key: ConfigKey) -> Any:
-        row = await self._repo.get_by_key(key.value)
+        row = await self._config_repo.get_by_key(key.value)
         if row is not None and row.value_json is not None:
             return row.value_json
         return CONFIG_DEFAULTS[key]

@@ -9,10 +9,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import BigInteger, Column, Index, String
+from sqlalchemy import BigInteger, Column, String
 
 from main.app.core.state.status import VerificationTier
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 from main.app.domain.verification.pricing_config.line_item.models import PricingLineItemDto
 
@@ -22,10 +22,7 @@ class PricingTierConfig(BaseEntity):
 
     tier = Column(String(16), nullable=False, unique=True, index=True)
     price_ngn_kobo = Column(BigInteger, nullable=False)
-
-    __table_args__ = (
-        Index("ix_pricing_tier_config_tier", "tier"),
-    )
+    # tier index is declared inline (unique=True, index=True) → ix_pricing_tier_config_tier, matching the migration.
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -43,7 +40,7 @@ class QueryPricingTierConfigDto(BaseQueryDto):
     tier: Optional[str] = None
 
 
-class SearchPricingTierConfigDto(PageRequest, BaseQueryDto):
+class SearchPricingTierConfigDto(InternalPageRequest, BaseQueryDto):
     tier: Optional[str] = None
 
 

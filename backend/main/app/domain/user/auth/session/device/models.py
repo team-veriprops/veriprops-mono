@@ -3,7 +3,7 @@ from typing import Optional
 
 from sqlalchemy import Column, String
 
-from main.appodus_utils import BaseEntity, PageRequest, BaseQueryDto, Utils
+from main.appodus_utils import BaseEntity, InternalPageRequest, BaseQueryDto, Utils
 from main.appodus_utils import Object
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 from main.appodus_utils.integrations.messaging.models import PushToken, PushProviderType
@@ -42,7 +42,7 @@ class _UpdateDeviceDto(DeviceBaseDto):
     last_active: datetime = Utils.datetime_now()
 
 
-class SearchDeviceDto(PageRequest, BaseQueryDto):
+class SearchDeviceDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
     push_provider_type: Optional[PushProviderType] = None
 

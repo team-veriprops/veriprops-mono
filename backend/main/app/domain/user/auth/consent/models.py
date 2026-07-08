@@ -7,7 +7,7 @@ from typing import Optional, List
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
 class ConsentDocumentType(str, enum.Enum):
@@ -87,7 +87,7 @@ class UpdateConsentDocumentDto(Object):
     signoff_status: Optional[ConsentSignoffStatus] = None
 
 
-class SearchConsentDocumentDto(PageRequest, BaseQueryDto):
+class SearchConsentDocumentDto(InternalPageRequest, BaseQueryDto):
     type: Optional[str] = None
     consent_version: Optional[str] = None
 
@@ -113,7 +113,7 @@ class UpdateUserConsentDto(Object):
     pass
 
 
-class SearchUserConsentDto(PageRequest, BaseQueryDto):
+class SearchUserConsentDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
     document_type: Optional[str] = None
     consent_version: Optional[str] = None

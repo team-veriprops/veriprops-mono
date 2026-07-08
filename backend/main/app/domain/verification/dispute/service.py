@@ -78,10 +78,10 @@ class DisputeService:
         task_repo: VerificationTaskRepo,
         audit_service: AuditLogService,
     ):
-        self._repo = dispute_repo
+        self._dispute_repo = dispute_repo
         self._verifications = verification_service
         self._verification_repo = verification_repo
-        self._reports = report_service
+        self._dispute_reports = report_service
         self._reviews = review_service
         self._commissions = commission_service
         self._payments = payment_service
@@ -116,7 +116,7 @@ class DisputeService:
             task = await self._tasks.get_by_role(verification_id, dto.target_role.value)
             agent_id = task.assigned_agent_id if task else None
 
-        dispute = await self._repo.create_return_model(CreateDisputeDto(
+        dispute = await self._dispute_repo.create_return_model(CreateDisputeDto(
             verification_id=Utils.uuid_to_hex(v.id),
             customer_id=customer_id,
             dispute_type=dto.dispute_type,
@@ -146,7 +146,7 @@ class DisputeService:
 
     async def agent_defend(self, dispute_id: str, agent_id: str, text: str) -> Dispute:
         """The affected agent's bounded-window defence, admin-mediated (§14.3)."""
-        dispute = await self._repo.get_open_for_agent(dispute_id, agent_id)
+        dispute = await self._dispute_repo.get_open_for_agent(dispute_id, agent_id)
         if dispute is None:
             raise ForbiddenException(message="No open dispute is awaiting your response.")
         if not (text or "").strip():
@@ -155,14 +155,14 @@ class DisputeService:
         deadline = dispute.date_created + timedelta(hours=hours)
         if Utils.datetime_now() > deadline:
             raise ValidationException(message="The response window for this dispute has closed.")
-        await self._repo.update(dispute.id, UpdateDisputeDto(agent_defence_text=text.strip()))
+        await self._dispute_repo.update(dispute.id, UpdateDisputeDto(agent_defence_text=text.strip()))
         await self._set_defended_at(dispute.id)
         self._audit.schedule(
             action=AuditActionType.DISPUTE_AGENT_DEFENDED,
             resource_type="dispute", resource_id=dispute.id, actor_id=agent_id,
             details={"verification_id": dispute.verification_id},
         )
-        return await self._repo.get_model(dispute.id)
+        return await self._dispute_repo.get_model(dispute.id)
 
     async def resolve(self, dispute_id: str, dto: ResolveDisputeDto, admin_id: str) -> Dispute:
         """Admin resolves the dispute with one of the three §14.3 outcomes + a mandatory note."""
@@ -202,7 +202,7 @@ class DisputeService:
                 await self._reviews.reopen_task(vid, AgentRole(role_value), admin_id)
             await self._commissions.unfreeze_for_verification(vid, admin_id)
 
-        await self._repo.update(dispute.id, UpdateDisputeDto(
+        await self._dispute_repo.update(dispute.id, UpdateDisputeDto(
             status=DisputeStatus.RESOLVED.value, resolution_outcome=dto.outcome.value,
             resolution_note=dto.note.strip(), resolved_by=admin_id,
         ))
@@ -218,21 +218,21 @@ class DisputeService:
             recipient_user_ids=(dispute.customer_id,),
             data={"outcome": dto.outcome.value, "note": dto.note.strip()},
         ))
-        return await self._repo.get_model(dispute.id)
+        return await self._dispute_repo.get_model(dispute.id)
 
     async def list_for_verification(self, verification_id: str, customer_id: str) -> List[Dispute]:
         v = await self._verifications.get_owned(verification_id, customer_id)
-        return await self._repo.list_for_verification(Utils.uuid_to_hex(v.id))
+        return await self._dispute_repo.list_for_verification(Utils.uuid_to_hex(v.id))
 
     async def list_open_for_agent(self, agent_id: str) -> List[Dispute]:
         """Open disputes awaiting the agent's admin-mediated defence (§14.3)."""
-        return await self._repo.list_open_for_agent(agent_id)
+        return await self._dispute_repo.list_open_for_agent(agent_id)
 
     async def page_open(self, page: int, page_size: int):
         """Admin queue of open disputes (paged), including any agent defence for review."""
-        rows, total = await self._repo.page_open(offset=page * page_size, limit=page_size)
+        rows, total = await self._dispute_repo.page_open(offset=page * page_size, limit=page_size)
         dtos = [dispute_to_dto(d) for d in rows]
-        return self._repo._db_utils.build_page(dtos, total, page, page_size)
+        return self._dispute_repo._db_utils.build_page(dtos, total, page, page_size)
 
     async def get(self, dispute_id: str) -> Dispute:
         return await self._get(dispute_id)
@@ -240,7 +240,7 @@ class DisputeService:
     # ── helpers ───────────────────────────────────────────────────
 
     async def _assert_within_window(self, verification_id: str) -> None:
-        report = await self._reports.get_released(verification_id)
+        report = await self._dispute_reports.get_released(verification_id)
         if report is None:
             raise ValidationException(message="There is no released report to dispute.")
         if report.released_at is not None:
@@ -271,15 +271,15 @@ class DisputeService:
             pass
 
     async def _get(self, dispute_id: str) -> Dispute:
-        dispute = await self._repo.get_model(dispute_id)
+        dispute = await self._dispute_repo.get_model(dispute_id)
         if dispute is None:
             raise ResourceNotFoundException(resource="dispute")
         return dispute
 
     async def _set_defended_at(self, dispute_id: str) -> None:
-        dispute = await self._repo.get_model(dispute_id)
+        dispute = await self._dispute_repo.get_model(dispute_id)
         dispute.agent_defence_at = Utils.datetime_now()
 
     async def _set_resolved_at(self, dispute_id: str) -> None:
-        dispute = await self._repo.get_model(dispute_id)
+        dispute = await self._dispute_repo.get_model(dispute_id)
         dispute.resolved_at = Utils.datetime_now()

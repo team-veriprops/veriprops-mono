@@ -10,7 +10,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Integer, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 from main.appodus_utils.integrations.kyc.models import (
     GovIdType,
@@ -57,7 +57,7 @@ class UpdateKycRecordDto(Object):
     summary: Optional[str] = None
 
 
-class SearchKycRecordDto(PageRequest, BaseQueryDto):
+class SearchKycRecordDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
     status: Optional[str] = None
 

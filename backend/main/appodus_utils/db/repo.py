@@ -258,8 +258,11 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
         page_size = search_dto.page_size
         offset = page * page_size
         criterion = self._db_utils.build_search_criterion(search_dto)
-        order_by_columns = self._db_utils.parse_order_by_clause(search_dto.order_by)
-        query_fields = search_dto.query_fields
+        # order_by / query_fields are server-only controls (InternalPageRequest). A
+        # client-facing PageRequest DTO lacks them — default to no explicit ordering /
+        # full-row select rather than trusting wire input.
+        order_by_columns = self._db_utils.parse_order_by_clause(getattr(search_dto, 'order_by', None))
+        query_fields = getattr(search_dto, 'query_fields', None)
         lean = bool(query_fields)
         if lean:
             select_columns = self._db_utils.parse_selected_columns(query_fields)

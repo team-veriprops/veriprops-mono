@@ -37,7 +37,7 @@ from main.appodus_utils.integrations.document_storage.stub.stub_storage import (
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class EvidenceService:
     def __init__(self, evidence_repo: EvidenceRepo, storage_factory: DocumentStorageProviderFactory):
-        self._repo = evidence_repo
+        self._evidence_repo = evidence_repo
         self._storage_factory = storage_factory
 
     async def capture(
@@ -69,7 +69,7 @@ class EvidenceService:
             encrypted=True,
         )
 
-        return await self._repo.create_return_model(CreateEvidenceDto(
+        return await self._evidence_repo.create_return_model(CreateEvidenceDto(
             task_id=task_id,
             verification_id=verification_id,
             agent_id=agent_id,
@@ -86,14 +86,14 @@ class EvidenceService:
         ))
 
     async def list_for_task(self, task_id: str) -> List[EvidenceItem]:
-        return await self._repo.list_for_task(task_id)
+        return await self._evidence_repo.list_for_task(task_id)
 
     async def list_for_verification(self, verification_id: str) -> List[EvidenceItem]:
         """All evidence for a verification, newest first — feeds the customer feed (§9.4)."""
-        return await self._repo.list_for_verification(verification_id)
+        return await self._evidence_repo.list_for_verification(verification_id)
 
     async def count_for_task(self, task_id: str) -> int:
-        return await self._repo.count_for_task(task_id)
+        return await self._evidence_repo.count_for_task(task_id)
 
     async def presigned_url(self, item: EvidenceItem) -> str:
         """Fresh short-lived read URL for an evidence object (regenerated per read).

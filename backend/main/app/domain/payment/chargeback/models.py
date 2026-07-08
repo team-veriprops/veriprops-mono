@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy import BigInteger, Column, Index, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 from main.appodus_utils.db.types.money import TransactionCurrency
 
@@ -71,7 +71,7 @@ class UpdateChargebackDto(Object):
     rebuttal_pack: Optional[Dict[str, Any]] = None
 
 
-class SearchChargebackDto(PageRequest, BaseQueryDto):
+class SearchChargebackDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
     payment_id: Optional[str] = None
     status: Optional[str] = None

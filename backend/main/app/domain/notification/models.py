@@ -10,7 +10,7 @@ from typing import Optional
 
 from sqlalchemy import Boolean, Column, Index, String, Text
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
 class Notification(BaseEntity):
@@ -47,7 +47,7 @@ class QueryNotificationDto(BaseQueryDto):
     read: Optional[bool] = None
 
 
-class SearchNotificationDto(PageRequest, BaseQueryDto):
+class SearchNotificationDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
     read: Optional[bool] = None
 

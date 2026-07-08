@@ -38,6 +38,13 @@ pnpm vitest run -t "test name pattern"
   * Keep route matching explicit and maintainable by clearly defining protected, public, and guest-only route groups.
   * `proxy.ts` should handle **access control only**; page-level authorization and business rules should remain in the application layer.
 
+### Security invariants (do not regress)
+
+- **Open-redirect guard.** Any post-auth navigation to a user-supplied `?redirect=`/`next` value must pass through `isSafeRedirectPath` / `resolvePostAuthRedirect` ([components/website/auth/libs/auth/redirect.ts](src/components/website/auth/libs/auth/redirect.ts)) — a bare `startsWith("/")` is insufficient (`//evil.com` and `/\evil.com` are cross-origin). Only same-origin relative paths are accepted.
+- **JSON-LD escaping.** `<JsonLd>` escapes `<`/`>`/`&` before `dangerouslySetInnerHTML` so a string value can't break out of the `<script>` tag. Don't bypass it.
+- **Automation hooks are fail-closed.** `isAutomationEnvironment()` ([lib/automation.ts](src/lib/automation.ts)) is an allowlist (`local`/`development`/`test`); staging/production/unset all return `false`. Never invert it or add prod-enabling values.
+- **No leaking backend errors to the console.** `FetchHttpClient` must not `console.log` response bodies (they may carry PII/internal detail).
+
 ## Route Definition
 * All routes in the application should be declared in `frontend\src\lib\routes.ts` grouped by their surface.
 * All Portal Menu Sidebars are grouped and maintained here `frontend\src\components\portal\nav.ts`,

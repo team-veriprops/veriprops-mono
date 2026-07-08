@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolvePostAuthRedirect } from "./redirect";
+import { resolvePostAuthRedirect, isSafeRedirectPath } from "./redirect";
 import { TransactionCurrency } from "@/types/models";
 import { AuthUser, AuthIntent, TrustStatus, UserPersona, UserType } from "@components/website/auth/models";
 const baseUser: AuthUser = {
@@ -75,5 +75,34 @@ describe("resolvePostAuthRedirect", () => {
       redirect: "https://attacker.example.com/take-over",
     });
     expect(dest).toBe("/portal/dashboard");
+  });
+
+  it("ignores protocol-relative and backslash open-redirect payloads", () => {
+    for (const payload of ["//evil.com", "/\\evil.com", "//evil.com/path"]) {
+      const dest = resolvePostAuthRedirect(baseUser, { redirect: payload });
+      expect(dest).toBe("/portal/dashboard");
+    }
+  });
+});
+
+describe("isSafeRedirectPath", () => {
+  it("accepts same-origin relative paths", () => {
+    expect(isSafeRedirectPath("/portal/verifications/abc")).toBe(true);
+    expect(isSafeRedirectPath("/")).toBe(true);
+  });
+
+  it("rejects cross-origin and malformed values", () => {
+    for (const bad of [
+      "//evil.com",
+      "/\\evil.com",
+      "https://evil.com",
+      "http://evil.com",
+      "evil.com",
+      "",
+      null,
+      undefined,
+    ]) {
+      expect(isSafeRedirectPath(bad)).toBe(false);
+    }
   });
 });

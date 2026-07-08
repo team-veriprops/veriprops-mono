@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from sqlalchemy import Column, String, Text
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import JSONB_VARIANT
 
 
@@ -104,7 +104,7 @@ class QuerySystemConfigDto(BaseQueryDto):
     key: Optional[str] = None
 
 
-class SearchSystemConfigDto(PageRequest, BaseQueryDto):
+class SearchSystemConfigDto(InternalPageRequest, BaseQueryDto):
     key: Optional[str] = None
 
 

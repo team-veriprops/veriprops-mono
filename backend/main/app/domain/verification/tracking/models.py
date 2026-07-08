@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from main.app.core.sla import SlaHealth
 from main.app.core.state.status import AgentRole, VerificationStatus, VerificationTier
 from main.app.domain.verification.task.evidence.models import EvidenceKind
-from main.appodus_utils import BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseQueryDto, Object, InternalPageRequest
 
 
 class AssignedAgentDto(Object):
@@ -100,7 +100,7 @@ class VerificationTrackingDto(Object):
     evidence_preview: List[CustomerEvidenceDto] = []
 
 
-class CustomerEvidenceQueryDto(PageRequest, BaseQueryDto):
+class CustomerEvidenceQueryDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
 
 

@@ -156,6 +156,20 @@ def _create_device_sessions():
     op.create_index("ix_device_sessions_id", "device_sessions", ["id"], unique=True)
 
 
+def _create_devices():
+    op.create_table(
+        "devices",
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        sa.Column("device_id", sa.String(length=36), nullable=False),
+        sa.Column("push_provider_type", sa.String(length=20), nullable=False),
+        sa.Column("push_token", JSONB_VARIANT, nullable=False),
+        sa.Column("last_active", UTCDateTime, nullable=False),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_devices_user_id", "devices", ["user_id"], unique=False)
+    op.create_index("ix_devices_id", "devices", ["id"], unique=True)
+
+
 def _create_security_events():
     op.create_table(
         "security_events",
@@ -228,6 +242,40 @@ def _create_messages():
     )
     op.create_index(op.f("ix_messages_deleted"), "messages", ["deleted"], unique=False)
     op.create_index(op.f("ix_messages_id"), "messages", ["id"], unique=True)
+
+
+def _create_dlq_entries():
+    op.create_table(
+        "dlq_entries",
+        sa.Column("original_message", JSONB_VARIANT, nullable=False),
+        sa.Column("channel", sa.String(length=20), nullable=False),
+        sa.Column("provider", sa.String(length=50), nullable=False),
+        sa.Column("error", sa.String(length=500), nullable=False),
+        sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("next_retry_at", UTCDateTime, nullable=False),
+        sa.Column("status", sa.String(length=15), nullable=False, server_default="PENDING"),
+        sa.Column("extras", JSONB_VARIANT, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_dlq_entries_status", "dlq_entries", ["status"], unique=False)
+    op.create_index("ix_dlq_entries_next_retry_at", "dlq_entries", ["next_retry_at"], unique=False)
+    op.create_index("ix_dlq_entries_id", "dlq_entries", ["id"], unique=True)
+
+
+def _create_callbacks():
+    op.create_table(
+        "callbacks",
+        sa.Column("platform", sa.String(length=20), nullable=False),
+        sa.Column("event_type", sa.String(length=20), nullable=False),
+        sa.Column("external_id", sa.String(length=97), nullable=False),
+        sa.Column("payload", JSONB_VARIANT, nullable=False),
+        sa.Column("handle_from_time", UTCDateTime, nullable=False),
+        sa.Column("handled", sa.Boolean(), nullable=False, server_default="false"),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_callbacks_external_id", "callbacks", ["external_id"], unique=False)
+    op.create_index("ix_callbacks_handled", "callbacks", ["handled"], unique=False)
+    op.create_index("ix_callbacks_id", "callbacks", ["id"], unique=True)
 
 # ─────────────────────────────────────────────────────────────────────
 # Audit logs (orig: c2d3e4f5a6b7)
@@ -1189,10 +1237,13 @@ _TABLE_BUILDERS = [
     ("consent_documents", _create_consent_documents),
     ("user_consents", _create_user_consents),
     ("device_sessions", _create_device_sessions),
+    ("devices", _create_devices),
     ("security_events", _create_security_events),
     ("password_reset_tokens", _create_password_reset_tokens),
     ("signup_drafts", _create_signup_drafts),
     ("messages", _create_messages),
+    ("dlq_entries", _create_dlq_entries),
+    ("callbacks", _create_callbacks),
     ("audit_logs", _create_audit_logs),
     ("idempotency_keys", _create_idempotency_keys),
     ("agent_profiles", _create_agent_profiles),

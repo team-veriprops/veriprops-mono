@@ -92,7 +92,6 @@ export class FetchHttpClient implements HttpClient {
 
         const errorBody = await this.safeJson(response);
 
-        console.log("errorBody: ", errorBody)
         throw new HttpError(
           errorBody?.error?.message || `An error occurred`,
           url,

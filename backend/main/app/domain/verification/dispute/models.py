@@ -8,7 +8,7 @@ from typing import Any, List, Optional
 from sqlalchemy import Column, Index, String, Text
 
 from main.app.core.state.status import AgentRole
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import JSONB_VARIANT, UTCDateTime
 
 
@@ -90,7 +90,7 @@ class QueryDisputeDto(BaseQueryDto):
     status: Optional[str] = None
 
 
-class SearchDisputeDto(PageRequest, BaseQueryDto):
+class SearchDisputeDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
     status: Optional[str] = None
 

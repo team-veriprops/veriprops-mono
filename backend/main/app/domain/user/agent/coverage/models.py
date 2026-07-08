@@ -8,7 +8,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Integer, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
 # ─── ORM ──────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ class UpdateAgentCoverageDto(Object):
     travel_radius_km: Optional[int] = None
 
 
-class SearchAgentCoverageDto(PageRequest, BaseQueryDto):
+class SearchAgentCoverageDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
 
 

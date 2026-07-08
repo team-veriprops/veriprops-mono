@@ -52,7 +52,7 @@ def _recheck(status=RecheckStatus.PENDING, scope=None, payment_id=None):
 
 def _service(verification=None, recheck=None):
     svc = object.__new__(RecheckService)
-    svc._repo = MagicMock()
+    svc._recheck_repo = MagicMock()
     svc._verifications = MagicMock()
     svc._verification_repo = MagicMock()
     svc._reviews = MagicMock()
@@ -66,10 +66,10 @@ def _service(verification=None, recheck=None):
     svc._verifications.get_owned = AsyncMock(return_value=v)
     svc._config.get_int = AsyncMock(return_value=30)
     svc._pricing.tier_price_kobo = AsyncMock(side_effect=lambda tier: TIER_PRICE_NGN_KOBO[tier])
-    svc._repo.create_return_model = AsyncMock(return_value=_recheck())
-    svc._repo.get_model = AsyncMock(return_value=recheck or _recheck())
-    svc._repo.get_by_payment = AsyncMock(return_value=recheck)
-    svc._repo.update = AsyncMock()
+    svc._recheck_repo.create_return_model = AsyncMock(return_value=_recheck())
+    svc._recheck_repo.get_model = AsyncMock(return_value=recheck or _recheck())
+    svc._recheck_repo.get_by_payment = AsyncMock(return_value=recheck)
+    svc._recheck_repo.update = AsyncMock()
     svc._verification_repo.update = AsyncMock()
     svc._payments.initiate_secondary = AsyncMock(return_value=SimpleNamespace(id="pay-1", checkout_url="/pay"))
     svc._reviews.reopen_task = AsyncMock()
@@ -80,7 +80,7 @@ class TestRequest:
     async def test_request_on_completed_creates_pending(self):
         svc = _service()
         await svc.request("v-1", "cust-1", RequestRecheckDto(reason="wrong survey plan attached"))
-        dto = svc._repo.create_return_model.await_args.args[0]
+        dto = svc._recheck_repo.create_return_model.await_args.args[0]
         assert dto.status == RecheckStatus.PENDING
         assert dto.price_minor == 3_600_000  # 30% of STANDARD
 
@@ -101,7 +101,7 @@ class TestDecide:
         monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
         svc = _service(recheck=_recheck())
         await svc.admin_decide("rc-1", DecideRecheckDto(approve=False, note="unfounded"), "admin-1")
-        dto = svc._repo.update.await_args.args[1]
+        dto = svc._recheck_repo.update.await_args.args[1]
         assert dto.status == RecheckStatus.REJECTED.value
 
     async def test_approve_scopes_and_charges(self, monkeypatch):
@@ -112,7 +112,7 @@ class TestDecide:
             "rc-1", DecideRecheckDto(approve=True, scope_roles=[AgentRole.SURVEYOR]), "admin-1"
         )
         svc._payments.initiate_secondary.assert_awaited_once()
-        dto = svc._repo.update.await_args.args[1]
+        dto = svc._recheck_repo.update.await_args.args[1]
         assert dto.status == RecheckStatus.APPROVED.value
         assert dto.scope_roles == [AgentRole.SURVEYOR.value]
 

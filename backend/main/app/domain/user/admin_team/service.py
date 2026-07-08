@@ -57,6 +57,16 @@ class AdminTeamService:
         return AdminTeamPageDto(items=items, total=total, page=page, page_size=page_size)
 
     async def change_sub_role(self, user_id: str, sub_role: AdminSubRole, admin_id: str) -> None:
+        # Defense in depth (the endpoint is already INVITE_ADMIN/SUPER-gated):
+        # an admin may not change their own sub-role, and only a SUPER may grant SUPER.
+        if user_id == admin_id:
+            raise ValidationException(message="You cannot change your own admin sub-role.")
+
+        actor = await self._user_service.get_user_model(admin_id)
+        self._assert_is_admin(actor)
+        if sub_role == AdminSubRole.SUPER and actor.admin_sub_role != AdminSubRole.SUPER.value:
+            raise ValidationException(message="Only a SUPER admin can grant the SUPER role.")
+
         user = await self._user_service.get_user_model(user_id)
         self._assert_is_admin(user)
         from_role = user.admin_sub_role

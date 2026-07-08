@@ -10,10 +10,10 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import List, Optional
 
-from sqlalchemy import BigInteger, Boolean, Column, Date, Float, Index, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, Column, Date, Float, Integer, String, Text
 
 from main.app.core.state.status import VerificationStatus, VerificationTier
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 from main.appodus_utils.db.types.money import TransactionCurrency
 from main.app.domain.property.models import PropertyInputDto
@@ -67,11 +67,9 @@ class Verification(BaseEntity):
     # a tier upgrade sets TIER_UPGRADE. Consumed + cleared by ReviewService.release. Null =
     # the ordinary initial release (v1.0).
     pending_revision_kind = Column(String(16), nullable=True)
-
-    __table_args__ = (
-        Index("ix_verifications_status", "status"),
-        Index("ix_verifications_customer", "customer_id"),
-    )
+    # customer_id / status indexes are declared inline (index=True) — they
+    # auto-name to ix_verifications_customer_id / ix_verifications_status,
+    # matching the migration. Don't re-declare them here.
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -100,7 +98,7 @@ class UpdateVerificationDto(Object):
     pending_revision_kind: Optional[str] = None
 
 
-class SearchVerificationDto(PageRequest, BaseQueryDto):
+class SearchVerificationDto(InternalPageRequest, BaseQueryDto):
     customer_id: Optional[str] = None
     status: Optional[str] = None
 

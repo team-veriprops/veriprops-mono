@@ -59,7 +59,7 @@ def _verification(status=VerificationStatus.PAID, tier=VerificationTier.STANDARD
 
 def _make_service(verification, tasks):
     svc = object.__new__(VerificationTaskService)
-    svc._repo = MagicMock()
+    svc._task_repo = MagicMock()
     svc._verification_repo = MagicMock()
     svc._evidence = MagicMock()
     svc._user_service = MagicMock()
@@ -71,7 +71,7 @@ def _make_service(verification, tasks):
     svc._user_service.upgrade_trust_status_if_eligible = AsyncMock()
 
     state = {"tasks": list(tasks)}
-    svc._repo.list_for_verification = AsyncMock(side_effect=lambda vid: list(state["tasks"]))
+    svc._task_repo.list_for_verification = AsyncMock(side_effect=lambda vid: list(state["tasks"]))
 
     async def _get_by_role(vid, role):
         return next((t for t in state["tasks"] if t.role == role), None)
@@ -91,13 +91,13 @@ def _make_service(verification, tasks):
     async def _get_model(task_id):
         return next((t for t in state["tasks"] if t.id == task_id), None)
 
-    svc._repo.get_by_role = AsyncMock(side_effect=_get_by_role)
-    svc._repo.create_return_model = AsyncMock(side_effect=_create)
-    svc._repo.update = AsyncMock(side_effect=_update)
-    svc._repo.get_model = AsyncMock(side_effect=_get_model)
-    svc._repo.count_active_for_agent = AsyncMock(return_value=0)
-    svc._repo.list_accept_deadline_expired = AsyncMock(return_value=[])
-    svc._repo.list_pool_expired = AsyncMock(return_value=[])
+    svc._task_repo.get_by_role = AsyncMock(side_effect=_get_by_role)
+    svc._task_repo.create_return_model = AsyncMock(side_effect=_create)
+    svc._task_repo.update = AsyncMock(side_effect=_update)
+    svc._task_repo.get_model = AsyncMock(side_effect=_get_model)
+    svc._task_repo.count_active_for_agent = AsyncMock(return_value=0)
+    svc._task_repo.list_accept_deadline_expired = AsyncMock(return_value=[])
+    svc._task_repo.list_pool_expired = AsyncMock(return_value=[])
     svc._state = state
     return svc
 
@@ -163,7 +163,7 @@ class TestAssign:
     async def test_capacity_cap_rejects(self, monkeypatch):
         monkeypatch.setattr(settings, "AGENT_MAX_ACTIVE_TASKS", 2)
         svc = _make_service(_verification(), [_task(AgentRole.REGISTRY)])
-        svc._repo.count_active_for_agent = AsyncMock(return_value=2)
+        svc._task_repo.count_active_for_agent = AsyncMock(return_value=2)
         with pytest.raises(ValidationException):
             await svc.assign("v-1", AgentRole.REGISTRY, "agent-1", "admin-1")
 
@@ -260,7 +260,7 @@ class TestSweeps:
     async def test_no_show_returns_to_pending(self):
         stale = _task(AgentRole.REGISTRY, TaskState.ASSIGNED, agent="agent-1")
         svc = _make_service(_verification(status=VerificationStatus.IN_PROGRESS), [stale])
-        svc._repo.list_accept_deadline_expired = AsyncMock(return_value=[stale])
+        svc._task_repo.list_accept_deadline_expired = AsyncMock(return_value=[stale])
         count = await svc.sweep_no_show()
         assert count == 1
         assert stale.state == TaskState.PENDING.value
@@ -269,7 +269,7 @@ class TestSweeps:
     async def test_pool_starvation_removes_from_pool(self):
         stale = _task(AgentRole.FIELD, TaskState.PENDING, in_pool=True)
         svc = _make_service(_verification(), [stale])
-        svc._repo.list_pool_expired = AsyncMock(return_value=[stale])
+        svc._task_repo.list_pool_expired = AsyncMock(return_value=[stale])
         count = await svc.sweep_pool_starvation()
         assert count == 1
         assert stale.in_pool is False
@@ -278,9 +278,9 @@ class TestSweeps:
 class TestAgentDashboardSummary:
     def _summary_service(self, state_counts):
         svc = object.__new__(VerificationTaskService)
-        svc._repo = MagicMock()
-        svc._repo.count_by_state_for_agent = AsyncMock(return_value=state_counts)
-        svc._repo.count_pool_pending = AsyncMock(return_value=6)
+        svc._task_repo = MagicMock()
+        svc._task_repo.count_by_state_for_agent = AsyncMock(return_value=state_counts)
+        svc._task_repo.count_pool_pending = AsyncMock(return_value=6)
         return svc
 
     async def test_agent_summary_rolls_up_states(self):

@@ -30,7 +30,7 @@ def mock_db_session():
 
 def _make_service(rules_by_key=None):
     svc = object.__new__(CommissionRuleService)
-    svc._repo = AsyncMock()
+    svc._rule_repo = AsyncMock()
     svc._weights = AsyncMock()
     svc._audit = SimpleNamespace(schedule=lambda **k: None)
     rules = rules_by_key or {}
@@ -38,7 +38,7 @@ def _make_service(rules_by_key=None):
     async def _get(role, tier):
         return rules.get((role, tier))
 
-    svc._repo.get_for_role_tier = AsyncMock(side_effect=_get)
+    svc._rule_repo.get_for_role_tier = AsyncMock(side_effect=_get)
     return svc
 
 

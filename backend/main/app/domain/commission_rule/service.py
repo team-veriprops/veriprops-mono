@@ -51,7 +51,7 @@ class CommissionRuleService:
         rule_repo: CommissionRuleRepo,
         audit_service: AuditLogService,
     ):
-        self._repo = rule_repo
+        self._rule_repo = rule_repo
         self._audit = audit_service
 
     async def seed_defaults(self) -> None:
@@ -60,19 +60,19 @@ class CommissionRuleService:
         for tier in VerificationTier:
             weights = _DEFAULT_ROLE_WEIGHTS.get(tier, {})
             for role in roles_for_tier(tier):
-                if await self._repo.get_for_role_tier(role.value, tier.value) is not None:
+                if await self._rule_repo.get_for_role_tier(role.value, tier.value) is not None:
                     continue
                 rate_bps = self._default_rate_bps(weights.get(role, 0))
-                await self._repo.create_return_model(CreateCommissionRuleDto(
+                await self._rule_repo.create_return_model(CreateCommissionRuleDto(
                     role=role, tier=tier, rate_bps=rate_bps,
                 ))
 
     async def list_all(self) -> List[CommissionRule]:
-        return await self._repo.list_all()
+        return await self._rule_repo.list_all()
 
     async def get_agent_share_bps(self, role: AgentRole, tier: VerificationTier) -> int:
         """The configured rate (basis points) for a role × tier — 0 if unconfigured."""
-        rule = await self._repo.get_for_role_tier(role.value, tier.value)
+        rule = await self._rule_repo.get_for_role_tier(role.value, tier.value)
         return rule.rate_bps if rule is not None else 0
 
     async def commission_minor(
@@ -90,14 +90,14 @@ class CommissionRuleService:
             raise ValidationException(
                 message=f"Rate must be between 0 and {FULL_BPS} basis points."
             )
-        existing = await self._repo.get_for_role_tier(role.value, tier.value)
+        existing = await self._rule_repo.get_for_role_tier(role.value, tier.value)
         if existing is None:
-            row = await self._repo.create_return_model(CreateCommissionRuleDto(
+            row = await self._rule_repo.create_return_model(CreateCommissionRuleDto(
                 role=role, tier=tier, rate_bps=rate_bps,
             ))
         else:
-            await self._repo.update(existing.id, UpdateCommissionRuleDto(rate_bps=rate_bps))
-            row = await self._repo.get_model(existing.id)
+            await self._rule_repo.update(existing.id, UpdateCommissionRuleDto(rate_bps=rate_bps))
+            row = await self._rule_repo.get_model(existing.id)
         self._audit.schedule(
             action=AuditActionType.ADMIN_CONFIG_CHANGED,
             resource_type="commission_rule", resource_id=row.id, actor_id=admin_id,

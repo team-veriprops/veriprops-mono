@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy import Column, Index, Integer, String, Text
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -48,7 +48,7 @@ class UpdateSignupDraftDto(Object):
     expires_at: Optional[datetime] = None
 
 
-class SearchSignupDraftDto(PageRequest, BaseQueryDto):
+class SearchSignupDraftDto(InternalPageRequest, BaseQueryDto):
     email: Optional[str] = None
 
 

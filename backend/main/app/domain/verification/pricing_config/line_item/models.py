@@ -9,9 +9,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, String
+from sqlalchemy import BigInteger, Boolean, Column, Integer, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
 class PricingLineItem(BaseEntity):
@@ -21,10 +21,7 @@ class PricingLineItem(BaseEntity):
     label = Column(String(128), nullable=False)
     amount_minor = Column(BigInteger, nullable=False)
     sort_order = Column(Integer, nullable=False, server_default="0")
-
-    __table_args__ = (
-        Index("ix_pricing_line_items_tier", "tier"),
-    )
+    # tier index is declared inline (index=True) → ix_pricing_line_items_tier, matching the migration.
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -46,7 +43,7 @@ class QueryPricingLineItemDto(BaseQueryDto):
     tier: Optional[str] = None
 
 
-class SearchPricingLineItemDto(PageRequest, BaseQueryDto):
+class SearchPricingLineItemDto(InternalPageRequest, BaseQueryDto):
     tier: Optional[str] = None
 
 

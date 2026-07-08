@@ -53,7 +53,7 @@ class ErasureService:
         pseudonymiser: PiiPseudonymiser,
         audit_service: AuditLogService,
     ):
-        self._repo = erasure_repo
+        self._erasure_repo = erasure_repo
         self._users = user_repo
         self._config = config_service
         self._pseudonymiser = pseudonymiser
@@ -67,13 +67,13 @@ class ErasureService:
         subject = await self._users.get_model(subject_user_id)
         if not subject:
             raise ResourceNotFoundException(resource="user")
-        if await self._repo.get_open_for_user(subject_user_id):
+        if await self._erasure_repo.get_open_for_user(subject_user_id):
             raise InvalidResourceStateException(
                 resource=_RESOURCE,
                 message="An erasure request is already in progress for this account.",
             )
         sla_days = await self._config.get_int(ConfigKey.ERASURE_REQUEST_REVIEW_SLA_DAYS)
-        row = await self._repo.create_return_model(CreateDataErasureRequestDto(
+        row = await self._erasure_repo.create_return_model(CreateDataErasureRequestDto(
             subject_user_id=subject_user_id,
             requested_by_user_id=requested_by_user_id,
             reason=reason,
@@ -91,18 +91,18 @@ class ErasureService:
         return row
 
     async def list_for_user(self, subject_user_id: str) -> List[DataErasureRequest]:
-        return await self._repo.list_for_user(subject_user_id)
+        return await self._erasure_repo.list_for_user(subject_user_id)
 
     # ── Admin review ──────────────────────────────────────────────
 
     async def get(self, request_id: str) -> DataErasureRequest:
-        row = await self._repo.get_model(request_id)
+        row = await self._erasure_repo.get_model(request_id)
         if not row:
             raise ResourceNotFoundException(resource=_RESOURCE)
         return row
 
     async def page(self, status: Optional[str], page: int, page_size: int) -> Page[DataErasureRequestDto]:
-        rows, total = await self._repo.page_by_status(status, offset=page * page_size, limit=page_size)
+        rows, total = await self._erasure_repo.page_by_status(status, offset=page * page_size, limit=page_size)
         total_pages = (total + page_size - 1) // page_size if page_size else 0
         return Page[DataErasureRequestDto](
             items=[erasure_to_dto(r) for r in rows],

@@ -48,7 +48,7 @@ def _verification(status=VerificationStatus.IN_PROGRESS, tier=VerificationTier.S
 
 def _make_service(verification):
     svc = object.__new__(AdminVerificationService)
-    svc._repo = MagicMock()
+    svc._verification_repo = MagicMock()
     svc._property_repo = MagicMock()
     svc._payment_repo = MagicMock()
     svc._task_service = MagicMock()
@@ -57,8 +57,8 @@ def _make_service(verification):
     svc._chargebacks = MagicMock()
     svc._audit = MagicMock()
 
-    svc._repo.get_model = AsyncMock(return_value=verification)
-    svc._repo.update = AsyncMock()
+    svc._verification_repo.get_model = AsyncMock(return_value=verification)
+    svc._verification_repo.update = AsyncMock()
     svc._property_repo.get_model = AsyncMock(return_value=None)
     svc._payment_repo.list_for_verification = AsyncMock(return_value=[])
     svc._task_service.list_for_verification = AsyncMock(return_value=[])
@@ -73,16 +73,16 @@ def _make_service(verification):
 class TestDashboardSummary:
     def _summary_service(self, status_counts, recent_rows):
         svc = object.__new__(AdminVerificationService)
-        svc._repo = MagicMock()
+        svc._verification_repo = MagicMock()
         svc._property_repo = MagicMock()
         svc._payment_repo = MagicMock()
         svc._task_service = MagicMock()
         svc._agents = MagicMock()
         svc._chargebacks = MagicMock()
-        svc._repo.count_by_status = AsyncMock(return_value=status_counts)
-        svc._repo.count_overdue = AsyncMock(return_value=3)
-        svc._repo.count_due_within = AsyncMock(return_value=6)
-        svc._repo.page_admin = AsyncMock(return_value=(list(recent_rows), len(recent_rows)))
+        svc._verification_repo.count_by_status = AsyncMock(return_value=status_counts)
+        svc._verification_repo.count_overdue = AsyncMock(return_value=3)
+        svc._verification_repo.count_due_within = AsyncMock(return_value=6)
+        svc._verification_repo.page_admin = AsyncMock(return_value=(list(recent_rows), len(recent_rows)))
         svc._property_repo.get_model = AsyncMock(return_value=None)
         svc._payment_repo.sum_succeeded_amount = AsyncMock(return_value=99_000_000)
         svc._task_service.count_pool_pending = AsyncMock(return_value=4)
@@ -111,30 +111,30 @@ class TestDashboardSummary:
         assert dto.revenue_minor == 99_000_000
         assert len(dto.recent) == 1
         # overdue is computed against the SLA-active statuses only
-        _, kwargs = svc._repo.count_overdue.call_args
+        _, kwargs = svc._verification_repo.count_overdue.call_args
         assert not kwargs  # positional call
-        active_arg = svc._repo.count_overdue.call_args.args[0]
+        active_arg = svc._verification_repo.count_overdue.call_args.args[0]
         assert VerificationStatus.IN_PROGRESS.value in active_arg
 
 
 class TestSlaHealth:
     def test_none_when_no_clock(self):
         svc = _make_service(_verification(status=VerificationStatus.PAID, due=None))
-        health, remaining = svc._sla_health(svc._repo.get_model.return_value)
+        health, remaining = svc._sla_health(svc._verification_repo.get_model.return_value)
         assert health == SlaHealth.NONE
         assert remaining is None
 
     def test_overdue_when_past_due(self):
         past = Utils.datetime_now().date() - timedelta(days=5)
         svc = _make_service(_verification(due=past))
-        health, remaining = svc._sla_health(svc._repo.get_model.return_value)
+        health, remaining = svc._sla_health(svc._verification_repo.get_model.return_value)
         assert health == SlaHealth.OVERDUE
         assert remaining < 0
 
     def test_on_track_when_far_out(self):
         far = add_business_days(Utils.datetime_now().date(), 10)
         svc = _make_service(_verification(due=far))
-        health, _ = svc._sla_health(svc._repo.get_model.return_value)
+        health, _ = svc._sla_health(svc._verification_repo.get_model.return_value)
         assert health == SlaHealth.ON_TRACK
 
 

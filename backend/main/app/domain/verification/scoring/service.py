@@ -45,24 +45,24 @@ _FULL_PERCENT = 100
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class TrustScoreWeightService:
     def __init__(self, weight_repo: TrustScoreWeightRepo, audit_service: AuditLogService):
-        self._repo = weight_repo
+        self._weight_repo = weight_repo
         self._audit = audit_service
 
     async def seed_defaults(self) -> None:
         """Idempotently ensure every (tier, role) default weight exists."""
         for tier, role_weights in _DEFAULT_WEIGHTS.items():
             for role, weight in role_weights.items():
-                existing = await self._repo.get_for_tier_role(tier.value, role.value)
+                existing = await self._weight_repo.get_for_tier_role(tier.value, role.value)
                 if existing is None:
-                    await self._repo.create_return_model(CreateTrustWeightDto(
+                    await self._weight_repo.create_return_model(CreateTrustWeightDto(
                         tier=tier, role=role, weight_percent=weight,
                     ))
 
     async def list_all(self) -> List[TrustScoreWeight]:
-        return await self._repo.list_all()
+        return await self._weight_repo.list_all()
 
     async def list_for_tier(self, tier: VerificationTier) -> List[TrustScoreWeight]:
-        return await self._repo.list_for_tier(tier.value)
+        return await self._weight_repo.list_for_tier(tier.value)
 
     async def set_tier_weights(
         self, tier: VerificationTier, weights: Dict[AgentRole, int], admin_id: str
@@ -83,26 +83,26 @@ class TrustScoreWeightService:
         for role, weight in weights.items():
             if weight < 0:
                 raise ValidationException(message="Weights cannot be negative.")
-            existing = await self._repo.get_for_tier_role(tier.value, role.value)
+            existing = await self._weight_repo.get_for_tier_role(tier.value, role.value)
             if existing is None:
-                await self._repo.create_return_model(CreateTrustWeightDto(
+                await self._weight_repo.create_return_model(CreateTrustWeightDto(
                     tier=tier, role=role, weight_percent=weight,
                 ))
             else:
-                await self._repo.update(existing.id, UpdateTrustWeightDto(weight_percent=weight))
+                await self._weight_repo.update(existing.id, UpdateTrustWeightDto(weight_percent=weight))
         self._audit.schedule(
             action=AuditActionType.ADMIN_CONFIG_CHANGED,
             resource_type="trust_score_weight_config", resource_id=tier.value, actor_id=admin_id,
             details={"tier": tier.value, "weights": {r.value: w for r, w in weights.items()}},
         )
-        return await self._repo.list_for_tier(tier.value)
+        return await self._weight_repo.list_for_tier(tier.value)
 
     async def compute_composite(
         self, tier: VerificationTier, role_quality: Dict[AgentRole, int]
     ) -> int:
         """Composite trust score (0–100) = Σ (weight_role/100 × quality_role) over the
         tier's roles (§8.3). Deterministic; called only at release (§8.6)."""
-        weights = {AgentRole(w.role): w.weight_percent for w in await self._repo.list_for_tier(tier.value)}
+        weights = {AgentRole(w.role): w.weight_percent for w in await self._weight_repo.list_for_tier(tier.value)}
         score = 0.0
         for role in roles_for_tier(tier):
             weight = weights.get(role, 0)

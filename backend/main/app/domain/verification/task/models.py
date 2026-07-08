@@ -25,7 +25,7 @@ from typing import Any, Dict
 from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, String, UniqueConstraint
 
 from main.app.core.state.status import AgentRole, TaskState, VerificationTier
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 
@@ -85,7 +85,7 @@ class VerificationTask(BaseEntity):
     __table_args__ = (
         # A verification has at most one task per role; reassignment/rework reuse the row.
         UniqueConstraint("verification_id", "role", name="uq_verification_tasks_role"),
-        Index("ix_verification_tasks_state", "state"),
+        # state index is declared inline (index=True) → ix_verification_tasks_state.
         Index("ix_verification_tasks_agent", "assigned_agent_id"),
     )
 
@@ -114,7 +114,7 @@ class UpdateTaskDto(Object):
     interim_note: Optional[str] = None
 
 
-class SearchTaskDto(PageRequest, BaseQueryDto):
+class SearchTaskDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
     assigned_agent_id: Optional[str] = None
     state: Optional[str] = None

@@ -50,8 +50,8 @@ ADMIN_ACTION_TYPES: List[str] = [
 @decorate_all_methods(transactional(), exclude=["schedule"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["schedule"], exclude_startswith=["_"])
 class AuditLogService:
-    def __init__(self, repo: AuditLogRepo):
-        self._repo = repo
+    def __init__(self, audit_repo: AuditLogRepo):
+        self._audit_repo = audit_repo
 
     def schedule(
         self,
@@ -79,7 +79,7 @@ class AuditLogService:
         )
 
         async def _write() -> None:
-            await self._repo.create(dto)
+            await self._audit_repo.create(dto)
 
         schedule_audit_write(_write)
 
@@ -93,7 +93,7 @@ class AuditLogService:
         page_size: int = 20,
     ) -> AuditActivityPageDto:
         """PII-safe paginated event list for customer/agent views (no actor_id)."""
-        rows, total = await self._repo.list_for_resource(
+        rows, total = await self._audit_repo.list_for_resource(
             resource_type=resource_type,
             resource_id=resource_id,
             offset=page * page_size,
@@ -115,7 +115,7 @@ class AuditLogService:
         """Full audit rows (with actor_id/IP) for a set of resource ids — the
         transition backbone of the §19.3 verification audit pack. CSV assembly
         lives in VerificationAuditPackService."""
-        rows = await self._repo.list_by_resource_ids(resource_ids)
+        rows = await self._audit_repo.list_by_resource_ids(resource_ids)
         return [
             AuditPackRowDto(
                 id=str(r.id),
@@ -141,7 +141,7 @@ class AuditLogService:
         page_size: int = 20,
     ) -> AdminActionLogPageDto:
         types = action_types if action_types else ADMIN_ACTION_TYPES
-        rows, total = await self._repo.list_admin_actions(
+        rows, total = await self._audit_repo.list_admin_actions(
             action_types=types,
             date_from=date_from,
             date_to=date_to,

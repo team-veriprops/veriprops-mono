@@ -2,11 +2,12 @@ import enum
 from datetime import datetime
 from typing import Optional, Any
 
-from sqlalchemy import Column, String, Boolean, JSON, DateTime
+from sqlalchemy import Column, String, Boolean
 from sqlalchemy.ext.mutable import MutableDict
 
 from main.app.config.settings import IntegratedPlatform
 from main.appodus_utils import BaseEntity, BaseQueryDto, PageRequest, Object
+from main.appodus_utils.db.models import UTCDateTime, jsonb_variant
 
 
 class CallbackType(str, enum.Enum):
@@ -19,8 +20,8 @@ class Callback(BaseEntity):
     platform = Column(String(20), nullable=False)
     event_type = Column(String(20), nullable=False)
     external_id = Column(String(97), nullable=False)
-    payload = Column(MutableDict.as_mutable(JSON), nullable=False)
-    handle_from_time = Column(DateTime(), nullable=False, default=False)
+    payload = Column(MutableDict.as_mutable(jsonb_variant()), nullable=False)
+    handle_from_time = Column(UTCDateTime, nullable=False)
     handled = Column(Boolean, nullable=False, default=False)
 
 

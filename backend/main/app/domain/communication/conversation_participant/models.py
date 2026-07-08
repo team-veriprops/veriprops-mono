@@ -12,7 +12,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Index, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -46,6 +46,6 @@ class QueryConversationParticipantDto(BaseQueryDto):
     user_id: Optional[str] = None
 
 
-class SearchConversationParticipantDto(PageRequest, BaseQueryDto):
+class SearchConversationParticipantDto(InternalPageRequest, BaseQueryDto):
     conversation_id: Optional[str] = None
     user_id: Optional[str] = None

@@ -21,7 +21,7 @@ from sqlalchemy import Column, Index, String
 from main.app.core.state.status import ShareType, VerificationTier
 from main.app.domain.property.models import PropertyType
 from main.app.domain.verification.report.models import CustomerReportDto
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -78,7 +78,7 @@ class QueryVerificationShareDto(BaseQueryDto):
     token: Optional[str] = None
 
 
-class SearchVerificationShareDto(PageRequest, BaseQueryDto):
+class SearchVerificationShareDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
 
 

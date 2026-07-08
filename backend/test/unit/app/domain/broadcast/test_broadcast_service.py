@@ -49,7 +49,7 @@ _USERS = [
 
 def _make_service():
     svc = object.__new__(BroadcastService)
-    svc._repo = AsyncMock()
+    svc._broadcast_repo = AsyncMock()
     svc._users = AsyncMock()
     svc._audit = MagicMock()
     svc._audit.schedule = MagicMock()
@@ -60,14 +60,14 @@ def _make_service():
 class TestCompose:
     async def test_no_schedule_is_draft(self):
         svc = _make_service()
-        svc._repo.create_return_model = AsyncMock(side_effect=lambda dto: SimpleNamespace(id="b-1", **dto.model_dump()))
+        svc._broadcast_repo.create_return_model = AsyncMock(side_effect=lambda dto: SimpleNamespace(id="b-1", **dto.model_dump()))
         b = await svc.compose(ComposeBroadcastDto(
             audience=BroadcastAudience.ALL, subject="Hi", body="Body"), "admin-1")
         assert b.status == BroadcastStatus.DRAFT
 
     async def test_with_schedule_is_scheduled(self):
         svc = _make_service()
-        svc._repo.create_return_model = AsyncMock(side_effect=lambda dto: SimpleNamespace(id="b-1", **dto.model_dump()))
+        svc._broadcast_repo.create_return_model = AsyncMock(side_effect=lambda dto: SimpleNamespace(id="b-1", **dto.model_dump()))
         when = Utils.datetime_now()
         b = await svc.compose(ComposeBroadcastDto(
             audience=BroadcastAudience.CUSTOMERS, subject="Hi", body="B", scheduled_at=when), "admin-1")
@@ -89,7 +89,7 @@ class TestSendNow:
         row = SimpleNamespace(id="b-1", audience=BroadcastAudience.CUSTOMERS.value,
                               subject="S", body="B", status=BroadcastStatus.DRAFT.value,
                               sent_at=None, recipient_count=0)
-        svc._repo.get_model = AsyncMock(return_value=row)
+        svc._broadcast_repo.get_model = AsyncMock(return_value=row)
         await svc.send_now("b-1", "admin-1")
         assert row.status == BroadcastStatus.SENT.value
         assert row.recipient_count == 2
@@ -100,7 +100,7 @@ class TestSendNow:
         svc = _make_service()
         row = SimpleNamespace(id="b-1", audience=BroadcastAudience.ALL.value, subject="S",
                               body="B", status=BroadcastStatus.SENT.value, sent_at=None, recipient_count=0)
-        svc._repo.get_model = AsyncMock(return_value=row)
+        svc._broadcast_repo.get_model = AsyncMock(return_value=row)
         await svc.send_now("b-1", "admin-1")
         assert stub_publish == []
 
@@ -110,8 +110,8 @@ class TestSweep:
         svc = _make_service()
         due = SimpleNamespace(id="b-1", audience=BroadcastAudience.ADMINS.value, subject="S",
                               body="B", status=BroadcastStatus.SCHEDULED.value, sent_at=None, recipient_count=0)
-        svc._repo.list_due_scheduled = AsyncMock(return_value=[due])
-        svc._repo.get_model = AsyncMock(return_value=due)
+        svc._broadcast_repo.list_due_scheduled = AsyncMock(return_value=[due])
+        svc._broadcast_repo.get_model = AsyncMock(return_value=due)
         sent = await svc.sweep_scheduled_broadcasts()
         assert sent == 1
         assert due.status == BroadcastStatus.SENT.value

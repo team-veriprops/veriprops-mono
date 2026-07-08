@@ -43,6 +43,29 @@ class RedisUtils:
             print(exc)
 
     @staticmethod
+    async def incr_with_ttl(key: str, ttl_seconds: int) -> int:
+        """Atomically increment a counter and (on first hit) set its TTL.
+
+        Backs fixed-window rate limiting. Uses Redis INCR/EXPIRE when available; falls
+        back to a best-effort read-modify-write via the SQL KV store (adequate for the
+        low-per-IP-concurrency auth/OTP paths this guards). Fails OPEN (returns 0) on any
+        backend error so a limiter outage never locks users out of authentication.
+        """
+        try:
+            if redis:
+                count = int(await redis.incr(key))
+                if count == 1:
+                    await redis.expire(key, ttl_seconds)
+                return count
+            current = await key_value_service.get(key)
+            count = int(current or 0) + 1
+            await key_value_service.set(key, timedelta(seconds=ttl_seconds), count)
+            return count
+        except Exception as exc:
+            logger.warning(f"Rate-limit counter for {key!r} failed (allowing request): {exc}")
+            return 0
+
+    @staticmethod
     async def delete(key: str) -> Any:
         try:
             if redis:

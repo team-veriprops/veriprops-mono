@@ -51,7 +51,7 @@ def _verification(**over):
 
 def _make_service(phone_verified=True, verification=None):
     svc = object.__new__(PaymentService)
-    svc._repo = MagicMock()
+    svc._payment_repo = MagicMock()
     svc._verification_service = MagicMock()
     svc._task_service = MagicMock()
     svc._user_service = MagicMock()
@@ -67,8 +67,8 @@ def _make_service(phone_verified=True, verification=None):
         return_value=SimpleNamespace(phone_verified=phone_verified)
     )
     svc._user_service.upgrade_trust_status_if_eligible = AsyncMock()
-    svc._repo.create_return_model = AsyncMock(return_value=SimpleNamespace(id="pay-1", tx_ref="VP-2026-ABC123-xyz"))
-    svc._repo.update = AsyncMock()
+    svc._payment_repo.create_return_model = AsyncMock(return_value=SimpleNamespace(id="pay-1", tx_ref="VP-2026-ABC123-xyz"))
+    svc._payment_repo.update = AsyncMock()
     return svc
 
 
@@ -81,7 +81,7 @@ class TestInitiate:
     async def test_creates_payment_and_moves_to_pending(self):
         svc = _make_service()
         await svc.initiate("ver-1", "cust-1", PaymentMethodKind.CARD)
-        svc._repo.create_return_model.assert_awaited_once()
+        svc._payment_repo.create_return_model.assert_awaited_once()
         svc._verification_service.mark_payment_pending.assert_awaited_once_with("ver-1")
         assert svc._audit.schedule.call_args.kwargs["action"] == AuditActionType.PAYMENT_INITIATED
 
@@ -90,16 +90,16 @@ class TestInitiate:
         svc._idempotency.begin_or_replay = AsyncMock(
             return_value=IdempotencyOutcome(is_replay=True, resource_id="pay-1")
         )
-        svc._repo.get_model = AsyncMock(return_value=SimpleNamespace(id="pay-1"))
+        svc._payment_repo.get_model = AsyncMock(return_value=SimpleNamespace(id="pay-1"))
         await svc.initiate("ver-1", "cust-1", PaymentMethodKind.CARD, idempotency_key="k-1")
-        svc._repo.create_return_model.assert_not_called()
+        svc._payment_repo.create_return_model.assert_not_called()
 
 
 class TestWebhook:
     async def test_success_marks_paid_and_upgrades_trust(self):
         svc = _make_service()
         svc._idempotency.claim = AsyncMock(return_value=True)
-        svc._repo.get_by_tx_ref = AsyncMock(
+        svc._payment_repo.get_by_tx_ref = AsyncMock(
             return_value=SimpleNamespace(id="pay-1", verification_id="ver-1", customer_id="cust-1", failure_count=0, purpose="INITIAL")
         )
         processed = await svc.handle_webhook(
@@ -121,13 +121,13 @@ class TestWebhook:
     async def test_failed_webhook_marks_failed(self):
         svc = _make_service()
         svc._idempotency.claim = AsyncMock(return_value=True)
-        svc._repo.get_by_tx_ref = AsyncMock(
+        svc._payment_repo.get_by_tx_ref = AsyncMock(
             return_value=SimpleNamespace(id="pay-1", verification_id="ver-1", customer_id="cust-1", failure_count=0, purpose="INITIAL")
         )
         await svc.handle_webhook(
             PaymentWebhookDto(event_id="evt-1", tx_ref="VP-2026-ABC123-xyz", succeeded=False)
         )
         # last update sets FAILED
-        statuses = [c.args[1].status for c in svc._repo.update.call_args_list if c.args[1].status]
+        statuses = [c.args[1].status for c in svc._payment_repo.update.call_args_list if c.args[1].status]
         assert PaymentStatus.FAILED.value in statuses
         svc._verification_service.mark_paid.assert_not_called()

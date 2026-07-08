@@ -11,7 +11,7 @@ from typing import List, Optional
 
 from sqlalchemy import Column, Index, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 from main.app.domain.referral.credit.models import ReferralCreditDto
 
@@ -43,7 +43,7 @@ class QueryReferralDto(BaseQueryDto):
     code: Optional[str] = None
 
 
-class SearchReferralDto(PageRequest, BaseQueryDto):
+class SearchReferralDto(InternalPageRequest, BaseQueryDto):
     referrer_user_id: Optional[str] = None
     code: Optional[str] = None
 

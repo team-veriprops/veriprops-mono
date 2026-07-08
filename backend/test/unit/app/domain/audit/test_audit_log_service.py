@@ -33,7 +33,7 @@ def mock_repo():
 def _make_svc(mock_repo) -> AuditLogService:
     """Build AuditLogService bypassing @inject for isolated unit testing."""
     svc = object.__new__(AuditLogService)
-    svc._repo = mock_repo
+    svc._audit_repo = mock_repo
     return svc
 
 

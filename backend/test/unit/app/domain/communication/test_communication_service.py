@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from main.app.core.state.status import TaskState
 from main.app.domain.communication.chat_message.models import SenderKind
+from main.app.domain.communication.conversation.models import ConversationType
 from main.app.domain.communication.service import CommunicationService
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import ForbiddenException
@@ -110,3 +111,47 @@ async def test_customer_send_delegates_through_ownership_gate():
     svc._verifications.get_owned.assert_awaited_with("v-1", "cust-1")
     args, kwargs = svc._chat.send.call_args
     assert args[2] == SenderKind.CUSTOMER
+
+
+# ── sender_kind is derived server-side, never trusted from the client (H2) ──────
+
+def _convo(convo_type):
+    return SimpleNamespace(id="conv-1", type=convo_type.value, deleted=False)
+
+
+async def test_post_message_customer_cannot_spoof_admin_or_system():
+    """A non-admin member of a customer↔admin thread always posts as CUSTOMER — there is
+    no client-supplied sender_kind path to impersonate ADMIN/SYSTEM."""
+    svc = _service(tasks=[], user_type="USER")
+    svc._conversations.get_owned_participant = AsyncMock(
+        return_value=_convo(ConversationType.CUSTOMER_ADMIN)
+    )
+    svc._chat.send = AsyncMock(return_value=SimpleNamespace(id="msg-1"))
+
+    await svc.post_message("conv-1", "cust-1", "hello")
+
+    assert svc._chat.send.call_args.args[2] == SenderKind.CUSTOMER
+
+
+async def test_post_message_admin_derives_admin_kind():
+    svc = _service(tasks=[], user_type="ADMIN")
+    svc._conversations.get_owned_participant = AsyncMock(
+        return_value=_convo(ConversationType.CUSTOMER_ADMIN)
+    )
+    svc._chat.send = AsyncMock(return_value=SimpleNamespace(id="msg-1"))
+
+    await svc.post_message("conv-1", "admin-1", "hello")
+
+    assert svc._chat.send.call_args.args[2] == SenderKind.ADMIN
+
+
+async def test_post_message_agent_thread_derives_agent_kind():
+    svc = _service(tasks=[], user_type="USER")
+    svc._conversations.get_owned_participant = AsyncMock(
+        return_value=_convo(ConversationType.ADMIN_AGENT)
+    )
+    svc._chat.send = AsyncMock(return_value=SimpleNamespace(id="msg-1"))
+
+    await svc.post_message("conv-1", "agent-1", "on my way")
+
+    assert svc._chat.send.call_args.args[2] == SenderKind.AGENT

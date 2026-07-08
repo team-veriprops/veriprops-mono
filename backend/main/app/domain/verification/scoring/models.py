@@ -13,7 +13,7 @@ from typing import Optional
 from sqlalchemy import Column, Integer, String, UniqueConstraint
 
 from main.app.core.state.status import AgentRole, VerificationTier
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
 # ─── ORM ──────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ class QueryTrustWeightDto(BaseQueryDto):
     role: Optional[str] = None
 
 
-class SearchTrustWeightDto(PageRequest, BaseQueryDto):
+class SearchTrustWeightDto(InternalPageRequest, BaseQueryDto):
     tier: Optional[str] = None
 
 

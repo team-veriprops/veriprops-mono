@@ -33,7 +33,10 @@ async def list_team(
 async def change_sub_role(
     user_id: str,
     req: ChangeSubRoleDto,
-    admin_id: str = Depends(require_permission(Permission.MANAGE_USERS)),
+    # Changing an admin's sub-role (including granting SUPER) is a privilege-boundary
+    # action, gated on INVITE_ADMIN — held only by SUPER. MANAGE_USERS (which OPERATIONS
+    # also holds) is deliberately NOT sufficient, to prevent lateral self-promotion.
+    admin_id: str = Depends(require_permission(Permission.INVITE_ADMIN)),
 ):
     await team_service.change_sub_role(user_id, req.sub_role, admin_id)
     return SuccessResponse[bool](data=True)

@@ -45,7 +45,7 @@ class AdminInvitationService:
         user_service: UserService,
         audit_service: AuditLogService,
     ):
-        self._repo = invitation_repo
+        self._invitation_repo = invitation_repo
         self._user_service = user_service
         self._audit_service = audit_service
 
@@ -61,7 +61,7 @@ class AdminInvitationService:
         """Create an invitation; returns the raw token for the caller to email."""
         raw_token = Utils.random_str(36)
         token_hash = Utils.sha256(raw_token)
-        invitation = await self._repo.create_return_model(CreateAdminInvitationDto(
+        invitation = await self._invitation_repo.create_return_model(CreateAdminInvitationDto(
             email=email,
             email_normalized=email.strip().lower(),
             first_name=first_name,
@@ -117,7 +117,7 @@ class AdminInvitationService:
             user_type=UserType.ADMIN.value,
             admin_sub_role=sub_role.value,
         ))
-        await self._repo.update(invitation.id, UpdateAdminInvitationDto(
+        await self._invitation_repo.update(invitation.id, UpdateAdminInvitationDto(
             status=AdminInvitationStatus.ACCEPTED.value,
             accepted_by=current_user_id,
         ))
@@ -135,7 +135,7 @@ class AdminInvitationService:
         return sub_role
 
     async def list_invitations(self, page: int = 0, page_size: int = 10) -> Page[AdminInvitationSummaryDto]:
-        rows, total = await self._repo.page_all(offset=page * page_size, limit=page_size)
+        rows, total = await self._invitation_repo.page_all(offset=page * page_size, limit=page_size)
         items = [
             AdminInvitationSummaryDto(
                 id=r.id,
@@ -162,16 +162,16 @@ class AdminInvitationService:
         )
 
     async def revoke(self, invitation_id: str, admin_id: str) -> None:
-        invitation = await self._repo.get_model(invitation_id)
+        invitation = await self._invitation_repo.get_model(invitation_id)
         if not invitation:
             raise ResourceNotFoundException(resource="admin invitation")
-        await self._repo.update(
+        await self._invitation_repo.update(
             invitation_id, UpdateAdminInvitationDto(status=AdminInvitationStatus.REVOKED.value)
         )
 
     # ── helpers ───────────────────────────────────────────────────
     async def _require_invitation(self, raw_token: str) -> AdminInvitation:
-        invitation = await self._repo.get_by_token_hash(Utils.sha256(raw_token))
+        invitation = await self._invitation_repo.get_by_token_hash(Utils.sha256(raw_token))
         if not invitation:
             raise InvalidTokenException(message="Invalid invitation link.")
         return invitation
@@ -183,5 +183,5 @@ class AdminInvitationService:
             raise InvalidTokenException(message="This invitation has expired.")
 
     async def _mark_accepted_at(self, invitation_id: str) -> None:
-        invitation = await self._repo.get_model(invitation_id)
+        invitation = await self._invitation_repo.get_model(invitation_id)
         invitation.accepted_at = Utils.datetime_now()

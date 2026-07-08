@@ -15,7 +15,7 @@ from typing import Optional
 
 from sqlalchemy import BigInteger, Column, Index, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -48,7 +48,7 @@ class ReferralCredit(BaseEntity):
     __table_args__ = (
         Index("ix_referral_credits_referrer", "referrer_user_id"),
         Index("ix_referral_credits_invitee", "invitee_user_id"),
-        Index("ix_referral_credits_status", "status"),
+        # status index is declared inline (index=True) → ix_referral_credits_status.
     )
 
 
@@ -76,7 +76,7 @@ class QueryReferralCreditDto(BaseQueryDto):
     status: Optional[str] = None
 
 
-class SearchReferralCreditDto(PageRequest, BaseQueryDto):
+class SearchReferralCreditDto(InternalPageRequest, BaseQueryDto):
     referrer_user_id: Optional[str] = None
     status: Optional[str] = None
 

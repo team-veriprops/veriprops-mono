@@ -11,7 +11,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Index, Integer, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -48,6 +48,6 @@ class QueryReportAcknowledgementDto(BaseQueryDto):
     report_version: Optional[int] = None
 
 
-class SearchReportAcknowledgementDto(PageRequest, BaseQueryDto):
+class SearchReportAcknowledgementDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
     customer_id: Optional[str] = None

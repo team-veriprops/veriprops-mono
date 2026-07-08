@@ -31,8 +31,8 @@ def mock_db_session():
 
 def _service(email_ok=True, sms_ok=True):
     svc = object.__new__(NotificationService)
-    svc._repo = MagicMock()
-    svc._repo.create_return_model = AsyncMock(return_value=SimpleNamespace(id="n-1"))
+    svc._notification_repo = MagicMock()
+    svc._notification_repo.create_return_model = AsyncMock(return_value=SimpleNamespace(id="n-1"))
     svc._preferences = MagicMock()
     svc._preferences.channels_enabled = AsyncMock(return_value=(email_ok, sms_ok))
     svc._dispatcher = MagicMock()
@@ -54,7 +54,7 @@ async def test_creates_in_app_and_dispatches_external():
     await svc.create_for_event(DomainEvent(
         type=EventType.PAYMENT_CONFIRMED, verification_id="v-1", recipient_user_ids=("cust-1",),
     ))
-    svc._repo.create_return_model.assert_awaited_once()
+    svc._notification_repo.create_return_model.assert_awaited_once()
     args, kwargs = svc._dispatcher.dispatch.call_args
     channels = args[2]
     assert MessageChannel.EMAIL in channels and MessageChannel.SMS in channels
@@ -75,11 +75,11 @@ async def test_chat_only_event_creates_no_notification():
     await svc.create_for_event(DomainEvent(
         type=EventType.MESSAGE_SENT, recipient_user_ids=("cust-1",), data={"conversation_id": "c-1"},
     ))
-    svc._repo.create_return_model.assert_not_called()
+    svc._notification_repo.create_return_model.assert_not_called()
     svc._dispatcher.dispatch.assert_not_called()
 
 
 async def test_pure_sse_nudge_creates_no_notification():
     svc = _service()
     await svc.create_for_event(DomainEvent(verification_id="v-1", sse_event="task_updated"))
-    svc._repo.create_return_model.assert_not_called()
+    svc._notification_repo.create_return_model.assert_not_called()

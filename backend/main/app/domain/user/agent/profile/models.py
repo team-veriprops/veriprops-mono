@@ -9,11 +9,11 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Column, Index, Integer, String
+from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.mutable import MutableList
 
 from main.app.core.state.status import AgentRole
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime, jsonb_variant
 
 
@@ -54,10 +54,7 @@ class AgentProfile(BaseEntity):
     submitted_at = Column(UTCDateTime, nullable=True)
     reviewed_at = Column(UTCDateTime, nullable=True)
     reviewed_by = Column(String(36), nullable=True)
-
-    __table_args__ = (
-        Index("ix_agent_profiles_status", "status"),
-    )
+    # status index is declared inline (index=True) → ix_agent_profiles_status, matching the migration.
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -82,7 +79,7 @@ class UpdateAgentProfileDto(Object):
     reviewed_by: Optional[str] = None
 
 
-class SearchAgentProfileDto(PageRequest, BaseQueryDto):
+class SearchAgentProfileDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
     status: Optional[str] = None
 

@@ -54,7 +54,7 @@ def _chargeback(status=ChargebackStatus.FLAGGED, cbid="cb-1"):
 
 def _make_service(*, existing_cb=None, payment=None, chargebacks=None):
     svc = object.__new__(ChargebackService)
-    svc._repo = MagicMock()
+    svc._chargeback_repo = MagicMock()
     svc._payment_repo = MagicMock()
     svc._verification_repo = MagicMock()
     svc._commissions = MagicMock()
@@ -63,7 +63,7 @@ def _make_service(*, existing_cb=None, payment=None, chargebacks=None):
     svc._audit = MagicMock()
 
     state = {"rows": list(chargebacks or [])}
-    svc._repo.get_by_event_id = AsyncMock(return_value=existing_cb)
+    svc._chargeback_repo.get_by_event_id = AsyncMock(return_value=existing_cb)
     svc._payment_repo.get_by_tx_ref = AsyncMock(return_value=payment)
     svc._payment_repo.update = AsyncMock()
 
@@ -84,9 +84,9 @@ def _make_service(*, existing_cb=None, payment=None, chargebacks=None):
                 setattr(c, f, v)
         return c
 
-    svc._repo.create_return_model = AsyncMock(side_effect=_create)
-    svc._repo.get_model = AsyncMock(side_effect=_get_model)
-    svc._repo.update = AsyncMock(side_effect=_update)
+    svc._chargeback_repo.create_return_model = AsyncMock(side_effect=_create)
+    svc._chargeback_repo.get_model = AsyncMock(side_effect=_get_model)
+    svc._chargeback_repo.update = AsyncMock(side_effect=_update)
     svc._commissions.freeze_for_verification = AsyncMock(return_value=2)
     svc._commissions.unfreeze_for_verification = AsyncMock(return_value=2)
     svc._commissions.reverse_for_verification = AsyncMock(return_value=2)

@@ -61,7 +61,7 @@ class UpgradeService:
         pricing_config_service: PricingConfigService,
         audit_service: AuditLogService,
     ):
-        self._repo = upgrade_repo
+        self._upgrade_repo = upgrade_repo
         self._verifications = verification_service
         self._verification_repo = verification_repo
         self._tasks = task_service
@@ -85,7 +85,7 @@ class UpgradeService:
             raise ValidationException(message="The selected tier is not an upgrade.")
 
         key = f"{Utils.uuid_to_hex(v.id)}:{target.value}"
-        existing = await self._repo.get_by_key(key)
+        existing = await self._upgrade_repo.get_by_key(key)
         if existing is not None and existing.status == UpgradeStatus.PENDING.value:
             return existing  # idempotent — reuse the pending request + its charge
 
@@ -97,12 +97,12 @@ class UpgradeService:
             verification_id=Utils.uuid_to_hex(v.id), customer_id=customer_id,
             amount_minor=delta, purpose=PaymentPurpose.UPGRADE,
         )
-        upgrade = await self._repo.create_return_model(CreateUpgradeDto(
+        upgrade = await self._upgrade_repo.create_return_model(CreateUpgradeDto(
             verification_id=Utils.uuid_to_hex(v.id), customer_id=customer_id,
             from_tier=current, to_tier=target, delta_minor=delta, idempotency_key=key,
         ))
         payment_ref = Utils.uuid_to_hex(payment.id)  # entity ref → .hex (32-char)
-        await self._repo.update(upgrade.id, UpdateUpgradeDto(payment_id=payment_ref))
+        await self._upgrade_repo.update(upgrade.id, UpdateUpgradeDto(payment_id=payment_ref))
         upgrade.payment_id = payment_ref  # reflect on the attached row (don't re-fetch in-txn)
         self._audit.schedule(
             action=AuditActionType.TIER_UPGRADE_REQUESTED,
@@ -114,7 +114,7 @@ class UpgradeService:
 
     async def on_payment_confirmed(self, payment_id: str) -> None:
         """Apply the upgrade once the delta is paid (webhook, §14.2). Idempotent."""
-        upgrade = await self._repo.get_by_payment(Utils.uuid_to_hex(payment_id))
+        upgrade = await self._upgrade_repo.get_by_payment(Utils.uuid_to_hex(payment_id))
         if upgrade is None or upgrade.status != UpgradeStatus.PENDING.value:
             return
         verification = await self._verification_repo.get_model(upgrade.verification_id)
@@ -137,7 +137,7 @@ class UpgradeService:
         # roles already present). Broadcast to the pool when auto-assignment is enabled (§6.2).
         await self._tasks.prepare_for_paid(upgrade.verification_id)
 
-        await self._repo.update(upgrade.id, UpdateUpgradeDto(status=UpgradeStatus.PAID.value))
+        await self._upgrade_repo.update(upgrade.id, UpdateUpgradeDto(status=UpgradeStatus.PAID.value))
         self._audit.schedule(
             action=AuditActionType.TIER_UPGRADE_APPLIED,
             resource_type="upgrade", resource_id=upgrade.id, actor_id=upgrade.customer_id,
@@ -154,12 +154,12 @@ class UpgradeService:
 
     async def list_for_verification(self, verification_id: str, customer_id: str) -> List[UpgradeRequest]:
         v = await self._verifications.get_owned(verification_id, customer_id)
-        return await self._repo.list_for_verification(Utils.uuid_to_hex(v.id))
+        return await self._upgrade_repo.list_for_verification(Utils.uuid_to_hex(v.id))
 
     # ── helpers ───────────────────────────────────────────────────
 
     async def _get(self, upgrade_id: str) -> UpgradeRequest:
-        upgrade = await self._repo.get_model(upgrade_id)
+        upgrade = await self._upgrade_repo.get_model(upgrade_id)
         if upgrade is None:
             raise ResourceNotFoundException(resource="upgrade")
         return upgrade

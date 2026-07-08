@@ -40,7 +40,7 @@ def _commission(status=CommissionStatus.CLEARING, cid="c-1", frozen_from=None):
 
 def _make_service(commissions):
     svc = object.__new__(CommissionService)
-    svc._repo = MagicMock()
+    svc._commission_repo = MagicMock()
     svc._audit = MagicMock()
     state = {"rows": list(commissions)}
 
@@ -54,9 +54,9 @@ def _make_service(commissions):
                 setattr(c, f, v)
         return c
 
-    svc._repo.list_for_verification_in_status = AsyncMock(side_effect=_list_in_status)
-    svc._repo.list_for_verification = AsyncMock(side_effect=lambda vid: list(state["rows"]))
-    svc._repo.update = AsyncMock(side_effect=_update)
+    svc._commission_repo.list_for_verification_in_status = AsyncMock(side_effect=_list_in_status)
+    svc._commission_repo.list_for_verification = AsyncMock(side_effect=lambda vid: list(state["rows"]))
+    svc._commission_repo.update = AsyncMock(side_effect=_update)
     svc._state = state
     return svc
 

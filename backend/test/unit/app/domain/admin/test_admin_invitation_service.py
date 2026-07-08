@@ -40,12 +40,12 @@ def mock_db_session():
 
 def _make_service():
     svc = object.__new__(AdminInvitationService)
-    svc._repo = MagicMock()
+    svc._invitation_repo = MagicMock()
     svc._user_service = MagicMock()
     svc._audit_service = MagicMock()
-    svc._repo.create_return_model = AsyncMock(return_value=SimpleNamespace(id="inv-1"))
-    svc._repo.update = AsyncMock()
-    svc._repo.get_model = AsyncMock(return_value=SimpleNamespace(id="inv-1", accepted_at=None))
+    svc._invitation_repo.create_return_model = AsyncMock(return_value=SimpleNamespace(id="inv-1"))
+    svc._invitation_repo.update = AsyncMock()
+    svc._invitation_repo.get_model = AsyncMock(return_value=SimpleNamespace(id="inv-1", accepted_at=None))
     return svc
 
 
@@ -69,7 +69,7 @@ class TestInvite:
         svc = _make_service()
         raw = await svc.invite("new@example.com", AdminSubRole.OPERATIONS, invited_by="super-1")
         assert isinstance(raw, str) and len(raw) >= 20
-        svc._repo.create_return_model.assert_awaited_once()
+        svc._invitation_repo.create_return_model.assert_awaited_once()
         assert svc._audit_service.schedule.call_args.kwargs["action"] == AuditActionType.ADMIN_INVITED
 
     async def test_persists_first_and_last_name(self):
@@ -78,7 +78,7 @@ class TestInvite:
             "new@example.com", AdminSubRole.OPERATIONS, invited_by="super-1",
             first_name="Ada", last_name="Lovelace",
         )
-        create_dto = svc._repo.create_return_model.call_args.args[0]
+        create_dto = svc._invitation_repo.create_return_model.call_args.args[0]
         assert create_dto.first_name == "Ada"
         assert create_dto.last_name == "Lovelace"
 
@@ -86,7 +86,7 @@ class TestInvite:
 class TestPreview:
     async def test_new_user_scenario(self):
         svc = _make_service()
-        svc._repo.get_by_token_hash = AsyncMock(return_value=_invitation())
+        svc._invitation_repo.get_by_token_hash = AsyncMock(return_value=_invitation())
         svc._user_service.get_user_by_email = AsyncMock(return_value=None)
         preview = await svc.preview("raw")
         assert preview.scenario == InviteAcceptScenario.NEW_USER
@@ -94,7 +94,7 @@ class TestPreview:
 
     async def test_existing_user_scenario(self):
         svc = _make_service()
-        svc._repo.get_by_token_hash = AsyncMock(return_value=_invitation())
+        svc._invitation_repo.get_by_token_hash = AsyncMock(return_value=_invitation())
         svc._user_service.get_user_by_email = AsyncMock(
             return_value=SimpleNamespace(user_type=UserType.USER.value)
         )
@@ -102,7 +102,7 @@ class TestPreview:
 
     async def test_already_admin_scenario(self):
         svc = _make_service()
-        svc._repo.get_by_token_hash = AsyncMock(return_value=_invitation())
+        svc._invitation_repo.get_by_token_hash = AsyncMock(return_value=_invitation())
         svc._user_service.get_user_by_email = AsyncMock(
             return_value=SimpleNamespace(user_type=UserType.ADMIN.value)
         )
@@ -112,7 +112,7 @@ class TestPreview:
 class TestAccept:
     async def test_elevates_matching_user_to_admin(self):
         svc = _make_service()
-        svc._repo.get_by_token_hash = AsyncMock(return_value=_invitation())
+        svc._invitation_repo.get_by_token_hash = AsyncMock(return_value=_invitation())
         svc._user_service.get_user_model = AsyncMock(
             return_value=SimpleNamespace(email="new@example.com", user_type=UserType.USER.value)
         )
@@ -128,7 +128,7 @@ class TestAccept:
 
     async def test_rejects_email_mismatch(self):
         svc = _make_service()
-        svc._repo.get_by_token_hash = AsyncMock(return_value=_invitation())
+        svc._invitation_repo.get_by_token_hash = AsyncMock(return_value=_invitation())
         svc._user_service.get_user_model = AsyncMock(
             return_value=SimpleNamespace(email="someone.else@example.com", user_type=UserType.USER.value)
         )
@@ -137,7 +137,7 @@ class TestAccept:
 
     async def test_rejects_expired_token(self):
         svc = _make_service()
-        svc._repo.get_by_token_hash = AsyncMock(
+        svc._invitation_repo.get_by_token_hash = AsyncMock(
             return_value=_invitation(expires_at=Utils.datetime_now() - timedelta(hours=1))
         )
         svc._user_service.get_user_model = AsyncMock(
@@ -148,7 +148,7 @@ class TestAccept:
 
     async def test_rejects_already_accepted_token(self):
         svc = _make_service()
-        svc._repo.get_by_token_hash = AsyncMock(
+        svc._invitation_repo.get_by_token_hash = AsyncMock(
             return_value=_invitation(status=AdminInvitationStatus.ACCEPTED.value)
         )
         svc._user_service.get_user_model = AsyncMock(
@@ -159,6 +159,6 @@ class TestAccept:
 
     async def test_rejects_invalid_token(self):
         svc = _make_service()
-        svc._repo.get_by_token_hash = AsyncMock(return_value=None)
+        svc._invitation_repo.get_by_token_hash = AsyncMock(return_value=None)
         with pytest.raises(InvalidTokenException):
             await svc.accept("bad", current_user_id="u-1")

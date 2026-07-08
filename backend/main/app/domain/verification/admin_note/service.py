@@ -21,10 +21,10 @@ from main.appodus_utils.decorators.transactional import transactional
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class AdminNoteService:
     def __init__(self, admin_note_repo: AdminNoteRepo):
-        self._repo = admin_note_repo
+        self._admin_note_repo = admin_note_repo
 
     async def add(self, verification_id: str, author_id: str, dto: AddAdminNoteDto) -> AdminNote:
-        return await self._repo.create_return_model(CreateAdminNoteDto(
+        return await self._admin_note_repo.create_return_model(CreateAdminNoteDto(
             verification_id=verification_id,
             author_id=author_id,
             category=dto.category,
@@ -33,4 +33,4 @@ class AdminNoteService:
         ))
 
     async def list_for_verification(self, verification_id: str) -> List[AdminNote]:
-        return await self._repo.list_for_verification(verification_id)
+        return await self._admin_note_repo.list_for_verification(verification_id)

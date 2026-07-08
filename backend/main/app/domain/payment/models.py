@@ -12,7 +12,7 @@ from typing import Optional
 
 from sqlalchemy import BigInteger, Column, Index, Integer, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.types.money import TransactionCurrency
 
 
@@ -106,7 +106,7 @@ class UpdatePaymentDto(Object):
     refunded_amount_minor: Optional[int] = None
 
 
-class SearchPaymentDto(PageRequest, BaseQueryDto):
+class SearchPaymentDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
     customer_id: Optional[str] = None
     status: Optional[str] = None

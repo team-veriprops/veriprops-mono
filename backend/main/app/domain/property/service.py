@@ -21,10 +21,10 @@ from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class PropertyService:
     def __init__(self, property_repo: PropertyRepo):
-        self._repo = property_repo
+        self._property_repo = property_repo
 
     async def create(self, customer_id: str, dto: PropertyInputDto) -> Property:
-        return await self._repo.create_return_model(CreatePropertyDto(
+        return await self._property_repo.create_return_model(CreatePropertyDto(
             customer_id=customer_id,
             property_type=dto.property_type,
             address=dto.address,
@@ -40,10 +40,10 @@ class PropertyService:
         ))
 
     async def update(self, property_id: str, dto: PropertyInputDto) -> Property:
-        existing = await self._repo.get_model(property_id)
+        existing = await self._property_repo.get_model(property_id)
         if not existing:
             raise ResourceNotFoundException(resource="property")
-        await self._repo.update(property_id, UpdatePropertyDto(
+        await self._property_repo.update(property_id, UpdatePropertyDto(
             property_type=dto.property_type.value if dto.property_type else None,
             address=dto.address,
             landmark=dto.landmark,
@@ -56,10 +56,10 @@ class PropertyService:
             seller=dto.seller.model_dump() if dto.seller else None,
             documents=dto.documents,
         ))
-        return await self._repo.get_model(property_id)
+        return await self._property_repo.get_model(property_id)
 
     async def get(self, property_id: str) -> Property:
-        existing = await self._repo.get_model(property_id)
+        existing = await self._property_repo.get_model(property_id)
         if not existing:
             raise ResourceNotFoundException(resource="property")
         return existing

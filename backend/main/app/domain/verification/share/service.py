@@ -73,10 +73,10 @@ class ShareService:
         verification_messages: VerificationMessages,
         audit_service: AuditLogService,
     ):
-        self._repo = share_repo
+        self._share_repo = share_repo
         self._verification_repo = verification_repo
         self._verifications = verification_service
-        self._reports = report_service
+        self._share_reports = report_service
         self._customer_report = customer_report_service
         self._properties = property_repo
         self._messages = verification_messages
@@ -111,7 +111,7 @@ class ShareService:
         if req.share_type == ShareType.NAMED_FULL and not (req.recipient_email or "").strip():
             raise ValidationException(message="A recipient email is required for a named share.")
 
-        share = await self._repo.create_return_model(CreateVerificationShareDto(
+        share = await self._share_repo.create_return_model(CreateVerificationShareDto(
             verification_id=Utils.uuid_to_hex(v.id),
             share_type=req.share_type,
             token=Utils.random_str(36),
@@ -132,13 +132,13 @@ class ShareService:
 
     async def list_shares(self, verification_id: str, customer_id: str) -> List[ShareDto]:
         v = await self._verifications.get_owned(verification_id, customer_id)
-        rows = await self._repo.list_for_verification(Utils.uuid_to_hex(v.id))
+        rows = await self._share_repo.list_for_verification(Utils.uuid_to_hex(v.id))
         return [self._to_dto(r) for r in rows]
 
     async def revoke_share(self, verification_id: str, share_id: str, customer_id: str) -> ShareDto:
         """Revoke a share — the token is invalid immediately (§13.3)."""
         v = await self._verifications.get_owned(verification_id, customer_id)
-        share = await self._repo.get_model(share_id)
+        share = await self._share_repo.get_model(share_id)
         if share is None or share.verification_id != Utils.uuid_to_hex(v.id):
             raise ResourceNotFoundException(resource="share")
         if share.revoked_at is None:
@@ -148,7 +148,7 @@ class ShareService:
                 resource_type="verification_share", resource_id=share.id, actor_id=customer_id,
                 details={"event": "share_revoked", "verification_id": verification_id},
             )
-        return self._to_dto(await self._repo.get_model(share.id))
+        return self._to_dto(await self._share_repo.get_model(share.id))
 
     # ── Public lookup (§13.1) — unauthenticated ───────────────────
 
@@ -206,7 +206,7 @@ class ShareService:
     # ── helpers ───────────────────────────────────────────────────
 
     async def _valid_share(self, token: str) -> Optional[VerificationShare]:
-        share = await self._repo.get_by_token(token)
+        share = await self._share_repo.get_by_token(token)
         if share is None or share.revoked_at is not None:
             return None
         if share.expires_at is not None and share.expires_at < Utils.datetime_now():
@@ -237,7 +237,7 @@ class ShareService:
 
     async def _build_summary(self, verification) -> PublicSummaryDto:
         # verification.id is a native UUID; report/verification ref columns use the .hex form.
-        report = await self._reports.get_released(Utils.uuid_to_hex(verification.id))
+        report = await self._share_reports.get_released(Utils.uuid_to_hex(verification.id))
         band = None
         if report is not None and report.composite_trust_score is not None:
             band, _ = trust_band(report.composite_trust_score)
@@ -264,7 +264,7 @@ class ShareService:
         )
 
     async def _require_released(self, verification_id: str) -> None:
-        if await self._reports.get_released(verification_id) is None:
+        if await self._share_reports.get_released(verification_id) is None:
             raise ValidationException(
                 message="Only a verification with a released report can be shared."
             )
@@ -301,13 +301,13 @@ class ShareService:
         )
 
     async def _set_revoked(self, share_id: str) -> None:
-        share = await self._repo.get_model(share_id)
+        share = await self._share_repo.get_model(share_id)
         share.revoked_at = Utils.datetime_now()
 
     async def _set_first_viewed(self, share_id: str) -> None:
-        share = await self._repo.get_model(share_id)
+        share = await self._share_repo.get_model(share_id)
         share.first_viewed_at = Utils.datetime_now()
 
     async def _set_acked(self, share_id: str) -> None:
-        share = await self._repo.get_model(share_id)
+        share = await self._share_repo.get_model(share_id)
         share.disclaimer_acked_at = Utils.datetime_now()

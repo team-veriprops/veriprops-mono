@@ -55,7 +55,7 @@ class PayoutService:
         bank_account_service: BankAccountService,
         audit_service: AuditLogService,
     ):
-        self._repo = payout_repo
+        self._payout_repo = payout_repo
         self._earnings = earnings_service
         self._banks = bank_account_service
         self._audit = audit_service
@@ -73,7 +73,7 @@ class PayoutService:
             )
         bank_name, account_number, account_name = await self._resolve_beneficiary(agent_id, dto)
         now = Utils.datetime_now()
-        payout = await self._repo.create_return_model(CreatePayoutDto(
+        payout = await self._payout_repo.create_return_model(CreatePayoutDto(
             agent_id=agent_id, amount_minor=dto.amount_minor,
             bank_name=bank_name, account_number=account_number, account_name=account_name,
         ))
@@ -93,12 +93,12 @@ class PayoutService:
             raise InvalidResourceStateException(
                 resource="payout", message="Only a pending request can be cancelled."
             )
-        await self._repo.update(payout.id, UpdatePayoutDto(status=PayoutStatus.CANCELLED.value))
+        await self._payout_repo.update(payout.id, UpdatePayoutDto(status=PayoutStatus.CANCELLED.value))
         self._audit.schedule(
             action=AuditActionType.PAYOUT_CANCELLED,
             resource_type="payout", resource_id=payout.id, actor_id=agent_id,
         )
-        return await self._repo.get_model(payout.id)
+        return await self._payout_repo.get_model(payout.id)
 
     async def list_bank_accounts(self, agent_id: str):
         return await self._banks.list_for_agent(agent_id)
@@ -110,8 +110,8 @@ class PayoutService:
         await self._banks.remove(agent_id, account_id)
 
     async def page_for_agent(self, agent_id: str, page: int, page_size: int) -> Page[PayoutDto]:
-        rows, total = await self._repo.page_for_agent(agent_id, page, page_size)
-        return self._repo._db_utils.build_page([payout_to_dto(p) for p in rows], total, page, page_size)
+        rows, total = await self._payout_repo.page_for_agent(agent_id, page, page_size)
+        return self._payout_repo._db_utils.build_page([payout_to_dto(p) for p in rows], total, page, page_size)
 
     # ── Finance (APPROVE_PAYOUT) ──────────────────────────────────
 
@@ -123,7 +123,7 @@ class PayoutService:
         await publish_domain_event(DomainEvent(
             type=EventType.PAYOUT_APPROVED, recipient_user_ids=(payout.agent_id,),
         ))
-        return await self._repo.get_model(payout.id)
+        return await self._payout_repo.get_model(payout.id)
 
     async def hold(self, payout_id: str, admin_id: str, dto: PayoutDecisionDto) -> Payout:
         """Hold pending review — REQUESTED → HELD; fires PAYOUT_HELD with the reason (§12.2)."""
@@ -133,19 +133,19 @@ class PayoutService:
             type=EventType.PAYOUT_HELD, recipient_user_ids=(payout.agent_id,),
             data={"reason": dto.note or "under review"},
         ))
-        return await self._repo.get_model(payout.id)
+        return await self._payout_repo.get_model(payout.id)
 
     async def reject(self, payout_id: str, admin_id: str, dto: PayoutDecisionDto) -> Payout:
         """Decline — REQUESTED/HELD → REJECTED; funds released back to available."""
         payout = await self._get_decidable(payout_id)
         await self._decide(payout, PayoutStatus.REJECTED, admin_id, dto,
                            AuditActionType.PAYOUT_REJECTED)
-        return await self._repo.get_model(payout.id)
+        return await self._payout_repo.get_model(payout.id)
 
     async def adjust(self, payout_id: str, admin_id: str, dto: PayoutDecisionDto) -> Payout:
         """Record a finance correction (an adjustment + note) without deciding the request."""
         payout = await self._get_decidable(payout_id)
-        await self._repo.update(payout.id, UpdatePayoutDto(
+        await self._payout_repo.update(payout.id, UpdatePayoutDto(
             adjustment_minor=dto.adjustment_minor or 0, note=dto.note,
         ))
         self._audit.schedule(
@@ -153,11 +153,11 @@ class PayoutService:
             resource_type="payout", resource_id=payout.id, actor_id=admin_id,
             details={"adjustment_minor": dto.adjustment_minor or 0, "note": dto.note},
         )
-        return await self._repo.get_model(payout.id)
+        return await self._payout_repo.get_model(payout.id)
 
     async def page_all(self, page: int, page_size: int, status: str | None = None) -> Page[PayoutDto]:
-        rows, total = await self._repo.page_all(page, page_size, status)
-        return self._repo._db_utils.build_page([payout_to_dto(p) for p in rows], total, page, page_size)
+        rows, total = await self._payout_repo.page_all(page, page_size, status)
+        return self._payout_repo._db_utils.build_page([payout_to_dto(p) for p in rows], total, page, page_size)
 
     # ── helpers ───────────────────────────────────────────────────
 
@@ -179,11 +179,11 @@ class PayoutService:
         self, payout: Payout, to_status: PayoutStatus, admin_id: str,
         dto: PayoutDecisionDto, action: AuditActionType,
     ) -> None:
-        await self._repo.update(payout.id, UpdatePayoutDto(
+        await self._payout_repo.update(payout.id, UpdatePayoutDto(
             status=to_status.value, decided_by=admin_id, note=dto.note,
             adjustment_minor=dto.adjustment_minor if dto.adjustment_minor is not None else None,
         ))
-        row = await self._repo.get_model(payout.id)
+        row = await self._payout_repo.get_model(payout.id)
         row.decided_at = Utils.datetime_now()
         self._audit.schedule(
             action=action, resource_type="payout", resource_id=payout.id, actor_id=admin_id,
@@ -192,13 +192,13 @@ class PayoutService:
         )
 
     async def _get_owned(self, payout_id: str, agent_id: str) -> Payout:
-        payout = await self._repo.get_model(payout_id)
+        payout = await self._payout_repo.get_model(payout_id)
         if payout is None or payout.deleted or payout.agent_id != agent_id:
             raise ResourceNotFoundException(resource="payout")
         return payout
 
     async def _get_decidable(self, payout_id: str) -> Payout:
-        payout = await self._repo.get_model(payout_id)
+        payout = await self._payout_repo.get_model(payout_id)
         if payout is None or payout.deleted:
             raise ResourceNotFoundException(resource="payout")
         if payout.status not in LOCKING_STATUSES:

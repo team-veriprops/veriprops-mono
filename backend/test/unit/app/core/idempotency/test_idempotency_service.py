@@ -58,7 +58,7 @@ def _make_service(existing=None) -> IdempotencyService:
     repo.create_return_model = AsyncMock()
     repo.update_return_model = AsyncMock()
     svc = object.__new__(IdempotencyService)
-    svc._repo = repo
+    svc._idempotency_repo = repo
     return svc
 
 
@@ -71,7 +71,7 @@ class TestBeginOrReplay:
         outcome = await svc.begin_or_replay("new-key", "verification.create", request_hash="h1")
         assert outcome.is_replay is False
         assert outcome.resource_id is None
-        svc._repo.create_return_model.assert_called_once()
+        svc._idempotency_repo.create_return_model.assert_called_once()
 
     async def test_existing_key_replays_without_creating(self):
         existing = _existing(resource_id="ver-99", response_snapshot={"vid": "VP-2026-ABCDEF"})
@@ -80,7 +80,7 @@ class TestBeginOrReplay:
         assert outcome.is_replay is True
         assert outcome.resource_id == "ver-99"
         assert outcome.response_snapshot == {"vid": "VP-2026-ABCDEF"}
-        svc._repo.create_return_model.assert_not_called()
+        svc._idempotency_repo.create_return_model.assert_not_called()
 
     async def test_same_request_hash_replays(self):
         svc = _make_service(existing=_existing(request_hash="h1"))
@@ -102,7 +102,7 @@ class TestComplete:
         svc = _make_service(existing=existing)
         await svc.complete("k-1", resource_id="ver-99", response_snapshot={"vid": "VP-2026-ABCDEF"})
 
-        args = svc._repo.update_return_model.call_args
+        args = svc._idempotency_repo.update_return_model.call_args
         assert args.args[0] == "idem-uuid-1"
         update_dto = args.args[1]
         assert update_dto.status == IdempotencyStatus.COMPLETED
@@ -122,9 +122,9 @@ class TestClaim:
     async def test_first_delivery_claims(self):
         svc = _make_service(existing=None)
         assert await svc.claim("evt_123", "webhook.flutterwave") is True
-        svc._repo.create_return_model.assert_called_once()
+        svc._idempotency_repo.create_return_model.assert_called_once()
 
     async def test_replayed_delivery_is_dropped(self):
         svc = _make_service(existing=_existing(key="evt_123"))
         assert await svc.claim("evt_123", "webhook.flutterwave") is False
-        svc._repo.create_return_model.assert_not_called()
+        svc._idempotency_repo.create_return_model.assert_not_called()

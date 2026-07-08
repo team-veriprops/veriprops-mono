@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Column, Index, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 
@@ -152,7 +152,7 @@ class UpdateAuditLogDto(Object):
     pass
 
 
-class SearchAuditLogDto(PageRequest, BaseQueryDto):
+class SearchAuditLogDto(InternalPageRequest, BaseQueryDto):
     actor_id: Optional[str] = None
     action: Optional[str] = None
     resource_type: Optional[str] = None

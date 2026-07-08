@@ -49,7 +49,7 @@ def _make_service():
     svc._user_service = MagicMock()
     svc._consent_service = MagicMock()
     svc._audit_service = MagicMock()
-    svc._validator = AgentApplicationValidator()
+    svc._agent_validator = AgentApplicationValidator()
 
     svc._user_service.get_user_model = AsyncMock(
         return_value=SimpleNamespace(first_name="Ada", last_name="Obi", email="ada@example.com")

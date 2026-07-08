@@ -13,7 +13,7 @@ from typing import Optional
 
 from sqlalchemy import BigInteger, Column, String, Text
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 from main.appodus_utils.db.types.money import TransactionCurrency
 
@@ -82,7 +82,7 @@ class QueryPayoutDto(BaseQueryDto):
     status: Optional[str] = None
 
 
-class SearchPayoutDto(PageRequest, BaseQueryDto):
+class SearchPayoutDto(InternalPageRequest, BaseQueryDto):
     agent_id: Optional[str] = None
     status: Optional[str] = None
 

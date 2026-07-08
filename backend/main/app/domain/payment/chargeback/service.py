@@ -55,7 +55,7 @@ class ChargebackService:
         audit_repo: AuditLogRepo,
         audit_service: AuditLogService,
     ):
-        self._repo = chargeback_repo
+        self._chargeback_repo = chargeback_repo
         self._payment_repo = payment_repo
         self._verification_repo = verification_repo
         self._commissions = commission_service
@@ -68,7 +68,7 @@ class ChargebackService:
 
         Idempotent on the gateway event id — a replayed chargeback webhook returns the
         existing row without re-freezing or duplicating."""
-        existing = await self._repo.get_by_event_id(dto.event_id)
+        existing = await self._chargeback_repo.get_by_event_id(dto.event_id)
         if existing:
             return existing
 
@@ -77,7 +77,7 @@ class ChargebackService:
             raise ResourceNotFoundException(resource="payment")
 
         pack = await self._assemble_rebuttal_pack(payment.verification_id, payment.customer_id)
-        chargeback = await self._repo.create_return_model(CreateChargebackDto(
+        chargeback = await self._chargeback_repo.create_return_model(CreateChargebackDto(
             payment_id=payment.id,
             verification_id=payment.verification_id,
             gateway_event_id=dto.event_id,
@@ -112,7 +112,7 @@ class ChargebackService:
             raise InvalidResourceStateException(
                 resource="chargeback", message="Only a flagged chargeback can be rebutted."
             )
-        await self._repo.update(chargeback_id, UpdateChargebackDto(
+        await self._chargeback_repo.update(chargeback_id, UpdateChargebackDto(
             status=ChargebackStatus.REBUTTAL_SUBMITTED.value
         ))
         self._audit.schedule(
@@ -121,7 +121,7 @@ class ChargebackService:
             resource_id=chargeback_id,
             actor_id=admin_id,
         )
-        return await self._repo.get_model(chargeback_id)
+        return await self._chargeback_repo.get_model(chargeback_id)
 
     async def resolve(self, chargeback_id: str, won: bool, admin_id: str) -> Chargeback:
         chargeback = await self._get(chargeback_id)
@@ -131,7 +131,7 @@ class ChargebackService:
             )
 
         if won:
-            await self._repo.update(chargeback_id, UpdateChargebackDto(status=ChargebackStatus.WON.value))
+            await self._chargeback_repo.update(chargeback_id, UpdateChargebackDto(status=ChargebackStatus.WON.value))
             await self._payment_repo.update(chargeback.payment_id, UpdatePaymentDto(
                 chargeback_status=ChargebackStatus.WON.value
             ))
@@ -146,7 +146,7 @@ class ChargebackService:
                 details={"commissions_resumed": resumed},
             )
         else:
-            await self._repo.update(chargeback_id, UpdateChargebackDto(status=ChargebackStatus.LOST.value))
+            await self._chargeback_repo.update(chargeback_id, UpdateChargebackDto(status=ChargebackStatus.LOST.value))
             # Payment reversed by the bank — record the reversal on our side.
             await self._payment_repo.update(chargeback.payment_id, UpdatePaymentDto(
                 chargeback_status=ChargebackStatus.LOST.value,
@@ -165,15 +165,15 @@ class ChargebackService:
                          "repeat_offender_review": chargeback.verification_id},
             )
         await self._set_resolved_at(chargeback_id)
-        return await self._repo.get_model(chargeback_id)
+        return await self._chargeback_repo.get_model(chargeback_id)
 
     async def list_for_verification(self, verification_id: str):
-        return await self._repo.list_for_verification(verification_id)
+        return await self._chargeback_repo.list_for_verification(verification_id)
 
     async def count_open(self) -> int:
         """Unresolved chargebacks needing admin attention (§6a) — flagged or with a
         rebuttal submitted but not yet won/lost."""
-        return await self._repo.count_by_status([
+        return await self._chargeback_repo.count_by_status([
             ChargebackStatus.FLAGGED.value,
             ChargebackStatus.REBUTTAL_SUBMITTED.value,
         ])
@@ -224,11 +224,11 @@ class ChargebackService:
     # ── helpers ───────────────────────────────────────────────────
 
     async def _get(self, chargeback_id: str) -> Chargeback:
-        chargeback = await self._repo.get_model(chargeback_id)
+        chargeback = await self._chargeback_repo.get_model(chargeback_id)
         if not chargeback:
             raise ResourceNotFoundException(resource="chargeback")
         return chargeback
 
     async def _set_resolved_at(self, chargeback_id: str) -> None:
-        chargeback = await self._repo.get_model(chargeback_id)
+        chargeback = await self._chargeback_repo.get_model(chargeback_id)
         chargeback.resolved_at = Utils.datetime_now()

@@ -10,7 +10,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Integer, String, Text
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -41,7 +41,7 @@ class UpdateAgentApplicationDraftDto(Object):
     payload: Optional[str] = None
 
 
-class SearchAgentApplicationDraftDto(PageRequest, BaseQueryDto):
+class SearchAgentApplicationDraftDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
 
 

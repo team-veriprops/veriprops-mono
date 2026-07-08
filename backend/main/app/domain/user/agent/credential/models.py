@@ -12,7 +12,7 @@ from typing import Optional
 from sqlalchemy import Column, Date, String
 
 from main.app.core.state.status import AgentRole
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
 class CredentialType(str, enum.Enum):
@@ -72,7 +72,7 @@ class UpdateAgentCredentialDto(Object):
     status: Optional[str] = None
 
 
-class SearchAgentCredentialDto(PageRequest, BaseQueryDto):
+class SearchAgentCredentialDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
     role: Optional[str] = None
 

@@ -68,8 +68,14 @@ class BaseWebhookHandler(IWebhookHandler):
 
     @staticmethod
     def _log_event(body: bytes, headers: Dict) -> None:
-        logger.info(f"Webhook processing event, payload: {body}")
-        logger.info(f"Webhook processing event, header: {headers}")
+        # Log metadata only. The raw body carries PII/amounts and the headers carry
+        # provider signatures — neither belongs in logs.
+        content_type = headers.get("content-type") or headers.get("Content-Type")
+        logger.info(
+            "Webhook processing event (bytes=%s, content_type=%s)",
+            len(body or b""),
+            content_type,
+        )
 
     @staticmethod
     async def _retry_logic(action: Callable, max_retries: int = 3) -> None:

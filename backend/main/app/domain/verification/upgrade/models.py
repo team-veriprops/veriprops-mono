@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy import BigInteger, Column, Index, String
 
 from main.app.core.state.status import VerificationTier
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
 class UpgradeStatus(str, enum.Enum):
@@ -62,7 +62,7 @@ class QueryUpgradeDto(BaseQueryDto):
     status: Optional[str] = None
 
 
-class SearchUpgradeDto(PageRequest, BaseQueryDto):
+class SearchUpgradeDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
 
 

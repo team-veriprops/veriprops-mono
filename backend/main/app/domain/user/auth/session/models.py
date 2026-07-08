@@ -9,7 +9,7 @@ from pydantic import EmailStr
 from sqlalchemy import Boolean, Column, Index, String
 
 from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -112,7 +112,7 @@ class UpdateDeviceSessionDto(Object):
     revoked_at: Optional[datetime] = None
 
 
-class SearchDeviceSessionDto(PageRequest, BaseQueryDto):
+class SearchDeviceSessionDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
     revoked: Optional[bool] = None
 
@@ -155,7 +155,7 @@ class UpdateSecurityEventDto(Object):
     pass
 
 
-class SearchSecurityEventDto(PageRequest, BaseQueryDto):
+class SearchSecurityEventDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
     type: Optional[str] = None
 
@@ -190,7 +190,7 @@ class UpdatePasswordResetTokenDto(Object):
     consumed_at: Optional[datetime] = None
 
 
-class SearchPasswordResetTokenDto(PageRequest, BaseQueryDto):
+class SearchPasswordResetTokenDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
     token_hash: Optional[str] = None
 

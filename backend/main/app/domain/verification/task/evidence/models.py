@@ -15,7 +15,7 @@ from typing import Optional
 
 from sqlalchemy import BigInteger, Column, Float, Index, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -80,7 +80,7 @@ class UpdateEvidenceDto(Object):
     storage_url: Optional[str] = None
 
 
-class SearchEvidenceDto(PageRequest, BaseQueryDto):
+class SearchEvidenceDto(InternalPageRequest, BaseQueryDto):
     task_id: Optional[str] = None
     verification_id: Optional[str] = None
     kind: Optional[str] = None

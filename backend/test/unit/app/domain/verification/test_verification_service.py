@@ -73,7 +73,7 @@ def _user(credit_balance_kobo=0):
 
 def _make_service(credit_balance_kobo=0, has_paid=False):
     svc = object.__new__(VerificationService)
-    svc._repo = MagicMock()
+    svc._verification_repo = MagicMock()
     svc._property_service = MagicMock()
     svc._consent_service = MagicMock()
     svc._idempotency = MagicMock()
@@ -81,9 +81,9 @@ def _make_service(credit_balance_kobo=0, has_paid=False):
     svc._config = MagicMock()
     svc._users = MagicMock()
     svc._pricing = MagicMock()
-    svc._repo.create_return_model = AsyncMock(return_value=_verification())
-    svc._repo.update = AsyncMock()
-    svc._repo.has_paid_verification = AsyncMock(return_value=has_paid)
+    svc._verification_repo.create_return_model = AsyncMock(return_value=_verification())
+    svc._verification_repo.update = AsyncMock()
+    svc._verification_repo.has_paid_verification = AsyncMock(return_value=has_paid)
     svc._property_service.create = AsyncMock(return_value=SimpleNamespace(id="prop-1"))
     svc._consent_service.record_user_consent = AsyncMock()
     svc._config.get_int = AsyncMock(side_effect=lambda key: _CONFIG_VALUES[key])
@@ -106,31 +106,31 @@ class TestCreateDraft:
     async def test_creates_when_no_idempotency_key(self):
         svc = _make_service()
         await svc.create_draft("cust-1")
-        svc._repo.create_return_model.assert_awaited_once()
+        svc._verification_repo.create_return_model.assert_awaited_once()
 
     async def test_replays_existing_on_double_tap(self):
         svc = _make_service()
         svc._idempotency.begin_or_replay = AsyncMock(
             return_value=IdempotencyOutcome(is_replay=True, resource_id="ver-1")
         )
-        svc._repo.get_model = AsyncMock(return_value=_verification())
+        svc._verification_repo.get_model = AsyncMock(return_value=_verification())
         result = await svc.create_draft("cust-1", idempotency_key="k-1")
         assert result.id == "ver-1"
-        svc._repo.create_return_model.assert_not_called()
+        svc._verification_repo.create_return_model.assert_not_called()
 
     async def test_fresh_key_creates_and_completes(self):
         svc = _make_service()
         svc._idempotency.begin_or_replay = AsyncMock(return_value=IdempotencyOutcome(is_replay=False))
         svc._idempotency.complete = AsyncMock()
         await svc.create_draft("cust-1", idempotency_key="k-1")
-        svc._repo.create_return_model.assert_awaited_once()
+        svc._verification_repo.create_return_model.assert_awaited_once()
         svc._idempotency.complete.assert_awaited_once()
 
 
 class TestSubmit:
     async def test_draft_to_submitted_with_property_and_consent(self):
         svc = _make_service()
-        svc._repo.get_model = AsyncMock(return_value=_verification())
+        svc._verification_repo.get_model = AsyncMock(return_value=_verification())
         await svc.submit("ver-1", "cust-1", _submit_dto(), ip_address="1.2.3.4")
 
         svc._property_service.create.assert_awaited_once()
@@ -139,14 +139,14 @@ class TestSubmit:
             ConsentDocumentType.VERIFICATION_TERMS
         )
         # Status transition persisted + audited.
-        update_dto = svc._repo.update.call_args_list[0].args[1]
+        update_dto = svc._verification_repo.update.call_args_list[0].args[1]
         assert update_dto.status == VerificationStatus.SUBMITTED.value
         assert update_dto.price_locked_minor and update_dto.price_locked_minor > 0
         assert svc._audit.schedule.call_args.kwargs["action"] == AuditActionType.VERIFICATION_SUBMITTED
 
     async def test_rejects_submit_from_paid(self):
         svc = _make_service()
-        svc._repo.get_model = AsyncMock(return_value=_verification(status=VerificationStatus.PAID.value))
+        svc._verification_repo.get_model = AsyncMock(return_value=_verification(status=VerificationStatus.PAID.value))
         with pytest.raises(IllegalStateTransitionException):
             await svc.submit("ver-1", "cust-1", _submit_dto())
 
@@ -154,28 +154,28 @@ class TestSubmit:
 class TestMarkPaid:
     async def test_payment_pending_to_paid(self):
         svc = _make_service()
-        svc._repo.get_model = AsyncMock(
+        svc._verification_repo.get_model = AsyncMock(
             return_value=_verification(status=VerificationStatus.PAYMENT_PENDING.value, tier="STANDARD")
         )
         await svc.mark_paid("ver-1")
-        update_dto = svc._repo.update.call_args_list[0].args[1]
+        update_dto = svc._verification_repo.update.call_args_list[0].args[1]
         assert update_dto.status == VerificationStatus.PAID.value
 
     async def test_idempotent_when_already_paid(self):
         svc = _make_service()
-        svc._repo.get_model = AsyncMock(return_value=_verification(status=VerificationStatus.PAID.value))
+        svc._verification_repo.get_model = AsyncMock(return_value=_verification(status=VerificationStatus.PAID.value))
         await svc.mark_paid("ver-1")
-        svc._repo.update.assert_not_called()
+        svc._verification_repo.update.assert_not_called()
 
     async def test_rejects_paid_from_draft(self):
         svc = _make_service()
-        svc._repo.get_model = AsyncMock(return_value=_verification(status=VerificationStatus.DRAFT.value))
+        svc._verification_repo.get_model = AsyncMock(return_value=_verification(status=VerificationStatus.DRAFT.value))
         with pytest.raises(IllegalStateTransitionException):
             await svc.mark_paid("ver-1")
 
     async def test_debits_applied_referral_credit_on_paid(self):
         svc = _make_service(credit_balance_kobo=800_000)
-        svc._repo.get_model = AsyncMock(return_value=_verification(
+        svc._verification_repo.get_model = AsyncMock(return_value=_verification(
             status=VerificationStatus.PAYMENT_PENDING.value, tier="STANDARD",
             referral_credit_applied_minor=500_000,
         ))
@@ -209,9 +209,9 @@ class TestQuoteDiscount:
 class TestSubmitDiscount:
     async def test_submit_locks_net_price_and_records_breakdown(self):
         svc = _make_service(has_paid=False)
-        svc._repo.get_model = AsyncMock(return_value=_verification())
+        svc._verification_repo.get_model = AsyncMock(return_value=_verification())
         await svc.submit("ver-1", "cust-1", _submit_dto())
-        dto = svc._repo.update.call_args_list[0].args[1]
+        dto = svc._verification_repo.update.call_args_list[0].args[1]
         # Net = base − first-time discount; the breakdown is recorded.
         assert dto.first_time_discount_minor == 1_200_000
         assert dto.price_locked_minor == 12_000_000 - 1_200_000
@@ -224,8 +224,8 @@ class TestAbandonmentSweep:
                             AsyncMock(side_effect=lambda e: published.append(e)))
         svc = _make_service()
         draft = _verification(status=VerificationStatus.PAYMENT_PENDING.value)
-        svc._repo.list_abandoned_drafts = AsyncMock(return_value=[draft])
-        svc._repo.get_model = AsyncMock(return_value=draft)
+        svc._verification_repo.list_abandoned_drafts = AsyncMock(return_value=[draft])
+        svc._verification_repo.get_model = AsyncMock(return_value=draft)
         reminded = await svc.sweep_abandoned_drafts()
         assert reminded == 1
         assert draft.recovery_reminded_at is not None
@@ -235,8 +235,8 @@ class TestAbandonmentSweep:
         monkeypatch.setattr(verification_module, "publish_domain_event", AsyncMock())
         svc = _make_service()
         draft = _verification(recovery_reminded_at=Utils.datetime_now())
-        svc._repo.list_abandoned_drafts = AsyncMock(return_value=[draft])
-        svc._repo.get_model = AsyncMock(return_value=draft)
+        svc._verification_repo.list_abandoned_drafts = AsyncMock(return_value=[draft])
+        svc._verification_repo.get_model = AsyncMock(return_value=draft)
         assert await svc.sweep_abandoned_drafts() == 0
 
 
@@ -247,7 +247,7 @@ class TestRefreshLock:
         v = _verification(status=VerificationStatus.SUBMITTED.value, tier="STANDARD",
                           price_locked_minor=12_000_000, price_lock_expires_at=expired,
                           charge_currency="NGN")
-        svc._repo.get_model = AsyncMock(return_value=v)
+        svc._verification_repo.get_model = AsyncMock(return_value=v)
         result = await svc.refresh_price_lock_if_expired("ver-1", "cust-1")
         assert result.price_changed is True
         assert result.net_price_minor == 12_000_000 - 1_200_000
@@ -257,6 +257,6 @@ class TestRefreshLock:
         future = Utils.datetime_now() + timedelta(hours=5)
         v = _verification(status=VerificationStatus.SUBMITTED.value, tier="STANDARD",
                           price_locked_minor=12_000_000, price_lock_expires_at=future)
-        svc._repo.get_model = AsyncMock(return_value=v)
+        svc._verification_repo.get_model = AsyncMock(return_value=v)
         result = await svc.refresh_price_lock_if_expired("ver-1", "cust-1")
         assert result.price_changed is False

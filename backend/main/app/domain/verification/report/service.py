@@ -49,7 +49,7 @@ def _next_version_label(prior_label: Optional[str], kind: ReportRevisionKind) ->
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class ReportService:
     def __init__(self, report_repo: ReportRepo, audit_service: AuditLogService):
-        self._repo = report_repo
+        self._report_repo = report_repo
         self._audit = audit_service
 
     async def release(
@@ -65,17 +65,17 @@ class ReportService:
         """Release a new report version (§8.6). Any live RELEASED report is superseded first.
         ``revision_kind`` (§14) tags why the version was produced and drives the semantic
         version label (v1.0 → v2.0 re-check → v3.0 tier upgrade)."""
-        existing = await self._repo.get_released(verification_id)
+        existing = await self._report_repo.get_released(verification_id)
         prior_label = existing.version_label if existing is not None else None
         if existing is not None:
             report_state_machine.assert_can_transition(
                 existing.state, ReportState.SUPERSEDED.value, resource="Report"
             )
-            await self._repo.update(existing.id, UpdateReportDto(state=ReportState.SUPERSEDED.value))
+            await self._report_repo.update(existing.id, UpdateReportDto(state=ReportState.SUPERSEDED.value))
             await self._set_superseded_at(existing.id)
 
-        next_version = await self._repo.latest_version(verification_id) + 1
-        report = await self._repo.create_return_model(CreateReportDto(
+        next_version = await self._report_repo.latest_version(verification_id) + 1
+        report = await self._report_repo.create_return_model(CreateReportDto(
             verification_id=verification_id,
             report_version=next_version,
             version_label=_next_version_label(prior_label, revision_kind),
@@ -100,13 +100,13 @@ class ReportService:
     async def supersede_current(self, verification_id: str, actor_id: str) -> Optional[Report]:
         """Move the live RELEASED report to SUPERSEDED (e.g. on reopen, §8.6). The report
         no longer reflects the verification once a task is reopened."""
-        existing = await self._repo.get_released(verification_id)
+        existing = await self._report_repo.get_released(verification_id)
         if existing is None:
             return None
         report_state_machine.assert_can_transition(
             existing.state, ReportState.SUPERSEDED.value, resource="Report"
         )
-        await self._repo.update(existing.id, UpdateReportDto(state=ReportState.SUPERSEDED.value))
+        await self._report_repo.update(existing.id, UpdateReportDto(state=ReportState.SUPERSEDED.value))
         await self._set_superseded_at(existing.id)
         self._audit.schedule(
             action=AuditActionType.REPORT_RELEASED,
@@ -114,18 +114,18 @@ class ReportService:
             from_state=ReportState.RELEASED.value, to_state=ReportState.SUPERSEDED.value,
             details={"event": "superseded_on_reopen", "verification_id": verification_id},
         )
-        return await self._repo.get_model(existing.id)
+        return await self._report_repo.get_model(existing.id)
 
     async def list_for_verification(self, verification_id: str) -> List[Report]:
-        return await self._repo.list_for_verification(verification_id)
+        return await self._report_repo.list_for_verification(verification_id)
 
     async def get_released(self, verification_id: str) -> Optional[Report]:
-        return await self._repo.get_released(verification_id)
+        return await self._report_repo.get_released(verification_id)
 
     async def _set_released_at(self, report_id: str) -> None:
-        report = await self._repo.get_model(report_id)
+        report = await self._report_repo.get_model(report_id)
         report.released_at = Utils.datetime_now()
 
     async def _set_superseded_at(self, report_id: str) -> None:
-        report = await self._repo.get_model(report_id)
+        report = await self._report_repo.get_model(report_id)
         report.superseded_at = Utils.datetime_now()

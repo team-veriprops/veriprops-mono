@@ -59,7 +59,7 @@ def _payout(pid="p-1", status=PayoutStatus.REQUESTED, agent="a-1", amount=50_000
 
 def _make_service(available=100_000):
     svc = object.__new__(PayoutService)
-    svc._repo = AsyncMock()
+    svc._payout_repo = AsyncMock()
     svc._earnings = AsyncMock()
     svc._banks = AsyncMock()
     svc._audit = MagicMock()
@@ -83,7 +83,7 @@ class TestRequest:
     async def test_creates_request_with_sla(self):
         svc = _make_service(available=100_000)
         created = _payout()
-        svc._repo.create_return_model = AsyncMock(return_value=created)
+        svc._payout_repo.create_return_model = AsyncMock(return_value=created)
         out = await svc.request("a-1", RequestPayoutDto(
             amount_minor=50_000, bank_name="GT", account_number="1", account_name="A"))
         assert out.requested_at is not None
@@ -101,24 +101,24 @@ class TestFinanceDecisions:
     async def test_approve_marks_paid_and_fires_event(self, stub_publish):
         svc = _make_service()
         p = _payout(status=PayoutStatus.REQUESTED)
-        svc._repo.get_model = AsyncMock(return_value=p)
-        svc._repo.update = AsyncMock()
+        svc._payout_repo.get_model = AsyncMock(return_value=p)
+        svc._payout_repo.update = AsyncMock()
         await svc.approve("p-1", "fin-1", PayoutDecisionDto())
-        _, dto = svc._repo.update.call_args[0]
+        _, dto = svc._payout_repo.update.call_args[0]
         assert dto.status == PayoutStatus.PAID.value
         assert stub_publish[0].type == EventType.PAYOUT_APPROVED
 
     async def test_hold_fires_held_event_with_reason(self, stub_publish):
         svc = _make_service()
-        svc._repo.get_model = AsyncMock(return_value=_payout())
-        svc._repo.update = AsyncMock()
+        svc._payout_repo.get_model = AsyncMock(return_value=_payout())
+        svc._payout_repo.update = AsyncMock()
         await svc.hold("p-1", "fin-1", PayoutDecisionDto(note="verify account"))
         assert stub_publish[0].type == EventType.PAYOUT_HELD
         assert stub_publish[0].data["reason"] == "verify account"
 
     async def test_cannot_decide_finalised_payout(self):
         svc = _make_service()
-        svc._repo.get_model = AsyncMock(return_value=_payout(status=PayoutStatus.PAID))
+        svc._payout_repo.get_model = AsyncMock(return_value=_payout(status=PayoutStatus.PAID))
         with pytest.raises(InvalidResourceStateException):
             await svc.approve("p-1", "fin-1", PayoutDecisionDto())
 
@@ -126,14 +126,14 @@ class TestFinanceDecisions:
 class TestCancel:
     async def test_owner_cancels_pending(self):
         svc = _make_service()
-        svc._repo.get_model = AsyncMock(return_value=_payout(status=PayoutStatus.REQUESTED))
-        svc._repo.update = AsyncMock()
+        svc._payout_repo.get_model = AsyncMock(return_value=_payout(status=PayoutStatus.REQUESTED))
+        svc._payout_repo.update = AsyncMock()
         await svc.cancel("a-1", "p-1")
-        _, dto = svc._repo.update.call_args[0]
+        _, dto = svc._payout_repo.update.call_args[0]
         assert dto.status == PayoutStatus.CANCELLED.value
 
     async def test_cannot_cancel_non_pending(self):
         svc = _make_service()
-        svc._repo.get_model = AsyncMock(return_value=_payout(status=PayoutStatus.PAID))
+        svc._payout_repo.get_model = AsyncMock(return_value=_payout(status=PayoutStatus.PAID))
         with pytest.raises(InvalidResourceStateException):
             await svc.cancel("a-1", "p-1")

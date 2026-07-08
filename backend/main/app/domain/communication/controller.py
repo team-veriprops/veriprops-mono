@@ -65,7 +65,8 @@ class AdminSendMessageDto(Object):
 
 class SendToConversationDto(Object):
     body: str
-    sender_kind: SenderKind
+    # sender_kind is intentionally NOT accepted from the client — it is derived
+    # server-side from the caller's role and the thread type (see post_message).
     task_id: str | None = None
     kind: MessageKind = MessageKind.CHAT
 
@@ -164,7 +165,7 @@ async def post_message(
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
     message = await comms.post_message(
-        conversation_id, user_id, req.sender_kind, req.body, task_id=req.task_id, kind=req.kind
+        conversation_id, user_id, req.body, task_id=req.task_id, kind=req.kind
     )
     return SuccessResponse[ChatMessageDto](data=_sent_dto(message))
 

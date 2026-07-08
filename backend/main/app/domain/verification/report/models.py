@@ -14,7 +14,7 @@ from sqlalchemy import Column, Integer, String
 from sqlalchemy import Index
 
 from main.app.core.state.status import ReportRevisionKind, ReportState, VerificationTier
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 
@@ -71,7 +71,7 @@ class QueryReportDto(BaseQueryDto):
     state: Optional[str] = None
 
 
-class SearchReportDto(PageRequest, BaseQueryDto):
+class SearchReportDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
     state: Optional[str] = None
 

@@ -52,7 +52,9 @@ async def list_admin_actions(
 )
 async def export_verification_pack(
     verification_id: str,
-    _: str = Depends(require_permission(Permission.VIEW_ADMIN_PANEL)),
+    # The pack is a full PII export; gate it on MANAGE_VERIFICATIONS (Operations/Super)
+    # rather than the broad VIEW_ADMIN_PANEL that content roles also hold.
+    _: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
 ):
     pack: VerificationAuditPackService = di[VerificationAuditPackService]
     csv_bytes = await pack.build_pack_csv(verification_id)

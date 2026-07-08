@@ -96,19 +96,30 @@ class CommunicationService:
         self,
         conversation_id: str,
         user_id: str,
-        sender_kind: SenderKind,
         body: str,
         *,
         task_id: Optional[str] = None,
         kind: MessageKind = MessageKind.CHAT,
     ) -> ChatMessage:
-        """Send into a thread the user is a member of. The controller supplies ``sender_kind``
-        from its surface (customer/agent/admin); membership is the base authorization, and an
-        agent posting about an approved task is refused (§11.1)."""
+        """Send into a thread the user is a member of. ``sender_kind`` is derived
+        server-side from the caller's role and the thread type — never trusted from the
+        client — so a member cannot post as ADMIN/SYSTEM. Membership is the base
+        authorization, and an agent posting about an approved task is refused (§11.1)."""
         convo = await self._conversations.get_owned_participant(conversation_id, user_id)
+        sender_kind = await self._resolve_sender_kind(user_id, convo)
         if sender_kind == SenderKind.AGENT and task_id:
             await self._assert_task_writable(task_id, user_id)
         return await self._chat.send(convo, user_id, sender_kind, body, task_id=task_id, kind=kind)
+
+    async def _resolve_sender_kind(self, user_id: str, convo: Conversation) -> SenderKind:
+        """Trusted sender identity for the generic post path: admins post as ADMIN, the
+        non-admin party in an admin↔agent thread posts as AGENT, everyone else as
+        CUSTOMER. SYSTEM is never assignable to a human-originated message."""
+        if await self._is_admin(user_id):
+            return SenderKind.ADMIN
+        if convo.type == ConversationType.ADMIN_AGENT.value:
+            return SenderKind.AGENT
+        return SenderKind.CUSTOMER
 
     # ── Customer ↔ Admin (§11.1) ──────────────────────────────────────
 

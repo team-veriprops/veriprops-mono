@@ -28,17 +28,17 @@ def mock_db_session():
 
 def _service(stored=None):
     svc = object.__new__(ConfigService)
-    svc._repo = MagicMock()
+    svc._config_repo = MagicMock()
     svc._audit = MagicMock()
     svc._audit.schedule = MagicMock()
     rows = stored or {}
-    svc._repo.get_by_key = AsyncMock(side_effect=lambda k: rows.get(k))
-    svc._repo.create = AsyncMock()
-    svc._repo.create_return_model = AsyncMock(
+    svc._config_repo.get_by_key = AsyncMock(side_effect=lambda k: rows.get(k))
+    svc._config_repo.create = AsyncMock()
+    svc._config_repo.create_return_model = AsyncMock(
         return_value=SimpleNamespace(id="c-1", value_json=30)
     )
-    svc._repo.update = AsyncMock()
-    svc._repo.get_model = AsyncMock(return_value=SimpleNamespace(id="c-1", value_json=45))
+    svc._config_repo.update = AsyncMock()
+    svc._config_repo.get_model = AsyncMock(return_value=SimpleNamespace(id="c-1", value_json=45))
     return svc, rows
 
 
@@ -57,7 +57,7 @@ class TestSet:
         svc, _ = _service()
         await svc.set(ConfigKey.DISPUTE_WINDOW_DAYS, "45", "admin-1")
         # create_return_model called with a coerced int value
-        dto = svc._repo.create_return_model.await_args.args[0]
+        dto = svc._config_repo.create_return_model.await_args.args[0]
         assert dto.value_json == 45 and isinstance(dto.value_json, int)
 
     async def test_set_audits(self):
@@ -72,4 +72,4 @@ class TestSeed:
         present = {ConfigKey.DISPUTE_WINDOW_DAYS.value: SimpleNamespace(value_json=30)}
         svc, _ = _service(present)
         await svc.seed_defaults()
-        assert svc._repo.create.await_count == len(CONFIG_DEFAULTS) - 1
+        assert svc._config_repo.create.await_count == len(CONFIG_DEFAULTS) - 1

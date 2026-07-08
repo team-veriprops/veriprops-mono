@@ -34,7 +34,7 @@ class ConversationService:
         conversation_repo: ConversationRepo,
         participant_repo: ConversationParticipantRepo,
     ):
-        self._repo = conversation_repo
+        self._conversation_repo = conversation_repo
         self._participants = participant_repo
 
     async def get_or_create_verification_thread(
@@ -44,10 +44,10 @@ class ConversationService:
         created_by: str,
         subject: Optional[str] = None,
     ) -> Conversation:
-        existing = await self._repo.get_for_verification(verification_id, conversation_type)
+        existing = await self._conversation_repo.get_for_verification(verification_id, conversation_type)
         if existing:
             return existing
-        return await self._repo.create_return_model(
+        return await self._conversation_repo.create_return_model(
             CreateConversationDto(
                 type=conversation_type,
                 verification_id=verification_id,
@@ -57,10 +57,10 @@ class ConversationService:
         )
 
     async def get_or_create_support_thread(self, user_id: str) -> Conversation:
-        existing = await self._repo.get_general_support(user_id)
+        existing = await self._conversation_repo.get_general_support(user_id)
         if existing:
             return existing
-        return await self._repo.create_return_model(
+        return await self._conversation_repo.create_return_model(
             CreateConversationDto(
                 type=ConversationType.GENERAL_SUPPORT,
                 verification_id=None,
@@ -75,7 +75,7 @@ class ConversationService:
         participant = await self._participants.get_for(conversation_id, user_id)
         if participant is None:
             raise ResourceNotFoundException(resource="Conversation")
-        convo = await self._repo.get_model(conversation_id)
+        convo = await self._conversation_repo.get_model(conversation_id)
         if convo is None or convo.deleted:
             raise ResourceNotFoundException(resource="Conversation")
         return convo
@@ -84,17 +84,17 @@ class ConversationService:
         """Advance ``last_message_at`` to a delivered message's time (drives unread state).
 
         Set on the attached row rather than the update DTO path (datetime columns)."""
-        convo = await self._repo.get_model(conversation_id)
+        convo = await self._conversation_repo.get_model(conversation_id)
         if convo is None:
             return
         convo.last_message_at = at
-        self._repo._session.add(convo)
+        self._conversation_repo._session.add(convo)
 
     async def list_for_user(self, user_id: str) -> List[ConversationDto]:
         """The user's threads (Chat conversation list, §N.3), each with its unread count."""
         memberships = await self._participants.list_for_user(user_id)
         by_conv = {m.conversation_id: m for m in memberships}
-        conversations = await self._repo.list_by_ids(list(by_conv.keys()))
+        conversations = await self._conversation_repo.list_by_ids(list(by_conv.keys()))
         result: List[ConversationDto] = []
         for convo in conversations:
             membership = by_conv.get(convo.id)
@@ -105,7 +105,7 @@ class ConversationService:
     async def list_for_admin(self, admin_id: str) -> List[ConversationDto]:
         """Admin shared inbox (§N.3): every verification thread, unread computed against this
         admin's own read state (a thread the admin has never opened reads as unread)."""
-        threads = await self._repo.list_verification_threads()
+        threads = await self._conversation_repo.list_verification_threads()
         result: List[ConversationDto] = []
         for convo in threads:
             participant = await self._participants.get_for(convo.id, admin_id)
@@ -114,7 +114,7 @@ class ConversationService:
         return result
 
     async def unread_count_for_admin(self, admin_id: str) -> int:
-        threads = await self._repo.list_verification_threads()
+        threads = await self._conversation_repo.list_verification_threads()
         count = 0
         for convo in threads:
             participant = await self._participants.get_for(convo.id, admin_id)

@@ -13,7 +13,7 @@ from pydantic import EmailStr
 from sqlalchemy import Column, Index, String
 
 from main.app.domain.user.models import AdminSubRole
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -70,7 +70,7 @@ class UpdateAdminInvitationDto(Object):
     accepted_by: Optional[str] = None
 
 
-class SearchAdminInvitationDto(PageRequest, BaseQueryDto):
+class SearchAdminInvitationDto(InternalPageRequest, BaseQueryDto):
     email: Optional[str] = None
     status: Optional[str] = None
 

@@ -33,7 +33,7 @@ def mock_db_session():
 
 def _service():
     svc = object.__new__(ChatMessageService)
-    svc._repo = MagicMock()
+    svc._chat_message_repo = MagicMock()
     svc._conversations = MagicMock()
     svc._participants = MagicMock()
     svc._users = MagicMock()
@@ -60,12 +60,12 @@ def _service():
             deleted=False,
         )
 
-    svc._repo.create_return_model = AsyncMock(side_effect=_create)
+    svc._chat_message_repo.create_return_model = AsyncMock(side_effect=_create)
     svc._participants.ensure_participant = AsyncMock()
-    svc._participants._repo = MagicMock()
-    svc._participants._repo.list_for_conversation = AsyncMock(return_value=[])
+    svc._participants._participant_repo = MagicMock()
+    svc._participants._participant_repo.list_for_conversation = AsyncMock(return_value=[])
     svc._conversations.touch = AsyncMock()
-    svc._conversations._repo = MagicMock()
+    svc._conversations._conversation_repo = MagicMock()
     svc._audit.schedule = MagicMock()
     return svc
 
@@ -108,8 +108,8 @@ async def test_approve_held_message_delivers():
         id="msg-1", conversation_id="conv-1", sender_user_id="cust-1",
         state=ChatMessageState.HELD.value, delivered_at=None, deleted=False,
     )
-    svc._repo.get_model = AsyncMock(return_value=held)
-    svc._conversations._repo.get_model = AsyncMock(return_value=_conversation())
+    svc._chat_message_repo.get_model = AsyncMock(return_value=held)
+    svc._conversations._conversation_repo.get_model = AsyncMock(return_value=_conversation())
 
     result = await svc.approve("msg-1", "admin-1")
     assert result.state == ChatMessageState.DELIVERED.value
@@ -122,7 +122,7 @@ async def test_reject_held_message_blocks():
         id="msg-1", conversation_id="conv-1", sender_user_id="cust-1",
         state=ChatMessageState.HELD.value, deleted=False,
     )
-    svc._repo.get_model = AsyncMock(return_value=held)
+    svc._chat_message_repo.get_model = AsyncMock(return_value=held)
 
     result = await svc.reject("msg-1", "admin-1")
     assert result.state == ChatMessageState.BLOCKED.value
@@ -135,7 +135,7 @@ async def test_cannot_review_a_non_held_message():
     delivered = SimpleNamespace(
         id="msg-1", state=ChatMessageState.DELIVERED.value, deleted=False,
     )
-    svc._repo.get_model = AsyncMock(return_value=delivered)
+    svc._chat_message_repo.get_model = AsyncMock(return_value=delivered)
     with pytest.raises(ForbiddenException):
         await svc.approve("msg-1", "admin-1")
 

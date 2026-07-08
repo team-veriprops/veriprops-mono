@@ -40,7 +40,7 @@ class NotificationService:
         preferences: NotificationPreferenceService,
         dispatcher: NotificationDispatcher,
     ):
-        self._repo = notification_repo
+        self._notification_repo = notification_repo
         self._preferences = preferences
         self._dispatcher = dispatcher
 
@@ -55,7 +55,7 @@ class NotificationService:
         title, body, link = build_content(event)
         for user_id in dict.fromkeys(event.recipient_user_ids):  # de-dupe, preserve order
             if rule.in_app:
-                await self._repo.create_return_model(
+                await self._notification_repo.create_return_model(
                     CreateNotificationDto(
                         user_id=user_id,
                         type=event.type.value,
@@ -89,22 +89,22 @@ class NotificationService:
     # ── Feed / counter / read ─────────────────────────────────────────
 
     async def feed(self, user_id: str, page: int, page_size: int) -> Page[NotificationDto]:
-        rows, total = await self._repo.list_for_user(user_id, page, page_size)
+        rows, total = await self._notification_repo.list_for_user(user_id, page, page_size)
         dtos = [self._to_dto(n) for n in rows]
-        return self._repo._db_utils.build_page(dtos, total, page, page_size)
+        return self._notification_repo._db_utils.build_page(dtos, total, page, page_size)
 
     async def unread_count(self, user_id: str) -> int:
-        return await self._repo.unread_count(user_id)
+        return await self._notification_repo.unread_count(user_id)
 
     async def mark_read(self, notification_id: str, user_id: str) -> None:
-        notification = await self._repo.get_model(notification_id)
+        notification = await self._notification_repo.get_model(notification_id)
         if notification is None or notification.user_id != user_id:
             return
         notification.read = True
-        self._repo._session.add(notification)
+        self._notification_repo._session.add(notification)
 
     async def mark_all_read(self, user_id: str) -> int:
-        return await self._repo.mark_all_read(user_id)
+        return await self._notification_repo.mark_all_read(user_id)
 
     @staticmethod
     def _to_dto(n: Notification) -> NotificationDto:

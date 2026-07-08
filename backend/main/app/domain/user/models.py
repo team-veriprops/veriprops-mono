@@ -6,11 +6,11 @@ from datetime import datetime
 from typing import List, Optional
 
 from pydantic import EmailStr, Field
-from sqlalchemy import BigInteger, Boolean, Column, Index, String, Integer
+from sqlalchemy import BigInteger, Boolean, Column, String, Integer
 from sqlalchemy.ext.mutable import MutableList
 
 from main.app.domain.user.auth.session.models import UserType, UserPersona
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime, jsonb_variant
 from main.appodus_utils.db.types.money import TransactionCurrency
 
@@ -64,10 +64,8 @@ class User(BaseEntity):
     avatar_url = Column(String(512), nullable=True)
     locked_until = Column(UTCDateTime, nullable=True)
     failed_login_count = Column(Integer(), nullable=False, server_default="0")
-
-    __table_args__ = (
-        Index("ix_users_phone_e164", "phone_e164"),
-    )
+    # phone_e164's index is declared inline (index=True) — it auto-names to
+    # ix_users_phone_e164, matching the migration. Don't re-declare it here.
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -124,7 +122,7 @@ class UpdateUserDto(Object):
     failed_login_count: Optional[int] = None
 
 
-class SearchUserDto(PageRequest, BaseQueryDto):
+class SearchUserDto(InternalPageRequest, BaseQueryDto):
     email: Optional[str] = None
     phone_e164: Optional[str] = None
     user_type: Optional[str] = None

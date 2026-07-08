@@ -53,8 +53,8 @@ class IdempotencyOutcome:
 @decorate_all_methods(transactional(), exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude_startswith=["_"])
 class IdempotencyService:
-    def __init__(self, repo: IdempotencyKeyRepo):
-        self._repo = repo
+    def __init__(self, idempotency_repo: IdempotencyKeyRepo):
+        self._idempotency_repo = idempotency_repo
 
     async def begin_or_replay(
         self,
@@ -69,7 +69,7 @@ class IdempotencyService:
         different ``request_hash`` (a client bug or collision — never silently
         served the wrong response).
         """
-        existing = await self._repo.get_by_key(key)
+        existing = await self._idempotency_repo.get_by_key(key)
         if existing is not None:
             if (
                 request_hash is not None
@@ -86,7 +86,7 @@ class IdempotencyService:
                 response_snapshot=existing.response_snapshot,
             )
 
-        await self._repo.create_return_model(
+        await self._idempotency_repo.create_return_model(
             CreateIdempotencyKeyDto(
                 key=key,
                 scope=scope,
@@ -104,13 +104,13 @@ class IdempotencyService:
         response_snapshot: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Mark a reserved key COMPLETED and store its replayable result."""
-        existing = await self._repo.get_by_key(key)
+        existing = await self._idempotency_repo.get_by_key(key)
         if existing is None:
             raise ResourceNotFoundException(
                 resource="IdempotencyKey",
                 message=f"Cannot complete unknown idempotency key {key!r}",
             )
-        await self._repo.update_return_model(
+        await self._idempotency_repo.update_return_model(
             existing.id,
             UpdateIdempotencyKeyDto(
                 status=IdempotencyStatus.COMPLETED,
@@ -126,10 +126,10 @@ class IdempotencyService:
         ttl_hours: int = DEFAULT_TTL_HOURS,
     ) -> bool:
         """One-shot dedup for webhooks: True if newly claimed, False if already seen."""
-        existing = await self._repo.get_by_key(key)
+        existing = await self._idempotency_repo.get_by_key(key)
         if existing is not None:
             return False
-        await self._repo.create_return_model(
+        await self._idempotency_repo.create_return_model(
             CreateIdempotencyKeyDto(
                 key=key,
                 scope=scope,

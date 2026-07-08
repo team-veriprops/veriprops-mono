@@ -1,7 +1,12 @@
 import enum
 from typing import Optional, Dict
 
-from main.appodus_utils.config.settings import AppodusBaseSettings, get_absolute_path, FileStorage
+from main.appodus_utils.config.settings import (
+    AppodusBaseSettings,
+    SECRET_PLACEHOLDER,
+    get_absolute_path,
+    FileStorage,
+)
 
 
 class IntegratedPlatform(str, enum.Enum):
@@ -23,11 +28,6 @@ PAYMENT_METHOD_TO_PLATFORM: Dict[PaymentMethod, IntegratedPlatform] = {
     PaymentMethod.FLUTTERWAVE: IntegratedPlatform.FLUTTERWAVE,
     PaymentMethod.PAYSTACK: IntegratedPlatform.PAYSTACK,
 }
-
-class EscrowMethod(str, enum.Enum):
-    FLUTTERWAVE = "flutterwave"
-    PAYSTACK = "paystack"
-
 
 class Settings(AppodusBaseSettings):
     # CORS
@@ -68,7 +68,6 @@ class Settings(AppodusBaseSettings):
         return (self.OAUTH_CALLBACK_BASE_URL or self.BACKEND_PUBLIC_ORIGIN).rstrip("/")
 
     # PAYMENT
-    PAYMENT_REDIRECT_PATH: str = "/redirect"
     PAYMENT_FRONTEND_REDIRECT_PATH: str = "/payment/redirect"
     # FLUTTERWAVE
     FLUTTERWAVE_PUBLIC_KEY: Optional[str] = "random"
@@ -80,8 +79,7 @@ class Settings(AppodusBaseSettings):
     PAYSTACK_PUBLIC_KEY: Optional[str] = "random"
     PAYSTACK_SECRET_KEY: Optional[str] = "random"
     PAYSTACK_WEBHOOK_SECRET: Optional[str] = None  # For verifying webhooks
-    PAYSTACK_BASE_URL: Optional[str] = "https://api.flutterwave.com/v3"
-    PAYSTACK_REDIRECT_URL: Optional[str] = "webhooks/flutterwave/redirect"
+    PAYSTACK_BASE_URL: Optional[str] = "https://api.paystack.co"
 
     # ACTIVES
     ACTIVE_PAYMENT_METHOD: PaymentMethod = PaymentMethod.FLUTTERWAVE
@@ -99,9 +97,9 @@ class Settings(AppodusBaseSettings):
     # TEMPLATING
     TEMPLATE_ENGINE: Optional[str] = "jinja2"
 
-    # AWS
-    AWS_ACCESS_KEY: Optional[str] = "AKIARSU7K5ZHU4J7VY5F"
-    AWS_SECRET_ACCESS_KEY: Optional[str] = "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"
+    # AWS — real values live in the git-ignored .env.{env}, never in committed source.
+    AWS_ACCESS_KEY: Optional[str] = SECRET_PLACEHOLDER
+    AWS_SECRET_ACCESS_KEY: Optional[str] = SECRET_PLACEHOLDER
     AWS_REGION_NAME: Optional[str] = "us-east-1"
     AWS_S3_BUCKET: Optional[str] = "veriprops-documents"
     AWS_S3_PLATFORM_NAME: Optional[str] = FileStorage.S3
@@ -136,7 +134,6 @@ class Settings(AppodusBaseSettings):
     GOOGLE_WEBHOOK_NOTIFICATION_TTL: int = 60 * 60 * 24 # 1 Day
     GOOGLE_DOC_CHANGE_UPDATE_WINDOW: int = 60 * 60 * 24 # 1 Day
     GOOGLE_SERVICE_ACCOUNT_FILE: Optional[str] = get_absolute_path("service_accounts/contracts-service_account.json")
-    GOOGLE_DOC_PARENT_CONTRACT_ID: str = "1he8Q3Sxs2PSdfoWflNFwlk10MXI7M03QqGW3GdPHuWM"
     GOOGLE_DOC_PARENT_CONTRACT_FOLDER_ID: str = "1lODSM6OMBX4Qan7SPFzJf_zJF6fH9mCA"
     GOOGLE_DOC_PROPERTY_CONTRACT_FOLDER_ID: str = "1VblZfpRnHmQj8DN5nOJNc4C1xbQe9u-h"
 
@@ -146,26 +143,26 @@ class Settings(AppodusBaseSettings):
     TWILIO_PHONE_NUMBER: Optional[str] = ""
     # TERMII
     TERMII_API: Optional[str] = 'https://v3.api.termii.com/api'
-    TERMII_API_KEY: Optional[str] = 'TL2bCMPbPo55fYGMiFpA0EyBm3oJ998PY88zXjSzPWV07Ht7oPIouZVX1v7oYJ'
-    TERMII_API_SECRET_KEY: Optional[str] = 'tsk_zgeb640a2b0320c09048483cpx'
+    TERMII_API_KEY: Optional[str] = SECRET_PLACEHOLDER
+    TERMII_API_SECRET_KEY: Optional[str] = SECRET_PLACEHOLDER
     # SENDGRID
     SENDGRID_API_KEY: Optional[str] = ""
     SENDGRID_API_SECRET: Optional[str] = ""
     # MAILJET
     MAILJET_API: Optional[str] = 'https://api.mailjet.com'
-    MAILJET_API_KEY: Optional[str] = 'c7e9d85f278d57415a52e10323b1b599'
-    MAILJET_API_SECRET: Optional[str] = '8e09beef376c4858b9eb548c77d899f4'
+    MAILJET_API_KEY: Optional[str] = SECRET_PLACEHOLDER
+    MAILJET_API_SECRET: Optional[str] = SECRET_PLACEHOLDER
 
 
-    # WhatsApp Providers
-    WHATSAPP_APP_ID: str = "2959461884217467"
-    WHATSAPP_APP_SECRET_KEY: str = "3108b4d84a7a1959d6af3a7debc22f6d"
-    WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN: Optional[str] = "webhook_verify_token_s3cr3t"
+    # WhatsApp Providers — app id / phone / account ids are non-secret identifiers;
+    # the app secret, verify token, and access token are secrets and live in .env.{env}.
+    WHATSAPP_APP_SECRET_KEY: str = SECRET_PLACEHOLDER
+    WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN: Optional[str] = SECRET_PLACEHOLDER
     # WHATSAPP BUSINESS
     WHATSAPP_API_URL: Optional[str] = "https://graph.facebook.com/v22.0"
     WHATSAPP_PHONE_NUMBER_ID: Optional[str] = "766140453239478"
     WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = "1412930669928110"
-    WHATSAPP_BUSINESS_ACCESS_TOKEN: Optional[str] = "EAAqDnWpVyHsBPKUESrXNqHGWUs7QqDAmjTVi171tDbZALH08qe5cQ6GeTPZBG8UOuBOA36jDFQmZAdHki76aDVLdbpht89K4VSnrENQIqm5st7ZChvJkx9O387YI5DdEIZBA6TMFOjzZCCQwv50ZAfSMliupcGjiPHznZCu6rjNZC04f0aHuEst0HD4fz9FKsevZAtAAZDZD"
+    WHATSAPP_BUSINESS_ACCESS_TOKEN: Optional[str] = SECRET_PLACEHOLDER
 
     # PUSH Providers
     # Firebase
@@ -174,7 +171,6 @@ class Settings(AppodusBaseSettings):
     WEB_PUSH_PRIVATE_KEY: Optional[str] = None
     WEB_PUSH_PUBLIC_KEY: Optional[str] = None
     WEB_PUSH_CONTACT_EMAIL: Optional[str] = "notifications@example.com"
-    WEB_PUSH_SUBJECT_EMAIL: Optional[str] = "notifications@example.com"
 
     # Super Admin
     SUPER_ADMIN_PASSWORD: Optional[str] = None
@@ -208,10 +204,6 @@ class Settings(AppodusBaseSettings):
     TASK_POOL_TIMEOUT_HOURS: int = 24           # broadcast starvation timeout
     REMOTE_JOB_BONUS_MINOR: int = 0             # optional flat bonus on aging pool tasks (kobo)
 
-    # Admin work-queue SLA shedding (PRD §6.4)
-    SLA_SHEDDING_QUEUE_THRESHOLD: int = 50      # queue depth that triggers auto-extension
-    SLA_SHEDDING_EXTENSION_DAYS: int = 1        # business days added when shedding
-
     # Agent commission (PRD §8.3/§15.2, D13) — share of the verification price paid out
     # to agents, split across roles by the Trust Score Weights; accrued at release.
     AGENT_COMMISSION_SHARE: float = 0.40
@@ -219,12 +211,6 @@ class Settings(AppodusBaseSettings):
     # Background scheduler (PRD §6.4/§7.2) — disabled in test; sweeps invoked directly.
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_SWEEP_INTERVAL_SECONDS: int = 15 * 60
-
-    # Wire transfer beneficiary details
-    WIRE_BENEFICIARY_BANK: str = "Stanbic IBTC Bank"
-    WIRE_SWIFT: str = "SBICNGLX"
-    WIRE_IBAN: str = ""
-    WIRE_BENEFICIARY: str = "Veriprops Operations Ltd"
 
 
 settings = Settings()

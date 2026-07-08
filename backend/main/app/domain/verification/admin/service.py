@@ -79,7 +79,7 @@ class AdminVerificationService:
         agent_service: AgentService,
         audit_service: AuditLogService,
     ):
-        self._repo = verification_repo
+        self._verification_repo = verification_repo
         self._property_repo = property_repo
         self._payment_repo = payment_repo
         self._task_service = task_service
@@ -95,16 +95,16 @@ class AdminVerificationService:
         """Admin operations home rollups (§6): queue counts by status, overdue count,
         open pool tasks, pending agent applications, open chargebacks, and the most
         recent verifications. Every figure is derived here (backend source of truth)."""
-        raw = await self._repo.count_by_status()
+        raw = await self._verification_repo.count_by_status()
         status_counts = {VerificationStatus(s): c for s, c in raw.items()}
         today = Utils.datetime_now().date()
         horizon = today + timedelta(days=_SLA_AT_RISK_DAYS)
-        recent_rows, _ = await self._repo.page_admin(offset=0, limit=_DASHBOARD_RECENT_LIMIT)
+        recent_rows, _ = await self._verification_repo.page_admin(offset=0, limit=_DASHBOARD_RECENT_LIMIT)
         return AdminDashboardDto(
             total=sum(status_counts.values()),
             status_counts=status_counts,
-            overdue=await self._repo.count_overdue(list(ACTIVE_SLA_STATES), today),
-            sla_at_risk=await self._repo.count_due_within(list(ACTIVE_SLA_STATES), today, horizon),
+            overdue=await self._verification_repo.count_overdue(list(ACTIVE_SLA_STATES), today),
+            sla_at_risk=await self._verification_repo.count_due_within(list(ACTIVE_SLA_STATES), today, horizon),
             unassigned_pool_tasks=await self._task_service.count_pool_pending(),
             pending_agent_applications=await self._agents.count_pending_applications(),
             open_chargebacks=await self._chargebacks.count_open(),
@@ -127,7 +127,7 @@ class AdminVerificationService:
         page_size: int = 10,
     ) -> Page[VerificationSummaryDto]:
         due_before = Utils.datetime_now().date() if overdue_only else None
-        rows, total = await self._repo.page_admin(
+        rows, total = await self._verification_repo.page_admin(
             status=status, tier=tier, state_region=state_region, query=query,
             due_before=due_before, offset=page * page_size, limit=page_size,
         )
@@ -207,7 +207,7 @@ class AdminVerificationService:
         verification_state_machine.assert_can_transition(
             verification.status, VerificationStatus.CANCELLED.value, resource="Verification"
         )
-        await self._repo.update(
+        await self._verification_repo.update(
             verification_id,
             {"status": VerificationStatus.CANCELLED.value},
         )
@@ -252,7 +252,7 @@ class AdminVerificationService:
     # ── helpers ───────────────────────────────────────────────────
 
     async def _get(self, verification_id: str) -> Verification:
-        verification = await self._repo.get_model(verification_id)
+        verification = await self._verification_repo.get_model(verification_id)
         if not verification:
             raise ResourceNotFoundException(resource="verification")
         return verification

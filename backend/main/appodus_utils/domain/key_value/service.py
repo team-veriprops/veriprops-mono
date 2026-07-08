@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loguru import Logger
 import datetime
-import pickle
 from datetime import timedelta
 from typing import Any
 
@@ -28,7 +27,10 @@ class KeyValueService:
         self._key_value_repo = key_value_repo
 
     async def set(self, key: str, time_to_live: timedelta, value: Any):
-        value_bytes = pickle.dumps(value)
+        # Store the UTF-8 text form (never pickle — deserializing pickle from the DB is a
+        # latent RCE primitive). This is the SQL fallback behind RedisUtils, which returns
+        # decoded strings, so values here are always simple string-serializable data.
+        value_bytes = str(value).encode("utf-8")
         time_to_live_sec = int(time_to_live.total_seconds())
 
         datetime_future = Utils.datetime_now() + datetime.timedelta(seconds=time_to_live_sec)
@@ -40,7 +42,9 @@ class KeyValueService:
     async def get(self, key: str) -> Any:
         data: UpsertKeyValue = await self._key_value_repo.get(key)
         if data:
-            return pickle.loads(data.value)
+            # Mirror RedisUtils.get_redis's decoded-string return (Redis path does
+            # result.decode("utf-8")), so both backends behave identically.
+            return data.value.decode("utf-8")
 
         return None
 

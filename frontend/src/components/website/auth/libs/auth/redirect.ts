@@ -11,11 +11,25 @@ import { AuthUser, UserType, UserPersona, AuthIntent } from "@components/website
  * the default landing — e.g. `intent=verify` lands a Customer on the new-verification
  * wizard rather than the dashboard.
  */
+/**
+ * True only for a safe same-origin relative path. Rejects protocol-relative
+ * (`//evil.com`), backslash (`/\evil.com`), and absolute (`https://…`) URLs so a
+ * `?redirect=` param cannot drive a cross-origin navigation (open-redirect phishing).
+ */
+export function isSafeRedirectPath(value: string | null | undefined): value is string {
+  return (
+    typeof value === "string" &&
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.startsWith("/\\")
+  );
+}
+
 export function resolvePostAuthRedirect(
   user: AuthUser,
   options: { intent?: AuthIntent | null; redirect?: string | null } = {},
 ): string {
-  if (options.redirect && options.redirect.startsWith("/")) {
+  if (isSafeRedirectPath(options.redirect)) {
     return options.redirect;
   }
 

@@ -30,8 +30,8 @@ def mock_db_session():
 
 def _svc(task):
     svc = object.__new__(VerificationTaskService)
-    svc._repo = MagicMock()
-    svc._repo.get_model = AsyncMock(return_value=task)
+    svc._task_repo = MagicMock()
+    svc._task_repo.get_model = AsyncMock(return_value=task)
     svc._audit = MagicMock()
     svc._audit.get_activity_log = AsyncMock(return_value="activity-page")
     return svc

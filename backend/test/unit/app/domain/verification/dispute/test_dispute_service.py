@@ -64,10 +64,10 @@ def _dispute(status=DisputeStatus.OPEN, agent_id="agent-1"):
 
 def _service(verification=None, report=None, dispute=None, window_days=30):
     svc = object.__new__(DisputeService)
-    svc._repo = MagicMock()
+    svc._dispute_repo = MagicMock()
     svc._verifications = MagicMock()
     svc._verification_repo = MagicMock()
-    svc._reports = MagicMock()
+    svc._dispute_reports = MagicMock()
     svc._reviews = MagicMock()
     svc._commissions = MagicMock()
     svc._payments = MagicMock()
@@ -80,13 +80,13 @@ def _service(verification=None, report=None, dispute=None, window_days=30):
     svc._verifications.get_owned = AsyncMock(return_value=v)
     svc._verification_repo.get_model = AsyncMock(return_value=v)
     svc._verification_repo.update = AsyncMock()
-    svc._reports.get_released = AsyncMock(return_value=report if report is not None else _report())
+    svc._dispute_reports.get_released = AsyncMock(return_value=report if report is not None else _report())
     svc._config.get_int = AsyncMock(return_value=window_days)
     svc._tasks.get_by_role = AsyncMock(return_value=SimpleNamespace(assigned_agent_id="agent-1"))
-    svc._repo.create_return_model = AsyncMock(return_value=_dispute())
-    svc._repo.get_model = AsyncMock(return_value=dispute or _dispute())
-    svc._repo.get_open_for_agent = AsyncMock(return_value=dispute)
-    svc._repo.update = AsyncMock()
+    svc._dispute_repo.create_return_model = AsyncMock(return_value=_dispute())
+    svc._dispute_repo.get_model = AsyncMock(return_value=dispute or _dispute())
+    svc._dispute_repo.get_open_for_agent = AsyncMock(return_value=dispute)
+    svc._dispute_repo.update = AsyncMock()
     svc._commissions.freeze_for_verification = AsyncMock()
     svc._commissions.unfreeze_for_verification = AsyncMock()
     svc._commissions.reverse_for_verification = AsyncMock()
@@ -137,7 +137,7 @@ class TestAgentDefence:
     async def test_defence_records_text(self):
         svc = _service(dispute=_dispute())
         await svc.agent_defend("d-1", "agent-1", "I surveyed the correct plot on 3 Jan.")
-        dto = svc._repo.update.await_args.args[1]
+        dto = svc._dispute_repo.update.await_args.args[1]
         assert "surveyed" in dto.agent_defence_text
 
     async def test_defence_forbidden_for_other_agent(self):

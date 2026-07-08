@@ -36,12 +36,12 @@ _FREEZABLE = [CommissionStatus.CLEARING.value, CommissionStatus.AVAILABLE.value]
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class CommissionService:
     def __init__(self, commission_repo: CommissionRepo, audit_service: AuditLogService):
-        self._repo = commission_repo
+        self._commission_repo = commission_repo
         self._audit = audit_service
 
     async def accrue(self, dto: CreateCommissionDto) -> Commission:
         """Record a commission in CLEARING (called on task approval in S12)."""
-        commission = await self._repo.create_return_model(dto)
+        commission = await self._commission_repo.create_return_model(dto)
         self._audit.schedule(
             action=AuditActionType.COMMISSION_ACCRUED,
             resource_type="commission",
@@ -55,9 +55,9 @@ class CommissionService:
     async def freeze_for_verification(self, verification_id: str, actor_id: str) -> int:
         """Freeze every freezable commission on a verification (§6a.2). Idempotent:
         already-frozen/reversed commissions are skipped. Returns the count frozen."""
-        commissions = await self._repo.list_for_verification_in_status(verification_id, _FREEZABLE)
+        commissions = await self._commission_repo.list_for_verification_in_status(verification_id, _FREEZABLE)
         for c in commissions:
-            await self._repo.update(c.id, UpdateCommissionDto(
+            await self._commission_repo.update(c.id, UpdateCommissionDto(
                 status=CommissionStatus.FROZEN.value,
                 frozen_from_status=c.status,
             ))
@@ -73,12 +73,12 @@ class CommissionService:
 
     async def unfreeze_for_verification(self, verification_id: str, actor_id: str) -> int:
         """Restore frozen commissions to their pre-freeze status (chargeback won)."""
-        frozen = await self._repo.list_for_verification_in_status(
+        frozen = await self._commission_repo.list_for_verification_in_status(
             verification_id, [CommissionStatus.FROZEN.value]
         )
         for c in frozen:
             restore = c.frozen_from_status or CommissionStatus.CLEARING.value
-            await self._repo.update(c.id, UpdateCommissionDto(status=restore))
+            await self._commission_repo.update(c.id, UpdateCommissionDto(status=restore))
             self._audit.schedule(
                 action=AuditActionType.COMMISSION_UNFROZEN,
                 resource_type="commission",
@@ -91,12 +91,12 @@ class CommissionService:
 
     async def reverse_for_verification(self, verification_id: str, actor_id: str) -> int:
         """Claw back frozen/clearing/available commissions (chargeback lost)."""
-        exposed = await self._repo.list_for_verification_in_status(
+        exposed = await self._commission_repo.list_for_verification_in_status(
             verification_id,
             [CommissionStatus.FROZEN.value, *_FREEZABLE],
         )
         for c in exposed:
-            await self._repo.update(c.id, UpdateCommissionDto(status=CommissionStatus.REVERSED.value))
+            await self._commission_repo.update(c.id, UpdateCommissionDto(status=CommissionStatus.REVERSED.value))
             self._audit.schedule(
                 action=AuditActionType.COMMISSION_REVERSED,
                 resource_type="commission",
@@ -108,8 +108,8 @@ class CommissionService:
         return len(exposed)
 
     async def list_for_verification(self, verification_id: str) -> List[Commission]:
-        return await self._repo.list_for_verification(verification_id)
+        return await self._commission_repo.list_for_verification(verification_id)
 
     async def get_live_for_task(self, verification_id: str, task_id: str):
         """A non-reversed commission already accrued for this task, or None (double-accrual guard)."""
-        return await self._repo.get_live_for_task(verification_id, task_id)
+        return await self._commission_repo.get_live_for_task(verification_id, task_id)

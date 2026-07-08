@@ -74,10 +74,10 @@ def _share(share_type=ShareType.LINK_SUMMARY, *, revoked=False, expired=False, a
 
 def _service(*, verification=None, report=True, share=None, property_=None):
     svc = object.__new__(ShareService)
-    svc._repo = MagicMock()
+    svc._share_repo = MagicMock()
     svc._verification_repo = MagicMock()
     svc._verifications = MagicMock()
-    svc._reports = MagicMock()
+    svc._share_reports = MagicMock()
     svc._customer_report = MagicMock()
     svc._properties = MagicMock()
     svc._messages = MagicMock()
@@ -87,12 +87,12 @@ def _service(*, verification=None, report=True, share=None, property_=None):
     svc._verification_repo.get_by_vid = AsyncMock(return_value=v)
     svc._verification_repo.get_model = AsyncMock(return_value=v)
     svc._verifications.get_owned = AsyncMock(return_value=v)
-    svc._reports.get_released = AsyncMock(return_value=_report() if report else None)
+    svc._share_reports.get_released = AsyncMock(return_value=_report() if report else None)
     svc._properties.get_model = AsyncMock(return_value=property_ or _property())
-    svc._repo.get_by_token = AsyncMock(return_value=share)
-    svc._repo.get_model = AsyncMock(return_value=share)
-    svc._repo.create_return_model = AsyncMock(return_value=_share())
-    svc._repo.list_for_verification = AsyncMock(return_value=[_share()])
+    svc._share_repo.get_by_token = AsyncMock(return_value=share)
+    svc._share_repo.get_model = AsyncMock(return_value=share)
+    svc._share_repo.create_return_model = AsyncMock(return_value=_share())
+    svc._share_repo.list_for_verification = AsyncMock(return_value=[_share()])
     svc._customer_report.build_shared_content = AsyncMock(
         return_value=CustomerReportDto(
             id="rep-1", verification_id="v-1", vid="VP-ABC123", report_version=2, trust_score=88,
@@ -186,7 +186,7 @@ class TestAcknowledgeShared:
         share = _share(ShareType.NAMED_FULL, acked=False)
         svc = _service(share=share)
         # After ack the stored row reads acked → resolve returns the full report.
-        svc._repo.get_model = AsyncMock(return_value=share)
+        svc._share_repo.get_model = AsyncMock(return_value=share)
 
         async def _ack(_id):
             share.disclaimer_acked_at = _now()
@@ -215,7 +215,7 @@ class TestCreateShare:
 
     async def test_named_share_emails_the_recipient(self):
         svc = _service()
-        svc._repo.create_return_model = AsyncMock(return_value=_share(ShareType.NAMED_FULL))
+        svc._share_repo.create_return_model = AsyncMock(return_value=_share(ShareType.NAMED_FULL))
         await svc.create_share(
             "v-1", "cust-1",
             CreateShareRequestDto(share_type=ShareType.NAMED_FULL, recipient_email="a@b.com"),

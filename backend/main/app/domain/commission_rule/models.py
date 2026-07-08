@@ -17,7 +17,7 @@ from typing import Optional
 from sqlalchemy import Column, Integer, String, UniqueConstraint
 
 from main.app.core.state.status import AgentRole, VerificationTier
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 # Basis points per whole percent (1% = 100 bps); a full 100% = 10_000 bps.
 BPS_PER_PERCENT = 100
@@ -56,7 +56,7 @@ class QueryCommissionRuleDto(BaseQueryDto):
     tier: Optional[str] = None
 
 
-class SearchCommissionRuleDto(PageRequest, BaseQueryDto):
+class SearchCommissionRuleDto(InternalPageRequest, BaseQueryDto):
     tier: Optional[str] = None
 
 

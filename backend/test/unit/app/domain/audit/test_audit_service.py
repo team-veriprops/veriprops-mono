@@ -56,7 +56,7 @@ def _make_svc(list_for_resource=None, list_by_resource_ids=None, list_admin_acti
     repo.list_by_resource_ids = list_by_resource_ids or AsyncMock(return_value=[])
     repo.list_admin_actions = list_admin_actions or AsyncMock(return_value=([], 0))
     repo.create = AsyncMock()
-    return AuditLogService(repo=repo)
+    return AuditLogService(audit_repo=repo)
 
 
 class TestGetActivityLog:
@@ -99,7 +99,7 @@ class TestListPackTransitions:
         assert result[0].actor_id == "admin-1"
         assert result[0].ip_address == "1.2.3.4"
         assert result[0].action == AuditActionType.VERIFICATION_STATE_CHANGED.value
-        svc._repo.list_by_resource_ids.assert_awaited_once_with(["vid-1", "task-1"])
+        svc._audit_repo.list_by_resource_ids.assert_awaited_once_with(["vid-1", "task-1"])
 
     async def test_empty_returns_empty_list(self):
         svc = _make_svc(list_by_resource_ids=AsyncMock(return_value=[]))
@@ -124,7 +124,7 @@ class TestListAdminActions:
         from main.app.domain.audit.service import ADMIN_ACTION_TYPES
         svc = _make_svc()
         await svc.list_admin_actions()
-        call_args = svc._repo.list_admin_actions.call_args
+        call_args = svc._audit_repo.list_admin_actions.call_args
         assert call_args.kwargs["action_types"] == ADMIN_ACTION_TYPES
 
     async def test_empty_result(self):

@@ -65,7 +65,7 @@ class ChatMessageService:
         user_repo: UserRepo,
         audit: AuditLogService,
     ):
-        self._repo = chat_message_repo
+        self._chat_message_repo = chat_message_repo
         self._conversations = conversation_service
         self._participants = participant_service
         self._users = user_repo
@@ -101,7 +101,7 @@ class ChatMessageService:
             ClarificationStatus.OPEN if kind == MessageKind.CLARIFICATION_REQUEST else None
         )
 
-        message = await self._repo.create_return_model(
+        message = await self._chat_message_repo.create_return_model(
             CreateChatMessageDto(
                 conversation_id=Utils.uuid_to_hex(conversation.id),
                 sender_user_id=sender_user_id,
@@ -151,9 +151,9 @@ class ChatMessageService:
         message.delivered_at = now
         message.reviewed_by = admin_id
         message.reviewed_at = now
-        self._repo._session.add(message)
+        self._chat_message_repo._session.add(message)
 
-        conversation = await self._conversations._repo.get_model(message.conversation_id)
+        conversation = await self._conversations._conversation_repo.get_model(message.conversation_id)
         if conversation is not None:
             await self._deliver_effects(conversation, message, message.sender_user_id)
         self._audit.schedule(
@@ -174,7 +174,7 @@ class ChatMessageService:
         message.state = ChatMessageState.BLOCKED.value
         message.reviewed_by = admin_id
         message.reviewed_at = now
-        self._repo._session.add(message)
+        self._chat_message_repo._session.add(message)
         self._audit.schedule(
             action=AuditActionType.MESSAGE_REJECTED,
             resource_type="ChatMessage",
@@ -184,7 +184,7 @@ class ChatMessageService:
         return message
 
     async def _get_held(self, message_id: str) -> ChatMessage:
-        message = await self._repo.get_model(message_id)
+        message = await self._chat_message_repo.get_model(message_id)
         if message is None or message.deleted:
             raise ResourceNotFoundException(resource="ChatMessage")
         if message.state != ChatMessageState.HELD.value:
@@ -196,17 +196,17 @@ class ChatMessageService:
     async def list_messages(
         self, conversation_id: str, viewer_id: Optional[str], page: int, page_size: int
     ) -> Page[ChatMessageDto]:
-        rows, total = await self._repo.list_delivered_page(conversation_id, viewer_id, page, page_size)
+        rows, total = await self._chat_message_repo.list_delivered_page(conversation_id, viewer_id, page, page_size)
         dtos = [await self._to_dto(m, viewer_id) for m in rows]
-        return self._repo._db_utils.build_page(dtos, total, page, page_size)
+        return self._chat_message_repo._db_utils.build_page(dtos, total, page, page_size)
 
     async def held_queue(self, page: int, page_size: int) -> Page[HeldMessageDto]:
-        rows, total = await self._repo.list_held_page(page, page_size)
+        rows, total = await self._chat_message_repo.list_held_page(page, page_size)
         dtos = [await self._to_held_dto(m) for m in rows]
-        return self._repo._db_utils.build_page(dtos, total, page, page_size)
+        return self._chat_message_repo._db_utils.build_page(dtos, total, page, page_size)
 
     async def held_count(self) -> int:
-        return await self._repo.held_count()
+        return await self._chat_message_repo.held_count()
 
     # ── Internal helpers ──────────────────────────────────────────────
 
@@ -217,7 +217,7 @@ class ChatMessageService:
         chat-counter subscriber pushes the Chat counter to the other participants; the rule
         table keeps a routine message out of Notifications (§12.3)."""
         await self._conversations.touch(conversation.id, message.delivered_at or Utils.datetime_now())
-        participants = await self._participants._repo.list_for_conversation(conversation.id)
+        participants = await self._participants._participant_repo.list_for_conversation(conversation.id)
         recipients = tuple(p.user_id for p in participants if p.user_id != sender_user_id)
         await publish_domain_event(DomainEvent(
             type=EventType.MESSAGE_SENT,
@@ -267,7 +267,7 @@ class ChatMessageService:
         )
 
     async def _to_held_dto(self, message: ChatMessage) -> HeldMessageDto:
-        conversation = await self._conversations._repo.get_model(message.conversation_id)
+        conversation = await self._conversations._conversation_repo.get_model(message.conversation_id)
         return HeldMessageDto(
             id=message.id,
             conversation_id=message.conversation_id,

@@ -68,7 +68,7 @@ class VerificationService:
         user_service: UserService,
         pricing_config_service: PricingConfigService,
     ):
-        self._repo = verification_repo
+        self._verification_repo = verification_repo
         self._property_service = property_service
         self._consent_service = consent_service
         self._idempotency = idempotency_service
@@ -83,11 +83,11 @@ class VerificationService:
         if idempotency_key:
             outcome = await self._idempotency.begin_or_replay(idempotency_key, _CREATE_SCOPE)
             if outcome.is_replay and outcome.resource_id:
-                existing = await self._repo.get_model(outcome.resource_id)
+                existing = await self._verification_repo.get_model(outcome.resource_id)
                 if existing:
                     return existing
 
-        verification = await self._repo.create_return_model(CreateVerificationDto(
+        verification = await self._verification_repo.create_return_model(CreateVerificationDto(
             vid=generate_vid(),
             customer_id=customer_id,
             status=VerificationStatus.DRAFT,
@@ -98,11 +98,11 @@ class VerificationService:
 
     async def save_draft(self, verification_id: str, customer_id: str, dto: SaveVerificationDraftDto) -> Verification:
         verification = await self._require_owned(verification_id, customer_id)
-        await self._repo.update(verification_id, UpdateVerificationDto(
+        await self._verification_repo.update(verification_id, UpdateVerificationDto(
             draft_step=dto.step,
             draft_payload=json.dumps(dto.payload),
         ))
-        return await self._repo.get_model(verification_id)
+        return await self._verification_repo.get_model(verification_id)
 
     async def get_owned(self, verification_id: str, customer_id: str) -> Verification:
         return await self._require_owned(verification_id, customer_id)
@@ -110,7 +110,7 @@ class VerificationService:
     async def get_by_id(self, verification_id: str) -> Verification:
         """Ownership-free fetch for internal service callers (e.g. tokenised report shares,
         where the share token — not the JWT — is the authorization)."""
-        verification = await self._repo.get_model(verification_id)
+        verification = await self._verification_repo.get_model(verification_id)
         if not verification:
             raise ResourceNotFoundException(resource="verification")
         return verification
@@ -142,7 +142,7 @@ class VerificationService:
     ) -> Discount:
         """Resolve the first-time + referral discount for a customer (§17.1). First-time =
         no prior paid verification; referral credit = the customer's spendable balance."""
-        first_time = not await self._repo.has_paid_verification(customer_id, exclude_verification_id)
+        first_time = not await self._verification_repo.has_paid_verification(customer_id, exclude_verification_id)
         user = await self._users.get_user_model(customer_id)
         return apply_discounts(
             base_kobo,
@@ -175,7 +175,7 @@ class VerificationService:
         )
 
         self._assert_transition(verification.status, VerificationStatus.SUBMITTED)
-        await self._repo.update(verification_id, UpdateVerificationDto(
+        await self._verification_repo.update(verification_id, UpdateVerificationDto(
             property_id=prop.id,
             tier=dto.tier.value,
             status=VerificationStatus.SUBMITTED.value,
@@ -199,22 +199,22 @@ class VerificationService:
             to_state=VerificationStatus.SUBMITTED.value,
             ip_address=ip_address,
         )
-        return await self._repo.get_model(verification_id)
+        return await self._verification_repo.get_model(verification_id)
 
     # ── Payment-driven transitions (called by PaymentService) ─────
 
     async def mark_payment_pending(self, verification_id: str) -> Verification:
-        verification = await self._repo.get_model(verification_id)
+        verification = await self._verification_repo.get_model(verification_id)
         if not verification:
             raise ResourceNotFoundException(resource="verification")
         self._assert_transition(verification.status, VerificationStatus.PAYMENT_PENDING)
-        await self._repo.update(
+        await self._verification_repo.update(
             verification_id, UpdateVerificationDto(status=VerificationStatus.PAYMENT_PENDING.value)
         )
-        return await self._repo.get_model(verification_id)
+        return await self._verification_repo.get_model(verification_id)
 
     async def mark_paid(self, verification_id: str) -> Verification:
-        verification = await self._repo.get_model(verification_id)
+        verification = await self._verification_repo.get_model(verification_id)
         if not verification:
             raise ResourceNotFoundException(resource="verification")
         # Idempotent: a replayed webhook that finds PAID must not double-transition.
@@ -222,7 +222,7 @@ class VerificationService:
             return verification
         self._assert_transition(verification.status, VerificationStatus.PAID)
         tier = VerificationTier(verification.tier) if verification.tier else VerificationTier.BASIC
-        await self._repo.update(
+        await self._verification_repo.update(
             verification_id, UpdateVerificationDto(status=VerificationStatus.PAID.value)
         )
         await self._set_paid_timestamps(verification_id, tier)
@@ -237,7 +237,7 @@ class VerificationService:
             sse_event=VerificationEventType.STATUS_CHANGED.value,
             data={"status": VerificationStatus.PAID.value},
         ))
-        return await self._repo.get_model(verification_id)
+        return await self._verification_repo.get_model(verification_id)
 
     # ── Re-lock guard (§17.1 abandonment): never silently re-price ─
 
@@ -268,7 +268,7 @@ class VerificationService:
             discount.net_minor, TransactionCurrency(verification.charge_currency)
             if verification.charge_currency else TransactionCurrency.NGN
         )
-        await self._repo.update(verification_id, UpdateVerificationDto(
+        await self._verification_repo.update(verification_id, UpdateVerificationDto(
             price_locked_minor=discount.net_minor,
             charge_amount_minor=charge_minor,
             fx_rate_at_quote=fx,
@@ -276,7 +276,7 @@ class VerificationService:
             referral_credit_applied_minor=discount.referral_applied_minor,
         ))
         await self._set_price_lock(verification_id)
-        refreshed = await self._repo.get_model(verification_id)
+        refreshed = await self._verification_repo.get_model(verification_id)
         return PriceRefreshDto(
             price_changed=discount.net_minor != previous,
             previous_price_minor=previous,
@@ -294,8 +294,8 @@ class VerificationService:
         Returns the number of drafts reminded."""
         cutoff = Utils.datetime_now() - timedelta(hours=_ABANDONMENT_AGE_HOURS)
         reminded = 0
-        for verification in await self._repo.list_abandoned_drafts(cutoff):
-            row = await self._repo.get_model(verification.id)
+        for verification in await self._verification_repo.list_abandoned_drafts(cutoff):
+            row = await self._verification_repo.get_model(verification.id)
             if row is None or row.recovery_reminded_at is not None:
                 continue
             row.recovery_reminded_at = Utils.datetime_now()
@@ -325,7 +325,7 @@ class VerificationService:
         )
 
     async def _require_owned(self, verification_id: str, customer_id: str) -> Verification:
-        verification = await self._repo.get_model(verification_id)
+        verification = await self._verification_repo.get_model(verification_id)
         if not verification:
             raise ResourceNotFoundException(resource="verification")
         if verification.customer_id != customer_id:
@@ -338,11 +338,11 @@ class VerificationService:
     async def _set_price_lock(self, verification_id: str) -> None:
         # price_lock_expires_at is a datetime → set on the model (not the update DTO
         # path, which json-encodes datetimes; see CLAUDE.md GenericRepo note).
-        verification = await self._repo.get_model(verification_id)
+        verification = await self._verification_repo.get_model(verification_id)
         verification.price_lock_expires_at = Utils.datetime_now() + timedelta(hours=_PRICE_LOCK_HOURS)
 
     async def _set_paid_timestamps(self, verification_id: str, tier: VerificationTier) -> None:
-        verification = await self._repo.get_model(verification_id)
+        verification = await self._verification_repo.get_model(verification_id)
         now = Utils.datetime_now()
         verification.paid_at = now
         verification.sla_due_date = sla_due_date(now, tier)

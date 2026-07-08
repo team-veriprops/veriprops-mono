@@ -8,7 +8,7 @@ from typing import Any, List, Optional
 from sqlalchemy import BigInteger, Column, Index, String, Text
 
 from main.app.core.state.status import AgentRole
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import JSONB_VARIANT
 
 
@@ -66,7 +66,7 @@ class QueryRecheckDto(BaseQueryDto):
     status: Optional[str] = None
 
 
-class SearchRecheckDto(PageRequest, BaseQueryDto):
+class SearchRecheckDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
     status: Optional[str] = None
 

@@ -72,7 +72,7 @@ class AgentService:
         user_service: UserService,
         consent_service: ConsentService,
         audit_service: AuditLogService,
-        validator: AgentApplicationValidator,
+        agent_validator: AgentApplicationValidator,
     ):
         self._profile_repo = profile_repo
         self._credential_repo = credential_repo
@@ -82,14 +82,14 @@ class AgentService:
         self._user_service = user_service
         self._consent_service = consent_service
         self._audit_service = audit_service
-        self._validator = validator
+        self._agent_validator = agent_validator
 
     # ── Submission ────────────────────────────────────────────────
 
     async def submit_application(
         self, user_id: str, dto: SubmitAgentApplicationDto, ip_address: Optional[str] = None
     ) -> AgentApplicationStatusDto:
-        self._validator.validate_submission(dto)
+        self._agent_validator.validate_submission(dto)
         user = await self._user_service.get_user_model(user_id)
 
         # KYC first — persists the provider result (no raw biometrics).

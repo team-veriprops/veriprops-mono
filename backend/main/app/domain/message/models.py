@@ -8,7 +8,7 @@ from sqlalchemy import (Column,
                         Text,
                         Integer)
 
-from main.appodus_utils import BaseEntity, PageRequest, BaseQueryDto, Object
+from main.appodus_utils import BaseEntity, InternalPageRequest, BaseQueryDto, Object
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 from main.appodus_utils.integrations.messaging.models import (MessageChannel,
                                                               MessageStatus,
@@ -180,7 +180,7 @@ class _UpdateMessageDto(Object):
     delivered_at: Optional[datetime]
 
 
-class SearchMessageDto(PageRequest, BaseQueryDto, _UpdateMessageDto):
+class SearchMessageDto(InternalPageRequest, BaseQueryDto, _UpdateMessageDto):
     channel: Optional[MessageChannel]
     to: Optional[MessageRecipient]
     provider: Optional[MessageProviderName]

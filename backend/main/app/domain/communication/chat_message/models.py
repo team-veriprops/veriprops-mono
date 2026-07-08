@@ -14,7 +14,7 @@ from typing import List, Optional
 from sqlalchemy import Column, Index, String, Text
 
 from main.app.core.state.status import ChatMessageState
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 # Customer-facing agent identity fields (§11.3). Kept in one place so every customer
@@ -104,7 +104,7 @@ class QueryChatMessageDto(BaseQueryDto):
     task_id: Optional[str] = None
 
 
-class SearchChatMessageDto(PageRequest, BaseQueryDto):
+class SearchChatMessageDto(InternalPageRequest, BaseQueryDto):
     conversation_id: Optional[str] = None
     state: Optional[str] = None
 

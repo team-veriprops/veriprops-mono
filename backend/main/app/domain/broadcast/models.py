@@ -10,9 +10,9 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, Index, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Text
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
@@ -43,10 +43,7 @@ class Broadcast(BaseEntity):
     sent_at = Column(UTCDateTime, nullable=True)
     recipient_count = Column(Integer, nullable=False, server_default="0")
     # created_by (the composing admin) is inherited from BaseEntity — set via the create DTO.
-
-    __table_args__ = (
-        Index("ix_broadcasts_status", "status"),
-    )
+    # status index is declared inline (index=True) → ix_broadcasts_status, matching the migration.
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -70,7 +67,7 @@ class QueryBroadcastDto(BaseQueryDto):
     audience: Optional[str] = None
 
 
-class SearchBroadcastDto(PageRequest, BaseQueryDto):
+class SearchBroadcastDto(InternalPageRequest, BaseQueryDto):
     status: Optional[str] = None
     audience: Optional[str] = None
 
