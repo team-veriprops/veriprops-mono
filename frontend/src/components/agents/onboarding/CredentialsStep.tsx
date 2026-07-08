@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { BadgeCheck } from "lucide-react";
 import {
   AgentCredentialInput,
   AgentRole,
@@ -9,6 +10,7 @@ import {
 import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import { Textarea } from "@3rdparty/ui/textarea";
+import { humanizeEnumLabel } from "@lib/utils";
 import { AgentWizardState } from "./types";
 
 interface Props {
@@ -51,9 +53,13 @@ export default function CredentialsStep({ state, update }: Props) {
           {requiredRoles.map((role) => {
             const cred = state.credentials.find((c) => c.role === role);
             return (
-              <div key={role} className="rounded-lg border border-border p-4">
-                <p className="mb-3 text-sm font-medium">
-                  {role} — {ROLE_REQUIRED_CREDENTIAL[role]!.replace(/_/g, " ").toLowerCase()}
+              <div key={role} className="rounded-xl border border-border p-4">
+                <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <BadgeCheck className="size-4 shrink-0 text-primary" />
+                  {humanizeEnumLabel(role)}
+                  <span className="font-normal text-muted-foreground">
+                    · {humanizeEnumLabel(ROLE_REQUIRED_CREDENTIAL[role]!)}
+                  </span>
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">

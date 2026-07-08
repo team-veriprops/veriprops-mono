@@ -2,8 +2,15 @@
 
 import Link from "next/link";
 import { Checkbox } from "@3rdparty/ui/checkbox";
+import { KycMethod } from "@/types/agent";
 import { ROUTES } from "@lib/routes";
+import { humanizeEnumLabel } from "@lib/utils";
 import { AgentWizardState } from "./types";
+
+const KYC_METHOD_LABELS: Record<KycMethod, string> = {
+  [KycMethod.BVN]: "BVN",
+  [KycMethod.GOV_ID]: "Government ID",
+};
 
 interface Props {
   state: AgentWizardState;
@@ -22,30 +29,22 @@ export default function ReviewStep({
 }: Props) {
   return (
     <div className="space-y-6" data-testid="agent-apply-review">
-      <div className="rounded-lg border border-border p-4 text-sm">
-        <dl className="space-y-2">
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Roles</dt>
-            <dd className="text-right font-medium">{state.roles.join(", ") || "—"}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Identity</dt>
-            <dd className="text-right font-medium">{state.kyc.method}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Credentials</dt>
-            <dd className="text-right font-medium">
-              {state.credentials.length ? state.credentials.map((c) => c.role).join(", ") : "None"}
-            </dd>
-          </div>
-          {state.coverage[0]?.state && (
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Coverage</dt>
-              <dd className="text-right font-medium">{state.coverage[0].state}</dd>
-            </div>
-          )}
-        </dl>
-      </div>
+      <dl className="divide-y divide-border rounded-xl border border-border text-sm">
+        <SummaryRow label="Roles" value={state.roles.map(humanizeEnumLabel).join(", ") || "—"} />
+        <SummaryRow label="Identity" value={KYC_METHOD_LABELS[state.kyc.method]} />
+        <SummaryRow
+          label="Credentials"
+          value={
+            state.credentials.length
+              ? state.credentials.map((c) => humanizeEnumLabel(c.role)).join(", ")
+              : "None required"
+          }
+        />
+        {state.coverage[0]?.state && <SummaryRow label="Coverage" value={state.coverage[0].state} />}
+        {state.yearsExperience != null && (
+          <SummaryRow label="Experience" value={`${state.yearsExperience} yr${state.yearsExperience === 1 ? "" : "s"}`} />
+        )}
+      </dl>
 
       <label className="flex items-start gap-3">
         <Checkbox
@@ -72,6 +71,15 @@ export default function ReviewStep({
           {termsVersion ? ` (v${termsVersion})` : ""}.
         </span>
       </label>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 px-4 py-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right font-medium text-foreground">{value}</dd>
     </div>
   );
 }
