@@ -4,13 +4,13 @@ Covers the acquisition funnel that the seed-based drive-throughs skip (the seed 
 ready-made UNDER_REVIEW verification): email OTP → consent → signup → draft → quote → submit
 → pay (stub) → assignment. Complements e2e_drive_through.py (which starts already UNDER_REVIEW).
 
-Run with phone verification ON so the full happy path reaches payment. (With
-PHONE_VERIFICATION_ENABLED=false the customer is collected-but-unverified at signup and the
-Phase-5 payment gate "Verify your phone number before paying" has no wired satisfy-path —
-a known gap; see mark_phone_verified in user/service.py, currently uncalled.)
+Runs against the default config (PHONE_VERIFICATION_ENABLED=false): the number is collected
+but left unverified at signup, then verified at the Phase-5 payment step via the authenticated
+POST /users/auth/phone/otp/send + /users/auth/phone/verify endpoints (satisfying the payment
+"Verify your phone number before paying" gate).
 
 How to run (non-prod only — uses /dev/reset):
-    set appodus_active_env=local && set ENABLE_OUT_MESSAGING=False && set PHONE_VERIFICATION_ENABLED=True && python veriprops.py
+    set appodus_active_env=local && set ENABLE_OUT_MESSAGING=False && python veriprops.py
     set PYTHONIOENCODING=utf-8 && python scripts/e2e_onboarding_submission.py
 """
 from __future__ import annotations
@@ -65,16 +65,7 @@ def main() -> int:
     check("email OTP verified with deterministic code (§2)", r.status_code == 200
           and r.json()["data"].get("verified") is True, f"http {r.status_code}")
 
-    # 1b. Phone OTP send + verify (so phone_verified=True carries into signup, satisfying the
-    # Phase-5 payment gate). Requires PHONE_VERIFICATION_ENABLED=true on the server.
     dial_code, phone = "+234", "8030000001"
-    r = root.post("/users/auth/otp/send", json={"channel": "PHONE", "country_code": "NG",
-                                                "dial_code": dial_code, "phone": phone})
-    check("phone OTP send accepted (§2)", r.status_code == 200, f"http {r.status_code}")
-    r = root.post("/users/auth/otp/verify", json={"channel": "PHONE", "country_code": "NG",
-                                                  "dial_code": dial_code, "phone": phone, "code": TEST_OTP})
-    check("phone OTP verified with deterministic code (§2)", r.status_code == 200
-          and r.json()["data"].get("verified") is True, f"http {r.status_code}")
 
     # 2. Signup with the two required consents → issues the session (Phase 2).
     client = httpx.Client(base_url=BASE, timeout=30.0)
@@ -120,6 +111,14 @@ def main() -> int:
     check("submitted verification has a locked price (§4.4)",
           bool(submitted.get("priceLockedMinor") or submitted.get("price_locked_minor")),
           f"status={submitted.get('status')}")
+
+    # 5b. Phase-5 phone verification: the number was collected-but-unverified at signup
+    # (PHONE_VERIFICATION_ENABLED=false), so verify it now to satisfy the payment gate (§5).
+    r = client.post("/users/auth/phone/otp/send")
+    check("Phase-5 phone OTP send (authenticated) accepted (§5)", r.status_code == 200, f"http {r.status_code}: {r.text[:160]}")
+    r = client.post("/users/auth/phone/verify", json={"code": TEST_OTP})
+    check("Phase-5 phone verify flips phone_verified (§5, fixes the payment-gate gap)",
+          r.status_code == 200 and r.json()["data"].get("verified") is True, f"http {r.status_code}: {r.text[:160]}")
 
     # 6. Initiate payment → tx_ref, then deterministically confirm it (§5.4, stub gateway).
     r = client.post(f"/payments/initiate/{vid_id}", json={"method": "CARD"})

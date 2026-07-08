@@ -26,7 +26,8 @@ from main.app.domain.user.auth.models import (
     ProfileCompletionDto,
     ResetPasswordDto,
     SetPasswordDto,
-    SignupRequestDto, )
+    SignupRequestDto,
+    VerifyPhoneDto, )
 from main.app.domain.user.auth.oauth.controller import oauth_router
 from main.app.domain.user.auth.service import AuthService
 from main.app.domain.user.auth.session.controller import session_router
@@ -161,6 +162,35 @@ async def verify_otp(req: OtpVerifyDto, request: Request, _: None = Depends(_otp
         req.channel, req.code,
         email=req.email, dial_code=req.dial_code, phone=req.phone,
         ip_address=ClientUtils.get_client_ip(request),
+    )
+    return SuccessResponse[dict](data={"verified": True})
+
+
+# ─── Phase-5 phone verification (logged-in user) ──────────────────────
+# Satisfies the payment-step phone gate when the number was collected but left unverified
+# at signup (PHONE_VERIFICATION_ENABLED=false). The phone is read from the user's profile.
+
+@auth_router.post("/phone/otp/send", response_model=SuccessResponse[dict])
+async def send_phone_otp(
+    request: Request, authorize: AuthJWT = Depends(), _: None = Depends(_otp_send_rate_limit),
+):
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
+    resend_in = await auth_service.send_phone_otp_for_user(
+        user_id, ip_address=ClientUtils.get_client_ip(request),
+    )
+    return SuccessResponse[dict](data={"resend_in": resend_in})
+
+
+@auth_router.post("/phone/verify", response_model=SuccessResponse[dict])
+async def verify_phone(
+    req: VerifyPhoneDto, request: Request, authorize: AuthJWT = Depends(),
+    _: None = Depends(_otp_verify_rate_limit),
+):
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
+    await auth_service.verify_phone_for_user(
+        user_id, req.code, ip_address=ClientUtils.get_client_ip(request),
     )
     return SuccessResponse[dict](data={"verified": True})
 

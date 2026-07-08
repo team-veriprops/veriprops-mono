@@ -55,6 +55,13 @@ class OtpVerifyDto(OtpSendDto):
     code: str
 
 
+class VerifyPhoneDto(Object):
+    """Phase-5 phone verification for the logged-in user — the phone comes from their
+    profile, so only the OTP code is submitted (PRD §5)."""
+
+    code: str
+
+
 class ForgotPasswordDto(Object):
     email: EmailStr
 

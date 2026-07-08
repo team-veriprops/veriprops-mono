@@ -390,3 +390,31 @@ class AuthService:
         await self._otp_service.verify_otp(
             channel, recipient, code, user_id=user_id, ip_address=ip_address,
         )
+
+    # ── Phase-5 phone verification (PRD §5) ───────────────────────────
+    # When PHONE_VERIFICATION_ENABLED=false the number is collected but left unverified at
+    # signup; the payment step then requires a verified phone. These two authenticated
+    # helpers send/verify an OTP to the *logged-in user's own* phone and flip phone_verified.
+
+    async def send_phone_otp_for_user(self, user_id: str, *, ip_address: Optional[str] = None) -> int:
+        user = await self._user_service.get_user_model(user_id)
+        return await self.send_otp(
+            OtpChannel.PHONE,
+            dial_code=user.phone_dial_code,
+            phone=user.phone,
+            user_id=user_id,
+            ip_address=ip_address,
+            fullname=f"{user.first_name} {user.last_name}".strip(),
+        )
+
+    async def verify_phone_for_user(self, user_id: str, code: str, *, ip_address: Optional[str] = None) -> None:
+        user = await self._user_service.get_user_model(user_id)
+        recipient = PhoneNumber(dial_code=user.phone_dial_code, number=user.phone)
+        await self._otp_service.verify_otp(
+            OtpChannel.PHONE, recipient, code, user_id=user_id, ip_address=ip_address,
+        )
+        await self._user_service.mark_phone_verified(user_id)
+        # Single-use — drop the marker so the code can't be replayed.
+        await self._otp_service.consume_verified_marker(
+            OtpChannel.PHONE, recipient.international_number,
+        )
