@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import {
-  AlertTriangle, BarChart3, ChevronRight, ClipboardList, Clock, CreditCard,
+  AlertTriangle, BarChart3, ClipboardList, Clock, CreditCard,
   DollarSign, Inbox, UserRoundCheck, Users,
 } from "lucide-react";
 import { Card } from "@3rdparty/ui/card";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { StatCard } from "@components/ui/StatCard";
+import { PageShell } from "@components/ui/PageShell";
+import { LinkCardRow } from "@components/ui/LinkCardRow";
+import { AttentionChip } from "@components/ui/AttentionChip";
 import { VerificationStatusBadge } from "@components/portal/verifications/VerificationStatusBadge";
 import { useAdminDashboardQuery } from "@components/admin/verifications/libs/useAdminVerificationQueries";
 import { ROUTES } from "@lib/routes";
@@ -23,17 +26,20 @@ export default function AdminDashboard() {
   const { data, isLoading, isError } = useAdminDashboardQuery();
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6" data-testid="admin-dashboard">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-foreground">Mission Control</h1>
+    <PageShell
+      title="Mission Control"
+      description="Live business and queue health."
+      width="wide"
+      data-testid="admin-dashboard"
+      actions={
         <Link
           href={ROUTES.ADMIN.ANALYTICS}
           className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
         >
           <BarChart3 className="size-4" /> Analytics
         </Link>
-      </div>
-
+      }
+    >
       <AsyncStateComponent<AdminDashboardData>
         isLoading={isLoading}
         isError={isError}
@@ -41,6 +47,32 @@ export default function AdminDashboard() {
       >
         {(summary) => (
           <div className="space-y-6">
+            {/* Urgent operational signals — surfaced up top, each linking to its queue. */}
+            {(summary.overdue > 0 || summary.slaAtRisk > 0 || summary.openChargebacks > 0 || summary.unassignedPoolTasks > 0) && (
+              <div className="flex flex-wrap gap-2">
+                {summary.overdue > 0 && (
+                  <AttentionChip icon={AlertTriangle} tone="danger" href={ROUTES.ADMIN.VERIFICATIONS}>
+                    {summary.overdue} overdue
+                  </AttentionChip>
+                )}
+                {summary.slaAtRisk > 0 && (
+                  <AttentionChip icon={Clock} tone="warning" href={ROUTES.ADMIN.VERIFICATIONS}>
+                    {summary.slaAtRisk} SLA at risk
+                  </AttentionChip>
+                )}
+                {summary.unassignedPoolTasks > 0 && (
+                  <AttentionChip icon={Inbox} tone="warning" href={ROUTES.ADMIN.VERIFICATIONS}>
+                    {summary.unassignedPoolTasks} unassigned
+                  </AttentionChip>
+                )}
+                {summary.openChargebacks > 0 && (
+                  <AttentionChip icon={CreditCard} tone="danger" href={ROUTES.ADMIN.FINANCE}>
+                    {summary.openChargebacks} open chargebacks
+                  </AttentionChip>
+                )}
+              </div>
+            )}
+
             {/* Mission Control: live business + queue health (§18.1). */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               <StatCard label="Revenue" value={formatMinor(summary.revenueMinor) ?? "—"} icon={DollarSign} tone="success" href={ROUTES.ADMIN.FINANCE} />
@@ -72,23 +104,19 @@ export default function AdminDashboard() {
                 <ul className="space-y-2">
                   {summary.recent.map((v) => (
                     <li key={v.id}>
-                      <Link href={ROUTES.ADMIN.VERIFICATION_DETAIL(v.id)}>
-                        <Card className="flex items-center justify-between gap-3 p-4 transition hover:border-primary">
-                          <div className="min-w-0 space-y-1">
-                            <p className="truncate font-medium">{v.vid}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {v.stateRegion ?? "—"}{v.tier ? ` · ${humanizeEnumLabel(v.tier)}` : ""}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
+                      <LinkCardRow
+                        href={ROUTES.ADMIN.VERIFICATION_DETAIL(v.id)}
+                        title={v.vid}
+                        subtitle={`${v.stateRegion ?? "—"}${v.tier ? ` · ${humanizeEnumLabel(v.tier)}` : ""}`}
+                        trailing={
+                          <>
                             {v.slaHealth === SlaHealth.OVERDUE ? (
                               <span className="text-xs font-medium text-red-600 dark:text-red-400">Overdue</span>
                             ) : null}
                             <VerificationStatusBadge status={v.status} />
-                            <ChevronRight className="size-4 text-muted-foreground" />
-                          </div>
-                        </Card>
-                      </Link>
+                          </>
+                        }
+                      />
                     </li>
                   ))}
                 </ul>
@@ -97,6 +125,6 @@ export default function AdminDashboard() {
           </div>
         )}
       </AsyncStateComponent>
-    </div>
+    </PageShell>
   );
 }

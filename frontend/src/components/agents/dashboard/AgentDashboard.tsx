@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CheckCircle2, ClipboardList, Inbox, Send, Star, TrendingUp } from "lucide-react";
 import { Card } from "@3rdparty/ui/card";
 import { StatCard } from "@components/ui/StatCard";
+import { PageShell } from "@components/ui/PageShell";
 import AgentApplicationStatusCard from "@components/agents/dashboard/AgentApplicationStatusCard";
 import { AvailabilityToggle } from "@components/agents/reputation/AvailabilityToggle";
 import { useAgentProfileQuery } from "@components/agents/reputation/libs/useReputationQueries";
@@ -23,8 +24,7 @@ export default function AgentDashboard() {
   const { data: profile } = useAgentProfileQuery();
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6" data-testid="agent-dashboard">
-      <h1 className="text-2xl font-bold text-foreground">Agent</h1>
+    <PageShell title="Agent" description="Your workload and reputation at a glance." width="narrow" data-testid="agent-dashboard">
       <AgentApplicationStatusCard />
 
       {approved && summary ? (
@@ -67,6 +67,6 @@ export default function AgentDashboard() {
           </Card>
         </section>
       ) : null}
-    </div>
+    </PageShell>
   );
 }

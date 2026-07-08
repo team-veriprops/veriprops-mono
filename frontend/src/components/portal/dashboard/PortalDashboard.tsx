@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, ClipboardList, CreditCard, FileCheck2, Gift, Plus, ShieldCheck } from "lucide-react";
+import { ClipboardList, CreditCard, FileCheck2, Gift, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@3rdparty/ui/button";
 import { Card } from "@3rdparty/ui/card";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { StatCard } from "@components/ui/StatCard";
+import { PageShell } from "@components/ui/PageShell";
+import { LinkCardRow } from "@components/ui/LinkCardRow";
 import { VerificationStatusBadge } from "@components/portal/verifications/VerificationStatusBadge";
 import { useCustomerDashboardQuery } from "@components/portal/libs/useVerificationQueries";
 import { useReferralSummaryQuery } from "@components/portal/referrals/libs/useReferralQueries";
@@ -22,16 +24,18 @@ export default function PortalDashboard() {
   const { data: referral } = useReferralSummaryQuery();
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6" data-testid="portal-dashboard">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+    <PageShell
+      title="Dashboard"
+      description="Your property verifications at a glance."
+      data-testid="portal-dashboard"
+      actions={
         <Button asChild size="sm">
           <Link href={ROUTES.PORTAL.VERIFICATIONS_NEW}>
             <Plus className="size-4" /> New Verification
           </Link>
         </Button>
-      </div>
-
+      }
+    >
       <AsyncStateComponent<CustomerDashboard>
         isLoading={isLoading}
         isError={isError}
@@ -76,20 +80,12 @@ export default function PortalDashboard() {
                 <ul className="space-y-2">
                   {summary.recent.map((v) => (
                     <li key={v.id}>
-                      <Link href={ROUTES.PORTAL.VERIFICATION_TRACKING(v.id)}>
-                        <Card className="flex items-center justify-between gap-3 p-4 transition hover:border-primary">
-                          <div className="min-w-0 space-y-1">
-                            <p className="truncate font-medium">{v.address ?? v.vid}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {v.vid}{v.tier ? ` · ${humanizeEnumLabel(v.tier)}` : ""}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <VerificationStatusBadge status={v.status} label={v.statusLabel} />
-                            <ChevronRight className="size-4 text-muted-foreground" />
-                          </div>
-                        </Card>
-                      </Link>
+                      <LinkCardRow
+                        href={ROUTES.PORTAL.VERIFICATION_TRACKING(v.id)}
+                        title={v.address ?? v.vid}
+                        subtitle={`${v.vid}${v.tier ? ` · ${humanizeEnumLabel(v.tier)}` : ""}`}
+                        trailing={<VerificationStatusBadge status={v.status} label={v.statusLabel} />}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -98,7 +94,7 @@ export default function PortalDashboard() {
           </div>
         )}
       </AsyncStateComponent>
-    </div>
+    </PageShell>
   );
 }
 
