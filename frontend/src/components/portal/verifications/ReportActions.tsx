@@ -14,6 +14,7 @@ import {
 } from "@components/portal/libs/useRevisionQueries";
 import { DisputeType } from "@/types/revision";
 import { VerificationTier } from "@/types/verification";
+import { humanizeEnumLabel } from "@lib/utils";
 
 const MIN_DISPUTE_CHARS = 100; // §14.3
 
@@ -249,7 +250,7 @@ function DisputeDialog({
               data-testid="dispute-type"
             >
               {Object.values(DisputeType).map((t) => (
-                <option key={t} value={t}>{t.replace(/_/g, " ")}</option>
+                <option key={t} value={t}>{humanizeEnumLabel(t)}</option>
               ))}
             </select>
           </div>

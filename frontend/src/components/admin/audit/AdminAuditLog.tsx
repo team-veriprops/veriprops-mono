@@ -2,15 +2,12 @@
 
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { humanizeEnumLabel } from "@lib/utils";
 import { Page } from "@/types/models";
 import { ADMIN_ACTION_TYPES, AuditPackRow } from "@/types/audit";
 import { useAdminActionsQuery } from "./libs/useAuditQueries";
 
 const PAGE_SIZE = 20;
-
-function humanize(text: string): string {
-  return text.toLowerCase().split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-}
 
 const columns: Column<AuditPackRow & Record<string, unknown>>[] = [
   {
@@ -18,7 +15,7 @@ const columns: Column<AuditPackRow & Record<string, unknown>>[] = [
     label: "When",
     render: (_v, item) => <span>{new Date(item.occurredAt).toLocaleString()}</span>,
   },
-  { key: "action", label: "Action", render: (_v, item) => <span>{humanize(item.action)}</span> },
+  { key: "action", label: "Action", render: (_v, item) => <span>{humanizeEnumLabel(item.action)}</span> },
   { key: "resourceType", label: "Resource" },
   {
     key: "actorId",
@@ -86,7 +83,7 @@ export default function AdminAuditLog() {
             key: "action",
             label: "Action",
             value: action,
-            options: ADMIN_ACTION_TYPES.map((a) => ({ label: humanize(a), value: a })),
+            options: ADMIN_ACTION_TYPES.map((a) => ({ label: humanizeEnumLabel(a), value: a })),
           },
         ]}
         isLoading={isLoading}

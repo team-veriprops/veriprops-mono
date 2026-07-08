@@ -1,15 +1,8 @@
 "use client";
 
 import { Loader2, Activity } from "lucide-react";
+import { humanizeEnumLabel } from "@lib/utils";
 import { AuditActivityEvent } from "@/types/audit";
-
-function humanize(text: string): string {
-  return text
-    .toLowerCase()
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
 
 interface ActivityTimelineProps {
   events: AuditActivityEvent[];
@@ -64,7 +57,7 @@ export function ActivityTimeline({ events, isLoading, isError, emptyLabel }: Act
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
-              {humanize(e.action)}
+              {humanizeEnumLabel(e.action)}
             </p>
             {(e.fromState || e.toState) && (
               <p className="text-sm" style={{ color: "var(--brand-on-surface-variant)" }}>

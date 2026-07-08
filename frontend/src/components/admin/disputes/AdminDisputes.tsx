@@ -7,6 +7,7 @@ import { Textarea } from "@3rdparty/ui/textarea";
 import { Label } from "@3rdparty/ui/label";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import DetailDrawer from "@components/ui/DetailDrawer";
+import { humanizeEnumLabel } from "@lib/utils";
 import {
   useOpenDisputesQuery,
   useResolveDisputeMutation,
@@ -51,7 +52,7 @@ export default function AdminDisputes() {
                 data-testid="dispute-row"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">{d.disputeType.replace(/_/g, " ")}</p>
+                  <p className="text-sm font-medium">{humanizeEnumLabel(d.disputeType)}</p>
                   <p className="truncate text-xs text-muted-foreground">{d.description}</p>
                 </div>
                 <span className="text-xs text-muted-foreground">{new Date(d.dateCreated).toLocaleDateString()}</span>

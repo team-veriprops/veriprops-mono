@@ -6,6 +6,7 @@ import { ShieldAlert, ShieldCheck, Loader2 } from "lucide-react";
 import { useSecurityEventsQuery } from "@components/website/auth/libs/useAuthQueries";
 import { SecurityEventType } from "@components/website/auth/models";
 import { Button } from "@3rdparty/ui/button";
+import { humanizeEnumLabel } from "@lib/utils";
 
 const PAGE_SIZE = 20;
 
@@ -71,7 +72,7 @@ export default function SecurityActivityPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
-                    {humanizeEventType(e.type)}
+                    {humanizeEnumLabel(e.type)}
                   </p>
                   <p className="text-sm" style={{ color: "var(--brand-on-surface-variant)" }}>
                     {e.description}
@@ -115,10 +116,3 @@ export default function SecurityActivityPage() {
   );
 }
 
-function humanizeEventType(type: string): string {
-  return type
-    .toLowerCase()
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}

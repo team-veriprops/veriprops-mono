@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@3rdparty/ui/button";
 import { Textarea } from "@3rdparty/ui/textarea";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
+import { humanizeEnumLabel } from "@lib/utils";
 import {
   useAgentDisputesQuery,
   useSubmitDefenceMutation,
@@ -70,8 +71,8 @@ function DefenceCard({ dispute }: { dispute: Dispute }) {
     <div className="space-y-3 rounded-lg border p-4" data-testid="agent-dispute-card">
       <div>
         <p className="text-sm font-medium">
-          {dispute.disputeType.replace(/_/g, " ")}
-          {dispute.targetRole ? ` · ${dispute.targetRole}` : ""}
+          {humanizeEnumLabel(dispute.disputeType)}
+          {dispute.targetRole ? ` · ${humanizeEnumLabel(dispute.targetRole)}` : ""}
         </p>
         <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">{dispute.description}</p>
       </div>

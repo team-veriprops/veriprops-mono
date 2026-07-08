@@ -3,14 +3,11 @@
 import { useState } from "react";
 import { Loader2, Download, FileText } from "lucide-react";
 import { Button } from "@3rdparty/ui/button";
+import { humanizeEnumLabel } from "@lib/utils";
 import { UserConsentHistoryItem } from "@/types/consentHistory";
 import { useConsentHistoryQuery, consentHistoryService } from "./libs/useConsentHistoryQueries";
 
 const PAGE_SIZE = 20;
-
-function humanize(text: string): string {
-  return text.toLowerCase().split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-}
 
 /** Account → Consents (§19.1 / R19.4). Versioned consent history + CSV download. */
 export default function ConsentHistory() {
@@ -64,7 +61,7 @@ export default function ConsentHistory() {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
-                  {humanize(c.documentType)} <span className="font-normal text-xs">v{c.consentVersion}</span>
+                  {humanizeEnumLabel(c.documentType)} <span className="font-normal text-xs">v{c.consentVersion}</span>
                 </p>
                 <p className="text-xs mt-1" style={{ color: "rgba(68,71,78,0.55)" }}>
                   Accepted {new Date(c.acceptedAt).toLocaleString()}

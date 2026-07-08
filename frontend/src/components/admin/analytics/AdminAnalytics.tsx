@@ -10,7 +10,7 @@ import {
   useTimeByTierQuery,
 } from "./libs/useAnalyticsQueries";
 import { Funnel, Revenue } from "@/types/analytics";
-import { formatMinor } from "@lib/utils";
+import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 
 /**
  * Analytics dashboard (§18.1, D38) — conversion funnel, avg time by tier, revenue by tier
@@ -27,7 +27,12 @@ export default function AdminAnalytics() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6" data-testid="admin-analytics">
-      <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+        <p className="text-sm text-muted-foreground">
+          Conversion, turnaround, revenue, and agent performance — all backend-derived.
+        </p>
+      </div>
 
       <Card className="space-y-3 p-5">
         <h2 className="text-sm font-semibold text-foreground">Conversion funnel</h2>
@@ -42,7 +47,7 @@ export default function AdminAnalytics() {
           <AsyncStateComponent data={timeByTier.data} isLoading={timeByTier.isLoading} isError={timeByTier.isError}>
             {(rows) => (
               <BarChart
-                data={rows.map((r) => ({ label: r.tier, value: r.avgDays, hint: `${r.completedCount} completed` }))}
+                data={rows.map((r) => ({ label: humanizeEnumLabel(r.tier), value: r.avgDays, hint: `${r.completedCount} completed` }))}
                 format={(v) => `${v.toFixed(1)}d`}
               />
             )}
@@ -58,7 +63,7 @@ export default function AdminAnalytics() {
                   {formatMinor(rev.totalMinor)} total
                 </p>
                 <BarChart
-                  data={rev.byTier.map((t) => ({ label: t.tier, value: t.revenueMinor, hint: `${t.count} sold` }))}
+                  data={rev.byTier.map((t) => ({ label: humanizeEnumLabel(t.tier), value: t.revenueMinor, hint: `${t.count} sold` }))}
                   format={(v) => formatMinor(v) ?? "—"}
                 />
               </>
