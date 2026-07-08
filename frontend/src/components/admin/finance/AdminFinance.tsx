@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { CreditCard, DollarSign, HandCoins, Receipt } from "lucide-react";
+import { ArrowUpRight, CreditCard, HandCoins, Receipt } from "lucide-react";
 import { Card } from "@3rdparty/ui/card";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
-import { StatCard } from "@components/ui/StatCard";
+import { PageShell } from "@components/ui/PageShell";
+import { AttentionChip } from "@components/ui/AttentionChip";
+import { MiniBarBreakdown } from "@components/ui/MiniBarBreakdown";
 import { useFinanceSummaryQuery } from "./libs/useFinanceSummaryQuery";
 import { FinanceSummary } from "@/types/finance";
 import { ROUTES } from "@lib/routes";
@@ -18,54 +20,63 @@ export default function AdminFinance() {
   const { data, isLoading, isError } = useFinanceSummaryQuery();
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6" data-testid="admin-finance">
-      <h1 className="text-2xl font-bold text-foreground">Finance</h1>
+    <AsyncStateComponent<FinanceSummary> isLoading={isLoading} isError={isError} data={data}>
+      {(summary) => (
+        <PageShell
+          title="Finance"
+          description="Collected revenue and payment, commission, and payout health."
+          data-testid="admin-finance"
+          meta={
+            summary.pendingPayouts > 0 ? (
+              <AttentionChip icon={HandCoins} tone="warning" href={ROUTES.ADMIN.FINANCE_PAYOUTS}>
+                {summary.pendingPayouts} payout{summary.pendingPayouts === 1 ? "" : "s"} pending
+              </AttentionChip>
+            ) : undefined
+          }
+        >
+          {/* Hero: collected revenue is the single headline figure. */}
+          <Card className="p-6">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Collected revenue</p>
+            <p className="mt-1 text-4xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              {formatMinor(summary.revenueMinor) ?? "—"}
+            </p>
+          </Card>
 
-      <AsyncStateComponent<FinanceSummary> isLoading={isLoading} isError={isError} data={data}>
-        {(summary) => (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <StatCard label="Revenue" value={formatMinor(summary.revenueMinor) ?? "—"} icon={DollarSign} tone="success" />
-              <StatCard label="Pending payouts" value={summary.pendingPayouts} icon={HandCoins} tone={summary.pendingPayouts > 0 ? "warning" : "default"} href={ROUTES.ADMIN.FINANCE_PAYOUTS} />
-              <StatCard label="Payments" value={sum(summary.paymentsByStatus)} icon={CreditCard} />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <StatusBreakdown title="Payments" counts={summary.paymentsByStatus} icon={<CreditCard className="size-4" />} />
-              <StatusBreakdown title="Commissions" counts={summary.commissionsByStatus} icon={<Receipt className="size-4" />} />
-              <StatusBreakdown title="Payouts" counts={summary.payoutsByStatus} icon={<HandCoins className="size-4" />} href={ROUTES.ADMIN.FINANCE_PAYOUTS} />
-            </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <BreakdownCard title="Payments" icon={<CreditCard className="size-4" />} counts={summary.paymentsByStatus} />
+            <BreakdownCard title="Commissions" icon={<Receipt className="size-4" />} counts={summary.commissionsByStatus} />
+            <BreakdownCard
+              title="Payouts"
+              icon={<HandCoins className="size-4" />}
+              counts={summary.payoutsByStatus}
+              href={ROUTES.ADMIN.FINANCE_PAYOUTS}
+            />
           </div>
-        )}
-      </AsyncStateComponent>
-    </div>
+        </PageShell>
+      )}
+    </AsyncStateComponent>
   );
 }
 
-function sum(counts: Record<string, number>): number {
-  return Object.values(counts).reduce((a, b) => a + b, 0);
-}
-
-function StatusBreakdown({
+function BreakdownCard({
   title, counts, icon, href,
 }: { title: string; counts: Record<string, number>; icon: React.ReactNode; href?: string }) {
-  const entries = Object.entries(counts);
-  const body = (
-    <Card className="space-y-2 p-4 transition hover:border-primary">
-      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">{icon} {title}</div>
-      {entries.length === 0 ? (
-        <p className="text-xs text-muted-foreground">None yet.</p>
+  const heading = (
+    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+      {icon} {title}
+      {href ? <ArrowUpRight className="ml-auto size-4 text-muted-foreground" aria-hidden /> : null}
+    </div>
+  );
+  return (
+    <Card className="space-y-3 p-4">
+      {href ? (
+        <Link href={href} className="block transition-colors hover:text-primary">
+          {heading}
+        </Link>
       ) : (
-        <ul className="space-y-1 text-sm">
-          {entries.map(([status, count]) => (
-            <li key={status} className="flex justify-between">
-              <span className="text-muted-foreground">{status}</span>
-              <span className="font-medium tabular-nums">{count}</span>
-            </li>
-          ))}
-        </ul>
+        heading
       )}
+      <MiniBarBreakdown counts={counts} />
     </Card>
   );
-  return href ? <Link href={href} className="block">{body}</Link> : body;
 }

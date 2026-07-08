@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
+import { PageShell } from "@components/ui/PageShell";
 import { humanizeEnumLabel } from "@lib/utils";
 import { CommissionRule } from "@/types/commission";
 import { AgentRole } from "@/types/agent";
@@ -19,13 +20,11 @@ export default function CommissionRules() {
   const { data, isLoading, isError } = useCommissionRulesQuery();
 
   return (
-    <div className="mx-auto max-w-3xl p-4 sm:p-6">
-      <header className="mb-4">
-        <h1 className="text-lg font-semibold">Commission rules</h1>
-        <p className="text-sm text-muted-foreground">
-          Agent share of the tier price, per role. Shown to the agent before they accept a job.
-        </p>
-      </header>
+    <PageShell
+      title="Commission rules"
+      description="Agent share of the tier price, per role. Shown to the agent before they accept a job."
+      width="narrow"
+    >
       <AsyncStateComponent<CommissionRule[]>
         isLoading={isLoading}
         isError={isError}
@@ -52,7 +51,7 @@ export default function CommissionRules() {
           </div>
         )}
       </AsyncStateComponent>
-    </div>
+    </PageShell>
   );
 }
 

@@ -7,6 +7,8 @@ import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import DetailDrawer from "@components/ui/DetailDrawer";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
+import { PageShell } from "@components/ui/PageShell";
+import { StatusPill } from "@components/ui/StatusPill";
 import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 import { Payout, PayoutStatus } from "@/types/payout";
 import { Page } from "@/types/models";
@@ -22,15 +24,16 @@ export default function AdminPayouts() {
   const [selected, setSelected] = useState<Payout | null>(null);
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold">Payouts</h1>
+    <PageShell
+      title="Payouts"
+      description="Approve, hold, adjust, or reject agent withdrawal requests."
+      actions={
         <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(0); }}
           className="h-9 rounded-md border bg-background px-3 text-sm" data-testid="payout-status-filter">
-          {STATUSES.map((s) => <option key={s || "all"} value={s}>{s || "All"}</option>)}
+          {STATUSES.map((s) => <option key={s || "all"} value={s}>{s ? humanizeEnumLabel(s) : "All"}</option>)}
         </select>
-      </div>
-
+      }
+    >
       <AsyncStateComponent<Page<Payout>>
         isLoading={isLoading}
         isError={isError}
@@ -51,7 +54,7 @@ export default function AdminPayouts() {
                       <p className="font-semibold tabular-nums">{formatMinor(p.amountMinor, p.currency)}</p>
                       <p className="truncate text-xs text-muted-foreground">{p.bankName} · {p.accountNumber} · {p.accountName}</p>
                     </div>
-                    <span className="shrink-0 text-xs font-medium text-muted-foreground">{humanizeEnumLabel(p.status)}</span>
+                    <StatusPill status={p.status} className="shrink-0" />
                   </button>
                 ))}
               </ul>
@@ -69,7 +72,7 @@ export default function AdminPayouts() {
         title="Payout" reference={selected?.id ?? ""}>
         {selected && <DecisionPanel payout={selected} onDone={() => setSelected(null)} />}
       </DetailDrawer>
-    </div>
+    </PageShell>
   );
 }
 
@@ -99,7 +102,7 @@ function DecisionPanel({ payout, onDone }: { payout: Payout; onDone: () => void 
       <section className="rounded-lg border p-3">
         <p className="text-lg font-semibold tabular-nums">{formatMinor(payout.amountMinor, payout.currency)}</p>
         <p className="text-muted-foreground">{payout.bankName} · {payout.accountNumber} · {payout.accountName}</p>
-        <p className="mt-1 text-xs text-muted-foreground">Status: {humanizeEnumLabel(payout.status)}</p>
+        <div className="mt-2"><StatusPill status={payout.status} /></div>
       </section>
 
       {decided ? (
