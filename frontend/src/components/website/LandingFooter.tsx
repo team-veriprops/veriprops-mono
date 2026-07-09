@@ -86,7 +86,7 @@ export default function LandingFooter() {
               className="text-sm leading-relaxed mb-6"
               style={{ color: "var(--brand-on-surface-variant)" }}
             >
-              Helping Nigerians buy property safely — through 
+              Helping Nigerians buy property safely; through 
               trusted, independent verification and real 
               due diligence. 
 
