@@ -41,6 +41,18 @@ client_state_manager: ClientStateManager = ClientStateManager()
 data_seeder: DataSeeder = DataSeeder()
 
 
+
+
+
+from pathlib import Path
+
+print("Current file:", __file__)
+print("Current cwd:", Path.cwd())
+
+for p in Path("/vercel/path1").rglob("firebase-service-account.json"):
+    print("Found:", p)
+
+
 @asynccontextmanager
 async def lifespan_event(app: FastAPI):
     logger.debug("Running lifespan..")
