@@ -31,6 +31,6 @@ media/
 boto3*
 botocore*
 google-cloud-*
-firebase-*
+remove_firebase-*
 gradio*
 huggingface*
