@@ -1,19 +1,19 @@
 {
-  "installCommand": "pip install -r requirements.txt",
-  "buildCommand": "export veriprops_active_env=local && alembic upgrade head && gunicorn -w 4 -k uvicorn.workers.UvicornWorker veriprops:app",
-  "builds": [
-    {
-      "src": "/veriprops.py",
-      "use": "@vercel/python",
-      "config": {
-        "pythonVersion": "3.12"
-      }
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+
+  "buildCommand": "export veriprops_active_env=prod && alembic upgrade head",
+
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60,
+      "includeFiles": "service_accounts/**"
     }
-  ],
-  "routes": [
+  },
+
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "veriprops.py"
+      "source": "/(.*)",
+      "destination": "/api/index.py"
     }
   ]
 }
