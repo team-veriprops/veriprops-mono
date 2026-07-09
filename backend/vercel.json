@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
 
-  "installCommand": "pip install -r requirements.txt",
-  "buildCommand": "export veriprops_active_env=local && alembic upgrade head",
+  "installCommand": "uv pip install --system -r requirements.txt",
+  "buildCommand": "export veriprops_active_env=prod && alembic upgrade head",
 
   "functions": {
     "api/index.py": {
