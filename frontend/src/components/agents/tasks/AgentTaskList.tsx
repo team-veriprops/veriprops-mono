@@ -13,12 +13,13 @@ import {
   SelectValue,
 } from "@3rdparty/ui/select";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
+import { StatusPill } from "@components/ui/StatusPill";
 import { toast } from "@components/3rdparty/ui/use-toast";
 import { ROUTES } from "@/lib/routes";
 import { TaskState } from "@/types/adminVerification";
 import { AgentTask } from "@/types/agentTask";
 import { Page } from "@/types/models";
-import { cn, humanizeEnumLabel } from "@lib/utils";
+import { humanizeEnumLabel } from "@lib/utils";
 import {
   useAcceptTaskMutation,
   useAgentTasksQuery,
@@ -27,18 +28,6 @@ import {
 
 const ALL = "ALL";
 const PAGE_SIZE = 10;
-
-// Task-state → pill styling. Terminal/approval states read positive, rejection negative,
-// active work states neutral-primary, and the not-yet-started states muted.
-const STATE_TONE: Record<TaskState, string> = {
-  [TaskState.PENDING]: "bg-muted text-muted-foreground",
-  [TaskState.ASSIGNED]: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  [TaskState.ACCEPTED]: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  [TaskState.IN_PROGRESS]: "bg-primary/10 text-primary",
-  [TaskState.SUBMITTED]: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  [TaskState.REJECTED]: "bg-destructive/10 text-destructive",
-  [TaskState.APPROVED]: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-};
 
 export default function AgentTaskList() {
   const router = useRouter();
@@ -110,14 +99,7 @@ export default function AgentTaskList() {
                             <span className="font-semibold text-foreground">
                               {humanizeEnumLabel(task.role)}
                             </span>
-                            <span
-                              className={cn(
-                                "rounded-full px-2 py-0.5 text-xs font-medium",
-                                STATE_TONE[task.state],
-                              )}
-                            >
-                              {humanizeEnumLabel(task.state)}
-                            </span>
+                            <StatusPill status={task.state} />
                             <Badge variant="secondary">{humanizeEnumLabel(task.tier)}</Badge>
                             {task.inPool && (
                               <Badge className="gap-1">
