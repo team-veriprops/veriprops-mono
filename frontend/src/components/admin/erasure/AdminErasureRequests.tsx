@@ -1,8 +1,10 @@
 "use client";
 
-import { CheckCircle2, XCircle, Trash2 } from "lucide-react";
-import { Badge } from "@3rdparty/ui/badge";
+import { CheckCircle2, XCircle, Trash2, Clock } from "lucide-react";
 import { Action, Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
+import { PageShell } from "@components/ui/PageShell";
+import { StatusPill } from "@components/ui/StatusPill";
+import { AttentionChip } from "@components/ui/AttentionChip";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
 import { humanizeEnumLabel } from "@lib/utils";
 import { Page } from "@/types/models";
@@ -16,12 +18,12 @@ import {
 
 const PAGE_SIZE = 10;
 
-const STATUS_VARIANT: Record<ErasureRequestStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  [ErasureRequestStatus.PENDING]: "default",
-  [ErasureRequestStatus.APPROVED]: "secondary",
-  [ErasureRequestStatus.EXECUTED]: "outline",
-  [ErasureRequestStatus.REJECTED]: "destructive",
-};
+// A right-to-erasure request is still actionable while pending or approved; those are the
+// rows whose review SLA matters.
+const ACTIONABLE = new Set<ErasureRequestStatus>([
+  ErasureRequestStatus.PENDING,
+  ErasureRequestStatus.APPROVED,
+]);
 
 const columns: Column<DataErasureRequest & Record<string, unknown>>[] = [
   {
@@ -32,13 +34,23 @@ const columns: Column<DataErasureRequest & Record<string, unknown>>[] = [
   {
     key: "status",
     label: "Status",
-    render: (_v, item) => <Badge variant={STATUS_VARIANT[item.status]}>{humanizeEnumLabel(item.status)}</Badge>,
+    render: (_v, item) => <StatusPill status={item.status} />,
   },
   { key: "reason", label: "Reason", render: (_v, item) => <span>{item.reason ?? "—"}</span> },
   {
     key: "slaDueAt",
     label: "Review by",
-    render: (_v, item) => <span>{item.slaDueAt ? new Date(item.slaDueAt).toLocaleDateString() : "—"}</span>,
+    render: (_v, item) => {
+      if (!item.slaDueAt) return <span>—</span>;
+      const overdue = ACTIONABLE.has(item.status) && new Date(item.slaDueAt).getTime() < Date.now();
+      return overdue ? (
+        <AttentionChip icon={Clock} tone="danger">
+          Overdue {new Date(item.slaDueAt).toLocaleDateString()}
+        </AttentionChip>
+      ) : (
+        <span>{new Date(item.slaDueAt).toLocaleDateString()}</span>
+      );
+    },
   },
   {
     key: "dateCreated",
@@ -108,14 +120,12 @@ export default function AdminErasureRequests() {
   const updateFilters = (u: TableFilterUpdate) => updateTableState(u as Partial<ErasureTableState>);
 
   return (
-    <div className="space-y-6" data-testid="admin-erasure-requests">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Data Erasure Requests</h1>
-        <p className="text-sm text-muted-foreground">
-          NDPA right-to-erasure queue (§18.1). Approving then executing pseudonymises the subject&apos;s PII irreversibly (§4.11).
-        </p>
-      </div>
-
+    <PageShell
+      title="Data Erasure Requests"
+      description="NDPA right-to-erasure queue (§18.1). Approving then executing pseudonymises the subject's PII irreversibly (§4.11)."
+      width="wide"
+      data-testid="admin-erasure-requests"
+    >
       <DataTable<DataErasureRequest & Record<string, unknown>>
         dataPage={dataPage}
         columns={columns}
@@ -127,13 +137,13 @@ export default function AdminErasureRequests() {
             key: "status",
             label: "Status",
             value: status,
-            options: Object.values(ErasureRequestStatus).map((s) => ({ label: s, value: s })),
+            options: Object.values(ErasureRequestStatus).map((s) => ({ label: humanizeEnumLabel(s), value: s })),
           },
         ]}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
       />
-    </div>
+    </PageShell>
   );
 }

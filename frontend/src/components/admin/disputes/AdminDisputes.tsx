@@ -7,6 +7,7 @@ import { Textarea } from "@3rdparty/ui/textarea";
 import { Label } from "@3rdparty/ui/label";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import DetailDrawer from "@components/ui/DetailDrawer";
+import { PageShell } from "@components/ui/PageShell";
 import { humanizeEnumLabel } from "@lib/utils";
 import {
   useOpenDisputesQuery,
@@ -32,8 +33,7 @@ export default function AdminDisputes() {
   const [selected, setSelected] = useState<Dispute | null>(null);
 
   return (
-    <div className="p-4 sm:p-6">
-      <h1 className="mb-4 text-lg font-semibold">Open disputes</h1>
+    <PageShell title="Open disputes" description="Resolve customer complaints — reject, refund, or grant a free re-check.">
       <AsyncStateComponent<Page<Dispute>>
         isLoading={isLoading}
         isError={isError}
@@ -70,7 +70,7 @@ export default function AdminDisputes() {
       >
         {selected && <ResolvePanel dispute={selected} onDone={() => setSelected(null)} />}
       </DetailDrawer>
-    </div>
+    </PageShell>
   );
 }
 

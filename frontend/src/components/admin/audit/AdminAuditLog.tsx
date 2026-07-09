@@ -1,6 +1,7 @@
 "use client";
 
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
+import { PageShell } from "@components/ui/PageShell";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
 import { humanizeEnumLabel } from "@lib/utils";
 import { Page } from "@/types/models";
@@ -63,16 +64,12 @@ export default function AdminAuditLog() {
   const updateFilters = (u: TableFilterUpdate) => updateTableState(u as Partial<AuditTableState>);
 
   return (
-    <div className="space-y-6" data-testid="admin-audit-log">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Admin Audit Log</h1>
-          <p className="text-sm text-muted-foreground">
-            Privileged admin actions — role changes, config edits, approvals, and NDPA erasures (§19.6).
-          </p>
-        </div>
-      </div>
-
+    <PageShell
+      title="Admin Audit Log"
+      description="Privileged admin actions — role changes, config edits, approvals, and NDPA erasures (§19.6)."
+      width="wide"
+      data-testid="admin-audit-log"
+    >
       <DataTable<AuditPackRow & Record<string, unknown>>
         dataPage={dataPage}
         columns={columns}
@@ -90,6 +87,6 @@ export default function AdminAuditLog() {
         isError={isError}
         error={error as Error | null}
       />
-    </div>
+    </PageShell>
   );
 }
