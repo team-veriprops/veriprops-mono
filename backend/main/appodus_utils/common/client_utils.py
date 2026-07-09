@@ -6,6 +6,7 @@ import json
 from typing import List, Optional, Union
 from urllib.parse import urlparse, urlunparse
 
+from functools import lru_cache
 from cryptography.fernet import Fernet
 from starlette.requests import Request
 
@@ -15,7 +16,20 @@ from main.appodus_utils.exception.exceptions import ForbiddenException, Unauthor
 
 client_secret_encryption_key = utils_settings.APPODUS_CLIENT_SECRET_ENCRYPTION_KEY or ""
 client_request_expires_seconds = utils_settings.APPODUS_CLIENT_REQUEST_EXPIRES_SECONDS or 300
-fernet = Fernet(client_secret_encryption_key)
+# fernet = Fernet(client_secret_encryption_key)
+
+
+    
+@lru_cache(maxsize=1)
+def get_fernet() -> Fernet:
+    key = utils_settings.APPODUS_CLIENT_SECRET_ENCRYPTION_KEY
+
+    if not key:
+        raise RuntimeError(
+            "APPODUS_CLIENT_SECRET_ENCRYPTION_KEY is not configured."
+        )
+
+    return Fernet(key)
 
 class ClientUtils:
 
@@ -68,11 +82,11 @@ class ClientUtils:
 
     @staticmethod
     def encrypt_api_secret(secret: bytes) -> str:
-        return fernet.encrypt(secret).decode()
+        return get_fernet().encrypt(secret).decode()
 
     @staticmethod
     def decrypt_api_secret(encrypted_secret: str) -> str:
-        return fernet.decrypt(encrypted_secret.encode()).decode()
+        return get_fernet().decrypt(encrypted_secret.encode()).decode()
 
     @staticmethod
     def compute_signature(client_secret: str, method: str, path: str, timestamp: str, body: bytes) -> str:
