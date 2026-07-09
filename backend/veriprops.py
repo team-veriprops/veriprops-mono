@@ -41,19 +41,6 @@ client_state_manager: ClientStateManager = ClientStateManager()
 data_seeder: DataSeeder = DataSeeder()
 
 
-
-
-from pathlib import Path
-
-root = Path("/vercel/path1")
-
-print("CWD:", Path.cwd())
-print("Root contents:")
-
-for p in sorted(root.iterdir()):
-    print("-", p)
-
-
 @asynccontextmanager
 async def lifespan_event(app: FastAPI):
     logger.debug("Running lifespan..")
