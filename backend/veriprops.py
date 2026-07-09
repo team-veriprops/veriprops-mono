@@ -43,14 +43,15 @@ data_seeder: DataSeeder = DataSeeder()
 
 
 
-
 from pathlib import Path
 
-print("Current file:", __file__)
-print("Current cwd:", Path.cwd())
+root = Path("/vercel/path1")
 
-for p in Path("/vercel/path1").rglob("firebase-service-account.json"):
-    print("Found:", p)
+print("CWD:", Path.cwd())
+print("Root contents:")
+
+for p in sorted(root.iterdir()):
+    print("-", p)
 
 
 @asynccontextmanager
