@@ -1,70 +1,34 @@
-import { httpClient } from "@/containers";
+import { HttpClient } from "@lib/FetchHttpClient";
+import { Page, SuccessResponse } from "@/types/models";
+import { AddBankAccountRequest, BankAccount, Payout, RequestPayoutRequest } from "@/types/payout";
 
-export interface BankAccount {
-  id: string;
-  agentId: string;
-  bankName: string;
-  accountNumber: string;
-  accountHolderName: string;
-  isDefault: boolean;
-  dateCreated: string;
-}
-
-export interface Payout {
-  id: string;
-  agentId: string;
-  amount: number;
-  bankAccountId: string;
-  status: string;
-  requestedAt: string;
-  approvedAt: string | null;
-  paidAt: string | null;
-  holdReason: string | null;
-  dateCreated: string;
-}
-
-export interface CreateBankAccountDto {
-  bankName: string;
-  accountNumber: string;
-  accountHolderName: string;
-  isDefault?: boolean;
-}
-
+/**
+ * Agent payout API (PRD §15.1). Mirrors the agent routes in app/domain/payout/controller.py.
+ */
 export class PayoutService {
-  listBankAccounts(): Promise<{ data: BankAccount[] }> {
-    return httpClient.get("/agent/bank-accounts");
+  constructor(private readonly http: HttpClient) {}
+
+  listPayouts(page = 0, pageSize = 10): Promise<SuccessResponse<Page<Payout>>> {
+    return this.http.get(`/agents/payouts?page=${page}&page_size=${pageSize}`);
   }
 
-  addBankAccount(dto: CreateBankAccountDto): Promise<{ data: BankAccount }> {
-    return httpClient.post("/agent/bank-accounts", dto);
+  requestPayout(req: RequestPayoutRequest): Promise<SuccessResponse<Payout>> {
+    return this.http.post(`/agents/payouts`, req);
   }
 
-  requestWithdrawal(amount: number, bankAccountId: string): Promise<{ data: Payout }> {
-    return httpClient.post("/agent/payouts", { amount, bankAccountId });
+  cancelPayout(payoutId: string): Promise<SuccessResponse<Payout>> {
+    return this.http.post(`/agents/payouts/${payoutId}/cancel`);
   }
 
-  listPayouts(): Promise<{ data: Payout[] }> {
-    return httpClient.get("/agent/payouts");
-  }
-}
-
-export class PayoutAdminService {
-  listAll(): Promise<{ data: Payout[] }> {
-    return httpClient.get("/admin/payouts");
+  listBankAccounts(): Promise<SuccessResponse<BankAccount[]>> {
+    return this.http.get(`/agents/payouts/bank-accounts`);
   }
 
-  approve(payoutId: string): Promise<{ data: Payout }> {
-    return httpClient.post(`/admin/payouts/${payoutId}/approve`);
+  addBankAccount(req: AddBankAccountRequest): Promise<SuccessResponse<BankAccount>> {
+    return this.http.post(`/agents/payouts/bank-accounts`, req);
   }
 
-  hold(payoutId: string, reason: string): Promise<{ data: Payout }> {
-    return httpClient.post(`/admin/payouts/${payoutId}/hold`, { reason });
-  }
-
-  adjust(payoutId: string, newAmount: number, reason: string): Promise<{ data: Payout }> {
-    return httpClient.put(`/admin/payouts/${payoutId}/adjust`, { newAmount, reason });
+  removeBankAccount(accountId: string): Promise<SuccessResponse<boolean>> {
+    return this.http.delete(`/agents/payouts/bank-accounts/${accountId}`);
   }
 }
-
-export const payoutService = new PayoutService();
-export const payoutAdminService = new PayoutAdminService();

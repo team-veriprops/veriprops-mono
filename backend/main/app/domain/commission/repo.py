@@ -1,112 +1,118 @@
-"""Commission repos — S47."""
+"""Commission data access."""
 from __future__ import annotations
 
-from decimal import Decimal
-from typing import List, Optional, Type
+from datetime import datetime
+from typing import List, Optional, Tuple, Type
 
-from sqlalchemy import select
 from kink import inject
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.commission.models import (
-    CommissionRule,
-    Earning,
-    CreateCommissionRuleDto,
-    UpdateCommissionRuleDto,
-    QueryCommissionRuleDto,
-    SearchCommissionRuleDto,
-    CreateEarningDto,
-    UpdateEarningDto,
-    QueryEarningDto,
-    SearchEarningDto,
-    EarningStatus,
+    Commission,
+    CommissionStatus,
+    CreateCommissionDto,
+    QueryCommissionDto,
+    SearchCommissionDto,
+    UpdateCommissionDto,
 )
 from main.appodus_utils.db.repo import GenericRepo
-from main.appodus_utils.db.session import get_db_session_from_context
 
 
 @inject
-class CommissionRuleRepo(GenericRepo[
-    CommissionRule,
-    CreateCommissionRuleDto,
-    UpdateCommissionRuleDto,
-    QueryCommissionRuleDto,
-    SearchCommissionRuleDto,
-]):
+class CommissionRepo(
+    GenericRepo[
+        Commission,
+        CreateCommissionDto,
+        UpdateCommissionDto,
+        QueryCommissionDto,
+        SearchCommissionDto,
+    ]
+):
     def __init__(
         self,
         db: AsyncSession,
-        model: Type[CommissionRule] = CommissionRule,
-        query_dto: Type[QueryCommissionRuleDto] = QueryCommissionRuleDto,
+        model: Type[Commission] = Commission,
+        query_dto: Type[QueryCommissionDto] = QueryCommissionDto,
     ):
         super().__init__(db, model, query_dto)
+        self.db = db
 
-    async def get_for_role_and_tier(self, role: str, tier: str) -> Optional[CommissionRule]:
-        session = self._session
-        result = await session.execute(
-            select(CommissionRule).where(
-                CommissionRule.role == role,
-                CommissionRule.tier == tier,
-                CommissionRule.deleted == False,
-            ).order_by(CommissionRule.effective_date.desc()).limit(1)
+    async def list_for_verification(self, verification_id: str) -> List[Commission]:
+        stmt = select(Commission).where(
+            Commission.deleted.is_(False),
+            Commission.verification_id == verification_id,
         )
-        return result.scalars().first()
+        return list((await self._session.execute(stmt)).scalars().all())
 
-
-@inject
-class EarningRepo(GenericRepo[
-    Earning,
-    CreateEarningDto,
-    UpdateEarningDto,
-    QueryEarningDto,
-    SearchEarningDto,
-]):
-    def __init__(
-        self,
-        db: AsyncSession,
-        model: Type[Earning] = Earning,
-        query_dto: Type[QueryEarningDto] = QueryEarningDto,
-    ):
-        super().__init__(db, model, query_dto)
-
-    async def list_for_agent(self, agent_id: str) -> List[Earning]:
-        session = self._session
-        result = await session.execute(
-            select(Earning).where(
-                Earning.agent_id == agent_id,
-                Earning.deleted == False,
-            ).order_by(Earning.date_created.desc())
+    async def list_for_verification_in_status(
+        self, verification_id: str, statuses: List[str]
+    ) -> List[Commission]:
+        stmt = select(Commission).where(
+            Commission.deleted.is_(False),
+            Commission.verification_id == verification_id,
+            Commission.status.in_(statuses),
         )
-        return list(result.scalars().all())
+        return list((await self._session.execute(stmt)).scalars().all())
 
-    async def admin_list(
-        self,
-        agent_id: Optional[str],
-        status: Optional[str],
-        page: int,
-        page_size: int,
-    ):
+    async def get_live_for_task(
+        self, verification_id: str, task_id: str
+    ) -> Optional[Commission]:
+        """A non-reversed commission already accrued for this task — the double-accrual
+        guard on a re-release (§S18 follow-up). REVERSED rows don't block a fresh accrual."""
+        stmt = select(Commission).where(
+            Commission.deleted.is_(False),
+            Commission.verification_id == verification_id,
+            Commission.task_id == task_id,
+            Commission.status != CommissionStatus.REVERSED.value,
+        )
+        return (await self._session.execute(stmt)).scalars().first()
+
+    async def list_for_agent(self, agent_id: str) -> List[Commission]:
+        stmt = select(Commission).where(
+            Commission.deleted.is_(False), Commission.agent_id == agent_id
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def page_for_agent(
+        self, agent_id: str, page: int, page_size: int
+    ) -> Tuple[List[Commission], int]:
+        base = select(Commission).where(
+            Commission.deleted.is_(False), Commission.agent_id == agent_id
+        )
+        total = (await self._session.execute(
+            select(func.count()).select_from(base.subquery())
+        )).scalar_one()
+        stmt = base.order_by(Commission.date_created.desc()).offset(page * page_size).limit(page_size)
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return rows, total
+
+    async def list_clearing_due(self, now: datetime) -> List[Commission]:
+        """CLEARING commissions whose bulk-clearance date has passed (sweep pass 1)."""
+        stmt = select(Commission).where(
+            Commission.deleted.is_(False),
+            Commission.status == CommissionStatus.CLEARING.value,
+            Commission.clearing_until.is_not(None),
+            Commission.clearing_until <= now,
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_reserve_due(self, now: datetime) -> List[Commission]:
+        """AVAILABLE commissions with an unreleased reserve past its window (sweep pass 2)."""
+        stmt = select(Commission).where(
+            Commission.deleted.is_(False),
+            Commission.status == CommissionStatus.AVAILABLE.value,
+            Commission.reserve_amount_minor > 0,
+            Commission.reserve_released_at.is_(None),
+            Commission.reserve_until.is_not(None),
+            Commission.reserve_until <= now,
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def count_by_status(self) -> dict:
+        """status → count over all commissions (Finance panel §18.1)."""
         from sqlalchemy import func, select
-        filters = [Earning.deleted == False]
-        if agent_id:
-            filters.append(Earning.agent_id == agent_id)
-        if status:
-            filters.append(Earning.status == status)
-        total = await self._session.scalar(select(func.count(Earning.id)).where(*filters)) or 0
-        offset = page * page_size
-        result = await self._session.execute(
-            select(Earning).where(*filters).order_by(Earning.date_created.desc()).offset(offset).limit(page_size)
-        )
-        return list(result.scalars().all()), int(total)
-
-    async def sum_available(self, agent_id: str) -> Decimal:
-        from sqlalchemy import func
-        session = self._session
-        result = await session.execute(
-            select(func.sum(Earning.net_amount)).where(
-                Earning.agent_id == agent_id,
-                Earning.status == EarningStatus.PENDING.value,
-                Earning.deleted == False,
-            )
-        )
-        return result.scalar() or Decimal("0")
+        stmt = select(Commission.status, func.count()).where(
+            Commission.deleted.is_(False)
+        ).group_by(Commission.status)
+        return {s: int(c) for s, c in (await self._session.execute(stmt)).all()}

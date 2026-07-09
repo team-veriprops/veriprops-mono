@@ -1,222 +1,98 @@
-"""Agent application HTTP routes — PRD Phase 3.
+"""Agent onboarding controller (PRD §3.1–3.2).
 
-URL shape: `/users/agents/...`
-
-Authenticated user routes are gated by JWT presence. Admin routes are gated by
-`require_permission(Permission.APPROVE_AGENT)` per PRD §4.1 RBAC.
+Frontend service: `frontend/src/components/agents/onboarding/*` (agent-service).
+URL shape: `/users/agents/...` (mounted under the user router).
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from loguru import Logger
-
-import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
-from kink import di
 from libre_fastapi_jwt import AuthJWT
+from kink import di
 
-from main.app.config.settings import settings
-from main.app.domain.user.agent.kyc.models import AdminKycReviewDto, KycRecordDto
-from main.app.domain.user.agent.kyc.webhook import validate_dojah_signature
+from main.app.domain.user.agent.application_draft.controller import agent_application_draft_router
 from main.app.domain.user.agent.models import (
-    AdminAgentApplicationDto,
-    AgentApplicationDto,
-    AgentApplicationStatus,
-    AgentMetricsDto,
-    AgentProfileDto,
-    BvnVerifyDto,
-    BvnVerificationResultDto,
-    CredentialsStepDto,
-    KycDocumentsDto,
-    RejectApplicationDto,
-    SubmitApplicationDto,
-    TypesStepDto,
-    UpdateAvailabilityDto,
-    UpdateCoverageDto,
+    AgentApplicationDetailDto,
+    AgentApplicationStatusDto,
+    AgentApplicationSummaryDto,
+    ApproveAgentApplicationDto,
+    RejectAgentApplicationDto,
+    SubmitAgentApplicationDto,
 )
-from main.app.domain.user.agent.service import AgentApplicationService
-from main.app.domain.user.auth.utils.permissions import (
-    Permission,
-    require_permission,
-)
+from main.app.domain.user.agent.service import AgentService
+from main.app.domain.user.auth.utils.permissions import Permission, require_permission
+from main.appodus_utils import RouterUtils
 from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.db.models import Page, SuccessResponse
-from main.appodus_utils.exception.exceptions import ForbiddenException
-
-logger: Logger = di["logger"]
-
-agent_service: AgentApplicationService = di[AgentApplicationService]
 
 agent_router = APIRouter(prefix="/agents", tags=["Agents"])
+agent_service: AgentService = di[AgentService]
+
+# Child domain: resumable wizard draft owns its own router (/agents/application/draft).
+RouterUtils.add_routers(agent_router, [agent_application_draft_router])
 
 
-# ─── Applicant-facing routes ─────────────────────────────────────
+# ── Applicant: submit + status ────────────────────────────────────
 
-@agent_router.get("/me/application", response_model=SuccessResponse[AgentApplicationDto])
-async def get_my_application(authorize: AuthJWT = Depends()):
+@agent_router.post("/application", response_model=SuccessResponse[AgentApplicationStatusDto])
+async def submit_application(req: SubmitAgentApplicationDto, request: Request, authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
-    dto = await agent_service.get_or_create_for_user(user_id)
-    return SuccessResponse[AgentApplicationDto](data=dto)
-
-
-@agent_router.post("/me/application/types", response_model=SuccessResponse[AgentApplicationDto])
-async def update_types(req: TypesStepDto, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    dto = await agent_service.update_types(user_id, req)
-    return SuccessResponse[AgentApplicationDto](data=dto)
-
-
-@agent_router.post("/me/application/kyc/bvn", response_model=SuccessResponse[BvnVerificationResultDto])
-async def verify_bvn(req: BvnVerifyDto, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    result = await agent_service.verify_bvn(user_id, req)
-    return SuccessResponse[BvnVerificationResultDto](data=result)
-
-
-@agent_router.post("/me/application/kyc/documents", response_model=SuccessResponse[AgentApplicationDto])
-async def record_kyc_documents(req: KycDocumentsDto, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    dto = await agent_service.record_kyc_documents(user_id, req)
-    return SuccessResponse[AgentApplicationDto](data=dto)
-
-
-@agent_router.post("/me/application/credentials", response_model=SuccessResponse[AgentApplicationDto])
-async def update_credentials(req: CredentialsStepDto, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    dto = await agent_service.update_credentials(user_id, req)
-    return SuccessResponse[AgentApplicationDto](data=dto)
-
-
-@agent_router.post("/me/application/submit", response_model=SuccessResponse[AgentApplicationDto])
-async def submit_application(
-    req: SubmitApplicationDto, request: Request, authorize: AuthJWT = Depends(),
-):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    dto = await agent_service.submit(
-        user_id,
-        req,
-        ip_address=ClientUtils.get_client_ip(request),
-        device_fingerprint=request.headers.get("X-Device-Fingerprint"),
+    status = await agent_service.submit_application(
+        user_id, req, ip_address=ClientUtils.get_client_ip(request)
     )
-    return SuccessResponse[AgentApplicationDto](data=dto)
+    return SuccessResponse[AgentApplicationStatusDto](data=status)
 
 
-# ─── Phase 16 — Profile, Coverage & Availability ────────────────
-
-@agent_router.get("/me/profile", response_model=SuccessResponse[AgentProfileDto])
-async def get_my_profile(authorize: AuthJWT = Depends()):
+@agent_router.get("/application", response_model=SuccessResponse[Optional[AgentApplicationStatusDto]])
+async def my_application_status(authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
-    dto = await agent_service.get_profile(user_id)
-    return SuccessResponse[AgentProfileDto](data=dto)
+    status = await agent_service.get_my_status(user_id)
+    return SuccessResponse[Optional[AgentApplicationStatusDto]](data=status)
 
 
-@agent_router.get("/me/metrics", response_model=SuccessResponse[AgentMetricsDto])
-async def get_my_metrics(authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    dto = await agent_service.get_metrics(user_id)
-    return SuccessResponse[AgentMetricsDto](data=dto)
+# ── Admin: approval queue (RBAC: APPROVE_AGENT) ───────────────────
 
-
-@agent_router.put("/me/coverage", response_model=SuccessResponse[AgentApplicationDto])
-async def update_coverage(req: UpdateCoverageDto, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    dto = await agent_service.update_coverage(user_id, req)
-    return SuccessResponse[AgentApplicationDto](data=dto)
-
-
-@agent_router.put("/me/availability", response_model=SuccessResponse[AgentApplicationDto])
-async def update_availability(req: UpdateAvailabilityDto, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    dto = await agent_service.set_availability(user_id, req)
-    return SuccessResponse[AgentApplicationDto](data=dto)
-
-
-# ─── KYC webhook (no auth — validated by HMAC) ───────────────────
-
-@agent_router.post("/kyc/webhook")
-async def kyc_webhook(request: Request):
-    body = await request.body()
-    sig = request.headers.get("X-Dojah-Signature", "")
-    if not validate_dojah_signature(body, sig, settings.DOJAH_WEBHOOK_SECRET):
-        raise ForbiddenException("invalid webhook signature")
-    payload = json.loads(body)
-    await agent_service.process_kyc_webhook(payload)
-    return {"received": True}
-
-
-# ─── Admin routes ─────────────────────────────────────────────────
-
-@agent_router.get(
-    "/admin/applications",
-    response_model=Page[AdminAgentApplicationDto],
-)
-async def admin_list_applications(
-    status: Optional[AgentApplicationStatus] = Query(None),
-    page: int = Query(0, ge=0),
-    page_size: int = Query(25, ge=1, le=100),
-    _: str = Depends(require_permission(Permission.APPROVE_AGENT)),
+@agent_router.get("/applications", response_model=SuccessResponse[Page[AgentApplicationSummaryDto]])
+async def list_applications(
+    status: Optional[str] = Query(default=None),
+    query: Optional[str] = Query(default=None),
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=10, ge=1, le=100),
+    _admin_id: str = Depends(require_permission(Permission.APPROVE_AGENT)),
 ):
-    return await agent_service.list_for_admin(status=status, page=page, page_size=page_size)
+    result = await agent_service.list_applications(
+        status=status, page=page, page_size=page_size, query=query,
+    )
+    return SuccessResponse[Page[AgentApplicationSummaryDto]](data=result)
 
 
-@agent_router.post(
-    "/admin/applications/{application_id}/approve",
-    response_model=SuccessResponse[AgentApplicationDto],
-)
-async def admin_approve(
-    application_id: str,
+@agent_router.get("/applications/{profile_id}", response_model=SuccessResponse[AgentApplicationDetailDto])
+async def get_application(
+    profile_id: str,
+    _admin_id: str = Depends(require_permission(Permission.APPROVE_AGENT)),
+):
+    detail = await agent_service.get_application_detail(profile_id)
+    return SuccessResponse[AgentApplicationDetailDto](data=detail)
+
+
+@agent_router.post("/applications/{profile_id}/approve", response_model=SuccessResponse[AgentApplicationDetailDto])
+async def approve_application(
+    profile_id: str,
+    req: ApproveAgentApplicationDto,
     admin_id: str = Depends(require_permission(Permission.APPROVE_AGENT)),
 ):
-    dto = await agent_service.approve(application_id, admin_id)
-    return SuccessResponse[AgentApplicationDto](data=dto)
+    detail = await agent_service.approve_application(profile_id, req, admin_id)
+    return SuccessResponse[AgentApplicationDetailDto](data=detail)
 
 
-@agent_router.post(
-    "/admin/applications/{application_id}/reject",
-    response_model=SuccessResponse[AgentApplicationDto],
-)
-async def admin_reject(
-    application_id: str,
-    req: RejectApplicationDto,
+@agent_router.post("/applications/{profile_id}/reject", response_model=SuccessResponse[AgentApplicationDetailDto])
+async def reject_application(
+    profile_id: str,
+    req: RejectAgentApplicationDto,
     admin_id: str = Depends(require_permission(Permission.APPROVE_AGENT)),
 ):
-    dto = await agent_service.reject(application_id, admin_id, req.reason)
-    return SuccessResponse[AgentApplicationDto](data=dto)
-
-
-@agent_router.get(
-    "/admin/kyc/review",
-    response_model=Page[KycRecordDto],
-)
-async def admin_list_kyc_under_review(
-    page: int = Query(0, ge=0),
-    page_size: int = Query(25, ge=1, le=100),
-    _: str = Depends(require_permission(Permission.APPROVE_AGENT)),
-):
-    return await agent_service.list_kyc_under_review(page=page, page_size=page_size)
-
-
-@agent_router.post(
-    "/admin/kyc/{record_id}/review",
-    response_model=SuccessResponse[KycRecordDto],
-)
-async def admin_review_kyc(
-    record_id: str,
-    req: AdminKycReviewDto,
-    admin_id: str = Depends(require_permission(Permission.APPROVE_AGENT)),
-):
-    dto = await agent_service.admin_review_kyc(record_id, admin_id, req)
-    return SuccessResponse[KycRecordDto](data=dto)
+    detail = await agent_service.reject_application(profile_id, req, admin_id)
+    return SuccessResponse[AgentApplicationDetailDto](data=detail)

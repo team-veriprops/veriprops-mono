@@ -1,204 +1,111 @@
-"""Trust score computation service — S30.
+"""Trust Score Weights service (PRD §8.3, D14).
 
-Computes a 0–100 composite trust score from approved task scores using
-tier-specific weights. Weights are admin-configurable; defaults seeded by migration.
-Score recomputes on every task approval. Audit trail stored per computation.
+Owns the admin weight config (per tier × role, summing to 100% within a tier) and the
+deterministic composite computation used by the release gate. Default weights are seeded
+idempotently at startup (like consent docs); admins edit them via the CRUD, enforcing the
+sum-to-100 invariant so a released score is always a true 0–100 blend.
 """
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict, List, TYPE_CHECKING
+from typing import Dict, List
 
-from kink import di, inject
+from kink import inject
 
+from main.app.core.state.dependencies import roles_for_tier
+from main.app.core.state.status import AgentRole, VerificationTier
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.verification.scoring.models import (
-    CreateBreakdownDto,
-    CreateWeightConfigDto,
-    SetTierWeightsDto,
-    TrustScoreWeightDto,
-    UpdateWeightDto,
+    CreateTrustWeightDto,
+    TrustScoreWeight,
+    UpdateTrustWeightDto,
 )
-from main.app.domain.verification.scoring.repo import (
-    TrustScoreBreakdownRepo,
-    TrustScoreWeightRepo,
-)
-from main.app.domain.verification.task.models import TaskRole, TaskStatus
+from main.app.domain.verification.scoring.repo import TrustScoreWeightRepo
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import ValidationException
 
-if TYPE_CHECKING:
-    from loguru import Logger
-
-logger: "Logger" = di["logger"]
-
-# Default weights seeded by migration (must sum to 100 per tier)
-_DEFAULT_WEIGHTS: Dict[str, Dict[str, Decimal]] = {
-    "BASIC": {
-        TaskRole.REGISTRY.value: Decimal("100"),
+# Default weight map per tier (sums to 100 within each tier). Seeded idempotently.
+_DEFAULT_WEIGHTS: Dict[VerificationTier, Dict[AgentRole, int]] = {
+    VerificationTier.BASIC: {AgentRole.REGISTRY: 100},
+    VerificationTier.STANDARD: {
+        AgentRole.REGISTRY: 40, AgentRole.FIELD: 30, AgentRole.SURVEYOR: 30,
     },
-    "STANDARD": {
-        TaskRole.FIELD.value: Decimal("35"),
-        TaskRole.SURVEYOR.value: Decimal("30"),
-        TaskRole.REGISTRY.value: Decimal("35"),
-    },
-    "PREMIUM": {
-        TaskRole.FIELD.value: Decimal("25"),
-        TaskRole.SURVEYOR.value: Decimal("20"),
-        TaskRole.REGISTRY.value: Decimal("30"),
-        TaskRole.LAWYER.value: Decimal("25"),
+    VerificationTier.PREMIUM: {
+        AgentRole.REGISTRY: 30, AgentRole.FIELD: 20, AgentRole.SURVEYOR: 20, AgentRole.LAWYER: 30,
     },
 }
+
+_FULL_PERCENT = 100
 
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
-class TrustScoreService:
-    def __init__(
-        self,
-        weight_repo: TrustScoreWeightRepo,
-        breakdown_repo: TrustScoreBreakdownRepo,
-        audit: AuditLogService,
-    ):
-        self._weights = weight_repo
-        self._breakdowns = breakdown_repo
-        self._audit = audit
+class TrustScoreWeightService:
+    def __init__(self, weight_repo: TrustScoreWeightRepo, audit_service: AuditLogService):
+        self._weight_repo = weight_repo
+        self._audit = audit_service
 
-    async def get_weights(self, tier: str) -> Dict[str, Decimal]:
-        """Return {role: weight} for the given tier, falling back to defaults."""
-        rows = await self._weights.list_for_tier(tier.upper())
-        if not rows:
-            return dict(_DEFAULT_WEIGHTS.get(tier.upper(), {}))
-        return {row.role: Decimal(str(row.weight)) for row in rows}
+    async def seed_defaults(self) -> None:
+        """Idempotently ensure every (tier, role) default weight exists."""
+        for tier, role_weights in _DEFAULT_WEIGHTS.items():
+            for role, weight in role_weights.items():
+                existing = await self._weight_repo.get_for_tier_role(tier.value, role.value)
+                if existing is None:
+                    await self._weight_repo.create_return_model(CreateTrustWeightDto(
+                        tier=tier, role=role, weight_percent=weight,
+                    ))
 
-    async def list_all_weights(self) -> List[TrustScoreWeightDto]:
-        rows = await self._weights.list_all()
-        return [self._weight_to_dto(r) for r in rows]
+    async def list_all(self) -> List[TrustScoreWeight]:
+        return await self._weight_repo.list_all()
 
-    async def recompute_for_verification(
-        self,
-        verification_id: str,
-        tier: str,
-    ) -> Decimal:
-        """Recompute and persist trust score from all APPROVED tasks' trust_score values."""
-        from main.app.domain.verification.task.repo import TaskRepo
-        task_repo: TaskRepo = di[TaskRepo]
-        tasks = await task_repo.list_for_verification(verification_id)
+    async def list_for_tier(self, tier: VerificationTier) -> List[TrustScoreWeight]:
+        return await self._weight_repo.list_for_tier(tier.value)
 
-        approved = [t for t in tasks if t.status == TaskStatus.APPROVED.value]
-        weights = await self.get_weights(tier)
-
-        task_scores: Dict[str, Decimal] = {}
-        for task in approved:
-            score = task.trust_score if task.trust_score is not None else 0
-            task_scores[task.role] = Decimal(str(score))
-
-        # Weighted mean: only roles that have a weight; 0 for missing roles
-        total_weight = Decimal("0")
-        weighted_sum = Decimal("0")
-        for role, weight in weights.items():
-            total_weight += weight
-            weighted_sum += weight * task_scores.get(role, Decimal("0"))
-
-        computed = (
-            (weighted_sum / total_weight).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            if total_weight > 0
-            else Decimal("0")
-        )
-
-        await self._save_breakdown(
-            verification_id=verification_id,
-            task_scores=task_scores,
-            weights=weights,
-            score=computed,
-        )
-
-        # Persist trust_score on the verification row itself
-        from main.app.domain.verification.repo import VerificationRepo
-        from main.app.domain.verification.models import UpdateVerificationDto
-        ver_repo: VerificationRepo = di[VerificationRepo]
-        await ver_repo.update(
-            verification_id,
-            UpdateVerificationDto(trust_score=computed),
-        )
-
-        logger.info(f"Trust score for {verification_id}: {computed} (tier={tier})")
-        return computed
-
-    async def update_weights(
-        self,
-        tier: str,
-        payload: SetTierWeightsDto,
-        admin_id: str,
-    ) -> List[TrustScoreWeightDto]:
-        """Replace all weights for the given tier. Validates sum == 100."""
-        total = sum(payload.weights.values())
-        if abs(total - Decimal("100")) > Decimal("0.01"):
+    async def set_tier_weights(
+        self, tier: VerificationTier, weights: Dict[AgentRole, int], admin_id: str
+    ) -> List[TrustScoreWeight]:
+        """Replace a tier's weight map (§8.3). Enforces exactly the tier's roles and a
+        sum of 100; upserts each role weight; audited."""
+        required = set(roles_for_tier(tier))
+        provided = {AgentRole(r) for r in weights}
+        if provided != required:
             raise ValidationException(
-                message=f"Weights for tier {tier} must sum to 100 (got {total})"
+                message=f"{tier.value} weights must cover exactly {sorted(r.value for r in required)}."
             )
-
-        results = []
-        for role, weight in payload.weights.items():
-            existing = await self._weights.get_for_tier_role(tier.upper(), role.upper())
-            if existing:
-                await self._weights.update(
-                    str(existing.id),
-                    UpdateWeightDto(weight=weight, updated_by=admin_id),
-                )
-                row = await self._weights.get_for_tier_role(tier.upper(), role.upper())
+        total = sum(weights.values())
+        if total != _FULL_PERCENT:
+            raise ValidationException(
+                message=f"{tier.value} weights must sum to 100 (got {total})."
+            )
+        for role, weight in weights.items():
+            if weight < 0:
+                raise ValidationException(message="Weights cannot be negative.")
+            existing = await self._weight_repo.get_for_tier_role(tier.value, role.value)
+            if existing is None:
+                await self._weight_repo.create_return_model(CreateTrustWeightDto(
+                    tier=tier, role=role, weight_percent=weight,
+                ))
             else:
-                row = await self._weights.create_return_model(
-                    CreateWeightConfigDto(
-                        tier=tier.upper(),
-                        role=role.upper(),
-                        weight=weight,
-                        updated_by=admin_id,
-                    )
-                )
-            results.append(self._weight_to_dto(row))
-
+                await self._weight_repo.update(existing.id, UpdateTrustWeightDto(weight_percent=weight))
         self._audit.schedule(
-            AuditActionType.ADMIN_CONFIG_CHANGED,
-            resource_type="TrustScoreWeightConfig",
-            resource_id=tier.upper(),
-            actor_id=admin_id,
-            meta={"tier": tier, "weights": {r: str(w) for r, w in payload.weights.items()}},
+            action=AuditActionType.ADMIN_CONFIG_CHANGED,
+            resource_type="trust_score_weight_config", resource_id=tier.value, actor_id=admin_id,
+            details={"tier": tier.value, "weights": {r.value: w for r, w in weights.items()}},
         )
-        return results
+        return await self._weight_repo.list_for_tier(tier.value)
 
-    # ── helpers ───────────────────────────────────────────────────────
-
-    async def _save_breakdown(
-        self,
-        verification_id: str,
-        task_scores: Dict[str, Decimal],
-        weights: Dict[str, Decimal],
-        score: Decimal,
-    ) -> None:
-        await self._breakdowns.create_return_model(
-            CreateBreakdownDto(
-                verification_id=verification_id,
-                task_scores_json=json.dumps({k: str(v) for k, v in task_scores.items()}),
-                weights_json=json.dumps({k: str(v) for k, v in weights.items()}),
-                computed_score=score,
-                computed_at=datetime.now(timezone.utc),
-            )
-        )
-
-    @staticmethod
-    def _weight_to_dto(row) -> TrustScoreWeightDto:
-        return TrustScoreWeightDto(
-            id=str(row.id),
-            tier=row.tier,
-            role=row.role,
-            weight=Decimal(str(row.weight)),
-            updated_by=row.updated_by,
-            date_updated=row.date_updated,
-        )
+    async def compute_composite(
+        self, tier: VerificationTier, role_quality: Dict[AgentRole, int]
+    ) -> int:
+        """Composite trust score (0–100) = Σ (weight_role/100 × quality_role) over the
+        tier's roles (§8.3). Deterministic; called only at release (§8.6)."""
+        weights = {AgentRole(w.role): w.weight_percent for w in await self._weight_repo.list_for_tier(tier.value)}
+        score = 0.0
+        for role in roles_for_tier(tier):
+            weight = weights.get(role, 0)
+            quality = role_quality.get(role, 0)
+            score += (weight / _FULL_PERCENT) * quality
+        return round(score)

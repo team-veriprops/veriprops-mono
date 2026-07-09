@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, AlertTriangle } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
@@ -27,7 +27,7 @@ export default function SetPasswordContainer() {
     mode: "onBlur",
   });
 
-  const password = form.watch("password");
+  const password = useWatch({ control: form.control, name: "password" });
 
   const onSubmit = async (values: ResetPasswordValues) => {
     setErrorMessage(null);

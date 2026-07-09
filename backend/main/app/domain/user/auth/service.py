@@ -3,8 +3,6 @@ session/device, and consent acceptance. Wired from `controller.py`."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from main.app.domain.user.admin_invitation.service import AdminInvitationService
-
 if TYPE_CHECKING:
     from loguru import Logger
 
@@ -115,20 +113,29 @@ class AuthService:
         if not required.issubset(consent_types):
             raise ValidationException(message="Both Platform Terms and Privacy Policy must be accepted.")
 
-        # Server-side OTP gate — the user must have completed an OTP for both
-        # email and phone within the last 30 minutes (see OtpService.OTP_VERIFIED_TTL).
-        # Reject the signup otherwise; FE keeps the wizard on the verify step.
+        # Email must have a recent OTP marker. Phone is only required when phone
+        # verification is enabled; otherwise the number is collected here and
+        # verified later at the payment step.
+        phone_required = settings.PHONE_VERIFICATION_ENABLED
         email_recipient = EmailRecipient(email=req.email.lower())
         phone_recipient = PhoneNumber(dial_code=req.dial_code, number=req.phone)
         email_ok = await self._otp_service.is_recently_verified(
             OtpChannel.EMAIL, email_recipient.email,
         )
-        phone_ok = await self._otp_service.is_recently_verified(
-            OtpChannel.PHONE, phone_recipient.international_number,
+        phone_ok = (
+            await self._otp_service.is_recently_verified(
+                OtpChannel.PHONE, phone_recipient.international_number,
+            )
+            if phone_required
+            else False
         )
-        if not email_ok or not phone_ok:
+        if not email_ok or (phone_required and not phone_ok):
             raise ValidationException(
-                message="Please verify your email and phone before creating your account.",
+                message=(
+                    "Please verify your email and phone before creating your account."
+                    if phone_required
+                    else "Please verify your email before creating your account."
+                ),
             )
 
         password_hash = Utils.get_password_hash(req.password)
@@ -139,6 +146,10 @@ class AuthService:
             if req.intent != AuthIntent.INVITED_ADMIN
             else []
         )
+
+        # §17.1 referral linkage — resolve the (optional) referral code to a referrer id.
+        # An unknown/invalid code is silently ignored (never blocks signup).
+        referred_by = await self._resolve_referrer(req.referral_code)
 
         user = await self._user_service.create_user(CreateUserDto(
             first_name=req.first_name,
@@ -154,12 +165,14 @@ class AuthService:
             personas=intent_persona,
             email_verified=email_ok,
             phone_verified=phone_ok,
+            referred_by=referred_by,
         ))
 
         # Verified markers are single-use — drop them so a future signup attempt
         # with the same recipient must re-verify.
         await self._otp_service.consume_verified_marker(OtpChannel.EMAIL, email_recipient.email)
-        await self._otp_service.consume_verified_marker(OtpChannel.PHONE, phone_recipient.international_number)
+        if phone_required:
+            await self._otp_service.consume_verified_marker(OtpChannel.PHONE, phone_recipient.international_number)
 
         for consent in req.consents:
             await self._consent_service.record_user_consent(
@@ -178,6 +191,16 @@ class AuthService:
             device_fingerprint=req.device_fingerprint,
         )
         return user
+
+    async def _resolve_referrer(self, referral_code: Optional[str]) -> Optional[str]:
+        """Map a referral code to the referrer's user id (§17.1). Resolved lazily via DI so
+        the auth domain never imports the referral service at module load. Unknown → None."""
+        if not referral_code:
+            return None
+        from kink import di
+
+        from main.app.domain.referral.service import ReferralService
+        return await di[ReferralService].resolve_referrer_id(referral_code)
 
     # ── OAuth ─────────────────────────────────────────────────────
     async def find_or_create_oauth_user(
@@ -269,7 +292,7 @@ class AuthService:
             phone_dial_code=dto.dial_code,
             phone=dto.phone,
             phone_e164=_phone_e164(dto.dial_code, dto.phone),
-            phone_verified=True,
+            phone_verified=settings.PHONE_VERIFICATION_ENABLED,
             country_of_residence=dto.country_of_residence,
             timezone=dto.timezone,
             preferred_currency=dto.preferred_currency,
@@ -366,4 +389,32 @@ class AuthService:
         recipient = recipient_for(channel, email=email, dial_code=dial_code, phone=phone)
         await self._otp_service.verify_otp(
             channel, recipient, code, user_id=user_id, ip_address=ip_address,
+        )
+
+    # ── Phase-5 phone verification (PRD §5) ───────────────────────────
+    # When PHONE_VERIFICATION_ENABLED=false the number is collected but left unverified at
+    # signup; the payment step then requires a verified phone. These two authenticated
+    # helpers send/verify an OTP to the *logged-in user's own* phone and flip phone_verified.
+
+    async def send_phone_otp_for_user(self, user_id: str, *, ip_address: Optional[str] = None) -> int:
+        user = await self._user_service.get_user_model(user_id)
+        return await self.send_otp(
+            OtpChannel.PHONE,
+            dial_code=user.phone_dial_code,
+            phone=user.phone,
+            user_id=user_id,
+            ip_address=ip_address,
+            fullname=f"{user.first_name} {user.last_name}".strip(),
+        )
+
+    async def verify_phone_for_user(self, user_id: str, code: str, *, ip_address: Optional[str] = None) -> None:
+        user = await self._user_service.get_user_model(user_id)
+        recipient = PhoneNumber(dial_code=user.phone_dial_code, number=user.phone)
+        await self._otp_service.verify_otp(
+            OtpChannel.PHONE, recipient, code, user_id=user_id, ip_address=ip_address,
+        )
+        await self._user_service.mark_phone_verified(user_id)
+        # Single-use — drop the marker so the code can't be replayed.
+        await self._otp_service.consume_verified_marker(
+            OtpChannel.PHONE, recipient.international_number,
         )

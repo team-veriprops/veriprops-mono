@@ -72,7 +72,7 @@ export default function ShareModal({ defaultMessage, extLink}: ShareReferralModa
       setShareModalOpen(false);
       setEmails([""]);
       setMessage("");
-    } catch (error) {
+    } catch {
       toast.error("Failed to share referral");
     } finally {
       setIsSending(false);
@@ -83,7 +83,7 @@ export default function ShareModal({ defaultMessage, extLink}: ShareReferralModa
     try {
       await copyToClipboard(extLink);
       toast.success("Link copied to clipboard!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to copy link");
     }
   };

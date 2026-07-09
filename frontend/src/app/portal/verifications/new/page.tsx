@@ -1,9 +1,5 @@
-import VerificationWizardContainer from "@components/portal/verifications/wizard/VerificationWizardContainer";
-
-export const metadata = {
-  title: "New verification — Veriprops",
-};
+import SubmissionContainer from "@components/portal/submission/SubmissionContainer";
 
 export default function NewVerificationPage() {
-  return <VerificationWizardContainer />;
+  return <SubmissionContainer />;
 }

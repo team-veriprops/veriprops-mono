@@ -1,273 +1,63 @@
 import { HttpClient } from "@lib/FetchHttpClient";
-import { SuccessResponse } from "@/types/models";
+import { Page, SuccessResponse } from "@/types/models";
+import {
+  AgentApplicationDetail,
+  AgentApplicationDraft,
+  AgentApplicationStatusView,
+  AgentApplicationSummary,
+  AgentRole,
+  SubmitAgentApplicationRequest,
+} from "@/types/agent";
 
-export type AgentType = "FIELD" | "SURVEYOR" | "REGISTRY" | "LAWYER";
-export type AgentApplicationStatus = "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
-export type KycMethod = "BVN" | "ID_DOC";
-export type IdDocType = "NIN" | "PASSPORT" | "DRIVERS_LICENCE" | "VOTERS_CARD";
-
-export type AvailabilityStatus = "AVAILABLE" | "LIMITED" | "UNAVAILABLE";
-
-export interface AgentApplication {
-  id: string;
-  userId: string;
-  status: AgentApplicationStatus;
-  types: AgentType[];
-  kycMethod: KycMethod | null;
-  bvnLast4: string | null;
-  bvnVerifiedAt: string | null;
-  idDocType: IdDocType | null;
-  idDocUploaded: boolean;
-  selfieUploaded: boolean;
-  selfieMatchScore: number | null;
-  surveyorLicenceNo: string | null;
-  nbaLicenceNo: string | null;
-  yearsOfExperience: number | null;
-  coverageStates: string[];
-  coverageLgas: string[];
-  maxTravelKm: number | null;
-  availabilityStatus: AvailabilityStatus;
-  bio: string | null;
-  submittedAt: string | null;
-  reviewedAt: string | null;
-  rejectionReason: string | null;
-  dateCreated: string;
-  dateUpdated: string | null;
-}
-
-export interface AgentMetrics {
-  completionRate: number;
-  accuracyScore: number;
-  timelinessScore: number;
-  totalJobs: number;
-  activeSince: string | null;
-  isTopAgent: boolean;
-}
-
-export interface AgentProfile extends AgentApplication {
-  metrics: AgentMetrics;
-}
-
-export interface UpdateCoverageRequest {
-  coverageStates: string[];
-  coverageLgas: string[];
-  maxTravelKm?: number;
-}
-
-export interface UpdateAvailabilityRequest {
-  status: AvailabilityStatus;
-}
-
-export interface BvnVerificationResult {
-  verified: boolean;
-  bvnLast4: string;
-  verificationId: string | null;
-  failureReason: string | null;
-}
-
-export interface TypesStepRequest {
-  types: AgentType[];
-}
-
-export interface BvnVerifyRequest {
-  bvn: string;
-}
-
-export interface KycDocumentsRequest {
-  idDocType: IdDocType;
-  idDocUrl: string;
-  selfieUrl: string;
-}
-
-export interface CredentialsStepRequest {
-  surveyorLicenceNo?: string;
-  surveyorLicenceUrl?: string;
-  nbaLicenceNo?: string;
-  nbaLicenceUrl?: string;
-  yearsOfExperience?: number;
-  coverageStates: string[];
-  coverageLgas: string[];
-  bio?: string;
-}
-
-export interface SubmitApplicationRequest {
-  truthfulnessAcknowledged: boolean;
-  agentTermsConsentVersion: string;
-}
-
-// ── Task + Evidence + Escalation types ──
-
-export type TaskRole = "FIELD" | "SURVEYOR" | "REGISTRY" | "LAWYER";
-export type TaskStatus =
-  | "PENDING" | "ASSIGNED" | "ACCEPTED" | "IN_PROGRESS"
-  | "SUBMITTED" | "APPROVED" | "REJECTED";
-
-export interface Task {
-  id: string;
-  verificationId: string;
-  role: TaskRole;
-  agentId: string | null;
-  status: TaskStatus;
-  poolReleasedAt: string | null;
-  acceptedAt: string | null;
-  submittedAt: string | null;
-  trustScore: number | null;
-  draftPayload: Record<string, unknown> | null;
-  dateCreated: string;
-  dateUpdated: string | null;
-}
-
-export interface EvidenceItem {
-  id: string;
-  taskId: string;
-  uploaderId: string;
-  type: "PHOTO" | "VIDEO" | "DOCUMENT";
-  fileUrl: string;
-  gpsLat: number | null;
-  gpsLng: number | null;
-  capturedAt: string | null;
-  dateCreated: string;
-}
-
-export interface Escalation {
-  id: string;
-  taskId: string;
-  reporterId: string;
-  category: "INACCESSIBLE" | "SUSPICIOUS" | "SAFETY" | "CONFLICTING" | "OTHER";
-  description: string;
-  dateCreated: string;
-}
-
-export interface ActivityEvent {
-  action: string;
-  occurredAt: string;
-  fromState: string | null;
-  toState: string | null;
-  meta: Record<string, unknown> | null;
-}
-
-export interface ActivityPage {
-  items: ActivityEvent[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
+/**
+ * Frontend-facing agent onboarding API. Mirrors the backend controller at
+ * `backend/main/app/domain/user/agent/controller.py` (URL shape `/users/agents/...`).
+ */
 export class AgentService {
   private readonly base = "/users/agents";
-  private readonly taskBase = "/agents/tasks";
 
   constructor(private readonly http: HttpClient) {}
 
-  getMyApplication(): Promise<SuccessResponse<AgentApplication>> {
-    return this.http.get(`${this.base}/me/application`);
+  getDraft(): Promise<SuccessResponse<AgentApplicationDraft | null>> {
+    return this.http.get(`${this.base}/application/draft`);
   }
 
-  saveTypesStep(payload: TypesStepRequest): Promise<SuccessResponse<AgentApplication>> {
-    return this.http.post(`${this.base}/me/application/types`, payload);
+  saveDraft(step: number, payload: Record<string, unknown>): Promise<SuccessResponse<AgentApplicationDraft>> {
+    return this.http.put(`${this.base}/application/draft`, { step, payload });
   }
 
-  verifyBvn(payload: BvnVerifyRequest): Promise<SuccessResponse<BvnVerificationResult>> {
-    return this.http.post(`${this.base}/me/application/kyc/bvn`, payload);
+  submit(payload: SubmitAgentApplicationRequest): Promise<SuccessResponse<AgentApplicationStatusView>> {
+    return this.http.post(`${this.base}/application`, payload);
   }
 
-  uploadKycDocs(payload: KycDocumentsRequest): Promise<SuccessResponse<AgentApplication>> {
-    return this.http.post(`${this.base}/me/application/kyc/documents`, payload);
+  getMyStatus(): Promise<SuccessResponse<AgentApplicationStatusView | null>> {
+    return this.http.get(`${this.base}/application`);
   }
 
-  saveCredentialsStep(
-    payload: CredentialsStepRequest,
-  ): Promise<SuccessResponse<AgentApplication>> {
-    return this.http.post(`${this.base}/me/application/credentials`, payload);
+  // ── Admin (RBAC: APPROVE_AGENT) ─────────────────────────────────
+  listApplications(
+    status: string | undefined,
+    page: number,
+    pageSize: number,
+    query?: string,
+  ): Promise<SuccessResponse<Page<AgentApplicationSummary>>> {
+    const search = new URLSearchParams();
+    if (status) search.set("status", status);
+    if (query) search.set("query", query);
+    search.set("page", String(page));
+    search.set("page_size", String(pageSize));
+    return this.http.get(`${this.base}/applications?${search.toString()}`);
   }
 
-  submitApplication(
-    payload: SubmitApplicationRequest,
-  ): Promise<SuccessResponse<AgentApplication>> {
-    return this.http.post(`${this.base}/me/application/submit`, payload);
+  getApplication(id: string): Promise<SuccessResponse<AgentApplicationDetail>> {
+    return this.http.get(`${this.base}/applications/${id}`);
   }
 
-  // ── Profile & metrics ──
-
-  getMyProfile(): Promise<SuccessResponse<AgentProfile>> {
-    return this.http.get(`${this.base}/me/profile`);
+  approve(id: string, approvedRoles?: AgentRole[]): Promise<SuccessResponse<AgentApplicationDetail>> {
+    return this.http.post(`${this.base}/applications/${id}/approve`, { approvedRoles });
   }
 
-  getMyMetrics(): Promise<SuccessResponse<AgentMetrics>> {
-    return this.http.get(`${this.base}/me/metrics`);
-  }
-
-  updateCoverage(payload: UpdateCoverageRequest): Promise<SuccessResponse<AgentApplication>> {
-    return this.http.put(`${this.base}/me/coverage`, payload);
-  }
-
-  updateAvailability(payload: UpdateAvailabilityRequest): Promise<SuccessResponse<AgentApplication>> {
-    return this.http.put(`${this.base}/me/availability`, payload);
-  }
-
-  // ── Tasks ──
-
-  getAvailableTasks(role: TaskRole, state?: string): Promise<SuccessResponse<Task[]>> {
-    const p = new URLSearchParams({ role });
-    if (state) p.set("state", state);
-    return this.http.get(`${this.taskBase}/available?${p.toString()}`);
-  }
-
-  getActiveTasks(): Promise<SuccessResponse<Task[]>> {
-    return this.http.get(`${this.taskBase}/active`);
-  }
-
-  getCompletedTasks(): Promise<SuccessResponse<Task[]>> {
-    return this.http.get(`${this.taskBase}/completed`);
-  }
-
-  getTask(taskId: string): Promise<SuccessResponse<Task>> {
-    return this.http.get(`${this.taskBase}/${taskId}`);
-  }
-
-  acceptTask(taskId: string): Promise<SuccessResponse<Task>> {
-    return this.http.post(`${this.taskBase}/${taskId}/accept`, {});
-  }
-
-  declineTask(taskId: string): Promise<SuccessResponse<Task>> {
-    return this.http.post(`${this.taskBase}/${taskId}/decline`, {});
-  }
-
-  saveDraft(taskId: string, payload: Record<string, unknown>): Promise<SuccessResponse<Task>> {
-    return this.http.put(`${this.taskBase}/${taskId}/draft`, payload);
-  }
-
-  submitTask(taskId: string, payload: Record<string, unknown>): Promise<SuccessResponse<Task>> {
-    return this.http.post(`${this.taskBase}/${taskId}/submit`, payload);
-  }
-
-  // ── Evidence ──
-
-  uploadEvidence(
-    taskId: string,
-    formData: FormData,
-  ): Promise<SuccessResponse<EvidenceItem>> {
-    return this.http.post(`${this.taskBase}/${taskId}/evidence`, formData);
-  }
-
-  // ── Escalation ──
-
-  reportEscalation(
-    taskId: string,
-    payload: { category: Escalation["category"]; description: string },
-  ): Promise<SuccessResponse<Escalation>> {
-    return this.http.post(`${this.taskBase}/${taskId}/escalation`, payload);
-  }
-
-  // ── History ──
-
-  getTaskHistory(
-    taskId: string,
-    page = 0,
-    pageSize = 20,
-  ): Promise<SuccessResponse<ActivityPage>> {
-    return this.http.get(
-      `${this.taskBase}/${taskId}/history?page=${page}&page_size=${pageSize}`,
-    );
+  reject(id: string, reason: string): Promise<SuccessResponse<AgentApplicationDetail>> {
+    return this.http.post(`${this.base}/applications/${id}/reject`, { reason });
   }
 }

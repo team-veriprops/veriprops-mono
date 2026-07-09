@@ -42,7 +42,7 @@ export async function requestSignedUrl(
 
   // Mock response - in production, this would call your backend
   const timestamp = Date.now();
-  const mockPublicUrl = `https://cdn.veriprops.com/${request.folder || 'uploads'}/${timestamp}-${request.filename}`;
+  const mockPublicUrl = `https://cdn.veriprops.ng/${request.folder || 'uploads'}/${timestamp}-${request.filename}`;
 
   return {
     uploadUrl: `https://storage.mock.com/signed-upload/${timestamp}`,
@@ -250,7 +250,7 @@ export function validateFile(file: File): ValidationResult {
  */
 export function trackEvent(
   eventName: string,
-  properties: Record<string, any>
+  properties: Record<string, unknown>
 ): void {
   console.log(`[Analytics] ${eventName}`, properties);
   // TODO: Implement real analytics

@@ -38,21 +38,77 @@ pnpm vitest run -t "test name pattern"
   * Keep route matching explicit and maintainable by clearly defining protected, public, and guest-only route groups.
   * `proxy.ts` should handle **access control only**; page-level authorization and business rules should remain in the application layer.
 
+### Security invariants (do not regress)
+
+- **Open-redirect guard.** Any post-auth navigation to a user-supplied `?redirect=`/`next` value must pass through `isSafeRedirectPath` / `resolvePostAuthRedirect` ([components/website/auth/libs/auth/redirect.ts](src/components/website/auth/libs/auth/redirect.ts)) — a bare `startsWith("/")` is insufficient (`//evil.com` and `/\evil.com` are cross-origin). Only same-origin relative paths are accepted.
+- **JSON-LD escaping.** `<JsonLd>` escapes `<`/`>`/`&` before `dangerouslySetInnerHTML` so a string value can't break out of the `<script>` tag. Don't bypass it.
+- **Automation hooks are fail-closed.** `isAutomationEnvironment()` ([lib/automation.ts](src/lib/automation.ts)) is an allowlist (`local`/`development`/`test`); staging/production/unset all return `false`. Never invert it or add prod-enabling values.
+- **No leaking backend errors to the console.** `FetchHttpClient` must not `console.log` response bodies (they may carry PII/internal detail).
+
 ## Route Definition
 * All routes in the application should be declared in `frontend\src\lib\routes.ts` grouped by their surface.
 * All Portal Menu Sidebars are grouped and maintained here `frontend\src\components\portal\nav.ts`,
 Admin here `frontend\src\components\admin\nav.ts` and Agents here `frontend\src\components\agents\nav.ts`.
 * **Compulsorily**: Make sure all routes in the app is declared and that various Menu sidebars are up to date.
 
+## Tables (DataTable)
+
+The shared table lives at [src/components/ui/table/DataTable.tsx](src/components/ui/table/DataTable.tsx). It is **controlled and presentational** — it fetches nothing and holds no query state.
+
+- The parent owns `{ page, query, orderBy, ...filters }` via `useSyncedQueryState` ([src/hooks/useSyncedQueryState.ts](src/hooks/useSyncedQueryState.ts)) so the state is URL-synced, and passes `searchValue`, `orderBy`, `filters`, and `updateFilters`. `updateFilters` must forward **all** keys it receives (not just `page`) to the query hook — search/sort/filter/pagination are emitted through that one callback.
+- Filters render **inside** the toolbar via the `filters` prop (a `TableFilter[]` — `{ key, label, value, options }`). Don't build a separate external filter bar.
+- Search, filtering, and pagination are **server-side**. The backend list endpoint accepts `page`/`page_size`/`query` (see the root [CLAUDE.md](../CLAUDE.md) pagination convention); the frontend service just forwards them. Do not filter client-side.
+- **Suspense rule (Next 16):** any `page.tsx` that renders a DataTable — or anything else reading `useSearchParams`/`useSyncedQueryState` — must wrap its client component in `<Suspense>`, or the page throws "missing-suspense-with-csr-bailout" on hard navigation.
+- Representative consumers: [src/components/admin/team/AdminTeamManagement.tsx](src/components/admin/team/AdminTeamManagement.tsx), [src/components/admin/verifications/AdminVerificationList.tsx](src/components/admin/verifications/AdminVerificationList.tsx), [src/components/admin/agents/AgentApplicationsAdmin.tsx](src/components/admin/agents/AgentApplicationsAdmin.tsx).
+
+## Drawers
+
+Record-detail views and one-off forms / centered modals use the shared right-side slide-over [src/components/ui/DetailDrawer.tsx](src/components/ui/DetailDrawer.tsx) (`side?: "right" | "left"`, default right; size via `DetailDrawerWidth`). Don't hand-roll `fixed inset-0` modals.
+
+- Deep-linkable detail **routes** wrap their content in [src/components/ui/DrawerRoutePage.tsx](src/components/ui/DrawerRoutePage.tsx) — open on mount, close → `router.back()` (with a fallback href) — so the URL stays deep-linkable and refresh-safe while presenting as a drawer.
+- Multi-step `WizardOverlay` flows (agent apply, portal submission/pay) stay **full-screen** — do not convert them to drawers.
+
+## Real-time, Chat & Notifications (top nav)
+
+- **One SSE transport.** Server→client pushes ride Server-Sent Events (§4.9); sends are ordinary HTTP POST. Two hooks: [src/lib/useVerificationStream.ts](src/lib/useVerificationStream.ts) (verification-scoped, `/api/verifications/{id}/stream`) and [src/lib/useUserStream.ts](src/lib/useUserStream.ts) (per-user, `/api/chat/stream` — carries `chat_message`/`chat_unread`/`notification`/`notification_unread`). SSE only *invalidates* queries; a 60-second `refetchInterval` poll is the durable fallback, so a dropped push never leaves the UI stale.
+- **Top-nav order is fixed: Support → Chat → Notifications → Account** (`AppShell`). `ChatButton` ([src/components/chat/ChatButton.tsx](src/components/chat/ChatButton.tsx)) and the real `NotificationBell` ([src/components/shared/notifications/NotificationBell.tsx](src/components/shared/notifications/NotificationBell.tsx)) each mount the per-user SSE subscription (`useChatRealtime`/`useNotificationRealtime`) so their counters stay live app-wide. Counters are numeric, cap at "9+", and hide at zero.
+- **Backend owns chat + notification copy, routing, counters, and the fraud-hold state** — the frontend renders what it receives. Chat threads reuse the shared [src/components/chat/ChatThread.tsx](src/components/chat/ChatThread.tsx); a held message shows its backend-supplied `heldNotice`. Services mirror the backend contracts: `chat-service` / `notification-service` under `components/{chat,notifications}/libs/`.
+
+## SEO (every public page)
+
+- Build a page's metadata with `buildMetadata({ title, description, path, image?, type?, noindex? })` from [src/lib/seo.ts](src/lib/seo.ts) — export it as `metadata` (static) or `generateMetadata` (dynamic). It sets canonical, Open Graph, Twitter, and robots from one place; don't hand-roll `Metadata`.
+- Add structured data with `<JsonLd data={...} />` ([src/components/seo/JsonLd.tsx](src/components/seo/JsonLd.tsx)) using the builders in `seo.ts` (`organizationJsonLd`, `websiteJsonLd`, `faqJsonLd`, `legalDocumentJsonLd`).
+- Keep [src/app/sitemap.ts](src/app/sitemap.ts) and [src/app/robots.ts](src/app/robots.ts) current: public marketing + legal routes are crawlable; `/portal`, `/admin`, `/agents`, `/account`, `/auth` are disallowed. VID-lookup pages pass `noindex` until `COMPLETED`.
+
+## Backend-served content & public flags
+
+- Legal pages render content the backend owns: the dynamic `/legal/[slug]` route fetches via [src/lib/legal.server.ts](src/lib/legal.server.ts) (`fetchLegalDocument`/`fetchLegalDocuments` → `/api/users/auth/consents/documents/...`) and renders Markdown through `LegalDocument`. Do not hardcode legal prose on the frontend.
+- Read runtime flags from the backend, not from `NEXT_PUBLIC_*`. `usePublicConfigQuery()` exposes `/config/public` (e.g. `phoneVerificationEnabled`, which drives whether the signup flow shows the phone-verification step).
+- The `/account/*` security surface (security log, devices, linked accounts, password) lives under `src/app/account/` on `AppShell`; the `PortalSwitcher` in the shell shows the cross-portal badge for multi-persona users.
+
+## Design system (shared UI primitives)
+
+Reach for the shared primitive before hand-rolling markup — the card/tile visual language is centralized so every surface stays consistent.
+
+- **Card-style choosers** use [src/components/ui/SelectableCard.tsx](src/components/ui/SelectableCard.tsx): an icon tile + title/description with a primary selection ring. Pass `selectionMode="radio"` (single-select) or `"checkbox"` (multi-select) — it sets the ARIA role + `aria-checked` and shows a check badge when a checkbox is selected. Optional `badge` (inline pill by the title) and `footer` (block below, e.g. a licence-required pill) slots. Consumers: submission property-type ([PropertyStep](src/components/portal/submission/PropertyStep.tsx)), agent role + KYC-method ([RolesStep](src/components/agents/onboarding/RolesStep.tsx), [KycStep](src/components/agents/onboarding/KycStep.tsx)). Do **not** re-roll the `rounded-xl border … ring-1 ring-primary` markup inline.
+- **Stat tiles** use [src/components/ui/StatCard.tsx](src/components/ui/StatCard.tsx) (label + value, optional `href`/`icon`/`tone`/`hint`). **A linked card must show its link affordance:** when `href` is set, `StatCard` auto-renders an `ArrowUpRight` indicator (top-right) and moves the metric icon inline — never rely on a hover border alone to signal a card is clickable. `AttentionChip` and `LinkCardRow` carry the same affordance.
+- **Status chips** use [src/components/ui/StatusPill.tsx](src/components/ui/StatusPill.tsx): a tone-coded, humanized pill. The exported `statusTone(status)` resolves any backend status/state enum value → tone (`positive`/`warning`/`negative`/`active`/`muted`); extend its map rather than re-rolling colored spans. Consumers: finance/payouts, disputes, erasure, task console.
+- **Status distributions** use [src/components/ui/MiniBarBreakdown.tsx](src/components/ui/MiniBarBreakdown.tsx) — dependency-free CSS bars over a `Record<status, count>` (e.g. `FinanceSummary.paymentsByStatus`), labelled with `StatusPill`.
+- **Operational signals** use [src/components/ui/AttentionChip.tsx](src/components/ui/AttentionChip.tsx) — a "needs attention" chip (icon + `tone` + optional `href`) for backend-derived counts / SLA breaches.
+- **Recent-item rows** use [src/components/ui/LinkCardRow.tsx](src/components/ui/LinkCardRow.tsx) (title + subtitle + trailing slot + chevron) — shared by the admin/portal dashboards.
+- **Page scaffold.** [src/components/ui/PageShell.tsx](src/components/ui/PageShell.tsx) wraps a page's content in the standard centered container + [PageHeader](src/components/ui/PageHeader.tsx) (with optional `actions`/`meta` slots). It's an **inner content wrapper only** — it does not touch `AppShell`/nav. Dashboards and admin finance/compliance surfaces use it; when a `page.tsx` adopts `PageShell`, drop any padding wrapper in the route file so it isn't double-applied (keep `<Suspense>`).
+- **Rendering enum values.** Never print a raw enum/DB string (`GOV_ID`, `UNDER_REVIEW`, `FIELD`) in the UI. Route it through `humanizeEnumLabel` from [src/lib/utils.ts](src/lib/utils.ts) (→ "Under Review"), or a small explicit label map when the humanized form is wrong (e.g. `BVN`). This also covers enum values inside `.map()` object literals (chart/filter labels), not just direct JSX. Compare on the enum, display via `humanizeEnumLabel`.
+- **Full-screen wizards** (submission, agent apply) share [src/components/ui/wizard/WizardOverlay.tsx](src/components/ui/wizard/WizardOverlay.tsx) — a stepper + footer shell; keep step content in per-step components and thread a `testIdPrefix`.
+
 ## Layout
 
 - `src/app/` — App Router. Top-level segments are isolated user surfaces:
-  - `(website)/` — public marketing + auth (login, signup, OAuth, password flows).
+  - `(website)/` — public marketing + auth (login, signup, OAuth, password flows) + account.
   - `portal/` — authenticated user area.
   - `admin/` — internal admin.
   - `agents/` — agent-facing area.
 - `src/components/{surface}/` — components grouped by the surface they serve (`website/`, `portal/`, `admin/`, `agents/`, `account/`, `nav/`, plus shared `ui/` and `3rdparty/`). Keep components close to the surface that owns them; promote into `ui/` only when reused by 2+ surfaces.
-- `src/components/ui/` — primitives + Radix wrappers (`AsyncStateComponent`, `DataTable`, form helpers, `verified_input/`, `upload/`).
+- `src/components/ui/` — primitives + Radix wrappers (`AsyncStateComponent`, `table`, form helpers `form/`, `verified_input/`, `upload/`, `BrandLogo`, `CopyText`, `DetailDrawer`, `InfiniteScrollTriggerComponent`, `ToolTipComponent`, `PageHeader`, `ShareModal`).
 - `src/containers/` — page-level components with business logic (currently a barrel; new orchestration components go here).
 - `src/stores/` — Zustand stores. Domain stores live next to their components (e.g. [components/website/auth/libs/useAuthStore.ts](src/components/website/auth/libs/useAuthStore.ts), [components/ui/libs/useUiStore.ts](src/components/ui/libs/useUiStore.ts)). Reserve [src/stores/](src/stores/) for app-wide state ([useGlobalSettings.ts](src/stores/useGlobalSettings.ts)).
 - `src/hooks/` — cross-cutting hooks (`useDebounce`, `useSyncedQueryState`, `useClarity`, etc.).
@@ -64,6 +120,10 @@ Admin here `frontend\src\components\admin\nav.ts` and Agents here `frontend\src\
 
 Defined in both [tsconfig.json](tsconfig.json) and [vitest.config.ts](vitest.config.ts) — keep them in sync. Available: `@/*`, `@app/*`, `@components/*`, `@3rdparty/*`, `@lib/*`, `@hooks/*`, `@stores/*`, `@styles/*`, `@icons/*`, `@app-types/*`, `@context/*`, `@assets/*`.
 
+## Enum references, never free literals
+
+Any value that has a defining enum or union type (verification/payment status, tier, currency, property type, etc. — declared in [src/types/models.ts](src/types/models.ts)) must be referenced via that enum/type in components, stores, and comparisons. Do not duplicate an enum value as a raw string literal. Backend is the source of truth for these values; keep the frontend enums in sync with the backend rather than inventing parallel literals. Exceptions: the type/enum definitions themselves, and tests asserting wire-string compatibility.
+
 ## FORM STABILITY (React Hook Form)
 
 Ensure:
@@ -71,6 +131,7 @@ Ensure:
 - submit button disabled during submission
 - no duplicate submissions allowed
 - errors are consistently rendered
+- implement idempotency when necessary
 
 Ensure Zod validation errors are stable and testable.
 

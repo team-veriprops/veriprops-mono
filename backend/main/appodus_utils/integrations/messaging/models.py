@@ -38,6 +38,8 @@ class MessageContext(str, Enum):
     DISPUTE_RESOLUTION_OUTCOME = "DISPUTE_RESOLUTION_OUTCOME"    # dispute_resolved — REJECTED / FULL_REFUND / PARTIAL_RECHECK
     PAYOUT_HOLD_REASON = "PAYOUT_HOLD_REASON"                    # payout_held — admin-supplied hold reason
     ABANDONMENT_VID = "ABANDONMENT_VID"                          # abandonment_recovery — VID of the abandoned verification
+    SHARE_VID = "SHARE_VID"                                      # report_share — VID of the shared verification
+    SHARE_URL = "SHARE_URL"                                      # report_share — tokenised link to the shared report
     BROADCAST_SUBJECT = "BROADCAST_SUBJECT"                      # admin_broadcast — subject line
     BROADCAST_BODY_HTML = "BROADCAST_BODY_HTML"                  # admin_broadcast — HTML body
 
@@ -211,7 +213,7 @@ class EmailPayloadRequest(Object):
         pattern=r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$',
         examples=["support@company.com"]
     )
-    attachments: Optional[List[AttachmentRequest]] = Field(default_factory=list)
+    attachments: Optional[List[Attachment]] = Field(default_factory=list)
     provider_template_id: Optional[str] = Field(
         None,
         description="ID for template services like Mailjet/SendGrid",
@@ -361,7 +363,7 @@ class WhatsappPayload(Object):
     )
     language_code: str = Field(
         "en",
-        pattern=r'^[a-z]{2}$',
+        pattern=r'^[a-z]{2}(_[A-Z]{2})?$',
         description="Two-letter language code",
         examples=["en"]
     )
@@ -389,27 +391,27 @@ class WhatsappPayload(Object):
         description="Whether a local template exists, I will be attached in the parent request"
     )
 
-    @model_validator(mode='after')
-    def validate_content(self):
-        has_text = bool(self.text)
-        has_media = bool(self.media_url)
-        has_template = bool(self.template_name)
-        has_interactive = bool(self.buttons) or bool(self.sections)
+    @staticmethod
+    def validate_content(obj: 'WhatsappPayload'):
+        has_text = bool(obj.text)
+        has_media = bool(obj.media_url)
+        has_template = bool(obj.template_name)
+        has_interactive = bool(obj.buttons) or bool(obj.sections)
 
-        if not (has_text or has_media or has_template or has_interactive or self.has_local_template):
+        if not (has_text or has_media or has_template or has_interactive or obj.has_local_template):
             raise IntegrationValidationException(
                 "WhatsApp message requires text, media, template, or interactive content")
 
-        if has_media and not self.media_type:
+        if has_media and not obj.media_type:
             raise IntegrationValidationException("media_type is required when media_url is provided")
 
-        if has_template and not self.template_variables:
+        if has_template and not obj.template_variables:
             raise IntegrationValidationException("template_variables are required for templates")
 
-        if self.buttons and self.sections:
+        if obj.buttons and obj.sections:
             raise IntegrationValidationException("Cannot have both buttons and sections")
 
-        return self
+        return obj
 
 
 class PushPriority(str, Enum):
@@ -562,16 +564,16 @@ class MessageRequestRecipient(Object):
 
     user_id: Optional[str] = None
     fullname: Optional[str] = None
-    email: Optional[EmailRecipient] = None
+    email: Optional[str] = None
     phone: Optional[PhoneNumber] = None
     ios_push_token: Optional[List[dict]] = None
     android_push_token: Optional[List[dict]] = None
     web_push_token: Optional[List[dict]] = None
-    cc_recipient: Union[EmailRecipient, List[EmailRecipient]] = Field(
+    cc_recipient: List[EmailRecipient] = Field(
         default_factory=list,
         description="CC recipient(s). Only applicable for email channel."
     )
-    bcc_recipient: Union[EmailRecipient, List[EmailRecipient]] = Field(
+    bcc_recipient: List[EmailRecipient] = Field(
         default_factory=list,
         description="BCC recipient(s). Only applicable for email channel."
     )
@@ -595,12 +597,12 @@ class MessageRecipient(Object):
         ...,
         description="Primary recipient(s). Format depends on the selected channel."
     )
-    fullname: str = Field(..., description="Recipient's fullname; Firstname Lastname.")
-    cc_recipient: Union[str, List[str]] = Field(
+    fullname: Optional[str] = Field(None, description="Recipient's fullname; Firstname Lastname.")
+    cc_recipient: List[EmailRecipient] = Field(
         default_factory=list,
         description="CC recipient(s). Only applicable for email channel."
     )
-    bcc_recipient: Union[str, List[str]] = Field(
+    bcc_recipient: List[EmailRecipient] = Field(
         default_factory=list,
         description="BCC recipient(s). Only applicable for email channel."
     )
@@ -641,7 +643,7 @@ class MessageRequestBuilder:
         self._template = None
         self._template_variables = None
         self._schedule_at = None
-        self._extras = None
+        self._extras: Dict[str, Any] = {}
         self._sandbox_mode = False
 
     def channel(self, channel: MessageChannel) -> 'MessageRequestBuilder':
@@ -671,7 +673,7 @@ class MessageRequestBuilder:
         self._template = template
         return self
 
-    def template_variables(self, template_variables: Optional[Dict[str, str]]) -> 'MessageRequestBuilder':
+    def template_variables(self, template_variables: Optional[Dict[str, Any]]) -> 'MessageRequestBuilder':
         """Set template variables (optional)"""
         self._template_variables = template_variables
         return self
@@ -681,7 +683,7 @@ class MessageRequestBuilder:
         self._schedule_at = schedule_at
         return self
 
-    def extras(self, extras: Optional[Dict[str, str]]) -> 'MessageRequestBuilder':
+    def extras(self, extras: Dict[str, Any]) -> 'MessageRequestBuilder':
         """Set analytics/tracking data (optional)"""
         self._extras = extras
         return self
@@ -763,7 +765,7 @@ class MessageRequest(Object):
         description="ID for template services like Mailjet/SendGrid",
         examples=["welcome_template"]
     )
-    template_variables: Optional[Dict[str, str]] = Field(
+    template_variables: Optional[Dict[str, Any]] = Field(
         None,
         examples=[{"name": "John", "activation_link": "https://example.com/activate"}]
     )
@@ -771,7 +773,7 @@ class MessageRequest(Object):
         None,
         description="Future delivery time"
     )
-    extras: Optional[Dict[str, str]] = Field(
+    extras: Optional[Dict[str, Any]] = Field(
         None,
         description="Tracking and analytics data, etc",
         examples=[{"campaign_id": "summer_sale", "user_id": "123"}]

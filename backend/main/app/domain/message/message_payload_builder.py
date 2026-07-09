@@ -85,15 +85,3 @@ class MessageRecipientBuilder:
                     MessageContext.FULL_NAME: user_contact.full_name,
                 })
         return context
-# class MessageContext(str, Enum):
-#     BRAND = "BRAND"
-#     OTP = "OTP"
-#     LINK = "LINK"
-#     TODAY = "TODAY"
-#     EMAIL = "EMAIL"
-#     FIRST_NAME = "FIRST_NAME"
-#     LAST_NAME = "LAST_NAME"
-#     FULL_NAME = "FULL_NAME"
-#     VALIDITY = "VALIDITY"
-#     BRAND_SUPPORT_EMAIL = "BRAND_SUPPORT_EMAIL"
-#     BRAND_SUPPORT_PHONE = "BRAND_SUPPORT_PHONE"

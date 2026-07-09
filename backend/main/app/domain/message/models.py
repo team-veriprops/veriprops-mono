@@ -6,11 +6,10 @@ from pydantic import model_validator, Field, HttpUrl, ConfigDict
 from sqlalchemy import (Column,
                         String,
                         Text,
-                        Integer,
-                        JSON)
+                        Integer)
 
-from main.appodus_utils import BaseEntity, PageRequest, BaseQueryDto, Object
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils import BaseEntity, InternalPageRequest, BaseQueryDto, Object
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 from main.appodus_utils.integrations.messaging.models import (MessageChannel,
                                                               MessageStatus,
                                                               MessagePriority,
@@ -27,8 +26,8 @@ from main.appodus_utils.integrations.messaging.models import (MessageRecipient,
 class Message(BaseEntity):
     __tablename__ = 'messages'
     channel = Column(String(20), nullable=False)
-    to = Column(JSON, nullable=False)
-    payload = Column(JSON, nullable=False)
+    to = Column(JSONB_VARIANT, nullable=False)
+    payload = Column(JSONB_VARIANT, nullable=False)
     status = Column(String(20), nullable=False, default=MessageStatus.PENDING)
     provider = Column(String(50))
     provider_id = Column(String(255))  # Provider's message ID
@@ -38,7 +37,7 @@ class Message(BaseEntity):
     scheduled_at = Column(UTCDateTime, nullable=True)
     sent_at = Column(UTCDateTime, nullable=True)
     delivered_at = Column(UTCDateTime, nullable=True)
-    extras = Column(JSON, default={})
+    extras = Column(JSONB_VARIANT, default={})
     callback_url = Column(String(100))
 
 
@@ -83,20 +82,29 @@ class UpsertMessageDto(MessageBaseDto):
     sandbox_mode: Optional[bool] = False
 
     @model_validator(mode="after")
-    def validate_recipients(self) -> 'UpsertMessageDto':
+    def validate_object(self):
+        self.validate_recipients(self)
+
+        if isinstance(self.payload, WhatsappPayload):
+            WhatsappPayload.validate_content(self.payload)
+
+        return self
+
+    @staticmethod
+    def validate_recipients(obj: 'UpsertMessageDto') -> 'UpsertMessageDto':
         def normalize(val):
             if val is None:
                 return []
             return val if isinstance(val, list) else [val]
 
-        all_recipients = normalize(self.to.recipient)
-        cc_list = normalize(self.to.cc_recipient)
-        bcc_list = normalize(self.to.bcc_recipient)
+        all_recipients = normalize(obj.to.recipient)
+        cc_list = normalize(obj.to.cc_recipient)
+        bcc_list = normalize(obj.to.bcc_recipient)
 
         total = len(all_recipients) + len(cc_list) + len(bcc_list)
 
-        if self.channel in {MessageChannel.SMS, MessageChannel.WHATSAPP} and total > 1:
-            raise ValueError(f"{self.channel.value.upper()} supports only one recipient")
+        if obj.channel in {MessageChannel.SMS, MessageChannel.WHATSAPP} and total > 1:
+            raise ValueError(f"{obj.channel.value.upper()} supports only one recipient")
 
         if total > 1000:
             raise ValueError("Total recipients must not exceed 1000")
@@ -106,26 +114,26 @@ class UpsertMessageDto(MessageBaseDto):
         wa_regex = r'^\d{1,15}$'
 
         for recipient in all_recipients + cc_list + bcc_list:
-            if self.channel == MessageChannel.EMAIL:
+            if obj.channel == MessageChannel.EMAIL:
                 if not re.fullmatch(email_regex, recipient):
                     raise ValueError(f"Invalid email address: {recipient}")
-            elif self.channel == MessageChannel.SMS:
+            elif obj.channel == MessageChannel.SMS:
                 if not re.fullmatch(e164_regex, recipient):
                     raise ValueError(f"Invalid SMS number (E.164): {recipient}")
-            elif self.channel == MessageChannel.WHATSAPP:
+            elif obj.channel == MessageChannel.WHATSAPP:
                 if not re.fullmatch(wa_regex, recipient):
                     raise ValueError(f"Invalid WhatsApp number: {recipient}")
-            elif self.channel in {MessageChannel.PUSH, MessageChannel.WEB_PUSH}:
+            elif obj.channel in {MessageChannel.PUSH, MessageChannel.WEB_PUSH}:
                 if not isinstance(recipient, str) or len(recipient) > 256:
                     raise ValueError(f"Invalid device token: {recipient}")
 
-        if self.channel != MessageChannel.EMAIL and (cc_list or bcc_list):
+        if obj.channel != MessageChannel.EMAIL and (cc_list or bcc_list):
             raise ValueError("CC and BCC are only supported for email channel")
 
-        return self
+        return obj
 
     @classmethod
-    def from_request(cls, request: MessageRequest) -> "UpsertMessageDto":
+    def  from_request(cls, request: MessageRequest) -> "UpsertMessageDto":
         """Convert a MessageRequest to UpsertMessageDto.
 
         MessageRequest and UpsertMessageDto share a compatible field set by design.
@@ -172,7 +180,7 @@ class _UpdateMessageDto(Object):
     delivered_at: Optional[datetime]
 
 
-class SearchMessageDto(PageRequest, BaseQueryDto, _UpdateMessageDto):
+class SearchMessageDto(InternalPageRequest, BaseQueryDto, _UpdateMessageDto):
     channel: Optional[MessageChannel]
     to: Optional[MessageRecipient]
     provider: Optional[MessageProviderName]

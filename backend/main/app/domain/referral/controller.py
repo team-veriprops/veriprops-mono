@@ -1,7 +1,6 @@
-"""Referral HTTP routes — Phase 17 (S51).
+"""Referral controller (PRD §17.1). URL shape: /referrals/...
 
-URL shape: /api/referrals/...
-All routes require JWT auth (customer persona).
+Frontend service: frontend/src/components/portal/referrals/libs/referral-service.
 """
 from __future__ import annotations
 
@@ -9,38 +8,17 @@ from fastapi import APIRouter, Depends
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
-from main.app.domain.referral.models import (
-    ClaimReferralDto,
-    ReferralCodeDto,
-    ReferralStatsDto,
-)
+from main.app.domain.referral.models import ReferralSummaryDto
 from main.app.domain.referral.service import ReferralService
 from main.appodus_utils.db.models import SuccessResponse
 
+referral_router = APIRouter(prefix="/referrals", tags=["Referrals"])
 referral_service: ReferralService = di[ReferralService]
 
-referral_router = APIRouter(prefix="/referrals", tags=["Referrals"])
 
-
-@referral_router.get("/my-code", response_model=SuccessResponse[ReferralCodeDto])
-async def get_my_referral_code(authorize: AuthJWT = Depends()):
+@referral_router.get("/me", response_model=SuccessResponse[ReferralSummaryDto])
+async def get_my_referral(authorize: AuthJWT = Depends()):
+    """The signed-in user's referral link + credit balances (§17.1 dashboard card)."""
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
-    dto = await referral_service.get_or_create_code(user_id)
-    return SuccessResponse[ReferralCodeDto](data=dto)
-
-
-@referral_router.get("/my-stats", response_model=SuccessResponse[ReferralStatsDto])
-async def get_my_referral_stats(authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    dto = await referral_service.get_my_stats(user_id)
-    return SuccessResponse[ReferralStatsDto](data=dto)
-
-
-@referral_router.post("/claim", response_model=SuccessResponse[dict])
-async def claim_referral(req: ClaimReferralDto, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    await referral_service.claim_referral(user_id, req)
-    return SuccessResponse[dict](data={"claimed": True})
+    return SuccessResponse[ReferralSummaryDto](data=await referral_service.summary(user_id))

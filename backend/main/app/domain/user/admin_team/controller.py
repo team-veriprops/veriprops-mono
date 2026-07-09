@@ -1,67 +1,51 @@
-"""Admin team HTTP routes — PRD §4.1 (R4.5).
-
-URL shape: /users/admin/team/...
-All endpoints require INVITE_ADMIN permission (SUPER admin only).
-"""
+"""Admin team management controller (PRD §4.1). URL shape: /users/admins/team/..."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from loguru import Logger
+from typing import Optional
 
-from typing import List, Optional
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from kink import di
 
-from main.app.domain.user.admin_team.models import AdminTeamMemberDto, ChangeSubRoleRequestDto
+from main.app.domain.user.admin_team.models import AdminTeamPageDto, ChangeSubRoleDto
 from main.app.domain.user.admin_team.service import AdminTeamService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
-from main.app.domain.user.models import AdminSubRole
 from main.appodus_utils.db.models import SuccessResponse
 
-logger: Logger = di["logger"]
-
-admin_team_service: AdminTeamService = di[AdminTeamService]
-
-admin_team_router = APIRouter(prefix="/admin/team", tags=["Admin Team"])
+admin_team_router = APIRouter(prefix="/admins/team", tags=["Admin Team"])
+team_service: AdminTeamService = di[AdminTeamService]
 
 
-@admin_team_router.get(
-    "",
-    response_model=List[AdminTeamMemberDto],
-)
+@admin_team_router.get("", response_model=SuccessResponse[AdminTeamPageDto])
 async def list_team(
-    sub_role: Optional[AdminSubRole] = None,
-    _: str = Depends(require_permission(Permission.INVITE_ADMIN)),
+    query: Optional[str] = Query(default=None),
+    sub_role: Optional[str] = Query(default=None),
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=10, ge=1, le=100),
+    _admin_id: str = Depends(require_permission(Permission.VIEW_ADMIN_PANEL)),
 ):
-    return await admin_team_service.list_admins(sub_role_filter=sub_role)
+    result = await team_service.list_team(
+        page=page, page_size=page_size, query=query, sub_role=sub_role,
+    )
+    return SuccessResponse[AdminTeamPageDto](data=result)
 
 
-@admin_team_router.post(
-    "/{user_id}/deactivate",
-    response_model=SuccessResponse[bool],
-)
-async def deactivate_admin(
+@admin_team_router.post("/{user_id}/sub-role", response_model=SuccessResponse[bool])
+async def change_sub_role(
     user_id: str,
-    actor_id: str = Depends(require_permission(Permission.INVITE_ADMIN)),
+    req: ChangeSubRoleDto,
+    # Changing an admin's sub-role (including granting SUPER) is a privilege-boundary
+    # action, gated on INVITE_ADMIN — held only by SUPER. MANAGE_USERS (which OPERATIONS
+    # also holds) is deliberately NOT sufficient, to prevent lateral self-promotion.
+    admin_id: str = Depends(require_permission(Permission.INVITE_ADMIN)),
 ):
-    await admin_team_service.deactivate_admin(actor_id=actor_id, target_id=user_id)
+    await team_service.change_sub_role(user_id, req.sub_role, admin_id)
     return SuccessResponse[bool](data=True)
 
 
-@admin_team_router.patch(
-    "/{user_id}/sub-role",
-    response_model=SuccessResponse[AdminTeamMemberDto],
-)
-async def change_sub_role(
+@admin_team_router.post("/{user_id}/deactivate", response_model=SuccessResponse[bool])
+async def deactivate_member(
     user_id: str,
-    req: ChangeSubRoleRequestDto,
-    actor_id: str = Depends(require_permission(Permission.INVITE_ADMIN)),
+    admin_id: str = Depends(require_permission(Permission.MANAGE_USERS)),
 ):
-    result = await admin_team_service.change_sub_role(
-        actor_id=actor_id,
-        target_id=user_id,
-        new_sub_role=req.sub_role,
-    )
-    return SuccessResponse[AdminTeamMemberDto](data=result)
+    await team_service.deactivate(user_id, admin_id)
+    return SuccessResponse[bool](data=True)

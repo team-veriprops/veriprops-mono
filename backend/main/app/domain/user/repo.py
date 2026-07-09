@@ -1,7 +1,7 @@
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import select, func, update as sa_update
+from sqlalchemy import select, func, or_, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.user.auth.session.device.models import Device
@@ -37,10 +37,32 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_admins(self, sub_role_filter: Optional[AdminSubRole] = None) -> List[User]:
+    async def list_recipient_rows(self) -> List[tuple]:
+        """(user_id_str, user_type, personas) for every active user — the broadcast audience
+        resolver (§18.1). User ids are the 36-char str form used by notifications."""
+        stmt = select(User.id, User.user_type, User.personas).where(User.deleted.is_(False))
+        return [
+            (str(uid), ut, list(personas or []))
+            for uid, ut, personas in (await self._session.execute(stmt)).all()
+        ]
+
+    async def list_admins(
+        self,
+        sub_role_filter: Optional[AdminSubRole] = None,
+        query: Optional[str] = None,
+    ) -> List[User]:
         conditions = [User.deleted.is_(False), User.user_type == UserType.ADMIN.value]
         if sub_role_filter is not None:
             conditions.append(User.admin_sub_role == sub_role_filter.value)
+        if query and query.strip():
+            like = f"%{query.strip()}%"
+            conditions.append(
+                or_(
+                    User.first_name.ilike(like),
+                    User.last_name.ilike(like),
+                    User.email.ilike(like),
+                )
+            )
         stmt = select(User).where(*conditions)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
@@ -169,8 +191,8 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
             sa_update(User)
             .where(User.id == user_id)
             .values(
-                email=f"deleted_{short_user_id}@erased.veriprops.com",
-                email_normalized=f"deleted_{short_user_id}@erased.veriprops.com",
+                email=f"deleted_{short_user_id}@erased.veriprops.ng",
+                email_normalized=f"deleted_{short_user_id}@erased.veriprops.ng",
                 phone="",
                 phone_e164=None,
                 first_name="Deleted",

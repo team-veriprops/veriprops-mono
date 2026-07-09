@@ -27,6 +27,9 @@ OPERATIONS_ALLOWED = {
     Permission.RELEASE_REPORT,
     Permission.VIEW_ADMIN_PANEL,
     Permission.MANAGE_VERIFICATIONS,
+    Permission.MANAGE_USERS,
+    Permission.VIEW_ANALYTICS,   # §18.1 Mission Control + analytics
+    Permission.BROADCAST,        # §18.1 admin announcements
 }
 
 FINANCE_ALLOWED = {
@@ -34,6 +37,7 @@ FINANCE_ALLOWED = {
     Permission.CONFIGURE_PRICING,
     Permission.CONFIRM_WIRE_PAYMENT,
     Permission.VIEW_ADMIN_PANEL,
+    Permission.VIEW_ANALYTICS,   # §18.1 finance analytics
 }
 
 
@@ -125,3 +129,18 @@ class TestPrdCoverage:
 
     def test_release_report_exists(self):
         assert Permission.RELEASE_REPORT in Permission
+
+
+# ── §19 compliance permission (D40) ───────────────────────────────────────────
+
+class TestManageCompliance:
+    """MANAGE_COMPLIANCE gates the irreversible NDPA erasure — SUPER only (D40)."""
+
+    def test_super_has_manage_compliance(self):
+        assert _allow("ADMIN", "SUPER", Permission.MANAGE_COMPLIANCE)
+
+    def test_operations_denied_manage_compliance(self):
+        assert not _allow("ADMIN", "OPERATIONS", Permission.MANAGE_COMPLIANCE)
+
+    def test_finance_denied_manage_compliance(self):
+        assert not _allow("ADMIN", "FINANCE", Permission.MANAGE_COMPLIANCE)

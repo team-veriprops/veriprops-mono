@@ -1,74 +1,55 @@
-"""Share link repos — S43."""
+"""Report share data access."""
 from __future__ import annotations
 
-from typing import Optional, Type
+from typing import List, Optional, Type
 
-from sqlalchemy import select
 from kink import inject
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.verification.share.models import (
-    ShareLink,
-    ShareRecipient,
-    CreateShareLinkDto,
-    UpdateShareLinkDto,
-    QueryShareLinkDto,
-    SearchShareLinkDto,
-    CreateShareRecipientDto,
-    UpdateShareRecipientDto,
-    QueryShareRecipientDto,
+    CreateVerificationShareDto,
+    QueryVerificationShareDto,
+    SearchVerificationShareDto,
+    UpdateVerificationShareDto,
+    VerificationShare,
 )
 from main.appodus_utils.db.repo import GenericRepo
-from main.appodus_utils.db.session import get_db_session_from_context
 
 
 @inject
-class ShareLinkRepo(GenericRepo[
-    ShareLink,
-    CreateShareLinkDto,
-    UpdateShareLinkDto,
-    QueryShareLinkDto,
-    SearchShareLinkDto,
-]):
+class VerificationShareRepo(
+    GenericRepo[
+        VerificationShare,
+        CreateVerificationShareDto,
+        UpdateVerificationShareDto,
+        QueryVerificationShareDto,
+        SearchVerificationShareDto,
+    ]
+):
     def __init__(
         self,
         db: AsyncSession,
-        model: Type[ShareLink] = ShareLink,
-        query_dto: Type[QueryShareLinkDto] = QueryShareLinkDto,
+        model: Type[VerificationShare] = VerificationShare,
+        query_dto: Type[QueryVerificationShareDto] = QueryVerificationShareDto,
     ):
         super().__init__(db, model, query_dto)
+        self.db = db
 
-    async def get_by_token(self, token: str) -> Optional[ShareLink]:
-        session = self._session
-        result = await session.execute(
-            select(ShareLink).where(ShareLink.token == token, ShareLink.deleted == False)
+    async def get_by_token(self, token: str) -> Optional[VerificationShare]:
+        stmt = select(VerificationShare).where(
+            VerificationShare.deleted.is_(False),
+            VerificationShare.token == token,
         )
-        return result.scalars().first()
+        return (await self._session.execute(stmt)).scalar_one_or_none()
 
-
-@inject
-class ShareRecipientRepo(GenericRepo[
-    ShareRecipient,
-    CreateShareRecipientDto,
-    UpdateShareRecipientDto,
-    QueryShareRecipientDto,
-    SearchShareLinkDto,
-]):
-    def __init__(
-        self,
-        db: AsyncSession,
-        model: Type[ShareRecipient] = ShareRecipient,
-        query_dto: Type[QueryShareRecipientDto] = QueryShareRecipientDto,
-    ):
-        super().__init__(db, model, query_dto)
-
-    async def get_share_recipient(self, share_link_id: str) -> Optional[ShareRecipient]:
-        session = self._session
-        result = await session.execute(
-            select(ShareRecipient).where(
-                ShareRecipient.share_link_id == share_link_id,
-                ShareRecipient.deleted == False,
+    async def list_for_verification(self, verification_id: str) -> List[VerificationShare]:
+        stmt = (
+            select(VerificationShare)
+            .where(
+                VerificationShare.deleted.is_(False),
+                VerificationShare.verification_id == verification_id,
             )
+            .order_by(desc(VerificationShare.date_created))
         )
-
-        return result.scalars().first()
+        return list((await self._session.execute(stmt)).scalars().all())

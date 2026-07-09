@@ -1,112 +1,96 @@
-"""Notification repos — S39."""
+"""Notification data access — the per-user feed, unread counter, and mark-read."""
 from __future__ import annotations
 
-from typing import List, Optional, Type
+from typing import List, Tuple, Type
 
 from kink import inject
-from sqlalchemy import select
+from sqlalchemy import and_, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.notification.models import (
-    Notification,
-    NotificationDispatch,
-    NotificationPreference,
     CreateNotificationDto,
-    UpdateNotificationDto,
-    SearchNotificationDto,
+    Notification,
     QueryNotificationDto,
-    CreateNotificationDispatchDto,
-    UpdateNotificationDispatchDto,
-    QueryNotificationDispatchDto,
-    UpsertNotificationPreferenceDto,
+    SearchNotificationDto,
+    UpdateNotificationDto,
 )
+from main.appodus_utils import Utils
 from main.appodus_utils.db.repo import GenericRepo
 
 
 @inject
-class NotificationRepo(GenericRepo[
-                           Notification,
-                           CreateNotificationDto,
-                           UpdateNotificationDto,
-                           QueryNotificationDto,
-                           SearchNotificationDto,
-                       ]):
+class NotificationRepo(
+    GenericRepo[
+        Notification,
+        CreateNotificationDto,
+        UpdateNotificationDto,
+        QueryNotificationDto,
+        SearchNotificationDto,
+    ]
+):
     def __init__(
-            self,
-            db: AsyncSession,
-            model: Type[Notification] = Notification,
-            query_dto: Type[QueryNotificationDto] = QueryNotificationDto,
+        self,
+        db: AsyncSession,
+        model: Type[Notification] = Notification,
+        query_dto: Type[QueryNotificationDto] = QueryNotificationDto,
     ):
         super().__init__(db, model, query_dto)
         self.db = db
 
-    async def list_for_recipient(self, recipient_id: str, limit: int = 30) -> List[Notification]:
-        result = await self._session.execute(
+    async def list_for_user(
+        self, user_id: str, page: int, page_size: int
+    ) -> Tuple[List[Notification], int]:
+        """Returns ``(rows, total)`` — the service builds the typed page from DTOs so ORM
+        models never reach ``build_page``."""
+        offset = page * page_size
+        where = and_(Notification.deleted.is_(False), Notification.user_id == str(user_id))
+        total = int((await self._session.execute(
+            select(func.count(Notification.id)).where(where)
+        )).scalar() or 0)
+        stmt = (
             select(Notification)
-            .where(Notification.recipient_id == recipient_id, Notification.deleted == False)
-            .order_by(Notification.date_created.desc())
-            .limit(limit)
+            .where(where)
+            .order_by(desc(Notification.date_created))
+            .offset(offset)
+            .limit(page_size)
         )
-        return list(result.scalars().all())
+        items = list((await self._session.execute(stmt)).scalars().all())
+        return items, total
 
-    async def mark_read(self, notification_id: str) -> None:
-        row = await self._session.get(Notification, notification_id)
-        if row:
-            row.read = True
+    async def exists_for_ref(self, notification_type: str, event_ref: str) -> bool:
+        """True if a notification of this type already exists for this reference — used to
+        keep the SLA-breach sweep firing at most once per verification (§12.2)."""
+        where = and_(
+            Notification.deleted.is_(False),
+            Notification.type == notification_type,
+            Notification.event_ref == Utils.uuid_to_hex(event_ref),
+        )
+        count = int((await self._session.execute(
+            select(func.count(Notification.id)).where(where)
+        )).scalar() or 0)
+        return count > 0
 
+    async def unread_count(self, user_id: str) -> int:
+        where = and_(
+            Notification.deleted.is_(False),
+            Notification.user_id == user_id,
+            Notification.read.is_(False),
+        )
+        return int((await self._session.execute(
+            select(func.count(Notification.id)).where(where)
+        )).scalar() or 0)
 
-@inject
-class NotificationDispatchRepo(GenericRepo[
-                                   NotificationDispatch,
-                                   CreateNotificationDispatchDto,
-                                   UpdateNotificationDispatchDto,
-                                   QueryNotificationDispatchDto,
-                                   SearchNotificationDto,
-                               ]):
-    def __init__(
-            self,
-            db: AsyncSession,
-            model: Type[NotificationDispatch] = NotificationDispatch,
-            query_dto: Type[QueryNotificationDispatchDto] = QueryNotificationDispatchDto,
-    ):
-        super().__init__(db, model, query_dto)
-        self.db = db
-
-
-@inject
-class NotificationPreferenceRepo(GenericRepo[
-                                     NotificationPreference,
-                                     UpsertNotificationPreferenceDto,
-                                     UpsertNotificationPreferenceDto,
-                                     QueryNotificationDto,
-                                     SearchNotificationDto,
-                                 ]):
-    def __init__(
-            self,
-            db: AsyncSession,
-            model: Type[NotificationPreference] = NotificationPreference,
-            query_dto: Type[QueryNotificationDto] = QueryNotificationDto,
-    ):
-        super().__init__(db, model, query_dto)
-        self.db = db
-
-    async def get_for_user_and_event(
-            self, user_id: str, event_type: str
-    ) -> Optional[NotificationPreference]:
-        result = await self._session.execute(
-            select(NotificationPreference).where(
-                NotificationPreference.user_id == user_id,
-                NotificationPreference.event_type == event_type,
-                NotificationPreference.deleted == False,
+    async def mark_all_read(self, user_id: str) -> int:
+        stmt = (
+            update(Notification)
+            .where(
+                and_(
+                    Notification.deleted.is_(False),
+                    Notification.user_id == user_id,
+                    Notification.read.is_(False),
+                )
             )
+            .values(read=True)
         )
-        return result.scalars().first()
-
-    async def list_for_user(self, user_id: str) -> List[NotificationPreference]:
-        result = await self._session.execute(
-            select(NotificationPreference).where(
-                NotificationPreference.user_id == user_id,
-                NotificationPreference.deleted == False,
-            )
-        )
-        return list(result.scalars().all())
+        result = await self._session.execute(stmt)
+        return result.rowcount or 0

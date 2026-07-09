@@ -1,85 +1,56 @@
-"""Verification service.
+"""Verification service (PRD §5, §4.4).
 
-Owns the wizard draft cycle and forward-only state transitions for the global
-verification entity. Property creation is folded in here on submission.
+Owns the resumable submission wizard (VID/DRAFT on step-1 load), pricing + 24h
+price-lock, the VERIFICATION_TERMS consent snapshot, and the lifecycle transitions
+DRAFT → SUBMITTED → PAYMENT_PENDING → PAID. Every status write is validated by the
+verification state machine; post-payment status is projected by the derivation owner.
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from loguru import Logger
-
-import io
 import json
-import secrets
-import uuid
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from datetime import timedelta
+from typing import Optional
 
-from kink import di, inject
+from kink import inject
 
-from main.app.config.settings import settings
+from main.app.core.idempotency.service import IdempotencyService
+from main.app.core.realtime import VerificationEventType
+from main.app.core.events import DomainEvent, EventType, publish_domain_event
+from main.app.core.sla import sla_due_date
+from main.app.core.state.machine import verification_state_machine
+from main.app.core.state.status import VerificationStatus, VerificationTier
+from main.app.core.vid import generate_vid
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.user.auth.consent.models import (
-    ConsentDocumentType,
-)
+from main.app.domain.property.service import PropertyService
+from main.app.domain.system_config.models import ConfigKey
+from main.app.domain.system_config.service import ConfigService
+from main.app.domain.user.auth.consent.models import ConsentDocumentType
 from main.app.domain.user.auth.consent.service import ConsentService
+from main.app.domain.user.models import UpdateUserDto
+from main.app.domain.user.service import UserService
 from main.app.domain.verification.models import (
-    ConsentRecordDto,
     CreateVerificationDto,
-    DocumentUploadResponseDto,
-    PricingSnapshotDto,
-    PropertyDocumentType,
-    SearchVerificationDto,
+    PriceQuoteDto,
+    PriceRefreshDto,
+    SaveVerificationDraftDto,
+    SubmitVerificationDto,
     UpdateVerificationDto,
     Verification,
-    VerificationDto,
-    VerificationStatus,
-    VerificationTier,
-    WizardStepDto,
 )
-from main.app.domain.verification.pricing.service import PricingService
-from main.app.domain.verification.property.models import (
-    CreatePropertyDto,
-    PropertyDto,
-    PropertySource,
-    PropertyType,
-)
-from main.app.domain.verification.property.repo import PropertyRepo
+from main.app.domain.verification.pricing import Discount, apply_discounts, indicative_charge_minor
+from main.app.domain.verification.pricing_config.service import PricingConfigService
 from main.app.domain.verification.repo import VerificationRepo
-from main.app.domain.verification.state_machine import verification_state_machine
-from main.app.domain.verification.state_machine.derive import derive_status
-from main.app.domain.verification.validator import VerificationValidator
 from main.appodus_utils import Utils
+from main.appodus_utils.db.types.money import TransactionCurrency
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
-from main.appodus_utils.exception.exceptions import (
-    ResourceNotFoundException,
-    ValidationException,
-)
-from main.appodus_utils.integrations.document_storage.factory import DocumentStorageProviderFactory
+from main.appodus_utils.exception.exceptions import ForbiddenException, ResourceNotFoundException
 
-logger: Logger = di["logger"]
-
-
-# 5 verification consent document types from PRD §5.3.
-VERIFICATION_CONSENT_TYPES = (
-    ConsentDocumentType.VERIFICATION_DISCLAIMER,
-    ConsentDocumentType.FINDINGS_OPINION_ACK,
-    ConsentDocumentType.JURISDICTION_PLATFORM_ONLY,
-    ConsentDocumentType.COMMUNICATION_RECORDING,
-    ConsentDocumentType.REFUND_POLICY,
-)
-
-
-def _generate_vid() -> str:
-    """Format: VP-YYYY-XXXXXX (6 random uppercase chars)."""
-    year = datetime.utcnow().year
-    suffix = secrets.token_hex(3).upper()
-    return f"VP-{year}-{suffix}"
+_CREATE_SCOPE = "verification.create"
+_PRICE_LOCK_HOURS = 24
+_ABANDONMENT_AGE_HOURS = 24
 
 
 @inject
@@ -88,390 +59,290 @@ def _generate_vid() -> str:
 class VerificationService:
     def __init__(
         self,
-        repo: VerificationRepo,
-        property_repo: PropertyRepo,
-        validator: VerificationValidator,
-        pricing_service: PricingService,
+        verification_repo: VerificationRepo,
+        property_service: PropertyService,
         consent_service: ConsentService,
-        audit: AuditLogService,
-        storage_factory: DocumentStorageProviderFactory,
+        idempotency_service: IdempotencyService,
+        audit_service: AuditLogService,
+        config_service: ConfigService,
+        user_service: UserService,
+        pricing_config_service: PricingConfigService,
     ):
-        self._repo = repo
-        self._property_repo = property_repo
-        self._validator = validator
-        self._pricing = pricing_service
+        self._verification_repo = verification_repo
+        self._property_service = property_service
         self._consent_service = consent_service
-        self._audit = audit
-        self._storage_factory = storage_factory
+        self._idempotency = idempotency_service
+        self._audit = audit_service
+        self._config = config_service
+        self._users = user_service
+        self._pricing = pricing_config_service
 
-    # ── Reads ─────────────────────────────────────────────────────
+    # ── Draft (VID/DRAFT on step-1 load; idempotent create) ───────
 
-    async def get(self, verification_id: str, customer_id: str) -> VerificationDto:
-        row = await self._repo.get_model(verification_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="Verification")
-        self._validator.assert_owner(row, customer_id)
-        return await self._to_dto(row)
+    async def create_draft(self, customer_id: str, idempotency_key: Optional[str] = None) -> Verification:
+        if idempotency_key:
+            outcome = await self._idempotency.begin_or_replay(idempotency_key, _CREATE_SCOPE)
+            if outcome.is_replay and outcome.resource_id:
+                existing = await self._verification_repo.get_model(outcome.resource_id)
+                if existing:
+                    return existing
 
-    async def get_active_draft(self, customer_id: str) -> Optional[VerificationDto]:
-        row = await self._repo.get_active_draft_for_customer(customer_id)
-        return await self._to_dto(row) if row else None
+        verification = await self._verification_repo.create_return_model(CreateVerificationDto(
+            vid=generate_vid(),
+            customer_id=customer_id,
+            status=VerificationStatus.DRAFT,
+        ))
+        if idempotency_key:
+            await self._idempotency.complete(idempotency_key, resource_id=verification.id)
+        return verification
 
-    async def list_for_customer(
-        self, customer_id: str, page: int = 0, page_size: int = 20,
-    ):
-        search = SearchVerificationDto(page=page, page_size=page_size, customer_id=customer_id)
-        return await self._repo.get_page(search)
-
-    # ── Wizard ────────────────────────────────────────────────────
-
-    async def create_or_resume_draft(self, customer_id: str) -> VerificationDto:
-        row = await self._repo.get_active_draft_for_customer(customer_id)
-        if row is None:
-            vid = _generate_vid()
-            await self._repo.create(CreateVerificationDto(
-                vid=vid,
-                customer_id=customer_id,
-                tier=VerificationTier.STANDARD,
-                status=VerificationStatus.DRAFT,
-                draft_step=0,
-            ))
-            row = await self._repo.get_by_vid(vid)
-        return await self._to_dto(row)
-
-    async def update_draft_step(
-        self, customer_id: str, verification_id: str, dto: WizardStepDto,
-    ) -> VerificationDto:
-        row = await self._repo.get_model(verification_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="Verification")
-        self._validator.assert_owner(row, customer_id)
-        self._validator.assert_draft(row)
-
-        # Merge incoming payload into the persisted draft.
-        existing = self._decode_payload(row.draft_payload)
-        existing.update(dto.payload or {})
-
-        await self._repo.update(verification_id, UpdateVerificationDto(
+    async def save_draft(self, verification_id: str, customer_id: str, dto: SaveVerificationDraftDto) -> Verification:
+        verification = await self._require_owned(verification_id, customer_id)
+        await self._verification_repo.update(verification_id, UpdateVerificationDto(
             draft_step=dto.step,
-            draft_payload=json.dumps(existing),
+            draft_payload=json.dumps(dto.payload),
         ))
-        return await self._to_dto(await self._repo.get_model(verification_id))
+        return await self._verification_repo.get_model(verification_id)
 
-    async def select_tier(
-        self, customer_id: str, verification_id: str, tier: VerificationTier, currency: str,
-    ) -> VerificationDto:
-        row = await self._repo.get_model(verification_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="Verification")
-        self._validator.assert_owner(row, customer_id)
-        self._validator.assert_draft(row)
+    async def get_owned(self, verification_id: str, customer_id: str) -> Verification:
+        return await self._require_owned(verification_id, customer_id)
 
-        snapshot = await self._pricing.quote(tier, currency)
-        snapshot = await self._pricing.lock(snapshot)
-        await self._repo.update(verification_id, UpdateVerificationDto(
+    async def get_by_id(self, verification_id: str) -> Verification:
+        """Ownership-free fetch for internal service callers (e.g. tokenised report shares,
+        where the share token — not the JWT — is the authorization)."""
+        verification = await self._verification_repo.get_model(verification_id)
+        if not verification:
+            raise ResourceNotFoundException(resource="verification")
+        return verification
+
+    # ── Pricing quote (PRD §5.2, §17.1 discounts) ─────────────────
+
+    async def quote(
+        self, customer_id: str, tier: VerificationTier, currency: TransactionCurrency
+    ) -> PriceQuoteDto:
+        ngn = await self._pricing.tier_price_kobo(tier)
+        discount = await self._compute_discount(customer_id, ngn)
+        # The foreign figure is indicative on the NET amount the customer will be charged.
+        charge_minor, fx = indicative_charge_minor(discount.net_minor, currency)
+        return PriceQuoteDto(
             tier=tier,
-            pricing_snapshot=snapshot.model_dump_json(by_alias=True),
-        ))
-        return await self._to_dto(await self._repo.get_model(verification_id))
+            price_ngn_minor=ngn,
+            currency=currency,
+            charge_amount_minor=charge_minor,
+            fx_rate=fx,
+            first_time_discount_minor=discount.first_time_minor,
+            referral_credit_applied_minor=discount.referral_applied_minor,
+            total_discount_minor=discount.total_discount_minor,
+            net_price_ngn_minor=discount.net_minor,
+            discount_cap_hit=discount.cap_hit,
+        )
+
+    async def _compute_discount(
+        self, customer_id: str, base_kobo: int, exclude_verification_id: Optional[str] = None
+    ) -> Discount:
+        """Resolve the first-time + referral discount for a customer (§17.1). First-time =
+        no prior paid verification; referral credit = the customer's spendable balance."""
+        first_time = not await self._verification_repo.has_paid_verification(customer_id, exclude_verification_id)
+        user = await self._users.get_user_model(customer_id)
+        return apply_discounts(
+            base_kobo,
+            first_time=first_time,
+            first_time_pct=await self._config.get_int(ConfigKey.FIRST_TIME_DISCOUNT_PERCENT),
+            referral_credit_kobo=user.credit_balance_kobo or 0,
+            max_discount_pct=await self._config.get_int(ConfigKey.MAX_DISCOUNT_PERCENT),
+        )
+
+    # ── Submit: finalise property + tier + price-lock + consent ───
 
     async def submit(
-        self,
-        customer_id: str,
-        verification_id: str,
-        consents: List[ConsentRecordDto],
-        ip_address: Optional[str] = None,
-        device_fingerprint: Optional[str] = None,
-    ) -> VerificationDto:
-        row = await self._repo.get_model(verification_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="Verification")
-        self._validator.assert_owner(row, customer_id)
-        self._validator.assert_draft(row)
+        self, verification_id: str, customer_id: str, dto: SubmitVerificationDto, ip_address: Optional[str] = None
+    ) -> Verification:
+        verification = await self._require_owned(verification_id, customer_id)
 
-        payload = self._decode_payload(row.draft_payload)
-        self._validator.assert_property_filled(payload)
-        self._validator.assert_can_transition(row.status, VerificationStatus.SUBMITTED.value)
+        prop = await self._property_service.create(customer_id, dto.property)
 
-        # Validate that all 5 consents were collected.
-        provided_types = {c.document_type for c in consents}
-        required_types = {t.value for t in VERIFICATION_CONSENT_TYPES}
-        missing = required_types - provided_types
-        if missing:
-            raise ValidationException(
-                message=f"Missing required consents: {', '.join(sorted(missing))}",
-            )
+        ngn = await self._pricing.tier_price_kobo(dto.tier)
+        # Apply first-time + referral discounts (§17.1); the NET amount is the locked price.
+        discount = await self._compute_discount(customer_id, ngn, exclude_verification_id=verification_id)
+        charge_minor, fx = indicative_charge_minor(discount.net_minor, dto.currency)
 
-        property_id = await self._materialise_property(payload)
+        # VERIFICATION_TERMS single bundled acceptance (§5.3) — evidentiary record.
+        await self._consent_service.record_user_consent(
+            user_id=customer_id,
+            document_type=ConsentDocumentType.VERIFICATION_TERMS,
+            consent_version=dto.consent.consent_version,
+            ip_address=ip_address,
+        )
 
-        for consent in consents:
-            await self._consent_service.record_user_consent(
-                user_id=customer_id,
-                document_type=ConsentDocumentType(consent.document_type),
-                consent_version=consent.consent_version,
-                ip_address=ip_address,
-                device_fingerprint=device_fingerprint,
-            )
-
-        await self._repo.update(verification_id, UpdateVerificationDto(
-            status=VerificationStatus.SUBMITTED,
-            property_id=property_id,
-            submitted_at=Utils.datetime_now(),
+        self._assert_transition(verification.status, VerificationStatus.SUBMITTED)
+        await self._verification_repo.update(verification_id, UpdateVerificationDto(
+            property_id=prop.id,
+            tier=dto.tier.value,
+            status=VerificationStatus.SUBMITTED.value,
+            price_locked_minor=discount.net_minor,
+            currency=TransactionCurrency.NGN.value,
+            charge_currency=dto.currency.value,
+            charge_amount_minor=charge_minor,
+            fx_rate_at_quote=fx,
+            first_time_discount_minor=discount.first_time_minor,
+            referral_credit_applied_minor=discount.referral_applied_minor,
+            consent_snapshot_id=f"{ConsentDocumentType.VERIFICATION_TERMS.value}@{dto.consent.consent_version}",
         ))
+        await self._set_price_lock(verification_id)
+
         self._audit.schedule(
-            AuditActionType.VERIFICATION_SUBMITTED,
-            resource_type="Verification",
+            action=AuditActionType.VERIFICATION_SUBMITTED,
+            resource_type="verification",
             resource_id=verification_id,
             actor_id=customer_id,
             from_state=VerificationStatus.DRAFT.value,
             to_state=VerificationStatus.SUBMITTED.value,
             ip_address=ip_address,
         )
-        return await self._to_dto(await self._repo.get_model(verification_id))
+        return await self._verification_repo.get_model(verification_id)
 
-    async def upload_document(
-        self,
-        customer_id: str,
-        verification_id: str,
-        file_bytes: bytes,
-        filename: str,
-        document_type: str,
-    ) -> DocumentUploadResponseDto:
-        row = await self._repo.get_model(verification_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="Verification")
-        self._validator.assert_owner(row, customer_id)
-        self._validator.assert_draft(row)
+    # ── Payment-driven transitions (called by PaymentService) ─────
 
-        ext = Path(filename).suffix.lower() or ".bin"
-        key = f"verifications/{verification_id}/documents/{uuid.uuid4()}{ext}"
-        storage = self._storage_factory.get_active_provider()
-        url = await storage.upload(
-            key=key,
-            bucket=settings.AWS_S3_BUCKET,
-            file_bytes=io.BytesIO(file_bytes),
-            metadata={"verification_id": verification_id, "document_type": document_type},
-            encrypted=True,
+    async def mark_payment_pending(self, verification_id: str) -> Verification:
+        verification = await self._verification_repo.get_model(verification_id)
+        if not verification:
+            raise ResourceNotFoundException(resource="verification")
+        self._assert_transition(verification.status, VerificationStatus.PAYMENT_PENDING)
+        await self._verification_repo.update(
+            verification_id, UpdateVerificationDto(status=VerificationStatus.PAYMENT_PENDING.value)
         )
-        return DocumentUploadResponseDto(
-            url=url,
-            document_type=PropertyDocumentType(document_type),
+        return await self._verification_repo.get_model(verification_id)
+
+    async def mark_paid(self, verification_id: str) -> Verification:
+        verification = await self._verification_repo.get_model(verification_id)
+        if not verification:
+            raise ResourceNotFoundException(resource="verification")
+        # Idempotent: a replayed webhook that finds PAID must not double-transition.
+        if verification.status == VerificationStatus.PAID.value:
+            return verification
+        self._assert_transition(verification.status, VerificationStatus.PAID)
+        tier = VerificationTier(verification.tier) if verification.tier else VerificationTier.BASIC
+        await self._verification_repo.update(
+            verification_id, UpdateVerificationDto(status=VerificationStatus.PAID.value)
         )
-
-    async def derive_global_state(
-        self, verification_id: str, task_statuses: list[str],
-    ) -> VerificationStatus:
-        """Apply PRD §0.3 rules and transition if the derived state differs.
-
-        Called from any task-state mutation path. Phase 7 (TaskService) will
-        invoke this after every task transition.
-
-        Args:
-            verification_id: The verification to re-evaluate.
-            task_statuses: Full list of TaskStatus string values for this verification.
-        """
-        row = await self._repo.get_model(verification_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="Verification")
-        current = VerificationStatus(row.status)
-        derived = derive_status(current, task_statuses)
-        if derived != current:
-            await self.transition(verification_id, derived, actor_id=None)
-        return derived
-
-    async def transition(
-        self, verification_id: str, target: VerificationStatus,
-        actor_id: Optional[str] = None,
-    ) -> VerificationDto:
-        """Internal-only. Used by PaymentService and admin actions."""
-        row = await self._repo.get_model(verification_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="Verification")
-        from_state = row.status
-        self._validator.assert_can_transition(row.status, target.value)
-        update = UpdateVerificationDto(status=target)
-        if target == VerificationStatus.PAID:
-            update.paid_at = Utils.datetime_now()
-        elif target == VerificationStatus.COMPLETED:
-            update.completed_at = Utils.datetime_now()
-        await self._repo.update(verification_id, update)
-        self._audit.schedule(
-            AuditActionType.VERIFICATION_STATE_CHANGED,
-            resource_type="Verification",
-            resource_id=verification_id,
-            actor_id=actor_id,
-            from_state=from_state,
-            to_state=target.value,
-        )
-        if target == VerificationStatus.PAID:
-            await self._auto_create_tasks(verification_id, row.tier)
-        await self._post_status_system_message(verification_id, from_state, target.value)
-        return await self._to_dto(await self._repo.get_model(verification_id))
-
-    # ── Abandonment recovery (S52) ────────────────────────────────
-
-    async def get_abandonments(self) -> List[Verification]:
-        """Return DRAFT/SUBMITTED verifications idle >24 hrs with no recovery email sent."""
-        return await self._repo.list_abandoned(older_than_hours=24)
-
-    async def send_abandonment_emails(self) -> int:
-        """Send one-time recovery email per abandoned verification. Returns count sent."""
-        from main.app.domain.message.verification_messages import VerificationMessages
-        from main.app.domain.user.repo import UserRepo
-        msg_svc: VerificationMessages = di[VerificationMessages]
-        user_repo: UserRepo = di[UserRepo]
-
-        abandoned = await self.get_abandonments()
-        sent = 0
-        for verification in abandoned:
-            try:
-                user = await user_repo.get_model(str(verification.customer_id))
-                if user is None:
-                    continue
-                # Mark before send to prevent duplicate sends on retry
-                await self._repo.update(str(verification.id), UpdateVerificationDto(
-                    abandonment_email_sent_at=Utils.datetime_now(),
-                ))
-                await msg_svc.send_abandonment_recovery(
-                    recipient_user_id=str(verification.customer_id),
-                    verification_id=str(verification.id),
-                    vid=verification.vid,
-                )
-                sent += 1
-            except Exception as exc:
-                logger.warning("Abandonment email failed for {}: {}", verification.id, exc)
-        return sent
-
-    async def refresh_price_lock(self, verification_id: str) -> None:
-        """Recalculate pricing snapshot if the verification is SUBMITTED and >24 hr stale."""
-        row = await self._repo.get_model(verification_id)
-        if row is None or row.status != VerificationStatus.SUBMITTED.value:
-            return
-        cutoff = Utils.datetime_now() - timedelta(hours=24)
-        last_updated = row.date_updated or row.date_created
-        if last_updated >= cutoff:
-            return
-        tier = VerificationTier(row.tier)
-        currency = "NGN"
-        if row.pricing_snapshot:
-            try:
-                existing = PricingSnapshotDto.model_validate(json.loads(row.pricing_snapshot))
-                currency = existing.currency
-            except Exception:
-                pass
-        snapshot = await self._pricing.quote(tier, currency)
-        snapshot = await self._pricing.lock(snapshot)
-        await self._repo.update(verification_id, UpdateVerificationDto(
-            pricing_snapshot=snapshot.model_dump_json(by_alias=True),
+        await self._set_paid_timestamps(verification_id, tier)
+        # Debit any referral credit spent on this verification from the customer's balance
+        # (§17.1). mark_paid is idempotent (early-returns when already PAID), so this fires once.
+        await self._debit_applied_referral_credit(verification)
+        # PAID is the payment-confirmed moment (§12.2): SSE re-emit (status_changed) + the
+        # customer payment-confirmed notification + email/SMS, one publish (§4.8, D20).
+        await publish_domain_event(DomainEvent(
+            type=EventType.PAYMENT_CONFIRMED, verification_id=verification_id,
+            recipient_user_ids=(verification.customer_id,),
+            sse_event=VerificationEventType.STATUS_CHANGED.value,
+            data={"status": VerificationStatus.PAID.value},
         ))
+        return await self._verification_repo.get_model(verification_id)
 
-    # ── Helpers ───────────────────────────────────────────────────
+    # ── Re-lock guard (§17.1 abandonment): never silently re-price ─
 
-    async def _post_status_system_message(
-        self, verification_id: str, from_state: str, to_state: str
-    ) -> None:
-        try:
-            from main.app.domain.thread.service import ThreadService
-            from main.app.domain.thread.models import ThreadType
-            thread_svc: ThreadService = di[ThreadService]
-            body = f"Verification status changed from {from_state} to {to_state}."
-            await thread_svc.post_system_message_for_verification(
-                verification_id, ThreadType.CUSTOMER_ADMIN, body
-            )
-        except Exception as exc:
-            logger.warning("System message post failed for {}: {}", verification_id, exc)
-
-    async def _auto_create_tasks(self, verification_id: str, tier: str) -> None:
-        """Create tasks for a newly-paid verification.
-
-        Checks admin_config to decide whether to release immediately (auto-assignment
-        default ON) or hold for manual admin assignment.
-        """
-        try:
-            from main.app.domain.admin_config.service import AdminConfigService
-            from main.app.domain.verification.task.service import TaskService
-            config_svc: AdminConfigService = di[AdminConfigService]
-            task_svc: TaskService = di[TaskService]
-            release = await config_svc.get_bool("auto_assignment_enabled", fallback=True)
-            await task_svc.create_tasks_for_tier(
-                verification_id, tier, release_immediately=release,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Failed to auto-create tasks for {verification_id}: {exc}")
-
-    async def _materialise_property(self, payload: Dict[str, Any]) -> str:
-        try:
-            create_dto = CreatePropertyDto(
-                source=PropertySource(payload.get("source", "MANUAL")),
-                source_url=payload.get("sourceUrl"),
-                property_type=PropertyType(payload["propertyType"]),
-                state=str(payload["state"]).upper(),
-                lga=payload.get("lga"),
-                address_line=payload.get("addressLine"),
-                lat=payload.get("lat"),
-                lng=payload.get("lng"),
-                landmark_description=payload.get("landmarkDescription"),
-                details=json.dumps(payload.get("details") or {}),
-                documents=list(payload.get("documents") or []),
-                seller_info=json.dumps(payload.get("sellerInfo") or {}),
-            )
-        except (KeyError, ValueError) as exc:
-            raise ValidationException(message=f"Property data invalid: {exc}")
-        created = await self._property_repo.create_return_model(create_dto)
-        return str(created.id)
-
-    @staticmethod
-    def _decode_payload(raw: Optional[str]) -> Dict[str, Any]:
-        if not raw:
-            return {}
-        try:
-            decoded = json.loads(raw)
-        except json.JSONDecodeError:
-            logger.warning("Discarding malformed draft payload")
-            return {}
-        return decoded if isinstance(decoded, dict) else {}
-
-    async def _to_dto(self, row: Optional[Verification]) -> Optional[VerificationDto]:
-        if row is None:
-            return None
-        property_dto: Optional[PropertyDto] = None
-        if row.property_id:
-            prop = await self._property_repo.get_model(row.property_id)
-            if prop:
-                property_dto = PropertyDto(
-                    id=str(prop.id),
-                    source=PropertySource(prop.source),
-                    property_type=PropertyType(prop.property_type),
-                    state=prop.state,
-                    lga=prop.lga,
-                    address_line=prop.address_line,
-                    lat=prop.lat,
-                    lng=prop.lng,
-                    landmark_description=prop.landmark_description,
-                    details=self._decode_payload(prop.details),
-                    documents=list(prop.documents or []),
-                    seller_info=self._decode_payload(prop.seller_info),
-                )
-        pricing: Optional[PricingSnapshotDto] = None
-        if row.pricing_snapshot:
-            try:
-                pricing = PricingSnapshotDto.model_validate(json.loads(row.pricing_snapshot))
-            except (json.JSONDecodeError, ValueError):
-                logger.warning("Discarding malformed pricing snapshot for verification {}", row.id)
-
-        return VerificationDto(
-            id=str(row.id),
-            vid=row.vid,
-            customer_id=row.customer_id,
-            tier=VerificationTier(row.tier),
-            status=VerificationStatus(row.status),
-            property=property_dto,
-            pricing=pricing,
-            submitted_at=row.submitted_at,
-            paid_at=row.paid_at,
-            completed_at=row.completed_at,
-            date_created=row.date_created,
-            date_updated=row.date_updated,
-            draft_step=row.draft_step or 0,
-            draft_payload=self._decode_payload(row.draft_payload),
+    async def refresh_price_lock_if_expired(self, verification_id: str, customer_id: str) -> PriceRefreshDto:
+        """Re-lock an expired price before payment. If the fresh net price differs from what
+        the customer last saw, ``price_changed`` is true so the pay page shows the mandatory
+        "price updated" interstitial before charging (§17.1) — no silent re-pricing."""
+        verification = await self._require_owned(verification_id, customer_id)
+        previous = verification.price_locked_minor or 0
+        not_expired = (
+            verification.price_lock_expires_at is not None
+            and verification.price_lock_expires_at > Utils.datetime_now()
         )
+        if verification.tier is None or not_expired:
+            return PriceRefreshDto(
+                price_changed=False, previous_price_minor=previous, net_price_minor=previous,
+                first_time_discount_minor=verification.first_time_discount_minor or 0,
+                referral_credit_applied_minor=verification.referral_credit_applied_minor or 0,
+                price_lock_expires_at=verification.price_lock_expires_at,
+            )
+
+        tier = VerificationTier(verification.tier)
+        discount = await self._compute_discount(
+            customer_id, await self._pricing.tier_price_kobo(tier),
+            exclude_verification_id=verification_id,
+        )
+        charge_minor, fx = indicative_charge_minor(
+            discount.net_minor, TransactionCurrency(verification.charge_currency)
+            if verification.charge_currency else TransactionCurrency.NGN
+        )
+        await self._verification_repo.update(verification_id, UpdateVerificationDto(
+            price_locked_minor=discount.net_minor,
+            charge_amount_minor=charge_minor,
+            fx_rate_at_quote=fx,
+            first_time_discount_minor=discount.first_time_minor,
+            referral_credit_applied_minor=discount.referral_applied_minor,
+        ))
+        await self._set_price_lock(verification_id)
+        refreshed = await self._verification_repo.get_model(verification_id)
+        return PriceRefreshDto(
+            price_changed=discount.net_minor != previous,
+            previous_price_minor=previous,
+            net_price_minor=discount.net_minor,
+            first_time_discount_minor=discount.first_time_minor,
+            referral_credit_applied_minor=discount.referral_applied_minor,
+            price_lock_expires_at=refreshed.price_lock_expires_at,
+        )
+
+    # ── Abandoned-draft recovery sweep (§17.1) ────────────────────
+
+    async def sweep_abandoned_drafts(self) -> int:
+        """Fire a one-time recovery email for each unpaid verification untouched for 24h
+        (§17.1). ``recovery_reminded_at`` is stamped so the email is sent exactly once.
+        Returns the number of drafts reminded."""
+        cutoff = Utils.datetime_now() - timedelta(hours=_ABANDONMENT_AGE_HOURS)
+        reminded = 0
+        for verification in await self._verification_repo.list_abandoned_drafts(cutoff):
+            row = await self._verification_repo.get_model(verification.id)
+            if row is None or row.recovery_reminded_at is not None:
+                continue
+            row.recovery_reminded_at = Utils.datetime_now()
+            reminded += 1
+            await publish_domain_event(DomainEvent(
+                type=EventType.ABANDONMENT_RECOVERY,
+                verification_id=verification.id,
+                recipient_user_ids=(verification.customer_id,),
+                data={"vid": verification.vid},
+            ))
+        return reminded
+
+    # ── helpers ───────────────────────────────────────────────────
+
+    async def _debit_applied_referral_credit(self, verification: Verification) -> None:
+        applied = verification.referral_credit_applied_minor or 0
+        if applied <= 0:
+            return
+        user = await self._users.get_user_model(verification.customer_id)
+        # Clamp: never drive the balance negative if credit was spent elsewhere meanwhile.
+        debit = min(applied, user.credit_balance_kobo or 0)
+        if debit <= 0:
+            return
+        await self._users.update_user(
+            verification.customer_id,
+            UpdateUserDto(credit_balance_kobo=(user.credit_balance_kobo or 0) - debit),
+        )
+
+    async def _require_owned(self, verification_id: str, customer_id: str) -> Verification:
+        verification = await self._verification_repo.get_model(verification_id)
+        if not verification:
+            raise ResourceNotFoundException(resource="verification")
+        if verification.customer_id != customer_id:
+            raise ForbiddenException(message="This verification belongs to another customer.")
+        return verification
+
+    def _assert_transition(self, current: str, target: VerificationStatus) -> None:
+        verification_state_machine.assert_can_transition(current, target.value, resource="Verification")
+
+    async def _set_price_lock(self, verification_id: str) -> None:
+        # price_lock_expires_at is a datetime → set on the model (not the update DTO
+        # path, which json-encodes datetimes; see CLAUDE.md GenericRepo note).
+        verification = await self._verification_repo.get_model(verification_id)
+        verification.price_lock_expires_at = Utils.datetime_now() + timedelta(hours=_PRICE_LOCK_HOURS)
+
+    async def _set_paid_timestamps(self, verification_id: str, tier: VerificationTier) -> None:
+        verification = await self._verification_repo.get_model(verification_id)
+        now = Utils.datetime_now()
+        verification.paid_at = now
+        verification.sla_due_date = sla_due_date(now, tier)

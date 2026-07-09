@@ -39,6 +39,9 @@ class Permission(str, enum.Enum):
     CREATE_CONTENT = "CREATE_CONTENT"
     PUBLISH_CONTENT = "PUBLISH_CONTENT"
     MANAGE_USERS = "MANAGE_USERS"
+    VIEW_ANALYTICS = "VIEW_ANALYTICS"      # §18.1 Mission Control + analytics dashboards
+    BROADCAST = "BROADCAST"                # §18.1 admin announcements to an audience
+    MANAGE_COMPLIANCE = "MANAGE_COMPLIANCE"  # §19 NDPA erasure review/execute — SUPER only (irreversible)
 
 
 # Role → permissions matrix. Super admins implicitly hold every permission.
@@ -52,12 +55,15 @@ _ROLE_MATRIX: dict[AdminSubRole, Set[Permission]] = {
         Permission.RELEASE_REPORT,
         Permission.VIEW_ADMIN_PANEL,
         Permission.MANAGE_USERS,
+        Permission.VIEW_ANALYTICS,
+        Permission.BROADCAST,
     },
     AdminSubRole.FINANCE: {
         Permission.APPROVE_PAYOUT,
         Permission.CONFIGURE_PRICING,
         Permission.CONFIRM_WIRE_PAYMENT,
         Permission.VIEW_ADMIN_PANEL,
+        Permission.VIEW_ANALYTICS,
     },
     AdminSubRole.CONTENT_CREATOR: {
         Permission.VIEW_ADMIN_PANEL,

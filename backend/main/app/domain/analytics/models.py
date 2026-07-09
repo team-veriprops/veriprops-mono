@@ -1,71 +1,65 @@
-"""Analytics domain DTOs — S53 Phase 18.
+"""Analytics DTOs (PRD §18.1) — orchestration-only, no ORM entity.
 
-No ORM models here; aggregation reads existing tables.
+Every figure is derived server-side from the operational tables (backend is the source
+of truth); the admin dashboard renders them, never computes them.
 """
 from __future__ import annotations
 
 from typing import List, Optional
 
+from main.app.core.state.status import VerificationTier
 from main.appodus_utils import Object
 
 
-class MissionControlDto(Object):
-    active_verifications: int
-    pending_assignments: int
-    stuck_jobs: int
-    sla_at_risk_count: int
-    revenue_total_ngn: float
-    available_agents: int
+class FunnelDto(Object):
+    """Conversion funnel (§18.1): how many verifications reach each lifecycle stage."""
+
+    created: int = 0
+    submitted: int = 0
+    paid: int = 0
+    completed: int = 0
+    submit_rate: float = 0.0     # submitted / created
+    payment_rate: float = 0.0    # paid / submitted
+    completion_rate: float = 0.0  # completed / paid
 
 
-class RegionalStat(Object):
-    region: str
-    active_count: int
-    completed_count: int
-    avg_trust_score: Optional[float] = None
-    revenue_ngn: float
+class TierTimeDto(Object):
+    tier: VerificationTier
+    avg_days: float = 0.0
+    completed_count: int = 0
 
 
-class RegionalPerformanceDto(Object):
-    regions: List[RegionalStat]
+class TierRevenueDto(Object):
+    tier: VerificationTier
+    revenue_minor: int = 0
+    count: int = 0
 
 
-class ConversionFunnelDto(Object):
-    signups: int
-    submitted: int
-    paid: int
-    completed: int
-    signup_to_paid_pct: float
-    paid_to_completed_pct: float
-
-
-class AvgVerificationTimeByTierDto(Object):
-    tier: str
-    avg_hours: float
-
-
-class AgentPerformanceTrendDto(Object):
-    period: str
-    avg_quality_score: float
-    total_scores: int
-
-
-class RevenueByLocationDto(Object):
+class LocationRevenueDto(Object):
     state: str
-    tier: str
-    revenue_ngn: float
-    count: int
+    revenue_minor: int = 0
+    count: int = 0
 
 
-class DisputeRateDto(Object):
-    total_completed: int
-    total_disputed: int
-    dispute_rate_pct: float
+class RevenueDto(Object):
+    total_minor: int = 0
+    by_tier: List[TierRevenueDto] = []
+    by_location: List[LocationRevenueDto] = []
 
 
-class AnalyticsDashboardDto(Object):
-    conversion_funnel: ConversionFunnelDto
-    avg_time_by_tier: List[AvgVerificationTimeByTierDto]
-    agent_performance_trends: List[AgentPerformanceTrendDto]
-    revenue_by_location: List[RevenueByLocationDto]
-    dispute_rate: DisputeRateDto
+class RegionalRowDto(Object):
+    state: str
+    active: int = 0
+    completed: int = 0
+    avg_trust_score: Optional[float] = None
+    revenue_minor: int = 0
+
+
+class AgentTrendPointDto(Object):
+    month: str            # "YYYY-MM"
+    completed_tasks: int = 0
+    avg_quality: Optional[float] = None
+
+
+class AgentTrendsDto(Object):
+    points: List[AgentTrendPointDto] = []

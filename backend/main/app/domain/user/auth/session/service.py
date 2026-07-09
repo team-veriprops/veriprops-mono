@@ -280,6 +280,28 @@ class SessionService:
     async def list_recent_events(self, user_id: str, limit: int = 50) -> List[SecurityEvent]:
         return await self._event_repo.list_recent_for_user(user_id, limit=limit)
 
+    async def page_security_events(self, user_id: str, page: int = 0, page_size: int = 20):
+        """Paginated Security Activity Log (PRD pagination convention, zero-indexed)."""
+        from main.app.domain.user.auth.session.models import SecurityEventDto
+        from main.appodus_utils.db.db_utils import DbUtils
+
+        rows, total = await self._event_repo.page_for_user(
+            user_id, offset=page * page_size, limit=page_size
+        )
+        items = [
+            SecurityEventDto(
+                id=str(e.id),
+                type=e.type,
+                description=e.description,
+                ip_address=e.ip_address,
+                approx_location=e.approx_location,
+                device=e.device,
+                occurred_at=e.occurred_at,
+            )
+            for e in rows
+        ]
+        return DbUtils.build_page(items, total=total, page=page, page_size=page_size)
+
     # ── Password reset token ─────────────────────────────────────
     async def create_password_reset_token(
             self, user_id: str, token_hash: str, expires_at: datetime,

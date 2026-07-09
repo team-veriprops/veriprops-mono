@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
@@ -28,7 +28,7 @@ export default function AccountBasicsStep({ defaultValues, onSubmit }: Props) {
     mode: "onBlur",
   });
 
-  const password = form.watch("password");
+  const password = useWatch({ control: form.control, name: "password" });
 
   return (
     <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="signup-basics-form">

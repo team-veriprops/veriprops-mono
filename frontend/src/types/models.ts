@@ -261,3 +261,43 @@ export interface SuccessResponse<T> {
   traceId?: string;
   data?: T;
 }
+
+// ─── Legal documents (mirrors backend ConsentDocumentType / ConsentSignoffStatus) ──
+
+export enum ConsentDocumentType {
+  PLATFORM_TERMS = "PLATFORM_TERMS",
+  PRIVACY_POLICY = "PRIVACY_POLICY",
+  AGENT_TERMS = "AGENT_TERMS",
+  VERIFICATION_TERMS = "VERIFICATION_TERMS",
+  REPORT_DISCLAIMER = "REPORT_DISCLAIMER",
+  VERIFICATION_DISCLAIMER = "VERIFICATION_DISCLAIMER",
+  FINDINGS_OPINION_ACK = "FINDINGS_OPINION_ACK",
+  JURISDICTION_PLATFORM_ONLY = "JURISDICTION_PLATFORM_ONLY",
+  COMMUNICATION_RECORDING = "COMMUNICATION_RECORDING",
+  REFUND_POLICY = "REFUND_POLICY",
+}
+
+export enum ConsentSignoffStatus {
+  DRAFT = "DRAFT",
+  FINAL = "FINAL",
+}
+
+export interface LegalDocumentSummary {
+  type: ConsentDocumentType;
+  consentVersion: string;
+  effectiveAt: string;
+  title: string;
+  href: string;
+  signoffStatus: ConsentSignoffStatus;
+}
+
+export interface LegalDocument extends LegalDocumentSummary {
+  body?: string;
+}
+
+// Mirrors backend PublicConfigDto.
+export interface PublicConfig {
+  phoneVerificationEnabled: boolean;
+  // §B go-live gate (D18): whether the Premium Legal Opinion report section is live.
+  legalOpinionEnabled?: boolean;
+}

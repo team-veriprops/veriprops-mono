@@ -174,7 +174,7 @@ async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], c
             await account_security_messages.send_direct_email_verification_message(
                 recipient=MessageRequestRecipient(
                     fullname=recipient.fullname,
-                    email=recipient
+                    email=recipient.email
                 ),
                 context={
                     MessageContext.FULL_NAME: recipient.fullname,

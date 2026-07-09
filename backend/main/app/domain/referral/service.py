@@ -1,54 +1,45 @@
-"""Referral service — Phase 17 (S51).
+"""Referral service (PRD §17.1, D34/D35).
 
-Handles:
-- Referral code generation (idempotent, 8-char slug)
-- Claiming a referral at signup
-- First-time discount + referral discount at payment initiation
-- Crediting referrer when invitee completes first payment
+Owns the shareable link, the signup linkage, the anti-farming gate, and the two-stage
+referral-credit lifecycle. A credit is created PENDING on the invitee's first payment and
+only clears to the referrer's spendable ``credit_balance_kobo`` after the payment passes
+the chargeback window (§15.2) — closing the refer-then-charge-back loop.
 """
 from __future__ import annotations
 
-import random
-import string
-from typing import TYPE_CHECKING, Optional, Tuple
+from datetime import timedelta
+from typing import Optional
 
-from kink import di, inject
+from kink import inject
 
-from main.app.domain.admin_config.service import AdminConfigService
-from main.app.domain.referral.models import (
-    ClaimReferralDto,
-    CreateReferralCodeDto,
-    CreateReferralRedemptionDto,
-    DiscountBreakdownDto,
-    RedemptionStatus,
-    ReferralCodeDto,
-    ReferralStatsDto,
-    UpdateReferralCodeDto,
-    UpdateReferralRedemptionDto,
+from main.app.core.events import DomainEvent, EventType, publish_domain_event
+from main.app.domain.payment.models import Payment
+from main.app.domain.payment.repo import PaymentRepo
+from main.app.domain.referral.credit.models import (
+    CreateReferralCreditDto,
+    ReferralCredit,
+    ReferralCreditDto,
+    ReferralCreditStatus,
+    UpdateReferralCreditDto,
 )
-from main.app.domain.referral.repo import ReferralCodeRepo, ReferralRedemptionRepo
-from main.app.domain.user.repo import UserRepo
+from main.app.domain.referral.credit.repo import ReferralCreditRepo
+from main.app.domain.referral.models import (
+    CreateReferralDto,
+    Referral,
+    ReferralSummaryDto,
+)
+from main.app.domain.referral.repo import ReferralRepo
+from main.app.domain.system_config.models import ConfigKey
+from main.app.domain.system_config.service import ConfigService
 from main.app.domain.user.models import UpdateUserDto
+from main.app.domain.user.service import UserService
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
-from main.appodus_utils.exception.exceptions import (
-    ResourceNotFoundException,
-    ValidationException,
-)
 
-if TYPE_CHECKING:
-    from loguru import Logger
-
-logger: "Logger" = di["logger"]
-
-_BASE_URL = "https://veriprops.com"   # Frontend origin for referral links
-
-
-def _generate_code(length: int = 8) -> str:
-    chars = string.ascii_uppercase + string.digits
-    return "".join(random.choices(chars, k=length))
+_CODE_LENGTH = 8
+_KOBO_PER_NGN = 100
 
 
 @inject
@@ -57,183 +48,146 @@ def _generate_code(length: int = 8) -> str:
 class ReferralService:
     def __init__(
         self,
-        code_repo: ReferralCodeRepo,
-        redemption_repo: ReferralRedemptionRepo,
-        user_repo: UserRepo,
-        admin_config: AdminConfigService,
+        referral_repo: ReferralRepo,
+        referral_credit_repo: ReferralCreditRepo,
+        payment_repo: PaymentRepo,
+        user_service: UserService,
+        config_service: ConfigService,
     ):
-        self._codes = code_repo
-        self._redemptions = redemption_repo
-        self._users = user_repo
-        self._config = admin_config
+        self._referrals = referral_repo
+        self._credits = referral_credit_repo
+        self._payments = payment_repo
+        self._users = user_service
+        self._config = config_service
 
-    async def get_or_create_code(self, user_id: str) -> ReferralCodeDto:
-        """Return the user's existing referral code or create a new unique one."""
-        row = await self._codes.get_by_owner(user_id)
-        if row is None:
-            # Retry up to 5 times to avoid rare collisions
-            for _ in range(5):
-                code = _generate_code()
-                if await self._codes.get_by_code(code) is None:
-                    row = await self._codes.create_return_model(
-                        CreateReferralCodeDto(owner_id=user_id, code=code)
-                    )
-                    break
-            else:
-                raise ValidationException(message="Could not generate a unique referral code")
-        return self._to_code_dto(row)
+    # ── Link ──────────────────────────────────────────────────────
 
-    async def get_my_stats(self, user_id: str) -> ReferralStatsDto:
-        """Return referral stats and credit balance for the requesting user."""
-        code_row = await self._codes.get_by_owner(user_id)
-        user = await self._users.get_model(user_id)
-        credit_balance_kobo = int(getattr(user, "credit_balance_kobo", 0) or 0)
+    async def get_or_create_link(self, user_id: str) -> Referral:
+        existing = await self._referrals.get_for_referrer(user_id)
+        if existing is not None:
+            return existing
+        return await self._referrals.create_return_model(CreateReferralDto(
+            referrer_user_id=user_id, code=await self._unique_code(),
+        ))
 
-        if code_row is None:
-            code_dto = await self.get_or_create_code(user_id)
-            return ReferralStatsDto(
-                code=code_dto.code,
-                referral_link=code_dto.referral_link,
-                total_invited=0,
-                total_credited=0,
-                pending_count=0,
-                credit_balance_ngn=credit_balance_kobo / 100.0,
+    async def resolve_referrer_id(self, code: str) -> Optional[str]:
+        """The referrer's user id for a referral code, or None if the code is unknown
+        (an invalid ``?ref=`` never blocks signup — it is simply ignored)."""
+        if not code:
+            return None
+        referral = await self._referrals.get_by_code(code.strip().upper())
+        return referral.referrer_user_id if referral is not None else None
+
+    async def summary(self, user_id: str) -> ReferralSummaryDto:
+        link = await self.get_or_create_link(user_id)
+        credits = await self._credits.list_for_referrer(user_id)
+        pending = sum(c.amount_minor for c in credits if c.status == ReferralCreditStatus.PENDING.value)
+        lifetime = sum(c.amount_minor for c in credits if c.status == ReferralCreditStatus.CLEARED.value)
+        user = await self._users.get_user_model(user_id)
+        reward_ngn = await self._config.get_int(ConfigKey.REFERRAL_CREDIT_NGN)
+        return ReferralSummaryDto(
+            code=link.code,
+            share_path=f"/auth/signup?ref={link.code}",
+            referral_credit_ngn=reward_ngn,
+            available_credit_minor=user.credit_balance_kobo or 0,
+            pending_credit_minor=pending,
+            lifetime_credit_minor=lifetime,
+            credits=[self._credit_dto(c) for c in credits],
+        )
+
+    # ── Credit lifecycle ──────────────────────────────────────────
+
+    async def on_invitee_first_payment(self, payment: Payment) -> Optional[ReferralCredit]:
+        """Record a referral credit for the referrer when a referred invitee first pays.
+
+        Anti-farming (§17.1, D34): a referrer and invitee sharing a verified phone or a
+        card fingerprint are the same human — the credit is voided, not paid. Idempotent:
+        a second call for the same invitee is a no-op (a credit is earned once, on the
+        invitee's first payment). Best-effort — never raises into the payment webhook.
+        """
+        invitee = await self._users.get_user_model(payment.customer_id)
+        referrer_id = getattr(invitee, "referred_by", None)
+        if not referrer_id:
+            return None
+        # One credit per invitee — their first payment. Guards replays + later payments.
+        if await self._credits.get_for_invitee(Utils.uuid_to_hex(invitee.id)) is not None:
+            return None
+
+        void_reason = await self._anti_farming_reason(invitee, referrer_id, payment)
+        amount_minor = await self._config.get_int(ConfigKey.REFERRAL_CREDIT_NGN) * _KOBO_PER_NGN
+        window_days = await self._config.get_int(ConfigKey.CHARGEBACK_WINDOW_DAYS)
+        clearing_until = Utils.datetime_now() + timedelta(days=window_days)
+
+        credit = await self._credits.create_return_model(CreateReferralCreditDto(
+            referrer_user_id=referrer_id,
+            invitee_user_id=Utils.uuid_to_hex(invitee.id),
+            verification_id=payment.verification_id,
+            amount_minor=amount_minor,
+            status=ReferralCreditStatus.VOID if void_reason else ReferralCreditStatus.PENDING,
+            clearing_until=None if void_reason else clearing_until,
+            void_reason=void_reason,
+        ))
+        return credit
+
+    async def sweep_referral_credits(self) -> int:
+        """Clear PENDING credits whose chargeback window has passed (§17.1): add the amount
+        to the referrer's spendable balance and notify them once. Idempotent — a CLEARED row
+        is never revisited. Returns the number of credits cleared."""
+        now = Utils.datetime_now()
+        cleared = 0
+        for credit in await self._credits.list_pending_due(now):
+            row = await self._credits.get_model(credit.id)
+            if row is None or row.status != ReferralCreditStatus.PENDING.value:
+                continue
+            referrer = await self._users.get_user_model(row.referrer_user_id)
+            new_balance = (referrer.credit_balance_kobo or 0) + row.amount_minor
+            await self._users.update_user(
+                row.referrer_user_id, UpdateUserDto(credit_balance_kobo=new_balance)
             )
+            await self._credits.update(row.id, UpdateReferralCreditDto(
+                status=ReferralCreditStatus.CLEARED.value,
+            ))
+            fresh = await self._credits.get_model(row.id)
+            fresh.cleared_at = now
+            cleared += 1
+            await publish_domain_event(DomainEvent(
+                type=EventType.REFERRAL_CREDIT_EARNED,
+                recipient_user_ids=(row.referrer_user_id,),
+                data={"amount_minor": row.amount_minor},
+            ))
+        return cleared
 
-        redemptions = await self._redemptions.list_for_code(str(code_row.id))
-        credited = [r for r in redemptions if r.status == RedemptionStatus.CREDITED.value]
-        pending = [r for r in redemptions if r.status == RedemptionStatus.PENDING.value]
+    # ── helpers ───────────────────────────────────────────────────
 
-        return ReferralStatsDto(
-            code=code_row.code,
-            referral_link=self._build_link(code_row.code),
-            total_invited=len(redemptions),
-            total_credited=len(credited),
-            pending_count=len(pending),
-            credit_balance_ngn=credit_balance_kobo / 100.0,
-        )
+    async def _anti_farming_reason(self, invitee, referrer_id: str, payment: Payment) -> Optional[str]:
+        if Utils.uuid_to_hex(invitee.id) == referrer_id or str(invitee.id) == referrer_id:
+            return "self_referral"
+        referrer = await self._users.get_user_model(referrer_id)
+        if referrer is None:
+            return None
+        if (
+            invitee.phone_verified and referrer.phone_verified
+            and invitee.phone_e164 and invitee.phone_e164 == referrer.phone_e164
+        ):
+            return "duplicate_phone"
+        if payment.card_fingerprint:
+            referrer_fingerprints = await self._payments.list_card_fingerprints_for_customer(referrer_id)
+            if payment.card_fingerprint in referrer_fingerprints:
+                return "duplicate_card"
+        return None
 
-    async def claim_referral(
-        self, invitee_id: str, dto: ClaimReferralDto,
-    ) -> None:
-        """Record that an invitee signed up via a referral code.
-
-        Idempotent — silently ignores if invitee already has a redemption.
-        Rejects self-referral.
-        """
-        code_row = await self._codes.get_by_code(dto.code.upper())
-        if code_row is None:
-            raise ResourceNotFoundException(resource="ReferralCode")
-        if code_row.owner_id == invitee_id:
-            raise ValidationException(message="You cannot use your own referral code")
-
-        existing = await self._redemptions.get_by_invitee(invitee_id)
-        if existing:
-            return  # already claimed — idempotent
-
-        await self._redemptions.create_return_model(CreateReferralRedemptionDto(
-            referral_code_id=str(code_row.id),
-            invitee_id=invitee_id,
-        ))
-        # Increment usage counter on code
-        await self._codes.update(str(code_row.id), UpdateReferralCodeDto(
-            times_redeemed=(code_row.times_redeemed or 0) + 1,
-        ))
-
-    async def compute_discount(
-        self,
-        user_id: str,
-        amount_kobo: int,
-        is_first_payment: bool,
-    ) -> DiscountBreakdownDto:
-        """Compute applicable discounts for a payment.
-
-        Called by PaymentService.initiate() before sending the amount to the
-        payment gateway. Returns a breakdown; does NOT mutate any state yet.
-        """
-        first_time_pct = await self._config.get_int("first_time_discount_percent", fallback=10)
-        max_pct = await self._config.get_int("max_discount_percent", fallback=20)
-
-        redemption = await self._redemptions.get_by_invitee(user_id)
-        has_pending_referral = (
-            redemption is not None
-            and redemption.status == RedemptionStatus.PENDING.value
-        )
-
-        first_time_discount_kobo = 0
-        referral_discount_kobo = 0
-
-        if is_first_payment:
-            first_time_discount_kobo = int(amount_kobo * first_time_pct / 100)
-
-        if is_first_payment and has_pending_referral:
-            # Additional referral stacking discount (shares the same max cap)
-            combined_pct = min(first_time_pct * 2, max_pct)
-            total_discount_kobo = int(amount_kobo * combined_pct / 100)
-            referral_discount_kobo = total_discount_kobo - first_time_discount_kobo
-        else:
-            total_discount_kobo = first_time_discount_kobo
-
-        # Enforce max cap
-        max_discount_kobo = int(amount_kobo * max_pct / 100)
-        total_discount_kobo = min(total_discount_kobo, max_discount_kobo)
-        final_amount_kobo = max(amount_kobo - total_discount_kobo, 100)  # min 1 NGN
-
-        return DiscountBreakdownDto(
-            original_amount_kobo=amount_kobo,
-            first_time_discount_kobo=first_time_discount_kobo,
-            referral_discount_kobo=referral_discount_kobo,
-            total_discount_kobo=total_discount_kobo,
-            final_amount_kobo=final_amount_kobo,
-            first_time_discount_percent=float(first_time_pct),
-            referral_discount_applied=has_pending_referral and is_first_payment,
-        )
-
-    async def credit_referrer_on_success(self, invitee_id: str) -> None:
-        """Mark the redemption CREDITED and add credit to the referrer's balance.
-
-        Called once from PaymentService after a payment webhook confirms success
-        for the invitee's first payment.  Idempotent — if already credited, no-op.
-        """
-        redemption = await self._redemptions.get_by_invitee(invitee_id)
-        if redemption is None:
-            return  # no referral for this user — no-op
-        if redemption.status == RedemptionStatus.CREDITED.value:
-            return  # already credited — idempotent
-
-        credit_ngn = await self._config.get_int("referral_credit_ngn", fallback=1000)
-        credit_kobo = credit_ngn * 100
-
-        # Mark redemption CREDITED
-        await self._redemptions.update(str(redemption.id), UpdateReferralRedemptionDto(
-            status=RedemptionStatus.CREDITED.value,
-            credited_at=Utils.datetime_now(),
-        ))
-
-        # Add credit to referrer's balance
-        code_row = await self._codes.get_model(redemption.referral_code_id)
-        if code_row:
-            referrer = await self._users.get_model(code_row.owner_id)
-            if referrer:
-                current = int(getattr(referrer, "credit_balance_kobo", 0) or 0)
-                await self._users.update(code_row.owner_id, UpdateUserDto(
-                    credit_balance_kobo=current + credit_kobo,
-                ))
-
-    # ── helpers ──────────────────────────────────────────────────────
+    async def _unique_code(self) -> str:
+        for _ in range(5):
+            code = Utils.random_str(_CODE_LENGTH).upper()
+            if await self._referrals.get_by_code(code) is None:
+                return code
+        # Astronomically unlikely; widen the entropy on the final attempt.
+        return Utils.random_str(_CODE_LENGTH + 4).upper()
 
     @staticmethod
-    def _build_link(code: str) -> str:
-        return f"{_BASE_URL}/auth/signup?ref={code}"
-
-    @staticmethod
-    def _to_code_dto(row) -> ReferralCodeDto:
-        from main.app.domain.referral.service import _BASE_URL
-        return ReferralCodeDto(
-            id=str(row.id),
-            owner_id=row.owner_id,
-            code=row.code,
-            times_redeemed=row.times_redeemed or 0,
-            referral_link=f"{_BASE_URL}/auth/signup?ref={row.code}",
-            date_created=row.date_created,
+    def _credit_dto(c: ReferralCredit) -> ReferralCreditDto:
+        return ReferralCreditDto(
+            id=c.id, invitee_user_id=c.invitee_user_id, verification_id=c.verification_id,
+            amount_minor=c.amount_minor, status=ReferralCreditStatus(c.status),
+            clearing_until=c.clearing_until, cleared_at=c.cleared_at, date_created=c.date_created,
         )

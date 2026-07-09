@@ -7,6 +7,7 @@ import {
   getSearchQuery,
   getStatusBadgeColor,
   capitalizeFirst,
+  humanizeEnumLabel,
 } from "./utils";
 
 describe("toQueryParams", () => {
@@ -107,5 +108,19 @@ describe("capitalizeFirst", () => {
 
   it("handles already capitalized strings", () => {
     expect(capitalizeFirst("Hello")).toBe("Hello");
+  });
+});
+
+describe("humanizeEnumLabel", () => {
+  it("title-cases a SCREAMING_SNAKE_CASE enum", () => {
+    expect(humanizeEnumLabel("UNDER_REVIEW")).toBe("Under Review");
+    expect(humanizeEnumLabel("PAYMENT_PENDING")).toBe("Payment Pending");
+    expect(humanizeEnumLabel("PENDING")).toBe("Pending");
+  });
+
+  it("returns an empty string for nullish input", () => {
+    expect(humanizeEnumLabel(null)).toBe("");
+    expect(humanizeEnumLabel(undefined)).toBe("");
+    expect(humanizeEnumLabel("")).toBe("");
   });
 });

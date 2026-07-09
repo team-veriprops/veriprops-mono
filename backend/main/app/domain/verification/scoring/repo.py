@@ -1,91 +1,55 @@
-"""Repositories for trust score weight config and breakdowns."""
+"""Trust Score Weights data access."""
 from __future__ import annotations
 
 from typing import List, Optional, Type
 
 from kink import inject
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.verification.scoring.models import (
-    CreateBreakdownDto,
-    CreateWeightConfigDto,
-    TrustScoreBreakdown,
-    TrustScoreWeightConfig,
-    UpdateWeightDto,
+    CreateTrustWeightDto,
+    QueryTrustWeightDto,
+    SearchTrustWeightDto,
+    TrustScoreWeight,
+    UpdateTrustWeightDto,
 )
 from main.appodus_utils.db.repo import GenericRepo
-from main.appodus_utils.db.session import get_db_session_from_context
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @inject
 class TrustScoreWeightRepo(
-    GenericRepo[TrustScoreWeightConfig, CreateWeightConfigDto, UpdateWeightDto, None, None]
+    GenericRepo[
+        TrustScoreWeight,
+        CreateTrustWeightDto,
+        UpdateTrustWeightDto,
+        QueryTrustWeightDto,
+        SearchTrustWeightDto,
+    ]
 ):
     def __init__(
         self,
         db: AsyncSession,
-        model: Type[TrustScoreWeightConfig] = TrustScoreWeightConfig,
-        query_dto=None,
-    ) -> None:
+        model: Type[TrustScoreWeight] = TrustScoreWeight,
+        query_dto: Type[QueryTrustWeightDto] = QueryTrustWeightDto,
+    ):
         super().__init__(db, model, query_dto)
         self.db = db
 
-    async def list_for_tier(self, tier: str) -> List[TrustScoreWeightConfig]:
-        session = self._session
-        result = await session.execute(
-            select(TrustScoreWeightConfig)
-            .where(
-                TrustScoreWeightConfig.tier == tier,
-                TrustScoreWeightConfig.deleted.is_(False),
-            )
+    async def list_all(self) -> List[TrustScoreWeight]:
+        stmt = select(TrustScoreWeight).where(TrustScoreWeight.deleted.is_(False))
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_for_tier(self, tier: str) -> List[TrustScoreWeight]:
+        stmt = select(TrustScoreWeight).where(
+            TrustScoreWeight.deleted.is_(False), TrustScoreWeight.tier == tier
         )
-        return list(result.scalars().all())
+        return list((await self._session.execute(stmt)).scalars().all())
 
-    async def list_all(self) -> List[TrustScoreWeightConfig]:
-        session = self._session
-        result = await session.execute(
-            select(TrustScoreWeightConfig)
-            .where(TrustScoreWeightConfig.deleted.is_(False))
-            .order_by(TrustScoreWeightConfig.tier, TrustScoreWeightConfig.role)
+    async def get_for_tier_role(self, tier: str, role: str) -> Optional[TrustScoreWeight]:
+        stmt = select(TrustScoreWeight).where(
+            TrustScoreWeight.deleted.is_(False),
+            TrustScoreWeight.tier == tier,
+            TrustScoreWeight.role == role,
         )
-        return list(result.scalars().all())
-
-    async def get_for_tier_role(self, tier: str, role: str) -> Optional[TrustScoreWeightConfig]:
-        session = self._session
-        result = await session.execute(
-            select(TrustScoreWeightConfig)
-            .where(
-                TrustScoreWeightConfig.tier == tier,
-                TrustScoreWeightConfig.role == role,
-                TrustScoreWeightConfig.deleted.is_(False),
-            )
-        )
-        return result.scalars().first()
-
-
-@inject
-class TrustScoreBreakdownRepo(
-    GenericRepo[TrustScoreBreakdown, CreateBreakdownDto, None, None, None]
-):
-    def __init__(
-        self,
-        db: AsyncSession,
-        model: Type[TrustScoreBreakdown] = TrustScoreBreakdown,
-        query_dto=None,
-    ) -> None:
-        super().__init__(db, model, query_dto)
-        self.db = db
-
-    async def latest_for_verification(self, verification_id: str) -> Optional[TrustScoreBreakdown]:
-        session = self._session
-        result = await session.execute(
-            select(TrustScoreBreakdown)
-            .where(
-                TrustScoreBreakdown.verification_id == verification_id,
-                TrustScoreBreakdown.deleted.is_(False),
-            )
-            .order_by(TrustScoreBreakdown.computed_at.desc())
-            .limit(1)
-        )
-        return result.scalars().first()
+        return (await self._session.execute(stmt)).scalar_one_or_none()

@@ -20,6 +20,7 @@ export const ROUTES = {
     SECURITY: '/account/security',
     DEVICES: '/account/devices',
     LINKED: '/account/linked',
+    PASSWORD: '/account/password',
     CONSENTS: '/account/consents',
     DATA_PRIVACY: '/account/data-privacy',
   },
@@ -27,12 +28,14 @@ export const ROUTES = {
   AGENT: {
     GATE: '/agents',
     DASHBOARD: '/agents/dashboard',
+    APPLY: '/agents/apply',
     TASKS: '/agents/tasks',
     TASK_DETAIL: (taskId: string) => `/agents/tasks/${taskId}`,
     TASK_HISTORY: (taskId: string) => `/agents/tasks/${taskId}/history`,
     TASK_MESSAGES: (taskId: string) => `/agents/tasks/${taskId}/messages`,
     EARNINGS: '/agents/earnings',
     PAYOUTS: '/agents/payouts',
+    DISPUTES: '/agents/disputes',
     PROFILE: '/agents/profile',
     SETTINGS_COVERAGE: '/agents/settings/coverage',
     NOTIFICATION_PREFERENCES: '/agents/account/notification-preferences',
@@ -46,9 +49,13 @@ export const ROUTES = {
     VERIFICATIONS: '/admin/verifications',
     VERIFICATION_DETAIL: (vid: string) => `/admin/verifications/${vid}`,
     VERIFICATION_MESSAGES: (vid: string) => `/admin/verifications/${vid}/messages`,
+    HELD_MESSAGES: '/admin/messages',
+    REPORT_REVIEW: (vid: string) => `/admin/verifications/${vid}/report-review`,
     TASK_REVIEW: (taskId: string) => `/admin/tasks/${taskId}/review`,
     CONFIG: '/admin/config',
     TRUST_SCORE_WEIGHTS: '/admin/config/trust-score-weights',
+    SYSTEM_CONFIG: '/admin/config/system',
+    DISPUTE_DETAIL: (id: string) => `/admin/disputes/${id}`,
     FRAUD_FLAGS: '/admin/fraud-flags',
     DISPUTES: '/admin/disputes',
     RECHECKS: '/admin/rechecks',
@@ -75,6 +82,7 @@ export const ROUTES = {
   },
   PUBLIC: {
     VERIFY: (id: string) => `/verify/${id}`,
+    SHARED: (token: string) => `/shared/${token}`,
   },
   PORTAL: {
     GATE: '/portal',
@@ -94,6 +102,7 @@ export const ROUTES = {
     NOTIFICATIONS: '/portal/notifications',
     PAYMENTS: '/portal/account/payments',
     SUPPORT: '/portal/support',
+    CHAT: '/portal/chat',
   },
 
   FORBIDDEN: '/forbidden',
@@ -112,6 +121,7 @@ export const ROUTES = {
   },
 
   ABOUT: '/about',
+  SAMPLE_REPORT: '/sample-report',
   PROJECTS: {
     ROOT: '/projects',
     DETAIL: (id: string | number) => `/projects/${id}`,

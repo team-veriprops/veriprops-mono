@@ -1,54 +1,20 @@
-import { httpClient } from "@/containers";
+import { HttpClient } from "@lib/FetchHttpClient";
+import { Page, SuccessResponse } from "@/types/models";
+import { EarningJob, EarningsSummary } from "@/types/earnings";
 
-export interface EarningsSummary {
-  totalLifetime: number;
-  totalPending: number;
-  totalAvailable: number;
-  totalPaid: number;
-}
-
-export interface EarningRecord {
-  id: string;
-  taskId: string;
-  verificationId: string;
-  grossAmount: number;
-  commissionPct: number;
-  netAmount: number;
-  status: string;
-  computedAt: string;
-}
-
-export interface CommissionRule {
-  id: string;
-  role: string;
-  tier: string;
-  percentage: number;
-  effectiveDate: string;
-}
-
+/**
+ * Agent earnings API (PRD §15.1). Mirrors the backend controller at
+ * app/domain/earnings/controller.py — the balance is derived server-side (D31); the
+ * frontend renders it, never recomputes it.
+ */
 export class EarningsService {
-  getSummary(): Promise<{ data: EarningsSummary }> {
-    return httpClient.get("/agent/earnings");
+  constructor(private readonly http: HttpClient) {}
+
+  getSummary(): Promise<SuccessResponse<EarningsSummary>> {
+    return this.http.get(`/agents/earnings`);
   }
 
-  listJobs(): Promise<{ data: EarningRecord[] }> {
-    return httpClient.get("/agent/earnings/jobs");
-  }
-}
-
-export class CommissionAdminService {
-  listRules(): Promise<{ data: CommissionRule[] }> {
-    return httpClient.get("/admin/commission-rules");
-  }
-
-  createRule(data: Omit<CommissionRule, "id">): Promise<{ data: CommissionRule }> {
-    return httpClient.post("/admin/commission-rules", data);
-  }
-
-  updateRule(id: string, data: Partial<Omit<CommissionRule, "id">>): Promise<{ data: CommissionRule }> {
-    return httpClient.put(`/admin/commission-rules/${id}`, data);
+  listJobs(page = 0, pageSize = 10): Promise<SuccessResponse<Page<EarningJob>>> {
+    return this.http.get(`/agents/earnings/jobs?page=${page}&page_size=${pageSize}`);
   }
 }
-
-export const earningsService = new EarningsService();
-export const commissionAdminService = new CommissionAdminService();

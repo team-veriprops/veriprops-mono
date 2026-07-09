@@ -1,6 +1,6 @@
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 from starlette.requests import Request
@@ -9,15 +9,20 @@ from main.app.domain.user.auth.session.models import DeviceSessionDto, SecurityE
 from main.app.domain.user.auth.session.service import SessionService
 from main.app.domain.user.auth.utils.jwt_auth_utils import JwtAuthUtils
 from main.app.domain.user.service import UserService
+from main.app.config.settings import settings
 from main.appodus_utils import Utils
 from main.appodus_utils.common.client_utils import ClientUtils
-from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.common.rate_limit import RateLimiter
+from main.appodus_utils.db.models import Page, SuccessResponse
 from main.appodus_utils.exception.exceptions import UnauthorizedException
 
 session_router = APIRouter(prefix="/sessions", tags=["Sessions"])
 
 user_service: UserService = di[UserService]
 session_service: SessionService = di[SessionService]
+
+# Per-IP throttle on login to blunt credential stuffing / account-lockout DoS (M7).
+_login_rate_limit = RateLimiter(scope="login", limit=10, window_seconds=60)
 
 
 def _to_device_dto(s, current_token_hash: Optional[str]) -> DeviceSessionDto:
@@ -34,7 +39,12 @@ def _to_device_dto(s, current_token_hash: Optional[str]) -> DeviceSessionDto:
     )
 
 @session_router.post("", response_model=SuccessResponse[AuthSessionDto])
-async def login(req: LoginRequestDto, request: Request, authorize: AuthJWT = Depends()):
+async def login(
+    req: LoginRequestDto,
+    request: Request,
+    authorize: AuthJWT = Depends(),
+    _: None = Depends(_login_rate_limit),
+):
     user = await session_service.login(
         req, ip_address=ClientUtils.get_client_ip(request), user_agent=ClientUtils.get_user_agent(request),
     )
@@ -48,7 +58,7 @@ async def login(req: LoginRequestDto, request: Request, authorize: AuthJWT = Dep
 @session_router.delete("/current", response_model=SuccessResponse[bool])
 async def logout(request: Request, authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
-    refresh_cookie = request.cookies.get("refresh_token")
+    refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
     if refresh_cookie:
         await session_service.revoke_current_device(refresh_cookie)
 
@@ -57,8 +67,19 @@ async def logout(request: Request, authorize: AuthJWT = Depends()):
 
 
 @session_router.post("/current", response_model=SuccessResponse[bool])
-async def refresh_session(authorize: AuthJWT = Depends()):
+async def refresh_session(request: Request, authorize: AuthJWT = Depends()):
+    # The refresh JWT stays valid until expiry, so check the device session too:
+    # a revoked one must not refresh. This is what makes device-revoke and
+    # reset-time revoke-all actually end a session.
+    refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
+    token_hash = Utils.sha256(refresh_cookie) if refresh_cookie else None
+    device = await session_service.get_device_by_token_hash(token_hash) if token_hash else None
+    if not device:
+        authorize.unset_jwt_cookies()
+        raise UnauthorizedException("Session has been revoked. Please sign in again.")
+
     await JwtAuthUtils.refresh_access_token(authorize=authorize)
+    await session_service.touch_device_session(token_hash)
     return SuccessResponse[bool](data=True)
 
 
@@ -74,7 +95,7 @@ async def current_session(authorize: AuthJWT = Depends()):
 async def list_devices(request: Request, authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
-    refresh = request.cookies.get("refresh_token")
+    refresh = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
     current_hash = Utils.sha256(refresh) if refresh else None
     sessions = await session_service.list_devices(user_id)
     dtos = [_to_device_dto(s, current_hash) for s in sessions]
@@ -92,7 +113,7 @@ async def revoke_device(session_id: str, authorize: AuthJWT = Depends()):
 async def revoke_all_others(scope: str, request: Request, authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
-    refresh = request.cookies.get("refresh_token")
+    refresh = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
     current_hash = Utils.sha256(refresh) if refresh else None
     if scope != "others":
         raise UnauthorizedException("Unsupported scope.")
@@ -100,18 +121,12 @@ async def revoke_all_others(scope: str, request: Request, authorize: AuthJWT = D
     return SuccessResponse[bool](data=True)
 
 
-@session_router.get("/security/events", response_model=SuccessResponse[List[SecurityEventDto]])
-async def list_security_events(authorize: AuthJWT = Depends()):
+@session_router.get("/security/events", response_model=Page[SecurityEventDto])
+async def list_security_events(
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=20, ge=1, le=100),
+    authorize: AuthJWT = Depends(),
+):
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
-    events = await session_service.list_recent_events(user_id)
-    dtos = [SecurityEventDto(
-        id=str(e.id),
-        type=e.type,
-        description=e.description,
-        ip_address=e.ip_address,
-        approx_location=e.approx_location,
-        device=e.device,
-        occurred_at=e.occurred_at,
-    ) for e in events]
-    return SuccessResponse[List[SecurityEventDto]](data=dtos)
+    return await session_service.page_security_events(user_id, page=page, page_size=page_size)

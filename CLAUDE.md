@@ -2,7 +2,7 @@
 
 Veriprops is a property verification platform. Monorepo with two deployable apps that talk over HTTP:
 
-- [backend/](backend/) — FastAPI service (Python 3.12, MySQL, async SQLAlchemy, Alembic). See [backend/CLAUDE.md](backend/CLAUDE.md).
+- [backend/](backend/) — FastAPI service (Python 3.12, PostgreSQL, async SQLAlchemy, Alembic). See [backend/CLAUDE.md](backend/CLAUDE.md).
 - [frontend/](frontend/) — Next.js 16 App Router, React 19, TypeScript. See [frontend/CLAUDE.md](frontend/CLAUDE.md).
 
 Product context lives in [PRD.md](PRD.md) — read the relevant section before designing features that touch verification, agent onboarding, or reports.
@@ -27,25 +27,28 @@ Frontend reads `API_BASE_URL` (server-only) from its env to build the proxy targ
 - **Backend API and Frontend Service Contract** Every call to the backend is proxied through Nextjs reverse proxy, no call reaches the backend directly. The backend API and the frontend services consuming the APIs should be maintained always in synch. When refactoring/adding/renaming an endpoint/service class, change both files in the same PR. 
 - **Package managers.** Frontend is `pnpm` (lockfile committed); never use `npm` or `yarn`. Backend is plain `pip` against `requirements.txt`, but `test-requirements.txt` during test as it included extra test dependencies.
 - **Session Propagation.** The auth session is propagated through a HttpOnly JWT cookie created by the backend.
+- **Security invariants.** Secrets live only in git-ignored `.env.{env}` files (never committed defaults); prod/staging refuse to boot with a placeholder/leaked JWT key or `ALLOW_AUTH_BYPASS=true`. All tokens/OTPs use `secrets` (never `uuid7`/`random`); persisted KV data is text, never `pickle`. Identity/authorization is server-derived, never client-claimed (chat `sender_kind`, admin sub-role grants). Client-bound list DTOs inherit `PageRequest` (pagination only) — the `where`/`order_by`/`query_fields` controls on `InternalPageRequest` are server-only. Post-auth redirects are validated same-origin. See "Security invariants" in [backend/CLAUDE.md](backend/CLAUDE.md) and [frontend/CLAUDE.md](frontend/CLAUDE.md).
 - **Path handling.** Use `path.join` / `pathlib` / POSIX-safe APIs — never hardcode `\` or `/` separators.
-- **Real-time channel**: SSE (live dashboard updates, notifications, metrics counters, audit feed), WS (collaborative workflow,chat,presence,two-way realtime commands).
+- **Real-time channel**: **SSE everywhere** (§4.9) — live dashboards, notifications, chat receive, metrics, audit feed. Chat is **admin-mediated + fraud-scanned** so there is deliberately no WebSocket/presence layer; message *sends* are ordinary HTTP POST. Two emitters: verification-keyed (`app/core/realtime/emitter.py`) and per-user (`user_emitter.py`).
+- **Event bus (§4.8).** Every domain event is published **once** through the in-process bus (`app/core/events/`); subscribers fan out (SSE re-emit, in-app/email/SMS notifications via a declarative rule table, chat counter). Don't call the SSE emitter or an email sender directly from a service — `await publish_domain_event(DomainEvent(...))` and let the subscribers decide surfacing. See [backend/CLAUDE.md](backend/CLAUDE.md).
 
 ## Pagination Convention
 Every list that can grow, should be implemented a page as follows:
 1. **Backend** -  The API must accept page (zero index) and page_size params, defaulted to 0 and 10 respectively. The API should also return an Object of Page[T], implemented in the file `backend\main\appodus_utils\db\models.py`. The GenericRepo returns this Object through get_page
-2. **Frontend** - The frontend receives the value as an Object of Page<T>, implemented in the file `frontend\src\types\models.ts`. It must also implement paginated rendering of the values. For main Table in the Admin pages, use our existing DataTable implemented here `frontend\src\components\ui\DataTable.tsx`
+2. **Frontend** - The frontend receives the value as an Object of Page<T>, implemented in the file `frontend\src\types\models.ts`. It must also implement paginated rendering of the values. For main Table in the Admin pages, use our existing DataTable implemented here `frontend\src\components\ui\table\DataTable.tsx`. The DataTable is fully controlled and server-driven: consumers own `{ page, query, orderBy, ...filters }` and forward all of them to the backend list endpoint (which accepts `page`/`page_size`/`query`) — search, filtering, and pagination are all server-side, never client-only. Any `page.tsx` hosting a DataTable must wrap its client component in `<Suspense>` (Next 16 `useSearchParams` requirement). See [frontend/CLAUDE.md](frontend/CLAUDE.md) for the full pattern.
 
 ## Workflow
 
-When adding a feature, write a short plan and confirm with the user before coding, write tests first, then implement. Update the relevant `CLAUDE.md` if a new pattern emerges that future agents would otherwise have to re-derive.
+When adding a feature/refactoring the codebase, write a short plan and confirm with the user before coding, write tests first, then implement. Update the relevant `CLAUDE.md` if a new pattern emerges that future agents would otherwise have to re-derive.
 
 ### Non-negotiable rule
 1. No Frontend/Backend duplicate implementations. 
 2. As much as possible, deliver all implementation as full vertical slices (backend domains + Alembic migrations + tests + frontend ) so each phase ships demoably end-to-end.
 3. For any change/refactor, make sure to also refactor the whole codebase, including all their references and related implementations; no feature should be ophaned.
 4. After each code change, refactor all existing tests, run the tests, and fix defects. Also confirm the app builds and lints.
-5. No facts should be derived on the frontend, delegate such tasks to the backend.
+5. Backend is the only source of truth; No facts should be derived on the frontend, delegate such tasks to the backend.
 6. When investigating the app ui, use playwright-cli skills.
+7. Document the codebase using: variable/class names, comments and docstrings; comments should focus on the use cases, and not on the history, etc.
 
 ## Automation determinism
 
@@ -60,10 +63,13 @@ The codebase ships a deterministic foundation for autonomous QA (Playwright + Cl
 
 Important constraints:
 - Prefer correctness and maintainability over speed
+- Abstract every function, class, component, etc, that are related and used in 2+ surfaces/places.
 - Reuse existing abstractions where sensible
 - Avoid introducing duplicate layout systems
-- Keep implementation scalable for future dashboard sections
-- Avoid hardcoded breadcrumbs where possible
-- Desktop-first implementation for now
+- Keep implementation scalable for future upgrades, e.g: backend and frontend
+- Avoid hardcoded breadcrumbs/Routes where possible
+- **Enum references, never free literals.** Any value that has a defining enum (statuses, tiers, roles, channels, currencies, event types, permissions, …) must be referenced via its enum member in app code — in comparisons, dict/set keys & values, defaults, and DTOs. Free string literals duplicating an enum value are prohibited. Exceptions: enum *definitions* themselves, Alembic migrations (kept decoupled from app enums by design — raw strings / numeric `server_default`s), and tests deliberately asserting wire/DB-string compatibility.
+- Mobile-first, highly responsive implementation
 - Do not generate code until investigation is complete
 - Be explicit about tradeoffs and uncertainties
+- Always ask me questions when you lack clarity.

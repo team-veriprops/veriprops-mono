@@ -1,6 +1,6 @@
 import { HttpClient } from "@lib/FetchHttpClient";
-import { SuccessResponse } from "@/types/models";
-import { AuthSession, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, AuthIntent, SocialProvider, UserConsent } from "@components/website/auth/models";
+import { Page, PublicConfig, SuccessResponse } from "@/types/models";
+import { AuthSession, CrossPortalSummary, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, AuthIntent, SocialProvider, UserConsent } from "@components/website/auth/models";
 /**
  * Frontend-facing auth API. Endpoint paths follow the convention used elsewhere
  * in the app (`/users/auth/...` — see FetchHttpClient.refreshToken). Backend is
@@ -23,6 +23,8 @@ export interface SignupRequest {
   consents: UserConsent[];
   intent?: AuthIntent;
   deviceFingerprint?: string;
+  // §17.1 — an optional referral code (from ?ref=…); an unknown code is ignored server-side.
+  referralCode?: string;
 }
 
 export interface LoginRequest {
@@ -94,6 +96,17 @@ export class AuthService {
     return this.http.post(`${this.base}/otp/verify`, payload);
   }
 
+  /** Phase-5 phone verification for the logged-in user: sends an OTP to their profile phone.
+   *  Unlike sendOtp, the backend reads the phone from the session, not the request (§5). */
+  sendPhoneOtp(): Promise<SuccessResponse<{ resendIn: number }>> {
+    return this.http.post(`${this.base}/phone/otp/send`, {});
+  }
+
+  /** Verifies the logged-in user's phone and flips phoneVerified so payment can proceed (§5). */
+  verifyPhone(code: string): Promise<SuccessResponse<{ verified: true }>> {
+    return this.http.post(`${this.base}/phone/verify`, { code });
+  }
+
   forgotPassword(payload: ForgotPasswordRequest): Promise<SuccessResponse<null>> {
     return this.http.post(`${this.base}/password/forgot`, payload);
   }
@@ -138,8 +151,9 @@ export class AuthService {
     return this.http.delete(`${this.base}/sessions?scope=others`);
   }
 
-  listSecurityEvents(): Promise<SuccessResponse<SecurityEvent[]>> {
-    return this.http.get(`${this.base}/sessions/security/events`);
+  listSecurityEvents(page = 0, pageSize = 20): Promise<Page<SecurityEvent>> {
+    const qs = new URLSearchParams({ page: String(page), page_size: String(pageSize) }).toString();
+    return this.http.get(`${this.base}/sessions/security/events?${qs}`);
   }
 
   listLinkedProviders(): Promise<SuccessResponse<SocialProvider[]>> {
@@ -148,6 +162,16 @@ export class AuthService {
 
   unlinkProvider(provider: SocialProvider): Promise<SuccessResponse<null>> {
     return this.http.delete(`${this.base}/oauth/links/${provider}`);
+  }
+
+  // Per-persona actionable counts for the cross-portal awareness badge (§2.14).
+  getCrossPortalSummary(): Promise<SuccessResponse<CrossPortalSummary>> {
+    return this.http.get(`${this.base}/cross-portal/summary`);
+  }
+
+  // Public runtime flags (e.g. phone-verification toggle). Not under /users/auth.
+  getPublicConfig(): Promise<SuccessResponse<PublicConfig>> {
+    return this.http.get(`/config/public`);
   }
 
   // ── Consent re-acceptance ────────────────────────────────────────

@@ -1,111 +1,111 @@
-"""Evidence upload service — GPS validation, photo count enforcement."""
+"""Task evidence service (PRD §4.5, §7.3a).
+
+Receives an agent's captured file, applies the two receipt-time integrity controls
+— per-item SHA-256 content hash (§4.5) and server-set GPS + timestamp (§7.3a) — uploads
+the bytes through the storage facade (deterministic stub default, real S3/R2 by settings),
+and persists the evidence row. The client-supplied GPS is accepted only as a hint; the
+authoritative capture facts are stamped here so they cannot be forged.
+"""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import List, Optional, TYPE_CHECKING
+from datetime import datetime
+from typing import List, Optional
 
 from kink import di, inject
 
+from main.app.config.settings import settings
+from main.app.core.evidence import compute_content_hash
 from main.app.domain.verification.task.evidence.models import (
-    CreateEvidenceItemDto,
+    CreateEvidenceDto,
     EvidenceItem,
-    EvidenceItemDto,
-    EvidenceType,
-    is_in_nigeria,
+    EvidenceKind,
 )
-from main.app.domain.verification.task.evidence.repo import EvidenceItemRepo
+from main.app.domain.verification.task.evidence.repo import EvidenceRepo
+from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
-from main.appodus_utils.exception.exceptions import (
-    ResourceNotFoundException,
-    ValidationException,
-)
 from main.appodus_utils.integrations.document_storage.factory import DocumentStorageProviderFactory
-
-if TYPE_CHECKING:
-    from loguru import Logger
-
-logger: "Logger" = di["logger"]
-
-PHOTO_MIN_COUNT = 5  # field agent must upload ≥5 GPS-stamped photos
+from main.appodus_utils.integrations.document_storage.interface import IDocumentStorageProvider
+from main.appodus_utils.integrations.document_storage.stub.stub_storage import (
+    StubDocumentStorageProvider,
+)
 
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class EvidenceService:
-    def __init__(
-        self,
-        repo: EvidenceItemRepo,
-        storage_factory: DocumentStorageProviderFactory,
-    ):
-        self._repo = repo
-        self._storage = storage_factory
+    def __init__(self, evidence_repo: EvidenceRepo, storage_factory: DocumentStorageProviderFactory):
+        self._evidence_repo = evidence_repo
+        self._storage_factory = storage_factory
 
-    async def upload(
+    async def capture(
         self,
+        *,
         task_id: str,
-        uploader_id: str,
+        verification_id: str,
+        agent_id: str,
         file_bytes: bytes,
-        filename: str,
-        evidence_type: EvidenceType = EvidenceType.PHOTO,
-        gps_lat: Optional[float] = None,
-        gps_lng: Optional[float] = None,
+        kind: EvidenceKind,
+        mime_type: Optional[str] = None,
+        gps_latitude: Optional[float] = None,
+        gps_longitude: Optional[float] = None,
         captured_at: Optional[datetime] = None,
-    ) -> EvidenceItemDto:
-        # GPS validation for photos
-        if evidence_type == EvidenceType.PHOTO:
-            if gps_lat is None or gps_lng is None:
-                raise ValidationException(message="GPS coordinates are required for photo evidence")
-            if not is_in_nigeria(gps_lat, gps_lng):
-                raise ValidationException(
-                    message="GPS coordinates must be within Nigeria (4–14°N, 3–15°E)"
-                )
+    ) -> EvidenceItem:
+        """Hash + stamp + store + persist a single evidence item. Encrypted at rest
+        (server-side) via the storage facade; the row is the tamper-evident record."""
+        content_hash = compute_content_hash(file_bytes)
+        now = Utils.datetime_now()
+        # Content-addressed key: dedupes identical bytes and ties the object to its hash.
+        key = f"evidence/{verification_id}/{task_id}/{content_hash}"
 
-        storage = self._storage.get_provider()
-        object_key = f"evidence/{task_id}/{uploader_id}/{filename}"
-        file_url = await storage.upload(
+        provider = self._provider()
+        storage_url = await provider.upload(
+            key=key,
+            bucket=settings.AWS_S3_BUCKET,
             file_bytes=file_bytes,
-            object_key=object_key,
-            content_type="application/octet-stream",
+            metadata={"task_id": task_id, "agent_id": agent_id, "sha256": content_hash},
+            encrypted=True,
         )
 
-        item = await self._repo.create_return_model(
-            CreateEvidenceItemDto(
-                task_id=task_id,
-                uploader_id=uploader_id,
-                type=evidence_type,
-                file_url=file_url,
-                gps_lat=gps_lat,
-                gps_lng=gps_lng,
-                captured_at=captured_at or datetime.now(timezone.utc),
-            )
-        )
-        return self._to_dto(item)
+        return await self._evidence_repo.create_return_model(CreateEvidenceDto(
+            task_id=task_id,
+            verification_id=verification_id,
+            agent_id=agent_id,
+            kind=kind,
+            storage_key=key,
+            storage_url=storage_url,
+            mime_type=mime_type,
+            size_bytes=len(file_bytes),
+            content_sha256=content_hash,
+            gps_latitude=gps_latitude,
+            gps_longitude=gps_longitude,
+            captured_at=captured_at or now,
+            uploaded_at=now,
+        ))
 
-    async def list_for_task(self, task_id: str) -> List[EvidenceItemDto]:
-        items = await self._repo.list_for_task(task_id)
-        return [self._to_dto(i) for i in items]
+    async def list_for_task(self, task_id: str) -> List[EvidenceItem]:
+        return await self._evidence_repo.list_for_task(task_id)
 
-    async def assert_min_gps_photos(self, task_id: str, minimum: int = PHOTO_MIN_COUNT) -> None:
-        count = await self._repo.count_gps_for_task(task_id)
-        if count < minimum:
-            raise ValidationException(
-                message=f"At least {minimum} GPS-stamped photos are required (uploaded: {count})"
-            )
+    async def list_for_verification(self, verification_id: str) -> List[EvidenceItem]:
+        """All evidence for a verification, newest first — feeds the customer feed (§9.4)."""
+        return await self._evidence_repo.list_for_verification(verification_id)
 
-    @staticmethod
-    def _to_dto(item: EvidenceItem) -> EvidenceItemDto:
-        return EvidenceItemDto(
-            id=str(item.id),
-            task_id=item.task_id,
-            uploader_id=item.uploader_id,
-            type=EvidenceType(item.type),
-            file_url=item.file_url,
-            gps_lat=item.gps_lat,
-            gps_lng=item.gps_lng,
-            captured_at=item.captured_at,
-            metadata=dict(item.metadata_ or {}),
-            date_created=item.date_created,
-        )
+    async def count_for_task(self, task_id: str) -> int:
+        return await self._evidence_repo.count_for_task(task_id)
+
+    async def presigned_url(self, item: EvidenceItem) -> str:
+        """Fresh short-lived read URL for an evidence object (regenerated per read).
+
+        Routes through the same provider selection as capture, so the deterministic stub
+        serves a stable synthetic URL with no bucket/creds in tests/local."""
+        provider = self._provider()
+        return await provider.get_presigned_url(item.storage_key, settings.AWS_S3_BUCKET)
+
+    def _provider(self) -> IDocumentStorageProvider:
+        # Deterministic default (no external calls / creds) unless a real provider is
+        # explicitly selected — mirrors PAYMENT_STUB_MODE / OTP_MODE.
+        if settings.DOCUMENT_STORAGE_STUB_MODE:
+            return di[StubDocumentStorageProvider]
+        return self._storage_factory.get_active_provider()

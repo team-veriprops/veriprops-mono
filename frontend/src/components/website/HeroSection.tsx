@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, ArrowRight, TrendingUp } from "lucide-react";
 import { CTA_VERIFY_HREF } from "./home.data";
+import { ROUTES } from "@lib/routes";
 
 export default function HeroSection() {
   return (
@@ -40,10 +41,31 @@ export default function HeroSection() {
             }}
           >
             <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={2.5} />
-            Trusted by Global Diaspora
+            Trusted by Nigerians worldwide
           </div>
 
           <h1
+          className="text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold editorial-spacing font-display leading-[1.08] mb-7"
+            style={{ color: "var(--brand-navy)" }}
+            >
+              Buy property in Nigeria with 
+              <em
+              className="relative inline-block"
+              style={{ color: "var(--brand-viridian)" }}
+              >
+                certainty
+                {/* Underline accent */}
+                <span
+                  className="absolute -bottom-1 left-0 right-0 h-[3px] rounded-full"
+                  style={{ background: "var(--brand-viridian)", opacity: 0.4 }}
+                >
+                </span>
+              </em> 
+              <br />
+              — from anywhere in the world.
+          </h1>
+
+          {/* <h1
             className="text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold editorial-spacing font-display leading-[1.08] mb-7"
             style={{ color: "var(--brand-navy)" }}
           >
@@ -53,7 +75,6 @@ export default function HeroSection() {
               style={{ color: "var(--brand-viridian)" }}
             >
               Nigerian
-              {/* Underline accent */}
               <span
                 className="absolute -bottom-1 left-0 right-0 h-[3px] rounded-full"
                 style={{ background: "var(--brand-viridian)", opacity: 0.4 }}
@@ -61,15 +82,16 @@ export default function HeroSection() {
             </span>
             <br />
             Real Estate Future
-          </h1>
+          </h1> */}
+          
 
           <p
             className="text-lg md:text-xl leading-relaxed mb-10 max-w-[480px]"
             style={{ color: "var(--brand-on-surface-variant)" }}
           >
-            Eliminate fraud and uncertainty with rigorously verified property
-            data. Protect your family&apos;s wealth from anywhere in the world —
-            we verify before you pay.
+            Before you send a single naira, we confirm the ownership, the boundaries, 
+            the documents, and the truth on the ground. You see exactly what you&rsquo;re
+            buying. Then you decide.
           </p>
 
           {/* Trust stats row */}
@@ -77,7 +99,8 @@ export default function HeroSection() {
             {[
               { value: "2,400+", label: "Properties Verified" },
               { value: "98%", label: "Accuracy Rate" },
-              { value: "4 Roles", label: "Certified Agents" },
+              { value: "£4.1M+", label: "Buyer funds protected" },
+              { value: "1 in 6", label: "Listings flagged with a problem" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <div
@@ -103,8 +126,8 @@ export default function HeroSection() {
               Start Verification
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
-            <a
-              href="#sample"
+            <Link
+              href={ROUTES.SAMPLE_REPORT}
               className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl text-base font-bold transition-all duration-200 hover:bg-gray-50"
               style={{
                 color: "var(--brand-navy)",
@@ -112,7 +135,7 @@ export default function HeroSection() {
               }}
             >
               View Sample Report
-            </a>
+            </Link>
           </div>
         </div>
 

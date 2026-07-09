@@ -1,119 +1,94 @@
-"""KYC record domain — tracks each BVN verification and selfie-match event.
+"""Agent KYC-record domain (PRD §3.1).
 
-Separate from AgentApplication so that async webhook state (PENDING → resolved)
-and admin review decisions are traceable per-event, not overwritten in-place.
+Persists the KYC provider's *decision and reference only* — never raw biometrics.
+BVN is primary; government-ID is the fallback (see ``KycSubmissionDto``).
 """
 from __future__ import annotations
 
-import enum
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Optional
 
-from sqlalchemy import Column, Index, Integer, JSON, String, Text
+from sqlalchemy import Column, Integer, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
-
-
-class KycType(str, enum.Enum):
-    BVN_VERIFICATION = "BVN_VERIFICATION"
-    SELFIE_MATCH = "SELFIE_MATCH"
-
-
-class KycStatus(str, enum.Enum):
-    PENDING = "PENDING"  # awaiting async webhook result (selfie only)
-    PASSED = "PASSED"
-    FAILED = "FAILED"
-    UNDER_REVIEW = "UNDER_REVIEW"  # score < KYC_SELFIE_REVIEW_THRESHOLD → admin queue
-
-
-class AdminKycDecision(str, enum.Enum):
-    PASS = "PASS"
-    FAIL = "FAIL"
+from main.appodus_utils.integrations.kyc.models import (
+    GovIdType,
+    KycMethod,
+    KycProvider,
+    KycResultStatus,
+)
 
 
 # ─── ORM ──────────────────────────────────────────────────────────
 
-
 class KycRecord(BaseEntity):
+    """Persisted KYC provider outcome (PRD §3.1). Stores the provider's decision
+    and reference only — never raw biometrics."""
+
     __tablename__ = "kyc_records"
 
-    application_id = Column(String(36), nullable=False, index=True)
     user_id = Column(String(36), nullable=False, index=True)
-    kyc_type = Column(String(32), nullable=False)  # KycType
-    status = Column(String(16), nullable=False, index=True)  # KycStatus
-    provider = Column(String(32), nullable=False)  # "dojah" | "stub"
-    provider_ref = Column(String(128), nullable=True, index=True)  # Dojah job/verification ID
-    score = Column(Integer, nullable=True)  # 0–100; selfie match confidence
-    failure_reason = Column(Text, nullable=True)
-    webhook_payload = Column(JSON, nullable=True)  # raw webhook body for audit trail
-    reviewed_by_admin_id = Column(String(36), nullable=True)
-    reviewed_at = Column(UTCDateTime, nullable=True)
-    admin_decision = Column(String(8), nullable=True)  # AdminKycDecision
-    admin_notes = Column(Text, nullable=True)
-
-    __table_args__ = (
-        Index("ix_kyc_records_app_type", "application_id", "kyc_type"),
-    )
+    provider = Column(String(16), nullable=False)
+    method = Column(String(16), nullable=False)
+    status = Column(String(16), nullable=False)
+    provider_ref = Column(String(255), nullable=False)
+    score = Column(Integer, nullable=True)
+    summary = Column(String(500), nullable=True)
+    verified_at = Column(UTCDateTime, nullable=True)
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
 
-
 class CreateKycRecordDto(Object):
-    application_id: str
     user_id: str
-    kyc_type: KycType
-    status: KycStatus
-    provider: str
-    provider_ref: Optional[str] = None
+    provider: KycProvider
+    method: KycMethod
+    status: KycResultStatus
+    provider_ref: str
     score: Optional[int] = None
-    failure_reason: Optional[str] = None
+    summary: Optional[str] = None
+    verified_at: Optional[datetime] = None
 
 
 class UpdateKycRecordDto(Object):
-    status: Optional[KycStatus] = None
+    status: Optional[str] = None
     score: Optional[int] = None
-    failure_reason: Optional[str] = None
-    webhook_payload: Optional[Dict[str, Any]] = None
-    reviewed_by_admin_id: Optional[str] = None
-    reviewed_at: Optional[datetime] = None
-    admin_decision: Optional[AdminKycDecision] = None
-    admin_notes: Optional[str] = None
+    summary: Optional[str] = None
 
 
-class SearchKycRecordDto(PageRequest, BaseQueryDto):
-    application_id: Optional[str] = None
+class SearchKycRecordDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
-    kyc_type: Optional[str] = None
     status: Optional[str] = None
 
 
 class QueryKycRecordDto(BaseQueryDto):
-    application_id: Optional[str] = None
     user_id: Optional[str] = None
-    kyc_type: Optional[str] = None
+    provider: Optional[str] = None
+    method: Optional[str] = None
     status: Optional[str] = None
     provider_ref: Optional[str] = None
+    score: Optional[int] = None
+
+
+# ─── API request/response DTOs ────────────────────────────────────
+
+class KycSubmissionDto(Object):
+    """KYC input at submission (PRD §3.1 step 2). BVN primary; gov-ID fallback."""
+
+    method: KycMethod
+    bvn: Optional[str] = None
+    id_type: Optional[GovIdType] = None
+    id_number: Optional[str] = None
+    # Access-controlled S3 reference for the uploaded selfie/ID (never the bytes).
+    selfie_reference: Optional[str] = None
+    document_ref: Optional[str] = None
 
 
 class KycRecordDto(Object):
-    id: str
-    application_id: str
-    user_id: str
-    kyc_type: KycType
-    status: KycStatus
-    provider: str
-    provider_ref: Optional[str] = None
+    provider: KycProvider
+    method: KycMethod
+    status: KycResultStatus
     score: Optional[int] = None
-    failure_reason: Optional[str] = None
-    reviewed_at: Optional[datetime] = None
-    admin_decision: Optional[AdminKycDecision] = None
-    admin_notes: Optional[str] = None
-    date_created: datetime
-    date_updated: Optional[datetime] = None
-
-
-class AdminKycReviewDto(Object):
-    decision: AdminKycDecision
-    notes: Optional[str] = None
+    summary: Optional[str] = None
+    verified_at: Optional[datetime] = None

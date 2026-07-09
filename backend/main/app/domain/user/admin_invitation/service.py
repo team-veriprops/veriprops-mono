@@ -1,53 +1,38 @@
-"""Admin invitation service.
-
-Owns invite creation, acceptance branching, and revocation. Email delivery is
-best-effort; the invitation record is the source of truth.
-"""
+"""Admin invitation service (PRD §4.1, decision-log D10)."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from loguru import Logger
-
-import secrets
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, Tuple
 
-from kink import di, inject
+from kink import inject
 
-from main.app.config.settings import settings
+from main.app.domain.audit.models import AuditActionType
+from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.admin_invitation.models import (
-    AcceptInviteResultDto,
     AdminInvitation,
     AdminInvitationStatus,
+    AdminInvitationSummaryDto,
     CreateAdminInvitationDto,
-    InviteAdminResultDto,
+    InviteAcceptScenario,
+    InvitePreviewDto,
     UpdateAdminInvitationDto,
 )
 from main.app.domain.user.admin_invitation.repo import AdminInvitationRepo
-from main.app.domain.user.auth.session.models import SecurityEventType
-from main.app.domain.user.auth.session.service import SessionService
-from main.app.domain.user.models import AdminSubRole, UpdateUserDto, User
+from main.app.domain.user.models import AdminSubRole, UpdateUserDto
 from main.app.domain.user.auth.session.models import UserType
-from main.app.domain.user.repo import UserRepo
+from main.app.domain.user.service import UserService
 from main.appodus_utils import Utils
+from main.appodus_utils.db.models import Page, PaginationMeta
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import (
-    InvalidResourceStateException,
+    ForbiddenException,
+    InvalidTokenException,
     ResourceNotFoundException,
-    ValidationException,
 )
 
-logger: Logger = di["logger"]
-
-
-# Branch identifiers returned to the frontend at /accept.
-BRANCH_SIGNUP_REQUIRED = "SIGNUP_REQUIRED"
-BRANCH_LOGIN_REQUIRED = "LOGIN_REQUIRED"
-BRANCH_ALREADY_ADMIN = "ALREADY_ADMIN"
-BRANCH_ACCEPTED = "ACCEPTED"
+INVITE_TTL_HOURS = 72
 
 
 @inject
@@ -56,233 +41,147 @@ BRANCH_ACCEPTED = "ACCEPTED"
 class AdminInvitationService:
     def __init__(
         self,
-        repo: AdminInvitationRepo,
-        user_repo: UserRepo,
-        session_service: SessionService,
+        invitation_repo: AdminInvitationRepo,
+        user_service: UserService,
+        audit_service: AuditLogService,
     ):
-        self._repo = repo
-        self._user_repo = user_repo
-        self._session_service = session_service
+        self._invitation_repo = invitation_repo
+        self._user_service = user_service
+        self._audit_service = audit_service
 
     async def invite(
         self,
-        inviter_admin_id: str,
         email: str,
         sub_role: AdminSubRole,
-        first_name: str = "",
-        last_name: str = "",
-    ) -> InviteAdminResultDto:
-        normalised_email = email.strip().lower()
-        # Revoke any earlier pending invitation for the same email.
-        existing = await self._repo.get_pending_for_email(email)
-        if existing:
-            await self._repo.update(str(existing.id), UpdateAdminInvitationDto(
-                status=AdminInvitationStatus.REVOKED,
-            ))
-
-        raw_token = secrets.token_urlsafe(48)
+        invited_by: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> str:
+        """Create an invitation; returns the raw token for the caller to email."""
+        raw_token = Utils.random_str(36)
         token_hash = Utils.sha256(raw_token)
-        ttl_hours = settings.ADMIN_INVITE_TTL_HOURS or 72
-        expires_at = Utils.datetime_now_plus(hours=ttl_hours)
-
-        row = await self._repo.create_return_model(CreateAdminInvitationDto(
+        invitation = await self._invitation_repo.create_return_model(CreateAdminInvitationDto(
             email=email,
-            email_normalized=normalised_email,
-            first_name=first_name or None,
-            last_name=last_name or None,
+            email_normalized=email.strip().lower(),
+            first_name=first_name,
+            last_name=last_name,
             sub_role=sub_role,
-            inviter_admin_id=inviter_admin_id,
             token_hash=token_hash,
-            expires_at=expires_at,
+            invited_by=invited_by,
+            expires_at=Utils.datetime_now() + timedelta(hours=INVITE_TTL_HOURS),
         ))
+        self._audit_service.schedule(
+            action=AuditActionType.ADMIN_INVITED,
+            resource_type="admin_invitation",
+            resource_id=invitation.id,
+            actor_id=invited_by,
+            details={"email": email, "sub_role": sub_role.value},
+            ip_address=ip_address,
+        )
+        return raw_token
 
-        if row is None:
-            raise InvalidResourceStateException(
-                resource="AdminInvitation",
-                message="Invitation could not be created",
+    async def preview(self, raw_token: str) -> InvitePreviewDto:
+        invitation = await self._require_invitation(raw_token)
+        expired = invitation.expires_at < Utils.datetime_now()
+        existing = await self._user_service.get_user_by_email(invitation.email)
+        if existing and existing.user_type == UserType.ADMIN.value:
+            scenario = InviteAcceptScenario.ALREADY_ADMIN
+        elif existing:
+            scenario = InviteAcceptScenario.EXISTING_USER
+        else:
+            scenario = InviteAcceptScenario.NEW_USER
+        return InvitePreviewDto(
+            email=invitation.email,
+            first_name=invitation.first_name,
+            last_name=invitation.last_name,
+            sub_role=AdminSubRole(invitation.sub_role),
+            status=AdminInvitationStatus(invitation.status),
+            expired=expired,
+            scenario=scenario,
+        )
+
+    async def accept(self, raw_token: str, current_user_id: str) -> AdminSubRole:
+        """Elevate the authenticated user to ADMIN with the invited sub-role (D10)."""
+        invitation = await self._require_invitation(raw_token)
+        self._assert_acceptable(invitation)
+
+        user = await self._user_service.get_user_model(current_user_id)
+        # Prevent accepting an invitation addressed to someone else.
+        if (user.email or "").strip().lower() != invitation.email_normalized:
+            raise ForbiddenException(message="This invitation was issued for a different email.")
+
+        sub_role = AdminSubRole(invitation.sub_role)
+        from_type = user.user_type
+        await self._user_service.update_user(current_user_id, UpdateUserDto(
+            user_type=UserType.ADMIN.value,
+            admin_sub_role=sub_role.value,
+        ))
+        await self._invitation_repo.update(invitation.id, UpdateAdminInvitationDto(
+            status=AdminInvitationStatus.ACCEPTED.value,
+            accepted_by=current_user_id,
+        ))
+        await self._mark_accepted_at(invitation.id)
+
+        self._audit_service.schedule(
+            action=AuditActionType.ADMIN_INVITE_ACCEPTED,
+            resource_type="admin_invitation",
+            resource_id=invitation.id,
+            actor_id=current_user_id,
+            from_state=from_type,
+            to_state=UserType.ADMIN.value,
+            details={"sub_role": sub_role.value},
+        )
+        return sub_role
+
+    async def list_invitations(self, page: int = 0, page_size: int = 10) -> Page[AdminInvitationSummaryDto]:
+        rows, total = await self._invitation_repo.page_all(offset=page * page_size, limit=page_size)
+        items = [
+            AdminInvitationSummaryDto(
+                id=r.id,
+                email=r.email,
+                first_name=r.first_name,
+                last_name=r.last_name,
+                sub_role=AdminSubRole(r.sub_role),
+                status=AdminInvitationStatus(r.status),
+                invited_by=r.invited_by,
+                expires_at=r.expires_at,
+                date_created=r.date_created,
             )
-
-        await self._record_event(
-            type_=SecurityEventType.ADMIN_INVITED,
-            description=f"invited {normalised_email} as {sub_role.value} by {inviter_admin_id}",
-            user_id=inviter_admin_id,
+            for r in rows
+        ]
+        total_pages = (total + page_size - 1) // page_size if page_size else 0
+        return Page[AdminInvitationSummaryDto](
+            items=items,
+            meta=PaginationMeta(
+                page=page, page_size=page_size, count=len(items), total=total,
+                total_pages=total_pages,
+                prev_page=page - 1 if page > 0 else None,
+                next_page=page + 1 if (page + 1) < total_pages else None,
+            ),
         )
-
-        inviter = await self._user_repo.get_model(inviter_admin_id)
-        inviter_fullname = (
-            f"{inviter.first_name or ''} {inviter.last_name or ''}".strip()
-            if inviter else ""
-        )
-
-        return InviteAdminResultDto(
-            invitation=await self._repo.to_query_dto(row),
-            raw_token=raw_token,
-            inviter_fullname=inviter_fullname,
-        )
-
-    async def get_pending_for_email(self, email: str) -> Optional[AdminInvitation]:
-        return await self._repo.get_pending_for_email(email=email)
-
-    async def list(self, status: Optional[AdminInvitationStatus] = None):
-        from main.app.domain.user.admin_invitation.models import SearchAdminInvitationDto
-        search = SearchAdminInvitationDto(page=0, page_size=100)
-        if status:
-            search.status = status.value
-        page = await self._repo.get_page(search)
-        return page
 
     async def revoke(self, invitation_id: str, admin_id: str) -> None:
-        row = await self._repo.get_model(invitation_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="AdminInvitation")
-        if row.status != AdminInvitationStatus.PENDING.value:
-            raise InvalidResourceStateException(
-                resource="AdminInvitation",
-                message="Only pending invitations can be revoked",
-            )
-        await self._repo.update(invitation_id, UpdateAdminInvitationDto(
-            status=AdminInvitationStatus.REVOKED,
-        ))
-        await self._record_event(
-            type_=SecurityEventType.ADMIN_ROLE_CHANGED,
-            description=f"revoked invitation {invitation_id}",
-            user_id=admin_id,
+        invitation = await self._invitation_repo.get_model(invitation_id)
+        if not invitation:
+            raise ResourceNotFoundException(resource="admin invitation")
+        await self._invitation_repo.update(
+            invitation_id, UpdateAdminInvitationDto(status=AdminInvitationStatus.REVOKED.value)
         )
 
-    async def accept(
-        self,
-        raw_token: str,
-        current_user_id: Optional[str] = None,
-    ) -> AcceptInviteResultDto:
-        if not raw_token:
-            raise ValidationException(message="Invitation token required")
-        token_hash = Utils.sha256(raw_token)
-        invite = await self._repo.get_by_token_hash(token_hash)
-        if invite is None or invite.status != AdminInvitationStatus.PENDING.value:
-            raise ResourceNotFoundException(
-                resource="AdminInvitation",
-                message="Invitation is no longer valid",
-            )
-        if invite.expires_at <= Utils.datetime_now():
-            await self._repo.update(str(invite.id), UpdateAdminInvitationDto(
-                status=AdminInvitationStatus.EXPIRED,
-            ))
-            raise InvalidResourceStateException(
-                resource="AdminInvitation",
-                message="Invitation expired",
-            )
+    # ── helpers ───────────────────────────────────────────────────
+    async def _require_invitation(self, raw_token: str) -> AdminInvitation:
+        invitation = await self._invitation_repo.get_by_token_hash(Utils.sha256(raw_token))
+        if not invitation:
+            raise InvalidTokenException(message="Invalid invitation link.")
+        return invitation
 
-        existing_user = await self._user_repo.get_by_email(invite.email_normalized)
+    def _assert_acceptable(self, invitation: AdminInvitation) -> None:
+        if invitation.status != AdminInvitationStatus.PENDING.value:
+            raise InvalidTokenException(message="This invitation is no longer valid.")
+        if invitation.expires_at < Utils.datetime_now():
+            raise InvalidTokenException(message="This invitation has expired.")
 
-        # Branch 1: no account
-        if existing_user is None:
-            return AcceptInviteResultDto(
-                branch=BRANCH_SIGNUP_REQUIRED,
-                email=invite.email,
-                sub_role=AdminSubRole(invite.sub_role),
-                first_name=invite.first_name,
-                last_name=invite.last_name,
-            )
-
-        # Branch 3: already an admin
-        if (existing_user.user_type or "").upper() == UserType.ADMIN.value:
-            await self._repo.update(str(invite.id), UpdateAdminInvitationDto(
-                status=AdminInvitationStatus.EXPIRED,
-                accepted_by_user_id=str(existing_user.id),
-            ))
-            return AcceptInviteResultDto(
-                branch=BRANCH_ALREADY_ADMIN,
-                email=invite.email,
-                first_name=invite.first_name,
-                last_name=invite.last_name,
-            )
-
-        # Branch 2: existing non-admin user must be signed-in to merge.
-        if not current_user_id:
-            return AcceptInviteResultDto(
-                branch=BRANCH_LOGIN_REQUIRED,
-                email=invite.email,
-                first_name=invite.first_name,
-                last_name=invite.last_name,
-            )
-        if str(existing_user.id) != current_user_id:
-            raise ValidationException(
-                message="You must accept the invitation while signed in as the invited email",
-            )
-
-        await self._commit_acceptance(
-            invite_id=str(invite.id),
-            user_id=str(existing_user.id),
-            admin_sub_role=invite.sub_role
-        )
-        return AcceptInviteResultDto(
-            branch=BRANCH_ACCEPTED,
-            email=invite.email,
-            sub_role=AdminSubRole(invite.sub_role),
-            first_name=invite.first_name,
-            last_name=invite.last_name,
-        )
-
-    async def _commit_acceptance(
-            self,
-            invite_id: str,
-            user_id: str,
-            admin_sub_role: AdminSubRole,
-    ) -> Optional[User]:
-        user = await self._user_repo.update_return_model(user_id, UpdateUserDto(
-            user_type=UserType.ADMIN.value,
-            admin_sub_role=admin_sub_role,
-            personas=[]
-        ))
-        await self._repo.update(invite_id, UpdateAdminInvitationDto(
-            status=AdminInvitationStatus.ACCEPTED,
-            accepted_at=Utils.datetime_now(),
-            accepted_by_user_id=user_id,
-        ))
-        await self._record_event(
-            type_=SecurityEventType.ADMIN_INVITE_ACCEPTED,
-            description=f"accepted invitation {invite_id}",
-            user_id=user_id,
-        )
-
-        return user
-
-    async def attach_admin_role_to_new_user(
-        self,
-        raw_token: str,
-        user_id: str,
-    ) -> None:
-        """Called by signup flow when an invite token is supplied."""
-        token_hash = Utils.sha256(raw_token)
-        invite = await self._repo.get_by_token_hash(token_hash)
-        if invite is None or invite.status != AdminInvitationStatus.PENDING.value:
-            return
-        if invite.expires_at <= Utils.datetime_now():
-            return
-        await self._user_repo.update(user_id, UpdateUserDto(
-            user_type=UserType.ADMIN.value,
-            admin_sub_role=invite.sub_role,
-        ))
-        await self._repo.update(str(invite.id), UpdateAdminInvitationDto(
-            status=AdminInvitationStatus.ACCEPTED,
-            accepted_at=Utils.datetime_now(),
-            accepted_by_user_id=user_id,
-        ))
-        await self._record_event(
-            type_=SecurityEventType.ADMIN_INVITE_ACCEPTED,
-            description=f"accepted invitation {invite.id} via signup",
-            user_id=user_id,
-        )
-
-    # ── Helpers ──
-    async def _record_event(
-        self, type_: SecurityEventType, description: str, user_id: Optional[str] = None,
-    ) -> None:
-        try:
-            await self._session_service.record_event(
-                type=type_,
-                description=description[:255],
-                user_id=user_id,
-            )
-        except Exception:  # pragma: no cover
-            logger.warning("Could not record admin invitation security event", exc_info=True)
+    async def _mark_accepted_at(self, invitation_id: str) -> None:
+        invitation = await self._invitation_repo.get_model(invitation_id)
+        invitation.accepted_at = Utils.datetime_now()

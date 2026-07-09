@@ -46,7 +46,7 @@ def create_db_engine_for_env() -> AsyncEngine:
             DATABASE_URL,
             echo=DB_ENABLE_LOGS,
             pool_pre_ping=True,
-            pool_recycle=1800,          # proactively recycle (MySQL default wait_timeout ~8h; adjust to your infra)
+            pool_recycle=1800,          # proactively recycle stale connections (with pool_pre_ping; tune to your infra)
             pool_size=5,              # tune
             max_overflow=10,           # tune
             pool_reset_on_return="rollback",  # ensures clean state on checkout

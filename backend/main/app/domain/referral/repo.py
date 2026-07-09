@@ -1,109 +1,45 @@
-"""Referral domain repos."""
+"""Referral link data access."""
 from __future__ import annotations
 
-from typing import List, Optional, Type
+from typing import Optional, Type
 
 from kink import inject
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.referral.models import (
-    CreateReferralCodeDto,
-    CreateReferralRedemptionDto,
-    QueryReferralCodeDto,
-    QueryReferralRedemptionDto,
-    ReferralCode,
-    ReferralRedemption,
-    RedemptionStatus,
-    SearchReferralCodeDto,
-    SearchReferralRedemptionDto,
-    UpdateReferralCodeDto,
-    UpdateReferralRedemptionDto,
+    CreateReferralDto,
+    QueryReferralDto,
+    Referral,
+    SearchReferralDto,
+    UpdateReferralDto,
 )
 from main.appodus_utils.db.repo import GenericRepo
 
 
 @inject
-class ReferralCodeRepo(
-    GenericRepo[
-        ReferralCode,
-        CreateReferralCodeDto,
-        UpdateReferralCodeDto,
-        QueryReferralCodeDto,
-        SearchReferralCodeDto,
-    ]
+class ReferralRepo(
+    GenericRepo[Referral, CreateReferralDto, UpdateReferralDto, QueryReferralDto, SearchReferralDto]
 ):
     def __init__(
         self,
         db: AsyncSession,
-        model: Type[ReferralCode] = ReferralCode,
-        query_dto: Type[QueryReferralCodeDto] = QueryReferralCodeDto,
+        model: Type[Referral] = Referral,
+        query_dto: Type[QueryReferralDto] = QueryReferralDto,
     ):
         super().__init__(db, model, query_dto)
+        self.db = db
 
-    async def get_by_owner(self, owner_id: str) -> Optional[ReferralCode]:
-        stmt = (
-            select(ReferralCode)
-            .where(
-                ReferralCode.deleted.is_(False),
-                ReferralCode.owner_id == owner_id,
-            )
-            .limit(1)
+    async def get_for_referrer(self, referrer_user_id: str) -> Optional[Referral]:
+        stmt = select(Referral).where(
+            Referral.deleted.is_(False),
+            Referral.referrer_user_id == referrer_user_id,
         )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def get_by_code(self, code: str) -> Optional[ReferralCode]:
-        stmt = (
-            select(ReferralCode)
-            .where(
-                ReferralCode.deleted.is_(False),
-                ReferralCode.code == code.upper(),
-            )
-            .limit(1)
+    async def get_by_code(self, code: str) -> Optional[Referral]:
+        stmt = select(Referral).where(
+            Referral.deleted.is_(False),
+            Referral.code == code,
         )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
-
-
-@inject
-class ReferralRedemptionRepo(
-    GenericRepo[
-        ReferralRedemption,
-        CreateReferralRedemptionDto,
-        UpdateReferralRedemptionDto,
-        QueryReferralRedemptionDto,
-        SearchReferralRedemptionDto,
-    ]
-):
-    def __init__(
-        self,
-        db: AsyncSession,
-        model: Type[ReferralRedemption] = ReferralRedemption,
-        query_dto: Type[QueryReferralRedemptionDto] = QueryReferralRedemptionDto,
-    ):
-        super().__init__(db, model, query_dto)
-
-    async def get_by_invitee(self, invitee_id: str) -> Optional[ReferralRedemption]:
-        stmt = (
-            select(ReferralRedemption)
-            .where(
-                ReferralRedemption.deleted.is_(False),
-                ReferralRedemption.invitee_id == invitee_id,
-            )
-            .limit(1)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def list_for_code(self, referral_code_id: str) -> List[ReferralRedemption]:
-        stmt = (
-            select(ReferralRedemption)
-            .where(
-                ReferralRedemption.deleted.is_(False),
-                ReferralRedemption.referral_code_id == referral_code_id,
-            )
-            .order_by(ReferralRedemption.date_created.desc())
-        )
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
+        return (await self._session.execute(stmt)).scalar_one_or_none()

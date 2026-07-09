@@ -14,44 +14,13 @@ from fastapi.responses import StreamingResponse
 from kink import di
 
 from main.app.domain.audit.models import AdminActionLogPageDto
+from main.app.domain.audit.pack_service import VerificationAuditPackService
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
-from main.app.domain.verification.repo import VerificationRepo
-from main.app.domain.verification.task.repo import TaskRepo
 from main.appodus_utils.db.models import SuccessResponse
-from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 from main.appodus_utils.router import AppRouter
 
 audit_router = AppRouter(prefix="/admin/audit", tags=["Admin — Audit"])
-
-
-@audit_router.get(
-    "/verifications/{vid}/export",
-    summary="Export full audit pack for a verification as CSV",
-)
-async def export_verification_audit(
-    vid: str,
-    _: str = Depends(require_permission(Permission.VIEW_ADMIN_PANEL)),
-):
-    svc: AuditLogService = di[AuditLogService]
-    ver_repo: VerificationRepo = di[VerificationRepo]
-    task_repo: TaskRepo = di[TaskRepo]
-    verification = await ver_repo.get_by_vid(vid)
-    if not verification:
-        raise ResourceNotFoundException(resource=f"Verification {vid}")
-    tasks = await task_repo.list_for_verification(str(verification.id))
-    task_ids = [str(t.id) for t in tasks]
-    csv_bytes = await svc.export_verification_pack_csv(vid=str(verification.id), task_ids=task_ids)
-
-    def _stream():
-        yield csv_bytes
-
-    return StreamingResponse(
-        _stream(),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="audit-{vid}.csv"'},
-    )
-
 
 @audit_router.get(
     "/actions",
@@ -75,3 +44,23 @@ async def list_admin_actions(
         page_size=page_size,
     )
     return SuccessResponse.ok(result)
+
+
+@audit_router.get(
+    "/verifications/{verification_id}/export",
+    summary="Download the full CSV audit pack for a verification (§19.3)",
+)
+async def export_verification_pack(
+    verification_id: str,
+    # The pack is a full PII export; gate it on MANAGE_VERIFICATIONS (Operations/Super)
+    # rather than the broad VIEW_ADMIN_PANEL that content roles also hold.
+    _: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
+):
+    pack: VerificationAuditPackService = di[VerificationAuditPackService]
+    csv_bytes = await pack.build_pack_csv(verification_id)
+    filename = f"veriprops-audit-pack-{verification_id}.csv"
+    return StreamingResponse(
+        iter([csv_bytes]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

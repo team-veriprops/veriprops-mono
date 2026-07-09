@@ -19,8 +19,6 @@ FIX CHANGELOG (from code review):
     [CRITICAL] _is_retryable_error now explicitly excludes CircuitBreakerError so
                an open circuit is never retried. Stacking order (retry outer,
                circuit breaker inner) is enforced by design and documented here.
-    [CRITICAL] _propagate_context is called once before AsyncRetrying loop, not
-               inside it on every attempt.
     [DESIGN]   REQUEST_CONTEXT_RETRIES counter moved to _log_retry (before_sleep
                hook) so it only fires on actual retries, not the first attempt.
     [DESIGN]   self._metrics dict removed — metrics are module-level globals and
@@ -188,7 +186,7 @@ class ResilienceManager:
         exc = retry_state.outcome.exception()
         fn_name = retry_state.fn.__name__
         logger.warning(
-            "Retrying %s: attempt %d failed with %r",
+            "Retrying {}: attempt %d failed with %r",
             fn_name,
             retry_state.attempt_number,
             exc,
@@ -197,18 +195,6 @@ class ResilienceManager:
             retry_state.attempt_number
         )
         REQUEST_CONTEXT_RETRIES.labels(function_name=fn_name).inc()
-
-    def _propagate_context(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        """Return a copy of *kwargs* with default headers merged in.
-
-        Called once before the retry loop begins, so headers are not
-        re-merged on every attempt.
-        """
-        return {
-            **kwargs,
-            "headers": {**self._default_headers, **kwargs.get("headers", {})},
-            "context": kwargs.get("context", {}),
-        }
 
     def _update_circuit_state(
         self,
@@ -237,7 +223,6 @@ class ResilienceManager:
         max_attempts: int = 3,
         min_wait: float = 1,
         max_wait: float = 10,
-        propagate_context: bool = True,
     ) -> Callable[[F], F]:
         """Decorator factory for retry logic with context propagation.
 
@@ -248,8 +233,6 @@ class ResilienceManager:
             max_attempts:      Total attempts including the first.
             min_wait:          Minimum exponential back-off seconds.
             max_wait:          Maximum exponential back-off seconds.
-            propagate_context: Merge ``default_headers`` into kwargs once
-                               before the retry loop (not per attempt).
         """
 
         def decorator(f: F) -> F:
@@ -258,9 +241,6 @@ class ResilienceManager:
 
                 @wraps(f)
                 async def async_wrapped(*args: Any, **kwargs: Any) -> Any:
-                    # Propagate context ONCE before entering the retry loop.
-                    if propagate_context:
-                        kwargs = self._propagate_context(kwargs)
 
                     async for attempt in AsyncRetrying(
                         stop=stop_after_attempt(max_attempts),
@@ -290,8 +270,6 @@ class ResilienceManager:
 
                 @wraps(f)
                 def sync_wrapped(*args: Any, **kwargs: Any) -> Any:
-                    if propagate_context:
-                        kwargs = self._propagate_context(kwargs)
                     return _retried(*args, **kwargs)
 
                 return sync_wrapped  # type: ignore[return-value]
@@ -467,7 +445,7 @@ if __name__ == "__main__":
             )
             print("Result:", json.dumps(data, indent=2))
         except Exception as exc:
-            logger.error("Request failed: %s", exc)
+            logger.error("Request failed: {}", exc)
 
         state = manager.get_circuit_state("example_api")
         print("Circuit state:", state)

@@ -90,6 +90,7 @@ class AvailableTemplate(str, Enum):
     VERIFICATION_RECHECK_DECISION = "verification_recheck_decision"  # Email
     VERIFICATION_DISPUTE_FILED = "verification_dispute_filed"  # Email
     VERIFICATION_DISPUTE_RESOLVED = "verification_dispute_resolved"  # Email
+    VERIFICATION_REPORT_SHARE = "verification_report_share"  # Email
     VERIFICATION_PAYOUT_APPROVED = "verification_payout_approved"  # Email
     VERIFICATION_PAYOUT_HELD = "verification_payout_held"  # Email
     VERIFICATION_ABANDONMENT_RECOVERY = "verification_abandonment_recovery"  # Email

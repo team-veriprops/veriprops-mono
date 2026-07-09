@@ -1,731 +1,503 @@
-"""Task service — competitive pool assignment, OL accept, role-specific submit.
+"""Task service (PRD §2.2, §4.1, §4.2, §6, §7.2).
 
-S19 (pool assignment), S21 (agent accept/decline), S22–S25 (role submit),
-S27 (trust elevation).
+Owns task instantiation at PAID (respecting §4.2 dependency locks), admin
+assignment/reassignment, the broadcast pool, and the derivation-owner integration:
+after any task mutation it recomputes the global verification status via
+``derive_status`` and persists it once (§4.1). Agent-facing accept/decline/submit
+build on this in S11; the timeout sweeps that reclaim stalled tasks live here too.
 """
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import timedelta
+from typing import List, Optional
 
-from kink import di, inject
+from kink import inject
 
-from main.app.domain.admin_config.service import AdminConfigService
+from main.app.config.settings import settings
+from main.app.core.realtime import VerificationEventType
+from main.app.core.events import DomainEvent, EventType, publish_domain_event
+from main.app.core.state.dependencies import is_unlocked, roles_for_tier
+from main.app.core.state.derive import derive_status
+from main.app.core.state.machine import task_state_machine
+from main.app.core.state.status import AgentRole, TaskState, VerificationStatus, VerificationTier
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.user.agent.models import (
-    AgentApplicationStatus,
-    AgentQualityScoreDto,
-    AvailabilityStatus,
-    CreateAgentQualityScoreDto,
-    CreateQualityScoreDto,
-    UpdateAgentApplicationDto,
-)
-from main.app.domain.user.agent.repo import AgentApplicationRepo, AgentQualityScoreRepo
-from main.app.domain.user.models import TrustStatus, UpdateUserDto
-from main.app.domain.user.repo import UserRepo
-from main.app.domain.verification.models import UpdateVerificationDto, VerificationStatus
+from main.app.domain.user.auth.session.models import UserPersona
+from main.app.domain.user.service import UserService
 from main.app.domain.verification.repo import VerificationRepo
+from main.app.domain.verification.models import UpdateVerificationDto, Verification
+from main.app.domain.verification.task.evidence.service import EvidenceService
 from main.app.domain.verification.task.models import (
-    AvailableAgentDto,
-    CreateTaskAssignmentDto,
+    AgentDashboardDto,
     CreateTaskDto,
-    Task,
-    TaskAssignment,
-    TaskAssignmentDto,
-    TaskDto,
-    TaskRole,
-    TaskStatus,
-    TIER_ROLES,
+    TaskAssignmentMode,
     UpdateTaskDto,
+    VerificationTask,
 )
-from main.app.domain.verification.task.evidence.repo import EvidenceItemRepo
-from main.app.domain.verification.task.repo import TaskAssignmentRepo, TaskRepo
+from main.app.domain.verification.task.repo import VerificationTaskRepo
+from main.app.domain.verification.task.validator import validate_submission
+from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import (
-    ResourceConflictException,
+    InvalidResourceStateException,
     ResourceNotFoundException,
     ValidationException,
 )
-
-if TYPE_CHECKING:
-    from loguru import Logger
-
-logger: "Logger" = di["logger"]
 
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
-class TaskService:
+class VerificationTaskService:
     def __init__(
         self,
-        task_repo: TaskRepo,
-        assignment_repo: TaskAssignmentRepo,
-        evidence_repo: EvidenceItemRepo,
+        task_repo: VerificationTaskRepo,
         verification_repo: VerificationRepo,
-        agent_app_repo: AgentApplicationRepo,
-        user_repo: UserRepo,
-        audit: AuditLogService,
-        quality_score_repo: AgentQualityScoreRepo,
-        admin_config: AdminConfigService,
+        evidence_service: EvidenceService,
+        user_service: UserService,
+        audit_service: AuditLogService,
     ):
-        self._tasks = task_repo
-        self._assignments = assignment_repo
-        self._evidence = evidence_repo
-        self._verifications = verification_repo
-        self._agent_apps = agent_app_repo
-        self._users = user_repo
-        self._audit = audit
-        self._quality_scores = quality_score_repo
-        self._config = admin_config
+        self._task_repo = task_repo
+        self._verification_repo = verification_repo
+        self._evidence = evidence_service
+        self._user_service = user_service
+        self._audit = audit_service
 
-    # ── Task creation ─────────────────────────────────────────────────
+    # ── Instantiation (§4.2 dependency-aware) ─────────────────────
 
-    async def create_tasks_for_tier(
-        self,
-        verification_id: str,
-        tier: str,
-        release_immediately: bool = True,
-    ) -> List[TaskDto]:
-        """Create one Task per role required by the tier.
-
-        If release_immediately is False, tasks stay PENDING with pool_released_at=None
-        (admin must manually release them).  If True, sets pool_released_at=now so
-        qualifying agents can see them immediately.
+    async def instantiate_unlocked(self, verification_id: str) -> List[VerificationTask]:
+        """Create ``PENDING`` rows for every tier role that is unlocked and not yet
+        instantiated. Dependency-blocked roles (Premium Lawyer before its siblings
+        SUBMITTED, §4.2) are skipped until they unlock — so they never appear in the
+        derived-state task set early (§2.5). Idempotent: re-running never duplicates.
         """
-        roles = TIER_ROLES.get(tier.upper(), [])
-        now = datetime.now(timezone.utc) if release_immediately else None
-        created: List[TaskDto] = []
-        for role in roles:
-            task = await self._tasks.create_return_model(
-                CreateTaskDto(
-                    verification_id=verification_id,
-                    role=role,
-                    status=TaskStatus.PENDING,
-                    pool_released_at=now,
-                )
-            )
-            created.append(self._task_to_dto(task))
-        # Notify customer that agents have been assigned
-        try:
-            from main.app.domain.notification.service import NotificationService
-            from main.app.domain.notification.models import NotificationEvent
-            ver = await self._verifications.get_model(verification_id)
-            if ver:
-                notif_svc: NotificationService = di[NotificationService]
-                await notif_svc.emit(
-                    NotificationEvent.AGENTS_ASSIGNED,
-                    recipient_id=str(ver.customer_id),
-                    context={},
-                    entity_type="Verification",
-                    entity_id=verification_id,
-                )
-        except Exception as exc:
-            logger.warning(f"Notification emit failed (agents_assigned): {exc}")
+        verification = await self._get_verification(verification_id)
+        tier = VerificationTier(verification.tier)
+        existing = {t.role for t in await self._task_repo.list_for_verification(verification_id)}
+        submitted_roles = await self._submitted_roles(verification_id)
+
+        created: List[VerificationTask] = []
+        for role in roles_for_tier(tier):
+            if role.value in existing:
+                continue
+            if not is_unlocked(tier, role, submitted_roles):
+                continue
+            task = await self._task_repo.create_return_model(CreateTaskDto(
+                verification_id=verification_id,
+                role=role,
+                tier=tier,
+                state=TaskState.PENDING,
+            ))
+            created.append(task)
         return created
 
-    async def release_to_pool(self, verification_id: str, admin_id: str) -> List[TaskDto]:
-        """Release all PENDING tasks for this verification into the agent pool."""
-        tasks = await self._tasks.list_for_verification(verification_id)
-        now = datetime.now(timezone.utc)
-        updated: List[TaskDto] = []
-        for task in tasks:
-            if task.status == TaskStatus.PENDING.value and task.pool_released_at is None:
-                await self._tasks.update(
-                    str(task.id),
-                    UpdateTaskDto(pool_released_at=now),
-                )
-                task.pool_released_at = now
-            updated.append(self._task_to_dto(task))
-        self._audit.schedule(
-            AuditActionType.VERIFICATION_STATE_CHANGED,
-            resource_type="Task",
-            resource_id=verification_id,
-            actor_id=admin_id,
-            meta={"action": "RELEASE_TO_POOL"},
-        )
-        return updated
+    async def broadcast_unassigned(self, verification_id: str) -> List[VerificationTask]:
+        """Put every un-owned PENDING task into the open pool (§6.2 auto-assignment).
 
-    # ── Admin assignment ──────────────────────────────────────────────
-
-    async def admin_assign(
-        self, task_id: str, agent_id: str, assigned_by: str,
-    ) -> TaskDto:
-        """Admin direct-assign — bypasses the pool (task goes to ASSIGNED state)."""
-        task = await self._get_task_or_raise(task_id)
-        if task.status not in (TaskStatus.PENDING.value, TaskStatus.ASSIGNED.value):
-            raise ValidationException(
-                message=f"Task cannot be assigned from status {task.status}"
-            )
-        await self._tasks.update(
-            task_id,
-            UpdateTaskDto(status=TaskStatus.ASSIGNED, agent_id=agent_id),
-        )
-        await self._assignments.create_return_model(
-            CreateTaskAssignmentDto(
-                task_id=task_id,
-                agent_id=agent_id,
-                assigned_by=assigned_by,
-            )
-        )
-        self._audit.schedule(
-            AuditActionType.VERIFICATION_STATE_CHANGED,
-            resource_type="Task",
-            resource_id=task_id,
-            actor_id=assigned_by,
-            from_state=task.status,
-            to_state=TaskStatus.ASSIGNED.value,
-            meta={"action": "ADMIN_ASSIGN", "agent_id": agent_id},
-        )
-        await self._derive_and_update_verification_status(task.verification_id)
-        return self._task_to_dto(await self._tasks.get_task(task_id))
-
-    async def admin_reassign(
-        self,
-        task_id: str,
-        new_agent_id: str,
-        assigned_by: str,
-        note: Optional[str] = None,
-    ) -> TaskDto:
-        """Admin reassign — moves an active task to a different agent."""
-        task = await self._get_task_or_raise(task_id)
-        reassignable_statuses = {
-            TaskStatus.ASSIGNED.value,
-            TaskStatus.ACCEPTED.value,
-            TaskStatus.IN_PROGRESS.value,
-        }
-        if task.status not in reassignable_statuses:
-            raise ValidationException(
-                message=f"Task cannot be reassigned from status {task.status}"
-            )
-        old_agent_id = task.agent_id
-        await self._tasks.update(
-            task_id,
-            UpdateTaskDto(
-                status=TaskStatus.ASSIGNED,
-                agent_id=new_agent_id,
-                accepted_at=None,
-            ),
-        )
-        await self._assignments.create_return_model(
-            CreateTaskAssignmentDto(
-                task_id=task_id,
-                agent_id=new_agent_id,
-                assigned_by=assigned_by,
-                reassigned_from_id=old_agent_id,
-                note=note,
-            )
-        )
-        self._audit.schedule(
-            AuditActionType.VERIFICATION_STATE_CHANGED,
-            resource_type="Task",
-            resource_id=task_id,
-            actor_id=assigned_by,
-            from_state=task.status,
-            to_state=TaskStatus.ASSIGNED.value,
-            meta={
-                "action": "ADMIN_REASSIGN",
-                "from_agent_id": old_agent_id,
-                "to_agent_id": new_agent_id,
-                "note": note,
-            },
-        )
-        await self._derive_and_update_verification_status(task.verification_id)
-        return self._task_to_dto(await self._tasks.get_task(task_id))
-
-    # ── Agent actions ─────────────────────────────────────────────────
-
-    async def agent_accept(self, task_id: str, agent_id: str) -> TaskDto:
-        """Competitive pool accept — first agent to call this wins (OL).
-
-        Raises ResourceConflictException if another agent already accepted.
+        First-accept-wins is enforced on the agent accept path (S11); here we only
+        open the pool and set the starvation timeout (§7.2).
         """
-        task = await self._get_task_or_raise(task_id)
-        # Admin-assigned path: agent_id must match and status must be ASSIGNED.
-        if task.status == TaskStatus.ASSIGNED.value:
-            if task.agent_id != agent_id:
-                raise ValidationException(message="This task is not assigned to you")
-            await self._tasks.update(
-                task_id,
-                UpdateTaskDto(
-                    status=TaskStatus.ACCEPTED,
-                    accepted_at=datetime.now(timezone.utc),
-                ),
-            )
-        elif task.status == TaskStatus.PENDING.value:
-            # Pool path: atomic optimistic-lock claim
-            claimed = await self._tasks.claim_task(task_id, agent_id)
-            if not claimed:
-                raise ResourceConflictException(
-                    resource="Task",
-                    message="Another agent accepted this job",
-                )
-        else:
-            raise ValidationException(
-                message=f"Task cannot be accepted from status {task.status}"
-            )
-        await self._assignments.create_return_model(
-            CreateTaskAssignmentDto(task_id=task_id, agent_id=agent_id)
-        )
-        self._audit.schedule(
-            AuditActionType.VERIFICATION_STATE_CHANGED,
-            resource_type="Task",
-            resource_id=task_id,
-            actor_id=agent_id,
-            from_state=task.status,
-            to_state=TaskStatus.ACCEPTED.value,
-            meta={"action": "AGENT_ACCEPT"},
-        )
-        await self._derive_and_update_verification_status(task.verification_id)
-        await self._maybe_flip_unavailable(agent_id)
-        return self._task_to_dto(await self._tasks.get_task(task_id))
-
-    async def agent_decline(self, task_id: str, agent_id: str) -> TaskDto:
-        """Agent declines — returns ACCEPTED task back to pool (PENDING)."""
-        task = await self._get_task_or_raise(task_id)
-        if task.status != TaskStatus.ACCEPTED.value:
-            raise ValidationException(
-                message="Only ACCEPTED tasks can be declined"
-            )
-        if task.agent_id != agent_id:
-            raise ValidationException(message="This task is not assigned to you")
-        await self._tasks.update(
-            task_id,
-            UpdateTaskDto(
-                status=TaskStatus.PENDING,
-                agent_id=None,
-                accepted_at=None,
-            ),
-        )
-        self._audit.schedule(
-            AuditActionType.VERIFICATION_STATE_CHANGED,
-            resource_type="Task",
-            resource_id=task_id,
-            actor_id=agent_id,
-            from_state=TaskStatus.ACCEPTED.value,
-            to_state=TaskStatus.PENDING.value,
-            meta={"action": "AGENT_DECLINE"},
-        )
-        await self._derive_and_update_verification_status(task.verification_id)
-        await self._maybe_restore_availability(agent_id)
-        return self._task_to_dto(await self._tasks.get_task(task_id))
-
-    async def save_draft(
-        self, task_id: str, agent_id: str, payload: Dict[str, Any],
-    ) -> TaskDto:
-        """Persist a draft payload for an in-progress task (autosave / S26)."""
-        task = await self._get_task_or_raise(task_id)
-        if task.agent_id != agent_id:
-            raise ValidationException(message="This task is not assigned to you")
-        active_statuses = {
-            TaskStatus.ACCEPTED.value,
-            TaskStatus.IN_PROGRESS.value,
-        }
-        if task.status not in active_statuses:
-            raise ValidationException(
-                message="Draft can only be saved for active tasks"
-            )
-        if task.status == TaskStatus.ACCEPTED.value:
-            # First save marks task as IN_PROGRESS
-            await self._tasks.update(
-                task_id,
-                UpdateTaskDto(
-                    status=TaskStatus.IN_PROGRESS,
-                    draft_payload=json.dumps(payload),
-                ),
-            )
-        else:
-            await self._tasks.update(
-                task_id,
-                UpdateTaskDto(draft_payload=json.dumps(payload)),
-            )
-        return self._task_to_dto(await self._tasks.get_task(task_id))
-
-    async def submit(
-        self, task_id: str, agent_id: str, payload: Dict[str, Any],
-    ) -> TaskDto:
-        """Role-specific submit with validation and state derivation."""
-        task = await self._get_task_or_raise(task_id)
-        if task.agent_id != agent_id:
-            raise ValidationException(message="This task is not assigned to you")
-        active_statuses = {TaskStatus.ACCEPTED.value, TaskStatus.IN_PROGRESS.value}
-        if task.status not in active_statuses:
-            raise ValidationException(
-                message=f"Task cannot be submitted from status {task.status}"
-            )
-        await self._validate_submit_payload(TaskRole(task.role), payload, task)
-        now = datetime.now(timezone.utc)
-        await self._tasks.update(
-            task_id,
-            UpdateTaskDto(
-                status=TaskStatus.SUBMITTED,
-                submitted_at=now,
-                draft_payload=json.dumps(payload),
-            ),
-        )
-        self._audit.schedule(
-            AuditActionType.VERIFICATION_STATE_CHANGED,
-            resource_type="Task",
-            resource_id=task_id,
-            actor_id=agent_id,
-            from_state=task.status,
-            to_state=TaskStatus.SUBMITTED.value,
-            meta={"action": "AGENT_SUBMIT", "role": task.role},
-        )
-        await self._maybe_elevate_trust(agent_id)
-        await self._derive_and_update_verification_status(task.verification_id)
-        return self._task_to_dto(await self._tasks.get_task(task_id))
-
-    async def list_for_verification(self, verification_id: str) -> List[TaskDto]:
-        tasks = await self._tasks.list_for_verification(verification_id)
-        return [self._task_to_dto(t) for t in tasks]
-
-    async def get_task(self, task_id: str) -> TaskDto:
-        task = await self._get_task_or_raise(task_id)
-        return self._task_to_dto(task)
-
-    # ── Agent query helpers ───────────────────────────────────────────
-
-    async def list_available_for_agent(
-        self,
-        agent_id: str,
-        role: str,
-        state: Optional[str] = None,
-    ) -> List[TaskDto]:
-        tasks = await self._tasks.list_pending_for_agent(role=role, state=state)
-        # Filter out tasks with no pool_released_at (held for manual assignment)
-        return [
-            self._task_to_dto(t)
-            for t in tasks
-            if t.pool_released_at is not None
-        ]
-
-    async def list_active_for_agent(self, agent_id: str) -> List[TaskDto]:
-        tasks = await self._tasks.list_active_for_agent(agent_id)
-        return [self._task_to_dto(t) for t in tasks]
-
-    async def list_completed_for_agent(self, agent_id: str) -> List[TaskDto]:
-        tasks = await self._tasks.list_completed_for_agent(agent_id)
-        return [self._task_to_dto(t) for t in tasks]
-
-    # ── Quality scores (Phase 16 — S49) ──────────────────────────────
-
-    async def assign_quality_score(
-        self,
-        task_id: str,
-        dto: CreateQualityScoreDto,
-        admin_id: str,
-    ) -> AgentQualityScoreDto:
-        """Admin assigns 1–5 quality score after a task is APPROVED."""
-        task = await self._get_task_or_raise(task_id)
-        if task.status != TaskStatus.APPROVED.value:
-            raise ValidationException(
-                message="Quality scores can only be assigned to APPROVED tasks"
-            )
-        if not (1 <= dto.score <= 5):
-            raise ValidationException(message="Quality score must be between 1 and 5")
-
-        # Upsert — overwrite if admin is correcting a score
-        existing = await self._quality_scores.get_by_task_id(task_id)
-        if existing:
-            from main.app.domain.user.agent.models import UpdateAgentQualityScoreDto
-            await self._quality_scores.update(str(existing.id), UpdateAgentQualityScoreDto(
-                score=dto.score,
-                note=dto.note,
-                reviewed_by_admin_id=admin_id,
-            ))
-            row = await self._quality_scores.get_by_task_id(task_id)
-        else:
-            row = await self._quality_scores.create_return_model(CreateAgentQualityScoreDto(
-                task_id=task_id,
-                agent_id=task.agent_id,
-                score=dto.score,
-                note=dto.note,
-                reviewed_by_admin_id=admin_id,
-            ))
-        self._audit.schedule(
-            AuditActionType.VERIFICATION_STATE_CHANGED,
-            resource_type="AgentQualityScore",
-            resource_id=task_id,
-            actor_id=admin_id,
-            meta={"score": dto.score, "agent_id": task.agent_id},
-        )
-        return AgentQualityScoreDto(
-            id=str(row.id),
-            task_id=row.task_id,
-            agent_id=row.agent_id,
-            score=row.score,
-            note=row.note,
-            reviewed_by_admin_id=row.reviewed_by_admin_id,
-            date_created=row.date_created,
-        )
-
-    # ── Admin: available agents list ──────────────────────────────────
-
-    async def list_available_agents(
-        self, role: Optional[str] = None, state: Optional[str] = None,
-    ) -> List[AvailableAgentDto]:
-        """Return APPROVED agents eligible for task assignment, ranked by composite score."""
-        from main.app.domain.user.agent.models import SearchAgentApplicationDto
-        apps = await self._agent_apps.get_by_criterion(
-            SearchAgentApplicationDto(
-                status=AgentApplicationStatus.APPROVED.value,
-                page=1,
-                page_size=200,
-            )
-        )
-        sla_hours = await self._config.get_int("task_sla_hours", fallback=48)
-        top_agent_threshold = float(await self._config.get("agent_top_agent_accuracy_threshold") or "4.5")
-
-        result: List[AvailableAgentDto] = []
-        for app_data in apps:
-            user_id = app_data.get("user_id") if isinstance(app_data, dict) else getattr(app_data, "user_id", None)
-            types = app_data.get("types") if isinstance(app_data, dict) else getattr(app_data, "types", [])
-            coverage_states = (
-                app_data.get("coverage_states") if isinstance(app_data, dict)
-                else getattr(app_data, "coverage_states", [])
-            )
-            availability_status = (
-                app_data.get("availability_status") if isinstance(app_data, dict)
-                else getattr(app_data, "availability_status", AvailabilityStatus.AVAILABLE.value)
-            )
-            if not user_id:
-                continue
-            if role and role not in (types or []):
-                continue
-            if state and state.upper() not in [s.upper() for s in (coverage_states or [])]:
-                continue
-            # Exclude unavailable agents from assignment list
-            if availability_status == AvailabilityStatus.UNAVAILABLE.value:
-                continue
-
-            user = await self._users.get_model(user_id)
-            if user is None:
-                continue
-            active_count = await self._tasks.count_active_for_agent(user_id)
-            metrics = await self._quality_scores.compute_metrics(user_id, sla_hours)
-
-            is_top_agent = (
-                metrics.accuracy_score >= top_agent_threshold
-                and metrics.completion_rate >= 80.0
-            )
-            # Composite score: accuracy 40%, completion 40%, timeliness 20%
-            composite = (
-                0.4 * (metrics.accuracy_score / 5.0)
-                + 0.4 * (metrics.completion_rate / 100.0)
-                + 0.2 * (metrics.timeliness_score / 100.0)
-            )
-            result.append(
-                AvailableAgentDto(
-                    agent_id=str(user.id),
-                    user_id=str(user.id),
-                    first_name=user.first_name,
-                    last_name=user.last_name,
-                    types=list(types or []),
-                    coverage_states=list(coverage_states or []),
-                    active_task_count=active_count,
-                    rating=round(metrics.accuracy_score, 2) if metrics.accuracy_score else None,
-                    is_trusted=user.trust_status == TrustStatus.TRUSTED.value,
-                    is_top_agent=is_top_agent,
-                    composite_score=round(composite, 4),
-                )
-            )
-        # Rank: Top Agents first, then trusted, then composite score DESC
-        result.sort(key=lambda a: (not a.is_top_agent, not a.is_trusted, -a.composite_score))
-        return result
-
-    # ── Verification state derivation ─────────────────────────────────
-
-    async def _derive_and_update_verification_status(
-        self, verification_id: str,
-    ) -> None:
-        """Compute verification status from the current state of all its tasks."""
-        tasks = await self._tasks.list_for_verification(verification_id)
-        if not tasks:
-            return
-
-        statuses = {t.status for t in tasks}
-        terminal_ok = {TaskStatus.SUBMITTED.value, TaskStatus.APPROVED.value}
-        all_approved = all(t.status == TaskStatus.APPROVED.value for t in tasks)
-        all_settled = all(t.status in terminal_ok for t in tasks)
-        any_submitted = any(t.status == TaskStatus.SUBMITTED.value for t in tasks)
-        any_active = any(
-            t.status in {TaskStatus.ACCEPTED.value, TaskStatus.IN_PROGRESS.value}
-            for t in tasks
-        )
-        all_pending = statuses == {TaskStatus.PENDING.value}
-
-        if all_approved:
-            # All tasks approved → hand off to admin for report review/release (S28-S31).
-            # COMPLETED is set exclusively by ReleaseService.release() (S31), not here.
-            new_status = VerificationStatus.UNDER_REVIEW
-        elif all_settled and any_submitted:
-            new_status = VerificationStatus.UNDER_REVIEW
-        elif any_active:
-            new_status = VerificationStatus.IN_PROGRESS
-        elif all_pending:
-            return  # no change — stays PAID
-        else:
-            return
-
-        verification = await self._verifications.get_model(verification_id)
-        if verification and verification.status != new_status.value:
-            await self._verifications.update(
-                verification_id,
-                UpdateVerificationDto(status=new_status),
-            )
-            # When transitioning to UNDER_REVIEW, run conflict detection (S29)
-            if new_status == VerificationStatus.UNDER_REVIEW:
-                await self._run_conflict_detection(verification_id)
-
-    async def _run_conflict_detection(self, verification_id: str) -> None:
-        try:
-            from main.app.domain.verification.conflict.service import ConflictService
-            svc: ConflictService = di[ConflictService]
-            await svc.detect_and_store(verification_id)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Conflict detection failed for {verification_id}: {exc}")
-
-    # ── Trust elevation ───────────────────────────────────────────────
-
-    async def _maybe_elevate_trust(self, agent_id: str) -> None:
-        """Elevate agent to TRUSTED on their first ever submitted task."""
-        user = await self._users.get_model(agent_id)
-        if user and user.trust_status != TrustStatus.TRUSTED.value:
-            await self._users.update(
-                agent_id,
-                UpdateUserDto(trust_status=TrustStatus.TRUSTED.value),
-            )
-
-    # ── Availability auto-management (Phase 16 — S50) ────────────────
-
-    async def _maybe_flip_unavailable(self, agent_id: str) -> None:
-        """Auto-set agent UNAVAILABLE when they hit the max active task cap."""
-        max_tasks = await self._config.get_int("agent_max_active_tasks", fallback=5)
-        active_count = await self._tasks.count_active_for_agent(agent_id)
-        if active_count >= max_tasks:
-            app = await self._agent_apps.get_by_user_id(agent_id)
-            if app and app.availability_status != AvailabilityStatus.UNAVAILABLE.value:
-                await self._agent_apps.update(str(app.id), UpdateAgentApplicationDto(
-                    availability_status=AvailabilityStatus.UNAVAILABLE.value,
+        pool_expires = Utils.datetime_now() + timedelta(hours=settings.TASK_POOL_TIMEOUT_HOURS)
+        broadcast: List[VerificationTask] = []
+        for task in await self._task_repo.list_for_verification(verification_id):
+            if task.state == TaskState.PENDING.value and not task.assigned_agent_id:
+                await self._task_repo.update(task.id, UpdateTaskDto(
+                    in_pool=True,
+                    assignment_mode=TaskAssignmentMode.BROADCAST.value,
                 ))
+                await self._set_pool_expiry(task.id, pool_expires)
+                broadcast.append(task)
+        return broadcast
 
-    async def _maybe_restore_availability(self, agent_id: str) -> None:
-        """Restore agent to AVAILABLE when task count drops below cap."""
-        max_tasks = await self._config.get_int("agent_max_active_tasks", fallback=5)
-        active_count = await self._tasks.count_active_for_agent(agent_id)
-        if active_count < max_tasks:
-            app = await self._agent_apps.get_by_user_id(agent_id)
-            # Only restore if the status was auto-flipped (UNAVAILABLE); leave
-            # LIMITED or manually set UNAVAILABLE alone.
-            if app and app.availability_status == AvailabilityStatus.UNAVAILABLE.value:
-                await self._agent_apps.update(str(app.id), UpdateAgentApplicationDto(
-                    availability_status=AvailabilityStatus.AVAILABLE.value,
-                ))
+    async def prepare_for_paid(self, verification_id: str) -> None:
+        """At PAID: instantiate unlocked tasks and, when auto-assignment is enabled,
+        broadcast them to the pool (§6.2). Manual assignment is always available."""
+        await self.instantiate_unlocked(verification_id)
+        if settings.AUTO_ASSIGNMENT_ENABLED:
+            await self.broadcast_unassigned(verification_id)
 
-    # ── Submit payload validators ─────────────────────────────────────
+    # ── Admin assignment (manual path, §6.1/§6.3) ─────────────────
 
-    async def _validate_submit_payload(
-        self, role: TaskRole, payload: Dict[str, Any], task: Task,
-    ) -> None:
-        if role == TaskRole.FIELD:
-            await self._validate_field(payload, task)
-        elif role == TaskRole.SURVEYOR:
-            self._validate_surveyor(payload)
-        elif role == TaskRole.REGISTRY:
-            self._validate_registry(payload)
-        elif role == TaskRole.LAWYER:
-            await self._validate_lawyer(payload, task)
+    async def assign(
+        self, verification_id: str, role: AgentRole, agent_id: str, admin_id: str
+    ) -> VerificationTask:
+        """Assign (or reassign) a role's task to a specific agent (§2.2 manual path).
 
-    async def _validate_field(self, p: Dict[str, Any], task: Task) -> None:
-        if not p.get("access_confirmed"):
-            raise ValidationException(message="access_confirmed is required")
-        if not p.get("declaration_signed"):
-            raise ValidationException(message="declaration_signed is required")
-        from main.app.domain.verification.task.evidence.service import PHOTO_MIN_COUNT
-        gps_count = await self._evidence.count_gps_for_task(str(task.id))
-        if gps_count < PHOTO_MIN_COUNT:
-            raise ValidationException(
-                message=f"At least {PHOTO_MIN_COUNT} GPS-stamped photos are required (uploaded: {gps_count})"
+        Enforces ``agent_max_active_tasks`` (§6.5), transitions the task to ASSIGNED,
+        takes it out of the pool, and re-derives the verification status (first
+        assignment moves PAID → IN_PROGRESS via the derivation owner, §6.3)."""
+        verification = await self._get_verification(verification_id)
+        if verification.status in (
+            VerificationStatus.CANCELLED.value,
+            VerificationStatus.REFUNDED.value,
+            VerificationStatus.FAILED.value,
+        ):
+            raise InvalidResourceStateException(
+                resource="verification",
+                message="This verification is in a terminal state.",
             )
 
-    @staticmethod
-    def _validate_surveyor(p: Dict[str, Any]) -> None:
-        if not p.get("survey_confirmed"):
-            raise ValidationException(message="survey_confirmed is required")
-        if not p.get("boundary_coords"):
-            raise ValidationException(message="boundary_coords (lat/lng) are required")
-        if not p.get("declaration_signed"):
-            raise ValidationException(message="declaration_signed is required")
+        await self._assert_capacity(agent_id)
 
-    @staticmethod
-    def _validate_registry(p: Dict[str, Any]) -> None:
-        if not p.get("registry_search_ref"):
-            raise ValidationException(message="registry_search_ref is required")
-        if not p.get("title_doc_assessment"):
-            raise ValidationException(message="title_doc_assessment is required")
-        if not p.get("ownership_chain"):
-            raise ValidationException(message="ownership_chain is required")
-        if not p.get("declaration_signed"):
-            raise ValidationException(message="declaration_signed is required")
-
-    async def _validate_lawyer(
-        self, p: Dict[str, Any], task: Task,
-    ) -> None:
-        legal_opinion = p.get("legal_opinion", "")
-        if len(str(legal_opinion)) < 200:
-            raise ValidationException(
-                message="legal_opinion must be at least 200 characters"
-            )
-        if not p.get("nba_confirmed"):
-            raise ValidationException(message="nba_confirmed is required")
-        if not p.get("recommendation"):
-            raise ValidationException(message="recommendation is required")
-        if not p.get("declaration_signed"):
-            raise ValidationException(message="declaration_signed is required")
-        # Dependency gate: all non-lawyer siblings must be SUBMITTED or APPROVED
-        siblings = await self._tasks.list_for_verification(task.verification_id)
-        settled = {TaskStatus.SUBMITTED.value, TaskStatus.APPROVED.value}
-        for sibling in siblings:
-            if sibling.role != TaskRole.LAWYER.value and str(sibling.id) != str(task.id):
-                if sibling.status not in settled:
-                    raise ValidationException(
-                        message="All other agents must submit before the lawyer can submit"
-                    )
-
-    # ── Mappers ───────────────────────────────────────────────────────
-
-    @staticmethod
-    def _task_to_dto(task: Task) -> TaskDto:
-        draft = None
-        if task.draft_payload:
-            try:
-                draft = json.loads(task.draft_payload)
-            except (json.JSONDecodeError, ValueError):
-                pass
-        return TaskDto(
-            id=str(task.id),
-            verification_id=task.verification_id,
-            role=TaskRole(task.role),
-            agent_id=task.agent_id,
-            status=TaskStatus(task.status),
-            pool_released_at=task.pool_released_at,
-            accepted_at=task.accepted_at,
-            submitted_at=task.submitted_at,
-            trust_score=task.trust_score,
-            draft_payload=draft,
-            date_created=task.date_created,
-            date_updated=task.date_updated,
-        )
-
-    # ── Internal helpers ──────────────────────────────────────────────
-
-    async def _get_task_or_raise(self, task_id: str) -> Task:
-        task = await self._tasks.get_task(task_id)
+        task = await self._task_repo.get_by_role(verification_id, role.value)
         if task is None:
-            raise ResourceNotFoundException(resource="Task")
+            tier = VerificationTier(verification.tier)
+            if not is_unlocked(tier, role, await self._submitted_roles(verification_id)):
+                raise InvalidResourceStateException(
+                    resource="task",
+                    message=f"The {role.value} task is still locked by its dependencies.",
+                )
+            task = await self._task_repo.create_return_model(CreateTaskDto(
+                verification_id=verification_id, role=role, tier=tier, state=TaskState.PENDING,
+            ))
+
+        reassignment = task.assigned_agent_id is not None and task.assigned_agent_id != agent_id
+        self._assert_task_transition(task.state, TaskState.ASSIGNED)
+        await self._task_repo.update(task.id, UpdateTaskDto(
+            state=TaskState.ASSIGNED.value,
+            assigned_agent_id=agent_id,
+            assignment_mode=TaskAssignmentMode.MANUAL.value,
+            in_pool=False,
+        ))
+        await self._set_assign_timestamps(task.id)
+
+        self._audit.schedule(
+            action=AuditActionType.TASK_REASSIGNED if reassignment else AuditActionType.TASK_ASSIGNED,
+            resource_type="verification_task",
+            resource_id=task.id,
+            actor_id=admin_id,
+            from_state=task.state,
+            to_state=TaskState.ASSIGNED.value,
+            details={"verification_id": verification_id, "role": role.value, "agent_id": agent_id},
+        )
+        await self._derive_and_persist(verification_id, actor_id=admin_id)
+        return await self._task_repo.get_model(task.id)
+
+    # ── Agent task execution (§7.1, §7.3) ─────────────────────────
+
+    async def list_for_agent(
+        self, agent_id: str, states: Optional[List[str]], page: int, page_size: int
+    ):
+        """Assigned/owned tasks for the agent dashboard (paged)."""
+        return await self._task_repo.page_for_agent(
+            agent_id, states, offset=page * page_size, limit=page_size
+        )
+
+    async def count_pool_pending(self) -> int:
+        """Unclaimed broadcast tasks in the open pool (admin dashboard §6.3)."""
+        return await self._task_repo.count_pool_pending()
+
+    async def agent_summary(self, agent_id: str) -> AgentDashboardDto:
+        """Agent home rollups (§7): the agent's own tasks counted by state, server-side."""
+        raw = await self._task_repo.count_by_state_for_agent(agent_id)
+        state_counts = {TaskState(s): c for s, c in raw.items()}
+        active = sum(raw.get(s, 0) for s in (
+            TaskState.ACCEPTED.value, TaskState.IN_PROGRESS.value, TaskState.REJECTED.value,
+        ))
+        return AgentDashboardDto(
+            assigned=raw.get(TaskState.ASSIGNED.value, 0),
+            active=active,
+            submitted=raw.get(TaskState.SUBMITTED.value, 0),
+            approved=raw.get(TaskState.APPROVED.value, 0),
+            total=sum(raw.values()),
+            state_counts=state_counts,
+        )
+
+    async def accept(self, task_id: str, agent_id: str) -> VerificationTask:
+        """Agent accepts a task (§7.1). Broadcast pool = first-accept-wins (the task
+        must still be unclaimed PENDING); manual = only the assigned agent may accept.
+        Enforces capacity (§6.5) and moves the task to ACCEPTED."""
+        task = await self._get_task(task_id)
+        if task.state == TaskState.ACCEPTED.value and task.assigned_agent_id == agent_id:
+            return task  # idempotent re-accept
+
+        if task.in_pool:
+            # First-accept-wins: guard against a second claimant of the same pool task.
+            if task.state != TaskState.PENDING.value or task.assigned_agent_id:
+                raise InvalidResourceStateException(
+                    resource="task", message="This task has already been taken."
+                )
+        elif task.assigned_agent_id and task.assigned_agent_id != agent_id:
+            raise ValidationException(message="This task is assigned to another agent.")
+
+        await self._assert_capacity(agent_id)
+        self._assert_task_transition(task.state, TaskState.ACCEPTED)
+        await self._task_repo.update(task.id, UpdateTaskDto(
+            state=TaskState.ACCEPTED.value,
+            assigned_agent_id=agent_id,
+            assignment_mode=task.assignment_mode or TaskAssignmentMode.BROADCAST.value,
+            in_pool=False,
+        ))
+        await self._set_accepted_timestamp(task.id)
+        self._audit.schedule(
+            action=AuditActionType.TASK_ACCEPTED,
+            resource_type="verification_task", resource_id=task.id, actor_id=agent_id,
+            from_state=task.state, to_state=TaskState.ACCEPTED.value,
+            details={"role": task.role},
+        )
+        await self._derive_and_persist(task.verification_id, actor_id=agent_id)
+        return await self._task_repo.get_model(task.id)
+
+    async def decline(self, task_id: str, agent_id: str, reason: Optional[str]) -> VerificationTask:
+        """Agent declines a task they own (§7.1). Returns it to the open pool for the
+        next agent and records the decline (feeds ranking / reliability, §7.2)."""
+        task = await self._get_owned_task(task_id, agent_id)
+        if task.state not in (TaskState.ASSIGNED.value, TaskState.ACCEPTED.value):
+            raise InvalidResourceStateException(
+                resource="task", message="Only an assigned/accepted task can be declined."
+            )
+        self._assert_task_transition(task.state, TaskState.PENDING)
+        await self._task_repo.update(task.id, UpdateTaskDto(
+            state=TaskState.PENDING.value,
+            in_pool=True,
+            decline_count=(task.decline_count or 0) + 1,
+        ))
+        row = await self._task_repo.get_model(task.id)
+        if row is not None:
+            row.assigned_agent_id = None  # NULL — dropped by the exclude_none update path
+        self._audit.schedule(
+            action=AuditActionType.TASK_DECLINED,
+            resource_type="verification_task", resource_id=task.id, actor_id=agent_id,
+            from_state=task.state, to_state=TaskState.PENDING.value,
+            details={"role": task.role, "reason": reason},
+        )
+        await self._derive_and_persist(task.verification_id, actor_id=agent_id)
+        return await self._task_repo.get_model(task.id)
+
+    async def start(self, task_id: str, agent_id: str) -> VerificationTask:
+        """Agent begins work (§7.3): ACCEPTED → IN_PROGRESS."""
+        task = await self._get_owned_task(task_id, agent_id)
+        self._assert_task_transition(task.state, TaskState.IN_PROGRESS)
+        await self._task_repo.update(task.id, UpdateTaskDto(state=TaskState.IN_PROGRESS.value))
+        self._audit.schedule(
+            action=AuditActionType.TASK_STARTED,
+            resource_type="verification_task", resource_id=task.id, actor_id=agent_id,
+            from_state=task.state, to_state=TaskState.IN_PROGRESS.value,
+            details={"role": task.role},
+        )
+        await self._derive_and_persist(task.verification_id, actor_id=agent_id)
+        return await self._task_repo.get_model(task.id)
+
+    async def add_evidence(
+        self, task_id: str, agent_id: str, *, file_bytes: bytes, kind, mime_type=None,
+        gps_latitude=None, gps_longitude=None,
+    ):
+        """Capture a piece of proof-of-work for an in-progress task (§4.5, §7.3a).
+        Ownership + IN_PROGRESS enforced; the evidence service stamps hash/GPS/timestamp."""
+        task = await self._get_owned_task(task_id, agent_id)
+        if task.state != TaskState.IN_PROGRESS.value:
+            raise InvalidResourceStateException(
+                resource="task", message="Evidence can only be added while the task is in progress."
+            )
+        item = await self._evidence.capture(
+            task_id=task.id, verification_id=task.verification_id, agent_id=agent_id,
+            file_bytes=file_bytes, kind=kind, mime_type=mime_type,
+            gps_latitude=gps_latitude, gps_longitude=gps_longitude,
+        )
+        self._audit.schedule(
+            action=AuditActionType.EVIDENCE_CAPTURED,
+            resource_type="task_evidence", resource_id=item.id, actor_id=agent_id,
+            details={"task_id": task.id, "sha256": item.content_sha256, "kind": item.kind},
+        )
+        # Pure SSE refresh — no customer notification at capture (evidence is only
+        # customer-visible after review-approval, D17).
+        await publish_domain_event(DomainEvent(
+            verification_id=task.verification_id, sse_event=VerificationEventType.TASK_UPDATED.value,
+        ))
+        return item
+
+    async def submit(self, task_id: str, agent_id: str, payload: dict) -> VerificationTask:
+        """Agent submits role findings (§7.3): IN_PROGRESS → SUBMITTED. Requires at least
+        one evidence item (proof-of-work). First successful submission upgrades the agent
+        to trusted (§3.3). The derive owner promotes the verification to UNDER_REVIEW once
+        every required task is SUBMITTED (§2.5)."""
+        task = await self._get_owned_task(task_id, agent_id)
+        validate_submission(AgentRole(task.role), payload)
+        if await self._evidence.count_for_task(task.id) == 0:
+            raise ValidationException(
+                message="At least one evidence item is required before submitting."
+            )
+        self._assert_task_transition(task.state, TaskState.SUBMITTED)
+        await self._task_repo.update(task.id, UpdateTaskDto(
+            state=TaskState.SUBMITTED.value,
+            submission_payload=payload,
+        ))
+        await self._set_submitted_timestamp(task.id)
+        await self._user_service.upgrade_trust_status_if_eligible(agent_id, UserPersona.AGENT)
+        self._audit.schedule(
+            action=AuditActionType.TASK_SUBMITTED,
+            resource_type="verification_task", resource_id=task.id, actor_id=agent_id,
+            from_state=task.state, to_state=TaskState.SUBMITTED.value,
+            details={"role": task.role},
+        )
+        await self._derive_and_persist(task.verification_id, actor_id=agent_id)
+        return await self._task_repo.get_model(task.id)
+
+    # ── Timeout sweeps (§7.2) ─────────────────────────────────────
+
+    async def sweep_no_show(self) -> int:
+        """Return manually-assigned tasks the agent never accepted in time to PENDING."""
+        now = Utils.datetime_now()
+        count = 0
+        for task in await self._task_repo.list_accept_deadline_expired(now):
+            await self._return_to_pending(task, reason="no_show_timeout")
+            count += 1
+        return count
+
+    async def sweep_pool_starvation(self) -> int:
+        """Aging broadcast tasks unclaimed past the pool timeout escalate off the open
+        pool to await targeted assignment by admin/ranking (§7.2 starvation backstop)."""
+        now = Utils.datetime_now()
+        count = 0
+        for task in await self._task_repo.list_pool_expired(now):
+            await self._task_repo.update(task.id, UpdateTaskDto(in_pool=False))
+            if settings.REMOTE_JOB_BONUS_MINOR > 0 and task.remote_bonus_minor is None:
+                await self._task_repo.update(task.id, UpdateTaskDto(
+                    remote_bonus_minor=settings.REMOTE_JOB_BONUS_MINOR
+                ))
+            self._audit.schedule(
+                action=AuditActionType.TASK_STATE_CHANGED,
+                resource_type="verification_task",
+                resource_id=task.id,
+                actor_id=None,
+                details={"event": "pool_starvation_escalated", "role": task.role},
+            )
+            count += 1
+        return count
+
+    # ── Read ──────────────────────────────────────────────────────
+
+    async def list_for_verification(self, verification_id: str) -> List[VerificationTask]:
+        return await self._task_repo.list_for_verification(verification_id)
+
+    async def task_history(
+        self, task_id: str, agent_id: str, page: int = 0, page_size: int = 20
+    ):
+        """PII-safe transition history for one of the agent's own tasks (§19.3 / R19.3).
+
+        Ownership-gated (the task must be assigned to the requesting agent), then the
+        audit read model is reused — the agent sees state transitions with no actor_id.
+        """
+        await self._get_owned_task(task_id, agent_id)
+        return await self._audit.get_activity_log(
+            resource_type="verification_task", resource_id=task_id, page=page, page_size=page_size
+        )
+
+    # ── helpers ───────────────────────────────────────────────────
+
+    async def _get_task(self, task_id: str) -> VerificationTask:
+        task = await self._task_repo.get_model(task_id)
+        if not task:
+            raise ResourceNotFoundException(resource="task")
         return task
+
+    async def _get_owned_task(self, task_id: str, agent_id: str) -> VerificationTask:
+        task = await self._get_task(task_id)
+        if task.assigned_agent_id != agent_id:
+            raise ValidationException(message="This task is not assigned to you.")
+        return task
+
+    async def _get_verification(self, verification_id: str) -> Verification:
+        verification = await self._verification_repo.get_model(verification_id)
+        if not verification:
+            raise ResourceNotFoundException(resource="verification")
+        if not verification.tier:
+            raise InvalidResourceStateException(
+                resource="verification", message="Verification has no tier set."
+            )
+        return verification
+
+    async def _submitted_roles(self, verification_id: str) -> List[AgentRole]:
+        tasks = await self._task_repo.list_for_verification(verification_id)
+        settled = {TaskState.SUBMITTED.value, TaskState.APPROVED.value}
+        return [AgentRole(t.role) for t in tasks if t.state in settled]
+
+    async def _assert_capacity(self, agent_id: str) -> None:
+        active = await self._task_repo.count_active_for_agent(agent_id)
+        if active >= settings.AGENT_MAX_ACTIVE_TASKS:
+            raise ValidationException(
+                message=f"Agent is at capacity ({settings.AGENT_MAX_ACTIVE_TASKS} active tasks)."
+            )
+
+    def _assert_task_transition(self, current: str, target: TaskState) -> None:
+        task_state_machine.assert_can_transition(current, target.value, resource="Task")
+
+    async def _return_to_pending(self, task: VerificationTask, reason: str) -> None:
+        self._assert_task_transition(task.state, TaskState.PENDING)
+        await self._task_repo.update(task.id, UpdateTaskDto(
+            state=TaskState.PENDING.value,
+            in_pool=False,
+            decline_count=(task.decline_count or 0) + 1,
+        ))
+        # assigned_agent_id must be cleared to NULL — the update DTO path drops None
+        # fields (exclude_none), so set it on the model directly (CLAUDE.md GenericRepo note).
+        row = await self._task_repo.get_model(task.id)
+        if row is not None:
+            row.assigned_agent_id = None
+        self._audit.schedule(
+            action=AuditActionType.TASK_STATE_CHANGED,
+            resource_type="verification_task",
+            resource_id=task.id,
+            actor_id=None,
+            from_state=task.state,
+            to_state=TaskState.PENDING.value,
+            details={"event": reason, "role": task.role},
+        )
+        await self._derive_and_persist(task.verification_id, actor_id=None)
+
+    async def _derive_and_persist(self, verification_id: str, actor_id: Optional[str]) -> None:
+        """The §4.1 derivation-owner integration: recompute the global status from the
+        task set and persist it once, auditing any change. The only place a task
+        mutation writes ``verification.status``."""
+        verification = await self._verification_repo.get_model(verification_id)
+        if not verification:
+            return
+        task_states = [t.state for t in await self._task_repo.list_for_verification(verification_id)]
+        new_status = derive_status(verification.status, task_states)
+        # A generic "something on this verification changed" push (§4.9). The frontend
+        # re-reads the authoritative snapshot on any event, so this covers task moves
+        # that don't shift the global status too. Pure SSE nudge — no notification.
+        await publish_domain_event(DomainEvent(
+            verification_id=verification_id, sse_event=VerificationEventType.TASK_UPDATED.value,
+        ))
+        if new_status.value == verification.status:
+            return
+        await self._verification_repo.update(
+            verification_id, UpdateVerificationDto(status=new_status.value)
+        )
+        self._audit.schedule(
+            action=AuditActionType.VERIFICATION_STATE_CHANGED,
+            resource_type="verification",
+            resource_id=verification_id,
+            actor_id=actor_id,
+            from_state=verification.status,
+            to_state=new_status.value,
+        )
+        # One publish (§4.8): SSE re-emit + customer status-change notification (§12.2).
+        await publish_domain_event(DomainEvent(
+            type=EventType.STATUS_CHANGED, verification_id=verification_id,
+            recipient_user_ids=(verification.customer_id,),
+            sse_event=VerificationEventType.STATUS_CHANGED.value,
+            data={"status": new_status.value},
+        ))
+
+    async def _set_pool_expiry(self, task_id: str, expires_at) -> None:
+        # datetime fields are set on the model, not via the json-encoding update path.
+        task = await self._task_repo.get_model(task_id)
+        task.pool_expires_at = expires_at
+
+    async def _set_assign_timestamps(self, task_id: str) -> None:
+        task = await self._task_repo.get_model(task_id)
+        now = Utils.datetime_now()
+        task.assigned_at = now
+        task.accept_deadline_at = now + timedelta(hours=settings.TASK_NO_SHOW_TIMEOUT_HOURS)
+
+    async def _set_accepted_timestamp(self, task_id: str) -> None:
+        task = await self._task_repo.get_model(task_id)
+        task.accepted_at = Utils.datetime_now()
+
+    async def _set_submitted_timestamp(self, task_id: str) -> None:
+        task = await self._task_repo.get_model(task_id)
+        task.submitted_at = Utils.datetime_now()

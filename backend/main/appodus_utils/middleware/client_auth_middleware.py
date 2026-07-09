@@ -3,11 +3,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from loguru import Logger
-import os
-
-from main.appodus_utils import Utils
 
 from main.appodus_utils.common.client_utils import ClientUtils
+from main.appodus_utils.common.utils_settings import utils_settings
+from main.appodus_utils.config.settings import Environment
 from main.app.domain.client.models import ClientAccessRuleDto
 from main.app.domain.client.service import ClientService
 from main.appodus_utils.exception.exceptions import ForbiddenException
@@ -19,8 +18,15 @@ from starlette.responses import Response
 client_service: ClientService = di[ClientService]
 logger: Logger = di['logger']
 
-ENVIRONMENT: str = os.getenv('ENVIRONMENT', "Environment.DEVELOPMENT")
-ALLOW_AUTH_BYPASS: bool =  Utils.get_bool_from_env(env_key="ALLOW_AUTH_BYPASS", default=False)
+# Client-auth bypass is only ever eligible in genuinely non-production environments.
+# Anything not explicitly listed here (including STAGING and PRODUCTION) is treated as
+# production and fails closed. Read config through settings (the enum value), never a
+# raw os.getenv string compared to a stale "Environment.X" literal.
+_BYPASS_ELIGIBLE_ENVIRONMENTS = frozenset(
+    {Environment.LOCAL, Environment.DEVELOPMENT, Environment.TEST}
+)
+
+
 class ClientAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
 
@@ -32,12 +38,12 @@ class ClientAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # --- Skip auth for test bypass only in non-production ---
-        if ALLOW_AUTH_BYPASS:
-            if (
-                    ENVIRONMENT in ["Environment.LOCAL", "Environment.DEVELOPMENT", "Environment.TEST", "Environment.STAGING"]
-            ):
-                logger.warning(f"[CLIENT AUTH BYPASS] Skipping client auth for path={request.url.path}, "
-                               f"ip={ClientUtils.get_client_ip(request)}, headers={dict(request.headers)}")
+        if utils_settings.ALLOW_AUTH_BYPASS:
+            if utils_settings.ENVIRONMENT in _BYPASS_ELIGIBLE_ENVIRONMENTS:
+                logger.warning(
+                    f"[CLIENT AUTH BYPASS] Skipping client auth for path={request.url.path}, "
+                    f"ip={ClientUtils.get_client_ip(request)}"
+                )
                 return await call_next(request)
             else:
                 raise ForbiddenException("[CLIENT AUTH BYPASS] not allowed in production")

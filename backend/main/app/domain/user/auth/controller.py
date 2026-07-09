@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from loguru import Logger
 
 from main.app.domain.user.auth.consent.controller import consent_router
+from main.app.domain.user.auth.cross_portal.controller import cross_portal_router
 
 from http import HTTPStatus
 
@@ -25,7 +26,8 @@ from main.app.domain.user.auth.models import (
     ProfileCompletionDto,
     ResetPasswordDto,
     SetPasswordDto,
-    SignupRequestDto, )
+    SignupRequestDto,
+    VerifyPhoneDto, )
 from main.app.domain.user.auth.oauth.controller import oauth_router
 from main.app.domain.user.auth.service import AuthService
 from main.app.domain.user.auth.session.controller import session_router
@@ -35,6 +37,7 @@ from main.app.domain.user.auth.signup_draft.controller import signup_draft_route
 from main.app.domain.user.auth.signup_draft.service import SignupDraftService
 from main.appodus_utils import RouterUtils, Utils
 from main.appodus_utils.common.client_utils import ClientUtils
+from main.appodus_utils.common.rate_limit import RateLimiter
 from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.integrations.messaging.models import MessageRequestRecipient, EmailRecipient, MessageContext
@@ -50,6 +53,7 @@ auth_router = APIRouter(prefix="/auth", tags=["Auths"])
 
 RouterUtils.add_routers(auth_router, [
     consent_router,
+    cross_portal_router,
     oauth_router,
     session_router,
     signup_draft_router,
@@ -57,11 +61,24 @@ RouterUtils.add_routers(auth_router, [
 
 logger: Logger = di["logger"]
 
+# Per-IP edge throttles on sensitive unauthenticated endpoints (M7). Disabled wholesale
+# when settings.DISABLE_RATE_LIMITING is true (preserves the non-prod automation contract).
+_signup_rate_limit = RateLimiter(scope="signup", limit=10, window_seconds=60)
+_otp_send_rate_limit = RateLimiter(scope="otp_send", limit=5, window_seconds=60)
+_otp_verify_rate_limit = RateLimiter(scope="otp_verify", limit=10, window_seconds=60)
+_password_forgot_rate_limit = RateLimiter(scope="password_forgot", limit=5, window_seconds=300)
+_password_reset_rate_limit = RateLimiter(scope="password_reset", limit=10, window_seconds=300)
+
 
 # ─── Signup / Profile completion ─────────────────────────────
 
 @auth_router.post("/signup", response_model=SuccessResponse[AuthSessionDto], status_code=HTTPStatus.CREATED)
-async def signup(req: SignupRequestDto, request: Request, authorize: AuthJWT = Depends()):
+async def signup(
+    req: SignupRequestDto,
+    request: Request,
+    authorize: AuthJWT = Depends(),
+    _: None = Depends(_signup_rate_limit),
+):
     user = await auth_service.signup(req, ip_address=ClientUtils.get_client_ip(request))
 
     session = await session_service.issue_session_cookies(
@@ -76,7 +93,7 @@ async def signup(req: SignupRequestDto, request: Request, authorize: AuthJWT = D
         await acct_msgs.send_direct_new_user_welcome_message(
             recipient=MessageRequestRecipient(
                 fullname=fullname,
-                email=EmailRecipient(email=req.email, fullname=fullname),
+                email=req.email,
                 phone=PhoneNumber(dial_code=req.dial_code, number=req.phone),
             ),
             context={
@@ -109,7 +126,7 @@ async def profile_complete(req: ProfileCompletionDto, authorize: AuthJWT = Depen
         await acct_msgs.send_direct_new_user_welcome_message(
             recipient=MessageRequestRecipient(
                 fullname=fullname,
-                email=EmailRecipient(email=user.email, fullname=fullname),
+                email=user.email,
                 phone=PhoneNumber(dial_code=req.dial_code, number=req.phone),
             ),
             context={
@@ -127,7 +144,7 @@ async def profile_complete(req: ProfileCompletionDto, authorize: AuthJWT = Depen
 # ─── OTP ───────────────────────────────────────────────────────────
 
 @auth_router.post("/otp/send", response_model=SuccessResponse[dict])
-async def send_otp(req: OtpSendDto, request: Request):
+async def send_otp(req: OtpSendDto, request: Request, _: None = Depends(_otp_send_rate_limit)):
     resend_in = await auth_service.send_otp(
         req.channel,
         email=req.email,
@@ -140,7 +157,7 @@ async def send_otp(req: OtpSendDto, request: Request):
 
 
 @auth_router.post("/otp/verify", response_model=SuccessResponse[dict])
-async def verify_otp(req: OtpVerifyDto, request: Request):
+async def verify_otp(req: OtpVerifyDto, request: Request, _: None = Depends(_otp_verify_rate_limit)):
     await auth_service.verify_otp(
         req.channel, req.code,
         email=req.email, dial_code=req.dial_code, phone=req.phone,
@@ -149,10 +166,39 @@ async def verify_otp(req: OtpVerifyDto, request: Request):
     return SuccessResponse[dict](data={"verified": True})
 
 
+# ─── Phase-5 phone verification (logged-in user) ──────────────────────
+# Satisfies the payment-step phone gate when the number was collected but left unverified
+# at signup (PHONE_VERIFICATION_ENABLED=false). The phone is read from the user's profile.
+
+@auth_router.post("/phone/otp/send", response_model=SuccessResponse[dict])
+async def send_phone_otp(
+    request: Request, authorize: AuthJWT = Depends(), _: None = Depends(_otp_send_rate_limit),
+):
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
+    resend_in = await auth_service.send_phone_otp_for_user(
+        user_id, ip_address=ClientUtils.get_client_ip(request),
+    )
+    return SuccessResponse[dict](data={"resend_in": resend_in})
+
+
+@auth_router.post("/phone/verify", response_model=SuccessResponse[dict])
+async def verify_phone(
+    req: VerifyPhoneDto, request: Request, authorize: AuthJWT = Depends(),
+    _: None = Depends(_otp_verify_rate_limit),
+):
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
+    await auth_service.verify_phone_for_user(
+        user_id, req.code, ip_address=ClientUtils.get_client_ip(request),
+    )
+    return SuccessResponse[dict](data={"verified": True})
+
+
 # ─── Password ──────────────────────────────────────────────────────
 
 @auth_router.post("/password/forgot", response_model=SuccessResponse[bool])
-async def forgot_password(req: ForgotPasswordDto, request: Request):
+async def forgot_password(req: ForgotPasswordDto, request: Request, _: None = Depends(_password_forgot_rate_limit)):
     raw_token, fullname = await auth_service.request_password_reset(req.email,
                                                                     ip_address=ClientUtils.get_client_ip(request))
     if raw_token:
@@ -166,7 +212,8 @@ async def forgot_password(req: ForgotPasswordDto, request: Request):
 
             await account_security_messages.send_direct_password_reset_request_message(
                 recipient=MessageRequestRecipient(
-                    email=EmailRecipient(email=req.email, fullname=fullname)
+                    email=req.email,
+                    fullname=fullname
                 ),
                 context={
                     MessageContext.FULL_NAME: fullname,
@@ -182,7 +229,11 @@ async def forgot_password(req: ForgotPasswordDto, request: Request):
 
 
 @auth_router.post("/password/reset", response_model=SuccessResponse[bool])
-async def reset_password(req: ResetPasswordDto, authorize: AuthJWT = Depends()):
+async def reset_password(
+    req: ResetPasswordDto,
+    authorize: AuthJWT = Depends(),
+    _: None = Depends(_password_reset_rate_limit),
+):
     await auth_service.reset_password(req.token, req.password)
     authorize.unset_jwt_cookies()
     return SuccessResponse[bool](data=True)

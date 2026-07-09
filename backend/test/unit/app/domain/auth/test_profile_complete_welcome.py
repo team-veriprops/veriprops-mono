@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from main.app.config.settings import settings
 from main.appodus_utils.db.session import db_session_ctx
 from main.app.domain.user.auth.models import ProfileCompletionDto
 from main.appodus_utils.exception.exceptions import ValidationException
@@ -66,7 +67,8 @@ def _make_dto(**overrides) -> ProfileCompletionDto:
 
 # ── complete_profile — happy path ─────────────────────────────────────────────
 
-async def test_complete_profile_updates_user_and_returns_it():
+async def test_complete_profile_updates_user_and_returns_it(monkeypatch):
+    monkeypatch.setattr(settings, "PHONE_VERIFICATION_ENABLED", True)
     updated_user = _make_user()
     svc = _make_service()
     svc._user_service.get_user_by_phone_e164 = AsyncMock(return_value=None)

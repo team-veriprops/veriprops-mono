@@ -1,15 +1,15 @@
 import { ROUTES, buildAuthUrl } from "./routes";
 
 export interface HttpClient {
-  get<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
+  get<T = unknown>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
   getBlob(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<Blob>;
-  post<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
-  put<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
-  patch<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
-  delete<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
+  post<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
+  put<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
+  patch<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
+  delete<T = unknown>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
 }
 
-export class HttpError<T = any> extends Error {
+export class HttpError<T = unknown> extends Error {
   status?: string;
   url: string;
   body?: T;
@@ -92,7 +92,6 @@ export class FetchHttpClient implements HttpClient {
 
         const errorBody = await this.safeJson(response);
 
-        console.log("errorBody: ", errorBody)
         throw new HttpError(
           errorBody?.error?.message || `An error occurred`,
           url,
@@ -105,8 +104,8 @@ export class FetchHttpClient implements HttpClient {
         return response.blob() as unknown as T;
       }
       return this.safeJson(response);
-    } catch (error: any) {
-      if (error.name === "AbortError") {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
         throw new HttpError("Request aborted (timeout or manual cancel)", url);
       }
       if (error instanceof TypeError) {
@@ -205,7 +204,7 @@ export class FetchHttpClient implements HttpClient {
   }
 
   // --- HttpClient methods ---
-  async get<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T> {
+  async get<T = unknown>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T> {
     return this.request<T>(url, { ...config, method: "GET" });
   }
 
@@ -213,7 +212,7 @@ export class FetchHttpClient implements HttpClient {
     return this.request<Blob>(url, { ...config, method: "GET", _responseType: "blob" });
   }
 
-  async post<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
+  async post<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
     return this.request<R>(url, {
       ...config,
       method: "POST",
@@ -221,7 +220,7 @@ export class FetchHttpClient implements HttpClient {
     });
   }
 
-  async put<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
+  async put<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
     return this.request<R>(url, {
       ...config,
       method: "PUT",
@@ -229,7 +228,7 @@ export class FetchHttpClient implements HttpClient {
     });
   }
 
-  async patch<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
+  async patch<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
     return this.request<R>(url, {
       ...config,
       method: "PATCH",
@@ -237,7 +236,7 @@ export class FetchHttpClient implements HttpClient {
     });
   }
 
-  async delete<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T> {
+  async delete<T = unknown>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T> {
     return this.request<T>(url, { ...config, method: "DELETE" });
   }
 

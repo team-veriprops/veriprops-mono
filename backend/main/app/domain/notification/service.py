@@ -1,32 +1,33 @@
-"""Notification service — emit in-app notifications and dispatch external channels."""
+"""Notification service (PRD §12).
+
+Turns a published domain event into per-recipient in-app notifications and (subject to the
+rule table + the user's opt-outs) email/SMS fan-out. Also serves the feed, the unread
+counter, and mark-read. In-app is always created (§12.1); external dispatch is best-effort so
+a template/provider hiccup never breaks the emitting transaction.
+"""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List, Optional, Any
+from typing import List
 
-from kink import di, inject
+from kink import inject
 
-from main.app.domain.notification.events import render_title, render_body
+from main.app.core.events.events import DomainEvent
+from main.app.core.realtime.user_emitter import UserEventType, publish_user_event
+from main.app.domain.notification.content import build_content, external_context
 from main.app.domain.notification.models import (
     CreateNotificationDto,
+    Notification,
     NotificationDto,
-    NotificationEvent,
-    NotificationPreferenceDto,
-    UpsertNotificationPreferenceDto, NotificationPreference, Notification,
 )
-from main.app.domain.notification.repo import (
-    NotificationDispatchRepo,
-    NotificationPreferenceRepo,
-    NotificationRepo,
-)
+from main.app.domain.notification.dispatcher import NotificationDispatcher
+from main.app.domain.notification.repo import NotificationRepo
+from main.app.domain.notification.rules import rule_for
+from main.app.domain.notification_preference.service import NotificationPreferenceService
+from main.appodus_utils import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
-from main.appodus_utils.exception.exceptions import ResourceNotFoundException
-
-if TYPE_CHECKING:
-    from loguru import Logger
-
-logger: "Logger" = di["logger"]
+from main.appodus_utils.integrations.messaging.models import MessageChannel
 
 
 @inject
@@ -34,102 +35,80 @@ logger: "Logger" = di["logger"]
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class NotificationService:
     def __init__(
-            self,
-            repo: NotificationRepo,
-            dispatch_repo: NotificationDispatchRepo,
-            pref_repo: NotificationPreferenceRepo,
+        self,
+        notification_repo: NotificationRepo,
+        preferences: NotificationPreferenceService,
+        dispatcher: NotificationDispatcher,
     ):
-        self._repo = repo
-        self._dispatch_repo = dispatch_repo
-        self._pref_repo = pref_repo
+        self._notification_repo = notification_repo
+        self._preferences = preferences
+        self._dispatcher = dispatcher
 
-    async def emit(
-            self,
-            event: NotificationEvent,
-            recipient_id: str,
-            context: Dict[str, Any],
-            entity_type: Optional[str] = None,
-            entity_id: Optional[str] = None,
-    ) -> NotificationDto:
-        """Write an in-app notification row.
+    async def create_for_event(self, event: DomainEvent) -> None:
+        """Fan an event out per the §4.8 rule table. Chat-only events create no notification."""
+        if event.type is None or not event.recipient_user_ids:
+            return  # a pure SSE-refresh nudge, or an event with no recipients
+        rule = rule_for(event.type)
+        if rule.chat_only:
+            return
 
-        External dispatch (email/SMS/push) is deliberately skipped here — it is
-        handled by VerificationMessages which is called by individual services.
-        This keeps the in-app record always written even when ENABLE_OUT_MESSAGING
-        is False.
-        """
-        title = render_title(event, context)
-        body = render_body(event, context)
+        title, body, link = build_content(event)
+        for user_id in dict.fromkeys(event.recipient_user_ids):  # de-dupe, preserve order
+            if rule.in_app:
+                await self._notification_repo.create_return_model(
+                    CreateNotificationDto(
+                        user_id=user_id,
+                        type=event.type.value,
+                        title=title,
+                        body=body,
+                        link=link,
+                        event_ref=event.verification_id,
+                    )
+                )
+                publish_user_event(user_id, UserEventType.NOTIFICATION, {"type": event.type.value})
+                publish_user_event(user_id, UserEventType.NOTIFICATION_UNREAD, {})
 
-        row = await self._repo.create(CreateNotificationDto(
-            recipient_id=recipient_id,
-            event_type=event.value,
-            title=title,
-            body=body,
-            entity_type=entity_type,
-            entity_id=entity_id,
-        ))
-        return self._to_dto(row)
+            await self._dispatch_external(event, user_id, rule)
 
-    async def list_for_recipient(self, recipient_id: str, limit: int = 30) -> List[NotificationDto]:
-        rows = await self._repo.list_for_recipient(recipient_id, limit=limit)
-        return [self._to_dto(r) for r in rows]
+    async def _dispatch_external(self, event: DomainEvent, user_id: str, rule) -> None:
+        if not rule.template or not (rule.email or rule.sms):
+            return
+        email_ok, sms_ok = await self._preferences.channels_enabled(user_id, event.type.value)
+        channels: List[MessageChannel] = []
+        if rule.email and email_ok:
+            channels.append(MessageChannel.EMAIL)
+        if rule.sms and sms_ok:
+            channels.append(MessageChannel.SMS)
+        if not channels:
+            return
+        try:
+            await self._dispatcher.dispatch(user_id, rule.template, channels, external_context(event))
+        except Exception:  # noqa: BLE001 — external send is best-effort, never fatal
+            pass
 
-    async def mark_read(self, notification_id: str, recipient_id: str) -> None:
-        row = await self._repo.get_model(notification_id)
-        if row is None or row.recipient_id != recipient_id:
-            raise ResourceNotFoundException(resource="Notification")
-        await self._repo.mark_read(notification_id)
+    # ── Feed / counter / read ─────────────────────────────────────────
 
-    # ── Preferences ───────────────────────────────────────────────
+    async def feed(self, user_id: str, page: int, page_size: int) -> Page[NotificationDto]:
+        rows, total = await self._notification_repo.list_for_user(user_id, page, page_size)
+        dtos = [self._to_dto(n) for n in rows]
+        return self._notification_repo._db_utils.build_page(dtos, total, page, page_size)
 
-    async def get_preferences(self, user_id: str) -> List[NotificationPreferenceDto]:
-        rows = await self._pref_repo.list_for_user(user_id)
-        return [self._pref_to_dto(r) for r in rows]
+    async def unread_count(self, user_id: str) -> int:
+        return await self._notification_repo.unread_count(user_id)
 
-    async def upsert_preference(
-            self, user_id: str, dto: UpsertNotificationPreferenceDto
-    ) -> NotificationPreferenceDto:
-        existing = await self._pref_repo.get_for_user_and_event(user_id, dto.event_type)
-        if existing:
-            await self._pref_repo.update(str(existing.id), UpsertNotificationPreferenceDto(
-                event_type=dto.event_type,
-                email_enabled=dto.email_enabled,
-                sms_enabled=dto.sms_enabled,
-                push_enabled=dto.push_enabled,
-            ))
-            row = await self._pref_repo.get_model(str(existing.id))
-        else:
-            dto_with_user = UpsertNotificationPreferenceDto(
-                event_type=dto.event_type,
-                email_enabled=dto.email_enabled,
-                sms_enabled=dto.sms_enabled,
-                push_enabled=dto.push_enabled,
-            )
-            row = await self._pref_repo.create_return_model(dto_with_user)
-            row.user_id = user_id
-        return self._pref_to_dto(row)
+    async def mark_read(self, notification_id: str, user_id: str) -> None:
+        notification = await self._notification_repo.get_model(notification_id)
+        if notification is None or notification.user_id != user_id:
+            return
+        notification.read = True
+        self._notification_repo._session.add(notification)
 
-    # ── Helpers ───────────────────────────────────────────────────
+    async def mark_all_read(self, user_id: str) -> int:
+        return await self._notification_repo.mark_all_read(user_id)
 
-    def _to_dto(self, row: Notification) -> NotificationDto:
+    @staticmethod
+    def _to_dto(n: Notification) -> NotificationDto:
         return NotificationDto(
-            id=str(row.id),
-            recipient_id=row.recipient_id,
-            event_type=row.event_type,
-            title=row.title,
-            body=row.body,
-            entity_type=row.entity_type,
-            entity_id=row.entity_id,
-            read=row.read,
-            date_created=str(row.date_created),
-        )
-
-    def _pref_to_dto(self, row: NotificationPreference) -> NotificationPreferenceDto:
-        return NotificationPreferenceDto(
-            user_id=row.user_id,
-            event_type=row.event_type,
-            email_enabled=row.email_enabled,
-            sms_enabled=row.sms_enabled,
-            push_enabled=row.push_enabled,
+            id=n.id, type=n.type, title=n.title, body=n.body, link=n.link,
+            read=n.read, event_ref=n.event_ref, date_created=n.date_created,
         )

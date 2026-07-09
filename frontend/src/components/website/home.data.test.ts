@@ -7,6 +7,7 @@ import {
   testimonials,
   navLinks,
   footerLinks,
+  faqs,
   currencies,
   fxRates,
   formatPrice,
@@ -14,6 +15,7 @@ import {
   CTA_AGENT_HREF,
 } from "./home.data";
 import { AuthIntent } from "./auth/models";
+import { ROUTES } from "@lib/routes";
 
 describe("pricingTiers", () => {
   it("has exactly three tiers", () => {
@@ -204,20 +206,33 @@ describe("navLinks", () => {
 });
 
 describe("footerLinks", () => {
-  it("has resources, company, and socials groups", () => {
-    expect(Array.isArray(footerLinks.resources)).toBe(true);
+  it("has platform, company, legal, and socials groups", () => {
+    expect(Array.isArray(footerLinks.platform)).toBe(true);
     expect(Array.isArray(footerLinks.company)).toBe(true);
+    expect(Array.isArray(footerLinks.legal)).toBe(true);
     expect(Array.isArray(footerLinks.socials)).toBe(true);
   });
 
-  it("resources has at least 3 links", () => {
-    expect(footerLinks.resources.length).toBeGreaterThanOrEqual(3);
+  it("platform has at least 3 links", () => {
+    expect(footerLinks.platform.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("company has Privacy Policy and Terms of Service", () => {
-    const labels = footerLinks.company.map((l) => l.label);
+  it("legal has Privacy Policy and Terms of Service", () => {
+    const labels = footerLinks.legal.map((l) => l.label);
     expect(labels).toContain("Privacy Policy");
     expect(labels).toContain("Terms of Service");
+  });
+
+  it("legal links point at declared /legal routes (not dead # anchors)", () => {
+    for (const link of footerLinks.legal) {
+      expect(link.href.startsWith("/legal/")).toBe(true);
+    }
+  });
+
+  it("Our Story footer link targets the About page", () => {
+    const ourStory = footerLinks.company.find((l) => l.label === "Our Story");
+    expect(ourStory).toBeDefined();
+    expect(ourStory?.href).toBe(ROUTES.ABOUT);
   });
 
   it(`Become an Agent footer link targets /auth?intent=${AuthIntent.AGENT} (PRD §1.12)`, () => {
@@ -285,6 +300,49 @@ describe("formatPrice", () => {
       expect(result.startsWith("₦")).toBe(true);
       expect(result.endsWith("k")).toBe(true);
     }
+  });
+});
+
+describe("faqs (conversion FAQ — PRD §1)", () => {
+  it("has enough questions to address the main objections", () => {
+    expect(faqs.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("every entry has a non-empty question and answer", () => {
+    for (const faq of faqs) {
+      expect(faq.question.trim().length).toBeGreaterThan(0);
+      expect(faq.answer.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it("covers the key closing objections (trust, refund/scam, timing, payment, tiers)", () => {
+    const haystack = faqs
+      .map((f) => `${f.question} ${f.answer}`)
+      .join(" ")
+      .toLowerCase();
+    for (const topic of ["trust", "refund", "agent", "business days", "payment", "premium"]) {
+      expect(haystack).toContain(topic);
+    }
+  });
+});
+
+describe("footerLinks (footer-linked pages)", () => {
+  it("legal links resolve to /legal/* routes", () => {
+    for (const link of footerLinks.legal) {
+      expect(link.href.startsWith("/legal/")).toBe(true);
+    }
+  });
+
+  it("the Sample Report link points to the sample-report page, not an anchor", () => {
+    const sample = footerLinks.platform.find((l) => l.label === "Sample Report");
+    expect(sample?.href).toBe(ROUTES.SAMPLE_REPORT);
+  });
+
+  it("has a socials group with the expected platforms", () => {
+    const labels = footerLinks.socials.map((s) => s.label);
+    expect(labels).toEqual(
+      expect.arrayContaining(["Facebook", "Twitter", "LinkedIn", "Instagram", "YouTube"]),
+    );
   });
 });
 

@@ -6,12 +6,12 @@ from datetime import datetime
 from typing import List, Optional
 
 from pydantic import EmailStr, Field
-from sqlalchemy import BigInteger, Boolean, Column, Index, String, Integer, JSON
+from sqlalchemy import BigInteger, Boolean, Column, String, Integer
 from sqlalchemy.ext.mutable import MutableList
 
 from main.app.domain.user.auth.session.models import UserType, UserPersona
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-from main.appodus_utils.db.models import UTCDateTime
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
+from main.appodus_utils.db.models import UTCDateTime, jsonb_variant
 from main.appodus_utils.db.types.money import TransactionCurrency
 
 
@@ -50,22 +50,22 @@ class User(BaseEntity):
     preferred_currency = Column(String(8), nullable=False, default="NGN")
 
     user_type = Column(String(8), nullable=False, default=UserType.USER.value)
-    personas = Column(MutableList.as_mutable(JSON), nullable=False, default=list)
+    personas = Column(MutableList.as_mutable(jsonb_variant()), nullable=False, default=list)
     admin_sub_role = Column(String(16), nullable=True)
 
     trust_status = Column(String(16), nullable=False, default=TrustStatus.UNTRUSTED.value)
 
     # Phase 17 — referral credits (stored in kobo to avoid float precision issues)
     credit_balance_kobo = Column(BigInteger, nullable=False, default=0)
+    # Phase 17 — the referrer this user signed up under (§17.1), user id (str form). Null = organic.
+    referred_by = Column(String(36), nullable=True, index=True)
 
     password_hash = Column(String(255), nullable=True)  # nullable for OAuth-only users
     avatar_url = Column(String(512), nullable=True)
     locked_until = Column(UTCDateTime, nullable=True)
     failed_login_count = Column(Integer(), nullable=False, server_default="0")
-
-    __table_args__ = (
-        Index("ix_users_phone_e164", "phone_e164"),
-    )
+    # phone_e164's index is declared inline (index=True) — it auto-names to
+    # ix_users_phone_e164, matching the migration. Don't re-declare it here.
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -88,6 +88,7 @@ class CreateUserDto(UserBaseDto):
     admin_sub_role: Optional[AdminSubRole] = None
     email_verified: bool = False
     phone_verified: bool = False
+    referred_by: Optional[str] = None
 
 
 class _CreateUserDto(CreateUserDto):
@@ -114,13 +115,14 @@ class UpdateUserDto(Object):
     admin_sub_role: Optional[str] = None
     trust_status: Optional[str] = None
     credit_balance_kobo: Optional[int] = None
+    referred_by: Optional[str] = None
     password_hash: Optional[str] = None
     avatar_url: Optional[str] = None
     locked_until: Optional[datetime] = None
     failed_login_count: Optional[int] = None
 
 
-class SearchUserDto(PageRequest, BaseQueryDto):
+class SearchUserDto(InternalPageRequest, BaseQueryDto):
     email: Optional[str] = None
     phone_e164: Optional[str] = None
     user_type: Optional[str] = None

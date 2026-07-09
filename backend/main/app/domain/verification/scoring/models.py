@@ -1,85 +1,75 @@
-"""Trust score computation models — S30."""
+"""Trust Score Weights domain (PRD §8.3, §18.5 — built early per decision-log D14).
+
+The composite trust score on a released report is a weighted blend of the per-role
+review quality, using admin-defined weights per (tier × role) that must sum to 100%
+within each tier. This is the config surface; the composite is computed at release
+(§8.6 — recomputed only at release) by ``compute_composite``.
+"""
 from __future__ import annotations
 
-import enum
 from datetime import datetime
-from decimal import Decimal
-from typing import Dict, Optional
+from typing import Optional
 
-from sqlalchemy import Column, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Column, Integer, String, UniqueConstraint
 
-from main.appodus_utils import BaseEntity, Object
-from main.appodus_utils.db.models import UTCDateTime
+from main.app.core.state.status import AgentRole, VerificationTier
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
-class TrustScoreWeightConfig(BaseEntity):
-    """Per-tier, per-role weight (stored as percentage 0–100, must sum to 100 per tier)."""
+# ─── ORM ──────────────────────────────────────────────────────────
 
+class TrustScoreWeight(BaseEntity):
     __tablename__ = "trust_score_weight_config"
 
-    tier = Column(String(16), nullable=False, index=True)
+    tier = Column(String(16), nullable=False)
     role = Column(String(16), nullable=False)
-    weight = Column(Numeric(6, 3), nullable=False, default=0)
-    updated_by = Column(String(36), nullable=True)
+    # Percent contribution of this role to the tier's composite (weights sum to 100/tier).
+    weight_percent = Column(Integer, nullable=False, default=0)
 
     __table_args__ = (
-        UniqueConstraint("tier", "role", name="uq_ts_weight_tier_role"),
+        UniqueConstraint("tier", "role", name="uq_trust_weight_tier_role"),
     )
 
 
-class TrustScoreBreakdown(BaseEntity):
-    """Snapshot of each scoring computation for audit purposes."""
+# ─── DTOs ─────────────────────────────────────────────────────────
 
-    __tablename__ = "trust_score_breakdowns"
-
-    verification_id = Column(String(36), nullable=False, index=True)
-    task_scores_json = Column(Text, nullable=False)   # JSON: {role: score}
-    weights_json = Column(Text, nullable=False)        # JSON: {role: weight}
-    computed_score = Column(Numeric(5, 2), nullable=False)
-    computed_at = Column(UTCDateTime, nullable=False)
+class CreateTrustWeightDto(Object):
+    tier: VerificationTier
+    role: AgentRole
+    weight_percent: int
 
 
-# ─── DTOs ─────────────────────────────────────────────────────────────────────
+class UpdateTrustWeightDto(Object):
+    weight_percent: Optional[int] = None
 
 
-class TrustScoreWeightDto(Object):
+class QueryTrustWeightDto(BaseQueryDto):
+    tier: Optional[str] = None
+    role: Optional[str] = None
+
+
+class SearchTrustWeightDto(InternalPageRequest, BaseQueryDto):
+    tier: Optional[str] = None
+
+
+class TrustWeightDto(Object):
     id: str
-    tier: str
-    role: str
-    weight: Decimal
-    updated_by: Optional[str] = None
-    date_updated: Optional[datetime] = None
+    tier: VerificationTier
+    role: AgentRole
+    weight_percent: int
+    date_created: datetime
 
 
-class UpdateWeightDto(Object):
-    weight: Optional[Decimal] = None
-    updated_by: Optional[str] = None
+class TierWeightsDto(Object):
+    """All role weights for one tier, with the running sum (must equal 100 to be valid)."""
+
+    tier: VerificationTier
+    weights: list[TrustWeightDto]
+    total_percent: int
+    valid: bool
 
 
 class SetTierWeightsDto(Object):
-    """Payload to update all role weights for a given tier at once."""
-    weights: Dict[str, Decimal]  # {role: weight}; must sum to 100
+    """Admin sets the full weight map for a tier in one call (§8.3 sum-to-100 enforced)."""
 
-
-class CreateWeightConfigDto(Object):
-    tier: str
-    role: str
-    weight: Decimal
-    updated_by: Optional[str] = None
-
-
-class CreateBreakdownDto(Object):
-    verification_id: str
-    task_scores_json: str
-    weights_json: str
-    computed_score: Decimal
-    computed_at: datetime
-
-
-class TrustScoreBreakdownDto(Object):
-    id: str
-    verification_id: str
-    task_scores_json: str
-    weights_json: str
-    computed_score: Decimal
-    computed_at: datetime
+    weights: dict[AgentRole, int]

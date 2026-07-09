@@ -1,12 +1,5 @@
-import DisputeQueue from "@components/admin/disputes/DisputeQueue";
-
-export const metadata = { title: "Disputes — Admin" };
+import AdminDisputes from "@components/admin/disputes/AdminDisputes";
 
 export default function AdminDisputesPage() {
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-xl font-semibold text-gray-900 mb-6">Disputes</h1>
-      <DisputeQueue />
-    </div>
-  );
+  return <AdminDisputes />;
 }

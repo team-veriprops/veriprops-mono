@@ -37,6 +37,8 @@ class SignupRequestDto(Object):
     consents: List[UserConsentInputDto] = Field(default_factory=list)
     intent: Optional[AuthIntent] = None
     device_fingerprint: Optional[str] = None
+    # §17.1 — an optional referral code (from ?ref=…); an unknown code is ignored, never fatal.
+    referral_code: Optional[str] = None
 
 
 class OtpSendDto(Object):
@@ -50,6 +52,13 @@ class OtpSendDto(Object):
 
 
 class OtpVerifyDto(OtpSendDto):
+    code: str
+
+
+class VerifyPhoneDto(Object):
+    """Phase-5 phone verification for the logged-in user — the phone comes from their
+    profile, so only the OTP code is submitted (PRD §5)."""
+
     code: str
 
 

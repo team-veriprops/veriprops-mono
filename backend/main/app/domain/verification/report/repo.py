@@ -1,89 +1,62 @@
-"""Report domain repositories — S35/S36."""
+"""Report data access."""
 from __future__ import annotations
 
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import func, select
-
-from main.app.domain.verification.report.models import (
-    CreateReportVersionDto,
-    CreateReportViewDto,
-    ReportVersion,
-    ReportView,
-    UpdateReportVersionDto,
-)
-from main.appodus_utils.db.repo import GenericRepo
-from main.appodus_utils.db.session import get_db_session_from_context
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-@inject
-class ReportViewRepo(GenericRepo[ReportView, CreateReportViewDto, None, None, None]):
-    def __init__(
-        self,
-        db: AsyncSession,
-        model: Type[ReportView] = ReportView,
-        query_dto=None,
-    ) -> None:
-        super().__init__(db, model, query_dto)
-        self.db = db
-
-    async def count_unacknowledged_for_customer(
-        self, customer_id: str, completed_vids: List[str]
-    ) -> int:
-        """Return how many of the given completed VIDs have no ReportView for this customer."""
-        if not completed_vids:
-            return 0
-        stmt = (
-            select(func.count(func.distinct(ReportView.vid)))
-            .where(
-                ReportView.customer_id == customer_id,
-                ReportView.deleted.is_(False),
-                ReportView.vid.in_(completed_vids),
-            )
-        )
-        result = await self._session.execute(stmt)
-        acknowledged_count: int = result.scalar() or 0
-        return len(completed_vids) - acknowledged_count
-
-    async def get_for_customer(self, vid: str, customer_id: str) -> Optional[ReportView]:
-        session = self._session
-        result = await session.execute(
-            select(ReportView)
-            .where(
-                ReportView.vid == vid,
-                ReportView.customer_id == customer_id,
-                ReportView.deleted.is_(False),
-            )
-            .limit(1)
-        )
-        return result.scalars().first()
+from main.app.core.state.status import ReportState
+from main.app.domain.verification.report.models import (
+    CreateReportDto,
+    QueryReportDto,
+    Report,
+    SearchReportDto,
+    UpdateReportDto,
+)
+from main.appodus_utils.db.repo import GenericRepo
 
 
 @inject
-class ReportVersionRepo(
-    GenericRepo[ReportVersion, CreateReportVersionDto, UpdateReportVersionDto, None, None]
+class ReportRepo(
+    GenericRepo[Report, CreateReportDto, UpdateReportDto, QueryReportDto, SearchReportDto]
 ):
     def __init__(
         self,
         db: AsyncSession,
-        model: Type[ReportVersion] = ReportVersion,
-        query_dto=None,
-    ) -> None:
+        model: Type[Report] = Report,
+        query_dto: Type[QueryReportDto] = QueryReportDto,
+    ):
         super().__init__(db, model, query_dto)
         self.db = db
 
-    async def current_for_vid(self, vid: str) -> Optional[ReportVersion]:
-        session = self._session
-        result = await session.execute(
-            select(ReportVersion)
-            .where(
-                ReportVersion.vid == vid,
-                ReportVersion.is_superseded.is_(False),
-                ReportVersion.deleted.is_(False),
-            )
-            .order_by(ReportVersion.date_created.desc())
-            .limit(1)
+    async def list_for_verification(self, verification_id: str) -> List[Report]:
+        stmt = (
+            select(Report)
+            .where(Report.deleted.is_(False), Report.verification_id == verification_id)
+            .order_by(desc(Report.report_version))
         )
-        return result.scalars().first()
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def get_released(self, verification_id: str) -> Optional[Report]:
+        stmt = select(Report).where(
+            Report.deleted.is_(False),
+            Report.verification_id == verification_id,
+            Report.state == ReportState.RELEASED.value,
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def latest_version(self, verification_id: str) -> int:
+        reports = await self.list_for_verification(verification_id)
+        return reports[0].report_version if reports else 0
+
+    async def list_released_scores(self) -> dict:
+        """verification_id → composite trust score for the RELEASED report, for the
+        regional average-trust analytic (§18.1)."""
+        stmt = select(Report.verification_id, Report.composite_trust_score).where(
+            Report.deleted.is_(False),
+            Report.state == ReportState.RELEASED.value,
+            Report.composite_trust_score.is_not(None),
+        )
+        return {vid: int(score) for vid, score in (await self._session.execute(stmt)).all()}

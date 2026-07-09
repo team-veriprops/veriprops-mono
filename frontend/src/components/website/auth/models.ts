@@ -130,13 +130,21 @@ export interface SecurityEvent {
   occurredAt: string;
 }
 
-export enum ConsentDocumentType {
-  PLATFORM_TERMS = "PLATFORM_TERMS",
-  PRIVACY_POLICY = "PRIVACY_POLICY",
-  AGENT_TERMS = "AGENT_TERMS",
-  VERIFICATION_TERMS = "VERIFICATION_TERMS",
-  REPORT_DISCLAIMER = "REPORT_DISCLAIMER",
+// Cross-portal awareness (PRD §2.14) — per-persona actionable counts; the
+// frontend derives the "other hat" badge from these.
+export interface PersonaActionableCount {
+  persona: UserPersona;
+  actionableCount: number;
 }
+
+export interface CrossPortalSummary {
+  personas: PersonaActionableCount[];
+}
+
+// The full enum lives in @/types/models; re-exported so consent flows can keep
+// importing it from here.
+export { ConsentDocumentType } from "@/types/models";
+import { ConsentDocumentType } from "@/types/models";
 
 export interface ConsentDocument {
   type: ConsentDocumentType;

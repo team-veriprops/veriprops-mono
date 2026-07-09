@@ -1,3 +1,6 @@
+"""Task evidence data access."""
+from __future__ import annotations
+
 from typing import List, Type
 
 from kink import inject
@@ -5,56 +8,53 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.verification.task.evidence.models import (
-    CreateEvidenceItemDto,
+    CreateEvidenceDto,
     EvidenceItem,
-    QueryEvidenceItemDto,
-    SearchEvidenceItemDto,
-    UpdateEvidenceItemDto,
+    QueryEvidenceDto,
+    SearchEvidenceDto,
+    UpdateEvidenceDto,
 )
 from main.appodus_utils.db.repo import GenericRepo
 
 
 @inject
-class EvidenceItemRepo(
+class EvidenceRepo(
     GenericRepo[
         EvidenceItem,
-        CreateEvidenceItemDto,
-        UpdateEvidenceItemDto,
-        QueryEvidenceItemDto,
-        SearchEvidenceItemDto,
+        CreateEvidenceDto,
+        UpdateEvidenceDto,
+        QueryEvidenceDto,
+        SearchEvidenceDto,
     ]
 ):
     def __init__(
         self,
         db: AsyncSession,
         model: Type[EvidenceItem] = EvidenceItem,
-        query_dto: Type[QueryEvidenceItemDto] = QueryEvidenceItemDto,
+        query_dto: Type[QueryEvidenceDto] = QueryEvidenceDto,
     ):
         super().__init__(db, model, query_dto)
+        self.db = db
 
     async def list_for_task(self, task_id: str) -> List[EvidenceItem]:
         stmt = (
             select(EvidenceItem)
             .where(EvidenceItem.deleted.is_(False), EvidenceItem.task_id == task_id)
-            .order_by(EvidenceItem.date_created.asc())
+            .order_by(EvidenceItem.uploaded_at.asc())
         )
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_for_verification(self, verification_id: str) -> List[EvidenceItem]:
+        """All evidence across a verification's tasks, newest first (customer feed §9.4)."""
+        stmt = (
+            select(EvidenceItem)
+            .where(
+                EvidenceItem.deleted.is_(False),
+                EvidenceItem.verification_id == verification_id,
+            )
+            .order_by(EvidenceItem.uploaded_at.desc())
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
 
     async def count_for_task(self, task_id: str) -> int:
-        from sqlalchemy import func, select
-        stmt = select(func.count(EvidenceItem.id)).where(
-            EvidenceItem.deleted.is_(False),
-            EvidenceItem.task_id == task_id,
-        )
-        return await self._session.scalar(stmt) or 0
-
-    async def count_gps_for_task(self, task_id: str) -> int:
-        from sqlalchemy import func, select
-        stmt = select(func.count(EvidenceItem.id)).where(
-            EvidenceItem.deleted.is_(False),
-            EvidenceItem.task_id == task_id,
-            EvidenceItem.gps_lat.is_not(None),
-            EvidenceItem.gps_lng.is_not(None),
-        )
-        return await self._session.scalar(stmt) or 0
+        return len(await self.list_for_task(task_id))

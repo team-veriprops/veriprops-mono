@@ -1,5 +1,9 @@
-import TrustScoreWeightsClient from "./TrustScoreWeightsClient";
+import TrustScoreWeights from "@components/admin/config/TrustScoreWeights";
 
 export default function TrustScoreWeightsPage() {
-  return <TrustScoreWeightsClient />;
+  return (
+    <div className="p-4 sm:p-6">
+      <TrustScoreWeights />
+    </div>
+  );
 }

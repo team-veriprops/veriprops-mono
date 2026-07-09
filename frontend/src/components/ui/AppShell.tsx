@@ -28,6 +28,8 @@ import {
   CheckCircle2, LogOut, Menu, X
 } from "lucide-react";
 import NotificationBell from "@components/shared/notifications/NotificationBell";
+import ChatButton from "@components/chat/ChatButton";
+import PortalSwitcher from "@components/ui/PortalSwitcher";
 import { useLogoutMutation } from "@components/website/auth/libs/useAuthQueries";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { UserType, UserPersona, type AuthUser } from "@components/website/auth/models";
@@ -35,6 +37,7 @@ import { NavItem } from "@/components/nav/MenuSidebar";
 import { ROUTES } from "@lib/routes";
 import TopNavBreadcrumb from "@components/ui/TopNav/TopNavBreadcrumb";
 import TopNavUserMenu from "@components/ui/TopNav/TopNavUserMenu";
+import BrandLogo from "./BrandLogo";
 
 interface AppShellProps {
   navItems: NavItem[];
@@ -88,15 +91,7 @@ function SidebarNav({
 }: SidebarNavProps) {
   return (
     <div className="flex flex-col h-full">
-      {/* Logo */}
-      <Link href={ROUTES.HOME} className="px-6 py-5 flex items-center gap-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="w-7 h-7 rounded-md flex items-center justify-center signature-gradient">
-          <CheckCircle2 className="w-4 h-4 text-white" strokeWidth={2.5} />
-        </div>
-        <span className="text-base font-extrabold tracking-tight font-display" style={{ color: "#fff" }}>
-          Veriprops
-        </span>
-      </Link>
+      <BrandLogo variant="light" />
 
       {/* Nav items */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -259,6 +254,8 @@ export default function AppShell({ navItems, children }: AppShellProps) {
         >
           <TopNavBreadcrumb />
           <div className="flex items-center gap-1">
+            <PortalSwitcher />
+            <ChatButton />
             <NotificationBell />
             <TopNavUserMenu
               user={user}
@@ -291,6 +288,8 @@ export default function AppShell({ navItems, children }: AppShellProps) {
             </span>
           </div>
           <div className="flex items-center gap-1">
+            <PortalSwitcher />
+            <ChatButton />
             <NotificationBell />
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"

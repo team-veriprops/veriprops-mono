@@ -1,111 +1,103 @@
-"""Admin team management service — PRD §4.1 (R4.5).
-
-Owns listing, deactivating, and sub-role reassignment for admin accounts.
-All mutations emit a SecurityEvent for the audit trail.
-"""
+"""Admin team management service (PRD §4.1): list, deactivate, change sub-role."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from loguru import Logger
+from typing import Optional
 
-from typing import List, Optional
+from kink import inject
 
-from kink import di, inject
-
-from main.app.domain.user.admin_team.models import AdminTeamMemberDto
-from main.app.domain.user.auth.session.models import SecurityEventType, UserType
-from main.app.domain.user.auth.session.service import SessionService
+from main.app.domain.audit.models import AuditActionType
+from main.app.domain.audit.service import AuditLogService
+from main.app.domain.user.admin_team.models import AdminMemberDto, AdminTeamPageDto
 from main.app.domain.user.models import AdminSubRole, UpdateUserDto
 from main.app.domain.user.repo import UserRepo
+from main.app.domain.user.service import UserService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
-from main.appodus_utils.exception.exceptions import (
-    InvalidResourceStateException,
-    ResourceNotFoundException,
-    ValidationException,
-)
-
-logger: Logger = di["logger"]
+from main.appodus_utils.exception.exceptions import ResourceNotFoundException, ValidationException
 
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class AdminTeamService:
-    def __init__(self, user_repo: UserRepo, session_service: SessionService):
+    def __init__(
+        self,
+        user_repo: UserRepo,
+        user_service: UserService,
+        audit_service: AuditLogService,
+    ):
         self._user_repo = user_repo
-        self._session_service = session_service
+        self._user_service = user_service
+        self._audit_service = audit_service
 
-    async def list_admins(
-        self, sub_role_filter: Optional[AdminSubRole] = None
-    ) -> List[AdminTeamMemberDto]:
-        admins = await self._user_repo.list_admins(sub_role_filter=sub_role_filter)
-        return [self._to_dto(u) for u in admins]
-
-    async def deactivate_admin(self, actor_id: str, target_id: str) -> None:
-        if actor_id == target_id:
-            raise ValidationException(message="Cannot deactivate your own admin account")
-
-        target = await self._user_repo.get_model(target_id)
-        if target is None or (target.user_type or "").upper() != UserType.ADMIN.value:
-            raise ResourceNotFoundException(resource="Admin")
-
-        if (target.admin_sub_role or "").upper() == AdminSubRole.SUPER.value:
-            supers = await self._user_repo.list_admins(sub_role_filter=AdminSubRole.SUPER)
-            if len(supers) <= 1:
-                raise InvalidResourceStateException(
-                    resource="Admin",
-                    message="Cannot deactivate the last SUPER admin",
-                )
-
-        await self._user_repo.demote_to_user(target_id)
-        await self._record_event(
-            type_=SecurityEventType.ADMIN_DEACTIVATED,
-            description=f"admin {target_id} deactivated by actor {actor_id}",
-            user_id=actor_id,
-        )
-
-    async def change_sub_role(
-        self, actor_id: str, target_id: str, new_sub_role: AdminSubRole
-    ) -> AdminTeamMemberDto:
-        target = await self._user_repo.get_model(target_id)
-        if target is None or (target.user_type or "").upper() != UserType.ADMIN.value:
-            raise ResourceNotFoundException(resource="Admin")
-
-        old_role = target.admin_sub_role or "NONE"
-        await self._user_repo.update(target_id, UpdateUserDto(admin_sub_role=new_sub_role.value))
-        await self._record_event(
-            type_=SecurityEventType.ADMIN_ROLE_CHANGED,
-            description=f"admin {target_id} sub-role changed {old_role} → {new_sub_role.value} by {actor_id}",
-            user_id=actor_id,
-        )
-
-        updated = await self._user_repo.get_model(target_id)
-        return self._to_dto(updated)
-
-    # ── Helpers ──
-
-    @staticmethod
-    def _to_dto(user) -> AdminTeamMemberDto:
-        return AdminTeamMemberDto(
-            id=str(user.id),
-            email=user.email,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            sub_role=AdminSubRole(user.admin_sub_role),
-            date_created=user.date_created,
-        )
-
-    async def _record_event(
-        self, type_: SecurityEventType, description: str, user_id: Optional[str] = None,
-    ) -> None:
-        try:
-            await self._session_service.record_event(
-                type=type_,
-                description=description[:255],
-                user_id=user_id,
+    async def list_team(
+        self,
+        page: int = 0,
+        page_size: int = 10,
+        query: Optional[str] = None,
+        sub_role: Optional[str] = None,
+    ) -> AdminTeamPageDto:
+        sub_role_filter = AdminSubRole(sub_role) if sub_role else None
+        admins = await self._user_repo.list_admins(sub_role_filter=sub_role_filter, query=query)
+        total = len(admins)
+        start = page * page_size
+        window = admins[start:start + page_size]
+        items = [
+            AdminMemberDto(
+                id=u.id,
+                name=f"{u.first_name} {u.last_name}".strip(),
+                email=u.email,
+                sub_role=AdminSubRole(u.admin_sub_role) if u.admin_sub_role else None,
+                active=not u.deleted,
+                date_created=u.date_created,
             )
-        except Exception:  # pragma: no cover
-            logger.warning("Could not record admin team security event", exc_info=True)
+            for u in window
+        ]
+        return AdminTeamPageDto(items=items, total=total, page=page, page_size=page_size)
+
+    async def change_sub_role(self, user_id: str, sub_role: AdminSubRole, admin_id: str) -> None:
+        # Defense in depth (the endpoint is already INVITE_ADMIN/SUPER-gated):
+        # an admin may not change their own sub-role, and only a SUPER may grant SUPER.
+        if user_id == admin_id:
+            raise ValidationException(message="You cannot change your own admin sub-role.")
+
+        actor = await self._user_service.get_user_model(admin_id)
+        self._assert_is_admin(actor)
+        if sub_role == AdminSubRole.SUPER and actor.admin_sub_role != AdminSubRole.SUPER.value:
+            raise ValidationException(message="Only a SUPER admin can grant the SUPER role.")
+
+        user = await self._user_service.get_user_model(user_id)
+        self._assert_is_admin(user)
+        from_role = user.admin_sub_role
+        await self._user_repo.update(user_id, UpdateUserDto(admin_sub_role=sub_role.value))
+        self._audit_service.schedule(
+            action=AuditActionType.ADMIN_ROLE_CHANGED,
+            resource_type="user",
+            resource_id=user_id,
+            actor_id=admin_id,
+            from_state=from_role,
+            to_state=sub_role.value,
+        )
+
+    async def deactivate(self, user_id: str, admin_id: str) -> None:
+        """Remove admin access (demote to a plain USER). PRD §4.1 team management."""
+        user = await self._user_service.get_user_model(user_id)
+        self._assert_is_admin(user)
+        if user_id == admin_id:
+            raise ValidationException(message="You cannot deactivate your own admin access.")
+        from_role = user.admin_sub_role
+        await self._user_repo.demote_to_user(user_id)
+        self._audit_service.schedule(
+            action=AuditActionType.ADMIN_ROLE_CHANGED,
+            resource_type="user",
+            resource_id=user_id,
+            actor_id=admin_id,
+            from_state=from_role,
+            to_state="DEACTIVATED",
+        )
+
+    def _assert_is_admin(self, user) -> None:
+        from main.app.domain.user.auth.session.models import UserType
+        if not user or user.user_type != UserType.ADMIN.value:
+            raise ResourceNotFoundException(resource="admin team member")

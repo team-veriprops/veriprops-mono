@@ -1,26 +1,17 @@
-"""Unit tests for BroadcastService (S55)."""
-from __future__ import annotations
-
+"""BroadcastService (§18.1, D37) — compose/send/audience-resolution/sweep, repos mocked."""
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from main.app.domain.broadcast.models import (
-    BroadcastAudience,
-    BroadcastStatus,
-    CreateBroadcastDto,
-    ScheduleBroadcastDto,
-    UpdateBroadcastDto,
-)
+from main.app.core.events import EventType
+from main.app.domain.broadcast import service as broadcast_module
+from main.app.domain.broadcast.models import BroadcastAudience, BroadcastStatus, ComposeBroadcastDto
 from main.app.domain.broadcast.service import BroadcastService
+from main.app.domain.user.auth.session.models import UserPersona, UserType
+from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
-from main.appodus_utils.exception.exceptions import (
-    InvalidResourceStateException,
-    ResourceNotFoundException,
-    ValidationException,
-)
 
 
 @pytest.fixture(autouse=True)
@@ -39,124 +30,88 @@ def mock_db_session():
     db_session_ctx.reset(token)
 
 
-def _make_broadcast(status="DRAFT", audience="ALL"):
-    row = MagicMock()
-    row.id = "bc-001"
-    row.subject = "Test Subject"
-    row.body_text = "Test body"
-    row.body_html = None
-    row.audience = audience
-    row.channels = None
-    row.status = status
-    row.scheduled_at = None
-    row.sent_at = None
-    row.created_by = "admin-1"
-    row.total_recipients = None
-    row.sent_count = 0
-    row.date_created = MagicMock()
-    row.date_updated = None
-    return row
+@pytest.fixture(autouse=True)
+def stub_publish(monkeypatch):
+    published = []
+    monkeypatch.setattr(broadcast_module, "publish_domain_event",
+                        AsyncMock(side_effect=lambda e: published.append(e)))
+    return published
 
 
-def _make_svc():
-    svc = BroadcastService.__new__(BroadcastService)
-    repo = MagicMock()
-    svc._repo = repo
-    return svc, repo
+# (user_id, user_type, personas)
+_USERS = [
+    ("u-admin", UserType.ADMIN.value, []),
+    ("u-cust", UserType.USER.value, [UserPersona.CUSTOMER.value]),
+    ("u-agent", UserType.USER.value, [UserPersona.AGENT.value]),
+    ("u-both", UserType.USER.value, [UserPersona.CUSTOMER.value, UserPersona.AGENT.value]),
+]
 
 
-class TestCreateBroadcast:
-    async def test_creates_draft_by_default(self):
-        svc, repo = _make_svc()
-        row = _make_broadcast("DRAFT")
-        repo.create = AsyncMock(return_value=MagicMock(data=MagicMock(id="bc-001")))
-        repo.get_model = AsyncMock(return_value=row)
-
-        dto = CreateBroadcastDto(subject="Hello", body_text="World", audience=BroadcastAudience.ALL)
-        result = await svc.create(dto, "admin-1")
-
-        assert result.status == BroadcastStatus.DRAFT
+def _make_service():
+    svc = object.__new__(BroadcastService)
+    svc._broadcast_repo = AsyncMock()
+    svc._users = AsyncMock()
+    svc._audit = MagicMock()
+    svc._audit.schedule = MagicMock()
+    svc._users.list_recipient_rows = AsyncMock(return_value=_USERS)
+    return svc
 
 
-class TestScheduleBroadcast:
-    async def test_schedules_draft_broadcast(self):
-        svc, repo = _make_svc()
-        row = _make_broadcast("DRAFT")
-        future = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=2)
-        scheduled_row = _make_broadcast("SCHEDULED")
-        scheduled_row.scheduled_at = future
-        repo.get_model = AsyncMock(side_effect=[row, scheduled_row])
-        repo.update = AsyncMock()
+class TestCompose:
+    async def test_no_schedule_is_draft(self):
+        svc = _make_service()
+        svc._broadcast_repo.create_return_model = AsyncMock(side_effect=lambda dto: SimpleNamespace(id="b-1", **dto.model_dump()))
+        b = await svc.compose(ComposeBroadcastDto(
+            audience=BroadcastAudience.ALL, subject="Hi", body="Body"), "admin-1")
+        assert b.status == BroadcastStatus.DRAFT
 
-        result = await svc.schedule("bc-001", ScheduleBroadcastDto(scheduled_at=future), "admin-1")
-
-        repo.update.assert_awaited_once()
-        assert result.status == BroadcastStatus.SCHEDULED
-
-    async def test_raises_when_not_draft(self):
-        svc, repo = _make_svc()
-        repo.get_model = AsyncMock(return_value=_make_broadcast("SENT"))
-
-        future = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
-        with pytest.raises(InvalidResourceStateException):
-            await svc.schedule("bc-001", ScheduleBroadcastDto(scheduled_at=future), "admin-1")
-
-    async def test_raises_when_scheduled_at_in_past(self):
-        svc, repo = _make_svc()
-        repo.get_model = AsyncMock(return_value=_make_broadcast("DRAFT"))
-
-        past = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
-        with pytest.raises(ValidationException):
-            await svc.schedule("bc-001", ScheduleBroadcastDto(scheduled_at=past), "admin-1")
+    async def test_with_schedule_is_scheduled(self):
+        svc = _make_service()
+        svc._broadcast_repo.create_return_model = AsyncMock(side_effect=lambda dto: SimpleNamespace(id="b-1", **dto.model_dump()))
+        when = Utils.datetime_now()
+        b = await svc.compose(ComposeBroadcastDto(
+            audience=BroadcastAudience.CUSTOMERS, subject="Hi", body="B", scheduled_at=when), "admin-1")
+        assert b.status == BroadcastStatus.SCHEDULED
 
 
-class TestCancelBroadcast:
-    async def test_cancels_draft(self):
-        svc, repo = _make_svc()
-        row = _make_broadcast("DRAFT")
-        cancelled = _make_broadcast("CANCELLED")
-        repo.get_model = AsyncMock(side_effect=[row, cancelled])
-        repo.update = AsyncMock()
-
-        result = await svc.cancel("bc-001", "admin-1")
-        assert result.status == BroadcastStatus.CANCELLED
-
-    async def test_cancels_scheduled(self):
-        svc, repo = _make_svc()
-        row = _make_broadcast("SCHEDULED")
-        cancelled = _make_broadcast("CANCELLED")
-        repo.get_model = AsyncMock(side_effect=[row, cancelled])
-        repo.update = AsyncMock()
-
-        result = await svc.cancel("bc-001", "admin-1")
-        assert result.status == BroadcastStatus.CANCELLED
-
-    async def test_raises_when_already_sent(self):
-        svc, repo = _make_svc()
-        repo.get_model = AsyncMock(return_value=_make_broadcast("SENT"))
-
-        with pytest.raises(InvalidResourceStateException):
-            await svc.cancel("bc-001", "admin-1")
-
-    async def test_raises_when_not_found(self):
-        svc, repo = _make_svc()
-        repo.get_model = AsyncMock(return_value=None)
-
-        with pytest.raises(ResourceNotFoundException):
-            await svc.cancel("nonexistent", "admin-1")
+class TestPreview:
+    async def test_audience_counts(self):
+        svc = _make_service()
+        assert (await svc.preview(BroadcastAudience.ALL)).recipient_count == 4
+        assert (await svc.preview(BroadcastAudience.ADMINS)).recipient_count == 1
+        assert (await svc.preview(BroadcastAudience.CUSTOMERS)).recipient_count == 2  # cust + both
+        assert (await svc.preview(BroadcastAudience.AGENTS)).recipient_count == 2     # agent + both
 
 
-class TestSendNowBroadcast:
-    async def test_transitions_to_sent(self):
-        svc, repo = _make_svc()
-        row = _make_broadcast("DRAFT")
-        sent_row = _make_broadcast("SENT")
-        sent_row.sent_count = 0
-        sent_row.total_recipients = 0
-        repo.get_model = AsyncMock(side_effect=[row, sent_row])
-        repo.update = AsyncMock()
+class TestSendNow:
+    async def test_fans_out_and_marks_sent(self, stub_publish):
+        svc = _make_service()
+        row = SimpleNamespace(id="b-1", audience=BroadcastAudience.CUSTOMERS.value,
+                              subject="S", body="B", status=BroadcastStatus.DRAFT.value,
+                              sent_at=None, recipient_count=0)
+        svc._broadcast_repo.get_model = AsyncMock(return_value=row)
+        await svc.send_now("b-1", "admin-1")
+        assert row.status == BroadcastStatus.SENT.value
+        assert row.recipient_count == 2
+        assert stub_publish[0].type == EventType.BROADCAST_ANNOUNCEMENT
+        assert set(stub_publish[0].recipient_user_ids) == {"u-cust", "u-both"}
 
-        with patch.object(svc, "_resolve_recipients", AsyncMock(return_value=[])):
-            result = await svc.send_now("bc-001", "admin-1")
+    async def test_idempotent_when_already_sent(self, stub_publish):
+        svc = _make_service()
+        row = SimpleNamespace(id="b-1", audience=BroadcastAudience.ALL.value, subject="S",
+                              body="B", status=BroadcastStatus.SENT.value, sent_at=None, recipient_count=0)
+        svc._broadcast_repo.get_model = AsyncMock(return_value=row)
+        await svc.send_now("b-1", "admin-1")
+        assert stub_publish == []
 
-        assert result.status == BroadcastStatus.SENT
+
+class TestSweep:
+    async def test_sends_due_scheduled(self, stub_publish):
+        svc = _make_service()
+        due = SimpleNamespace(id="b-1", audience=BroadcastAudience.ADMINS.value, subject="S",
+                              body="B", status=BroadcastStatus.SCHEDULED.value, sent_at=None, recipient_count=0)
+        svc._broadcast_repo.list_due_scheduled = AsyncMock(return_value=[due])
+        svc._broadcast_repo.get_model = AsyncMock(return_value=due)
+        sent = await svc.sweep_scheduled_broadcasts()
+        assert sent == 1
+        assert due.status == BroadcastStatus.SENT.value

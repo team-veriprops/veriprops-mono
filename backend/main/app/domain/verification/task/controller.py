@@ -1,283 +1,163 @@
-"""Task HTTP routes — admin assignment + agent task execution.
+"""Agent task-execution controller (PRD §7.1, §7.3).
 
-Admin routes:  /api/admin/verifications/{vid}/tasks/...
-               /api/admin/tasks/...
-               /api/admin/agents/available
-Agent routes:  /api/agents/tasks/...
+URL shape: /agents/tasks/... — the agent's own work surface. Identity is the JWT
+subject; authorization is ownership-based (a task belongs to the accepting/assigned
+agent), enforced in the service. Admin assignment lives on the admin verification
+router (§6.3). Frontend service: frontend/src/components/agents/libs/agent-task-service.
 """
 from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
+from main.app.core.state.status import AgentRole, VerificationTier
 from main.app.domain.audit.models import AuditActivityPageDto
-from main.app.domain.audit.service import AuditLogService
-from main.app.domain.user.auth.utils.permissions import Permission, require_permission
-from main.app.domain.verification.task.models import (
-    AdminAssignDto,
-    AdminReassignDto,
-    AvailableAgentDto,
-    TaskDto,
-)
-from main.app.domain.verification.escalation.models import EscalationDto, ReportEscalationDto
-from main.app.domain.verification.escalation.service import EscalationService
-from main.app.domain.verification.task.evidence.models import EvidenceItemDto, EvidenceType
+from main.app.domain.verification.task.evidence.models import EvidenceDto, EvidenceItem, EvidenceKind
 from main.app.domain.verification.task.evidence.service import EvidenceService
-from main.app.domain.verification.task.service import TaskService
-from main.appodus_utils.db.models import SuccessResponse
+from main.app.domain.verification.task.models import (
+    AgentDashboardDto,
+    AgentTaskDto,
+    DeclineTaskDto,
+    SubmitTaskDto,
+    TaskAssignmentMode,
+    TaskState,
+    VerificationTask,
+)
+from main.app.domain.verification.task.service import VerificationTaskService
+from main.appodus_utils.db.models import Page, PaginationMeta, SuccessResponse
 
-task_service: TaskService = di[TaskService]
+agent_task_router = APIRouter(prefix="/agents/tasks", tags=["Agent: Tasks"])
+task_service: VerificationTaskService = di[VerificationTaskService]
 evidence_service: EvidenceService = di[EvidenceService]
-escalation_service: EscalationService = di[EscalationService]
-
-# ── Admin routers ─────────────────────────────────────────────────────
-
-admin_task_router = APIRouter(prefix="/admin", tags=["Admin - Tasks"])
-agent_task_router = APIRouter(prefix="/agents", tags=["Agent - Tasks"])
-
-# ── Admin: tasks scoped to a verification ─────────────────────────────
 
 
-@admin_task_router.get(
-    "/verifications/{vid}/tasks",
-    response_model=SuccessResponse[List[TaskDto]],
-)
-async def list_tasks_for_verification(
-    vid: str,
-    _: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
-):
-    tasks = await task_service.list_for_verification(vid)
-    return SuccessResponse[List[TaskDto]](data=tasks)
+async def _to_agent_dto(t: VerificationTask) -> AgentTaskDto:
+    evidence_count = await evidence_service.count_for_task(t.id)
+    return AgentTaskDto(
+        id=t.id, verification_id=t.verification_id, role=AgentRole(t.role),
+        tier=VerificationTier(t.tier), state=TaskState(t.state), in_pool=bool(t.in_pool),
+        assignment_mode=TaskAssignmentMode(t.assignment_mode) if t.assignment_mode else None,
+        accept_deadline_at=t.accept_deadline_at, remote_bonus_minor=t.remote_bonus_minor,
+        submission_payload=t.submission_payload, rejection_reason=t.rejection_reason,
+        evidence_count=evidence_count, assigned_at=t.assigned_at,
+        accepted_at=t.accepted_at, submitted_at=t.submitted_at,
+    )
 
 
-@admin_task_router.post(
-    "/verifications/{vid}/tasks/{role}/assign",
-    response_model=SuccessResponse[TaskDto],
-)
-async def admin_assign_task(
-    vid: str,
-    role: str,
-    req: AdminAssignDto,
-    admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
-):
-    """Admin directly assigns a specific role-task to an agent (bypasses pool)."""
-    tasks = await task_service.list_for_verification(vid)
-    matching = [t for t in tasks if t.role.value.upper() == role.upper()]
-    if not matching:
-        from main.appodus_utils.exception.exceptions import ResourceNotFoundException
-        raise ResourceNotFoundException(resource=f"Task with role {role}")
-    task = matching[0]
-    dto = await task_service.admin_assign(task.id, req.agent_id, admin_id)
-    return SuccessResponse[TaskDto](data=dto)
+def _evidence_dto(e: EvidenceItem) -> EvidenceDto:
+    return EvidenceDto(
+        id=e.id, task_id=e.task_id, verification_id=e.verification_id, kind=EvidenceKind(e.kind),
+        storage_url=e.storage_url, mime_type=e.mime_type, size_bytes=e.size_bytes,
+        content_sha256=e.content_sha256, gps_latitude=e.gps_latitude,
+        gps_longitude=e.gps_longitude, captured_at=e.captured_at, uploaded_at=e.uploaded_at,
+    )
 
 
-# ── Admin: task-level operations ──────────────────────────────────────
-
-
-@admin_task_router.post(
-    "/tasks/{task_id}/reassign",
-    response_model=SuccessResponse[TaskDto],
-)
-async def admin_reassign_task(
-    task_id: str,
-    req: AdminReassignDto,
-    admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
-):
-    dto = await task_service.admin_reassign(task_id, req.agent_id, admin_id, req.note)
-    return SuccessResponse[TaskDto](data=dto)
-
-
-@admin_task_router.get(
-    "/agents/available",
-    response_model=SuccessResponse[List[AvailableAgentDto]],
-)
-async def list_available_agents(
-    role: Optional[str] = Query(None),
-    state: Optional[str] = Query(None),
-    _: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
-):
-    """Return approved agents eligible for assignment, ranked by trust + load."""
-    agents = await task_service.list_available_agents(role=role, state=state)
-    return SuccessResponse[List[AvailableAgentDto]](data=agents)
-
-
-# ── Agent routes ──────────────────────────────────────────────────────
-
-
-@agent_task_router.get(
-    "/tasks/available",
-    response_model=SuccessResponse[List[TaskDto]],
-)
-async def get_available_tasks(
-    role: str = Query(..., description="Agent role: FIELD, SURVEYOR, REGISTRY, LAWYER"),
-    state: Optional[str] = Query(None),
+@agent_task_router.get("", response_model=SuccessResponse[Page[AgentTaskDto]])
+async def list_my_tasks(
+    state: Optional[str] = Query(default=None),
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=10, ge=1, le=100),
     authorize: AuthJWT = Depends(),
 ):
-    """PENDING tasks visible to this agent (geo + role filtered)."""
     await authorize.jwt_required()
     agent_id = str(authorize.get_jwt_subject())
-    tasks = await task_service.list_available_for_agent(agent_id=agent_id, role=role, state=state)
-    return SuccessResponse[List[TaskDto]](data=tasks)
+    states = [state] if state else None
+    rows, total = await task_service.list_for_agent(agent_id, states, page, page_size)
+    items = [await _to_agent_dto(t) for t in rows]
+    total_pages = (total + page_size - 1) // page_size if page_size else 0
+    return SuccessResponse[Page[AgentTaskDto]](data=Page[AgentTaskDto](
+        items=items,
+        meta=PaginationMeta(
+            page=page, page_size=page_size, count=len(items), total=total,
+            total_pages=total_pages,
+            prev_page=page - 1 if page > 0 else None,
+            next_page=page + 1 if (page + 1) < total_pages else None,
+        ),
+    ))
 
 
-@agent_task_router.get(
-    "/tasks/active",
-    response_model=SuccessResponse[List[TaskDto]],
-)
-async def get_active_tasks(authorize: AuthJWT = Depends()):
+@agent_task_router.get("/summary", response_model=SuccessResponse[AgentDashboardDto])
+async def get_dashboard_summary(authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
     agent_id = str(authorize.get_jwt_subject())
-    tasks = await task_service.list_active_for_agent(agent_id)
-    return SuccessResponse[List[TaskDto]](data=tasks)
+    return SuccessResponse[AgentDashboardDto](data=await task_service.agent_summary(agent_id))
 
 
-@agent_task_router.get(
-    "/tasks/completed",
-    response_model=SuccessResponse[List[TaskDto]],
-)
-async def get_completed_tasks(authorize: AuthJWT = Depends()):
+@agent_task_router.post("/{task_id}/accept", response_model=SuccessResponse[AgentTaskDto])
+async def accept_task(task_id: str, authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
     agent_id = str(authorize.get_jwt_subject())
-    tasks = await task_service.list_completed_for_agent(agent_id)
-    return SuccessResponse[List[TaskDto]](data=tasks)
+    task = await task_service.accept(task_id, agent_id)
+    return SuccessResponse[AgentTaskDto](data=await _to_agent_dto(task))
 
 
-@agent_task_router.get(
-    "/tasks/{task_id}",
-    response_model=SuccessResponse[TaskDto],
-)
-async def get_task(task_id: str, authorize: AuthJWT = Depends()):
+@agent_task_router.post("/{task_id}/decline", response_model=SuccessResponse[AgentTaskDto])
+async def decline_task(task_id: str, req: DeclineTaskDto, authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
-    dto = await task_service.get_task(task_id)
-    return SuccessResponse[TaskDto](data=dto)
+    agent_id = str(authorize.get_jwt_subject())
+    task = await task_service.decline(task_id, agent_id, req.reason)
+    return SuccessResponse[AgentTaskDto](data=await _to_agent_dto(task))
+
+
+@agent_task_router.post("/{task_id}/start", response_model=SuccessResponse[AgentTaskDto])
+async def start_task(task_id: str, authorize: AuthJWT = Depends()):
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
+    task = await task_service.start(task_id, agent_id)
+    return SuccessResponse[AgentTaskDto](data=await _to_agent_dto(task))
+
+
+@agent_task_router.post("/{task_id}/evidence", response_model=SuccessResponse[EvidenceDto])
+async def add_evidence(
+    task_id: str,
+    file: UploadFile = File(...),
+    kind: EvidenceKind = Form(default=EvidenceKind.PHOTO),
+    gps_latitude: Optional[float] = Form(default=None),
+    gps_longitude: Optional[float] = Form(default=None),
+    authorize: AuthJWT = Depends(),
+):
+    """Upload a piece of proof-of-work (§4.5, §7.3a). Content hash + server GPS/timestamp
+    are stamped at receipt; the client GPS is a hint only."""
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
+    file_bytes = await file.read()
+    item = await task_service.add_evidence(
+        task_id, agent_id, file_bytes=file_bytes, kind=kind,
+        mime_type=file.content_type, gps_latitude=gps_latitude, gps_longitude=gps_longitude,
+    )
+    return SuccessResponse[EvidenceDto](data=_evidence_dto(item))
+
+
+@agent_task_router.get("/{task_id}/evidence", response_model=SuccessResponse[List[EvidenceDto]])
+async def list_evidence(task_id: str, authorize: AuthJWT = Depends()):
+    await authorize.jwt_required()
+    items = await evidence_service.list_for_task(task_id)
+    return SuccessResponse[List[EvidenceDto]](data=[_evidence_dto(e) for e in items])
+
+
+@agent_task_router.post("/{task_id}/submit", response_model=SuccessResponse[AgentTaskDto])
+async def submit_task(task_id: str, req: SubmitTaskDto, authorize: AuthJWT = Depends()):
+    await authorize.jwt_required()
+    agent_id = str(authorize.get_jwt_subject())
+    task = await task_service.submit(task_id, agent_id, req.payload)
+    return SuccessResponse[AgentTaskDto](data=await _to_agent_dto(task))
 
 
 @agent_task_router.get(
-    "/tasks/{task_id}/history",
-    response_model=SuccessResponse[AuditActivityPageDto],
+    "/{task_id}/history", response_model=SuccessResponse[AuditActivityPageDto]
 )
 async def get_task_history(
     task_id: str,
     page: int = Query(default=0, ge=0),
-    page_size: int = Query(default=20, ge=1, le=50),
+    page_size: int = Query(default=20, ge=1, le=100),
     authorize: AuthJWT = Depends(),
 ):
-    """PII-safe state-transition history for an agent's task (R19.3)."""
+    """PII-safe state-transition history for one of the agent's own tasks (§19.3 / R19.3)."""
     await authorize.jwt_required()
     agent_id = str(authorize.get_jwt_subject())
-    task = await task_service.get_task(task_id)
-    if task.agent_id != agent_id:
-        from main.appodus_utils.exception.exceptions import ForbiddenException
-        raise ForbiddenException(message="Not your task")
-    audit_svc: AuditLogService = di[AuditLogService]
-    result = await audit_svc.get_activity_log(
-        resource_type="TASK",
-        resource_id=task_id,
-        page=page,
-        page_size=page_size,
-    )
-    return SuccessResponse.ok(result)
-
-
-@agent_task_router.post(
-    "/tasks/{task_id}/accept",
-    response_model=SuccessResponse[TaskDto],
-)
-async def accept_task(task_id: str, authorize: AuthJWT = Depends()):
-    """First-come-first-served accept.  409 if another agent already took it."""
-    await authorize.jwt_required()
-    agent_id = str(authorize.get_jwt_subject())
-    dto = await task_service.agent_accept(task_id, agent_id)
-    return SuccessResponse[TaskDto](data=dto)
-
-
-@agent_task_router.post(
-    "/tasks/{task_id}/decline",
-    response_model=SuccessResponse[TaskDto],
-)
-async def decline_task(task_id: str, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    agent_id = str(authorize.get_jwt_subject())
-    dto = await task_service.agent_decline(task_id, agent_id)
-    return SuccessResponse[TaskDto](data=dto)
-
-
-@agent_task_router.put(
-    "/tasks/{task_id}/draft",
-    response_model=SuccessResponse[TaskDto],
-)
-async def save_draft(task_id: str, payload: dict, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    agent_id = str(authorize.get_jwt_subject())
-    dto = await task_service.save_draft(task_id, agent_id, payload)
-    return SuccessResponse[TaskDto](data=dto)
-
-
-@agent_task_router.post(
-    "/tasks/{task_id}/evidence",
-    response_model=SuccessResponse[EvidenceItemDto],
-)
-async def upload_evidence(
-    task_id: str,
-    file: UploadFile,
-    evidence_type: EvidenceType = Form(EvidenceType.PHOTO),
-    gps_lat: Optional[float] = Form(None),
-    gps_lng: Optional[float] = Form(None),
-    captured_at: Optional[str] = Form(None),
-    authorize: AuthJWT = Depends(),
-):
-    await authorize.jwt_required()
-    agent_id = str(authorize.get_jwt_subject())
-    file_bytes = await file.read()
-    captured_dt = None
-    if captured_at:
-        from datetime import datetime
-        try:
-            captured_dt = datetime.fromisoformat(captured_at)
-        except ValueError:
-            pass
-    dto = await evidence_service.upload(
-        task_id=task_id,
-        uploader_id=agent_id,
-        file_bytes=file_bytes,
-        filename=file.filename or "upload",
-        evidence_type=evidence_type,
-        gps_lat=gps_lat,
-        gps_lng=gps_lng,
-        captured_at=captured_dt,
-    )
-    return SuccessResponse[EvidenceItemDto](data=dto)
-
-
-@agent_task_router.post(
-    "/tasks/{task_id}/submit",
-    response_model=SuccessResponse[TaskDto],
-)
-async def submit_task(task_id: str, payload: dict, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    agent_id = str(authorize.get_jwt_subject())
-    dto = await task_service.submit(task_id, agent_id, payload)
-    return SuccessResponse[TaskDto](data=dto)
-
-
-@agent_task_router.post(
-    "/tasks/{task_id}/escalation",
-    response_model=SuccessResponse[EscalationDto],
-)
-async def report_escalation(
-    task_id: str, req: ReportEscalationDto, authorize: AuthJWT = Depends(),
-):
-    await authorize.jwt_required()
-    agent_id = str(authorize.get_jwt_subject())
-    dto = await escalation_service.report(task_id, agent_id, req)
-    return SuccessResponse[EscalationDto](data=dto)
-
-
-# Export the combined router used by task/__init__.py for import checking;
-# actual mounting happens in domain/__init__.py via admin_task_router + agent_task_router.
-task_router = APIRouter()
-task_router.include_router(admin_task_router)
-task_router.include_router(agent_task_router)
+    result = await task_service.task_history(task_id, agent_id, page, page_size)
+    return SuccessResponse[AuditActivityPageDto](data=result)

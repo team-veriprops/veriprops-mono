@@ -1,12 +1,3 @@
-from main.app.domain.verification.dispute.models import Dispute, DisputeResolution
-from main.app.domain.verification.dispute.repo import DisputeRepo, DisputeResolutionRepo
-from main.app.domain.verification.dispute.service import DisputeService
-from main.app.domain.verification.dispute.validator import DisputeValidator
-from main.app.domain.verification.dispute.controller import dispute_router
-
-__all__ = [
-    "Dispute", "DisputeResolution",
-    "DisputeRepo", "DisputeResolutionRepo",
-    "DisputeService", "DisputeValidator",
-    "dispute_router",
-]
+"""Dispute domain (PRD §14.3) — a customer contests a completed report within the dispute
+window; the affected agent may defend (admin-mediated); the admin resolves with one of three
+outcomes, each delivering a mandatory resolution note verbatim to the customer."""

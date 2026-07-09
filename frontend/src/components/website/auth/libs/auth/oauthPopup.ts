@@ -42,7 +42,7 @@ const POPUP_NAME = "veriprops_oauth";
 
 function signalOauthComplete(status: "success" | "failed"): void {
   if (!isAutomationEnvironment()) return;
-  (window as any).__oauth_complete__ = status;
+  window.__oauth_complete__ = status;
   window.dispatchEvent(new CustomEvent("__oauth_complete__", { detail: { status } }));
 }
 
@@ -58,7 +58,7 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
   } = opts;
 
   if (isAutomationEnvironment()) {
-    (window as any).__oauth_complete__ = null;
+    window.__oauth_complete__ = null;
   }
 
   // Synchronously open the popup. Browsers count this as a direct response to

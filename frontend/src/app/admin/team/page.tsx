@@ -1,13 +1,12 @@
-import TeamManagement from "@components/admin/team/TeamManagement";
-
-export const metadata = {
-  title: "Admin team — Veriprops",
-};
+import { Suspense } from "react";
+import AdminTeamManagement from "@components/admin/team/AdminTeamManagement";
 
 export default function AdminTeamPage() {
   return (
-    <div className="max-w-5xl mx-auto px-4 py-10">
-      <TeamManagement />
+    <div className="p-4 sm:p-6">
+      <Suspense>
+        <AdminTeamManagement />
+      </Suspense>
     </div>
   );
 }

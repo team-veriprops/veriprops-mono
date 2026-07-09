@@ -16,6 +16,13 @@ import { Alert, AlertDescription, AlertTitle } from '@3rdparty/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@3rdparty/ui/tooltip';
 import { toast } from '@components/3rdparty/ui/use-toast';
 
+interface UploadError {
+  name?: string;
+  status?: number;
+  existingUrl?: string;
+  message?: string;
+}
+
 interface MediaUploadManagerProps {
   propertyId?: string;
   maxFiles?: number;
@@ -42,7 +49,7 @@ export function MediaUploadManager({
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const blobUrlsRef = useRef<Set<string>>(new Set());
-  const [uploadStats, setUploadStats] = useState<{
+  const [, setUploadStats] = useState<{
     [mediaId: string]: {
       startTime: number;
       lastLoaded: number;
@@ -53,13 +60,207 @@ export function MediaUploadManager({
 
   // Cleanup object URLs on unmount
   useEffect(() => {
+    const blobUrls = blobUrlsRef.current;
     return () => {
-      blobUrlsRef.current.forEach((url) => {
+      blobUrls.forEach((url) => {
         URL.revokeObjectURL(url);
       });
-      blobUrlsRef.current.clear();
+      blobUrls.clear();
     };
   }, []);
+
+  // Emit onChange when mediaItems change
+  useEffect(() => {
+    if (onChange) {
+      onChange(mediaItems);
+    }
+  }, [mediaItems, onChange]);
+
+  const updateMediaStatus = useCallback(
+    (id: string, updates: Partial<MediaItem>) => {
+      setMediaItems((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
+      );
+    },
+    []
+  );
+
+  const processUpload = useCallback(async (media: MediaItem) => {
+    if (!media.file) return;
+
+    const controller = new AbortController();
+    abortControllersRef.current.set(media.id, controller);
+    const startTime = Date.now();
+
+    try {
+      // Detect if file is PDF or video
+      const isPdf = media.file.type === 'application/pdf';
+      const isVideo = media.file.type.startsWith('video/');
+      let fileToUpload: File | Blob = media.file;
+
+      if (isPdf || isVideo) {
+        // Skip compression for PDFs and videos
+        updateMediaStatus(media.id, { status: 'uploading', progress: 30 });
+      } else {
+        // Step 1: Compression (images only)
+        updateMediaStatus(media.id, { status: 'compressing', progress: 10 });
+
+        const compressedFile = await imageCompression(media.file, {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1280,
+          useWebWorker: true,
+          exifOrientation: 1,
+          onProgress: (progress) => {
+            const mappedProgress = 10 + Math.round(progress * 0.2);
+            updateMediaStatus(media.id, { progress: mappedProgress });
+          },
+        });
+
+        fileToUpload = compressedFile;
+        updateMediaStatus(media.id, { progress: 30 });
+      }
+
+      // Step 2: Request signed URL
+      const signedUrlResponse = await requestSignedUrl({
+        filename: media.filename,
+        contentType: fileToUpload.type,
+        folder: `properties/${propertyId}`,
+      });
+
+      // Step 3: Upload to signed URL
+      updateMediaStatus(media.id, { status: 'uploading', progress: 35 });
+
+      await uploadToSignedUrl(fileToUpload, signedUrlResponse.uploadUrl, {
+        signal: controller.signal,
+        onProgress: (progress) => {
+          const mappedProgress = 35 + Math.round(progress.percent * 0.65);
+          const now = Date.now();
+
+          // Read/compute from `prev` (not the outer `uploadStats` closure) since
+          // this callback is captured once by useCallback and would otherwise
+          // always see the stats from the render that created it.
+          setUploadStats((prev) => {
+            const stats = prev[media.id] || {
+              startTime: now,
+              lastLoaded: 0,
+              lastTime: now,
+              speed: 0,
+            };
+
+            const timeDiff = (now - stats.lastTime) / 1000;
+            if (timeDiff <= 0.5) {
+              updateMediaStatus(media.id, { progress: mappedProgress });
+              return prev;
+            }
+
+            const bytesDiff = progress.loaded - stats.lastLoaded;
+            const instantSpeed = bytesDiff / timeDiff;
+            const speed = stats.speed === 0 ? instantSpeed : stats.speed * 0.7 + instantSpeed * 0.3;
+
+            const remaining = progress.total - progress.loaded;
+            const estimatedTimeRemaining = speed > 0 ? remaining / speed : 0;
+
+            updateMediaStatus(media.id, {
+              progress: mappedProgress,
+              uploadSpeed: speed,
+              estimatedTimeRemaining,
+            });
+
+            return {
+              ...prev,
+              [media.id]: {
+                startTime: stats.startTime,
+                lastLoaded: progress.loaded,
+                lastTime: now,
+                speed,
+              },
+            };
+          });
+        },
+        onExpiredUrl: async () => {
+          console.log('Requesting fresh signed URL for', media.filename);
+          const freshData = await requestSignedUrl({
+            filename: media.filename,
+            contentType: fileToUpload.type,
+            folder: `properties/${propertyId}`,
+          });
+          return freshData.uploadUrl;
+        },
+      });
+
+      // Success
+      const duration = Date.now() - startTime;
+      setUploadStats(prev => {
+        const newStats = { ...prev };
+        delete newStats[media.id];
+        return newStats;
+      });
+      updateMediaStatus(media.id, {
+        status: 'done',
+        progress: 100,
+        uploadedUrl: signedUrlResponse.publicUrl,
+        estimatedTimeRemaining: 0,
+      });
+
+      trackEvent('upload_complete', {
+        id: media.id,
+        filename: media.filename,
+        bytes: media.size,
+        duration,
+        publicUrl: signedUrlResponse.publicUrl,
+        fileType: isVideo ? 'video' : isPdf ? 'pdf' : 'image',
+      });
+
+      toast({
+        title: 'Upload successful',
+        description: `${media.filename} uploaded successfully`,
+      });
+    } catch (caught) {
+      const error = caught as UploadError;
+      if (error.name === 'AbortError') {
+        return;
+      }
+
+      if (error.status === 409) {
+        toast({
+          title: 'Duplicate file detected',
+          description: 'This file may already exist.',
+        });
+        updateMediaStatus(media.id, {
+          status: 'done',
+          progress: 100,
+          uploadedUrl: error.existingUrl || media.uploadedUrl,
+        });
+        return;
+      }
+
+      const errorMessage =
+        error.message === 'Upload cancelled'
+          ? 'Upload cancelled'
+          : error.message || 'Network error during upload';
+
+      updateMediaStatus(media.id, {
+        status: 'error',
+        error: errorMessage,
+      });
+
+      trackEvent('upload_fail', {
+        id: media.id,
+        filename: media.filename,
+        error: errorMessage,
+      });
+
+      if (error.message !== 'Upload cancelled') {
+        toast({
+          title: 'Upload failed',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      abortControllersRef.current.delete(media.id);
+    }
+  }, [propertyId, updateMediaStatus]);
 
   // Offline detection with auto-retry
   useEffect(() => {
@@ -92,14 +293,7 @@ export function MediaUploadManager({
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [mediaItems]);
-
-  // Emit onChange when mediaItems change
-  useEffect(() => {
-    if (onChange) {
-      onChange(mediaItems);
-    }
-  }, [mediaItems, onChange]);
+  }, [mediaItems, processUpload]);
 
   const handleFilesSelected = useCallback(
     (fileList: FileList) => {
@@ -164,188 +358,8 @@ export function MediaUploadManager({
         });
       }
     },
-    [mediaItems.length, maxFiles]
+    [mediaItems.length, maxFiles, processUpload]
   );
-
-  const updateMediaStatus = useCallback(
-    (id: string, updates: Partial<MediaItem>) => {
-      setMediaItems((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
-      );
-    },
-    []
-  );
-
-  const processUpload = useCallback(async (media: MediaItem) => {
-    if (!media.file) return;
-
-    const controller = new AbortController();
-    abortControllersRef.current.set(media.id, controller);
-    const startTime = Date.now();
-
-    try {
-      // Detect if file is PDF or video
-      const isPdf = media.file.type === 'application/pdf';
-      const isVideo = media.file.type.startsWith('video/');
-      let fileToUpload: File | Blob = media.file;
-
-      if (isPdf || isVideo) {
-        // Skip compression for PDFs and videos
-        updateMediaStatus(media.id, { status: 'uploading', progress: 30 });
-      } else {
-        // Step 1: Compression (images only)
-        updateMediaStatus(media.id, { status: 'compressing', progress: 10 });
-
-        const compressedFile = await imageCompression(media.file, {
-          maxSizeMB: 1,
-          maxWidthOrHeight: 1280,
-          useWebWorker: true,
-          exifOrientation: 1,
-          onProgress: (progress) => {
-            const mappedProgress = 10 + Math.round(progress * 0.2);
-            updateMediaStatus(media.id, { progress: mappedProgress });
-          },
-        });
-
-        fileToUpload = compressedFile;
-        updateMediaStatus(media.id, { progress: 30 });
-      }
-
-      // Step 2: Request signed URL
-      const signedUrlResponse = await requestSignedUrl({
-        filename: media.filename,
-        contentType: fileToUpload.type,
-        folder: `properties/${propertyId}`,
-      });
-
-      // Step 3: Upload to signed URL
-      updateMediaStatus(media.id, { status: 'uploading', progress: 35 });
-
-      await uploadToSignedUrl(fileToUpload, signedUrlResponse.uploadUrl, {
-        signal: controller.signal,
-        onProgress: (progress) => {
-          const mappedProgress = 35 + Math.round(progress.percent * 0.65);
-          const now = Date.now();
-          
-          const stats = uploadStats[media.id] || {
-            startTime: now,
-            lastLoaded: 0,
-            lastTime: now,
-            speed: 0,
-          };
-          
-          const timeDiff = (now - stats.lastTime) / 1000;
-          const bytesDiff = progress.loaded - stats.lastLoaded;
-          
-          if (timeDiff > 0.5) {
-            const instantSpeed = bytesDiff / timeDiff;
-            const speed = stats.speed === 0 ? instantSpeed : stats.speed * 0.7 + instantSpeed * 0.3;
-            
-            const remaining = progress.total - progress.loaded;
-            const estimatedTimeRemaining = speed > 0 ? remaining / speed : 0;
-            
-            setUploadStats(prev => ({
-              ...prev,
-              [media.id]: {
-                startTime: stats.startTime,
-                lastLoaded: progress.loaded,
-                lastTime: now,
-                speed,
-              },
-            }));
-            
-            updateMediaStatus(media.id, {
-              progress: mappedProgress,
-              uploadSpeed: speed,
-              estimatedTimeRemaining,
-            });
-          } else {
-            updateMediaStatus(media.id, { progress: mappedProgress });
-          }
-        },
-        onExpiredUrl: async () => {
-          console.log('Requesting fresh signed URL for', media.filename);
-          const freshData = await requestSignedUrl({
-            filename: media.filename,
-            contentType: fileToUpload.type,
-            folder: `properties/${propertyId}`,
-          });
-          return freshData.uploadUrl;
-        },
-      });
-
-      // Success
-      const duration = Date.now() - startTime;
-      setUploadStats(prev => {
-        const newStats = { ...prev };
-        delete newStats[media.id];
-        return newStats;
-      });
-      updateMediaStatus(media.id, {
-        status: 'done',
-        progress: 100,
-        uploadedUrl: signedUrlResponse.publicUrl,
-        estimatedTimeRemaining: 0,
-      });
-
-      trackEvent('upload_complete', {
-        id: media.id,
-        filename: media.filename,
-        bytes: media.size,
-        duration,
-        publicUrl: signedUrlResponse.publicUrl,
-        fileType: isVideo ? 'video' : isPdf ? 'pdf' : 'image',
-      });
-
-      toast({
-        title: 'Upload successful',
-        description: `${media.filename} uploaded successfully`,
-      });
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        return;
-      }
-
-      if (error.status === 409) {
-        toast({
-          title: 'Duplicate file detected',
-          description: 'This file may already exist.',
-        });
-        updateMediaStatus(media.id, {
-          status: 'done',
-          progress: 100,
-          uploadedUrl: error.existingUrl || media.uploadedUrl,
-        });
-        return;
-      }
-
-      const errorMessage =
-        error.message === 'Upload cancelled'
-          ? 'Upload cancelled'
-          : error.message || 'Network error during upload';
-
-      updateMediaStatus(media.id, {
-        status: 'error',
-        error: errorMessage,
-      });
-
-      trackEvent('upload_fail', {
-        id: media.id,
-        filename: media.filename,
-        error: errorMessage,
-      });
-
-      if (error.message !== 'Upload cancelled') {
-        toast({
-          title: 'Upload failed',
-          description: errorMessage,
-          variant: 'destructive',
-        });
-      }
-    } finally {
-      abortControllersRef.current.delete(media.id);
-    }
-  }, [propertyId, updateMediaStatus]);
 
   const handleDelete = useCallback((id: string) => {
     const controller = abortControllersRef.current.get(id);
@@ -504,7 +518,8 @@ export function MediaUploadManager({
         }
       });
       setMediaItems([]);
-    } catch (error: any) {
+    } catch (caught) {
+      const error = caught as UploadError;
       toast({
         title: 'Save failed',
         description: error.message || 'Failed to save files',

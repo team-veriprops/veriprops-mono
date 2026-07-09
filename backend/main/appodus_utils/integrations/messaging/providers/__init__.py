@@ -1,5 +1,4 @@
 from main.appodus_utils.integrations.messaging.providers.email.mailjet import MailjetEmailProvider
-from main.appodus_utils.integrations.messaging.providers.email.sendgrid import SendGridEmailProvider
 from main.appodus_utils.integrations.messaging.providers.email.smtp import SmtpEmailProvider
 from main.appodus_utils.integrations.messaging.providers.push.firebase import FirebasePushProvider
 from main.appodus_utils.integrations.messaging.providers.push.web_push import WebPushProvider

@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy import Column, String, UniqueConstraint, Index
 
 from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
-from main.appodus_utils import PageRequest, BaseQueryDto, Object, BaseEntity
+from main.appodus_utils import InternalPageRequest, BaseQueryDto, Object, BaseEntity
 
 
 class OAuthIdentity(BaseEntity):
@@ -34,7 +34,7 @@ class UpdateOAuthIdentityDto(Object):
     raw_profile: Optional[str] = None
 
 
-class SearchOAuthIdentityDto(PageRequest, BaseQueryDto):
+class SearchOAuthIdentityDto(InternalPageRequest, BaseQueryDto):
     user_id: Optional[str] = None
     provider: Optional[str] = None
     subject: Optional[str] = None

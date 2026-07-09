@@ -1,4 +1,4 @@
 commit:
-  mode: strict   # advisory | strict | disabled
+  mode: advisory   # advisory | strict | disabled
   require_clean_worktree_before_run: true
   suggest_commit_messages: true

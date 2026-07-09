@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, AlertTriangle, Lock, ShieldAlert } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
@@ -53,6 +53,18 @@ function writeLockoutState(state: LockoutState) {
   }
 }
 
+// Defined outside the component (rather than inline in the submit handler) so
+// the Date.now() call isn't flagged as an impure render call — React Compiler
+// can't prove `onSubmit` only runs from an event, since it's invoked
+// indirectly via form.handleSubmit(onSubmit).
+function nextLockoutState(currentCount: number): LockoutState {
+  const next: LockoutState = { count: currentCount + 1 };
+  if (next.count >= RATE_LIMIT_LOCKOUT_AT) {
+    next.lockedUntil = Date.now() + RATE_LIMIT_LOCKOUT_MINUTES * 60_000;
+  }
+  return next;
+}
+
 export default function LoginContainer() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -70,8 +82,12 @@ export default function LoginContainer() {
 
   const loginMutation = useLoginMutation();
 
-  // Hydrate lockout from storage on mount.
+  // Hydrate lockout from storage post-mount (not via a lazy useState
+  // initializer) so the client's first render still matches the SSR markup
+  // ({ count: 0 }); reading localStorage during that first render would
+  // desync from the server output and trigger a hydration mismatch.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLockout(readLockoutState());
   }, []);
 
@@ -91,6 +107,8 @@ export default function LoginContainer() {
     defaultValues: { email: emailParam, password: "", rememberMe: false },
     mode: "onBlur",
   });
+
+  const rememberMe = useWatch({ control: form.control, name: "rememberMe" });
 
   const isLockedNow = !!lockout.lockedUntil && lockout.lockedUntil > now;
   const remainingSeconds = useMemo(
@@ -117,10 +135,7 @@ export default function LoginContainer() {
         : ROUTES.AUTH.LOGIN_SUCCESS_REDIRECT;
       router.push(dest);
     } catch (err) {
-      const next: LockoutState = { count: lockout.count + 1 };
-      if (next.count >= RATE_LIMIT_LOCKOUT_AT) {
-        next.lockedUntil = Date.now() + RATE_LIMIT_LOCKOUT_MINUTES * 60_000;
-      }
+      const next = nextLockoutState(lockout.count);
       writeLockoutState(next);
       setLockout(next);
       setErrorMessage(
@@ -255,7 +270,7 @@ export default function LoginContainer() {
 
         <label className="flex items-center gap-2.5 cursor-pointer select-none">
           <Checkbox
-            checked={form.watch("rememberMe")}
+            checked={rememberMe}
             onCheckedChange={(v) => form.setValue("rememberMe", v === true)}
           />
           <span className="text-sm" style={{ color: "var(--brand-on-surface)" }}>

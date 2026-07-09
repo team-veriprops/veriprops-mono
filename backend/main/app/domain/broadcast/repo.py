@@ -1,10 +1,11 @@
-"""Broadcast repo — S55."""
+"""Broadcast data access."""
 from __future__ import annotations
 
-from typing import List, Type
+from datetime import datetime
+from typing import List, Tuple, Type
 
 from kink import inject
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.broadcast.models import (
@@ -13,21 +14,14 @@ from main.app.domain.broadcast.models import (
     CreateBroadcastDto,
     QueryBroadcastDto,
     SearchBroadcastDto,
-    UpdateBroadcastDto, BroadcastAudience,
+    UpdateBroadcastDto,
 )
 from main.appodus_utils.db.repo import GenericRepo
-from main.appodus_utils.db.session import get_db_session_from_context
 
 
 @inject
 class BroadcastRepo(
-    GenericRepo[
-        Broadcast,
-        CreateBroadcastDto,
-        UpdateBroadcastDto,
-        QueryBroadcastDto,
-        SearchBroadcastDto,
-    ]
+    GenericRepo[Broadcast, CreateBroadcastDto, UpdateBroadcastDto, QueryBroadcastDto, SearchBroadcastDto]
 ):
     def __init__(
         self,
@@ -36,42 +30,26 @@ class BroadcastRepo(
         query_dto: Type[QueryBroadcastDto] = QueryBroadcastDto,
     ):
         super().__init__(db, model, query_dto)
+        self.db = db
 
-    async def list_due_scheduled(self) -> List[Broadcast]:
-        from main.appodus_utils import Utils
-        session = self._session
-        now = Utils.datetime_now()
-        result = await session.execute(
-            select(Broadcast).where(
-                Broadcast.status == BroadcastStatus.SCHEDULED.value,
-                Broadcast.scheduled_at <= now,
-                Broadcast.deleted == False,
-            )
+    async def list_due_scheduled(self, now: datetime) -> List[Broadcast]:
+        """SCHEDULED broadcasts whose send time has passed (§18.1 sweep)."""
+        stmt = select(Broadcast).where(
+            Broadcast.deleted.is_(False),
+            Broadcast.status == BroadcastStatus.SCHEDULED.value,
+            Broadcast.scheduled_at.is_not(None),
+            Broadcast.scheduled_at <= now,
         )
-        return list(result.scalars().all())
+        return list((await self._session.execute(stmt)).scalars().all())
 
-    async def list_all(self, page: int = 0, page_size: int = 25):
-        from sqlalchemy import func
-        session = self._session
-        filters = [Broadcast.deleted == False]
-        total = await session.scalar(select(func.count(Broadcast.id)).where(*filters)) or 0
-        result = await session.execute(
-            select(Broadcast).where(*filters).order_by(Broadcast.date_created.desc())
-            .offset(page * page_size).limit(page_size)
-        )
-        return list(result.scalars().all()), int(total)
-
-    async def get_broadcast_user_ids(self, audience: BroadcastAudience) -> list[str]:
-        from main.app.domain.user.models import User
-        from main.app.domain.user.auth.session.models import UserType, UserPersona
-
-        stmt = select(User.id).where(User.deleted == False)
-        if audience == BroadcastAudience.ADMINS:
-            stmt = stmt.where(User.user_type == UserType.ADMIN.value)
-        elif audience == BroadcastAudience.CUSTOMERS:
-            stmt = stmt.where(User.personas.in_(UserPersona.CUSTOMER.value))
-        elif audience == BroadcastAudience.AGENTS:
-            stmt = stmt.where(User.personas.in_(UserPersona.AGENT.value))
-        result = await self._session.execute(stmt)
-
-        return [str(r) for r in result.scalars().all()]
+    async def page_all(self, page: int, page_size: int, status: str | None = None) -> Tuple[List[Broadcast], int]:
+        conditions = [Broadcast.deleted.is_(False)]
+        if status:
+            conditions.append(Broadcast.status == status)
+        base = select(Broadcast).where(*conditions)
+        total = (await self._session.execute(
+            select(func.count()).select_from(base.subquery())
+        )).scalar_one()
+        stmt = base.order_by(Broadcast.date_created.desc()).offset(page * page_size).limit(page_size)
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return rows, total

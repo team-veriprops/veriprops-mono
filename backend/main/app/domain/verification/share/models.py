@@ -1,90 +1,137 @@
-"""Share link domain — S43."""
+"""Report sharing domain (PRD §13.2) — child of the verification domain.
+
+A ``VerificationShare`` is a tokenised, revocable, time-limited grant of visibility into a
+released report beyond the owning customer:
+
+- ``LINK_SUMMARY`` — anyone with the link sees the public *summary*.
+- ``NAMED_FULL`` — a specific email recipient sees the *full* report after a one-time
+  disclaimer acknowledgement.
+
+Private (default) = no share rows and ``public_lookup_enabled`` off. Public = the
+verification's ``public_lookup_enabled`` flag, surfaced by the VID lookup (§13.1).
+"""
 from __future__ import annotations
 
 import enum
-from typing import Optional
+from datetime import date, datetime
+from typing import List, Optional
 
-from sqlalchemy import Boolean, Column, String
+from sqlalchemy import Column, Index, String
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.app.core.state.status import ShareType, VerificationTier
+from main.app.domain.property.models import PropertyType
+from main.app.domain.verification.report.models import CustomerReportDto
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
 
-class ShareMode(str, enum.Enum):
-    PRIVATE = "PRIVATE"
-    LINK_ONLY = "LINK_ONLY"
-    PUBLIC = "PUBLIC"
-    NAMED_RECIPIENT = "NAMED_RECIPIENT"
+# ─── ORM ──────────────────────────────────────────────────────────
 
-
-class ShareLink(BaseEntity):
-    __tablename__ = "share_links"
+class VerificationShare(BaseEntity):
+    __tablename__ = "verification_shares"
 
     verification_id = Column(String(36), nullable=False, index=True)
-    mode = Column(String(20), nullable=False, default=ShareMode.PRIVATE.value)
+    share_type = Column(String(16), nullable=False)
+    # Bearer capability: the unguessable token IS the authorization for the link. Stored
+    # raw (not hashed) so the customer can re-copy the link from the share list.
     token = Column(String(64), nullable=False, unique=True, index=True)
+    recipient_email = Column(String(254), nullable=True)  # NAMED_FULL only
     expires_at = Column(UTCDateTime, nullable=True)
     revoked_at = Column(UTCDateTime, nullable=True)
-    created_by = Column(String(36), nullable=False)
+    first_viewed_at = Column(UTCDateTime, nullable=True)
+    disclaimer_acked_at = Column(UTCDateTime, nullable=True)  # NAMED_FULL first-view gate
+
+    __table_args__ = (
+        Index("ix_verification_shares_verification", "verification_id"),
+    )
 
 
-class ShareRecipient(BaseEntity):
-    __tablename__ = "share_recipients"
+# ─── Public lookup result (§13.1 state routing) ───────────────────
 
-    share_link_id = Column(String(36), nullable=False, index=True)
-    email = Column(String(254), nullable=False)
-    acknowledged_at = Column(UTCDateTime, nullable=True)
+class PublicLookupState(str, enum.Enum):
+    """The five public-lookup outcomes (§13.1)."""
+
+    SHARED = "SHARED"            # summary available
+    PRIVATE = "PRIVATE"          # completed but not shared publicly ("not enabled")
+    IN_PROGRESS = "IN_PROGRESS"  # verification still running
+    DISPUTED = "DISPUTED"        # under dispute review
+    NOT_FOUND = "NOT_FOUND"      # unknown / never a shareable outcome
 
 
-class ShareLinkDto(Object):
-    id: str
+# ─── DTOs ─────────────────────────────────────────────────────────
+
+class CreateVerificationShareDto(Object):
     verification_id: str
-    mode: ShareMode
+    share_type: ShareType
     token: str
-    expires_at: Optional[str] = None
-    revoked_at: Optional[str] = None
-    created_by: str
-    date_created: str
+    recipient_email: Optional[str] = None
 
 
-class CreateShareLinkDto(Object):
-    verification_id: str
-    mode: ShareMode = ShareMode.LINK_ONLY
-    token: str
-    expires_at: Optional[str] = None
-    created_by: str
+class UpdateVerificationShareDto(Object):
+    revoked_at: Optional[datetime] = None
+    first_viewed_at: Optional[datetime] = None
+    disclaimer_acked_at: Optional[datetime] = None
 
 
-class UpdateShareLinkDto(Object):
-    revoked_at: Optional[str] = None
-    mode: Optional[ShareMode] = None
-
-
-class QueryShareLinkDto(BaseQueryDto):
+class QueryVerificationShareDto(BaseQueryDto):
     verification_id: Optional[str] = None
     token: Optional[str] = None
-    mode: Optional[str] = None
 
 
-class SearchShareLinkDto(PageRequest, BaseQueryDto):
+class SearchVerificationShareDto(InternalPageRequest, BaseQueryDto):
     verification_id: Optional[str] = None
 
 
-class CreateShareRecipientDto(Object):
-    share_link_id: str
-    email: str
+class CreateShareRequestDto(Object):
+    """Customer request to create a share (§13.2)."""
+
+    share_type: ShareType
+    recipient_email: Optional[str] = None  # required for NAMED_FULL
+    expires_in_days: Optional[int] = None  # defaults to the 30-day config knob
 
 
-class UpdateShareRecipientDto(Object):
-    acknowledged_at: Optional[str] = None
+class PublicVisibilityDto(Object):
+    enabled: bool
 
 
-class QueryShareRecipientDto(BaseQueryDto):
-    share_link_id: Optional[str] = None
-    email: Optional[str] = None
-
-
-class CreateShareDto(Object):
-    mode: ShareMode = ShareMode.LINK_ONLY
+class ShareDto(Object):
+    id: str
+    verification_id: str
+    share_type: ShareType
     recipient_email: Optional[str] = None
-    expiry_days: int = 30
+    token: str
+    share_url: str
+    expires_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+    first_viewed_at: Optional[datetime] = None
+    disclaimer_acked_at: Optional[datetime] = None
+    active: bool = True
+    date_created: datetime
+
+
+class PublicSummaryDto(Object):
+    """The unauthenticated summary (§13.1). Summary only — never full address, agent/owner
+    names, documents, or the numeric trust score."""
+
+    state: PublicLookupState
+    message: Optional[str] = None
+    vid: Optional[str] = None
+    verified: bool = False
+    trust_band: Optional[str] = None      # band string only, never the number
+    tier: Optional[VerificationTier] = None
+    property_type: Optional[PropertyType] = None
+    state_region: Optional[str] = None    # property state (not the full address)
+    lga: Optional[str] = None
+    report_version: Optional[int] = None
+    report_date: Optional[date] = None
+
+
+class SharedReportDto(Object):
+    """A tokenised share view (§13.2). Summary for LINK_SUMMARY; full report for a
+    NAMED_FULL recipient once the disclaimer is acknowledged."""
+
+    state: PublicLookupState
+    share_type: Optional[ShareType] = None
+    requires_acknowledgement: bool = False
+    summary: Optional[PublicSummaryDto] = None
+    report: Optional[CustomerReportDto] = None

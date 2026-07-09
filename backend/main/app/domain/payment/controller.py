@@ -1,112 +1,76 @@
-"""Payment HTTP routes — PRD Phase 5 (§5.4)."""
+"""Payment controller (PRD §4.4, §5.4). URL shape: /payments/..."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional
 
-if TYPE_CHECKING:
-    from loguru import Logger
+from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Body, Depends, Header
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
+from main.app.config.settings import settings
 from main.app.domain.payment.models import (
-    ConfirmWireDto,
-    CustomerPaymentDto,
     InitiatePaymentDto,
-    InitiatePaymentResultDto,
+    Payment,
     PaymentDto,
-    WireProofDto,
+    PaymentWebhookDto,
 )
 from main.app.domain.payment.service import PaymentService
-from main.app.domain.user.auth.utils.permissions import (
-    Permission,
-    require_permission,
-)
-from main.appodus_utils.db.models import Page, SuccessResponse
+from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.db.types.money import TransactionCurrency
+from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 
-logger: Logger = di["logger"]
-
-payment_service: PaymentService = di[PaymentService]
+from main.app.domain.payment.chargeback.controller import chargeback_router
 
 payment_router = APIRouter(prefix="/payments", tags=["Payments"])
+payment_service: PaymentService = di[PaymentService]
+# Chargeback ingestion is a child of the payment domain (§6a.1).
+payment_router.include_router(chargeback_router)
 
 
-@payment_router.post(
-    "/initiate",
-    response_model=SuccessResponse[InitiatePaymentResultDto],
-)
-async def initiate_payment(req: InitiatePaymentDto, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    result = await payment_service.initiate(user_id, req)
-    return SuccessResponse[InitiatePaymentResultDto](data=result)
-
-
-@payment_router.get("/me", response_model=SuccessResponse[Page[CustomerPaymentDto]])
-async def list_my_payments(
-    page: int = Query(default=0, ge=0),
-    page_size: int = Query(default=20, ge=1, le=100),
-    authorize: AuthJWT = Depends(),
-):
-    await authorize.jwt_required()
-    customer_id = str(authorize.get_jwt_subject())
-    result = await payment_service.list_for_customer(customer_id, page=page, page_size=page_size)
-    return SuccessResponse[Page[CustomerPaymentDto]](data=result)
-
-
-@payment_router.get("/{payment_id}", response_model=SuccessResponse[PaymentDto])
-async def get_payment(payment_id: str, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    dto = await payment_service.get(user_id, payment_id)
-    return SuccessResponse[PaymentDto](data=dto)
-
-
-@payment_router.post(
-    "/{payment_id}/wire-proof",
-    response_model=SuccessResponse[PaymentDto],
-)
-async def upload_wire_proof(
-    payment_id: str, req: WireProofDto, authorize: AuthJWT = Depends(),
-):
-    await authorize.jwt_required()
-    user_id = str(authorize.get_jwt_subject())
-    dto = await payment_service.upload_wire_proof(user_id, payment_id, req)
-    return SuccessResponse[PaymentDto](data=dto)
-
-
-@payment_router.post(
-    "/admin/{payment_id}/confirm-wire",
-    response_model=SuccessResponse[PaymentDto],
-)
-async def admin_confirm_wire(
-    payment_id: str,
-    req: ConfirmWireDto,
-    admin_id: str = Depends(require_permission(Permission.CONFIRM_WIRE_PAYMENT)),
-):
-    dto = await payment_service.confirm_wire(payment_id, admin_id, req)
-    return SuccessResponse[PaymentDto](data=dto)
-
-
-@payment_router.get(
-    "/admin/payments",
-    response_model=Page[PaymentDto],
-)
-async def admin_list_payments(
-    status: Optional[str] = Query(None),
-    method: Optional[str] = Query(None),
-    page: int = Query(0, ge=0),
-    page_size: int = Query(25, ge=1, le=100),
-    _: str = Depends(require_permission(Permission.VIEW_ADMIN_PANEL)),
-):
-    return await payment_service.admin_list_payments(
-        status=status, method=method, page=page, page_size=page_size,
+def _to_dto(p: Payment) -> PaymentDto:
+    return PaymentDto(
+        id=p.id,
+        verification_id=p.verification_id,
+        tx_ref=p.tx_ref,
+        method=p.method,
+        status=p.status,
+        amount_minor=p.amount_minor,
+        currency=TransactionCurrency(p.currency),
+        charge_currency=TransactionCurrency(p.charge_currency) if p.charge_currency else None,
+        charge_amount_minor=p.charge_amount_minor,
+        checkout_url=p.checkout_url,
+        date_created=p.date_created,
     )
 
 
-# ── Webhook ────────────────────────────────────────────────────
+@payment_router.post("/initiate/{verification_id}", response_model=SuccessResponse[PaymentDto])
+async def initiate_payment(
+    verification_id: str,
+    req: InitiatePaymentDto,
+    authorize: AuthJWT = Depends(),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    payment = await payment_service.initiate(
+        verification_id, customer_id, req.method, idempotency_key=idempotency_key
+    )
+    return SuccessResponse[PaymentDto](data=_to_dto(payment))
 
 
-# Webhook handler is mounted under /webhooks separately. Stub here lets us
-# call the service from a future webhook implementation; the receiving glue
-# would translate provider payload to (provider_ref, status, payload).
+@payment_router.post("/stub/confirm", response_model=SuccessResponse[dict])
+async def stub_confirm_payment(
+    tx_ref: str = Body(..., embed=True),
+    succeeded: bool = Body(default=True, embed=True),
+    authorize: AuthJWT = Depends(),
+):
+    """Deterministic completion for local/test/dev — routes through the idempotent
+    webhook handler. Non-prod only (PAYMENT_STUB_MODE); production uses real gateway
+    webhooks. The event id is derived from tx_ref so a repeat confirm is a no-op."""
+    if not settings.PAYMENT_STUB_MODE:
+        raise ResourceNotFoundException(resource="stub payment confirm")
+    await authorize.jwt_required()
+    processed = await payment_service.handle_webhook(
+        PaymentWebhookDto(event_id=f"stub-{tx_ref}", tx_ref=tx_ref, succeeded=succeeded)
+    )
+    return SuccessResponse[dict](data={"processed": processed})

@@ -62,6 +62,39 @@ class ConsentDocumentRepo(
                 rows.append(row)
         return rows
 
+    async def get_by_type_version(
+            self, doc_type: ConsentDocumentType, consent_version: str
+    ) -> Optional[ConsentDocument]:
+        stmt = (
+            select(ConsentDocument)
+            .where(
+                ConsentDocument.deleted.is_(False),
+                ConsentDocument.type == doc_type.value,
+                ConsentDocument.consent_version == consent_version,
+            )
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_active_by_href(self, href: str) -> Optional[ConsentDocument]:
+        """Latest (by effective date) published document for a public `/legal/*` href."""
+        stmt = (
+            select(ConsentDocument)
+            .where(
+                ConsentDocument.deleted.is_(False),
+                ConsentDocument.href == href,
+            )
+            .order_by(desc(ConsentDocument.effective_at))
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def list_active(self) -> List[ConsentDocument]:
+        """The current published document for every type (one per type)."""
+        return await self.list_current_for_types(list(ConsentDocumentType))
+
 
 @inject
 class UserConsentRepo(

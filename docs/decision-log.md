@@ -1,548 +1,1056 @@
----
-skill: prd-orchestrator
-skill_version: 2.2.0
-last_updated: 2026-05-02
----
-
 # Decision Log
 
-> Binding decisions for Veriprops PRD execution. Every entry is `proposed` (orchestrator's default — may be overridden by user) or `confirmed` (user-approved). The orchestrator MUST NOT proceed past a phase whose blocking decisions are still `proposed` for any user-input-required item.
+> Decisions captured at the `initialize` clarification gate. Each follows the skill template:
+> Context / Options / Chosen / Rationale / Tradeoffs / Constraints / Revisit.
 
 ---
 
-## Decision: D1 — Versioned consent ownership
-
-**Status:** proposed (Open Q29)
+## Decision: D1 — Treatment of existing code
 
 ### Context
-PRD §3.2 requires every legal document to be versioned and every user acceptance recorded against that exact version. Someone has to *publish* version bumps and *trigger* re-consent prompts. This shapes Phase 0 schema and Phase 2/5/10 UX.
+The repo is mid-refactor. The foundation layer (`appodus_utils`) and `audit` / `message` / `user`-core-auth
+survive, frontend auth is ~95% and marketing ~40%, but most domain code (verification, payment, payout,
+commission, referral, notification, broadcast, content, analytics, admin_config, retention, thread+fraud, dev,
+and user subdomains agent / admin_invitation / admin_team) is **staged for deletion** — while migration
+`0001_initial_schema.py` still defines their tables.
 
 ### Options Considered
-1. Engineering owns version numbers via migration (`ConsentDocument` rows added in Alembic).
-2. Super Admin publishes new versions via admin UI; system fans out re-consent prompts on next relevant action.
-3. Hybrid: engineering seeds initial versions; Super Admin publishes subsequent updates via admin UI.
+1. Brownfield — build forward on surviving assets; rebuild deleted domains phase-by-phase.
+2. Restore deleted domains from git history, reconcile to PRD, then build forward.
+3. Greenfield rebuild — ignore current implementation status.
 
 ### Chosen Option
-Option 3 — Hybrid.
+**Option 1 — Brownfield, build forward.**
 
 ### Rationale
-- Initial versions need to ship with the migration (Phase 0/2 require functional consent at signup).
-- Subsequent updates should not require an engineering deploy — they are content changes.
+The surviving foundation (BaseEntity, GenericRepo, Money, Auth, Consent, AuditLog) is high-quality and PRD-aligned;
+discarding it wastes real work. The deletions are treated as intentional clearing for a PRD-aligned rebuild.
 
 ### Tradeoffs
-- **Pros:** unblocks MVP; ongoing legal updates are admin-driven.
-- **Cons:** two write paths to the consent store — must be carefully serialised to prevent version skew.
+- Pros: maximum reuse; fastest path to MVP; preserves working auth + design system.
+- Cons: must reconcile rebuilt models against the `0001` schema (see D6); risk of partial/stale survivors.
 
 ### Constraints Introduced
-- `ConsentDocument` carries `version` (semver) + `published_by` (user_id or `system`) + `published_at` + `effective_at`.
-- Re-consent triggers compare `effective_at` against the user's most recent `accepted_at` for that doc type.
+- Requirements matrix status is seeded from the brownfield audit (done/partial/pending).
+- New domain models must align to existing schema; prefer additive migrations.
 
 ### Revisit Conditions
-- After Phase 19 — if NDPR audit reveals weakness in admin-published versions, may force engineering-only updates.
+- If surviving code proves incompatible with PRD v2.4 contracts, or if the `0001` schema diverges materially
+  from PRD entities, reconsider a targeted restore (Option 2) for specific domains.
 
 ---
 
-## Decision: D2 — Trust Score weighting formula
-
-**Status:** **REQUIRES USER INPUT** (Open Q8, Q32)
+## Decision: D2 — Scope
 
 ### Context
-Phase 8.5 needs a deterministic composite trust score (0–100) computed from per-agent role scores. PRD says "weights admin-defined" but does not give initial values, weights per role, or formula shape (weighted mean, capped sum, geometric mean, etc.).
+The PRD marks Phases 0–10 as the MVP cut line; 11–19 harden and scale.
 
 ### Options Considered
-1. Weighted arithmetic mean per role: `Σ(score_role × weight_role) / Σ(weight_role)`.
-2. Geometric mean (penalises any single low-scoring role harder).
-3. Capped sum with floor (e.g., minimum across roles is the score floor — protects against one bad task hiding behind good others).
-4. Hybrid — weighted mean modified by minimum-floor bound.
+1. Analyze all 19 phases; execute MVP (0–10) first, then 11–19.
+2. MVP only (0–10); defer 11–19 entirely.
 
 ### Chosen Option
-*Pending user input.* Provisional default: Option 1 (weighted arithmetic mean) with weights:
-- Basic tier (Registry only): Registry = 1.0
-- Standard tier: Registry 0.30, Field 0.30, Surveyor 0.40
-- Premium tier: Registry 0.20, Field 0.20, Surveyor 0.30, Lawyer 0.30
+**Option 1 — Analyze all 19; execute MVP-first.**
 
-### Rationale (provisional)
-Weighted mean is the simplest auditable formula. Lawyer carries the highest weight in Premium because it's the legal-opinion seal. Surveyor weight is elevated when present — a wrong boundary is the most actionable risk for a buyer.
+### Rationale
+Full traceability now avoids re-analysis later and keeps cross-phase dependencies visible; execution still
+prioritises the MVP so delivery is demoable end-to-end early.
 
 ### Tradeoffs
-- Pros: easy to explain; admin-tuneable.
-- Cons: cannot model "Lawyer disagrees with Registry" — that conflict is out-of-band (Phase 8.2 conflict detection).
+- Pros: complete requirements matrix; no surprises from later phases; MVP-prioritised delivery.
+- Cons: larger upfront analysis artifacts.
 
 ### Constraints Introduced
-- Weights table is admin-configurable per tier × role (Phase 18 UI).
-- Score is recomputed on `Approve` of any task in `UNDER_REVIEW`.
+- `requirements-matrix.md` and `prd-analysis.md` cover all 19 phases; `execution-plan.md` sequences MVP first.
 
 ### Revisit Conditions
-- After 50 completed verifications — examine score distribution + dispute correlation.
+- If priorities shift to ship MVP and stop, prune 11–19 slices from the execution plan.
 
 ---
 
-## Decision: D3 — Trust score visibility to agents pre-submit
-
-**Status:** **REQUIRES USER INPUT** (Open Q9)
+## Decision: D3 — Commit policy
 
 ### Context
-PRD §7 has agents input their own trust score. Should they see the rolling composite score before they submit?
+`.claude/skills/prd-orchestrator/config.yaml` is set to `mode: strict` with
+`require_clean_worktree_before_run: true`. The worktree is very dirty (large staged deletions + edits).
 
 ### Options Considered
-1. Agents see their score input only; never see composite.
-2. Agents see composite only after submit + admin approval.
-3. Agents see live composite as it builds (their score + others already submitted).
+1. Switch to advisory (suggest commits, never block).
+2. Keep strict — user commits/cleans the worktree before `run`.
+3. Disabled — ignore git state entirely.
 
 ### Chosen Option
-*Pending.* Provisional default: **Option 2** — agents see composite only after admin approval, to prevent gaming.
+**Option 2 — Keep strict.**
 
 ### Rationale
-Live visibility creates an incentive to optimise toward the score rather than the truth. Post-approval visibility is feedback without distortion.
-
-### Revisit Conditions
-- If agent satisfaction drops; if dispute rate correlates with low feedback transparency.
-
----
-
-## Decision: D4 — Payment gateway selection
-
-**Status:** confirmed (2026-05-07) — Flutterwave (card + multi-currency) + Paystack (NGN bank transfer via /charge virtual account); wire = static SWIFT/IBAN from settings
-
-### Context
-Both Paystack and Flutterwave SDKs are wired in `appodus_utils/integrations/payment/`. Which is primary for NGN cards? Which handles multi-currency + international wires?
-
-### Options Considered
-1. Paystack only — NGN-strong, mature; but USD/GBP/EUR support weaker.
-2. Flutterwave only — multi-currency native, but NGN-card UX historically weaker.
-3. **Hybrid** — Paystack for NGN cards, Flutterwave for multi-currency.
-
-### Chosen Option
-Provisional: Option 3. Selected at runtime via `ACTIVE_PAYMENT_METHOD` per currency context.
-
-### Rationale
-Lets us optimise per-currency. The customer's tier-card flow picks the gateway based on selected currency.
+Strict mode maximises recovery safety. The user will commit the in-flight refactor before invoking `run`,
+giving the orchestrator a clean checkpoint to build on.
 
 ### Tradeoffs
-- Pros: best UX per currency.
-- Cons: two webhooks to maintain; reconciliation across two providers.
+- Pros: clean recovery checkpoints; no work lost mid-slice.
+- Cons: `run` is blocked until the worktree is committed/clean — a manual gate.
+
+### Constraints Introduced
+- `config.yaml` is **unchanged**. `run` will refuse to start while the worktree is dirty.
+- `runtime-state.yaml` records `git.dirty: true`; `progress.md` carries the warning.
 
 ### Revisit Conditions
-- If reconciliation overhead grows past 5% of finance-admin time.
+- If the manual commit gate becomes a friction point, switch to advisory (D3 → Option 1).
 
 ---
 
-## Decision: D5 — SMS provider selection
-
-**Status:** **REQUIRES USER INPUT** (Open Q14)
+## Decision: D4 — Database engine
 
 ### Context
-Both Twilio and Termii integrations are in `appodus_utils/integrations/`. Termii is Nigeria-specialised; Twilio is global.
-
-### Options Considered
-1. Termii only — best NG deliverability, lower cost.
-2. Twilio only — global reach for diaspora SMS confirmations.
-3. **Hybrid** — Termii for Nigerian numbers, Twilio for international.
+PRD.md states PostgreSQL; CLAUDE.md line 1 states MySQL. Code (`asyncpg`, `ACTIVE_DB=POSTGRES`, JSONB in `0001`)
+is PostgreSQL.
 
 ### Chosen Option
-Provisional: Option 3 — route by country code.
+**PostgreSQL is the source of truth.**
 
 ### Rationale
-Diaspora customers receive SMS at international numbers (Twilio); Nigerian agents receive SMS at NG numbers (Termii).
+Code and PRD agree; CLAUDE.md is stale.
+
+### Constraints Introduced
+- All schema/migration work targets PostgreSQL (async SQLAlchemy + asyncpg).
+- CLAUDE.md correction is **flagged only** (not applied during `initialize`, which touches `docs/` only).
 
 ### Revisit Conditions
-- If unified deliverability via one provider drops below 95%.
+- N/A — apply the CLAUDE.md fix in an early `run` slice.
 
 ---
 
-## Decision: D6 — BVN verification provider
-
-**Status:** confirmed (2026-05-02)
+## Decision: D5 — Frontend directory
 
 ### Context
-Phase 3 KYC requires live BVN verification. Mono / Dojah / Okra are the three commonly-cited Nigerian providers. They differ on price, latency, fraud-detection extras, and selfie-match availability.
-
-### Options Considered
-1. **Mono Connect** — broad financial-data API; BVN endpoint mature.
-2. **Dojah** — KYC-focused; bundles BVN + selfie match + ID verification in one SDK.
-3. **Okra** — financial data leader; less KYC-bundled.
+PRD references `web/`; the actual directory is `frontend/` (confirmed by CLAUDE.md and the tree).
 
 ### Chosen Option
-**Dojah** — user-confirmed 2026-05-02.
+**`frontend/` is the source of truth** (`web/` is stale PRD naming).
+
+### Constraints Introduced
+- All frontend paths in artifacts use `frontend/`.
+
+### Revisit Conditions
+- N/A.
+
+---
+
+## Decision: D6 — Migration vs deleted domains (reconciliation risk)
+
+### Context
+Migration `0001_initial_schema.py` defines and seeds tables for domains whose code is staged for deletion
+(verification tiers, trust-score weights, property, consent docs, etc.).
+
+### Chosen Option
+**Treat `0001` as the schema contract.** Rebuilt domain models must align to it; prefer additive migrations
+over recreating tables.
 
 ### Rationale
-One vendor, one webhook, one billing relationship. Bundles BVN + selfie match, eliminating the need for a separate D7 vendor.
+The schema is the most complete surviving description of the intended data model; aligning to it minimises churn
+and keeps the migration history coherent.
 
 ### Tradeoffs
-- Pros: one vendor, one webhook, one billing relationship.
-- Cons: BVN-only price arguably higher; less mature financial-data side.
-
-### Revisit Conditions
-- If false-rejection rate > 3% in pilot.
-
----
-
-## Decision: D7 — Selfie match technology
-
-**Status:** confirmed (2026-05-02)
-
-### Context
-Phase 3 selfie match against BVN photo or uploaded ID. Build vs buy.
-
-### Options Considered
-1. Vendor-bundled (Dojah / Smile Identity / Verifyle).
-2. AWS Rekognition (CompareFaces) — pay-per-call.
-3. In-house (face-recognition lib + ML pipeline) — defer.
-
-### Chosen Option
-**Vendor-bundled with D6 (Dojah)** — user-confirmed 2026-05-02.
-
-### Rationale
-Build is out of scope for MVP. Dojah bundles BVN + selfie in the same SDK call; no second vendor needed.
-
-### Revisit Conditions
-- If vendor pricing shifts; if false-match rate > 0.1%.
-
----
-
-## Decision: D8 — OAuth providers in production
-
-**Status:** confirmed-by-default (Open Q18)
-
-### Context
-Phase 2 §2.2 lists Google, Apple, Facebook with `NEXT_PUBLIC_OAUTH_{...}_DISABLED` per-provider flags so a provider can be hidden while developer-console approval is pending.
-
-### Chosen Option
-- **Google** — enabled in all envs.
-- **Apple** — enabled in dev/staging; **prod-disable until Apple developer review approves**.
-- **Facebook** — enabled in dev/staging; **prod-disable until Meta App Review approves**.
-
-### Rationale
-Mandatory developer-account reviews are slow. The disable flags exist precisely so we can ship without them.
+- Pros: coherent migration history; less rework; schema already PRD-shaped.
+- Cons: rebuilt code must match an existing schema it did not generate — drift risk.
 
 ### Constraints Introduced
-- Frontend defaults to disabled for Apple + Facebook in `.env.prod`.
-- E2E tests still cover all three providers in dev/staging.
+- Each rebuilt domain slice includes a schema-reconciliation check (model ↔ `0001`) and round-trip tests.
 
 ### Revisit Conditions
-- After Apple + Meta reviews land.
+- If `0001` proves materially wrong vs PRD v2.4, author a corrective migration in the relevant slice rather than
+  editing `0001`.
 
 ---
 
-## Decision: D9 — OAuth profile data stored (NDPR)
-
-**Status:** **REQUIRES USER INPUT** (Open Q35)
+## Decision: D7 — Foundation primitives live under `app/core`
 
 ### Context
-NDPR requires data minimisation. What OAuth profile fields do we persist?
-
-### Options Considered
-1. Only `email`, `oauth_subject_id`, `provider` — minimum needed for re-auth.
-2. Above + `display_name`, `avatar_url`, `email_verified_flag`.
-3. Full profile (locale, timezone, etc.) — too broad.
+The execution plan named S2–S4 primitives under `app/domain/verification/*`, but that package was deleted in the
+consolidation and will be fully rebuilt in S9. A surviving `app/state/machine.py` already held the state-machine
+validator + transition tables.
 
 ### Chosen Option
-Provisional: Option 2.
+Create a cross-cutting **`app/core`** package and **move `app/state` → `app/core/state`**. S2–S4 primitives live there:
+`app/core/state/{status,derive,dependencies}.py`, `app/core/{vid,evidence,sla}.py`, `app/core/idempotency/`.
 
 ### Rationale
-`display_name` and `avatar_url` are needed in the UI and are what users expect a social login to provide. `email_verified_flag` short-circuits OTP step.
-
-### Revisit Conditions
-- If NDPR audit objects to `avatar_url` retention.
-
----
-
-## Decision: D10 — Real-time channel for live dashboard
-
-**Status:** confirmed (2026-05-02)
-
-### Context
-Phase 9 customer dashboard needs real-time status updates. WebSocket vs SSE.
-
-### Options Considered
-1. **SSE** — server-sent events, one-way (server → client), works over plain HTTPS, no extra infra.
-2. **WebSocket** — bidirectional, more capable but requires additional connection management.
-3. Polling-only (60-sec) — already required as fallback per PRD.
-
-### Chosen Option
-**Dual-channel** — user-confirmed 2026-05-02:
-- **SSE** for one-way push: live dashboard updates, notifications, metrics counters, audit feed.
-- **WebSocket** for two-way: collaborative workflow, chat, presence, real-time commands.
-
-### Rationale
-Different use cases require different transports. SSE is simpler and sufficient for server-push-only flows. WebSocket is required for Phase 11 chat and agent collaboration features that need duplex communication.
+These are genuinely cross-cutting (state derivation, idempotency, VID, evidence-hash, SLA are consumed by multiple
+future domains). Housing them in `app/core` gives one source of truth and avoids churn/collision when S9 rebuilds the
+full verification domain (which will *import* these, not redefine them).
 
 ### Constraints Introduced
-- Phase 9 (S33) uses SSE with 60-sec polling fallback.
-- Phase 11 (S37) uses WebSocket for messaging/presence.
-- Both are admin-configurable in terms of timeouts/reconnect behaviour.
+- `app/core/__init__.py` imports model-bearing sub-packages (idempotency) so Alembic `env.py` (`from main.app import core`)
+  registers them on `BaseEntity.metadata`. Status enums in `app/core/state/status.py` are the canonical source.
 
 ### Revisit Conditions
-- If SSE connection limits become a scaling constraint at >1000 concurrent users.
+- N/A.
 
 ---
 
-## Decision: D11 — Pricing defaults
-
-**Status:** confirmed (2026-05-07) — PRD values: ₦150k / ₦350k / ₦750k (verified correct in config.py)
+## Decision: D8 — Clean orphaned seeds from `0001`
 
 ### Context
-PRD §1.7 quotes ₦150k / ₦350k / ₦750k for Basic / Standard / Premium. Other knobs (cancellation surcharge, service fee, discounts, price lock) have suggested defaults but no signed-off values.
-
-### Provisional Defaults (admin-configurable)
-| Knob | Default |
-|---|---|
-| Basic tier price (NGN) | ₦150,000 |
-| Standard tier price (NGN) | ₦350,000 |
-| Premium tier price (NGN) | ₦750,000 |
-| Cancellation surcharge | 5% |
-| Service fee | 10% |
-| First-time discount | 5% |
-| Referral credit (referrer) | 5% |
-| Referral discount (invitee) | 5% |
-| Max combined discount cap | 15% |
-| Price-lock window | 24 hours |
-
-### Rationale
-PRD-quoted values where stated; conservative defaults elsewhere. All knobs are admin-configurable in Phase 18 — initial values are seeded via migration.
-
-### Revisit Conditions
-- After first 100 verifications — re-tune by conversion rate.
-
----
-
-## Decision: D12 — FX rate source
-
-**Status:** confirmed (2026-05-02)
-
-### Context
-Currency toggle needs live or near-live FX. Two paths: live API or admin-set table updated daily.
-
-### Options Considered
-1. Live API (e.g., openexchangerates.org or fixer.io) with 5-min cache.
-2. Admin-set rate table refreshed daily by Finance Admin.
-3. Hybrid — Flutterwave FX rates API with configurable cache + admin override table.
+After consolidation, `0001_initial_schema.py` creates only the surviving tables (auth/message/audit/consent) but still
+contained `_seed_pricing` / `_seed_trust_score_weights` writing to `pricing_tier_configs`, `pricing_line_items`,
+`trust_score_weight_config` — tables it no longer creates (the seeds were silently skipped by `table_exists` guards).
 
 ### Chosen Option
-**Option 3 — Flutterwave FX rates API** — user-confirmed 2026-05-02.
-- Primary source: Flutterwave `/rates` API endpoint.
-- Cache TTL: 5 minutes (admin-configurable via `FX_CACHE_TTL_MINUTES` setting).
-- Admin override table: Finance Admin can pin a rate that supersedes the live rate.
-- Stale-warning shown to customer at 30 min (per PRD §5.2).
-- All FX settings configurable by Finance Admin in Phase 18 UI.
+Remove the orphaned pricing + trust-weight seeds (and `_SEED_WEIGHTS`); keep consent-document, verification-consent,
+and super-admin seeds (their tables ARE created here). Behaviour-preserving dead-code removal.
+
+### Revisit Conditions
+- Pricing + trust-weight seeds are reintroduced (with their CREATE TABLEs) when those domains are rebuilt (S9 pricing, S12 scoring).
+
+---
+
+## Decision: D9 — Greenfield foundation posture (relaxes D6)
+
+### Context
+User direction: a total rewrite was preferred; only **user-auth (backend + frontend)** and the **home page** are worth
+preserving. Nothing has shipped to production.
+
+### Chosen Option
+Build the foundation **greenfield/clean** rather than reconciling to brownfield survivors. Treat `0001` as the single
+**editable** initial migration: add new foundation tables *into* `0001` (e.g. `idempotency_keys` in S3) using the
+per-table `_create_*` + `AlembicUtils` + DRY pattern (backend/CLAUDE.md), instead of incremental migrations.
 
 ### Rationale
-Flutterwave is already integrated for payments; using their FX rates avoids a second API dependency and ensures rate consistency with the payment gateway.
+With no shipped database, a single coherent initial schema is cleaner than a chain of additive migrations for the
+foundation phase. This relaxes **D6** (which treated `0001` as an immutable contract).
+
+### Tradeoffs
+- Pros: one coherent initial schema; less migration noise during the foundation rebuild.
+- Cons: `0001` changes until the schema stabilises; once real data exists, revert to additive-only migrations.
+
+### Revisit Conditions
+- Once a non-throwaway database exists (staging/prod), stop editing `0001` and switch to additive migrations.
+
+---
+
+## Decision: D10 — Enum references over free literals (codebase-wide convention)
+
+### Context
+`app/core/state/machine.py` defined its transition tables with raw string literals, predating the canonical enums
+in `app/core/state/status.py`. A codebase-wide audit found `machine.py` was the **sole** offender (derivation,
+dependencies, surviving domains, `appodus_utils`, and the frontend already reference their enums).
+
+### Chosen Option
+Refactor `machine.py` to reference `VerificationStatus` / `TaskState` / `ReportState` members (tables annotated
+`Dict[str, Set[str]]` since the enums subclass `str`, so `StateMachine` still accepts DB strings at the boundary —
+behaviour-preserving, 363 tests unchanged). Codify the rule in [CLAUDE.md](../CLAUDE.md),
+[backend/CLAUDE.md](../backend/CLAUDE.md), and [frontend/CLAUDE.md](../frontend/CLAUDE.md): **any value with a
+defining enum must be referenced via its enum member in app code; free string literals duplicating an enum value
+are prohibited.**
 
 ### Constraints Introduced
-- `currency_rates` table stores Flutterwave-sourced rates + admin overrides.
-- `FX_CACHE_TTL_MINUTES` setting (default 5, admin-configurable).
-- Stale warning fires if last_refreshed > 30 min.
+- Exceptions: enum *definitions*, Alembic migrations (decoupled by design), and tests asserting wire/DB-string
+  compatibility. Future rebuilt domains (S5+) inherit the rule.
 
 ### Revisit Conditions
-- After first Flutterwave rate API outage — may add openexchangerates.org as fallback.
+- N/A.
 
 ---
 
-## Decision: D13 — Listing-URL parser supported sites
-
-**Status:** confirmed (2026-05-07) — PropertyPro.ng + NigeriaPropertyCentre.com for MVP; manual fallback for unknown domains
+## Decision: D10 — Admin-invite acceptance elevates user_type (S8 / Phase 4)
 
 ### Context
-PRD §5.1 names PropertyPro and Nigeria Property Centre. Are others required for MVP?
+§3.2 declares `user_type` immutable after creation; §4.1 requires an existing USER who accepts an
+admin invite to "merge the admin role". The RBAC helper (`app/domain/user/auth/utils/permissions.py`)
+gates every admin endpoint on `user_type == ADMIN`, so admin access cannot be granted by `admin_sub_role`
+alone.
 
 ### Chosen Option
-Provisional: PropertyPro + Nigeria Property Centre **only** for MVP.
+Treat a validated admin-invite acceptance as the **sanctioned elevation path**: on accept, set
+`user_type = ADMIN` and `admin_sub_role = invitation.sub_role`. Acceptance requires an authenticated user
+whose email matches the invitation, a non-expired unused token, and is audited (`ADMIN_INVITE_ACCEPTED`).
 
 ### Rationale
-Two sites cover ~80% of diaspora-targeted listings. Manual fallback handles the rest.
+The §3.2 immutability rule guards against *unsanctioned* self-promotion; an admin invite issued by a
+Super Admin (RBAC `INVITE_ADMIN`) is exactly the authorized exception. Keeping admin access keyed on
+`user_type == ADMIN` preserves one consistent authorization predicate across the whole admin surface.
 
-### Revisit Conditions
-- After 30 days post-launch — review parser-success rate per source.
+### Tradeoffs / Constraints
+- A single wire predicate (`user_type == ADMIN`) rather than two (`ADMIN` OR has-sub_role).
+- Existing CUSTOMER/AGENT personas are preserved (portal switcher still works).
+
+### Revisit
+- If product later wants admin capability without full admin `user_type`, extend `has_permission` to also
+  honour `admin_sub_role` on USER rows, and relax this.
 
 ---
 
-## Decision: D14 — Country/timezone source dataset
-
-**Status:** **REQUIRES USER INPUT** (Open Q19)
+## Decision: D11 — S11 evidence: full presigned-S3 upload (not ref-only)
 
 ### Context
-Signup auto-suggests timezone from country.
+S7 deferred the real presigned-S3 upload UX (stored refs only). S11 (Phase 7) is where evidence
+carries proof-of-work weight: server-side GPS+timestamp stamping, per-item SHA-256 content hash
+(§4.5), image compression/derivatives, progressive viewing, and the offline upload queue (§7.4).
 
 ### Chosen Option
-Provisional: **`Intl.supportedValuesOf('timeZone')`** for browsers + IANA TZ database server-side. Country list from ISO 3166-1.
+**Full S3 presigned upload** (user direction). S11 wires a real storage facade (presigned PUT +
+retained full-res original + served compressed derivatives), the evidence domain (rows with
+content-hash + server-set GPS/timestamp/capture-date), and the frontend upload manager + offline
+retry queue (Field/Surveyor).
 
-### Rationale
-- IANA / ISO are authoritative, no third-party dependency.
-- Frontend uses native browser APIs.
+### Tradeoffs
+- Pros: §4.5/§7.3a/§7.4 exercised end-to-end; evidence layer (S13) inherits real media.
+- Cons: largest S11 sub-scope; storage-facade + upload manager + offline queue are real engineering.
 
----
+### Constraints
+- Deterministic default preserved: a local/stub storage provider backs tests (mirrors the OTP/payment
+  stub philosophy); real S3/R2 selected by settings behind the facade.
 
-## Decision: D15 — Conflict-detection initial rule set
-
-**Status:** **REQUIRES USER INPUT** (Open Q20)
-
-### Context
-Phase 8.2 needs an initial rule set for automated conflict flags between agent submissions on the same verification.
-
-### Provisional Initial Rules
-1. **Occupancy mismatch** — Field reports occupied; Registry reports vacant per ownership records.
-2. **Boundary divergence** — Surveyor coordinates differ from Registry survey-plan coordinates by > 5m.
-3. **Authenticity conflict** — Lawyer flags forged document; Registry flagged document as authentic.
-4. **Owner-name mismatch** — Registry chain shows different owner than seller info on customer submission.
-
-### Constraints Introduced
-- Each rule produces a `conflict_flag` that admin must resolve before "Release Report" is permitted.
-
-### Revisit Conditions
-- After 20 verifications — review false-positive rate per rule.
+### Revisit
+- If disk/infra constraints block, fall back to ref+hash for the binary path while keeping the domain.
 
 ---
 
-## Decision: D16 — Wire proof reconciliation
-
-**Status:** **REQUIRES USER INPUT** (Open Q21)
+## Decision: D12 — Real scheduler for time-based automation (S10/S11)
 
 ### Context
-Phase 5.4 wire proof workflow.
-
-### Options Considered
-1. Manual review by Finance Admin only.
-2. Auto-match by reference + admin confirm exceptions.
-3. Vendor-mediated (e.g. Stripe wire matching).
+Broadcast first-accept-wins expiry, no-show/pool timeouts, starvation backstop (§7.2), and graceful
+SLA shedding (§6.4) are time-driven. They need a periodic trigger.
 
 ### Chosen Option
-Provisional: **Option 1** for MVP, evolving to Option 2 in Phase 18 once volume justifies it.
+**Wire a real scheduler now** (user direction). Timeout/broadcast/shedding logic lives in pure,
+tested service methods; a background job-runner fires the sweeps periodically. A non-prod dev
+endpoint also triggers each sweep for deterministic tests.
 
-### Rationale
-Wire proof volumes will be small early; manual review is fastest to ship.
+### Tradeoffs
+- Pros: exit criteria met with real automation, not just callable methods.
+- Cons: adds runtime/infra concerns (lifespan-managed scheduler) and shutdown handling.
 
----
+### Constraints
+- Sweeps must be idempotent and safe to run concurrently with request traffic (claim-based, like the
+  payment webhook). Scheduler is disabled under test env; sweeps invoked directly/via dev endpoint.
 
-## Decision: D17 — Admin SLAs
-
-**Status:** **REQUIRES USER INPUT** (Open Q23, Q24, Q25, Q33)
-
-### Provisional Defaults
-| SLA | Default | Phase |
-|---|---|---|
-| Agent application review | 3 business days | 3 |
-| Agent no-show timeout | 4 hours | 7 |
-| Max active task capacity per agent | 5 | 16 |
-| Admin report-release SLA | 4 hours | 8 |
-
-### Rationale
-Match PRD's suggested values.
-
-### Revisit Conditions
-- If admin operations bottleneck on application review — extend or add Operations capacity.
+### Revisit
+- If serverless deployment (NullPool) makes an in-process scheduler unsound, move sweeps to an external
+  cron hitting the dev/admin sweep endpoints.
 
 ---
 
-## Decision: D18 — KYC document review (manual vs automated)
-
-**Status:** **REQUIRES USER INPUT** (Open Q27)
+## Decision: D13 — Pull commission + refund forward into S10/S12
 
 ### Context
-Phase 3 ID upload (NIN / Passport / DL / Voter's Card) — review path.
+Chargeback commission-freeze (R6a.2) and FAILED/REFUNDED refunds (R8.5) reference domains sequenced
+later (commissions = Phase 15/S19; gateway refunds unwired).
 
 ### Chosen Option
-Provisional: **Vendor-automated (D6) primary; admin manual fallback for low-confidence results.**
+**Pull them forward** (user direction). S10 introduces a minimal commission domain (states
+CLEARING/AVAILABLE/FROZEN/REVERSED + freeze/reverse ops) so chargeback freeze executes for real;
+commission *accrual* wires at task-approval/report-release (S12). Refund execution (gateway refund
+call behind the payment facade) lands with FAILED/REFUNDED in S12.
 
-### Rationale
-Most cases auto-resolve. Admin attention reserved for vendor's "uncertain" tier.
+### Tradeoffs
+- Pros: R6a.2/R8.5 fully satisfied, not hook-only.
+- Cons: front-runs Phase 15/S19 sequencing; S19 becomes earnings/payout + rules maturity over this base.
+
+### Constraints
+- Commission money in integer minor units, NGN-contractual, reconciling to the kobo (§4.4).
+- Gateway refund goes through the provider facade with the deterministic stub default (§PAYMENT_STUB_MODE).
+- S19 (Phase 15) is re-scoped in the plan to build on this base rather than introduce commissions cold.
+
+### Revisit
+- N/A — S19 slice objective updated at its run.
 
 ---
 
-## Decision: D19 — Verification Disclaimer copy
-
-**Status:** confirmed-placeholder (2026-05-02)
+## Decision: D14 — Build admin Trust Score Weights CRUD in S12
 
 ### Context
-Phase 5 cannot ship pre-payment without legally-signed-off Verification Disclaimer copy. The five consent items (PRD §5.3) need final wording.
+Report release (§8.3) computes the composite trust score from admin-defined Trust Score Weights
+(per tier × role, summing to 100%). Full admin config is nominally Phase 18 (R18.5).
 
 ### Chosen Option
-**Proceed with placeholder text** — user-confirmed 2026-05-02. Placeholder copy will be seeded in the migration; final legal copy must be swapped in before Phase 5 production launch.
+**Build the admin weights CRUD now** (user direction). S12 recreates `trust_score_weight_config` in
+`0001`, ships default weights, and builds the admin management UI + endpoints with sum-to-100
+validation. Composite computed deterministically at release; recompute only at release (§8.6).
 
-### Required Action (pre-launch)
-Legal sign-off still required on final wording for:
-1. Verification Disclaimer
-2. Findings & Opinion Acknowledgement
-3. Jurisdiction & Platform-Only Transactions
-4. Communication Recording
-5. Refund & Cancellation Policy
+### Tradeoffs
+- Pros: §8.3 fully admin-configurable at MVP; R18.5's weights portion delivered early.
+- Cons: pulls part of Phase 18 forward; S22 keeps the remaining system-config surface.
 
-### Constraints Introduced
-- Until copy is signed, Phase 5 launch is gated.
-- Initial versions will be seeded via migration; subsequent updates via admin UI (per D1).
+### Constraints
+- Weights referenced via enums (tier/role); sum-to-100 enforced at save (per tier).
+- Default weights seeded idempotently (like consent docs), editable via admin CRUD.
+
+### Revisit
+- N/A — S22 (Phase 18) objective updated to exclude the weights CRUD delivered here.
 
 ---
 
-## Decision: D20 — Trust-status visibility to other users
-
-**Status:** **REQUIRES USER INPUT** (Open Q30)
+## Decision: D15 — SSE transport now, event bus deferred (S13 / Phase 9)
 
 ### Context
-A user's `trusted` flag — is it visible to others (e.g. on report), to admins only, or hidden entirely?
-
-### Provisional Default
-Visible to admins only. Not surfaced to customers or other agents.
-
-### Rationale
-"Trusted" is a system-internal signal that drives ranking (Phase 16) and could be gamed if exposed.
-
----
-
-## Decision: D21 — Area Insights content owner
-
-**Status:** **REQUIRES USER INPUT** (Open Q31)
-
-### Context
-Phase 18.4 includes per-LGA Area Insights as content. Source + maintainer?
-
-### Provisional Default
-Operations Manager curates; CMS UI in Phase 18 for content edits.
-
-### Revisit Conditions
-- If LGA coverage exceeds 20 areas, may need content team.
-
----
-
-## Decision: D22 — Share link default expiry
-
-**Status:** confirmed-by-default (Open Q34)
+§9 needs live tracking over §4.9 SSE, but the §4.8 in-process event bus is Phase 12 (S16). No SSE,
+emitter, or event bus exists in the backend today.
 
 ### Chosen Option
-30 days default; customer can extend or revoke. Phase 18 may add admin override per share class.
+**In-process asyncio pub/sub emitter (`app/core/realtime`) + a real `text/event-stream` endpoint now,
+with the 60-second poll endpoint sharing one identical snapshot shape** as the durable fallback. Redis
+multi-instance fan-out is deferred to the Phase-12 event bus (S16). Publishing is **best-effort** and
+never breaks the emitting transaction; **poll is the source of truth, SSE is a latency-reducing hint**.
 
-### Rationale
-Match PRD §13.2.
+### Tradeoffs
+- Pros: meets the "watch status advance in real time" exit criterion now; single-process (`python
+  veriprops.py`) is the demo reality; poll fallback keeps correctness anywhere (incl. serverless/NullPool).
+- Cons: no cross-worker fan-out until S16; emit happens pre-commit (a dropped/early push only costs a
+  60s reconciliation, never correctness).
 
----
-
-## Decision: D23 — Nigerian public holidays for SLA exclusion
-
-**Status:** **REQUIRES USER INPUT** (Open Q26)
-
-### Context
-SLA timers must exclude Nigerian public holidays. Source list?
-
-### Provisional Default
-Maintained as a `business_calendar` table seeded from Nigerian Federal Government public-holiday list, refreshed annually by Operations Admin in Phase 18.
-
-### Constraints Introduced
-- `business_calendar` entity in Phase 0 schema.
-- Seed migration carries 2026 + 2027 holidays.
+### Revisit
+- S16 replaces the emitter's internals with the §4.8 event bus without changing this public API.
 
 ---
 
-## Decision: D24 — Re-check pricing model
-
-**Status:** **REQUIRES USER INPUT** (Open Q7)
+## Decision: D16 — fpdf2 behind a stub-first facade for the report PDF (S14 / Phase 10)
 
 ### Context
-Phase 14.1 re-check pricing. Three models:
-1. Flat fee per re-check.
-2. Per-affected-agent fee.
-3. Percentage of original verification price.
+§10 requires a server-side branded PDF with a per-page legal footer + QR. No PDF library exists; the dev
+platform is Windows, where WeasyPrint's GTK/cairo native deps are painful and Playwright is heavy.
 
-### Provisional Default
-**Per-affected-agent fee** — sum of per-task component prices for tasks scoped into the re-check. Configurable in Phase 18.
+### Chosen Option
+**`fpdf2` (pure-Python, zero native deps) behind a `report_pdf` facade** with a deterministic stub default,
+mirroring the storage/payment/kyc facades. Per-page footer via `footer()`; QR via a pure-Python lib.
+
+### Tradeoffs
+- Pros: cross-platform/CI-safe, deterministic tests, satisfies the footer-parity exit criterion now.
+- Cons: not pixel-for-pixel with the HTML view; a WeasyPrint/Playwright renderer is a later enhancement
+  behind the same facade.
+
+### Revisit
+- Swap in an HTML-CSS renderer behind the facade if pixel parity becomes a requirement.
+
+---
+
+## Decision: D17 — Evidence visible only after review-approval (S13 / Phase 9)
+
+### Context
+§9.4 shows customers a chronological evidence feed; §9.3 mandates risk-bearing interim signal be withheld
+until admin review so a negative is delivered only with context.
+
+### Chosen Option
+**A role's evidence (and its interim milestone) surfaces to the customer only once that task is admin
+review-approved** (`review_decision == APPROVED`). Before then the task reads the collapsed "In Progress".
+
+### Tradeoffs
+- Pros: the §9.3 guardrail holds automatically at the API layer; positives are contextualised.
+- Cons: less immediate than a live-as-uploaded feed (deferred as a possible future toggle).
+
+### Revisit
+- Could add an admin per-item "release early" control if product wants selectively-live evidence.
+
+---
+
+## Decision: D18 — Build the Legal Opinion section, gate its go-live (S14 / Phase 10)
+
+### Context
+The Premium Legal Opinion framing is a hard go-live gate pending NBA counsel + lawyer-role PI insurance
+(§3.5/§B). It does not block MVP build, only go-live.
+
+### Chosen Option
+**Build the Premium Legal Opinion report section fully, but gate its customer display behind
+`LEGAL_OPINION_ENABLED` (default off)** surfaced via `/config/public`. Build, do not go live.
+
+### Tradeoffs
+- Pros: the tier is demoably complete; flipping one flag ships it post-sign-off.
+- Cons: the section is dark in prod until legal clears — intended.
+
+### Revisit
+- Enable the flag once NBA sign-off + lawyer PI cover are recorded (§B items 15, 17).
+
+---
+
+## Decision: D19 — S15 delivers full Phase 11, including structured clarifications
+
+### Context
+Phase 11 spans the Customer↔Admin thread, the task-tagged Admin↔Agent thread, general support,
+and the §11.1 "structured, fraud-scanned clarification request/response" refinement.
+
+### Chosen Option
+**Full Phase 11** (user direction): all channels plus the clarification flow. Clarifications are
+modelled as `ChatMessage`s with `message_kind = CLARIFICATION_REQUEST/RESPONSE` and a
+`clarification_status` (OPEN→ANSWERED) — they run the same send-time fraud scan, so no separate
+pipeline is needed.
+
+### Tradeoffs
+- Pros: the whole mediated-comms surface ships together; clarifications reuse the message machine.
+- Cons: larger S15 UI + state than a threads-only cut.
+
+### Revisit
+- N/A.
+
+---
+
+## Decision: D20 — S16 routes the existing emitter + external dispatch through the event bus
+
+### Context
+S13 scattered `publish_verification_event(...)` calls at every mutation, and the outbound
+`VerificationMessages.send_*` methods are called ad hoc. §4.8 wants each domain event published
+**once**, with subscribers deciding surfacing. D15 promised the emitter's internals would be
+swapped for the bus without changing its public behaviour.
+
+### Chosen Option
+**Full refactor** (user direction): S16 introduces `app/core/events` and replaces the scattered
+emitter calls and the best-effort external-dispatch calls with a single `event_bus.publish(...)`.
+A `RealtimeSubscriber` re-emits the same SSE event names (S13 frontend hooks untouched); a
+`NotificationSubscriber` fans out per the rule table; a `ChatCounterSubscriber` handles §12.3.
+
+### Tradeoffs
+- Pros: one publish point; honours the no-orphan/refactor-everything non-negotiable.
+- Cons: touches task/review/payment/tracking services — more churn now.
+
+### Revisit
+- Redis fan-out replaces the in-process dispatcher internals later without an API change.
+
+---
+
+## Decision: D21 — Rule table covers all §12.2 events; publish only what exists today
+
+### Context
+Several §12.2 notification triggers (dispute, payout, re-check) reference source domains not yet
+built (S18/S19).
+
+### Chosen Option
+**Declare the full §12.2 set** in the event enum + declarative rule table, but wire `publish(...)`
+calls only at choke points that exist today (payment, status, agents-assigned, evidence, report
+ready/versioned, task-rejected, conflict, no-show, fraud-message, new chat message). Dispute /
+payout / re-check entries are declared-but-unfired until their slices add the sources.
+
+### Tradeoffs
+- Pros: the routing table is complete and reviewable now; later slices just publish an existing event.
+- Cons: some rule-table rows are dormant until S17–S19.
+
+### Revisit
+- N/A — later slices publish the already-declared events.
+
+---
+
+## Decision: D22 — Chat is text + fraud-scan only in S15; attachments deferred
+
+### Context
+§11.1 allows attachments in the Customer↔Admin thread. Full presigned upload is a real sub-surface.
+
+### Chosen Option
+**Text + fraud-scan only** this slice (user direction). The `attachments` JSONB column is kept on
+`chat_messages` for forward-compat, but no upload UI/endpoint is built. Attachment upload is a
+documented follow-up (reuses the S11 storage facade when built).
+
+### Tradeoffs
+- Pros: S15 stays focused on the state-machine + routing correctness (the risky part).
+- Cons: attachments arrive in a follow-up, not this slice.
+
+### Revisit
+- Wire presigned attachment upload behind the existing storage facade in a later slice.
+
+---
+
+## Decision: D23 — Minimal SLA-breach emitter sweep so the notification actually fires
+
+### Context
+There is no SLA-breach detector firing today — only the S4 business-day calculator and the admin
+SLA-health projection. Without an emitter the §12.2 SLA-breach notification would be dark.
+
+### Chosen Option
+**Add a minimal SLA-breach sweep** (S16) reusing the S10 scheduler pattern (`ALWAYS_NEW` session,
+disabled under test, on-demand dev endpoint): a periodic job finds newly-overdue verifications and
+publishes `SlaBreached` **once** per verification through the event bus.
+
+### Tradeoffs
+- Pros: the SLA-breach notification is real, not a dormant rule-table row.
+- Cons: adds one more scheduled sweep to maintain.
+
+### Revisit
+- Fold into a richer ops/analytics scheduler in S22 if needed.
+
+---
+
+## Decision: D24 — Restore the `/dev/reset` + `/dev/seed` contract (gap-closure follow-up)
+
+### Context
+CLAUDE.md's automation-determinism section declares `POST /dev/reset` + `POST /dev/seed` as a
+permanent contract for autonomous QA, but the `dev` domain was cleared in the greenfield rebuild
+and never restored — so a deterministic live drive-through had no way to seed data.
+
+### Chosen Option
+**Rebuild `app/domain/dev/`** (controller + service, no entity), production-gated twice (router
+mounts only in non-prod; `_require_non_prod()` 404s in prod). `reset()` clears domain rows keeping
+the super-admin + reference seeds; `seed()` builds a deterministic scenario (customer + approved
+agents + a `PAID`/`UNDER_REVIEW` verification with review-approved tasks, SLA overdue) and returns
+credentials/ids. Reuses `Utils.get_password_hash`, the domain models, and `VerificationTaskService`.
+
+### Tradeoffs
+- Pros: restores the documented QA contract; enables the live HTTP drive-through + future automation.
+- Cons: a seed must stay in step with the domain schema (it writes rows directly for determinism).
+
+### Revisit
+- Extend the seed as later slices add domains (disputes, payouts).
+
+---
+
+## Decision: D25 — Admin Chat counter is a shared-inbox model (gap-closure follow-up)
+
+### Context
+The §N.3 Chat counter is per-participant, but admins are not enrolled as participants of every
+verification thread — so without special handling an admin would see no Chat counter.
+
+### Chosen Option
+**Treat admins as a shared inbox:** `CommunicationService` detects `user_type == ADMIN` and returns
+*all* verification threads (`ConversationRepo.list_verification_threads`) with unread computed from
+that admin's own `ConversationParticipant.last_read_at` (a never-opened thread reads as unread).
+Admins bypass participant-membership on read/mark-read. Live SSE bumps for admins ride the 60-second
+poll rather than per-message fan-out (bounded).
+
+### Tradeoffs
+- Pros: admins get a meaningful, per-admin Chat counter without enrolling every admin per thread.
+- Cons: an extra id-type branch; admin counter latency is poll-bound (≤60s), not instant.
+
+### Revisit
+- Add per-admin SSE fan-out if instant admin counters become important.
+
+---
+
+## Note: three runtime bugs the live drive-through surfaced (mocked tests couldn't)
+
+The first real end-to-end run against a live backend caught defects unit tests (mocked repos) missed,
+all now fixed:
+1. **UUID-vs-String references.** `BaseEntity.id` is a native `UUID(as_uuid=True)` (so `entity.id` is
+   a `uuid.UUID`), but reference columns are `String(36)`; the wire form is `.hex` (32-char) for
+   entities and `str(uuid)` (36-char) for user ids (JWT). Communication/notification code now coerces
+   with `Utils.uuid_to_hex` (entity refs) / `str` (user refs) at the repo/DTO boundaries.
+2. **ORM models into `build_page`.** `build_page` validates its items as DTOs; the chat/notification
+   list repos were passing ORM models. They now return `(rows, total)` and the service builds the
+   typed page from DTOs.
+3. **Get-after-create returns None.** `ReportService.release` re-fetched a report created in the same
+   uncommitted transaction (`get_model(report.id)` → `None` → crash). It now sets the timestamp on the
+   attached row and returns it directly.
+
+---
+
+## Decision: D26 — Re-check pricing = % of original; tier-upgrade = tier-price delta (S18 / Phase 14)
+
+### Context
+PRD Open Question #4 (line 1554) explicitly leaves the Phase-14 re-check pricing model unresolved
+(flat / per-agent / % of original). §14.2 fixes tier-upgrade pricing as "delta pricing only".
+
+### Chosen Option
+Re-check fee = **a configurable percentage of the original tier price** (`recheck_price_pct`, default
+30, held in the S18 system-config store; helper `pricing.recheck_price_kobo`). Tier-upgrade charge =
+**`price(to_tier) − price(from_tier)`** (`pricing.upgrade_delta_kobo`), reusing the existing per-tier
+prices.
 
 ### Rationale
-Aligns cost with actual work; avoids charging customer for tasks that did not need re-doing.
+A percentage scales fairly across tiers (a Premium re-check reruns costlier scoped work than a Basic
+one) and reconciles cleanly to the kobo. Centralised in `pricing.py` so the Phase-18 admin pricing API
+is a single-call-site swap, consistent with the provisional-pricing posture.
+
+### Revisit
+Switch models once the Phase-18 admin pricing API lands; the percentage lives in system-config already.
+
+---
+
+## Decision: D27 — Named-recipient sharing built in S17 (full §13.2 table)
+
+### Context
+§13.2 defines four sharing modes; the named-recipient mode (full report emailed to a specific address,
+time-limited, revocable, disclaimer-ack on first view) is the largest sub-surface.
+
+### Chosen Option
+**Build all four modes now**, including named-recipient: a tokenised `VerificationShare` row emails a
+magic link; a public full-report-by-token view is gated on a one-time disclaimer acknowledgement;
+shares are revocable (token dead immediately) with a 30-day default expiry.
+
+### Tradeoffs
+- Pros: the whole proof-sharing surface ships together; §13.3 revocation exit criterion exercised end-to-end.
+- Cons: larger S17 (public full-report view + per-recipient ack + share-invite email template).
+
+### Revisit
+N/A.
+
+---
+
+## Decision: D28 — Build a minimal admin System-Config domain now (mirrors D14)
+
+### Context
+§14 references `dispute_window_days` (default 30), re-check pricing, and upgrade deltas as
+admin-configured values. Full Mission-Control system config is Phase 18 (S22).
+
+### Chosen Option
+**Build a minimal `system_config` domain now** (user direction): a typed key-value store
+(`SystemConfig(key, value_json, description)`) with `ConfigService.get_int/get_bool/set`, seeded
+idempotently by `DataSeeder`, and an RBAC-gated admin CRUD. Holds `dispute_window_days`,
+`recheck_price_pct`, `agent_dispute_defence_hours`. Pulls the config-store portion of Phase 18 forward,
+exactly as D14 pulled the trust-weights CRUD forward.
+
+### Tradeoffs
+- Pros: §14 values are admin-configurable at MVP; S22 builds the broader ops config on this base.
+- Cons: front-runs part of Phase 18; S22 re-scoped to exclude the config store delivered here.
+
+### Revisit
+S22 (Phase 18) objective updated at its run to build on this store.
+
+---
+
+## Decision: D29 — Report re-versioning via version_label + revision_kind (S18 / Phase 14)
+
+### Context
+§10.1/§14 want the report to display v1.0 / v1.1 (minor admin revision) / v2.0 (re-check) / v3.0 (tier
+upgrade). The `Report` model carries only a monotonic integer `report_version`.
+
+### Chosen Option
+**Add a `version_label` (string) + `revision_kind` enum (INITIAL / ADMIN_REVISION / RECHECK /
+TIER_UPGRADE) to `Report`.** `ReportService.release(..., revision_kind=…)` computes the label
+(INITIAL→"1.0", ADMIN_REVISION→minor bump, RECHECK/TIER_UPGRADE→+1 major). The integer
+`report_version` stays the monotonic counter and PK-ordering key; the label is the display convention.
+
+### Rationale
+Keeps the existing monotonic counter (and its supersede/versioning tests) intact while giving the
+customer-facing semantic label the PRD specifies. Decoupled so the label scheme can evolve without
+touching the counter.
+
+### Revisit
+N/A.
+
+---
+
+## Note: three runtime bugs the S17/S18 live drive-through surfaced (mocked tests couldn't)
+
+Extending `backend/scripts/e2e_drive_through.py` to cover the §13 sharing + §14 revision flows
+against a live backend caught three defects the mocked unit tests missed — the same class of
+UUID/transaction gotchas as the S15/S16 gap-closure, all now fixed:
+1. **`get_released` called with a native UUID.** The S17 `CustomerReportService` refactor
+   (`_content_from_verification`) and `ShareService._build_summary` passed `verification.id`
+   (a `uuid.UUID`) into `ReportRepo.get_released`, whose `verification_id` column is `String(36)`
+   — asyncpg raised "expected str, got UUID". Both now coerce with `Utils.uuid_to_hex`. This had
+   broken the customer report endpoint for *all* customers, not just shares.
+2. **Payment reference two-string-forms.** Re-check/upgrade stored/looked-up the linking
+   `payment_id` inconsistently (a fresh entity's `.id` is a `uuid.UUID`; the update path
+   json-encodes it to `str(uuid)` 36-char, while lookups used `.hex` 32-char). Standardised on
+   `Utils.uuid_to_hex(payment.id)` for storage, audit-detail JSON, and `get_by_payment` lookup.
+3. **Get-after-create returns None.** `UpgradeService.request` re-fetched the upgrade row it had
+   just created in the same uncommitted transaction (`get_model` → `None`), so the controller
+   dereferenced `None.status`. It now sets `payment_id` on the attached row and returns it directly.
+
+---
+
+## Decision: D30 — Commission rules = per-role×tier table + admin CRUD (S19 / Phase 15)
+
+### Context
+§15.1 wants the agent commission "admin-configured per role × tier," shown on job-accept. The base
+built at S10/S12 (D13) accrued a flat `AGENT_COMMISSION_SHARE (0.40) × trust-weight`.
+
+### Chosen Option
+**Build a `commission_rule` table + admin CRUD** (mirrors the D14 Trust-Score-Weights CRUD), rate in
+**basis points** for exact kobo math (`commission = price_locked_minor × rate_bps / 10_000`). Defaults
+seeded to reproduce the prior flat model (`weight_percent/100 × AGENT_COMMISSION_SHARE` = `weight × 40`
+bps). RBAC `CONFIGURE_PRICING` (Finance). Accrual reads the rule; the rate shows on the job-accept preview.
+
+### Tradeoffs / Constraints
+- Defaults are seeded from a **static** role-weight map (not a live trust-weight DB read) so seeding is
+  deterministic and never depends on trust-weight rows being visible mid-seed-transaction (the live
+  drive-through caught a zero-rate seed when the read ran before the weights were flushed).
+- Admin edits after seed; the Phase-18 pricing API builds on this table.
+
+### Revisit
+Fold into the broader Phase-18 pricing/finance config (S22).
+
+---
+
+## Decision: D31 — Earnings balance is derived-by-date; two-stage clearance; stub payouts (S19)
+
+### Context
+§15.2 defines a two-stage commission hold: the bulk clears after `commission_clearance_days`, a
+`commission_reserve_pct` reserve after the chargeback window. §15.3 requires payout math to reconcile to
+the kobo. No payout/withdrawal concept existed.
+
+### Chosen Option
+**Derive the agent balance by date on read** (never a stored running total): available = cleared bulk +
+released reserve − paid − in-flight-locked payouts; clearing / in-reserve / on-hold / lifetime / paid are
+the §15.1 line items. Accrual stamps `clearing_until` and `reserve_until`; a **claim-based clearance
+sweep** flips CLEARING→AVAILABLE and releases the reserve, firing `COMMISSION_CLEARED` (the positive-
+movement notification, §15.1). A new **payout domain** (agent bank account + payout, `APPROVE_PAYOUT`
+finance panel) draws down available (a REQUESTED/APPROVED/HELD payout locks funds so nothing is double-
+spent) with a 2-business-day SLA. Disbursement is **stub-first** (approval marks PAID + fires
+`PAYOUT_APPROVED`); a real transfer gateway drops in behind this later.
+
+### Tradeoffs
+- Deriving-by-date reconciles to the kobo and can't drift; the sweep exists only to fire the notification
+  and give a coarse status. Available is clamped at 0 (a late reversal after payout is the accepted,
+  bounded §15.2 tail risk).
+- Also closes the S18 double-accrual follow-up: `_accrue_commissions` skips a task that already carries a
+  live (non-reversed) commission, so a re-checked re-release never double-accrues.
+
+### Revisit
+Swap the stub disbursement for a real transfer provider behind the payment facade.
+
+---
+
+## Note: three runtime bugs the S19 live drive-through surfaced (mocked tests couldn't)
+
+Extending `backend/scripts/e2e_drive_through.py` to cover the §15 earnings→payout flow against a live
+backend caught three defects the mocked unit tests missed — again the UUID/transaction-boundary class:
+1. **`get_live_for_task` called with native UUIDs.** The double-accrual guard passed `verification.id` /
+   `task.id` (`uuid.UUID`) into `String(36)` ref-column filters — asyncpg "expected str, got UUID", which
+   500'd **every** report release. Both now coerce with `Utils.uuid_to_hex`.
+2. **Zero-rate commission seed.** `CommissionRuleService.seed_defaults` read the trust weights via the DB
+   mid-seed-transaction before they were visible, so every rate seeded to 0 and no commission accrued. Now
+   seeded from a static role-weight map (D30) — no cross-table read ordering dependency.
+3. **Payout beneficiary id-form mismatch.** `_resolve_beneficiary` keyed stored accounts by the raw
+   `uuid.UUID` `a.id` but the client sends the `.hex` wire id, so a saved account never matched. Now keyed
+   by `Utils.uuid_to_hex(a.id)`.
+
+---
+
+## Decision: D32 — Reputation metrics derived on read (S20 / Phase 16)
+
+### Context
+§16.1 wants agent metrics: completion rate, accuracy (1–5, admin-assigned), timeliness. The backend
+already stores per-task `review_quality` (0–100, admin-set at approval) and task timestamps; no metrics
+table exists.
+
+### Chosen Option
+**Compute metrics on read** from an agent's verification tasks (no stored metrics — can't drift).
+Accuracy = the existing `review_quality` aggregated and shown on a **5-point scale** (reuses the admin
+input already captured; no second scoring step). Timeliness = the fraction of submissions within a new
+`task_sla_hours` system-config knob (`submitted_at − accepted_at`). A composite (completion + accuracy +
+timeliness − decline penalty) drives the assignment ranking. Pure arithmetic in `reputation/metrics.py`.
+
+### Tradeoffs
+- Reuses one admin score instead of adding a distinct 1–5 rating action; a richer per-role rubric can
+  layer on later without a schema change.
+- Metrics recompute per request over an agent's tasks — fine at MVP volume; cache if it grows.
+
+### Revisit
+Add a stored/snapshot metrics table only if the per-read aggregation becomes a hotspot.
+
+---
+
+## Decision: D33 — Full coverage + interactive map; backend-owned states canon; unified dashboard (S20)
+
+### Context
+§16.1 coverage lets agents declare states + LGAs + travel distance with a "Nigeria map preview," and
+specifies role-specific dashboards (Field/Registry/Lawyer). No Nigerian-locations canon existed on the
+backend (only a static frontend list).
+
+### Chosen Option
+**Full coverage** (states + LGAs + travel radius) with an **interactive Nigeria SVG map** picker. The
+backend owns the canonical **37-state** list (`config/nigeria_locations.py`, served at
+`GET /config/nigeria-locations`) — the matching-critical field — and validates coverage against it; LGA
+stays a free-text convenience. Coverage is **role-differentiated**: Field/Surveyor are location-bound
+(coverage gates matching), Registry/Lawyer are remote-capable (coverage does not gate). Availability is
+🟢/🟡/🔴, **forced RED at `agent_max_active_tasks`**. Assignment gains a ranked **suggested-agents**
+endpoint (role eligibility + credential status + coverage + capacity → composite order; Top-Agent +
+low-performance annotations) feeding the admin picker. **One unified enhanced agent dashboard** now (metrics
++ availability + tasks, with Lawyer dependency-gating already visible via the S13 progress component);
+the distinct Field/Registry/Lawyer dashboard variants are a documented follow-up.
+
+### Tradeoffs / Constraints
+- The SVG map is a **schematic geo-grid** of the 37 states (approximate positions, not cartographic paths)
+  — interactive and highlight-driven; an exact GeoJSON path set can drop in behind the same component API.
+- "Reduced job-feed visibility" for low performers is realised in the **ranking** (excluded/sunk); the
+  broadcast pool is untargeted accept-by-id today, so per-agent pool-feed reduction is a follow-up pending
+  a targeted/browsable pool.
+
+### Revisit
+Build the role-specific dashboard variants + a precise map + targeted pool visibility when prioritised.
+
+---
+
+## Note: two runtime bugs the S20 live drive-through surfaced
+
+Extending the drive-through to the §16 reputation/coverage/ranking flow caught two the unit tests missed:
+1. **Dev seed created AGENT users but no `agent_profiles`/`agent_coverage` rows**, so the profile /
+   availability / coverage endpoints 404'd and suggested-agents returned empty. The seed now creates an
+   APPROVED profile + Lagos coverage per agent (D24 — the seed extends as slices land).
+2. **`AgentCoverageRepo.delete` / `BankAccountRepo.delete` don't exist** — `GenericRepo`'s soft-delete is
+   `soft_delete(_id)`. `set_coverage` (and the S19 bank-account remove) now call `soft_delete`. Also, a
+   same-transaction re-list read stale rows after the replace, so `set_coverage` now echoes the just-written
+   coverage instead of re-querying.
+
+---
+
+## Decision: D34 — Referral anti-farming under stub payments (S21 / Phase 17)
+
+### Context
+§17.1 requires referral discount/credit eligibility to need a **distinct verified human**: a
+unique verified phone **and** a unique payment instrument (card fingerprint). Payments run in
+`PAYMENT_STUB_MODE` and the `Payment` model deliberately holds no raw card data.
+
+### Chosen Option
+**Enforce unique-verified-phone anti-farming now; add a forward-compatible nullable
+`card_fingerprint` on `Payment`** that stays null under the stub and is checked once the live
+gateway surfaces it. `ReferralService._anti_farming_reason` voids a credit on a shared verified
+phone (and on a shared card fingerprint when non-null); self-referral is rejected.
+
+### Tradeoffs / Constraints
+Consistent with the stub-first posture (KYC/payment/PDF/storage). The card half is dark until a
+live gateway fills the fingerprint — phone-uniqueness is the enforced gate at MVP.
+
+### Revisit
+Wire real gateway fingerprint capture with the live payment provider.
+
+---
+
+## Decision: D35 — Referral credit uses the §15.2 clearance model (S21 / Phase 17)
+
+### Context
+§17.1: the referrer credit must **not** pay out until the invitee's payment clears the
+chargeback-window reserve, closing the refer-then-charge-back loop.
+
+### Chosen Option
+A **`referral_credits` ledger** (child of `referral/`) mirrors the commission reserve fields: a
+credit is created **PENDING** on the invitee's first payment with `clearing_until = paid_at +
+chargeback_window_days`, and a swept `sweep_referral_credits()` clears PENDING→CLEARED past that
+horizon, crediting the referrer's spendable `credit_balance_kobo` and firing
+`REFERRAL_CREDIT_EARNED`. One credit per invitee (idempotency guard). Spent credit is debited from
+the customer's balance at PAID (idempotent via `mark_paid`).
+
+### Revisit
+N/A — reuses the S19 reserve machinery.
+
+---
+
+## Decision: D36 — Pricing config = DB-backed tier prices + line items (S22 / Phase 18)
+
+### Context
+§18.2 exit criterion: pricing controls change customer pricing **without a deploy**. Tier prices
+were a hardcoded `TIER_PRICE_NGN_KOBO` dict.
+
+### Chosen Option
+Recreate `pricing_tier_config` (tier→price) + `pricing_line_items` in `0001`, seeded from the
+static defaults. `PricingConfigService.tier_price_kobo` is the **single resolver** every pricing
+path reads (quote/submit/recheck/upgrade), falling back to the static default. The pure
+`pricing.py` helpers now take an already-resolved base price (`recheck_price_kobo(base, pct)`,
+`upgrade_delta_kobo(from, to)`) so they stay DB-agnostic. Admin CRUD at `/admin/pricing`; edits
+take effect on the **next quote** — existing 24h price locks (on the verification row) are honoured.
+
+### Revisit
+N/A — the exit criterion is live-verified (an admin edit reflects in the next quote; a locked
+price is untouched).
+
+---
+
+## Decision: D37 — Broadcasts = send-now + scheduled, event-bus fan-out (S22 / Phase 18)
+
+### Context
+§18.1 broadcasts: audience (All/Admins/Customers/Agents), compose, preview, send now **or**
+schedule, manage.
+
+### Chosen Option
+A `broadcast` domain (compose→DRAFT/SCHEDULED, preview reach, send-now, cancel, paged list).
+Fan-out publishes **one** `BROADCAST_ANNOUNCEMENT` event per send carrying the resolved recipient
+ids — the notification subscriber creates the per-user in-app + email, reusing the §4.8 pipeline.
+Scheduled sends fire from a swept `BroadcastSweepJobs` (`ALWAYS_NEW`, off under test) + an admin
+dev sweep endpoint. Audience resolved from `UserRepo.list_recipient_rows` (user_type + personas).
+
+### Revisit
+Batched/queued fan-out if audiences grow large.
+
+---
+
+## Decision: D38 — Full analytics set, server-derived (S22 / Phase 18)
+
+### Context
+§18.1 analytics: conversion funnel, avg verification time by tier, agent performance trends
+(6-month), revenue by location & tier, regional performance.
+
+### Chosen Option
+An `analytics` domain (no entity) computes all five metrics in Python over targeted repo pulls
+(`analytics_snapshot`, `revenue_by_verification`, `list_approved_since`, `list_released_scores`).
+Endpoints `/admin/analytics/*`, RBAC `VIEW_ANALYTICS`. Backend is the only source of truth; the
+dashboard renders lightweight, theme-aware, accessible CSS-bar charts (no charting dependency).
+
+### Tradeoffs / Constraints
+Per-request aggregation over the operational tables is fine at MVP volume; materialise/cache if
+the dataset grows (consistent with the reputation-metrics posture, D32).
+
+### Revisit
+Add a stored/rollup table if the per-read aggregation becomes a hotspot.
+
+---
+
+## Note: two runtime bugs the S21/S22 live drive-through surfaced (mocked tests couldn't)
+
+`backend/scripts/e2e_s21_s22.py` against a live backend caught two the unit tests missed:
+1. **`uuid = character varying` join.** `analytics_snapshot` joined `properties.id` (native UUID)
+   to `verifications.property_id` (`String(36)`) — asyncpg refused the type mismatch and 500'd
+   every time-by-tier/revenue/regional call. Fixed by `cast(Property.id, String)` in the join
+   (the two-string-forms gotcha again).
+2. **Seed had no Payment row.** The dev seed set `verifications.paid_at` but created no `Payment`,
+   so revenue analytics / finance / mission-control all read 0. The seed now records a SUCCEEDED
+   Payment (D24 extension); reset clears the growth + broadcast tables.
+
+---
+
+## Decision: D39 — S23 completes Phase 19; reconcile the S56/S57/S58 pre-build (S23 / Phase 19)
+
+### Context
+Resuming to implement S23 (Phase 19 audit & compliance maturity), exploration found Phase 19 was
+already ~40% built and committed under a finer, **undocumented** "S56/S57/S58" code numbering that the
+orchestrator docs (which marked S23 fully pending) did not reflect: the customer activity endpoint
+(`/verifications/{id}/activity`), consent history + CSV download (`/users/auth/consents/history[/download]`),
+the admin action log (`/admin/audit/actions`), and the four `DATA_ERASURE_*` audit action types.
+
+### Chosen Option
+S23 **completes** Phase 19 rather than rebuilding it: wire the missing audit-pack export, add the agent
+task-history endpoint + the two compliance config keys, build the data-erasure workflow + pseudonymisation,
+and build every Phase-19 frontend surface (all routes were pre-declared in `routes.ts`). The S56/S57/S58
+work is folded into the S23 record.
+
+### Tradeoffs / Constraints
+The pre-built `list_for_verification_pack` was **latently broken** (filtered `resource_type` on uppercase
+`"VERIFICATION"`/`"TASK"` while the codebase stores lowercase `"verification"`/`"verification_task"`, so the
+§19.3 pack would have been empty) and too narrow. Replaced with an id-based `list_by_resource_ids` and a
+`VerificationAuditPackService` that gathers the whole verification object graph (every related repo exposes
+`list_for_verification`) into one flat legal-pack CSV (transitions + evidence hashes + consent snapshots).
+
+### Revisit
+If the audit dataset grows, the id-set pack query can be indexed/materialised (consistent with D32/D38).
+
+---
+
+## Decision: D40 — MANAGE_COMPLIANCE (SUPER-only) + self-service erasure (S23 / Phase 19)
+
+### Context
+Data erasure irreversibly pseudonymises PII. It needs an RBAC gate, and an initiation model.
+
+### Chosen Option
+New `Permission.MANAGE_COMPLIANCE`, granted to **SUPER only** (SUPER already holds `set(Permission)`, so no
+matrix change was needed — OPERATIONS/FINANCE explicitly do not receive it), gates the admin erasure
+approve/reject/execute + the admin erasure page. The audit-log read/export stays on `VIEW_ADMIN_PANEL`
+(consistent with the existing action-log). Erasure requests are **self-service** — the data subject opens a
+request from Account → Data & privacy (§N.5); an admin reviews → approve → execute, or reject.
+
+### Tradeoffs / Constraints
+Concentrating the irreversible action on SUPER limits blast radius. A confirm dialog guards `execute` on the
+frontend; one open request per subject is enforced server-side.
+
+### Revisit
+Grant MANAGE_COMPLIANCE to OPERATIONS if day-to-day NDPA volume warrants delegated processing.
+
+---
+
+## Decision: D41 — Erasure = pseudonymisation, not deletion; execute is built, legal sign-off is a launch gate (S23)
+
+### Context
+§4.11 resolves the audit-retention-vs-NDPA-erasure tension via **pseudonymisation, not deletion**: replace
+the subject's identifying PII with a stable opaque token while retaining the events. §B item 12 flags the
+post-erasure legal basis + re-identification risk as needing legal sign-off.
+
+### Chosen Option
+`PiiPseudonymiser` derives a deterministic per-subject token (`erased-{sha256(user_id + AUTHJWT_SECRET_KEY)[:16]}`)
+and scrubs eight surfaces in one transaction — `users` (name/email/phone/avatar/password → login impossible),
+`audit_logs` (**actor_id → token, ip → null**, events retained, §4.11), `device_sessions` (+revoked),
+`security_events`, `user_consents`, `oauth_identities`, `kyc_records`, `agent_bank_accounts`. Execute works in
+all non-prod envs (the live e2e proves it end-to-end); the §B legal-basis sign-off is a documented **launch
+gate**, consistent with D18 (Legal Opinion build-behind-flag) and the S9/S14 legal gates.
+
+### Tradeoffs / Constraints
+Runs via `get_db_session_from_context()` bulk `update()`s (sanctioned for transactional service code) — avoids
+scattering near-identical scrub methods across eight repos. Secondary PII (payment card fingerprints,
+third-party share-recipient emails, property addresses) is a documented follow-up — each needs its own
+retention basis. True anonymisation (§4.11 caveat: context can re-identify) is out of scope by design.
+
+### Revisit
+Extend the scrub set + revisit the token/retention basis once §B item 12 legal sign-off lands.

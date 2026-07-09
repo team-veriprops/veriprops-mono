@@ -1,23 +1,18 @@
-"""Unit tests for AnalyticsService (S53)."""
-from __future__ import annotations
-
+"""AnalyticsService (§18.1, D38) — pure aggregation over mocked repo pulls."""
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID
 
 import pytest
 
-from main.app.domain.analytics.models import (
-    ConversionFunnelDto,
-    DisputeRateDto,
-    MissionControlDto,
-    RegionalPerformanceDto,
-    AnalyticsDashboardDto,
-    AvgVerificationTimeByTierDto,
-    AgentPerformanceTrendDto,
-    RevenueByLocationDto,
-)
+from main.app.core.state.status import VerificationStatus, VerificationTier
 from main.app.domain.analytics.service import AnalyticsService
+from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
+
+V1, V2, V3 = UUID(int=1), UUID(int=2), UUID(int=3)
 
 
 @pytest.fixture(autouse=True)
@@ -36,113 +31,91 @@ def mock_db_session():
     db_session_ctx.reset(token)
 
 
-def _make_svc(repo_overrides: dict = None, config_overrides: dict = None):
-    repo = MagicMock()
-    config_svc = MagicMock()
-
-    defaults = {
-        "mission_control": AsyncMock(return_value=MissionControlDto(
-            active_verifications=5, pending_assignments=2, stuck_jobs=1,
-            sla_at_risk_count=3, revenue_total_ngn=100000.0, available_agents=8,
-        )),
-        "regional_performance": AsyncMock(return_value=RegionalPerformanceDto(regions=[])),
-        "conversion_funnel": AsyncMock(return_value=ConversionFunnelDto(
-            signups=100, submitted=80, paid=60, completed=50,
-            signup_to_paid_pct=60.0, paid_to_completed_pct=83.3,
-        )),
-        "avg_verification_time_by_tier": AsyncMock(return_value=[]),
-        "agent_performance_trends": AsyncMock(return_value=[]),
-        "revenue_by_location": AsyncMock(return_value=[]),
-        "dispute_rate": AsyncMock(return_value=DisputeRateDto(
-            total_completed=50, total_disputed=5, dispute_rate_pct=9.1
-        )),
+def _row(vid, tier, status, paid=True, state="Lagos", days=3):
+    now = Utils.datetime_now()
+    return {
+        "id": vid, "tier": tier.value if tier else None, "status": status.value,
+        "paid_at": now - timedelta(days=days) if paid else None,
+        "updated": now, "state": state,
     }
-    for k, v in (repo_overrides or {}).items():
-        defaults[k] = v
-    for k, v in defaults.items():
-        setattr(repo, k, v)
-
-    config_svc.get_int = AsyncMock(return_value=48)
-    for k, v in (config_overrides or {}).items():
-        setattr(config_svc, k, v)
-
-    return AnalyticsService.__new__(AnalyticsService), repo, config_svc
 
 
-class TestGetMissionControl:
-    async def test_returns_mission_control_dto(self):
-        svc_raw, repo, config_svc = _make_svc()
-        svc_raw._repo = repo
-        svc_raw._config_svc = config_svc
+def _make_service():
+    svc = object.__new__(AnalyticsService)
+    svc._verifications = AsyncMock()
+    svc._payments = AsyncMock()
+    svc._tasks = AsyncMock()
+    svc._reports = AsyncMock()
+    return svc
 
-        result = await svc_raw.get_mission_control()
 
-        assert isinstance(result, MissionControlDto)
-        assert result.active_verifications == 5
-        assert result.stuck_jobs == 1
-        assert result.revenue_total_ngn == 100000.0
+class TestFunnel:
+    async def test_counts_each_stage(self):
+        svc = _make_service()
+        svc._verifications.analytics_snapshot = AsyncMock(return_value=[
+            _row(V1, VerificationTier.BASIC, VerificationStatus.COMPLETED),
+            _row(V2, VerificationTier.STANDARD, VerificationStatus.PAID),
+            _row(V3, None, VerificationStatus.DRAFT, paid=False),
+        ])
+        funnel = await svc.funnel()
+        assert funnel.created == 3
+        assert funnel.submitted == 2   # not DRAFT
+        assert funnel.paid == 2
+        assert funnel.completed == 1
+        assert 0.0 < funnel.completion_rate <= 1.0
 
-    async def test_reads_sla_hours_from_config(self):
-        svc_raw, repo, config_svc = _make_svc()
-        svc_raw._repo = repo
-        svc_raw._config_svc = config_svc
-        config_svc.get_int = AsyncMock(return_value=72)
 
-        await svc_raw.get_mission_control()
+class TestTimeByTier:
+    async def test_avg_days_for_completed(self):
+        svc = _make_service()
+        svc._verifications.analytics_snapshot = AsyncMock(return_value=[
+            _row(V1, VerificationTier.BASIC, VerificationStatus.COMPLETED, days=4),
+        ])
+        rows = await svc.time_by_tier()
+        basic = next(r for r in rows if r.tier == VerificationTier.BASIC)
+        assert basic.completed_count == 1
+        assert 3.5 <= basic.avg_days <= 4.5
 
-        repo.mission_control.assert_called_once_with(stuck_threshold_hours=72)
 
-    async def test_zero_counts_when_no_data(self):
-        svc_raw, repo, config_svc = _make_svc(repo_overrides={
-            "mission_control": AsyncMock(return_value=MissionControlDto(
-                active_verifications=0, pending_assignments=0, stuck_jobs=0,
-                sla_at_risk_count=0, revenue_total_ngn=0.0, available_agents=0,
-            ))
+class TestRevenue:
+    async def test_revenue_by_tier_and_location(self):
+        svc = _make_service()
+        svc._verifications.analytics_snapshot = AsyncMock(return_value=[
+            _row(V1, VerificationTier.PREMIUM, VerificationStatus.COMPLETED, state="Lagos"),
+            _row(V2, VerificationTier.BASIC, VerificationStatus.PAID, state="Abuja"),
+        ])
+        svc._payments.revenue_by_verification = AsyncMock(return_value={
+            Utils.uuid_to_hex(V1): 30_000_000, Utils.uuid_to_hex(V2): 5_000_000,
         })
-        svc_raw._repo = repo
-        svc_raw._config_svc = config_svc
+        rev = await svc.revenue()
+        assert rev.total_minor == 35_000_000
+        premium = next(t for t in rev.by_tier if t.tier == VerificationTier.PREMIUM)
+        assert premium.revenue_minor == 30_000_000
+        assert rev.by_location[0].revenue_minor == 30_000_000  # sorted desc
 
-        result = await svc_raw.get_mission_control()
-        assert result.active_verifications == 0
-        assert result.revenue_total_ngn == 0.0
+
+class TestRegional:
+    async def test_regional_rolls_up_by_state(self):
+        svc = _make_service()
+        svc._verifications.analytics_snapshot = AsyncMock(return_value=[
+            _row(V1, VerificationTier.BASIC, VerificationStatus.IN_PROGRESS, state="Lagos"),
+            _row(V2, VerificationTier.BASIC, VerificationStatus.COMPLETED, state="Lagos"),
+        ])
+        svc._payments.revenue_by_verification = AsyncMock(return_value={Utils.uuid_to_hex(V2): 5_000_000})
+        svc._reports.list_released_scores = AsyncMock(return_value={Utils.uuid_to_hex(V2): 90})
+        rows = await svc.regional()
+        lagos = next(r for r in rows if r.state == "Lagos")
+        assert lagos.active == 1 and lagos.completed == 1
+        assert lagos.revenue_minor == 5_000_000
+        assert lagos.avg_trust_score == 90.0
 
 
-class TestGetAnalyticsDashboard:
-    async def test_assembles_all_components(self):
-        svc_raw, repo, config_svc = _make_svc()
-        svc_raw._repo = repo
-        svc_raw._config_svc = config_svc
-
-        result = await svc_raw.get_analytics_dashboard()
-
-        assert isinstance(result, AnalyticsDashboardDto)
-        assert result.conversion_funnel.signups == 100
-        assert result.conversion_funnel.paid == 60
-        assert result.dispute_rate.total_completed == 50
-
-    async def test_conversion_percentages_correct(self):
-        svc_raw, repo, config_svc = _make_svc(repo_overrides={
-            "conversion_funnel": AsyncMock(return_value=ConversionFunnelDto(
-                signups=200, submitted=150, paid=100, completed=80,
-                signup_to_paid_pct=50.0, paid_to_completed_pct=80.0,
-            ))
-        })
-        svc_raw._repo = repo
-        svc_raw._config_svc = config_svc
-
-        result = await svc_raw.get_analytics_dashboard()
-        assert result.conversion_funnel.signup_to_paid_pct == 50.0
-        assert result.conversion_funnel.paid_to_completed_pct == 80.0
-
-    async def test_dispute_rate_computation(self):
-        svc_raw, repo, config_svc = _make_svc(repo_overrides={
-            "dispute_rate": AsyncMock(return_value=DisputeRateDto(
-                total_completed=90, total_disputed=10, dispute_rate_pct=10.0,
-            ))
-        })
-        svc_raw._repo = repo
-        svc_raw._config_svc = config_svc
-
-        result = await svc_raw.get_analytics_dashboard()
-        assert result.dispute_rate.dispute_rate_pct == 10.0
-        assert result.dispute_rate.total_disputed == 10
+class TestAgentTrends:
+    async def test_groups_by_month(self):
+        svc = _make_service()
+        now = Utils.datetime_now()
+        svc._tasks.list_approved_since = AsyncMock(return_value=[(now, 100), (now, 80)])
+        trends = await svc.agent_trends()
+        assert len(trends.points) == 1
+        assert trends.points[0].completed_tasks == 2
+        assert trends.points[0].avg_quality == 90.0

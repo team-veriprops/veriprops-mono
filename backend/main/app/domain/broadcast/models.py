@@ -1,87 +1,65 @@
-"""Broadcast domain models — S55 Phase 18."""
+"""Broadcast domain (PRD §18.1, D37) — an admin announcement to an audience.
+
+A broadcast targets an audience (All / Admins / Customers / Agents), can be sent
+immediately or scheduled, and fans out one in-app notification (+ email) per recipient
+through the §4.8 event bus. Scheduled sends are fired by a swept job.
+"""
 from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Text
 
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
+
+
+class BroadcastAudience(str, enum.Enum):
+    ALL = "ALL"
+    ADMINS = "ADMINS"
+    CUSTOMERS = "CUSTOMERS"
+    AGENTS = "AGENTS"
 
 
 class BroadcastStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     SCHEDULED = "SCHEDULED"
-    SENDING = "SENDING"
     SENT = "SENT"
     CANCELLED = "CANCELLED"
 
 
-class BroadcastAudience(str, enum.Enum):
-    ALL = "ALL"
-    CUSTOMERS = "CUSTOMERS"
-    AGENTS = "AGENTS"
-    ADMINS = "ADMINS"
-
+# ─── ORM ──────────────────────────────────────────────────────────
 
 class Broadcast(BaseEntity):
     __tablename__ = "broadcasts"
 
-    subject = Column(String(256), nullable=False)
-    body_text = Column(Text, nullable=False)
-    body_html = Column(Text, nullable=True)
-    audience = Column(String(16), nullable=False, default=BroadcastAudience.ALL.value)
-    channels = Column(Text, nullable=True)
+    audience = Column(String(16), nullable=False)
+    subject = Column(String(255), nullable=False)
+    body = Column(Text, nullable=False)
     status = Column(String(16), nullable=False, default=BroadcastStatus.DRAFT.value, index=True)
     scheduled_at = Column(UTCDateTime, nullable=True)
     sent_at = Column(UTCDateTime, nullable=True)
-    created_by = Column(String(36), nullable=True)
-    total_recipients = Column(Integer, nullable=True)
-    sent_count = Column(Integer, nullable=True, default=0)
+    recipient_count = Column(Integer, nullable=False, server_default="0")
+    # created_by (the composing admin) is inherited from BaseEntity — set via the create DTO.
+    # status index is declared inline (index=True) → ix_broadcasts_status, matching the migration.
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
 
-
-class BroadcastDto(Object):
-    id: str
-    subject: str
-    body_text: str
-    body_html: Optional[str] = None
-    audience: BroadcastAudience
-    channels: Optional[str] = None
-    status: BroadcastStatus
-    scheduled_at: Optional[datetime] = None
-    sent_at: Optional[datetime] = None
-    created_by: Optional[str] = None
-    total_recipients: Optional[int] = None
-    sent_count: Optional[int] = None
-    date_created: datetime
-    date_updated: Optional[datetime] = None
-
-
 class CreateBroadcastDto(Object):
+    audience: str
     subject: str
-    body_text: str
-    body_html: Optional[str] = None
-    audience: BroadcastAudience = BroadcastAudience.ALL
-    channels: Optional[str] = None
-    created_by: Optional[str] = None
+    body: str
+    status: BroadcastStatus = BroadcastStatus.DRAFT
+    scheduled_at: Optional[datetime] = None
+    created_by: str
 
 
 class UpdateBroadcastDto(Object):
-    subject: Optional[str] = None
-    body_text: Optional[str] = None
-    body_html: Optional[str] = None
-    audience: Optional[BroadcastAudience] = None
-    channels: Optional[str] = None
-    status: Optional[BroadcastStatus] = None
-    scheduled_at: Optional[datetime] = None
-    sent_at: Optional[datetime] = None
-    total_recipients: Optional[int] = None
-    sent_count: Optional[int] = None
+    status: Optional[str] = None
+    recipient_count: Optional[int] = None
 
 
 class QueryBroadcastDto(BaseQueryDto):
@@ -89,18 +67,34 @@ class QueryBroadcastDto(BaseQueryDto):
     audience: Optional[str] = None
 
 
-class SearchBroadcastDto(PageRequest, BaseQueryDto):
+class SearchBroadcastDto(InternalPageRequest, BaseQueryDto):
     status: Optional[str] = None
     audience: Optional[str] = None
 
 
-class ScheduleBroadcastDto(Object):
-    scheduled_at: datetime
+# ─── API request/response DTOs ────────────────────────────────────
 
+class ComposeBroadcastDto(Object):
+    """Create a broadcast (§18.1). ``scheduled_at`` present → SCHEDULED; absent → DRAFT."""
 
-class PreviewBroadcastDto(Object):
-    subject: str
-    body_text: str
-    body_html: Optional[str] = None
     audience: BroadcastAudience
-    estimated_recipients: int
+    subject: str
+    body: str
+    scheduled_at: Optional[datetime] = None
+
+
+class BroadcastPreviewDto(Object):
+    audience: BroadcastAudience
+    recipient_count: int
+
+
+class BroadcastDto(Object):
+    id: str
+    audience: BroadcastAudience
+    subject: str
+    body: str
+    status: BroadcastStatus
+    scheduled_at: Optional[datetime] = None
+    sent_at: Optional[datetime] = None
+    recipient_count: int = 0
+    date_created: datetime

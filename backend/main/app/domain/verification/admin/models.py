@@ -1,124 +1,80 @@
-"""Admin verification domain models — PRD Phase 6 (R6.1, R6.2, R6.5)."""
+"""Admin verification control-panel DTOs (PRD §6.1).
+
+Orchestration-only module — no ORM entity of its own. Composes the verification
+aggregate, its tasks, property, admin notes, payments, commissions, and chargebacks
+into the admin list + detail views, and carries the action request shapes.
+"""
 from __future__ import annotations
 
-import enum
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime
+from typing import Dict, List, Optional
 
-from sqlalchemy import Column, Boolean, JSON, String, Text
-
-from main.app.domain.verification.models import VerificationStatus, VerificationTier
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-
-
-# ─── ORM ──────────────────────────────────────────────────────────
-
-
-class VerificationNote(BaseEntity):
-    __tablename__ = "verification_notes"
-
-    verification_id = Column(String(36), nullable=False, index=True)
-    admin_id = Column(String(36), nullable=False, index=True)
-    content = Column(Text, nullable=False)
-    tags = Column(JSON, nullable=True)
-    pinned = Column(Boolean, nullable=False, default=False)
+from main.app.core.sla import SlaHealth  # re-exported: single SLA-health source (core/sla)
+from main.app.core.state.status import VerificationStatus, VerificationTier
+from main.app.domain.commission.models import CommissionDto
+from main.app.domain.payment.chargeback.models import ChargebackDto
+from main.app.domain.payment.models import PaymentDto
+from main.app.domain.property.models import PropertyDto
+from main.app.domain.verification.admin_note.models import AdminNoteDto
+from main.app.domain.verification.task.models import TaskDto
+from main.appodus_utils import Object
 
 
-# ─── DTOs ─────────────────────────────────────────────────────────
+class VerificationSummaryDto(Object):
+    """Row in the admin verifications list."""
 
-
-class VerificationNoteDto(Object):
     id: str
-    verification_id: str
-    admin_id: str
-    content: str
-    tags: Optional[List[str]] = None
-    pinned: bool = False
+    vid: str
+    customer_id: str
+    tier: Optional[VerificationTier] = None
+    status: VerificationStatus
+    paused: bool = False
+    state_region: Optional[str] = None
+    sla_due_date: Optional[date] = None
+    sla_health: SlaHealth = SlaHealth.NONE
+    business_days_remaining: Optional[int] = None
     date_created: datetime
-    date_updated: Optional[datetime] = None
 
 
-class CreateVerificationNoteDto(Object):
-    verification_id: str
-    admin_id: str
-    content: str
-    tags: Optional[List[str]] = None
-    pinned: bool = False
+class VerificationDetailDto(Object):
+    """Full admin detail view: aggregate + per-role task grid + related records."""
+
+    summary: VerificationSummaryDto
+    property: Optional[PropertyDto] = None
+    tasks: List[TaskDto] = []
+    notes: List[AdminNoteDto] = []
+    payments: List[PaymentDto] = []
+    commissions: List[CommissionDto] = []
+    chargebacks: List[ChargebackDto] = []
+    progress_percent: int = 0
+    required_task_count: int = 0
+    approved_task_count: int = 0
 
 
-class UpdateVerificationNoteDto(Object):
-    content: Optional[str] = None
-    tags: Optional[List[str]] = None
-    pinned: Optional[bool] = None
+class AdminDashboardDto(Object):
+    """Admin operations home summary (§6) — backend-owned queue health so the console
+    renders counts without deriving anything client-side."""
+
+    total: int = 0
+    status_counts: Dict[VerificationStatus, int] = {}
+    overdue: int = 0                    # active verifications past their SLA due date
+    sla_at_risk: int = 0                # active + due within the next 2 days (§18.1)
+    unassigned_pool_tasks: int = 0      # broadcast tasks unclaimed in the open pool
+    pending_agent_applications: int = 0
+    open_chargebacks: int = 0
+    available_agents: int = 0           # approved agents currently accepting work (§18.1)
+    revenue_minor: int = 0              # total collected revenue, NGN kobo (§18.1)
+    recent: List[VerificationSummaryDto] = []
 
 
-class QueryVerificationNoteDto(BaseQueryDto):
-    verification_id: Optional[str] = None
-    admin_id: Optional[str] = None
-    pinned: Optional[bool] = None
-
-
-class SearchVerificationNoteDto(PageRequest, BaseQueryDto):
-    verification_id: Optional[str] = None
-    pinned: Optional[bool] = None
-
-
-# ── Admin request/response DTOs ──
-
-class AddNoteDto(Object):
-    content: str
-    tags: Optional[List[str]] = None
-    pinned: bool = False
-
-
-class UpdateNoteDto(Object):
-    pinned: Optional[bool] = None
-    tags: Optional[List[str]] = None
-
+# ── action request DTOs ───────────────────────────────────────────
 
 class SetDelayDto(Object):
-    delay_hours: int
+    """Graceful SLA shedding / manual extension (§6.4)."""
+
+    extra_business_days: int
+    reason: Optional[str] = None
+
+
+class CancelVerificationDto(Object):
     reason: str
-
-
-class AdminFailDto(Object):
-    reason: str
-
-
-class AdminVerificationListItemDto(Object):
-    id: str
-    vid: str
-    customer_id: str
-    tier: VerificationTier
-    status: VerificationStatus
-    state: Optional[str] = None
-    lga: Optional[str] = None
-    address_line: Optional[str] = None
-    submitted_at: Optional[datetime] = None
-    paid_at: Optional[datetime] = None
-    date_created: datetime
-    date_updated: Optional[datetime] = None
-
-
-class AdminVerificationDetailDto(Object):
-    id: str
-    vid: str
-    customer_id: str
-    tier: VerificationTier
-    status: VerificationStatus
-    property: Optional[Dict[str, Any]] = None
-    pricing: Optional[Dict[str, Any]] = None
-    notes: List[VerificationNoteDto] = []
-    submitted_at: Optional[datetime] = None
-    paid_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    date_created: datetime
-    date_updated: Optional[datetime] = None
-
-
-class AdminVerificationSearchDto(PageRequest, BaseQueryDto):
-    status: Optional[str] = None
-    tier: Optional[str] = None
-    state: Optional[str] = None
-    lga: Optional[str] = None
-    vid: Optional[str] = None

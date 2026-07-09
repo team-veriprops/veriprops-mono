@@ -9,11 +9,13 @@ from main.app.domain.message.message_sender import BaseMessageSender
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.integrations.messaging.models import (
+    EmailRecipient,
     MessageCategory,
     MessageChannel,
     MessageContext,
     MessageContextModule,
     MessageRecipientUserId,
+    MessageRequestRecipient,
 )
 from main.appodus_utils.integrations.messaging.templating.models import AvailableTemplate
 
@@ -124,6 +126,23 @@ class VerificationMessages(BaseMessageSender):
             category=MessageCategory.TRANSACTIONAL,
             default_channels=[MessageChannel.EMAIL],
             extra_context={MessageContext.DISPUTE_RESOLUTION_OUTCOME.value: outcome},
+        )
+
+    async def send_report_share(self, recipient_email: str, vid: str, share_url: str) -> None:
+        """Email a tokenised report link to a named recipient (§13.2). The recipient need
+        not be a registered user, so the message goes to a raw email address."""
+        recipient = MessageRequestRecipient(
+            email=EmailRecipient(email=recipient_email),
+        )
+        await self._send_direct_message(
+            recipient=recipient,
+            template=AvailableTemplate.VERIFICATION_REPORT_SHARE,
+            context={
+                MessageContext.SHARE_VID.value: vid,
+                MessageContext.SHARE_URL.value: share_url,
+            },
+            category=MessageCategory.TRANSACTIONAL,
+            default_channels=[MessageChannel.EMAIL],
         )
 
     async def send_payout_approved(self, recipient_user_id: str) -> None:

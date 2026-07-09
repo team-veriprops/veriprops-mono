@@ -12,7 +12,7 @@ export function ClarityPageTracker() {
   useEffect(() => {
     // Wait for route to be client-side navigated
     if (pathname) {
-        init(microsoftClarityProjectId!)
+        init(microsoftClarityProjectId)
         identify('user_456', undefined, undefined, 'Kingsley')
         setTag('plan', 'Startup')
         event(`page_view: ${pathname}`)

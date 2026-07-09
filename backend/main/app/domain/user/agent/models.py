@@ -1,337 +1,90 @@
-"""Agent application domain — PRD §3, §24, §25 / Phase 3, 16.
+"""Agent onboarding cross-entity DTOs (PRD §3.1–3.2).
 
-A single AgentApplication row tracks an applicant from DRAFT through PENDING
-(submitted), and into APPROVED or REJECTED. Wizard payloads land in this row
-incrementally — no separate draft table — because the row is bound to user_id
-and is mutable until submission.
-
-Phase 16 additions:
-- availability_status + max_travel_km on AgentApplication
-- AgentQualityScore ORM (one per completed task, admin-assigned)
-- AgentMetricsDto (computed aggregates surfaced on the agent profile page)
+The agent onboarding flow spans several single-entity child domains
+(``profile``, ``credential``, ``coverage``, ``application_draft``, ``kyc``).
+This module holds only the *orchestration* DTOs that compose those child domains
+into the wizard submission and the admin review views — it declares no ORM entity.
 """
 from __future__ import annotations
 
-import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Column, Index, Integer, JSON, SmallInteger, String, Text
-from sqlalchemy.ext.mutable import MutableList
-
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
-from main.appodus_utils.db.models import UTCDateTime
-
-
-class AgentType(str, enum.Enum):
-    FIELD = "FIELD"
-    SURVEYOR = "SURVEYOR"
-    REGISTRY = "REGISTRY"
-    LAWYER = "LAWYER"
+from main.app.core.state.status import AgentRole
+from main.app.domain.user.agent.coverage.models import AgentCoverageInputDto
+from main.app.domain.user.agent.credential.models import (
+    AgentCredentialDto,
+    AgentCredentialInputDto,
+)
+from main.app.domain.user.agent.kyc.models import KycRecordDto, KycSubmissionDto
+from main.app.domain.user.agent.profile.models import AgentApplicationStatus
+from main.appodus_utils import Object
 
 
-class AgentApplicationStatus(str, enum.Enum):
-    DRAFT = "DRAFT"
-    PENDING = "PENDING"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
+# ─── Applicant: wizard submission ─────────────────────────────────
 
+class SubmitAgentApplicationDto(Object):
+    """Final wizard submission (PRD §3.1 step 4)."""
 
-class AvailabilityStatus(str, enum.Enum):
-    AVAILABLE = "AVAILABLE"
-    LIMITED = "LIMITED"
-    UNAVAILABLE = "UNAVAILABLE"
-
-
-class KycMethod(str, enum.Enum):
-    BVN = "BVN"
-    ID_DOC = "ID_DOC"
-
-
-class IdDocType(str, enum.Enum):
-    NIN = "NIN"
-    PASSPORT = "PASSPORT"
-    DRIVERS_LICENCE = "DRIVERS_LICENCE"
-    VOTERS_CARD = "VOTERS_CARD"
-
-
-# ─── ORM ──────────────────────────────────────────────────────────
-
-class AgentApplication(BaseEntity):
-    __tablename__ = "agent_applications"
-
-    user_id = Column(String(36), nullable=False, unique=True, index=True)
-    status = Column(String(16), nullable=False, default=AgentApplicationStatus.DRAFT.value, index=True)
-
-    # Step 1 — Type selection (multi-select)
-    types = Column(MutableList.as_mutable(JSON), nullable=False, default=list)
-
-    # Step 2 — KYC
-    kyc_method = Column(String(16), nullable=True)
-    bvn_last4 = Column(String(4), nullable=True)
-    bvn_verification_id = Column(String(128), nullable=True)
-    bvn_verified_at = Column(UTCDateTime, nullable=True)
-    id_doc_type = Column(String(32), nullable=True)
-    id_doc_url = Column(String(512), nullable=True)
-    selfie_url = Column(String(512), nullable=True)
-    selfie_match_score = Column(Integer, nullable=True)  # 0–100
-    selfie_matched_at = Column(UTCDateTime, nullable=True)
-
-    # Step 3 — Professional credentials (conditional)
-    surveyor_licence_no = Column(String(64), nullable=True)
-    surveyor_licence_url = Column(String(512), nullable=True)
-    nba_licence_no = Column(String(64), nullable=True)
-    nba_licence_url = Column(String(512), nullable=True)
-    years_of_experience = Column(Integer, nullable=True)
-    coverage_states = Column(MutableList.as_mutable(JSON), nullable=False, default=list)
-    coverage_lgas = Column(MutableList.as_mutable(JSON), nullable=False, default=list)
-    bio = Column(Text, nullable=True)
-
-    # Step 4 — Submission
-    truthfulness_acknowledged = Column(String(16), nullable=True)
-    agent_terms_consent_id = Column(String(36), nullable=True)
-    submitted_at = Column(UTCDateTime, nullable=True)
-
-    # Admin review
-    reviewed_by_admin_id = Column(String(36), nullable=True)
-    reviewed_at = Column(UTCDateTime, nullable=True)
-    rejection_reason = Column(Text, nullable=True)
-
-    # Phase 16 — Coverage & Availability
-    availability_status = Column(
-        String(20), nullable=False, default=AvailabilityStatus.AVAILABLE.value,
-    )
-    max_travel_km = Column(Integer, nullable=True)
-
-    __table_args__ = (
-        Index("ix_agent_applications_status_submitted", "status", "submitted_at"),
-    )
-
-
-# ─── AgentQualityScore ORM (Phase 16 — S49) ──────────────────────
-
-
-class AgentQualityScore(BaseEntity):
-    """Admin-assigned quality rating after a task is APPROVED (1–5 stars)."""
-
-    __tablename__ = "agent_quality_scores"
-
-    task_id = Column(String(36), nullable=False, unique=True, index=True)
-    agent_id = Column(String(36), nullable=False, index=True)
-    score = Column(SmallInteger, nullable=False)  # 1–5
-    note = Column(Text, nullable=True)
-    reviewed_by_admin_id = Column(String(36), nullable=False)
-
-
-# ─── DTOs ─────────────────────────────────────────────────────────
-
-class CreateAgentApplicationDto(Object):
-    user_id: str
-    status: AgentApplicationStatus = AgentApplicationStatus.DRAFT
-
-
-class UpdateAgentApplicationDto(Object):
-    status: Optional[AgentApplicationStatus] = None
-    types: Optional[List[AgentType]] = None
-    kyc_method: Optional[KycMethod] = None
-    bvn_last4: Optional[str] = None
-    bvn_verification_id: Optional[str] = None
-    bvn_verified_at: Optional[datetime] = None
-    id_doc_type: Optional[IdDocType] = None
-    id_doc_url: Optional[str] = None
-    selfie_url: Optional[str] = None
-    selfie_match_score: Optional[int] = None
-    selfie_matched_at: Optional[datetime] = None
-    surveyor_licence_no: Optional[str] = None
-    surveyor_licence_url: Optional[str] = None
-    nba_licence_no: Optional[str] = None
-    nba_licence_url: Optional[str] = None
-    years_of_experience: Optional[int] = None
-    coverage_states: Optional[List[str]] = None
-    coverage_lgas: Optional[List[str]] = None
+    roles: List[AgentRole]
+    kyc: KycSubmissionDto
+    credentials: List[AgentCredentialInputDto] = []
+    coverage: List[AgentCoverageInputDto] = []
     bio: Optional[str] = None
-    truthfulness_acknowledged: Optional[str] = None
-    agent_terms_consent_id: Optional[str] = None
-    submitted_at: Optional[datetime] = None
-    reviewed_by_admin_id: Optional[str] = None
-    reviewed_at: Optional[datetime] = None
-    rejection_reason: Optional[str] = None
-    availability_status: Optional[str] = None
-    max_travel_km: Optional[int] = None
+    years_experience: Optional[int] = None
+    truthfulness_confirmed: bool
+    agent_terms_version: str
 
 
-class SearchAgentApplicationDto(PageRequest, BaseQueryDto):
-    user_id: Optional[str] = None
-    status: Optional[str] = None
+# ─── Applicant: status view ───────────────────────────────────────
 
+class AgentApplicationStatusDto(Object):
+    """The applicant's own view (PRD §3.1 Approval Status Dashboard)."""
 
-class QueryAgentApplicationDto(BaseQueryDto):
-    user_id: Optional[str] = None
-    status: Optional[str] = None
-    types: Optional[List[str]] = None
-    submitted_at: Optional[datetime] = None
-    reviewed_by_admin_id: Optional[str] = None
-
-
-# ─── Public step DTOs (input) ─────────────────────────────────────
-
-class TypesStepDto(Object):
-    types: List[AgentType]
-
-
-class BvnVerifyDto(Object):
-    bvn: str  # 11 digits
-
-
-class KycDocumentsDto(Object):
-    id_doc_type: IdDocType
-    id_doc_url: str  # presigned-uploaded URL
-    selfie_url: str
-
-
-class CredentialsStepDto(Object):
-    surveyor_licence_no: Optional[str] = None
-    surveyor_licence_url: Optional[str] = None
-    nba_licence_no: Optional[str] = None
-    nba_licence_url: Optional[str] = None
-    years_of_experience: Optional[int] = None
-    coverage_states: List[str]
-    coverage_lgas: List[str]
-    bio: Optional[str] = None
-
-
-class SubmitApplicationDto(Object):
-    truthfulness_acknowledged: bool
-    agent_terms_consent_version: str
-
-
-class ApproveApplicationDto(Object):
-    note: Optional[str] = None
-
-
-class RejectApplicationDto(Object):
-    reason: str  # ≥ 30 chars enforced in validator
-
-
-# ─── Public response DTO ──────────────────────────────────────────
-
-class AgentApplicationDto(Object):
-    id: str
-    user_id: str
     status: AgentApplicationStatus
-    types: List[AgentType]
-    kyc_method: Optional[KycMethod] = None
-    bvn_last4: Optional[str] = None
-    bvn_verified_at: Optional[datetime] = None
-    id_doc_type: Optional[IdDocType] = None
-    id_doc_uploaded: bool = False
-    selfie_uploaded: bool = False
-    selfie_match_score: Optional[int] = None
-    surveyor_licence_no: Optional[str] = None
-    nba_licence_no: Optional[str] = None
-    years_of_experience: Optional[int] = None
-    coverage_states: List[str] = []
-    coverage_lgas: List[str] = []
-    bio: Optional[str] = None
-    submitted_at: Optional[datetime] = None
-    reviewed_at: Optional[datetime] = None
+    roles: List[AgentRole]
+    approved_roles: List[AgentRole]
+    active_roles: List[AgentRole]
     rejection_reason: Optional[str] = None
-    availability_status: AvailabilityStatus = AvailabilityStatus.AVAILABLE
-    max_travel_km: Optional[int] = None
-    date_created: datetime
-    date_updated: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
 
 
-# Admin-facing DTO — exposes signed URLs (admins only).
-class AdminAgentApplicationDto(AgentApplicationDto):
-    id_doc_url: Optional[str] = None
-    selfie_url: Optional[str] = None
-    surveyor_licence_url: Optional[str] = None
-    nba_licence_url: Optional[str] = None
-    user_first_name: Optional[str] = None
-    user_last_name: Optional[str] = None
-    user_email: Optional[str] = None
+# ─── Admin: approval queue & detail ───────────────────────────────
 
+class AgentApplicationSummaryDto(Object):
+    """Row in the admin applications DataTable."""
 
-class BvnVerificationResultDto(Object):
-    verified: bool
-    bvn_last4: str
-    verification_id: Optional[str] = None
-    failure_reason: Optional[str] = None
-
-
-class KycUploadUrlsDto(Object):
-    """Returned by the start-of-step-2 endpoint so the frontend can PUT
-    files directly to S3 with short-lived presigned URLs."""
-    id_doc_upload_url: str
-    id_doc_object_key: str
-    selfie_upload_url: str
-    selfie_object_key: str
-    expires_in_seconds: int
-
-
-# ─── Phase 16 DTOs ────────────────────────────────────────────────
-
-
-class CreateQualityScoreDto(Object):
-    score: int  # 1–5
-    note: Optional[str] = None
-
-
-class AgentQualityScoreDto(Object):
     id: str
-    task_id: str
-    agent_id: str
-    score: int
-    note: Optional[str] = None
-    reviewed_by_admin_id: str
-    date_created: datetime
+    user_id: str
+    applicant_name: str
+    roles: List[AgentRole]
+    status: AgentApplicationStatus
+    submitted_at: Optional[datetime] = None
 
 
-class AgentMetricsDto(Object):
-    """Computed performance aggregates for an agent."""
-    completion_rate: float  # 0–100 %
-    accuracy_score: float  # 1–5 (avg quality score; 0.0 if no scores yet)
-    timeliness_score: float  # 0–100 %
-    total_jobs: int
-    active_since: Optional[datetime] = None
-    is_top_agent: bool = False  # accuracy_score >= 4.5 and total_jobs >= 10
+class AgentApplicationDetailDto(Object):
+    """Admin DetailDrawer view of a single application."""
+
+    id: str
+    user_id: str
+    applicant_name: str
+    applicant_email: str
+    roles: List[AgentRole]
+    approved_roles: List[AgentRole]
+    status: AgentApplicationStatus
+    rejection_reason: Optional[str] = None
+    bio: Optional[str] = None
+    years_experience: Optional[int] = None
+    submitted_at: Optional[datetime] = None
+    credentials: List[AgentCredentialDto] = []
+    coverage: List[AgentCoverageInputDto] = []
+    kyc: Optional[KycRecordDto] = None
 
 
-class AgentProfileDto(AgentApplicationDto):
-    """Agent's own view of their profile — application + computed metrics."""
-    metrics: AgentMetricsDto
+class ApproveAgentApplicationDto(Object):
+    # Subset of applied roles to approve; empty ⇒ approve all applied roles.
+    approved_roles: Optional[List[AgentRole]] = None
 
 
-class UpdateCoverageDto(Object):
-    coverage_states: List[str]
-    coverage_lgas: List[str]
-    max_travel_km: Optional[int] = None
-
-
-class UpdateAvailabilityDto(Object):
-    status: AvailabilityStatus
-
-
-# Quality score CRUD DTOs (for repo layer)
-class CreateAgentQualityScoreDto(Object):
-    task_id: str
-    agent_id: str
-    score: int
-    note: Optional[str] = None
-    reviewed_by_admin_id: str
-
-
-class UpdateAgentQualityScoreDto(Object):
-    score: Optional[int] = None
-    note: Optional[str] = None
-    reviewed_by_admin_id: Optional[str] = None
-
-
-class QueryAgentQualityScoreDto(BaseQueryDto):
-    agent_id: Optional[str] = None
-    task_id: Optional[str] = None
-
-
-class SearchAgentQualityScoreDto(PageRequest, BaseQueryDto):
-    agent_id: Optional[str] = None
+class RejectAgentApplicationDto(Object):
+    reason: str

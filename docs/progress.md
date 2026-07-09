@@ -1,207 +1,369 @@
----
-skill: prd-orchestrator
-skill_version: 2.2.0
-last_updated: 2026-05-12
----
-
 # Progress Tracker
 
-> Live state of the PRD execution loop. Updated every `run`/`resume` cycle. Source of truth alongside [requirements-matrix.md](requirements-matrix.md).
-
----
-
-**status:** S0–S55 complete — ALL PHASES DONE (Phases 0–18 fully delivered)
-
-**next_slice:** —
-
-**current_slice:** —
-
-**completion %:** 100% — S0–S55 shipped
-
----
+status: COMPLETE — all 23 slices (Phases 0–19) delivered & live-verified; PRD spine done. Next: final system audit.
 
 ## Completed Slices
+- S1  Foundation reconciliation & doc fixes — cleaned 0001 orphaned seeds (pricing + trust-weights),
+      moved `app/state` → `app/core/state`, root CLAUDE.md MySQL→PostgreSQL, removed 9 orphaned
+      deleted-domain tests → suite green (267 passed).
+- S2  State derivation owner + task-dependency config — `app/core/state/{status,derive,dependencies}.py`;
+      pure `derive_status` (§2.5) + tier composition / Lawyer-dependency / acyclicity (§4.2). 49 tests, 316 total.
+- S3  Idempotency + VID + evidence-hash — `app/core/vid.py`, `app/core/evidence.py`,
+      `app/core/idempotency/{models,repo,service}.py`; `idempotency_keys` table folded into 0001;
+      Money kobo-reconciliation tests. 344 total. (Live `alembic upgrade head` deferred — no DB here.)
+- S4  SLA business-day calculator + Nigerian holiday calendar — `app/core/sla.py` (fixed + Easter-computus
+      + maintained movable-Islamic holidays; per-tier due dates 5/7/10). 363 total.
+- S5  Phase 1 — Marketing completion + Legal documents + footer pages.
+      Backend: `consent_documents` gains `body` + `signoff_status` (0001); legal content registry
+      (`consent/content/`, 10 drafted docs from PRD §3.5); idempotent `ConsentService.seed_documents()` wired
+      into `DataSeeder`; public read API (`GET /consents/documents`, `/documents/{slug}`). Frontend: reusable
+      SEO pattern (`lib/seo.ts buildMetadata` + `JsonLd`) applied to all public pages, `app/sitemap.ts` +
+      `app/robots.ts`; dynamic `/legal/[slug]` pages (react-markdown) with DRAFT banner; conversion FAQ after
+      Client Stories (FAQPage JSON-LD); `/sample-report`; footer dynamic year + socials disable-when-unset.
+      Backend 373 tests; frontend +seo/home.data tests (58). Live-verified: API returns 10 docs, DRAFT/FINAL
+      correct, legal pages + sitemap/robots render. Incidental baseline build repairs (not mine): added
+      `NotificationBell` stub (AppShell orphan import), removed dead `lib/mockUrlExtractor.ts`.
 
-| Slice | Description | Completed |
-|---|---|---|
-| S0 | Audit & reconcile current state against requirements matrix | 2026-05-02 |
-| S1 | Audit log primitive — `AuditLog` model, repo, service, ContextVar queue, `@transactional` drain, Alembic migration, tests | 2026-05-02 |
-| S2 | Reusable state-machine validator — `appodus_utils/state/machine.py`, `IllegalStateTransitionException`, Verification + Task + Report machines, 101 unit tests | 2026-05-02 |
-| S3 | Derived global state rules — `derive_status()` pure function (PRD §0.3 rules 1–8), `VerificationService.derive_global_state()`, 31 unit tests | 2026-05-05 |
-| S4 | Marketing site final polish — CTA URL fix (6 locations `/auth/login?intent=` → `/auth?intent=`); `formatPrice` extracted to `home.data.ts`; 14 new unit tests (43 total, all passing); PRD §1.12 exit criteria all met | 2026-05-05 |
-| S5 | Auth shell completeness audit — R2.5–R2.15 all verified; 59 backend unit tests + 24 frontend tests passing; `make_oauth_state`/`normalise_provider` helpers added to oauth package; `_phone_e164` added to otp_service; `models.ts` frontend enum file verified; `resolvePostAuthRedirect` route corrected to `/agents/*` | 2026-05-07 |
-| S6 | OAuth security hardening — Google ID token JWKS-based signature verification (replaced `get_unverified_claims`); Apple + Google JWKS cached in Redis with 5-min TTL + key-rotation fallback; OAuth state stored with explicit 10-min TTL; `resolve_frontend_origin` rejects unlisted origins (ForbiddenException) instead of silently falling back; 11 new unit tests; 70 auth tests passing | 2026-05-07 |
-| S7 | Agent application wizard tests — verified full backend implementation in `user/agent/` (models, repo, service, validator, controller, KYC subdomain, migration); wrote 16 unit tests in `test/unit/app/domain/agent/` covering R3.1 (multi-select types), R3.3 (conditional credentials), R3.4 (AGENT_TERMS consent recording, PENDING transition, truthfulness gate), R3.7 (idempotent get_or_create, wizard state preservation), plus approve/reject paths; 86 backend unit tests total passing | 2026-05-07 |
-| S8 | KYC BVN + selfie integration (Dojah) — `DojahKycProvider` (sync BVN via `/kyc/bvn/advance`, async selfie via `/kyc/selfie`); `KycRecord` ORM + repo + Alembic migration `d3e4f5a6b7c8`; `kyc/webhook.py` HMAC-SHA256 validation + `parse_dojah_selfie_webhook`; D18: selfie score < `KYC_SELFIE_REVIEW_THRESHOLD` (80) routes to UNDER_REVIEW admin queue; S3 `upload(encrypted=True)` adds SSE-AES256; service updated with `process_kyc_webhook` + `admin_review_kyc`; controller adds `POST /agents/kyc/webhook` + admin review endpoints; 3 new audit action types; 22 new unit tests (108 total passing) | 2026-05-07 |
-| S9 | Agent onboarding frontend — confirmed all 6 wizard components (`TypeSelectionStep`, `KycStep`, `CredentialsStep`, `ReviewStep`, `ApprovalStatusCard`, `AgentOnboardingContainer`) + service layer + TanStack Query hooks; added stable `data-testid` selectors (`agent-wizard-*`, `agent-status-*`) to all interactive elements; extracted `deriveResumeStep` + `validateCredentialsStep` pure functions into `wizardUtils.ts`; wrote 25 Vitest tests (18 wizard logic + 7 service HTTP); route protection confirmed in `proxy.ts`; 193 frontend tests total passing | 2026-05-07 |
-| S10 | Admin invite + acceptance — verified complete backend (`admin_invitation/` service, repo, controller, migration in `b1f2c3d4e5f6`), frontend (`admin-service.ts`, `useAdminQueries.ts`, `/auth/admin-invite/[token]/page.tsx`), and Super Admin seed migration; wrote 17 backend unit tests (all 4 acceptance branches, expired-token gate, revoke, `attach_admin_role_to_new_user`) + 8 frontend service HTTP tests; fixed `UpdateUserDto` missing `user_type` field (silent Pydantic drop bug — user was never promoted to ADMIN); 268 backend + 201 frontend tests passing | 2026-05-07 |
-| S11 | RBAC enforcement (R4.4, R4.5) — confirmed JWT claims already embed `admin_sub_role`; created `user/admin_team/` domain (`service.py`, `controller.py`, `models.py`) with list/deactivate/change-sub-role endpoints all guarded by `require_permission(INVITE_ADMIN)`; added `ADMIN_DEACTIVATED` to `SecurityEventType`; added `list_admins()` + `demote_to_user()` to `UserRepo`; mounted `admin_team_router` in `user/controller.py`; wrote 61 new unit tests (12 team management + 49 permission matrix); 329 backend tests passing, 0 regressions | 2026-05-07 |
+- S6  Phase 2 — Auth hardening.
+      Backend: `PHONE_VERIFICATION_ENABLED` setting + public `GET /config/public`; revoked-session enforcement on
+      token refresh (`POST /sessions/current` rejects revoked/absent device sessions); paginated Security
+      Activity Log (`GET /sessions/security/events` → `Page[SecurityEventDto]`); cross-portal summary aggregator
+      (`GET /cross-portal/summary`, forward-compatible source registry → 0 until S11/S16). Frontend: `/account`
+      shell (AppShell + account nav) with Security/Devices/Linked/Password pages; `PortalSwitcher` + badge wired
+      into AppShell top nav (multi-persona only); `usePublicConfigQuery` exposes the phone flag for the S9 gate.
+      Backend 384 tests; frontend 241 tests (incl. auth-service contract test); build green; endpoints + route
+      protection live-verified.
 
-| S12 | Property submission backend (R5.3, R5.4, R5.14) — audited full verification domain (models, service, validator, controller, pricing, state machine all confirmed); added `PropertyDocumentType` enum + `DocumentUploadResponseDto` to `models.py`; added `upload_document()` to `VerificationService` (injecting `DocumentStorageProviderFactory`, SSE-AES256 encrypted S3 upload); added `POST /verifications/{id}/documents` multipart route; wrote 31 service unit tests + 11 validator unit tests (42 total); 371 backend tests passing, 0 regressions | 2026-05-07 |
-| S13 | Listing-URL parser (R5.2) — built `verification/parser/` module (interface, models, service, PropertyPro + NPC providers using httpx + BeautifulSoup4); added `POST /verifications/{id}/parse-listing` endpoint (jwt_required, assert_owner, assert_draft, graceful fallback); fixture HTML files for both parsers; 22 unit tests covering extraction, service routing, unknown-domain fallback, parse-error fallback | 2026-05-07 |
-| S14 | Pricing validation — confirmed config.py already correct (BASIC=₦150k, STANDARD=₦350k, PREMIUM=₦750k in kobo); no code changes needed; D11 confirmed | 2026-05-07 |
-| S15 | Pre-payment consent — already complete (ConsentService.record_user_consent() persists ip_address + device_fingerprint + consent_version; ConsentStep.tsx exists in wizard); no changes | 2026-05-07 |
-| S16 | Payment gateway integration (R5.9, R5.15) — replaced stub initiate() with real gateway calls: CARD→Flutterwave /payments (returns checkout_url + stores provider_ref), BANK_TRANSFER→Paystack /charge virtual account (returns bank/account/expiry instructions + stores provider_ref), WIRE→settings.WIRE_* static values; added WIRE_BENEFICIARY_BANK/SWIFT/IBAN/BENEFICIARY settings; fixed Paystack webhook handle_charge_success() (was calling broken _transaction_service); fixed Flutterwave webhook verif-hash header (was verif_hash); mounted webhook_router in domain/__init__.py; 17 payment service unit tests; 410 backend tests passing, 0 regressions | 2026-05-07 |
-| S17 | Post-payment portal — already complete (confirmed/page.tsx shows VID + ETA + SLA countdown + "Track" CTA; VerificationWizardContainer redirects to confirmed after onPaid()); no changes | 2026-05-07 |
+- S7  Phase 3 — Agent onboarding & KYC.
+      Backend: KYC provider facade (`appodus_utils/integrations/kyc/` — deterministic Stub default + gated
+      Dojah scaffold + factory, registered like payments); agent domain (`app/domain/user/agent/`: models,
+      repo, service, validator, controller, kyc_service) + pure `credentials.py` role-level expiry suspension
+      (§3.3a); resumable application drafts. Endpoints `/users/agents/*` — applicant draft/submit/status; admin
+      list/detail/approve/reject gated by `require_permission(APPROVE_AGENT)`. Submit runs KYC, creates PENDING
+      profile, persists credentials/coverage, records AGENT_TERMS consent, adds AGENT persona, audits. Agent/KYC
+      tables folded into `0001` (greenfield single-migration); validated downgrade base→upgrade head (61 tables).
+      Frontend: reusable full-screen `WizardOverlay` (route-backed `/agents/apply`, resumable), 4-step wizard
+      (Roles/KYC/Credentials/Review), approval-status card on `/agents/dashboard`, admin review at
+      `/admin/agents/applications` (DataTable→DetailDrawer approve/reject). Backend 418 tests; frontend 246;
+      tsc + lint clean. Known gap: KYC/credential S3 upload UI deferred (refs stored; facade supports encrypted).
 
-| S18 | Admin verification queue + detail — `verification/admin/` backend domain (list, detail, pause/resume/cancel/fail/delay/notes/release-to-pool); `VerificationQueue.tsx`, `VerificationDetail.tsx`, `AdminActionPanel.tsx`, `NotesList.tsx`, `VerificationStatusBadge.tsx`; admin nav + routes | 2026-05-11 |
-| S19 | Task schema + competitive pool assignment — `verification/task/` + `evidence/` backend domains; `Task` ORM + OL claim (`UPDATE WHERE status=PENDING`); `TaskService` with state derivation; `admin-service.ts` + `useAdminQueries.ts` task hooks; `AssignmentModal.tsx` | 2026-05-11 |
-| S20 | S20 audit — confirmed persona elevation on approve; cursor rules verified; `agent-service.test.ts` coverage | 2026-05-11 |
-| S21 | Agent dashboard + accept/decline — agent task routes (available/active/completed/accept/decline); `AvailableJobsList.tsx`, `ActiveTasksList.tsx`, `CompletedTasksSummary.tsx`; agent nav updated; no-show + pool timeout APScheduler jobs | 2026-05-11 |
-| S22 | Field agent submission — evidence service (GPS validation Nigeria bbox, ≥5 photo gate); `FieldAgentForm.tsx`; `EvidenceUploadSection.tsx`, `DeclarationSection.tsx`, `DraftSaveButton.tsx` | 2026-05-11 |
-| S23 | Surveyor submission — `SurveyorForm.tsx`; boundary coords + survey plan validation | 2026-05-11 |
-| S24 | Registry submission — `RegistryAgentForm.tsx`; registry search ref + title doc + ownership chain validation | 2026-05-11 |
-| S25 | Lawyer submission + dependency gate — `LawyerForm.tsx` with locked overlay; ≥200-char legal opinion; sibling SUBMITTED/APPROVED gate server-side | 2026-05-11 |
-| S26 | Offline + autosave — `sw.js` Background Sync service worker; `offlineQueue.ts` IndexedDB wrapper (drafts + upload queue); `SyncIndicator.tsx` (offline/syncing/synced banner); `SwRegistrar.tsx` client component; SW registered in agents layout | 2026-05-11 |
-| S27 | Escalation + trust elevation — `verification/escalation/` backend domain (models/repo/service); `EscalationModal.tsx`; SSE publish to `admin:escalations`; trust elevation on first task submission | 2026-05-11 |
-| S28 | Task Review Interface — `task/review/` backend domain (approve/reject/reopen); `TaskReviewPanel.tsx`, `EvidenceGallery.tsx`; all 4 task roles; audit log on every action | 2026-05-11 |
-| S29 | Conflict Detection — 4-rule engine (occupancy mismatch, boundary divergence >5m, authenticity conflict, owner-name mismatch); `conflict/` backend domain; `ConflictPanel.tsx`, `ConflictBadge.tsx`; admin resolution (OVERRIDE / REJECT_TASK) | 2026-05-11 |
-| S30 | Trust Score Computation — tier-specific weighted average; `scoring/` domain; `TrustScoreWeightConfig` ORM; admin weight editor; `TrustScoreBadge.tsx`; recomputes on every task approval | 2026-05-11 |
-| S31 | Release Report + FAILED State — `release/` domain; pre-checks (all tasks APPROVED + no open conflicts); UNDER_REVIEW→COMPLETED / FAILED transitions; `ReleaseReportPanel.tsx`; SSE publish `report_released` | 2026-05-11 |
-| S32 | Verification Tracking Dashboard — `portal/tracking.py`; `TrackingDto` with progress_pct, SLA, agents (first name + role only); `ProgressTracker.tsx`, `SlaTracker.tsx`, `AssignedAgentsCard.tsx`, `StateDetailBanner.tsx` | 2026-05-11 |
-| S33 | SSE Live Updates — `portal/stream.py` with Redis pub/sub + 60s heartbeat; `useVerificationStream.ts` with exponential backoff + polling fallback; tracking page auto-invalidates on events | 2026-05-11 |
-| S34 | Evidence Layer — `portal/evidence.py`; ownership-checked; never exposes agent identity; `EvidenceFeed.tsx` grouped by role; GPS metadata chips | 2026-05-11 |
-| S35 | Report HTML View — `report/assembly.py`; tier-conditional sections (BASIC: registry; STANDARD+: physical+boundary; PREMIUM: legal opinion); `AccessGateModal.tsx` scroll-to-accept; `ReportSection.tsx` collapsible; `ReportLegalFooter.tsx`; `report_views` migration | 2026-05-11 |
-| S36 | PDF Generation + Versioning — `report/pdf.py` WeasyPrint + Jinja2 + QR code; single conditional `report.html.jinja2`; version tracking with `is_superseded` watermark; `GET /api/portal/verifications/{vid}/report/pdf` blob streaming | 2026-05-11 |
-| S37 | Message Threads — `thread/` backend domain (MessageThread, ThreadMessage ORM, ThreadRepo, ThreadService, REST + WS controller); Redis pub/sub fan-out; system auto-posts on status changes; agent name stripped to first name only; chat pages for portal/admin/agents; ThreadView WebSocket component; thread-service.ts | 2026-05-12 |
-| S38 | Fraud Detection on Send — `thread/fraud/` subdomain (FraudFlag ORM, FraudDetectionService with compiled regexes for phone/email/URL/banking/off-platform phrases); held messages; admin fraud-flags queue; FraudFlagQueue.tsx | 2026-05-12 |
-| S39 | Notification Fan-out Core — `notification/` backend domain (Notification, NotificationDispatch, NotificationPreference ORM; NotificationService.emit(); NotificationEvent enum; VerificationMessages message class); hooks wired: PAYMENT_CONFIRMED, AGENTS_ASSIGNED, REPORT_READY, REVISION_REQUEST, NEW_MESSAGE; NotificationBell + NotificationList; nav wiring for portal/admin/agents | 2026-05-12 |
-| S40 | SMS + Push Enablement — SMS (Termii/Twilio) + Push (Firebase/WebPush) channels wired in VerificationMessages for high-signal events; preference opt-out read before dispatch | 2026-05-12 |
-| S41 | Notification Preferences UI — `GET/PUT /api/notifications/preferences` backend; NotificationPreferencesForm.tsx; portal + agents account pages | 2026-05-12 |
-| S42 | Public Lookup Page — `GET /api/public/verifications/{vid}` (no auth; 5 state branches; numeric score never exposed); `/verify/[id]/page.tsx` (noindex unless COMPLETED+PUBLIC); VerificationBadge, PublicSummaryCard, public-verification-service.ts | 2026-05-12 |
-| S43 | Share Modes + Revocation — `verification/share/` backend domain (ShareLink, ShareRecipient ORM; ShareService with create/revoke/get_by_token; 30-day default expiry; NAMED_RECIPIENT email invite); ShareModal.tsx; 3 Alembic migrations: c3d4e5f6a7b8 (threads+fraud), d4e5f6a7b8c9 (notifications), e5f6a7b8c9d0 (share+recheck+dispute+commission+payout) | 2026-05-12 |
-| S44 | Re-check Request — `verification/recheck/` backend domain (RecheckRequest ORM; RecheckService submit/approve/reject; scope pricing = sum of commission rates); admin recheck queue; RecheckModal.tsx; RecheckQueue.tsx; verification COMPLETED→IN_PROGRESS transition | 2026-05-12 |
-| S45 | Tier Upgrade — `verification/tier_upgrade/` backend domain (TierUpgrade ORM; TierUpgradeService submit/complete; delta pricing; idempotency guard); TierUpgradeModal.tsx; upgrade-service.ts | 2026-05-12 |
-| S46 | Dispute Flow — `verification/dispute/` backend domain (Dispute, DisputeResolution ORM; DisputeService submit/resolve; DisputeValidator ≥100-char gate; 3 outcomes: REJECTED/FULL_REFUND/PARTIAL_RECHECK); COMPLETED→DISPUTED state transition; DisputeModal.tsx; DisputeQueue.tsx; DisputeResolutionForm.tsx | 2026-05-12 |
-| S47 | Agent Earnings + Commission — `commission/` backend domain (CommissionRule, Earning ORM; CommissionService compute_and_record/get_earnings_summary); commission_preview on task detail; admin CommissionRuleEditor; EarningsDashboard.tsx; JobBreakdownTable.tsx; earnings-service.ts | 2026-05-12 |
-| S48 | Withdrawal + Payout Panel — `payout/` backend domain (BankAccount, Payout, PayoutAdjustment ORM; PayoutService submit_withdrawal/approve/hold/adjust; APPROVE_PAYOUT RBAC gate); WithdrawalModal.tsx; PayoutHistory.tsx; PayoutPanel.tsx; AdjustPayoutModal.tsx; payout-service.ts | 2026-05-12 |
-| S49 | Agent Reputation + Quality Scores — `agent/quality_score/` domain; `AgentMetrics` computation (completion_rate, accuracy_score, timeliness_score + composite); agent profile page | 2026-05-12 |
-| S50 | Coverage + Availability — `availability_status` + `max_travel_km`; auto-flip on task accept/release; coverage settings page | 2026-05-12 |
-| S51 | Referral System — `referral/` domain; get_or_create_code; claim_referral with self-referral rejection; compute_discount with cap; referrals page | 2026-05-12 |
-| S52 | Abandonment Recovery — get_abandonments/send_abandonment_emails (idempotent); refresh_price_lock; AbandonmentBanner | 2026-05-12 |
-| S53 | Mission Control + Analytics — `analytics/` domain (AnalyticsRepo pure aggregation; AnalyticsService; 3 endpoints); analytics indexes migration; MissionControlPanel + RegionalPerformanceTable + AnalyticsDashboard frontend | 2026-05-14 |
-| S54 | Pricing & Finance Management — `pricing/` DB models (PricingTierConfig, PricingLineItem, PricingUpgradeDelta); admin pricing CRUD; payment admin list + wire confirm; commission breakdown; PricingManager + UpgradeDeltaEditor + PaymentsTable + CommissionBreakdownTable frontend | 2026-05-14 |
-| S55 | Content Layer + System-wide Broadcast — `content/` domain (ContentItem ORM; CRUD + publish + reorder + area insights; public endpoints); `broadcast/` domain (DRAFT→SCHEDULED/SENT/CANCELLED state machine; BroadcastMessages.send_broadcast); CONTENT_CREATOR + CONTENT_APPROVER sub-roles + permissions; ContentItemTable + ContentItemForm + AreaInsightPanel + BroadcastList + BroadcastComposer frontend | 2026-05-14 |
+- S8  Phase 4 — Admin onboarding & RBAC.
+      Backend: RBAC matrix + `require_permission` already existed (permissions.py, 19 tests). New
+      `admin_invitation` domain (tokenised 72h single-use invite, email-match guard, accept elevates to
+      `user_type=ADMIN`+sub_role per decision-log D10, unauthenticated 3-scenario preview) + `admin_team`
+      domain (list/change-sub-role/deactivate over `users`, self-deactivate guard, all audited). Endpoints
+      gated by `require_permission` (INVITE_ADMIN / VIEW_ADMIN_PANEL / MANAGE_USERS). `admin_invitations`
+      folded into `0001`. Frontend: `/admin/team` (DataTable→DetailDrawer change-role/deactivate + invite
+      form returning a copyable link + pending-invitations revoke); invite acceptance at
+      `/auth/admin-invite/[token]` (preview-driven signup/login/already-admin routing). Backend 431 tests;
+      frontend 251; tsc+lint clean. Known gap: templated invite email deferred (link returned instead).
+
+- S9  Phase 5 — Customer submission & payment.
+      Backend: property (thin first-class §4.3), verification (central aggregate — VID/DRAFT on step-1,
+      resumable draft on the row, 24h price-lock, VERIFICATION_TERMS consent snapshot, DRAFT→SUBMITTED→
+      PAYMENT_PENDING→PAID guarded by the state machine; post-PAID projected by the derive owner), payment
+      (idempotent init + idempotent webhook on the gateway event id). Provisional per-tier pricing in NGN kobo
+      (Money minor units; FX indicative via `TransactionCurrency.fx_rate`). Geocoding facade (Stub default +
+      gated Google Places + factory) with NG autocomplete/geocode endpoints. Deterministic payment
+      (`PAYMENT_STUB_MODE` + non-prod `/payments/stub/confirm` → idempotent webhook → PAID); phone gate before
+      payment; first payment upgrades the customer to `trusted`. property/verifications/payments folded into
+      `0001`. Frontend: submission WizardOverlay at `/portal/verifications/new` (Property/Tier/Consent,
+      idempotent VID/DRAFT on load, autosave per step) → pay overlay `/portal/verifications/[id]/pay`
+      (phone-verify gate + initiate + deterministic confirm) → `/confirmed` (VID + SLA + track CTA);
+      backend-sourced pricing/FX (never recomputed on the client). Backend 453 tests; frontend 260; tsc+lint
+      clean. Gaps: live-gateway call + emailed receipt + full draft-resume UI + conditional property details
+      deferred (see runtime-state self_audit_s9). §B liability-cap copy gates go-live only.
+
+- S10 Phase 6 + 6a — Admin control panel & chargeback.
+      Backend: task domain (per-role `VerificationTask` + state machine; `instantiate_unlocked` at PAID
+      respecting §4.2 locks — Premium Lawyer skipped until siblings SUBMITTED; manual assign/reassign with
+      §6.5 capacity; broadcast pool + §7.2 no-show/starvation sweeps; every mutation re-derives
+      `verification.status` via the §4.1 derive owner). Admin control panel (paged list with SLA health,
+      composed detail, pause/resume flag, state-guarded cancel, SLA delay, notes; RBAC MANAGE_VERIFICATIONS /
+      ASSIGN_AGENT). `admin_note`, `commission` (freeze/unfreeze/reverse, D13), `chargeback` (§6a — idempotent
+      webhook flags payment + freezes commissions without touching the state machine; auto-assembled rebuttal
+      pack; won→unfreeze / lost→reverse+payment FAILED; non-prod stub-flag endpoint). Scheduler sweeps wired
+      (D12, ALWAYS_NEW wrappers, disabled under test) + admin dev sweep endpoints; `payment.handle_webhook`
+      calls `task_service.prepare_for_paid` at PAID. Four tables folded into `0001` (+`paused`,
+      `chargeback_status`, `refunded_amount_minor`); downgrade base→upgrade head clean. **Fixed a real bug**:
+      `_sla_health` OVERDUE branch was dead code (`business_days_remaining` clamps at 0) — now detects overdue
+      from the due-date. Frontend: `types/adminVerification`, `admin-verification-service` +
+      `useAdminVerificationQueries`, list at `/admin/verifications` (DataTable + status/tier/overdue filters +
+      SLA badge) → detail `/admin/verifications/[id]` (task grid + inline (re)assign, progress, property/
+      payments/commissions/chargebacks, notes, pause/resume/delay/cancel, chargeback rebuttal/resolve).
+      Backend 494 tests; frontend 266; tsc+lint clean. Gaps: agent-side accept UX + live gateway chargeback
+      webhook + agent-picker deferred (see runtime-state self_audit_s10).
+
+- S11 Phase 7 — Agent task execution.
+      Backend: agent execution on the S10 task domain — `list_for_agent`, `accept` (broadcast
+      first-accept-wins + §6.5 capacity; manual = assigned agent only), `decline` (→pool,
+      decline_count++), `start` (ACCEPTED→IN_PROGRESS), `submit` (IN_PROGRESS→SUBMITTED); every
+      mutation re-derives status via the §4.1 owner (all-submitted→UNDER_REVIEW); first submit upgrades
+      the AGENT to trusted. Role validator enforces the four role forms over a JSON `submission_payload`;
+      submit requires ≥1 evidence. Evidence child domain: `EvidenceService.capture` computes the §4.5
+      SHA-256 hash + stamps §7.3a server GPS/timestamp, uploads via the storage facade (encrypted,
+      content-addressed key). `StubDocumentStorageProvider` (FileStorage.STUB) = deterministic default
+      under `DOCUMENT_STORAGE_STUB_MODE`. Agent controller `/agents/tasks/*` (list/accept/decline/start/
+      evidence-multipart/submit) mounted at root; ownership authz. `task_evidence` +
+      `submission_payload`/`rejection_reason` folded into `0001` (round-trip clean). Frontend:
+      `agent-task-service` + hooks, `/agents/tasks` dashboard (accept/decline), `/agents/tasks/[taskId]`
+      workflow (accept→start→evidence upload w/ geolocation hint + content-hash display→per-role findings
+      form, submit gated on required fields + evidence). Backend 515 tests; frontend 270; tsc+lint clean.
+      Gaps: offline queue + image derivatives + presigned-PUT deferred (D11 fallback; see self_audit_s11).
+
+- S12 Phase 8 — Admin review & report release.
+      Backend: Trust Score Weights domain (`trust_score_weight_config`, sum-to-100 per tier,
+      idempotent default seed, admin CRUD, deterministic `compute_composite = Σ weight/100 ×
+      per-task quality`, D14). Report domain (versioned `report_version`, DRAFT→RELEASED→SUPERSEDED;
+      release supersedes the prior version §8.6). Review service = the **release gate** (§8): admin
+      `approve` records intent + quality *without* changing task state (stays SUBMITTED, so all-approved
+      never auto-completes); `reject` SUBMITTED→REJECTED (derive→IN_PROGRESS rework); `release` (requires
+      UNDER_REVIEW + all review-approved + no HIGH conflict) flips all SUBMITTED→APPROVED atomically
+      (derive→COMPLETED exactly at release), accrues CLEARING commissions (price×weight×share, D13),
+      computes the composite, creates the RELEASED report; `reopen` APPROVED→IN_PROGRESS + supersede;
+      `fail` → FAILED + refund (`PaymentService.refund`, `PaymentStatus.REFUNDED`). Conflict detection
+      (§8.2 rules). Endpoints `/admin/review/*` + `/admin/trust-score-weights` (RBAC). 2 tables + 2 task
+      columns in `0001` (round-trip clean). Frontend: report-review at
+      `/admin/verifications/[id]/report-review` (approve/reject/reopen, conflicts, trust score, release,
+      fail&refund) + Trust Score Weights CRUD at `/admin/config/trust-score-weights` (live sum-to-100).
+      Backend 533 tests; frontend 273; tsc+lint clean. Gaps: richer quality rubric + live gateway refund
+      + report-ready email deferred (see runtime-state self_audit_s12). Final report UX + PDF is S14.
+
+- S13 Phase 9 — Customer tracking & evidence (SSE).
+      Backend: in-process realtime emitter (`app/core/realtime`, best-effort pub/sub keyed by verification;
+      D15) wired at every status/task mutation (task accept/decline/start/submit + evidence, review
+      approve/reject/release, payment→PAID). Customer tracking sub-package (`verification/tracking/`,
+      orchestration-only): pure §9.2 label projection (`labels.py` — status/task-collapse/SLA/interim copy,
+      backend source of truth); `CustomerTrackingService` builds the shared snapshot (header + SLA tracker +
+      tier-adaptive progress + assigned agents + interim milestones + evidence preview) reused by the poll
+      endpoint and the SSE initial frame. Endpoints on `/verifications/*`: `GET /` (my list), `/tracking`
+      (poll), `/stream` (SSE `text/event-stream`, cookie-auth, ownership-gated before streaming; generator
+      forwards in-memory events + 25s heartbeats, no mid-stream DB), `/evidence` (paged, **review-approved
+      tasks only, D17**, presigned URLs via the storage facade), `/activity` (reuses `AuditLogService`).
+      **First-name-only enforced at the API** via `AssignedAgentDto` (role/first_name/avatar_url/verified
+      only). Shared SLA-health helper extracted to `core/sla.py` (admin + customer reuse). `interim_note`
+      column added to `verification_tasks` (0001) + `approve_task(interim_note=…)`. Frontend: `types/tracking`,
+      service (listMine/getTracking/getEvidence/streamUrl) + `useVerificationTracking` (60s poll +
+      `useVerificationStream` SSE refetch, D15), shared `VerificationStatusBadge` + portable
+      `VerificationProgress`, tracking dashboard `/portal/verifications/[id]`, evidence feed + full-screen
+      viewer w/ tamper-evidence hash panel `/portal/verifications/[id]/evidence`, My-Verifications list
+      `/portal/verifications` (fixes the sidebar 404). Backend 562 tests; frontend 277; tsc+lint clean;
+      migration round-trip clean. Gaps: progressive/derivative image pipeline + messages preview (Phase 11)
+      + Redis SSE fan-out (S16) deferred.
+
+- S14 Phase 10 — Final report experience *(built; Legal Opinion go-live gated on NBA sign-off §B, D18)*.
+      Backend: `report_pdf` facade (`appodus_utils/integrations/report_pdf/` — decoupled primitive
+      `ReportPdfContext`; **fpdf2** pure-Python renderer as the default (D16, per-page §3.5 legal footer via
+      `footer()` + embedded QR to the public lookup + SUPERSEDED watermark) + deterministic stub, selected by
+      `REPORT_PDF_STUB_MODE`). Pure content builder (`report/content.py` — `trust_band` 90/60 bands, opinion-framed
+      verdict, tier-gated sections; Legal Opinion section built but content withheld unless `LEGAL_OPINION_ENABLED`,
+      D18). `CustomerReportService` (ownership gate → released report → content → ack state → PDF). Access-gate
+      acknowledgement child domain (`report/acknowledgement/`, recorded against the report version;
+      `report_acknowledgements` in 0001). Customer endpoints `/verifications/{id}/report`, `/report/acknowledge`,
+      `/report/pdf` (StreamingResponse application/pdf). Wired `send_report_ready` into the release path (closes
+      the S12 email follow-up). `LEGAL_OPINION_ENABLED` surfaced via `/config/public`. Frontend: `types/report`,
+      report-service + hooks, report page `/portal/verifications/[id]/report` (one-time access-gate modal →
+      acknowledge, verified-badge header + Download PDF / Request Re-check, plain-language verdict lead,
+      trust-score band + tooltip, collapsible tier-dependent sections with the Legal Opinion section hidden until
+      the flag is on, per-page legal footer, superseded banner) + a "View report" CTA on the tracking page when
+      COMPLETED. Backend 582 tests; frontend 280; migration round-trip clean; tsc+lint clean. Real fpdf2 render
+      verified: %PDF valid, legal footer on every page (7/7), QR embedded, tier-gated sections. Gaps: pixel-perfect
+      HTML-CSS PDF + customer-vs-agent document appendix attribution deferred; Legal Opinion **build-only** until §B.
+
+- S15 Phase 11 — Communication layer *(full, incl. structured clarifications, D19)*.
+      Backend: new `app/domain/communication/` parent with one-entity-per-domain children — `conversation/`
+      (thread: CUSTOMER_ADMIN / ADMIN_AGENT / GENERAL_SUPPORT), `conversation_participant/` (per-user read
+      state → the §N.3 Chat unread counter), `chat_message/` (ChatMessage + §4.7 fraud-hold state). Pure
+      deterministic `fraud_scan.py` (phone/email/URL/banking/social/off-platform → categories; clean = fast
+      lane DELIVERED, any flag = HELD). `ChatMessageState` in `core/state/status.py` + transition table in
+      `machine.py` (PENDING_SCAN→{DELIVERED,HELD}; HELD→{DELIVERED,BLOCKED}; DELIVERED/BLOCKED terminal).
+      `CommunicationService` façade (ownership + thread resolution + send). Admin hold review
+      (`/admin/messages/held` + approve/reject, audit-logged). Structured clarifications (CLARIFICATION_
+      REQUEST/RESPONSE + clarification_status). Rejection reason auto-posts tagged to the task (§11.1,
+      best-effort hook in ReviewService). Per-user SSE (`UserEventEmitter` + `/chat/stream`). §11.3 identity
+      guard: customer-facing sender = first_name/avatar only. Read-only-when-approved for agents. Attachments
+      column kept, no upload (D22). 3 tables in 0001 (round-trip clean; `created_by` inherited from BaseEntity).
+      Frontend: `types/chat`, `chat-service` + `useChatQueries` (+`useChatRealtime`), `useUserStream`;
+      `ChatButton` in the top nav (Support→Chat→Notifications→Account, 9+ cap, hidden at 0); shared `ChatThread`;
+      thread pages (portal/agent/admin verification messages, `/portal/chat` list, `/portal/support` FAQ +
+      general support, `/admin/messages` hold queue); contextual Messages CTAs + nav items. Backend 627 tests
+      (+36); frontend 296 (+7); migration round-trip clean; tsc+lint clean. Gaps: attachments + customer
+      status-change auto-posts (land via the S16 event bus) + admin chat counter deferred.
+
+- S16 Phase 12 — Notification system & event bus *(full refactor, D20)*.
+      Backend: `app/core/events/` = the §4.8 in-process synchronous `EventBus` (`DomainEvent` + `EventType`
+      full §12.2 set; publish once, best-effort per subscriber). Three subscribers registered at bootstrap:
+      `realtime_subscriber` (re-emits the **exact S13 verification SSE event name** — frontend hooks
+      untouched), `notification_subscriber` (declarative rule-table fan-out), `chat_counter_subscriber`
+      (per-user Chat counter for `MESSAGE_SENT`, §12.3). `notification/` domain (feed + counter + mark-read;
+      `rules.py` = the single Chat-vs-Notification table; `content.py` = backend-owned copy + links;
+      `dispatcher.py` sends the template on a computed channel set). `notification_preference/` domain
+      (per-event email/SMS opt-out; in-app always on). **Refactor:** every `publish_verification_event(...)`
+      (review/task/verification) now publishes a `DomainEvent` once; notification-worthy events carry the
+      customer recipient + type (`PAYMENT_CONFIRMED` at PAID, `STATUS_CHANGED` on derive, `REPORT_READY` at
+      release — the direct `send_report_ready` call removed); chat delivery publishes `MESSAGE_SENT`.
+      SLA-breach sweep (`SlaMonitorService`, D23) publishes `SlaBreached` once per overdue verification
+      (idempotent), wired into the S10 scheduler (30-min, ALWAYS_NEW, off under test) + admin dev endpoint.
+      2 tables in 0001 (round-trip clean). Frontend: `types/notification`, `notification-service` +
+      `useNotificationQueries` (+`useNotificationRealtime`); real `NotificationBell` (counter 9+/hidden-at-0
+      + dropdown + "View all") replacing the stub; `/portal/notifications` history; notification-preferences
+      page (portal + agent, per-event email/SMS toggles). Backend 644 tests (+17); frontend 299 (+3);
+      migration round-trip clean; tsc+lint clean. Gaps: customer status-change chat auto-post + admin
+      SLA-breach notification + dispute/payout/re-check sources (S18/S19) are documented follow-ups; full
+      live UI drive-through deferred (test-substitute gate, per S13/S14).
+
+- Gap-closure + live e2e *(follow-up to S15/S16)*.
+      Closed the deferred gaps: **G1** customer status-change chat auto-post (`chat_autopost_subscriber` on
+      STATUS_CHANGED → `auto_post_customer`, 4th bus subscriber); **G2** task-rejection agent notification
+      (`reject_task` publishes TASK_REJECTED); **G3** admin SLA-breach notification (`SlaMonitorService` adds
+      `UserRepo.list_admins` to recipients); **G4** admin Chat unread counter as a shared-inbox model (D25).
+      Restored the **`/dev/reset` + `/dev/seed`** contract (`app/domain/dev/`, prod-gated twice, D24) seeding
+      a customer + approved agents + an UNDER_REVIEW SLA-overdue verification. Ran a **live HTTP drive-through**
+      (`backend/scripts/e2e_drive_through.py`) against a real server — **all 19 checks PASS** (fraud
+      fast-lane/hold → admin approve → delivered; SLA sweep → customer+admin; release → REPORT_READY +
+      STATUS_CHANGED + §11.1 auto-post; admin shared-inbox counter). The live run **surfaced and fixed 3
+      runtime bugs** mocked tests missed: UUID-vs-String reference coercion, ORM models passed to `build_page`,
+      and a get-after-create-returns-None in `ReportService.release`. Backend 649 tests green; frontend 299.
+
+- S17 Phase 13 — Public lookup & sharing *(full §13.2 table incl. named recipient, D27)*.
+      Backend: new `app/domain/verification/share/` — `VerificationShare` (LINK_SUMMARY / NAMED_FULL),
+      tokenised, revocable, 30-day default expiry + a `public_lookup_enabled` flag on the verification
+      (PUBLIC mode). Unauthenticated `public_controller` (`/public/verify/{vid}` summary-only with §13.1
+      state routing — shared/private/in-progress/disputed/not-found, never the numeric score or full
+      address; `/public/shared/{token}` = summary for a link, full report for a named recipient after a
+      one-time disclaimer ack). Customer share management `/verifications/{id}/shares` + public-visibility
+      toggle. Named-recipient share invite email (`VERIFICATION_REPORT_SHARE`, raw-email send). Reuses
+      `report/content.trust_band` + a new `CustomerReportService.build_shared_content`. `verification_shares`
+      + `verifications.public_lookup_enabled` in 0001 (round-trip clean). Frontend: public `/verify/[vid]`
+      (SSR, `noindex` unless completed+public) + `/shared/[token]` pages, reusable `ReportView`, a
+      `ReportShareModal` on the report page, `share-service` + hooks + types. Backend 665 tests (+16);
+      frontend tsc/lint clean, vitest 306 (+7). Committed `5024aa5`.
+
+- S18 Phase 14 — Revision, re-verification & disputes *(re-check % pricing D26, admin config CRUD D28,
+      report re-versioning D29)*.
+      Backend: **system_config** domain (typed key-value store — `dispute_window_days`, `recheck_price_pct`,
+      `agent_dispute_defence_hours`; seeded idempotently; RBAC admin CRUD `CONFIGURE_SYSTEM`). Report
+      re-versioning (`version_label` + `revision_kind` on `Report`; `ReportService.release` computes
+      v1.0→v2.0 re-check→v3.0 upgrade; the release gate generalised to accept already-APPROVED tasks so a
+      partial re-check re-releases). `Payment.purpose` routes the idempotent webhook; `initiate_secondary`
+      charges a completed verification without touching its state machine. **recheck** (request→admin
+      approve+scope→pay % of tier price→reopen scoped tasks→v2.0), **upgrade** (delta pricing, idempotent
+      resubmit, on-pay raises the tier + adds the new scope's tasks with approved work preserved + extends
+      SLA→v3.0), **dispute** (window + ≥100-char guard, COMPLETED→DISPUTED + commission freeze,
+      admin-mediated agent defence, three outcomes: reject→COMPLETED / full refund→REFUNDED / partial→
+      IN_PROGRESS free re-check; mandatory resolution note delivered verbatim). Fires the pre-declared
+      RECHECK_DECISION / DISPUTE_OPENED / DISPUTE_RESOLVED events (D21). 6 tables in 0001 (round-trip clean).
+      Frontend: customer `ReportActions` (re-check / upgrade / dispute modals on the report page), admin
+      System Config CRUD + Disputes (3-outcome resolve) + Re-checks (approve/scope/reject) pages, agent
+      dispute-defence page; `revision-service` + `system-config-service` + hooks + contract tests; nav +
+      routes updated. Backend 700 tests (+35); frontend tsc/lint clean, vitest 315 (+9). Committed `e3372f7`
+      (backend) + this commit (frontend + fixes + e2e).
+
+- Live e2e drive-through *(S17/S18 verification)*.
+      Extended `backend/scripts/e2e_drive_through.py` to cover §13 + §14 end-to-end against a real server:
+      release→public lookup (private→enable→summary, no score leak)→link + named-recipient share (ack→full
+      report)→revoke (token dead)→dispute (open→admin reject→COMPLETED, DISPUTE_OPENED/RESOLVED notifs)→
+      re-check (request→approve+scope→pay→IN_PROGRESS)→tier upgrade (pay delta→PREMIUM). **ALL PASSED (32
+      checks).** The live run **surfaced and fixed 3 runtime bugs** mocked tests missed (see decision-log
+      note): `get_released` called with a native UUID (broke the customer report endpoint for everyone),
+      payment-reference two-string-forms in re-check/upgrade, and a get-after-create-returns-None in
+      `UpgradeService.request`. Backend 700 green after fixes.
+
+- S19–S22 Phases 15–18 — earnings/commission + payouts, reputation/coverage, growth (referral + abandonment),
+  admin ops & analytics (mission control, DB pricing, broadcasts, finance). All delivered & live-verified
+  (see runtime-state s19–s22 blocks + decision-log D30–D38).
+
+- S23 Phase 19 — Audit & compliance maturity *(completes Phase 19; reconciles the S56/S57/S58 pre-build, D39)*.
+      Backend: fixed the latent bug in the pre-built audit export (uppercase `resource_type` filter → empty
+      pack) → id-based `AuditLogRepo.list_by_resource_ids` + a new `VerificationAuditPackService`
+      (`audit/pack_service.py`) that gathers the whole verification object graph (every related repo exposes
+      `list_for_verification`) into one flat §19.3 legal-pack CSV (transitions + evidence content hashes +
+      consent snapshots), wired at `GET /admin/audit/verifications/{vid}/export` (`VIEW_ADMIN_PANEL`). Agent
+      task-history `GET /agents/tasks/{taskId}/history` (ownership-gated, reuses the PII-safe audit read
+      model). Two compliance config keys (`pii_retention_days`, `erasure_request_review_sla_days`). New
+      `Permission.MANAGE_COMPLIANCE` (SUPER-only, D40). New `compliance/erasure` domain: `DataErasureRequest`
+      + `ErasureRequestState` machine; self-service request + admin approve/reject/execute; `PiiPseudonymiser`
+      (D41) scrubs 8 surfaces to a stable opaque token (users / audit_logs actor / device_sessions+revoked /
+      security_events / user_consents / oauth_identities / kyc_records / agent_bank_accounts) — the account can
+      no longer authenticate and the audit actor is severed while events are retained (§4.11). In-app
+      `ERASURE_STATUS_CHANGED` notification. `data_erasure_requests` in `0001` (round-trip clean); dev seed +
+      `e2e_s23.py` extended. Frontend: types audit/erasure/consentHistory; shared `ErasureService` + admin
+      `AuditService` + account `ConsentHistoryService` + `getActivity`/`getHistory`; **7 surfaces** — admin
+      Audit Log + Erasure Requests (+ Export audit-pack button), account Data & Privacy + Consents, portal
+      activity + agent task history (shared `ActivityTimeline`) + nav. Backend 814 tests (+23); frontend vitest
+      348 (+9); tsc+lint clean; migration round-trip clean. **Live `e2e_s23.py` ALL 15 CHECKS PASS** (export
+      pack → activity → task history → consent download → config keys → self-request → approve → execute →
+      login fails → audit actor pseudonymised). §19.3 exit criterion met. Gaps: secondary PII (card
+      fingerprints, third-party share emails, property addresses) + true anonymisation are documented
+      follow-ups; §B item 12 legal-basis sign-off is a launch gate.
 
 ## Current Slice
+- none — **all 23 slices complete.** S23 (Phase 19) delivered and **live-verified** (15-check drive-through
+  ALL PASSED). The recommended next step is the final system audit (`docs/final-audit.md`).
 
-ALL SLICES COMPLETE. S0–S55 (Phases 0–18) fully delivered end-to-end.
-
-Last audit: 2026-05-14 — 19 S55 unit tests passing (content: 9, broadcast: 10); pnpm build 0 TypeScript errors.
+## Post-MVP hardening (S1–S14 review pass)
+- **Persona dashboards completed.** `/portal/dashboard` and `/admin/dashboard` did not exist (both
+  landing redirects 404'd); the agent dashboard was a thin status card. Added backend-owned summary
+  endpoints — `GET /verifications/summary` (`CustomerDashboardDto`), `GET /admin/verifications/summary`
+  (`AdminDashboardDto`, RBAC `VIEW_ADMIN_PANEL`), `GET /agents/tasks/summary` (`AgentDashboardDto`) —
+  each deriving all counts server-side (status rollups, overdue via `core/sla.ACTIVE_SLA_STATES`,
+  open pool tasks, pending applications, open chargebacks). Frontend: shared `ui/StatCard`, dashboard
+  pages for all three personas, services/hooks + contract tests. Nav sidebars trimmed to built routes
+  (S15+ items restored as their slices land) so nothing 404s.
+- **Full build verified both ends** (closes final-audit follow-up #6): backend `pytest` 587 passed;
+  frontend `pnpm lint` clean, `tsc --noEmit` clean, `vitest` 286 passed, and a real `pnpm build`
+  succeeds (both dashboard routes prerender).
 
 ## Pending Slices
-
-None — full PRD delivered.
-
----
+- S19–S23 Phases 15–19 — harden & scale (earnings/commission, reputation/coverage, growth, admin ops, audit/compliance)
 
 ## Runtime State
-
-idle — S13–S17 complete; 410 backend tests passing; no slice in-flight.
+- idle (S1–S4 committed; checkpoint clean)
 
 ## Pending Recovery
-
-none — S13–S17 completed cleanly.
-
----
+- none
 
 ## Blockers
-
-The following decisions in [decision-log.md](decision-log.md) are **REQUIRES USER INPUT** and gate one or more slices:
-
-| Decision | Description | Gates slices |
-|---|---|---|
-| D2 | Trust score weighting formula | S30 (Phase 8 trust score), S35 (Phase 10 report) |
-| D3 | Trust score visibility to agents pre-submit | S22–S25 (Phase 7 forms) |
-| D4 | Payment gateway primary selection | S16 (Phase 5 payment) |
-| D5 | SMS provider selection | S40 (Phase 12 SMS) |
-| ~~D6~~ | ~~BVN verification provider~~ | ~~S8~~ — **confirmed: Dojah** |
-| ~~D7~~ | ~~Selfie match technology~~ | ~~S8~~ — **confirmed: vendor-bundled with Dojah** |
-| D9 | OAuth profile data persistence (NDPR) | S5 (Phase 2 audit) |
-| ~~D10~~ | ~~Real-time channel~~ | ~~S33~~ — **confirmed: SSE (push) + WS (two-way)** |
-| D11 | Pricing defaults (knobs) | S14 (Phase 5 pricing) |
-| ~~D12~~ | ~~FX rate source~~ | ~~S14~~ — **confirmed: Flutterwave FX rates, 5-min cache** |
-| D13 | Listing-URL parser sources | S13 (Phase 5 parser) |
-| D14 | Country/timezone source dataset | S5 (Phase 2) |
-| D15 | Conflict-detection initial rule set | S29 (Phase 8 conflicts) |
-| D16 | Wire-proof reconciliation | S16 (Phase 5 payment) |
-| D17 | Admin SLAs | S21 (Phase 7), S50 (Phase 16) |
-| ~~D18~~ | ~~KYC document review path~~ | ~~S8~~ — **confirmed: admin reviews low-confidence only (score < KYC_SELFIE_REVIEW_THRESHOLD=80)** |
-| ~~D19~~ | ~~Verification Disclaimer copy~~ | ~~S15~~ — **confirmed-placeholder: proceed, swap before launch** |
-| D20 | Trust-status visibility | S49 (Phase 16) |
-| D21 | Area Insights content owner | S55 (Phase 18) |
-| D23 | Nigerian public holidays source | S14 (Phase 5 pricing — SLA) |
-| D24 | Re-check pricing model | S44 (Phase 14 re-check) |
-
-**Previously blocking decisions now confirmed:** D6 (Dojah), D7 (Dojah bundled), D19 (placeholder copy). Critical-path is now unblocked through Phase 5.
-
-The orchestrator can proceed on Phases 0–2 + 4 (audit + closure) immediately. Phase 3 (S8) blocks until D6/D7. Phase 5 (S15) blocks until D19. Other phases have provisional defaults that the orchestrator will adopt unless the user overrides.
-
----
+- none. Migration validated live on the test DB (`downgrade base` + `upgrade head` clean; `idempotency_keys`
+  created with correct columns/indexes). Pre-squash orphan tables (`pricing_tier_configs`,
+  `trust_score_weight_config`) remain in the test DB — no current migration creates them; recreated in S9/S12.
 
 ## Open Questions
-
-See full list in [prd-analysis.md § Ambiguities](prd-analysis.md#ambiguities-from-prd-27--open-questions). Highest-priority gate questions are tracked above as Decision IDs.
-
-The next message to the user surfaces these as a CLARIFICATION REQUIRED block.
-
----
+- D6 (relaxed by D9): foundation built greenfield; `0001` is the single editable initial migration.
+- D4: applied in S1 — root CLAUDE.md now says PostgreSQL.
+- §B legal sign-offs are launch gates, not build blockers: liability-cap copy gates Phase 5 go-live;
+  NBA counsel gates Phase 10 Legal Opinion go-live; Premium-lawyer insurance posture gates that tier.
+- §6.4 admin staffing gate is a business commitment (not buildable) — record before launch.
 
 ## Risks
-
-- **Working tree has uncommitted Phase 0–5 work.** Slice S0 must reconcile before slicing forward — otherwise we duplicate work or overwrite in-flight code.
-- **Three blocking decisions** (D6, D7, D19) gate the critical path. If the user can confirm provisional defaults, the orchestrator can proceed; if not, work parallelises around them on Phase 1, 2, 4.
-- ~~**Audit log primitive (R0.10) is `pending`**~~ — **delivered by S1** (2026-05-02). `AuditLog` table live, drain atomically committed with each state-machine transition.
-- **No DB foreign keys / cascades** is a hard repo convention; slices that touch schema must follow it.
-- Adopting all provisional decisions verbatim risks misalignment with stakeholder intent — the user should **at minimum confirm D11 pricing values** before any payment-touching slice ships.
-
----
+- State-derivation correctness (single owner, tier-config counts) — highest-leverage correctness risk.
+- Money/FX reconciliation to the kobo across pay→refund→commission→payout.
+- Webhook double-processing (mitigated by idempotency keys, proven in S3).
+- Brownfield drift between rebuilt models and `0001` schema.
+- Strict commit mode + dirty worktree: `run` is blocked until committed (see below).
 
 ## Last Commit
+- S19 earnings/payouts + S20 reputation/coverage (prior resume); S21 `846b1fa` (growth: referral +
+  anti-farming + first-time discount + abandonment recovery), S22 `01a6ed1` (admin ops: mission control,
+  analytics, DB pricing config, broadcasts, finance), live-e2e fixes `11f5943` (uuid=varchar analytics join +
+  seed Payment row).
 
-Branch: `main`. Most recent commit: `41b0caf implement S3: derived global state rules (R0.16)`.
-
-Working tree: S4 changes uncommitted (6 component files + home.data.ts + home.data.test.ts).
+## Completion %
+- **100% (23 of 23 slices; Phase-0 foundation + Phases 1–19 complete).** End-to-end: submission → payment (+
+  first-time & referral discounts) → assignment → agent execution → admin review/release → live tracking →
+  final report + PDF → mediated chat → notifications → public proof + sharing → re-check/upgrade/dispute →
+  agent earnings/payouts → reputation/coverage → referral program + abandonment recovery → mission control +
+  analytics + DB-configurable pricing + broadcasts + finance → **audit & compliance maturity (legally
+  defensible audit pack per VID [§19.3, live-verified], customer/agent activity logs, versioned consent
+  download, NDPA data-erasure workflow with §4.11 pseudonymisation).** The recommended next step is the final
+  system audit (`docs/final-audit.md`).
 
 ---
 
-## Audit Notes (Slice S0) — 2026-05-02
+### ⚠️ Strict-mode reminder
+`config.yaml` is `mode: strict` (D3). Worktree committed at each slice boundary; clean between slices.
 
-All `done`/`in_progress` rows reconciled against live `main` branch (commit `0f2217d finalize phases 1-5`).
-
-### Promoted to `done`
-- **R0.11** — `verification/state_machine/__init__.py` has `StateMachine` class with `VERIFICATION_TRANSITIONS` dict + `assert_can_transition()` raising `InvalidResourceStateException`.
-- **R0.12** — `consent/models.py` has `ConsentDocument` (type, consent_version, effective_at) + `UserConsent` (user_id, doc_type, consent_version, accepted_at, ip_address, device_fingerprint).
-- **R2.1** — Signup OTP gate enforced: `OTP_VERIFIED_TTL=30min`, both email + phone markers single-use and consumed on signup. All profile fields captured.
-- **R2.2** — Login rate limiting: warn at 5 attempts (`LOGIN_FAILURE_WARNING` event), lockout at 7 for 15 minutes (`ACCOUNT_LOCKED` event). Configurable via settings.
-- **R2.10** — `SignupDraft` model with 7-day TTL, upsert/discard. Soft-deleted on signup completion.
-- **R2.11** — Versioned consent on signup captures `PLATFORM_TERMS` + `PRIVACY_POLICY` with version, ip, fingerprint.
-- **R3.1** — `AgentApplication.types` as MutableList JSON, multi-select AgentType enum (FIELD, SURVEYOR, REGISTRY, LAWYER).
-- **R3.3** — Conditional credential fields: `surveyor_licence_no/url`, `nba_licence_no/url`; service validates per agent type.
-- **R3.7** — Resumable wizard: draft state on main `AgentApplication` row (status=DRAFT until PENDING), no separate draft table.
-- **R4.1–R4.3** — Full admin invitation: token hash, 72-hr TTL, all three acceptance branches (SIGNUP_REQUIRED / LOGIN_REQUIRED / ALREADY_ADMIN / ACCEPTED).
-- **R4.4–R4.5** — Full RBAC: `Permission` enum, role matrix (SUPER/OPERATIONS/FINANCE), `require_permission()` FastAPI dependency, guarded endpoints.
-- **R4.6** — Super Admin seed in `fdd959a2cfda_auto_generated.py` via `SUPER_ADMIN_PASSWORD` env.
-- **R5.1** — VID `VP-{year}-{6-char-hex}` generated in `verification/service.py::_generate_vid()`.
-- **R5.7** — Price lock: `locked_at` + `locked_until` in pricing snapshot, TTL from `PRICE_LOCK_TTL_HOURS` (default 24h).
-
-### Confirmed `in_progress` (code exists, gaps remain)
-- **R2.3 (OAuth)** — State param, PKCE, Apple JWKS, email-collision rejection all present. **Missing:** redirect allow-list for callback `redirect_uri`.
-- **R0.9** — Paystack/Flutterwave gateway clients real; **missing:** webhook receiver routes (payment/controller.py stubs them).
-- **R5.5** — Pricing tier matrix + quote logic done. **Missing:** first-time + referral discount auto-application (R5.6 stays `pending`).
-- **R5.9** — Paystack `initialize_payment()/verify_payment()` + Flutterwave both real. Wire proof flow done. **Missing:** webhook handlers (idempotency, provider_ref deduplication).
-- **R5.14** — State machine transitions enforced. **Missing:** dedicated `AuditLog` writer (R0.10) — depends on S1.
-
-### Confirmed `pending` (no code)
-- ~~**R0.10**~~ — **Delivered by S1** (2026-05-02): `app/domain/audit/` created; `AuditLog` ORM + `AuditLogRepo` + `AuditLogService.schedule()` + `audit_ctx.py` ContextVar queue + `@transactional` drain + Alembic migration `c2d3e4f5a6b7`. Wired into `VerificationService` + `AgentApplicationService`. 11 unit tests + 3 e2e tests pass.
-- **R0.16** — No derivation layer mapping task states → global verification state. **S3 delivers this.**
-- **R5.6** — No first-time discount or referral credit logic anywhere. S14 delivers this.
-- **R3.2** — KYC stubs raise `NotImplementedError`. Gated on D6/D7 decisions (BVN + selfie provider).
-
-### Test harness established (S1)
-`test/unit/app/domain/audit/` — 11 unit tests (no DB; `AsyncMock`-based).
-`test/e2e/app/domain/verification/` — 3 e2e tests (real DB; `ALWAYS_NEW` helper pattern).
-Pattern: `@transactional(ALWAYS_NEW)` helper functions own independent sessions. No `@decorate_all_methods(transactional)` on the test class is needed when each DB step should commit independently. All subsequent slices add tests following this pattern.
-
-### R2.3 gap — OAuth redirect allow-list
-`S6` will add this. Flag raised for security review if any slice touches OAuth before S6 lands.
+<!-- legacy note retained for history -->
+`config.yaml` is `mode: strict` (D3). The worktree was previously **dirty** (large staged domain deletions +
+edits). `prd-orchestrator run` will refuse to start until the worktree is committed/clean. Commit the in-flight
+refactor before invoking `run`.

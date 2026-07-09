@@ -1,33 +1,37 @@
-"""Task repository — competitive pool queries + optimistic-lock claim."""
+"""Task data access — extends GenericRepo with the lifecycle-specific queries the
+assignment, derivation, capacity, and timeout-sweep paths need."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import select, update, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from main.app.core.state.status import TaskState
 from main.app.domain.verification.task.models import (
-    CreateTaskAssignmentDto,
     CreateTaskDto,
-    QueryTaskAssignmentDto,
     QueryTaskDto,
-    SearchTaskAssignmentDto,
     SearchTaskDto,
-    Task,
-    TaskAssignment,
-    TaskStatus,
-    UpdateTaskAssignmentDto,
     UpdateTaskDto,
+    VerificationTask,
 )
 from main.appodus_utils.db.repo import GenericRepo
 
+# States in which a task counts against an agent's active-task capacity (§6.5, §7.2).
+_ACTIVE_STATES = (
+    TaskState.ASSIGNED.value,
+    TaskState.ACCEPTED.value,
+    TaskState.IN_PROGRESS.value,
+    TaskState.REJECTED.value,
+)
+
 
 @inject
-class TaskRepo(
+class VerificationTaskRepo(
     GenericRepo[
-        Task,
+        VerificationTask,
         CreateTaskDto,
         UpdateTaskDto,
         QueryTaskDto,
@@ -37,157 +41,115 @@ class TaskRepo(
     def __init__(
         self,
         db: AsyncSession,
-        model: Type[Task] = Task,
+        model: Type[VerificationTask] = VerificationTask,
         query_dto: Type[QueryTaskDto] = QueryTaskDto,
     ):
         super().__init__(db, model, query_dto)
+        self.db = db
 
-    async def list_for_verification(self, verification_id: str) -> List[Task]:
+    async def list_for_verification(self, verification_id: str) -> List[VerificationTask]:
         stmt = (
-            select(Task)
-            .where(Task.deleted.is_(False), Task.verification_id == verification_id)
-            .order_by(Task.role)
-        )
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
-
-    async def list_pending_for_agent(
-        self, role: str, state: Optional[str] = None, excluded_task_ids: Optional[List[str]] = None
-    ) -> List[Task]:
-        """Return PENDING tasks visible to an agent with a given role."""
-        conditions = [
-            Task.deleted.is_(False),
-            Task.status == TaskStatus.PENDING.value,
-            Task.role == role,
-        ]
-        if excluded_task_ids:
-            conditions.append(Task.id.notin_(excluded_task_ids))
-        stmt = select(Task).where(*conditions).order_by(Task.pool_released_at.asc())
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
-
-    async def list_active_for_agent(self, agent_id: str) -> List[Task]:
-        active_statuses = [
-            TaskStatus.ASSIGNED.value,
-            TaskStatus.ACCEPTED.value,
-            TaskStatus.IN_PROGRESS.value,
-        ]
-        stmt = (
-            select(Task)
+            select(VerificationTask)
             .where(
-                Task.deleted.is_(False),
-                Task.agent_id == agent_id,
-                Task.status.in_(active_statuses),
+                VerificationTask.deleted.is_(False),
+                VerificationTask.verification_id == verification_id,
             )
-            .order_by(Task.accepted_at.desc())
+            .order_by(VerificationTask.date_created.asc())
         )
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
+        return list((await self._session.execute(stmt)).scalars().all())
 
-    async def list_completed_for_agent(self, agent_id: str) -> List[Task]:
-        terminal_statuses = [TaskStatus.SUBMITTED.value, TaskStatus.APPROVED.value]
-        stmt = (
-            select(Task)
-            .where(
-                Task.deleted.is_(False),
-                Task.agent_id == agent_id,
-                Task.status.in_(terminal_statuses),
-            )
-            .order_by(Task.submitted_at.desc())
+    async def get_by_role(self, verification_id: str, role: str) -> Optional[VerificationTask]:
+        stmt = select(VerificationTask).where(
+            VerificationTask.deleted.is_(False),
+            VerificationTask.verification_id == verification_id,
+            VerificationTask.role == role,
         )
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def list_all_for_agent(self, agent_id: str) -> List[VerificationTask]:
+        """Every task ever assigned to an agent — feeds the reputation metrics (§16.1)."""
+        stmt = select(VerificationTask).where(
+            VerificationTask.deleted.is_(False),
+            VerificationTask.assigned_agent_id == agent_id,
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
 
     async def count_active_for_agent(self, agent_id: str) -> int:
-        active_statuses = [
-            TaskStatus.ASSIGNED.value,
-            TaskStatus.ACCEPTED.value,
-            TaskStatus.IN_PROGRESS.value,
-        ]
-        stmt = select(func.count(Task.id)).where(
-            Task.deleted.is_(False),
-            Task.agent_id == agent_id,
-            Task.status.in_(active_statuses),
+        """Tasks that count against ``agent_max_active_tasks`` (§6.5)."""
+        stmt = select(func.count()).select_from(VerificationTask).where(
+            VerificationTask.deleted.is_(False),
+            VerificationTask.assigned_agent_id == agent_id,
+            VerificationTask.state.in_(_ACTIVE_STATES),
         )
-        return await self._session.scalar(stmt) or 0
+        return int(await self._session.scalar(stmt) or 0)
 
-    async def claim_task(self, task_id: str, agent_id: str) -> bool:
-        """Atomic optimistic-lock accept — UPDATE WHERE status='PENDING'.
+    async def count_pool_pending(self) -> int:
+        """Broadcast tasks sitting unclaimed in the open pool (admin dashboard §6.3)."""
+        stmt = select(func.count()).select_from(VerificationTask).where(
+            VerificationTask.deleted.is_(False),
+            VerificationTask.in_pool.is_(True),
+            VerificationTask.state == TaskState.PENDING.value,
+        )
+        return int(await self._session.scalar(stmt) or 0)
 
-        Returns True if the claim succeeded (1 row updated), False if another
-        agent already accepted (0 rows updated → caller should raise 409).
-        """
-        now = datetime.now(timezone.utc)
+    async def count_by_state_for_agent(self, agent_id: str) -> dict[str, int]:
+        """state → count over an agent's assigned tasks (agent dashboard §7)."""
         stmt = (
-            update(Task)
+            select(VerificationTask.state, func.count())
             .where(
-                Task.id == task_id,
-                Task.status == TaskStatus.PENDING.value,
-                Task.deleted.is_(False),
+                VerificationTask.deleted.is_(False),
+                VerificationTask.assigned_agent_id == agent_id,
             )
-            .values(
-                status=TaskStatus.ACCEPTED.value,
-                agent_id=agent_id,
-                accepted_at=now,
+            .group_by(VerificationTask.state)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {state: int(count) for state, count in rows}
+
+    async def list_pool_expired(self, now: datetime) -> List[VerificationTask]:
+        """Broadcast tasks still unclaimed past their pool timeout (§7.2 starvation)."""
+        stmt = select(VerificationTask).where(
+            VerificationTask.deleted.is_(False),
+            VerificationTask.in_pool.is_(True),
+            VerificationTask.state == TaskState.PENDING.value,
+            VerificationTask.pool_expires_at.is_not(None),
+            VerificationTask.pool_expires_at < now,
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_accept_deadline_expired(self, now: datetime) -> List[VerificationTask]:
+        """Manually-assigned tasks the agent never accepted in time (§7.2 no-show)."""
+        stmt = select(VerificationTask).where(
+            VerificationTask.deleted.is_(False),
+            VerificationTask.state == TaskState.ASSIGNED.value,
+            VerificationTask.accept_deadline_at.is_not(None),
+            VerificationTask.accept_deadline_at < now,
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def page_for_agent(
+        self, agent_id: str, states: Optional[List[str]], offset: int, limit: int
+    ) -> tuple[List[VerificationTask], int]:
+        conditions = [
+            VerificationTask.deleted.is_(False),
+            VerificationTask.assigned_agent_id == agent_id,
+        ]
+        if states:
+            conditions.append(VerificationTask.state.in_(states))
+        base = select(VerificationTask).where(*conditions)
+        total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
+        rows = (
+            await self._session.execute(
+                base.order_by(VerificationTask.date_created.desc()).offset(offset).limit(limit)
             )
-            .execution_options(synchronize_session="fetch")
+        ).scalars().all()
+        return list(rows), int(total or 0)
+
+    async def list_approved_since(self, cutoff: datetime) -> List[tuple]:
+        """(approved_at, review_quality) for tasks approved since ``cutoff`` — the agent
+        performance-trend series (§18.1 analytics, 6-month window)."""
+        stmt = select(VerificationTask.approved_at, VerificationTask.review_quality).where(
+            VerificationTask.deleted.is_(False),
+            VerificationTask.approved_at.is_not(None),
+            VerificationTask.approved_at >= cutoff,
         )
-        result = await self._session.execute(stmt)
-        return result.rowcount > 0
-
-    async def get_task(self, task_id: str) -> Optional[Task]:
-        stmt = (
-            select(Task)
-            .where(Task.deleted.is_(False), Task.id == task_id)
-            .limit(1)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def list_pending_stale(self, older_than: datetime) -> List[Task]:
-        """Tasks stuck PENDING past the pool timeout threshold."""
-        stmt = select(Task).where(
-            Task.deleted.is_(False),
-            Task.status == TaskStatus.PENDING.value,
-            Task.pool_released_at <= older_than,
-        )
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
-
-    async def list_accepted_no_progress(self, older_than: datetime) -> List[Task]:
-        """Tasks ACCEPTED but with no evidence uploaded past no-show threshold."""
-        stmt = select(Task).where(
-            Task.deleted.is_(False),
-            Task.status == TaskStatus.ACCEPTED.value,
-            Task.accepted_at <= older_than,
-        )
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
-
-
-@inject
-class TaskAssignmentRepo(
-    GenericRepo[
-        TaskAssignment,
-        CreateTaskAssignmentDto,
-        UpdateTaskAssignmentDto,
-        QueryTaskAssignmentDto,
-        SearchTaskAssignmentDto,
-    ]
-):
-    def __init__(
-        self,
-        db: AsyncSession,
-        model: Type[TaskAssignment] = TaskAssignment,
-        query_dto: Type[QueryTaskAssignmentDto] = QueryTaskAssignmentDto,
-    ):
-        super().__init__(db, model, query_dto)
-
-    async def list_for_task(self, task_id: str) -> List[TaskAssignment]:
-        stmt = (
-            select(TaskAssignment)
-            .where(TaskAssignment.deleted.is_(False), TaskAssignment.task_id == task_id)
-            .order_by(TaskAssignment.date_created.desc())
-        )
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
+        return [(a, q) for a, q in (await self._session.execute(stmt)).all()]

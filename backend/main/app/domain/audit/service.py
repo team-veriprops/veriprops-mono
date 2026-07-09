@@ -9,9 +9,6 @@ and agent task history (R19.3).
 """
 from __future__ import annotations
 
-import csv
-import io
-import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -53,8 +50,8 @@ ADMIN_ACTION_TYPES: List[str] = [
 @decorate_all_methods(transactional(), exclude=["schedule"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["schedule"], exclude_startswith=["_"])
 class AuditLogService:
-    def __init__(self, repo: AuditLogRepo):
-        self._repo = repo
+    def __init__(self, audit_repo: AuditLogRepo):
+        self._audit_repo = audit_repo
 
     def schedule(
         self,
@@ -65,7 +62,7 @@ class AuditLogService:
         actor_id: Optional[str] = None,
         from_state: Optional[str] = None,
         to_state: Optional[str] = None,
-        meta: Optional[Dict[str, Any]] = None,
+        details: Optional[Dict[str, Any]] = None,
         ip_address: Optional[str] = None,
     ) -> None:
         """Queue an audit write to run after the current @transactional flush."""
@@ -76,13 +73,13 @@ class AuditLogService:
             resource_id=resource_id,
             from_state=from_state,
             to_state=to_state,
-            meta=meta,
+            details=details,
             ip_address=ip_address,
             occurred_at=Utils.datetime_now(),
         )
 
         async def _write() -> None:
-            await self._repo.create(dto)
+            await self._audit_repo.create(dto)
 
         schedule_audit_write(_write)
 
@@ -96,7 +93,7 @@ class AuditLogService:
         page_size: int = 20,
     ) -> AuditActivityPageDto:
         """PII-safe paginated event list for customer/agent views (no actor_id)."""
-        rows, total = await self._repo.list_for_resource(
+        rows, total = await self._audit_repo.list_for_resource(
             resource_type=resource_type,
             resource_id=resource_id,
             offset=page * page_size,
@@ -108,38 +105,32 @@ class AuditLogService:
                 occurred_at=r.occurred_at,
                 from_state=r.from_state,
                 to_state=r.to_state,
-                meta=r.meta,
+                details=r.details,
             )
             for r in rows
         ]
         return AuditActivityPageDto(items=items, total=total, page=page, page_size=page_size)
 
-    async def export_verification_pack_csv(
-        self,
-        vid: str,
-        task_ids: List[str],
-    ) -> bytes:
-        """Return a CSV byte string with the full audit trail for a verification."""
-        rows = await self._repo.list_for_verification_pack(vid=vid, task_ids=task_ids)
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow([
-            "occurred_at", "action", "actor_id", "resource_type", "resource_id",
-            "from_state", "to_state", "ip_address", "meta",
-        ])
-        for r in rows:
-            writer.writerow([
-                r.occurred_at.isoformat() if r.occurred_at else "",
-                r.action,
-                r.actor_id or "",
-                r.resource_type,
-                r.resource_id,
-                r.from_state or "",
-                r.to_state or "",
-                r.ip_address or "",
-                json.dumps(r.meta) if r.meta else "",
-            ])
-        return buf.getvalue().encode("utf-8")
+    async def list_pack_transitions(self, resource_ids: List[str]) -> List[AuditPackRowDto]:
+        """Full audit rows (with actor_id/IP) for a set of resource ids — the
+        transition backbone of the §19.3 verification audit pack. CSV assembly
+        lives in VerificationAuditPackService."""
+        rows = await self._audit_repo.list_by_resource_ids(resource_ids)
+        return [
+            AuditPackRowDto(
+                id=str(r.id),
+                actor_id=r.actor_id,
+                action=r.action,
+                resource_type=r.resource_type,
+                resource_id=r.resource_id,
+                from_state=r.from_state,
+                to_state=r.to_state,
+                occurred_at=r.occurred_at,
+                ip_address=r.ip_address,
+                details=r.details,
+            )
+            for r in rows
+        ]
 
     async def list_admin_actions(
         self,
@@ -150,7 +141,7 @@ class AuditLogService:
         page_size: int = 20,
     ) -> AdminActionLogPageDto:
         types = action_types if action_types else ADMIN_ACTION_TYPES
-        rows, total = await self._repo.list_admin_actions(
+        rows, total = await self._audit_repo.list_admin_actions(
             action_types=types,
             date_from=date_from,
             date_to=date_to,
@@ -168,7 +159,7 @@ class AuditLogService:
                 to_state=r.to_state,
                 occurred_at=r.occurred_at,
                 ip_address=r.ip_address,
-                meta=r.meta,
+                details=r.details,
             )
             for r in rows
         ]
