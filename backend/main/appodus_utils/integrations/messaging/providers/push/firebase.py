@@ -26,6 +26,16 @@ from main.appodus_utils import Utils
 
 logger: Logger = di['logger']
 
+
+
+from pathlib import Path
+
+print("Current file:", __file__)
+print("Current cwd:", Path.cwd())
+
+for p in Path("/vercel/path1").rglob("firebase-service-account.json"):
+    print("Found:", p)
+
 @inject
 class FirebasePushProvider(PushNotificationProvider):
     """
