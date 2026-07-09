@@ -98,6 +98,20 @@ class SecurityEventRepo(
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def page_for_user(self, user_id: str, offset: int, limit: int) -> tuple[List[SecurityEvent], int]:
+        from sqlalchemy import func
+        base = select(SecurityEvent).where(
+            SecurityEvent.deleted.is_(False),
+            SecurityEvent.user_id == user_id,
+        )
+        total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
+        rows = (
+            await self._session.execute(
+                base.order_by(desc(SecurityEvent.occurred_at)).offset(offset).limit(limit)
+            )
+        ).scalars().all()
+        return list(rows), total or 0
+
 
 @inject
 class PasswordResetTokenRepo(

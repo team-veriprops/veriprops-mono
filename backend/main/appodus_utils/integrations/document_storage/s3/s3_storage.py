@@ -42,7 +42,14 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
     # def _get_s3_url(bucket: str, key: str) -> str:
     #     return f"https://{bucket}.s3.amazonaws.com/{key}"
 
-    async def upload(self, key: str, bucket: str, file_bytes: Union[bytes, BinaryIO], metadata: dict) -> str:
+    async def upload(
+        self,
+        key: str,
+        bucket: str,
+        file_bytes: Union[bytes, BinaryIO],
+        metadata: dict,
+        encrypted: bool = False,
+    ) -> str:
         try:
             if hasattr(file_bytes, "read"):
                 file_data = file_bytes.read()
@@ -51,16 +58,19 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
 
             logger.info(f"Uploading object to S3 bucket={bucket}, key={key}")
             cleaned_metadata = {k: str(v) for k, v in metadata.items()}
+            extra_args: dict = {
+                "ContentType": "application/pdf",
+                "ACL": "private",
+                "Metadata": cleaned_metadata,
+            }
+            if encrypted:
+                extra_args["ServerSideEncryption"] = "AES256"
             await asyncio.to_thread(
                 self.client.put_object,
                 Bucket=bucket,
                 Key=key,
                 Body=file_data,
-                ExtraArgs={
-                    "ContentType": "application/pdf",
-                    "ACL": "private",  # Change if public access is required
-                    "Metadata": cleaned_metadata
-                }
+                ExtraArgs=extra_args,
             )
             return await self.get_presigned_url(key, bucket, expires_in_sec=settings.AWS_S3_PRESIGNED_URL_EXPIRES)
         except (BotoCoreError, ClientError) as e:

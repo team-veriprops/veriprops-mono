@@ -7,9 +7,26 @@
 
 import { TransactionCurrency } from "@/types/models";
 
+export interface JwtPayload {
+  sub?: string
+  email?: string
+  exp?: number
+  iat?: number
+  role?: string
+  user_type: UserType
+  personas: UserPersona[];
+}
+
 export enum UserType {
   USER = "USER",
   ADMIN = "ADMIN",
+}
+
+export enum AuthIntent {
+  DEFAULT = "default", // Customer
+  VERIFY = "verify",   // Customer
+  AGENT = "agent",     // Agent
+  INVITED_ADMIN = "invited-admin", // Admin
 }
 
 export enum UserPersona {
@@ -68,7 +85,7 @@ export interface AuthUser {
   hasPassword: boolean;
   linkedProviders: SocialProvider[];
   avatarUrl?: string;
-  createdAt: string;
+  dateCreated: string;
 }
 
 export interface AuthSession {
@@ -86,7 +103,7 @@ export interface DeviceSession {
   approxLocation: string;
   current: boolean;
   lastActiveAt: string;
-  createdAt: string;
+  dateCreated: string;
 }
 
 export enum SecurityEventType {
@@ -113,13 +130,21 @@ export interface SecurityEvent {
   occurredAt: string;
 }
 
-export enum ConsentDocumentType {
-  PLATFORM_TERMS = "PLATFORM_TERMS",
-  PRIVACY_POLICY = "PRIVACY_POLICY",
-  AGENT_TERMS = "AGENT_TERMS",
-  VERIFICATION_TERMS = "VERIFICATION_TERMS",
-  REPORT_DISCLAIMER = "REPORT_DISCLAIMER",
+// Cross-portal awareness (PRD §2.14) — per-persona actionable counts; the
+// frontend derives the "other hat" badge from these.
+export interface PersonaActionableCount {
+  persona: UserPersona;
+  actionableCount: number;
 }
+
+export interface CrossPortalSummary {
+  personas: PersonaActionableCount[];
+}
+
+// The full enum lives in @/types/models; re-exported so consent flows can keep
+// importing it from here.
+export { ConsentDocumentType } from "@/types/models";
+import { ConsentDocumentType } from "@/types/models";
 
 export interface ConsentDocument {
   type: ConsentDocumentType;
@@ -141,5 +166,5 @@ export interface SignupDraft {
   email: string;
   step: number;
   payload: Record<string, unknown>;
-  updatedAt: string;
+  dateUpdated: string;
 }

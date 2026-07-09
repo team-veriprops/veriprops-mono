@@ -10,7 +10,7 @@ from typing import ClassVar, Optional, Any, Dict, List
 from uuid import UUID
 
 from fastapi.encoders import jsonable_encoder
-from pydantic import Field, field_validator, ValidationInfo
+from pydantic import Field, field_validator, ValidationInfo, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +32,7 @@ def get_absolute_path(path: str):
 class FileStorage(str, enum.Enum):
     R2 = "R2"
     S3 = "S3"
+    STUB = "STUB"  # deterministic local provider for tests/dev (no external calls)
 
 class SupportedDB(str, enum.Enum):
     MYSQL = 'MYSQL'
@@ -50,6 +51,38 @@ class TemplatingEngine(str, enum.Enum):
     JINJA2 = "jinja2"
 
 
+# Secrets left at this placeholder must be supplied via the environment before a
+# prod/staging boot. The startup validator (`_enforce_prod_secret_policy`) refuses
+# to start a prod/staging build whose security-critical secrets are still unset or
+# left at a placeholder — this is what keeps a mislabeled env file from silently
+# shipping a known/default signing key.
+SECRET_PLACEHOLDER = "CHANGE_ME"
+
+# Values never acceptable for a security-critical secret in prod/staging: the shared
+# placeholders plus the historically-committed (now public) JWT signing default.
+_INSECURE_SECRET_VALUES = {
+    SECRET_PLACEHOLDER,
+    "mock_value",
+    "",
+    "d344auth_jwt_s3cr3t-635678$%#agst634",
+}
+
+# The full settings snapshot (used by utils_settings to reconstruct the object) is
+# kept off `os.environ` so the aggregated secret blob is not exposed via the process
+# environment / `/proc/<pid>/environ` / subprocess inheritance. Read it via
+# `get_full_settings_json()` rather than an env var.
+_full_settings_json: Optional[str] = None
+
+
+def get_full_settings_json() -> Optional[str]:
+    """Return the JSON snapshot produced by the most recent `set_env_vars()` call.
+
+    Consumers that previously read the `APPODUS_SETTINGS` environment variable should
+    call this instead — the snapshot is held in-process, not in `os.environ`.
+    """
+    return _full_settings_json
+
+
 class AppodusBaseSettings(BaseSettings):
     BRAND: str = "appodus"
     BRAND_SUPPORT_EMAIL: str = "kingsley.ezenwwere@gmail.com"
@@ -66,8 +99,9 @@ class AppodusBaseSettings(BaseSettings):
     # APPODUS
     APPODUS_SERVICES_URL: str = "https://8d39e6e80670.ngrok-free.app"
     APPODUS_CLIENT_ID: str = "b91b0ecb-7bd7-4630-91cb-af20549c8667"
-    APPODUS_CLIENT_SECRET: str = "kQWzK2eeNM_9uN16ZmbHCdJNRSw9UQ5eF2PhwqZRz2I="
-    APPODUS_CLIENT_SECRET_ENCRYPTION_KEY: str = '1dXgFqcjihJaeCBIYWZf-kjWvBbXkBpxT-5IOWY-G0Y='
+    # Real values live in the git-ignored .env.{env} files, never in committed source.
+    APPODUS_CLIENT_SECRET: str = SECRET_PLACEHOLDER
+    APPODUS_CLIENT_SECRET_ENCRYPTION_KEY: str = SECRET_PLACEHOLDER
 
     APPODUS_CLIENT_REQUEST_EXPIRES_SECONDS: Optional[int] = 60 * 5 # 5mins
 
@@ -119,7 +153,11 @@ class AppodusBaseSettings(BaseSettings):
     APPLE_PRIVATE_KEY: Optional[str] = "mock_value"
 
     # AUTHJWT
-    AUTHJWT_SECRET_KEY: str = "auth_jwt_s3cr3t"
+    # Signing key for session JWTs. Symmetric (HS256), so the key IS the trust anchor:
+    # anyone who knows it can forge an admin session. Never commit a real value — set
+    # AUTHJWT_SECRET_KEY in the git-ignored .env.{env}. Prod/staging refuse to boot with
+    # the placeholder/default (see `_enforce_prod_secret_policy`).
+    AUTHJWT_SECRET_KEY: str = SECRET_PLACEHOLDER
     # Configure application to store and get JWT from cookies
     AUTHJWT_TOKEN_LOCATION: List[str] = Field(default_factory=lambda: ["cookies"])
     # Only allow JWT cookies to be sent over https
@@ -127,10 +165,15 @@ class AppodusBaseSettings(BaseSettings):
     # Enable csrf double submit protection. default is True
     AUTHJWT_COOKIE_CSRF_PROTECT: bool = True
     # Change to 'lax' in production to make your website more secure from CSRF Attacks, default is None
-    AUTHJWT_COOKIE_SAMESITE: str = 'none' # Must be 'none' when AUTHJWT_COOKIE_SECURE = True
-    # AUTHJWT_ACCESS_COOKIE_KEY: str = 'Host-access_token'
-    # AUTHJWT_REFRESH_COOKIE_KEY: str = 'Host-refresh_token'
-    # AUTHJWT_ALGORITHM: str = ""
+    AUTHJWT_COOKIE_SAMESITE: str = 'lax'
+    AUTHJWT_ACCESS_COOKIE_KEY: str = '__Host-access_token'
+    AUTHJWT_REFRESH_COOKIE_KEY: str = '__Host-refresh_token'
+    AUTHJWT_ACCESS_CSRF_COOKIE_KEY: str = '__Host-access_csrf_token'
+    AUTHJWT_REFRESH_CSRF_COOKIE_KEY: str = '__Host-refresh_csrf_token'
+    # Pin the signing + accepted-decode algorithm explicitly so no algorithm-confusion
+    # is possible. HS256 is symmetric; keep the allowlist to the single algorithm.
+    AUTHJWT_ALGORITHM: str = "HS256"
+    AUTHJWT_DECODE_ALGORITHMS: List[str] = Field(default_factory=lambda: ["HS256"])
 
     # MESSAGING
     EMAIL_FROM_ADDRESS: Optional[str] = "noreply@example.com"
@@ -154,10 +197,77 @@ class AppodusBaseSettings(BaseSettings):
     MESSAGE_TEMPLATE_DIR: str = "resources/templates"
     MESSAGING_BRAND_NAME: str = "appodus"
 
-    MESSAGING_HEADERS: List[str] = []
+    MESSAGING_HEADERS: Dict[str, str] = {}
     MESSAGING_PRIORITY: int = 2
     MESSAGING_SANDBOX_MODE: bool = False
     MESSAGING_CATEGORIES: List[str] = []
+    MESSAGING_RPS_LIMIT: int = 20
+    MESSAGING_BULK_CONCURRENCY: int = 10
+
+    # SMTP (Mailpit in dev/test — auto-selected when ENVIRONMENT is not prod/staging)
+    SMTP_HOST: Optional[str] = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_USE_TLS: bool = False
+
+    # TEST CONFIG — canonical test OTP returned when OTP_MODE=deterministic
+    TEST_OTP: int = 654123
+
+    # OTP determinism contract
+    # deterministic → always return TEST_OTP (required in test, allowed in dev/local/staging)
+    # random        → always generate a random 6-digit code (required in production)
+    OTP_MODE: str = "deterministic"
+
+    @model_validator(mode="after")
+    def _enforce_otp_mode_policy(self) -> "AppodusBaseSettings":
+        env = self.ENVIRONMENT
+        mode = self.OTP_MODE
+        if env == Environment.TEST and mode != "deterministic":
+            raise ValueError(
+                f"ENVIRONMENT=test requires OTP_MODE=deterministic, got '{mode}'. "
+                "Set OTP_MODE=deterministic in .env.test."
+            )
+        if env == Environment.PRODUCTION and mode != "random":
+            raise ValueError(
+                f"ENVIRONMENT=prod requires OTP_MODE=random, got '{mode}'. "
+                "Deterministic OTP is forbidden in production."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_prod_secret_policy(self) -> "AppodusBaseSettings":
+        """Fail fast if a prod/staging build is missing a security-critical secret or
+        has an unsafe auth flag. This is the backstop for a mislabeled env file: even
+        if `ENVIRONMENT` is set correctly but the JWT key was left at its placeholder
+        (or the historically-leaked default), the app refuses to start rather than
+        signing tokens with a guessable key.
+        """
+        if self.ENVIRONMENT not in (Environment.PRODUCTION, Environment.STAGING):
+            return self
+
+        env_name = self.ENVIRONMENT.value
+
+        if (self.AUTHJWT_SECRET_KEY or "").strip() in _INSECURE_SECRET_VALUES:
+            raise ValueError(
+                f"AUTHJWT_SECRET_KEY must be a strong, unique secret in '{env_name}'. "
+                "Refusing to start with a placeholder or the committed default key. "
+                "Set AUTHJWT_SECRET_KEY in the environment."
+            )
+
+        if (self.APPODUS_CLIENT_SECRET or "").strip() in _INSECURE_SECRET_VALUES:
+            raise ValueError(
+                f"APPODUS_CLIENT_SECRET must be set in '{env_name}'. "
+                "Refusing to start with a placeholder value."
+            )
+
+        if self.ALLOW_AUTH_BYPASS:
+            raise ValueError(
+                f"ALLOW_AUTH_BYPASS must be false in '{env_name}'. "
+                "The client-auth bypass is only permitted in non-production environments."
+            )
+
+        return self
 
     # REDIS
     REDIS_ENABLED: Optional[bool] = False
@@ -178,7 +288,9 @@ class AppodusBaseSettings(BaseSettings):
     DB_NAME: Optional[str] = None
     DB_ADDITIONAL_CONFIG: Optional[str] = None
     SQLALCHEMY_DATABASE_URI: Optional[Any] = None
-    DB_ENABLE_LOGS: Optional[bool] = True
+    # SQL echo logs bound parameter values — keep off by default so PII/secrets in
+    # query params are not written to logs. Enable explicitly per-env when debugging.
+    DB_ENABLE_LOGS: Optional[bool] = False
     DB_ENABLE_LOG_POOL: Optional[bool] = True
     DB_MAIN_THREAD_CONTEXT_ID: int = 12345
     DEPLOYMENT_IS_SERVERLESS: Optional[bool] = True
@@ -242,13 +354,15 @@ class AppodusBaseSettings(BaseSettings):
 
             os.environ[env_key] = env_value
 
-        # store whole settings as JSON (structured) for consumers that want the full object
+        # Store the whole settings snapshot in-process (NOT in os.environ) so the
+        # aggregated secret blob is not leaked via the process environment. Consumers
+        # read it through get_full_settings_json().
+        global _full_settings_json
         try:
-            full = json.dumps(jsonable_encoder(self, by_alias=False), ensure_ascii=False)
-            os.environ["APPODUS_SETTINGS"] = full
+            _full_settings_json = json.dumps(jsonable_encoder(self, by_alias=False), ensure_ascii=False)
         except Exception:
             # swallow problems here; you may want to log
-            pass
+            _full_settings_json = None
 
     # def set_env_vars(self):
     #     """Set all settings as environment variables."""

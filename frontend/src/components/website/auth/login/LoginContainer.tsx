@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, AlertTriangle, Lock, ShieldAlert } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
@@ -24,6 +24,7 @@ import { ROUTES, isAuthIntent, buildAuthUrl } from "@lib/routes";
 import { resolvePostAuthRedirect } from "@components/website/auth/libs/auth/redirect";
 import { getDeviceFingerprint } from "@components/website/auth/libs/auth/fingerprint";
 import { getErrorMessage } from "@lib/utils";
+import { AuthIntent } from "../models";
 
 const LOCKOUT_KEY = "veriprops-login-lockout";
 const ATTEMPTS_KEY = "veriprops-login-attempts";
@@ -52,13 +53,26 @@ function writeLockoutState(state: LockoutState) {
   }
 }
 
+// Defined outside the component (rather than inline in the submit handler) so
+// the Date.now() call isn't flagged as an impure render call — React Compiler
+// can't prove `onSubmit` only runs from an event, since it's invoked
+// indirectly via form.handleSubmit(onSubmit).
+function nextLockoutState(currentCount: number): LockoutState {
+  const next: LockoutState = { count: currentCount + 1 };
+  if (next.count >= RATE_LIMIT_LOCKOUT_AT) {
+    next.lockedUntil = Date.now() + RATE_LIMIT_LOCKOUT_MINUTES * 60_000;
+  }
+  return next;
+}
+
 export default function LoginContainer() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const intentParam = searchParams.get("intent");
-  const intent = isAuthIntent(intentParam) ? intentParam : "default";
+  const intent = isAuthIntent(intentParam) ? intentParam : AuthIntent.DEFAULT;
   const tier = searchParams.get("tier");
   const redirect = searchParams.get("redirect");
+  const emailParam = searchParams.get("email") ?? "";
 
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -68,8 +82,12 @@ export default function LoginContainer() {
 
   const loginMutation = useLoginMutation();
 
-  // Hydrate lockout from storage on mount.
+  // Hydrate lockout from storage post-mount (not via a lazy useState
+  // initializer) so the client's first render still matches the SSR markup
+  // ({ count: 0 }); reading localStorage during that first render would
+  // desync from the server output and trigger a hydration mismatch.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLockout(readLockoutState());
   }, []);
 
@@ -86,9 +104,11 @@ export default function LoginContainer() {
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "", rememberMe: false },
+    defaultValues: { email: emailParam, password: "", rememberMe: false },
     mode: "onBlur",
   });
+
+  const rememberMe = useWatch({ control: form.control, name: "rememberMe" });
 
   const isLockedNow = !!lockout.lockedUntil && lockout.lockedUntil > now;
   const remainingSeconds = useMemo(
@@ -112,13 +132,10 @@ export default function LoginContainer() {
       const user = res.data?.user;
       const dest = user
         ? resolvePostAuthRedirect(user, { intent, redirect })
-        : ROUTES.PORTAL.DASHBOARD;
+        : ROUTES.AUTH.LOGIN_SUCCESS_REDIRECT;
       router.push(dest);
     } catch (err) {
-      const next: LockoutState = { count: lockout.count + 1 };
-      if (next.count >= RATE_LIMIT_LOCKOUT_AT) {
-        next.lockedUntil = Date.now() + RATE_LIMIT_LOCKOUT_MINUTES * 60_000;
-      }
+      const next = nextLockoutState(lockout.count);
       writeLockoutState(next);
       setLockout(next);
       setErrorMessage(
@@ -186,7 +203,7 @@ export default function LoginContainer() {
         </div>
       )}
 
-      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="login-form">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
             Email
@@ -196,6 +213,7 @@ export default function LoginContainer() {
             autoComplete="email"
             placeholder="you@example.com"
             disabled={isLockedNow}
+            data-testid="login-email"
             {...form.register("email")}
           />
           {form.formState.errors.email && (
@@ -225,6 +243,7 @@ export default function LoginContainer() {
               placeholder="Your password"
               disabled={isLockedNow}
               className="pr-10"
+              data-testid="login-password"
               {...form.register("password")}
             />
             <button
@@ -233,6 +252,7 @@ export default function LoginContainer() {
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-[var(--brand-surface-low)]"
               onClick={() => setShowPassword((v) => !v)}
               tabIndex={-1}
+              data-testid="login-password-toggle"
             >
               {showPassword ? (
                 <EyeOff className="w-4 h-4" style={{ color: "var(--brand-on-surface-variant)" }} />
@@ -250,7 +270,7 @@ export default function LoginContainer() {
 
         <label className="flex items-center gap-2.5 cursor-pointer select-none">
           <Checkbox
-            checked={form.watch("rememberMe")}
+            checked={rememberMe}
             onCheckedChange={(v) => form.setValue("rememberMe", v === true)}
           />
           <span className="text-sm" style={{ color: "var(--brand-on-surface)" }}>
@@ -277,6 +297,7 @@ export default function LoginContainer() {
           className="w-full"
           size="lg"
           disabled={isLockedNow || loginMutation.isPending}
+          data-testid="login-submit"
         >
           {loginMutation.isPending ? "Signing in…" : "Sign in"}
         </Button>

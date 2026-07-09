@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ROUTES, isAuthIntent, buildAuthUrl } from "./routes";
+import { AuthIntent } from "@/components/website/auth/models";
 
 describe("ROUTES", () => {
   it("exposes auth gate, login, signup, forgot/reset, oauth callback", () => {
@@ -39,17 +40,17 @@ describe("buildAuthUrl", () => {
     expect(buildAuthUrl("/auth/login")).toBe("/auth/login");
   });
 
-  it("omits intent=default", () => {
-    expect(buildAuthUrl("/auth/login", { intent: "default" })).toBe("/auth/login");
+  it(`omits intent=${AuthIntent.DEFAULT}`, () => {
+    expect(buildAuthUrl("/auth/login", { intent: AuthIntent.DEFAULT })).toBe("/auth/login");
   });
 
   it("preserves intent + tier + redirect", () => {
     const url = buildAuthUrl("/auth/signup", {
-      intent: "verify",
+      intent: AuthIntent.VERIFY,
       tier: "standard",
       redirect: "/portal/verifications/abc",
     });
-    expect(url).toContain("intent=verify");
+    expect(url).toContain(`intent=${AuthIntent.VERIFY}`);
     expect(url).toContain("tier=standard");
     expect(url).toContain("redirect=%2Fportal%2Fverifications%2Fabc");
   });

@@ -1,110 +1,66 @@
 import { HttpClient } from "@lib/FetchHttpClient";
-import { SuccessResponse } from "@/types/models";
-import type {
-  AgentApplication,
-} from "@components/agents/libs/agent-service";
+import { Page, SuccessResponse } from "@/types/models";
+import {
+  AdminInvitationSummary,
+  AdminSubRole,
+  AdminTeamPage,
+  InvitePreview,
+} from "@/types/admin";
 
-export type AdminSubRole = "SUPER" | "OPERATIONS" | "FINANCE";
-export type AdminInvitationStatus = "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
-export type AcceptInviteBranch =
-  | "SIGNUP_REQUIRED"
-  | "LOGIN_REQUIRED"
-  | "ALREADY_ADMIN"
-  | "ACCEPTED";
-
-export interface AdminInvitation {
-  id: string;
-  email: string;
-  subRole: AdminSubRole;
-  status: AdminInvitationStatus;
-  inviterAdminId: string;
-  expiresAt: string;
-  acceptedAt: string | null;
-  createdAt: string;
-}
-
-export interface InviteAdminResult {
-  invitation: AdminInvitation;
-  rawToken: string;
-}
-
-export interface AcceptInviteResult {
-  branch: AcceptInviteBranch;
-  email: string;
-  subRole: AdminSubRole | null;
-}
-
-export interface PageResponse<T> {
-  status: string;
-  code: string;
-  items: T[];
-  meta: {
-    page: number;
-    pageSize: number;
-    count: number;
-    total: number;
-  };
-}
-
-export interface AdminAgentApplication extends AgentApplication {
-  idDocUrl: string | null;
-  selfieUrl: string | null;
-  surveyorLicenceUrl: string | null;
-  nbaLicenceUrl: string | null;
-  userFirstName: string | null;
-  userLastName: string | null;
-  userEmail: string | null;
-}
-
+/**
+ * Admin onboarding & team management API. Mirrors the backend controllers at
+ * `app/domain/user/admin_invitation` and `app/domain/user/admin_team`
+ * (URL shape `/users/admins/...`).
+ */
 export class AdminService {
-  private readonly inviteBase = "/users/admin-invitations";
-  private readonly agentBase = "/users/agents";
+  private readonly base = "/users/admins";
 
   constructor(private readonly http: HttpClient) {}
 
-  // ── Admin invitations ──
-  inviteAdmin(payload: {
-    email: string;
-    subRole: AdminSubRole;
-  }): Promise<SuccessResponse<InviteAdminResult>> {
-    return this.http.post(this.inviteBase, payload);
+  inviteAdmin(
+    email: string,
+    subRole: AdminSubRole,
+    firstName?: string,
+    lastName?: string,
+  ): Promise<SuccessResponse<{ inviteUrl: string }>> {
+    return this.http.post(`${this.base}/invitations`, { email, subRole, firstName, lastName });
   }
 
-  listInvitations(status?: AdminInvitationStatus): Promise<PageResponse<AdminInvitation>> {
-    const qs = status ? `?status=${status}` : "";
-    return this.http.get(`${this.inviteBase}${qs}`);
+  listInvitations(page: number, pageSize: number): Promise<SuccessResponse<Page<AdminInvitationSummary>>> {
+    return this.http.get(`${this.base}/invitations?page=${page}&page_size=${pageSize}`);
   }
 
-  revokeInvitation(invitationId: string): Promise<SuccessResponse<boolean>> {
-    return this.http.post(`${this.inviteBase}/${invitationId}/revoke`, {});
+  revokeInvitation(id: string): Promise<SuccessResponse<boolean>> {
+    return this.http.post(`${this.base}/invitations/${id}/revoke`, {});
   }
 
-  acceptInvitation(token: string): Promise<SuccessResponse<AcceptInviteResult>> {
-    return this.http.post(`${this.inviteBase}/accept`, { token });
+  previewInvitation(token: string): Promise<SuccessResponse<InvitePreview>> {
+    return this.http.get(`${this.base}/invitations/preview/${token}`);
   }
 
-  // ── Agent application queue ──
-  listAgentApplications(opts?: {
-    status?: "PENDING" | "APPROVED" | "REJECTED";
-    page?: number;
-    pageSize?: number;
-  }): Promise<PageResponse<AdminAgentApplication>> {
+  acceptInvitation(token: string): Promise<SuccessResponse<{ subRole: string }>> {
+    return this.http.post(`${this.base}/invitations/accept`, { token });
+  }
+
+  listTeam(
+    page: number,
+    pageSize: number,
+    query?: string,
+    subRole?: string,
+  ): Promise<SuccessResponse<AdminTeamPage>> {
     const params = new URLSearchParams();
-    if (opts?.status) params.set("status", opts.status);
-    if (opts?.page) params.set("page", String(opts.page));
-    if (opts?.pageSize) params.set("page_size", String(opts.pageSize));
-    const qs = params.toString();
-    return this.http.get(`${this.agentBase}/admin/applications${qs ? `?${qs}` : ""}`);
+    params.set("page", String(page));
+    params.set("page_size", String(pageSize));
+    if (query) params.set("query", query);
+    if (subRole) params.set("sub_role", subRole);
+    return this.http.get(`${this.base}/team?${params.toString()}`);
   }
 
-  approveApplication(applicationId: string): Promise<SuccessResponse<AdminAgentApplication>> {
-    return this.http.post(`${this.agentBase}/admin/applications/${applicationId}/approve`, {});
+  changeSubRole(userId: string, subRole: AdminSubRole): Promise<SuccessResponse<boolean>> {
+    return this.http.post(`${this.base}/team/${userId}/sub-role`, { subRole });
   }
 
-  rejectApplication(
-    applicationId: string,
-    reason: string,
-  ): Promise<SuccessResponse<AdminAgentApplication>> {
-    return this.http.post(`${this.agentBase}/admin/applications/${applicationId}/reject`, { reason });
+  deactivateMember(userId: string): Promise<SuccessResponse<boolean>> {
+    return this.http.post(`${this.base}/team/${userId}/deactivate`, {});
   }
 }

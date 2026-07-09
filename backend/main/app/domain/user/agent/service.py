@@ -1,348 +1,342 @@
-"""Agent application service.
+"""Agent onboarding service (PRD §3.1–3.2, §3.3a).
 
-Owns the wizard step transitions, KYC flow orchestration, and admin
-approve/reject. On approval the AGENT persona is appended to the user record.
+Owns the resumable application wizard, submission (KYC + credentials + coverage +
+AGENT_TERMS consent + AGENT persona + PENDING profile), the applicant's status
+view, the admin approval queue, and role-level credential-expiry suspension.
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from loguru import Logger
 
 from typing import List, Optional
 
-from kink import di, inject
+from kink import inject
 
-from main.app.config.settings import settings
-from main.app.domain.user.agent.kyc.interface import (
-    BvnVerificationResult,
-    KycProvider,
-    SelfieMatchResult,
+from main.app.core.state.status import AgentRole
+from main.app.domain.audit.models import AuditActionType
+from main.app.domain.audit.service import AuditLogService
+from main.app.domain.user.agent.application_draft.service import AgentApplicationDraftService
+from main.app.domain.user.agent.coverage.models import (
+    AgentCoverageInputDto,
+    CreateAgentCoverageDto,
 )
+from main.app.domain.user.agent.coverage.repo import AgentCoverageRepo
+from main.app.domain.user.agent.credential.models import (
+    AgentCredentialDto,
+    CreateAgentCredentialDto,
+    CredentialStatus,
+    UpdateAgentCredentialDto,
+)
+from main.app.domain.user.agent.credential.repo import AgentCredentialRepo
+from main.app.domain.user.agent.credential.rules import active_roles
+from main.app.domain.user.agent.kyc.models import KycRecordDto
+from main.app.domain.user.agent.kyc.service import KycService
 from main.app.domain.user.agent.models import (
-    AdminAgentApplicationDto,
-    AgentApplication,
-    AgentApplicationDto,
-    AgentApplicationStatus,
-    AgentType,
-    BvnVerifyDto,
-    BvnVerificationResultDto,
-    CreateAgentApplicationDto,
-    CredentialsStepDto,
-    IdDocType,
-    KycDocumentsDto,
-    KycMethod,
-    SearchAgentApplicationDto,
-    SubmitApplicationDto,
-    TypesStepDto,
-    UpdateAgentApplicationDto,
+    AgentApplicationDetailDto,
+    AgentApplicationStatusDto,
+    AgentApplicationSummaryDto,
+    ApproveAgentApplicationDto,
+    RejectAgentApplicationDto,
+    SubmitAgentApplicationDto,
 )
-from main.app.domain.user.agent.repo import AgentApplicationRepo
+from main.app.domain.user.agent.profile.models import (
+    AgentApplicationStatus,
+    AgentProfile,
+    AvailabilityStatus,
+    CreateAgentProfileDto,
+    UpdateAgentProfileDto,
+)
+from main.app.domain.user.agent.profile.repo import AgentProfileRepo
 from main.app.domain.user.agent.validator import AgentApplicationValidator
 from main.app.domain.user.auth.consent.models import ConsentDocumentType
 from main.app.domain.user.auth.consent.service import ConsentService
-from main.app.domain.user.auth.session.models import (
-    SecurityEventType,
-    UserPersona,
-)
-from main.app.domain.user.auth.session.service import SessionService
+from main.app.domain.user.auth.session.models import UserPersona
 from main.app.domain.user.service import UserService
 from main.appodus_utils import Utils
-from main.appodus_utils.db.models import Page
+from main.appodus_utils.db.models import Page, PaginationMeta
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
-from main.appodus_utils.exception.exceptions import (
-    ResourceNotFoundException,
-    ValidationException,
-)
-
-logger: Logger = di["logger"]
-
-
-# Agent KYC artefacts use a dedicated S3 prefix for per-user access scoping.
-KYC_OBJECT_PREFIX = "agent-kyc"
+from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
-class AgentApplicationService:
+class AgentService:
     def __init__(
         self,
-        repo: AgentApplicationRepo,
-        validator: AgentApplicationValidator,
-        consent_service: ConsentService,
+        profile_repo: AgentProfileRepo,
+        credential_repo: AgentCredentialRepo,
+        coverage_repo: AgentCoverageRepo,
+        draft_service: AgentApplicationDraftService,
+        kyc_service: KycService,
         user_service: UserService,
-        session_service: SessionService,
-        kyc_provider: KycProvider,
+        consent_service: ConsentService,
+        audit_service: AuditLogService,
+        agent_validator: AgentApplicationValidator,
     ):
-        self._repo = repo
-        self._validator = validator
-        self._consent_service = consent_service
+        self._profile_repo = profile_repo
+        self._credential_repo = credential_repo
+        self._coverage_repo = coverage_repo
+        self._draft_service = draft_service
+        self._kyc_service = kyc_service
         self._user_service = user_service
-        self._session_service = session_service
-        self._kyc = kyc_provider
+        self._consent_service = consent_service
+        self._audit_service = audit_service
+        self._agent_validator = agent_validator
 
-    # ── Reads ──────────────────────────────────────────────────────
+    # ── Submission ────────────────────────────────────────────────
 
-    async def get_or_create_for_user(self, user_id: str) -> AgentApplicationDto:
-        row = await self._repo.get_by_user_id(user_id)
-        if row is None:
-            await self._repo.create(CreateAgentApplicationDto(
-                user_id=user_id,
-                status=AgentApplicationStatus.DRAFT,
-            ))
-            row = await self._repo.get_by_user_id(user_id)
-        return self._to_public_dto(row)
+    async def submit_application(
+        self, user_id: str, dto: SubmitAgentApplicationDto, ip_address: Optional[str] = None
+    ) -> AgentApplicationStatusDto:
+        self._agent_validator.validate_submission(dto)
+        user = await self._user_service.get_user_model(user_id)
 
-    async def get_for_user(self, user_id: str) -> Optional[AgentApplicationDto]:
-        row = await self._repo.get_by_user_id(user_id)
-        return self._to_public_dto(row) if row else None
-
-    async def list_for_admin(
-        self, status: Optional[AgentApplicationStatus] = None, page: int = 1, page_size: int = 25,
-    ) -> Page[AdminAgentApplicationDto]:
-        # Reuse generic search; map results to admin DTO with user fields filled.
-        search = SearchAgentApplicationDto(page=page, page_size=page_size)
-        if status:
-            search.status = status.value
-        result = await self._repo.get_page(search)
-
-        items: List[AdminAgentApplicationDto] = []
-        for q in result.items:
-            row = await self._repo.get_model(q.id)
-            if not row:
-                continue
-            user = await self._user_service.get_user_model(row.user_id)
-            items.append(self._to_admin_dto(row, user))
-        return Page[AdminAgentApplicationDto](items=items, meta=result.meta)
-
-    # ── Wizard steps ───────────────────────────────────────────────
-
-    async def update_types(self, user_id: str, dto: TypesStepDto) -> AgentApplicationDto:
-        await self.get_or_create_for_user(user_id)  # ensure exists
-        row = await self._repo.get_by_user_id(user_id)
-        self._validator.assert_mutable(row)
-        self._validator.assert_types(dto.types)
-        await self._repo.update(str(row.id), UpdateAgentApplicationDto(
-            types=dto.types,
-        ))
-        return self._to_public_dto(await self._repo.get_by_user_id(user_id))
-
-    async def verify_bvn(self, user_id: str, dto: BvnVerifyDto) -> BvnVerificationResultDto:
-        row = await self._repo.get_by_user_id(user_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="AgentApplication")
-        self._validator.assert_mutable(row)
-        self._validator.assert_bvn(dto.bvn)
-
-        result: BvnVerificationResult = await self._kyc.verify_bvn(dto.bvn)
-        last4 = dto.bvn[-4:]
-        if not result.verified:
-            return BvnVerificationResultDto(
-                verified=False,
-                bvn_last4=last4,
-                failure_reason=result.failure_reason,
-            )
-        await self._repo.update(str(row.id), UpdateAgentApplicationDto(
-            kyc_method=KycMethod.BVN,
-            bvn_last4=last4,
-            bvn_verification_id=result.verification_id,
-            bvn_verified_at=Utils.datetime_now(),
-            # Clear ID-doc artefacts if user previously chose that path
-            id_doc_type=None,
-            id_doc_url=None,
-            selfie_url=None,
-        ))
-        return BvnVerificationResultDto(
-            verified=True,
-            bvn_last4=last4,
-            verification_id=result.verification_id,
+        # KYC first — persists the provider result (no raw biometrics).
+        await self._kyc_service.run_verification(
+            user_id, user.first_name, user.last_name, dto.kyc
         )
 
-    async def record_kyc_documents(
-        self, user_id: str, dto: KycDocumentsDto,
-    ) -> AgentApplicationDto:
-        row = await self._repo.get_by_user_id(user_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="AgentApplication")
-        self._validator.assert_mutable(row)
-        if not dto.id_doc_url or not dto.selfie_url:
-            raise ValidationException(
-                message="ID document and selfie URLs are required",
-            )
-        # Selfie match — the URLs reference S3 keys uploaded directly by the
-        # frontend. We delegate the actual blob fetch + matching to the KYC
-        # provider in a real implementation; for the stub, pass empty bytes
-        # to exercise the deterministic path.
-        match: SelfieMatchResult = await self._kyc.match_selfie(b"\x00")  # stub-friendly
-        await self._repo.update(str(row.id), UpdateAgentApplicationDto(
-            kyc_method=KycMethod.ID_DOC,
-            id_doc_type=dto.id_doc_type,
-            id_doc_url=dto.id_doc_url,
-            selfie_url=dto.selfie_url,
-            selfie_match_score=match.score,
-            selfie_matched_at=Utils.datetime_now() if match.matched else None,
-            # Clear BVN if user previously chose that path
-            bvn_last4=None,
-            bvn_verification_id=None,
-            bvn_verified_at=None,
-        ))
-        return self._to_public_dto(await self._repo.get_by_user_id(user_id))
-
-    async def update_credentials(
-        self, user_id: str, dto: CredentialsStepDto,
-    ) -> AgentApplicationDto:
-        row = await self._repo.get_by_user_id(user_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="AgentApplication")
-        self._validator.assert_mutable(row)
-        self._validator.assert_credentials(list(row.types or []), dto)
-        await self._repo.update(str(row.id), UpdateAgentApplicationDto(
-            surveyor_licence_no=dto.surveyor_licence_no,
-            surveyor_licence_url=dto.surveyor_licence_url,
-            nba_licence_no=dto.nba_licence_no,
-            nba_licence_url=dto.nba_licence_url,
-            years_of_experience=dto.years_of_experience,
-            coverage_states=[s.upper() for s in dto.coverage_states],
-            coverage_lgas=list(dto.coverage_lgas or []),
+        profile = await self._profile_repo.create_return_model(CreateAgentProfileDto(
+            user_id=user_id,
+            roles=dto.roles,
+            status=AgentApplicationStatus.PENDING,
             bio=dto.bio,
+            years_experience=dto.years_experience,
+            submitted_at=Utils.datetime_now(),
         ))
-        return self._to_public_dto(await self._repo.get_by_user_id(user_id))
 
-    async def submit(
-        self, user_id: str, dto: SubmitApplicationDto,
-        ip_address: Optional[str] = None,
-        device_fingerprint: Optional[str] = None,
-    ) -> AgentApplicationDto:
-        if not dto.truthfulness_acknowledged:
-            raise ValidationException(message="You must acknowledge the truthfulness statement")
-        row = await self._repo.get_by_user_id(user_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="AgentApplication")
-        self._validator.assert_mutable(row)
-        self._validator.assert_submission_ready(row)
+        for cred in dto.credentials:
+            await self._credential_repo.create(CreateAgentCredentialDto(
+                user_id=user_id,
+                role=cred.role,
+                credential_type=cred.credential_type,
+                licence_number=cred.licence_number,
+                document_ref=cred.document_ref,
+                expiry_date=cred.expiry_date,
+                status=CredentialStatus.PENDING,
+            ))
 
-        # Record versioned consent — frontend must echo back the consent_version
-        # the user actually saw at acceptance time.
+        for cov in dto.coverage:
+            await self._coverage_repo.create(CreateAgentCoverageDto(
+                user_id=user_id,
+                state=cov.state,
+                lga=cov.lga,
+                place=cov.place,
+                travel_radius_km=cov.travel_radius_km,
+            ))
+
+        # AGENT_TERMS acceptance (PRD §3.5 versioned consent).
         await self._consent_service.record_user_consent(
             user_id=user_id,
             document_type=ConsentDocumentType.AGENT_TERMS,
-            consent_version=dto.agent_terms_consent_version,
+            consent_version=dto.agent_terms_version,
             ip_address=ip_address,
-            device_fingerprint=device_fingerprint,
         )
 
-        await self._repo.update(str(row.id), UpdateAgentApplicationDto(
-            status=AgentApplicationStatus.PENDING,
-            truthfulness_acknowledged="ACKNOWLEDGED",
-            submitted_at=Utils.datetime_now(),
-        ))
-        await self._record_security_event(
-            user_id=user_id,
-            type_=SecurityEventType.AGENT_APPLICATION_SUBMITTED,
-            description=f"submitted application {row.id}",
+        # Persona is additive (PRD §3.2) — grants the AGENT hat without removing CUSTOMER.
+        await self._user_service.add_persona(user_id, UserPersona.AGENT)
+
+        await self._draft_service.discard(user_id)
+
+        self._audit_service.schedule(
+            action=AuditActionType.AGENT_APPLICATION_SUBMITTED,
+            resource_type="agent_profile",
+            resource_id=profile.id,
+            actor_id=user_id,
+            to_state=AgentApplicationStatus.PENDING.value,
+            details={"roles": [r.value for r in dto.roles]},
+            ip_address=ip_address,
         )
-        return self._to_public_dto(await self._repo.get_by_user_id(user_id))
 
-    # ── Admin actions ──────────────────────────────────────────────
+        return await self._status_dto(profile)
 
-    async def approve(self, application_id: str, admin_id: str) -> AgentApplicationDto:
-        row = await self._repo.get_model(application_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="AgentApplication")
-        self._validator.assert_pending(row)
+    # ── Applicant status view ─────────────────────────────────────
 
-        await self._repo.update(application_id, UpdateAgentApplicationDto(
-            status=AgentApplicationStatus.APPROVED,
-            reviewed_by_admin_id=admin_id,
-            reviewed_at=Utils.datetime_now(),
-        ))
-        # Add AGENT persona (idempotent).
-        await self._user_service.add_persona(row.user_id, UserPersona.AGENT)
-
-        await self._record_security_event(
-            user_id=row.user_id,
-            type_=SecurityEventType.AGENT_APPLICATION_APPROVED,
-            description=f"approved by admin {admin_id}",
-        )
-        return self._to_public_dto(await self._repo.get_model(application_id))
-
-    async def reject(self, application_id: str, admin_id: str, reason: str) -> AgentApplicationDto:
-        self._validator.assert_rejection_reason(reason)
-        row = await self._repo.get_model(application_id)
-        if row is None:
-            raise ResourceNotFoundException(resource="AgentApplication")
-        self._validator.assert_pending(row)
-
-        await self._repo.update(application_id, UpdateAgentApplicationDto(
-            status=AgentApplicationStatus.REJECTED,
-            reviewed_by_admin_id=admin_id,
-            reviewed_at=Utils.datetime_now(),
-            rejection_reason=reason,
-        ))
-        await self._record_security_event(
-            user_id=row.user_id,
-            type_=SecurityEventType.AGENT_APPLICATION_REJECTED,
-            description=f"rejected by admin {admin_id}: {reason[:120]}",
-        )
-        return self._to_public_dto(await self._repo.get_model(application_id))
-
-    # ── Helpers ────────────────────────────────────────────────────
-
-    @staticmethod
-    def _to_public_dto(row: Optional[AgentApplication]) -> Optional[AgentApplicationDto]:
-        if row is None:
+    async def get_my_status(self, user_id: str) -> Optional[AgentApplicationStatusDto]:
+        profile = await self._profile_repo.get_by_user_id(user_id)
+        if not profile:
             return None
-        return AgentApplicationDto(
-            id=str(row.id),
-            user_id=row.user_id,
-            status=AgentApplicationStatus(row.status),
-            types=[AgentType(t) for t in (row.types or [])],
-            kyc_method=KycMethod(row.kyc_method) if row.kyc_method else None,
-            bvn_last4=row.bvn_last4,
-            bvn_verified_at=row.bvn_verified_at,
-            id_doc_type=IdDocType(row.id_doc_type) if row.id_doc_type else None,
-            id_doc_uploaded=bool(row.id_doc_url),
-            selfie_uploaded=bool(row.selfie_url),
-            selfie_match_score=row.selfie_match_score,
-            surveyor_licence_no=row.surveyor_licence_no,
-            nba_licence_no=row.nba_licence_no,
-            years_of_experience=row.years_of_experience,
-            coverage_states=list(row.coverage_states or []),
-            coverage_lgas=list(row.coverage_lgas or []),
-            bio=row.bio,
-            submitted_at=row.submitted_at,
-            reviewed_at=row.reviewed_at,
-            rejection_reason=row.rejection_reason,
-            created_at=row.date_created,
-            updated_at=row.date_updated,
+        return await self._status_dto(profile)
+
+    async def _status_dto(self, profile: AgentProfile) -> AgentApplicationStatusDto:
+        creds = await self._credential_repo.list_for_user(profile.user_id)
+        approved = list(profile.approved_roles or [])
+        return AgentApplicationStatusDto(
+            status=AgentApplicationStatus(profile.status),
+            roles=[AgentRole(r) for r in (profile.roles or [])],
+            approved_roles=[AgentRole(r) for r in approved],
+            active_roles=active_roles(approved, creds, Utils.datetime_now().date()),
+            rejection_reason=profile.rejection_reason,
+            submitted_at=profile.submitted_at,
         )
 
-    def _to_admin_dto(self, row: AgentApplication, user) -> AdminAgentApplicationDto:
-        public = self._to_public_dto(row)
-        return AdminAgentApplicationDto(
-            **public.model_dump(),
-            id_doc_url=row.id_doc_url,
-            selfie_url=row.selfie_url,
-            surveyor_licence_url=row.surveyor_licence_url,
-            nba_licence_url=row.nba_licence_url,
-            user_first_name=user.first_name if user else None,
-            user_last_name=user.last_name if user else None,
-            user_email=user.email if user else None,
+    # ── Admin approval queue ──────────────────────────────────────
+
+    async def count_pending_applications(self) -> int:
+        """Agent applications awaiting admin review (admin dashboard §6)."""
+        return await self._profile_repo.count_by_status(AgentApplicationStatus.PENDING.value)
+
+    async def count_available_agents(self) -> int:
+        """Approved agents currently accepting work (🟢) — Mission Control §18.1."""
+        return await self._profile_repo.count_available(
+            AgentApplicationStatus.APPROVED.value, AvailabilityStatus.GREEN.value
         )
 
-    async def _record_security_event(
-        self, user_id: str, type_: SecurityEventType, description: str,
-    ) -> None:
-        # Reuse SessionService's audit writer to keep security events
-        # consistent. Best-effort — state change is the source of truth.
-        try:
-            await self._session_service.record_event(
-                type=type_,
-                description=description[:255],
-                user_id=user_id,
-            )
-        except Exception:  # pragma: no cover
-            logger.warning("Could not record agent application security event", exc_info=True)
+    async def list_applications(
+        self, status: Optional[str] = None, page: int = 0, page_size: int = 10,
+        query: Optional[str] = None,
+    ) -> Page[AgentApplicationSummaryDto]:
+        rows, total = await self._profile_repo.page_applications(
+            status=status, offset=page * page_size, limit=page_size, query=query,
+        )
+        items: List[AgentApplicationSummaryDto] = []
+        for p in rows:
+            user = await self._user_service.get_user_model(p.user_id)
+            items.append(AgentApplicationSummaryDto(
+                id=p.id,
+                user_id=p.user_id,
+                applicant_name=f"{user.first_name} {user.last_name}".strip() if user else "",
+                roles=[AgentRole(r) for r in (p.roles or [])],
+                status=AgentApplicationStatus(p.status),
+                submitted_at=p.submitted_at,
+            ))
+        total_pages = (total + page_size - 1) // page_size if page_size else 0
+        return Page[AgentApplicationSummaryDto](
+            items=items,
+            meta=PaginationMeta(
+                page=page,
+                page_size=page_size,
+                count=len(items),
+                total=total,
+                total_pages=total_pages,
+                prev_page=page - 1 if page > 0 else None,
+                next_page=page + 1 if (page + 1) < total_pages else None,
+            ),
+        )
+
+    async def get_application_detail(self, profile_id: str) -> AgentApplicationDetailDto:
+        profile = await self._profile_repo.get_model(profile_id)
+        if not profile:
+            raise ResourceNotFoundException(resource="agent application")
+        user = await self._user_service.get_user_model(profile.user_id)
+        creds = await self._credential_repo.list_for_user(profile.user_id)
+        coverage = await self._coverage_repo.list_for_user(profile.user_id)
+        kyc = await self._kyc_service.get_latest(profile.user_id)
+        return AgentApplicationDetailDto(
+            id=profile.id,
+            user_id=profile.user_id,
+            applicant_name=f"{user.first_name} {user.last_name}".strip() if user else "",
+            applicant_email=user.email if user else "",
+            roles=[AgentRole(r) for r in (profile.roles or [])],
+            approved_roles=[AgentRole(r) for r in (profile.approved_roles or [])],
+            status=AgentApplicationStatus(profile.status),
+            rejection_reason=profile.rejection_reason,
+            bio=profile.bio,
+            years_experience=profile.years_experience,
+            submitted_at=profile.submitted_at,
+            credentials=[AgentCredentialDto(
+                role=AgentRole(c.role),
+                credential_type=c.credential_type,
+                licence_number=c.licence_number,
+                expiry_date=c.expiry_date,
+                status=CredentialStatus(c.status),
+            ) for c in creds],
+            coverage=[AgentCoverageInputDto(
+                state=c.state, lga=c.lga, place=c.place, travel_radius_km=c.travel_radius_km,
+            ) for c in coverage],
+            kyc=KycRecordDto(
+                provider=kyc.provider, method=kyc.method, status=kyc.status,
+                score=kyc.score, summary=kyc.summary, verified_at=kyc.verified_at,
+            ) if kyc else None,
+        )
+
+    async def approve_application(
+        self, profile_id: str, dto: ApproveAgentApplicationDto, admin_id: str
+    ) -> AgentApplicationDetailDto:
+        profile = await self._profile_repo.get_model(profile_id)
+        if not profile:
+            raise ResourceNotFoundException(resource="agent application")
+
+        applied = [AgentRole(r) for r in (profile.roles or [])]
+        approved = dto.approved_roles if dto.approved_roles else applied
+        # Never approve a role the applicant did not apply for.
+        approved = [r for r in approved if r in applied]
+
+        await self._profile_repo.update(profile_id, UpdateAgentProfileDto(
+            status=AgentApplicationStatus.APPROVED.value,
+            approved_roles=[r.value for r in approved],
+            reviewed_by=admin_id,
+        ))
+        await self._mark_reviewed(profile_id)
+
+        # Clear pending credentials for the approved roles.
+        for cred in await self._credential_repo.list_for_user(profile.user_id):
+            if AgentRole(cred.role) in approved and cred.status == CredentialStatus.PENDING.value:
+                await self._credential_repo.update(
+                    cred.id, UpdateAgentCredentialDto(status=CredentialStatus.VERIFIED.value)
+                )
+
+        self._audit_service.schedule(
+            action=AuditActionType.AGENT_APPLICATION_APPROVED,
+            resource_type="agent_profile",
+            resource_id=profile_id,
+            actor_id=admin_id,
+            from_state=profile.status,
+            to_state=AgentApplicationStatus.APPROVED.value,
+            details={"approved_roles": [r.value for r in approved]},
+        )
+        return await self.get_application_detail(profile_id)
+
+    async def reject_application(
+        self, profile_id: str, dto: RejectAgentApplicationDto, admin_id: str
+    ) -> AgentApplicationDetailDto:
+        profile = await self._profile_repo.get_model(profile_id)
+        if not profile:
+            raise ResourceNotFoundException(resource="agent application")
+
+        await self._profile_repo.update(profile_id, UpdateAgentProfileDto(
+            status=AgentApplicationStatus.REJECTED.value,
+            rejection_reason=dto.reason,
+            reviewed_by=admin_id,
+        ))
+        await self._mark_reviewed(profile_id)
+
+        self._audit_service.schedule(
+            action=AuditActionType.AGENT_APPLICATION_REJECTED,
+            resource_type="agent_profile",
+            resource_id=profile_id,
+            actor_id=admin_id,
+            from_state=profile.status,
+            to_state=AgentApplicationStatus.REJECTED.value,
+            details={"reason": dto.reason},
+        )
+        return await self.get_application_detail(profile_id)
+
+    async def _mark_reviewed(self, profile_id: str) -> None:
+        # reviewed_at is a datetime → set directly on the model (the update DTO
+        # path json-encodes datetimes; see CLAUDE.md GenericRepo note).
+        profile = await self._profile_repo.get_model(profile_id)
+        profile.reviewed_at = Utils.datetime_now()
+
+    # ── Role-level credential-expiry suspension (§3.3a) ───────────
+
+    async def suspend_expired_role_credentials(self, user_id: str) -> List[AgentRole]:
+        """Flag any expired credentials so only the affected role is suspended.
+
+        Returns the roles that ended up suspended.
+        """
+        today = Utils.datetime_now().date()
+        creds = await self._credential_repo.list_for_user(user_id)
+        suspended: List[AgentRole] = []
+        for cred in creds:
+            if (
+                cred.expiry_date is not None
+                and cred.expiry_date < today
+                and cred.status != CredentialStatus.EXPIRED.value
+            ):
+                await self._credential_repo.update(
+                    cred.id, UpdateAgentCredentialDto(status=CredentialStatus.EXPIRED.value)
+                )
+                suspended.append(AgentRole(cred.role))
+        return suspended

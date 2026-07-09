@@ -1,3 +1,6 @@
+import { AuthIntent } from "./auth/models";
+import { ROUTES, buildAuthUrl } from "@lib/routes";
+
 export interface PricingTier {
   name: string;
   priceNGN: number;
@@ -43,6 +46,11 @@ export interface NavLink {
   href: string;
 }
 
+export interface Faq {
+  question: string;
+  answer: string;
+}
+
 export interface FooterLink {
   label: string;
   href: string;
@@ -59,19 +67,19 @@ export const ecosystemFeatures: EcosystemFeature[] = [
   {
     title: "Trust Score",
     description:
-      "Our proprietary weighted algorithm calculates risk from registry records, encumbrances, and ground inspection. 90+ is Safe — 60–89 is Caution — 0–59 is High Risk.",
+      "A single, honest number from 0–100, weighted from registry records, encumbrances, and a physical inspection. 90+ is safe, 60–89 means proceed with caution, below 60 is high risk. No jargon; just where you stand.",
     icon: "BarChart3",
   },
   {
     title: "Verification ID",
     description:
-      "A unique, immutable public identifier (VP-YYYY-XXXXXX) for every verified property. Share it — anyone can cross-reference findings without exposing your private data.",
+      "A unique public reference (VP-YYYY-XXXXXX) for every property we check. Share it with family or your bank — anyone can cross-reference the findings, on this website, without exposing your private details.",
     icon: "Fingerprint",
   },
   {
     title: "Certified Report",
     description:
-      "A comprehensive signed document from legal and site experts. Structured, versioned (v1, v2…), downloadable as PDF, and admissible for institutional financing.",
+      "A signed document from the legal and field experts who did the work. Structured, versioned, downloadable as PDF, and detailed enough to support institutional financing.",
     icon: "ShieldCheck",
   },
 ];
@@ -80,31 +88,31 @@ export const methodologySteps: MethodologyStep[] = [
   {
     step: 1,
     title: "Submit Details",
-    description: "Provide property coordinates, upload documents, and select your verification tier.",
+    description: "Share the property's location, upload any documents, and pick your verification tier.",
     icon: "Upload",
   },
   {
     step: 2,
     title: "Cross-Check Records",
-    description: "We validate ownership against official registry and survey records with certified agents.",
+    description: "Certified agents validate ownership against official registry and survey records.",
     icon: "Search",
   },
   {
     step: 3,
     title: "Check Encumbrances",
-    description: "Identify liens, caveats, pending litigations, or any outstanding claims on the property.",
+    description: "We surface liens, caveats, pending litigation, or any outstanding claim.",
     icon: "Shield",
   },
   {
     step: 4,
     title: "Run Risk Analysis",
-    description: "Assessment of area zoning, title history, fraud indicators, and surrounding property context.",
+    description: "Zoning, title history, fraud indicators, and the surrounding context.",
     icon: "Lock",
   },
   {
     step: 5,
     title: "Get Certified Report",
-    description: "Receive your high-authority digital report with Trust Score, Verification ID, and agent sign-offs.",
+    description: "Receive your Trust Score, Verification ID, and signed certified report.",
     icon: "Award",
   },
 ];
@@ -231,18 +239,63 @@ export const testimonials: Testimonial[] = [
   },
 ];
 
+// Conversion-oriented FAQ — answers the diaspora buyer's closing objections so
+// they feel safe enough to proceed. Rendered after "Client Stories".
+export const faqs: Faq[] = [
+  {
+    question: "How do I know your agents are trustworthy and not part of the scam?",
+    answer:
+      "Every agent is independently vetted and KYC-verified before they can take work — Field agents, Surveyors, Registry agents, and NBA-licensed Lawyers. They never know who else is verifying the same property, declare any conflict of interest on each task, and confirm on-site that the property they inspected matches your submitted address. You deal with Veriprops, not the agent.",
+  },
+  {
+    question: "What if I pay and the property still turns out to be a problem?",
+    answer:
+      "We reduce uncertainty; we don't eliminate it. Your report is an honest professional opinion backed by registry checks, a physical inspection, and a Trust Score. If we assign the wrong agent or skip a step, you get a full refund and a free re-verification. Our liability is clearly set out in the Verification Terms, and our refund matrix tells you exactly what happens in every scenario before you pay.",
+  },
+  {
+    question: "I'm abroad — can I really do this without flying to Nigeria?",
+    answer:
+      "That's exactly who we built this for. Buyers in the UK, US, and Canada submit the property details online, pay securely, and track progress live as our agents on the ground do the work. You receive GPS-stamped photos, a boundary survey, a registry search, and a downloadable certified report — all without leaving home.",
+  },
+  {
+    question: "How long does a verification take?",
+    answer:
+      "It depends on the tier: Basic in 3–5 business days, Standard in 5–7, and Premium (with a legal opinion) in 7–10. Timelines exclude weekends and Nigerian public holidays, and you can watch each stage advance in real time from your dashboard.",
+  },
+  {
+    question: "Is my payment secure, and can I get a refund?",
+    answer:
+      "Payments are processed through trusted gateways (Paystack/Flutterwave) — we never see your full card details. Refunds follow a published, scenario-by-scenario policy and are issued in Naira through the same gateway; your bank reconverts at its prevailing rate. Where a problem is our fault, you're fully covered.",
+  },
+  {
+    question: "What's the difference between Basic, Standard, and Premium?",
+    answer:
+      "Basic confirms ownership and registry records — good for early due diligence. Standard adds a physical site inspection, boundary survey, and neighbourhood profile — the recommended tier for serious buyers. Premium adds a signed legal opinion, encumbrance and fraud assessment, and a full risk analysis for high-value transactions.",
+  },
+  {
+    question: "Why must everything stay on the platform?",
+    answer:
+      "Keeping submission, payment, and communication on Veriprops is how we protect you. All communication is recorded and auditable, messages are scanned to block anyone trying to move you off-platform, and your full evidence trail is preserved — so if there's ever a dispute, the record is on your side.",
+  },
+];
+
 export const footerLinks = {
-  resources: [
-    { label: "Certification Standards", href: "#" },
-    { label: "Verification Process", href: "#how-it-works" },
-    { label: "Trust Score Guide", href: "#" },
-    { label: "Sample Report", href: "#" },
+  platform: [
+    { label: "How It Works", href: "#how-it-works" },
+    { label: "Trust Score Guide", href: "#ecosystem" },
+    { label: "Sample Report", href: ROUTES.SAMPLE_REPORT },
+    { label: "Pricing", href: "#pricing" },
   ] as FooterLink[],
   company: [
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms of Service", href: "#" },
-    { label: "Contact Support", href: "#" },
-    { label: "Become an Agent", href: "/auth?intent=agent" },
+    { label: "Our Story", href: ROUTES.ABOUT },
+    { label: "Certification Standards", href: "#agents" },
+    { label: "Become an Agent", href: buildAuthUrl(ROUTES.AUTH.GATE, { intent: AuthIntent.AGENT }) },
+    { label: "Contact Support", href: "mailto:support@veriprops.ng" },
+  ] as FooterLink[],
+  legal: [
+    { label: "Privacy Policy", href: ROUTES.LEGAL.PRIVACY },
+    { label: "Terms of Service", href: ROUTES.LEGAL.TERMS },
+    { label: "Disclaimer", href: ROUTES.LEGAL.REPORT_DISCLAIMER },
   ] as FooterLink[],
   socials: [
     { label: "Facebook", href: "#" },
@@ -259,3 +312,18 @@ export const fxRates: Record<string, { symbol: string; rate: number }> = {
   GBP: { symbol: "£", rate: 0.00052 },
   EUR: { symbol: "€", rate: 0.00060 },
 };
+
+export const currencies = ["NGN", "USD", "GBP", "EUR"] as const;
+export type Currency = (typeof currencies)[number];
+
+export function formatPrice(priceNGN: number, currency: Currency): string {
+  const { symbol, rate } = fxRates[currency];
+  const amount = priceNGN * rate;
+  if (currency === "NGN") {
+    return `${symbol}${(amount / 1000).toFixed(0)}k`;
+  }
+  return `${symbol}${amount.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+}
+
+export const CTA_VERIFY_HREF = buildAuthUrl(ROUTES.AUTH.GATE, { intent: AuthIntent.VERIFY });
+export const CTA_AGENT_HREF = buildAuthUrl(ROUTES.AUTH.GATE, { intent: AuthIntent.AGENT });

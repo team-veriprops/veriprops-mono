@@ -1,4 +1,4 @@
-import { formatDistanceToNow, differenceInDays, format } from "date-fns";
+import { formatDistanceToNow, differenceInDays } from "date-fns";
 
 export const formatRelativeTime = (dateString: string): string => {
   try {

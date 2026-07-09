@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, AlertTriangle } from "lucide-react";
@@ -11,6 +11,7 @@ import { useCurrentSession } from "../libs/useAuthQueries";
 import ProfileCompletionModal from "./ProfileCompletionModal";
 import { ROUTES, isAuthIntent, buildAuthUrl } from "@lib/routes";
 import { resolvePostAuthRedirect } from "@components/website/auth/libs/auth/redirect";
+import { AuthIntent } from "../models";
 
 interface Props {
   provider: string;
@@ -29,11 +30,10 @@ export default function OAuthCallbackContainer({ provider }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const intentParam = searchParams.get("intent");
-  const intent = isAuthIntent(intentParam) ? intentParam : "default";
+  const intent = isAuthIntent(intentParam) ? intentParam : AuthIntent.DEFAULT;
   const errorCode = searchParams.get("error");
 
   const sessionQuery = useCurrentSession(!errorCode);
-  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const user = sessionQuery.data?.user;
   const profileIncomplete = useMemo(() => {
@@ -45,14 +45,14 @@ export default function OAuthCallbackContainer({ provider }: Props) {
       !user.preferredCurrency
     );
   }, [user]);
+  // Once shown, the modal only ever leaves via onComplete() navigating away
+  // (the page unmounts), so deriving directly from query state is equivalent
+  // to — and simpler than — a separate "shown" flag toggled from an effect.
+  const showProfileModal = !errorCode && !!user && profileIncomplete;
 
   useEffect(() => {
-    if (errorCode || !user) return;
-    if (profileIncomplete) {
-      setShowProfileModal(true);
-    } else {
-      router.replace(resolvePostAuthRedirect(user, { intent }));
-    }
+    if (errorCode || !user || profileIncomplete) return;
+    router.replace(resolvePostAuthRedirect(user, { intent }));
   }, [user, profileIncomplete, errorCode, router, intent]);
 
   if (errorCode) {
@@ -106,7 +106,7 @@ export default function OAuthCallbackContainer({ provider }: Props) {
         </div>
       </AuthShell>
       <ProfileCompletionModal
-        open={showProfileModal && !!user}
+        open={showProfileModal}
         user={user}
         intent={intent}
         onComplete={() => {

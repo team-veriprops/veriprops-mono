@@ -3,27 +3,31 @@
 status: initialized | in_progress | completed
 
 ## Completed Slices
-- S1
-- S2
+- none
 
 ## Current Slice
-- S3
+- none
 
 ## Pending Slices
-- S4
-- S5
+- none
+
+## Runtime State
+- idle | running | interrupted | recovering | checkpointed
+
+## Pending Recovery
+- none
 
 ## Blockers
 - none
 
 ## Open Questions
-- Q1:
+- none
 
 ## Risks
-- ...
+- none
 
 ## Last Commit
-- hash / message
+- none
 
 ## Completion %
-- 0–100
+- 0

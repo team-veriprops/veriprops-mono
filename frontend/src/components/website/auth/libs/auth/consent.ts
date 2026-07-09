@@ -1,4 +1,5 @@
 import { ConsentDocument, ConsentDocumentType } from "@components/website/auth/models";
+import { ROUTES } from "@lib/routes";
 /**
  * Versioned consent registry. Every legal document the user must accept
  * is keyed by `type` and `version`. PRD §3.2: every acceptance is recorded
@@ -16,35 +17,35 @@ const documents: ConsentDocument[] = [
     consentVersion: "1.0.0",
     effectiveAt: "2026-01-15",
     title: "Platform Terms of Service",
-    href: "/legal/terms",
+    href: ROUTES.LEGAL.TERMS,
   },
   {
     type: ConsentDocumentType.PRIVACY_POLICY,
     consentVersion: "1.0.0",
     effectiveAt: "2026-01-15",
     title: "Privacy Policy",
-    href: "/legal/privacy",
+    href: ROUTES.LEGAL.PRIVACY,
   },
   {
     type: ConsentDocumentType.AGENT_TERMS,
     consentVersion: "1.0.0",
     effectiveAt: "2026-01-15",
     title: "Agent Terms",
-    href: "/legal/agent-terms",
+    href: ROUTES.LEGAL.AGENT_TERMS,
   },
   {
     type: ConsentDocumentType.VERIFICATION_TERMS,
     consentVersion: "1.0.0",
     effectiveAt: "2026-01-15",
     title: "Verification Terms",
-    href: "/legal/verification-terms",
+    href: ROUTES.LEGAL.VERIFICATION_TERMS,
   },
   {
     type: ConsentDocumentType.REPORT_DISCLAIMER,
     consentVersion: "1.0.0",
     effectiveAt: "2026-01-15",
     title: "Report Disclaimer",
-    href: "/legal/report-disclaimer",
+    href: ROUTES.LEGAL.REPORT_DISCLAIMER,
   },
 ];
 

@@ -1,7 +1,7 @@
 # PRD Orchestrator Skill
 
 ## Purpose
-Convert a PRD.md with phased requirements (e.g., 1–19) into a fully implemented, production-ready system through:
+Convert a `PRD.md` with phased requirements into a fully implemented, production-ready system through:
 
 - structured analysis
 - architecture design
@@ -9,84 +9,134 @@ Convert a PRD.md with phased requirements (e.g., 1–19) into a fully implemente
 - autonomous slice-based implementation
 - continuous clarification loops
 - self-auditing after every cycle
+- recovery-first resumption
 - final system audit
 
 ---
 
 ## Core Lifecycle
 
-0. initialize (bootstrap + clarification)
-1. run (execute optimal work batch)
-2. resume (recover + continue execution)
-3. audit (final validation)
+1. initialize
+2. run
+3. resume
+4. audit
 
 ---
 
 ## Key Principles
 
-### 1. No silent assumptions
+### 1) No silent assumptions
 If anything is unclear:
 → STOP and ask the user.
 
-### 2. Continuous clarification allowed
-Clarifications can be triggered:
-- during initialization
-- during run
-- during resume
+---
 
-### 3. Self-audit is mandatory
-Every run/resume cycle must:
-- validate correctness
-- validate PRD compliance
-- validate architecture compliance
-- validate security constraints
-- validate test coverage
-- fix issues before stopping
+### 2) Continuous clarification
+Clarifications may be triggered during:
 
-### 4. State-driven execution
+- initialize
+- run
+- resume
+
+---
+
+### 3) Self-audit is mandatory
+Every run/resume must validate:
+
+- correctness
+- PRD compliance
+- architecture compliance
+- security
+- migration safety
+- API consistency
+- test coverage
+
+Fix issues before stopping.
+
+---
+
+### 4) State-driven execution
 Never rely on chat memory.
 
 Always read:
-- docs/prd-analysis.md
-- docs/requirements-matrix.md
-- docs/decision-log.md
-- docs/architecture-spec.md
-- docs/execution-plan.md
-- docs/progress.md
-- git status + diff
+
+- PRD.md
+- docs/*
+- git status
+- git diff
 
 ---
 
-## Execution Rules
+## Recovery-first Resume
 
-### Batch sizing
+Persist in-flight execution state in:
+
+`docs/runtime-state.yaml`
+
+This stores:
+
+- active slice
+- active subtask
+- modified files
+- created files
+- test state
+- self-audit state
+- discovered findings
+- clarification questions
+- next action
+
+Resume must:
+
+recover → complete audit → checkpoint → continue
+
+Never start new work before recovering interrupted work.
+
+---
+
+## Batch Sizing
+
 Skill decides dynamically:
 
-- large slice → simple CRUD / UI / docs
-- medium slice → service + tests
-- small slice → schema/auth/integration work
+Small batches:
+- schema
+- auth
+- integrations
+- concurrency-sensitive work
 
-Never overfill context.
+Medium batches:
+- service logic
+- APIs
+- validations
+
+Large batches:
+- CRUD
+- tests
+- docs
+- UI wiring
+
+Prefer safe checkpoints over large output.
 
 ---
 
-## Safety Rules
+## Stop Conditions
 
-Stop execution immediately if:
+Stop immediately when:
+
 - ambiguity is detected
 - conflicting requirements exist
-- missing business rules affect correctness
-- schema or auth implications are unclear
+- business rule is unclear
+- security implications are unclear
+- migration correctness is uncertain
 
-Ask user:
+Ask:
 
-> CLARIFICATION REQUIRED
+CLARIFICATION REQUIRED
 
 ---
 
 ## Outputs Required
 
-The skill must generate and maintain:
+Maintain:
 
 - docs/prd-analysis.md
 - docs/requirements-matrix.md
@@ -94,7 +144,8 @@ The skill must generate and maintain:
 - docs/architecture-spec.md
 - docs/execution-plan.md
 - docs/progress.md
-- docs/final-audit.md (only at end)
+- docs/runtime-state.yaml
+- docs/final-audit.md
 
 ---
 
@@ -102,22 +153,34 @@ The skill must generate and maintain:
 
 A PRD is complete only when:
 
-- all slices executed
+- all slices completed
 - all requirements marked complete
-- no open blockers
-- final audit passes or remediation completed
+- no blockers remain
+- runtime state is checkpointed or idle
+- final audit passes (or remediation completed)
 
 ---
 
-## Commands Overview
+## Commit Policy
 
-- initialize → bootstrap + docs + clarification
-- run → execute next optimal slice batch
-- resume → recover + continue safely
-- audit → final validation report
+Commit behavior is configurable via:
+
+.claude/skills/prd-orchestrator/config.yaml
+
+Modes:
+
+- advisory (default): suggest commits, do not block execution
+- strict: require commits before run/resume
+- disabled: ignore git state entirely
+
+The skill must:
+
+- never force commits
+- respect user workflow
+- warn when recovery safety is reduced due to uncommitted changes
 
 ---
 
 ## Golden Rule
 
-> "Always prefer correctness, traceability, and architectural integrity over speed."
+1. Always prefer correctness, traceability, and architectural integrity over speed.

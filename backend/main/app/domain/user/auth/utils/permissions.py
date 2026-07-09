@@ -30,10 +30,18 @@ class Permission(str, enum.Enum):
     ASSIGN_AGENT = "ASSIGN_AGENT"
     APPROVE_PAYOUT = "APPROVE_PAYOUT"
     CONFIGURE_PRICING = "CONFIGURE_PRICING"
+    CONFIGURE_SYSTEM = "CONFIGURE_SYSTEM"
+    MANAGE_VERIFICATIONS = "MANAGE_VERIFICATIONS"
     RESOLVE_DISPUTE = "RESOLVE_DISPUTE"
     RELEASE_REPORT = "RELEASE_REPORT"
     CONFIRM_WIRE_PAYMENT = "CONFIRM_WIRE_PAYMENT"
     VIEW_ADMIN_PANEL = "VIEW_ADMIN_PANEL"
+    CREATE_CONTENT = "CREATE_CONTENT"
+    PUBLISH_CONTENT = "PUBLISH_CONTENT"
+    MANAGE_USERS = "MANAGE_USERS"
+    VIEW_ANALYTICS = "VIEW_ANALYTICS"      # §18.1 Mission Control + analytics dashboards
+    BROADCAST = "BROADCAST"                # §18.1 admin announcements to an audience
+    MANAGE_COMPLIANCE = "MANAGE_COMPLIANCE"  # §19 NDPA erasure review/execute — SUPER only (irreversible)
 
 
 # Role → permissions matrix. Super admins implicitly hold every permission.
@@ -42,15 +50,29 @@ _ROLE_MATRIX: dict[AdminSubRole, Set[Permission]] = {
     AdminSubRole.OPERATIONS: {
         Permission.APPROVE_AGENT,
         Permission.ASSIGN_AGENT,
+        Permission.MANAGE_VERIFICATIONS,
         Permission.RESOLVE_DISPUTE,
         Permission.RELEASE_REPORT,
         Permission.VIEW_ADMIN_PANEL,
+        Permission.MANAGE_USERS,
+        Permission.VIEW_ANALYTICS,
+        Permission.BROADCAST,
     },
     AdminSubRole.FINANCE: {
         Permission.APPROVE_PAYOUT,
         Permission.CONFIGURE_PRICING,
         Permission.CONFIRM_WIRE_PAYMENT,
         Permission.VIEW_ADMIN_PANEL,
+        Permission.VIEW_ANALYTICS,
+    },
+    AdminSubRole.CONTENT_CREATOR: {
+        Permission.VIEW_ADMIN_PANEL,
+        Permission.CREATE_CONTENT,
+    },
+    AdminSubRole.CONTENT_APPROVER: {
+        Permission.VIEW_ADMIN_PANEL,
+        Permission.CREATE_CONTENT,
+        Permission.PUBLISH_CONTENT,
     },
 }
 
@@ -71,22 +93,22 @@ def require_permission(permission: Permission) -> Callable:
     """FastAPI dependency factory."""
 
     async def _dep(authorize: AuthJWT = Depends()) -> str:
-        authorize.jwt_required()
+        await authorize.jwt_required()
         claims = authorize.get_raw_jwt() or {}
         user_type = claims.get("user_type")
         sub_role = claims.get("admin_sub_role")
         if not has_permission(user_type, sub_role, permission):
             raise ForbiddenException(message=f"Missing permission: {permission.value}")
-        return authorize.get_jwt_subject()
+        return str(authorize.get_jwt_subject())
 
     return _dep
 
 
 async def require_admin(authorize: AuthJWT = Depends()) -> str:
     """Lightweight 'any admin' guard — short-circuits before more specific checks."""
-    authorize.jwt_required()
+    await authorize.jwt_required()
     claims = authorize.get_raw_jwt() or {}
     user_type = (claims.get("user_type") or "").upper()
     if user_type != UserType.ADMIN.value:
         raise ForbiddenException(message="Admin access required")
-    return authorize.get_jwt_subject()
+    return str(authorize.get_jwt_subject())

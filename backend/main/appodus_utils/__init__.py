@@ -4,7 +4,7 @@ from kink import di
 from .common.commons import Utils, RouterUtils, FileUtils, Base64Utils
 from .db.models import (
     AutoRepr, Object, BaseEntity, ModelType, CreateSchemaType, UpdateSchemaType,
-    SearchSchemaType, QuerySchemaType, BaseQueryDto, Page, PageRequest
+    SearchSchemaType, QuerySchemaType, BaseQueryDto, Page, PageRequest, InternalPageRequest
 )
 
 
@@ -21,7 +21,8 @@ __all__ = [
     "QuerySchemaType",
     "BaseQueryDto",
     "Page",
-    "PageRequest"
+    "PageRequest",
+    "InternalPageRequest"
 ]
 
 # Provision some global Dependencies

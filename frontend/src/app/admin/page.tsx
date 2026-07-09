@@ -1,10 +1,6 @@
-import AdminDashboard from "@components/admin/AdminDashboard";
-import { Metadata } from "next";
+import { ROUTES } from "@/lib/routes";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Dashboard | Veriprops Admin",
-};
-
-export default function AdminPage() {
-  return <AdminDashboard />;
+export default function PortalPage() {
+  redirect(ROUTES.ADMIN.DASHBOARD);
 }

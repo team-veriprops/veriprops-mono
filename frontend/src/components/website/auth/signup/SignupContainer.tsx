@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthShell from "../AuthShell";
@@ -18,7 +18,7 @@ import {
   SignupStep2Values,
   SignupStep3Values,
 } from "../schemas";
-import { UserConsent, SignupDraft } from "@components/website/auth/models";
+import { UserConsent, SignupDraft, AuthIntent } from "@components/website/auth/models";
 import {
   loadActiveLocalDraft,
   loadLocalDraft,
@@ -29,18 +29,24 @@ import { ROUTES, isAuthIntent } from "@lib/routes";
 import { resolvePostAuthRedirect } from "@components/website/auth/libs/auth/redirect";
 import { getDeviceFingerprint } from "@components/website/auth/libs/auth/fingerprint";
 import { getErrorMessage } from "@lib/utils";
+import { findCountry } from "@components/website/auth/libs/auth/locale";
 
 const STEPS = ["Account", "Verify", "Residence", "Consent"];
 
-interface DraftPayload extends Partial<SignupStep1Values & SignupStep2Values & SignupStep3Values> {}
+type DraftPayload = Partial<SignupStep1Values & SignupStep2Values & SignupStep3Values>;
 
 export default function SignupContainer() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const intentParam = searchParams.get("intent");
-  const intent = isAuthIntent(intentParam) ? intentParam : "default";
+  const intent = isAuthIntent(intentParam) ? intentParam : AuthIntent.DEFAULT;
   const tier = searchParams.get("tier");
   const redirect = searchParams.get("redirect");
+  // §17.1 referral capture — an unknown code is ignored server-side, never blocks signup.
+  const referralCode = searchParams.get("ref") ?? undefined;
+  const emailParam = searchParams.get("email") ?? "";
+  const firstNameParam = searchParams.get("firstName") ?? "";
+  const lastNameParam = searchParams.get("lastName") ?? "";
 
   const [step, setStep] = useState(0);
   const [step1, setStep1] = useState<SignupStep1Values | null>(null);
@@ -48,6 +54,29 @@ export default function SignupContainer() {
   const [step3, setStep3] = useState<SignupStep3Values | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resumed, setResumed] = useState(false);
+
+  // Pre-populate step 1 from URL params (admin invite flow); only used when
+  // there is no draft to restore.
+  const urlStep1 = useMemo((): SignupStep1Values | null => {
+    if (!emailParam) return null;
+    return { email: emailParam, firstName: firstNameParam, lastName: lastNameParam, password: "" };
+  }, [emailParam, firstNameParam, lastNameParam]);
+
+  // Derive step 3 defaults from the phone country code chosen in step 2.
+  // Left unmemoized (a plain derived value) — React Compiler auto-memoizes
+  // this at build time, and a manual useMemo here couldn't agree with the
+  // compiler's own (more precise) dependency inference.
+  const step3Defaults = ((): Partial<SignupStep3Values> | undefined => {
+    if (step3) return step3;
+    if (!step2?.countryCode) return undefined;
+    const info = findCountry(step2.countryCode);
+    if (!info) return undefined;
+    return {
+      countryOfResidence: step2.countryCode,
+      timezone: info.defaultTimezone,
+      preferredCurrency: info.defaultCurrency,
+    };
+  })();
 
   const signupMutation = useSignupMutation();
 
@@ -94,7 +123,7 @@ export default function SignupContainer() {
           const res = await authService.getSignupDraft(localDraft.email);
           const remote = res.data;
           if (cancelled) return;
-          if (remote && remote.updatedAt >= localDraft.updatedAt) {
+          if (remote && remote.dateUpdated >= localDraft.dateUpdated) {
             applyDraft(remote);
             return;
           }
@@ -113,7 +142,7 @@ export default function SignupContainer() {
       email: next.payload.email,
       step: next.step,
       payload: next.payload,
-      updatedAt: new Date().toISOString(),
+      dateUpdated: new Date().toISOString(),
     };
     saveLocalDraft(draft);
     // Fire-and-forget server sync. Non-fatal: localStorage is sufficient for
@@ -175,6 +204,7 @@ export default function SignupContainer() {
         consents,
         intent,
         deviceFingerprint: getDeviceFingerprint(),
+        referralCode,
       });
 
       clearLocalDraft(step1.email);
@@ -196,7 +226,7 @@ export default function SignupContainer() {
   };
 
   const subtitle =
-    intent === "agent"
+    intent === AuthIntent.AGENT
       ? "Create your Veriprops account first. After this, we'll walk you through the agent application."
       : tier
       ? `Set up your account so we can pre-select the ${tier} tier on your verification.`
@@ -205,7 +235,7 @@ export default function SignupContainer() {
   return (
     <AuthShell>
       <AuthHeading
-        eyebrow={intent === "agent" ? "Step 1 of 2 — agent path" : "Create your account"}
+        eyebrow={intent === AuthIntent.AGENT ? "Step 1 of 2 — agent path" : "Create your account"}
         title="Welcome to Veriprops."
         subtitle={subtitle}
       />
@@ -214,7 +244,7 @@ export default function SignupContainer() {
 
       {step === 0 && (
         <>
-          <AccountBasicsStep defaultValues={step1 ?? undefined} onSubmit={handleStep1} />
+          <AccountBasicsStep defaultValues={step1 ?? urlStep1 ?? undefined} onSubmit={handleStep1} />
           <AuthDivider />
           <SocialAuthButtons verb="Sign up with" intent={intent} />
         </>
@@ -235,7 +265,7 @@ export default function SignupContainer() {
 
       {step === 2 && (
         <ResidenceStep
-          defaultValues={step3 ?? undefined}
+          defaultValues={step3Defaults}
           onSubmit={handleStep3}
           onBack={() => setStep(1)}
         />

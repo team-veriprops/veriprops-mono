@@ -6,7 +6,8 @@ import { ArrowRight, ShieldCheck, UserPlus, LogIn, Briefcase } from "lucide-reac
 import AuthShell from "./AuthShell";
 import AuthHeading from "./AuthHeading";
 import SocialAuthButtons, { AuthDivider } from "./SocialAuthButtons";
-import { ROUTES, isAuthIntent, buildAuthUrl, AuthIntent } from "@lib/routes";
+import { ROUTES, isAuthIntent, buildAuthUrl} from "@lib/routes";
+import { AuthIntent } from "./models";
 
 interface IntentCopy {
   eyebrow: string;
@@ -41,12 +42,19 @@ const COPY: Record<AuthIntent, IntentCopy> = {
     primaryCta: "Create an account",
     secondaryCta: "I already have an account",
   },
+  "invited-admin": {
+    eyebrow: "Admin Invitation",
+    title: "You've been invited.",
+    subtitle: "Sign in or create an account to accept your admin invitation to Veriprops.",
+    primaryCta: "Accept invitation",
+    secondaryCta: "I already have an account",
+  },
 };
 
 export default function AuthGateContainer() {
   const search = useSearchParams();
   const rawIntent = search.get("intent");
-  const intent: AuthIntent = isAuthIntent(rawIntent) ? rawIntent : "default";
+  const intent: AuthIntent = isAuthIntent(rawIntent) ? rawIntent : AuthIntent.DEFAULT;
   const tier = search.get("tier");
   const redirect = search.get("redirect");
 
@@ -57,12 +65,12 @@ export default function AuthGateContainer() {
   return (
     <AuthShell
       panelHeading={
-        intent === "agent" ? "Earn from verified work." : "Verify before you pay."
+        intent === AuthIntent.AGENT ? "Earn from verified work." : "Verify before you pay."
       }
       panelCopy={
-        intent === "agent"
+        intent === AuthIntent.AGENT
           ? "Veriprops connects you with paying customers who need exactly the work you do. Submit on your terms; get paid on time."
-          : "Veriprops independently checks ownership, encumbrances, boundaries and physical reality of any Nigerian property — before you wire a single naira."
+          : "Veriprops independently checks ownership, encumbrances, boundaries and physical reality of any Nigerian property; before you wire a single naira."
       }
     >
       <AuthHeading eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.subtitle} />
@@ -74,7 +82,7 @@ export default function AuthGateContainer() {
           style={{ boxShadow: "0 8px 24px -6px rgba(0,13,34,0.3)" }}
         >
           <span className="inline-flex items-center gap-3">
-            {intent === "agent" ? (
+            {intent === AuthIntent.AGENT ? (
               <Briefcase className="w-5 h-5" strokeWidth={2.2} />
             ) : (
               <UserPlus className="w-5 h-5" strokeWidth={2.2} />
@@ -113,7 +121,7 @@ export default function AuthGateContainer() {
         <p className="text-xs leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
           We never ask for your bank details, send payment links via DM, or use your data for anything beyond
           delivering verifications. Read our{" "}
-          <Link href="/legal/privacy" className="font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <Link href={ROUTES.LEGAL.PRIVACY} className="font-semibold" style={{ color: "var(--brand-navy)" }}>
             Privacy Policy
           </Link>
           .

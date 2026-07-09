@@ -1,77 +1,54 @@
-"""Admin invitation HTTP routes — PRD Phase 4.
-
-URL shape: `/users/admin-invitations/...`
-
-The /accept endpoint is authentication-aware: it succeeds with no JWT for
-new-account or already-admin branches, and requires a JWT for the merge
-branch where the invitee already has a non-admin account.
-"""
+"""Admin invitation controller (PRD §4.1). URL shape: /users/admins/invitations/..."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from loguru import Logger
-
-from typing import Optional
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends, Query, Request
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
 from main.app.domain.user.admin_invitation.models import (
-    AcceptInviteRequestDto,
-    AcceptInviteResultDto,
-    AdminInvitationDto,
-    AdminInvitationStatus,
+    AdminInvitationSummaryDto,
     InviteAdminRequestDto,
-    InviteAdminResultDto,
+    InvitePreviewDto,
 )
 from main.app.domain.user.admin_invitation.service import AdminInvitationService
-from main.app.domain.user.auth.utils.permissions import (
-    Permission,
-    require_permission,
-)
+from main.app.domain.user.auth.utils.permissions import Permission, require_permission
+from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.db.models import Page, SuccessResponse
 
-logger: Logger = di["logger"]
-
+admin_invitation_router = APIRouter(prefix="/admins/invitations", tags=["Admin Invitations"])
 invitation_service: AdminInvitationService = di[AdminInvitationService]
 
-admin_invitation_router = APIRouter(prefix="/admin-invitations", tags=["Admin Invitations"])
 
-
-@admin_invitation_router.post(
-    "",
-    response_model=SuccessResponse[InviteAdminResultDto],
-)
-async def invite(
+@admin_invitation_router.post("", response_model=SuccessResponse[dict])
+async def invite_admin(
     req: InviteAdminRequestDto,
-    inviter_admin_id: str = Depends(require_permission(Permission.INVITE_ADMIN)),
+    request: Request,
+    admin_id: str = Depends(require_permission(Permission.INVITE_ADMIN)),
 ):
-    result = await invitation_service.invite(
-        inviter_admin_id=inviter_admin_id,
-        email=req.email,
-        sub_role=req.sub_role,
+    raw_token = await invitation_service.invite(
+        email=req.email, sub_role=req.sub_role, invited_by=admin_id,
+        first_name=req.first_name, last_name=req.last_name,
+        ip_address=ClientUtils.get_client_ip(request),
     )
-    return SuccessResponse[InviteAdminResultDto](data=result)
+    domain = ClientUtils.get_referer_domain(request)
+    invite_url = f"{domain}/auth/admin-invite/{raw_token}"
+    # The link is returned to the inviting Super Admin to deliver (email template
+    # wiring is a follow-up; in dev the admin shares the link directly).
+    return SuccessResponse[dict](data={"inviteUrl": invite_url})
 
 
-@admin_invitation_router.get(
-    "",
-    response_model=Page[AdminInvitationDto],
-)
-async def list_invites(
-    status: Optional[AdminInvitationStatus] = None,
-    _: str = Depends(require_permission(Permission.INVITE_ADMIN)),
+@admin_invitation_router.get("", response_model=SuccessResponse[Page[AdminInvitationSummaryDto]])
+async def list_invitations(
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=10, ge=1, le=100),
+    _admin_id: str = Depends(require_permission(Permission.INVITE_ADMIN)),
 ):
-    return await invitation_service.list(status=status)
+    result = await invitation_service.list_invitations(page=page, page_size=page_size)
+    return SuccessResponse[Page[AdminInvitationSummaryDto]](data=result)
 
 
-@admin_invitation_router.post(
-    "/{invitation_id}/revoke",
-    response_model=SuccessResponse[bool],
-)
-async def revoke(
+@admin_invitation_router.post("/{invitation_id}/revoke", response_model=SuccessResponse[bool])
+async def revoke_invitation(
     invitation_id: str,
     admin_id: str = Depends(require_permission(Permission.INVITE_ADMIN)),
 ):
@@ -79,20 +56,16 @@ async def revoke(
     return SuccessResponse[bool](data=True)
 
 
-@admin_invitation_router.post(
-    "/accept",
-    response_model=SuccessResponse[AcceptInviteResultDto],
-)
-async def accept(
-    req: AcceptInviteRequestDto,
-    authorize: AuthJWT = Depends(),
-):
-    # Optional auth: accept the request whether or not the caller is signed in;
-    # the service decides which branch to take.
-    try:
-        authorize.jwt_optional()
-    except Exception:
-        pass
-    current_user_id = authorize.get_jwt_subject()
-    result = await invitation_service.accept(req.token, current_user_id=current_user_id)
-    return SuccessResponse[AcceptInviteResultDto](data=result)
+@admin_invitation_router.get("/preview/{token}", response_model=SuccessResponse[InvitePreviewDto])
+async def preview_invitation(token: str):
+    """Unauthenticated preview so the frontend can route the acceptance flow."""
+    preview = await invitation_service.preview(token)
+    return SuccessResponse[InvitePreviewDto](data=preview)
+
+
+@admin_invitation_router.post("/accept", response_model=SuccessResponse[dict])
+async def accept_invitation(token: str = Body(..., embed=True), authorize: AuthJWT = Depends()):
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
+    sub_role = await invitation_service.accept(token, user_id)
+    return SuccessResponse[dict](data={"subRole": sub_role.value})

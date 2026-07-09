@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from main.app.domain.user.auth.models import AuthIntent
 from main.app.domain.user.auth.oauth.providers.models import (
     OAuthCallbackRequestDto,
     OAuthFlowMode,
@@ -20,7 +21,7 @@ class ISocialAuthProvider(ABC):
     async def initialize(
         self,
         request: Request,
-        intent: Optional[str] = None,
+        intent: Optional[AuthIntent] = None,
         mode: OAuthFlowMode = OAuthFlowMode.AUTH,
         link_user_id: Optional[str] = None,
     ) -> str:

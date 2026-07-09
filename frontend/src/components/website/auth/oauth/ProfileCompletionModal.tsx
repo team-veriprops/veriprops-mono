@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
 import { Button } from "@3rdparty/ui/button";
 import VerifiedInput, { VerifiedInputType } from "@components/ui/verified_input/VerifiedInput";
+import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
 import { profileCompletionSchema, type ProfileCompletionValues } from "../schemas";
 import {
   RESIDENCE_COUNTRIES,
@@ -15,13 +16,13 @@ import {
   suggestTimezoneForCountry,
 } from "@components/website/auth/libs/auth/locale";
 import { CURRENCY_NAMES, TransactionCurrency } from "@/types/models";
-import { OtpChannel, AuthUser } from "@components/website/auth/models";
+import { OtpChannel, AuthUser, AuthIntent } from "@components/website/auth/models";
 import {
   useCompleteProfileMutation,
   useSendOtpMutation,
   useVerifyOtpMutation,
+  usePublicConfigQuery,
 } from "../libs/useAuthQueries";
-import { AuthIntent } from "@lib/routes";
 import { getErrorMessage } from "@lib/utils";
 
 interface Props {
@@ -31,11 +32,22 @@ interface Props {
   onComplete: () => void;
 }
 
+// Mirrors the `phone` field constraints in verifyFormSchema. Also rejects the
+// synthetic placeholder AuthService.find_or_create_oauth_user seeds new OAuth
+// signups with ("0000000000") — it's shaped like a valid number, so it must
+// be excluded explicitly or a user could complete their profile without ever
+// entering a real one.
+const OAUTH_PLACEHOLDER_PHONE = "0000000000";
+const isValidPhoneNumber = (phone: string) =>
+  /^\d{7,15}$/.test(phone) && phone !== OAUTH_PLACEHOLDER_PHONE;
+
 export default function ProfileCompletionModal({ open, user, onComplete }: Props) {
   const browserTz = useMemo(() => detectBrowserTimezone(), []);
   const completeMutation = useCompleteProfileMutation();
   const sendOtp = useSendOtpMutation();
   const verifyOtp = useVerifyOtpMutation();
+  const { data: publicConfig } = usePublicConfigQuery();
+  const phoneVerificationEnabled = publicConfig?.phoneVerificationEnabled ?? true;
 
   // We reuse VerifiedInput which expects the verifyFormSchema shape, plus we
   // augment with country/timezone/currency. Use a single form for everything.
@@ -58,7 +70,20 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
     mode: "onBlur",
   });
 
-  const country = form.watch("countryOfResidence");
+  const country = useWatch({ control: form.control, name: "countryOfResidence" });
+  const preferredCurrency = useWatch({ control: form.control, name: "preferredCurrency" });
+  const phone = useWatch({ control: form.control, name: "phone" });
+
+  // Phone is always required, whether or not it needs to be OTP-verified here.
+  // When verification is off, the number is still collected — so we satisfy
+  // the "verified" refine only once the number itself passes its own
+  // validation, rather than unconditionally, so a placeholder/blank value
+  // (e.g. the OAuth signup placeholder) can't slip through unedited.
+  useEffect(() => {
+    if (!phoneVerificationEnabled) {
+      form.setValue("phoneVerified", isValidPhoneNumber(phone) as never, { shouldValidate: true });
+    }
+  }, [phoneVerificationEnabled, phone, form]);
 
   useEffect(() => {
     if (!country) return;
@@ -102,46 +127,66 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
         </p>
 
         <form className="space-y-5 mt-4" onSubmit={form.handleSubmit(onSubmit as never)} noValidate>
-          <VerifiedInput
-            form={form as never}
-            field="phone"
-            label="Phone"
-            type={VerifiedInputType.PHONE}
-            placeholder="0801 234 5678"
-            onSendVerificationMessage={({ onSuccess, onError }) => {
-              const v = form.getValues();
-              sendOtp.mutate(
-                {
-                  channel: OtpChannel.PHONE,
-                  countryCode: v.countryCode,
-                  dialCode: v.dialCode,
-                  phone: v.phone,
-                },
-                {
-                  onSuccess: () => onSuccess(),
-                  onError: (err) =>
-                    onError(getErrorMessage(err as Error, "Could not send code.")),
-                },
-              );
-            }}
-            onValidateVerificationOtp={({ otp, onSuccess, onError }) => {
-              const v = form.getValues();
-              verifyOtp.mutate(
-                {
-                  channel: OtpChannel.PHONE,
-                  countryCode: v.countryCode,
-                  dialCode: v.dialCode,
-                  phone: v.phone,
-                  code: otp ?? "",
-                },
-                {
-                  onSuccess: () => onSuccess(),
-                  onError: (err) =>
-                    onError(getErrorMessage(err as Error, "That code didn't match.")),
-                },
-              );
-            }}
-          />
+          {phoneVerificationEnabled ? (
+            <VerifiedInput
+              form={form as never}
+              field="phone"
+              label="Phone"
+              type={VerifiedInputType.PHONE}
+              placeholder="0801 234 5678"
+              onSendVerificationMessage={({ onSuccess, onError }) => {
+                const v = form.getValues();
+                sendOtp.mutate(
+                  {
+                    channel: OtpChannel.PHONE,
+                    countryCode: v.countryCode,
+                    dialCode: v.dialCode,
+                    phone: v.phone,
+                  },
+                  {
+                    onSuccess: () => onSuccess(),
+                    onError: (err) =>
+                      onError(getErrorMessage(err as Error, "Could not send code.")),
+                  },
+                );
+              }}
+              onValidateVerificationOtp={({ otp, onSuccess, onError }) => {
+                const v = form.getValues();
+                verifyOtp.mutate(
+                  {
+                    channel: OtpChannel.PHONE,
+                    countryCode: v.countryCode,
+                    dialCode: v.dialCode,
+                    phone: v.phone,
+                    code: otp ?? "",
+                  },
+                  {
+                    onSuccess: () => onSuccess(),
+                    onError: (err) =>
+                      onError(getErrorMessage(err as Error, "That code didn't match.")),
+                  },
+                );
+              }}
+            />
+          ) : (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Phone <span className="text-destructive">*</span>
+              </label>
+              <PhoneInputWithCountry
+                form={form as never}
+                isVerified={false}
+                onChanged={() => {}}
+                placeholder="0801 234 5678"
+              />
+              {(form.formState.touchedFields.phone || form.formState.isSubmitted) &&
+                (form.formState.errors.phone || form.formState.errors.phoneVerified) && (
+                <p className="text-sm text-destructive">
+                  {form.formState.errors.phone?.message ?? "Please enter your phone number"}
+                </p>
+              )}
+            </div>
+          )}
 
           <Field label="Country of residence" error={form.formState.errors.countryOfResidence?.message}>
             <select
@@ -173,7 +218,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
           <Field label="Preferred currency" error={form.formState.errors.preferredCurrency?.message}>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {SUPPORTED_CURRENCIES.map((c) => {
-                const selected = form.watch("preferredCurrency") === c;
+                const selected = preferredCurrency === c;
                 return (
                   <button
                     key={c}

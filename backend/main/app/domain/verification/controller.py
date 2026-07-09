@@ -1,120 +1,156 @@
-"""Verification HTTP routes — PRD Phase 5+.
-
-URL shape: `/verifications/...`
-"""
+"""Verification submission controller (PRD §5). URL shape: /verifications/..."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from loguru import Logger
+import json
+from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
+from main.app.core.state.status import VerificationTier
 from main.app.domain.verification.models import (
-    ConsentsAcceptedDto,
-    PricingSnapshotDto,
-    TierSelectionDto,
+    PriceQuoteDto,
+    PriceRefreshDto,
+    SaveVerificationDraftDto,
+    SubmitVerificationDto,
+    Verification,
+    VerificationDraftDto,
     VerificationDto,
-    VerificationTier,
-    WizardStepDto,
 )
-from main.app.domain.verification.pricing.service import PricingService
 from main.app.domain.verification.service import VerificationService
+from main.app.domain.verification.tracking.models import CustomerDashboardDto
+from main.app.domain.verification.tracking.service import CustomerTrackingService
 from main.appodus_utils.common.client_utils import ClientUtils
-from main.appodus_utils.db.models import Page, SuccessResponse
-
-logger: Logger = di["logger"]
-
-verification_service: VerificationService = di[VerificationService]
-pricing_service: PricingService = di[PricingService]
+from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.db.types.money import TransactionCurrency
+from main.appodus_utils.integrations.geocoding.factory import GeocoderFactory
+from main.appodus_utils.integrations.geocoding.models import GeoLocation, GeoSuggestion
 
 verification_router = APIRouter(prefix="/verifications", tags=["Verifications"])
+verification_service: VerificationService = di[VerificationService]
+tracking_service: CustomerTrackingService = di[CustomerTrackingService]
+geocoder_factory: GeocoderFactory = di[GeocoderFactory]
 
 
-@verification_router.get("/me", response_model=SuccessResponse[VerificationDto])
-async def get_my_active_draft(authorize: AuthJWT = Depends()):
-    """Return the active DRAFT for the caller, creating one if none exists."""
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
-    dto = await verification_service.create_or_resume_draft(user_id)
-    return SuccessResponse[VerificationDto](data=dto)
+def _to_dto(v: Verification) -> VerificationDto:
+    return VerificationDto(
+        id=v.id,
+        vid=v.vid,
+        status=v.status,
+        tier=VerificationTier(v.tier) if v.tier else None,
+        property_id=v.property_id,
+        price_locked_minor=v.price_locked_minor,
+        currency=TransactionCurrency(v.currency),
+        charge_currency=TransactionCurrency(v.charge_currency) if v.charge_currency else None,
+        charge_amount_minor=v.charge_amount_minor,
+        fx_rate_at_quote=v.fx_rate_at_quote,
+        price_lock_expires_at=v.price_lock_expires_at,
+        first_time_discount_minor=v.first_time_discount_minor or 0,
+        referral_credit_applied_minor=v.referral_credit_applied_minor or 0,
+        paid_at=v.paid_at,
+        sla_due_date=v.sla_due_date,
+        draft_step=v.draft_step or 0,
+    )
+
+
+def _to_draft_dto(v: Verification) -> VerificationDraftDto:
+    return VerificationDraftDto(
+        id=v.id,
+        vid=v.vid,
+        status=v.status,
+        step=v.draft_step or 0,
+        payload=json.loads(v.draft_payload) if v.draft_payload else {},
+    )
+
+
+@verification_router.post("/draft", response_model=SuccessResponse[VerificationDraftDto])
+async def create_draft(
+    authorize: AuthJWT = Depends(),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    v = await verification_service.create_draft(customer_id, idempotency_key=idempotency_key)
+    return SuccessResponse[VerificationDraftDto](data=_to_draft_dto(v))
+
+
+@verification_router.put("/{verification_id}/draft", response_model=SuccessResponse[VerificationDraftDto])
+async def save_draft(verification_id: str, req: SaveVerificationDraftDto, authorize: AuthJWT = Depends()):
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    v = await verification_service.save_draft(verification_id, customer_id, req)
+    return SuccessResponse[VerificationDraftDto](data=_to_draft_dto(v))
+
+
+@verification_router.get("/geo/autocomplete", response_model=SuccessResponse[list[GeoSuggestion]])
+async def geo_autocomplete(q: str = Query(...), authorize: AuthJWT = Depends()):
+    await authorize.jwt_required()
+    suggestions = await geocoder_factory.get_active_provider().autocomplete(q, country="NG")
+    return SuccessResponse[list[GeoSuggestion]](data=suggestions)
+
+
+@verification_router.get("/geo/place/{place_id}", response_model=SuccessResponse[Optional[GeoLocation]])
+async def geo_place(place_id: str, authorize: AuthJWT = Depends()):
+    await authorize.jwt_required()
+    loc = await geocoder_factory.get_active_provider().geocode(place_id)
+    return SuccessResponse[Optional[GeoLocation]](data=loc)
+
+
+@verification_router.get("/quote", response_model=SuccessResponse[PriceQuoteDto])
+async def get_quote(
+    tier: VerificationTier = Query(...),
+    currency: TransactionCurrency = Query(default=TransactionCurrency.NGN),
+    authorize: AuthJWT = Depends(),
+):
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    return SuccessResponse[PriceQuoteDto](data=await verification_service.quote(customer_id, tier, currency))
+
+
+@verification_router.get("/summary", response_model=SuccessResponse[CustomerDashboardDto])
+async def get_dashboard_summary(authorize: AuthJWT = Depends()):
+    """Portal home summary (§9). Registered on this root router *before* the greedy
+    ``/{verification_id}`` route so the literal path wins; delegates to the tracking
+    service which owns the customer-facing projection."""
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    return SuccessResponse[CustomerDashboardDto](data=await tracking_service.summary(customer_id))
 
 
 @verification_router.get("/{verification_id}", response_model=SuccessResponse[VerificationDto])
 async def get_verification(verification_id: str, authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
-    dto = await verification_service.get(verification_id, user_id)
-    return SuccessResponse[VerificationDto](data=dto)
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    v = await verification_service.get_owned(verification_id, customer_id)
+    return SuccessResponse[VerificationDto](data=_to_dto(v))
 
 
-@verification_router.post("/{verification_id}/draft", response_model=SuccessResponse[VerificationDto])
-async def update_draft(
-    verification_id: str, req: WizardStepDto, authorize: AuthJWT = Depends(),
-):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
-    dto = await verification_service.update_draft_step(user_id, verification_id, req)
-    return SuccessResponse[VerificationDto](data=dto)
+@verification_router.get("/{verification_id}/draft", response_model=SuccessResponse[VerificationDraftDto])
+async def get_draft(verification_id: str, authorize: AuthJWT = Depends()):
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    v = await verification_service.get_owned(verification_id, customer_id)
+    return SuccessResponse[VerificationDraftDto](data=_to_draft_dto(v))
 
 
-@verification_router.post(
-    "/{verification_id}/tier",
-    response_model=SuccessResponse[VerificationDto],
-)
-async def select_tier(
-    verification_id: str, req: TierSelectionDto, authorize: AuthJWT = Depends(),
-):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
-    dto = await verification_service.select_tier(user_id, verification_id, req.tier, req.currency)
-    return SuccessResponse[VerificationDto](data=dto)
+@verification_router.post("/{verification_id}/refresh-lock", response_model=SuccessResponse[PriceRefreshDto])
+async def refresh_price_lock(verification_id: str, authorize: AuthJWT = Depends()):
+    """Re-lock an expired price before payment (§17.1). The response's ``priceChanged`` drives
+    the mandatory "price updated" interstitial so the customer is never silently re-charged."""
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    result = await verification_service.refresh_price_lock_if_expired(verification_id, customer_id)
+    return SuccessResponse[PriceRefreshDto](data=result)
 
 
-@verification_router.post(
-    "/{verification_id}/submit",
-    response_model=SuccessResponse[VerificationDto],
-)
+@verification_router.post("/{verification_id}/submit", response_model=SuccessResponse[VerificationDto])
 async def submit_verification(
-    verification_id: str,
-    req: ConsentsAcceptedDto,
-    request: Request,
-    authorize: AuthJWT = Depends(),
+    verification_id: str, req: SubmitVerificationDto, request: Request, authorize: AuthJWT = Depends()
 ):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
-    dto = await verification_service.submit(
-        user_id,
-        verification_id,
-        req.consents,
-        ip_address=ClientUtils.get_client_ip(request),
-        device_fingerprint=request.headers.get("X-Device-Fingerprint"),
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    v = await verification_service.submit(
+        verification_id, customer_id, req, ip_address=ClientUtils.get_client_ip(request)
     )
-    return SuccessResponse[VerificationDto](data=dto)
-
-
-@verification_router.get("/me/list", response_model=Page)
-async def list_my_verifications(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    authorize: AuthJWT = Depends(),
-):
-    authorize.jwt_required()
-    user_id = authorize.get_jwt_subject()
-    return await verification_service.list_for_customer(user_id, page=page, page_size=page_size)
-
-
-# ── Pricing endpoints (public quote, no auth) ───────────────────
-
-
-@verification_router.get(
-    "/pricing/quote",
-    response_model=SuccessResponse[PricingSnapshotDto],
-)
-async def quote_pricing(
-    tier: VerificationTier = Query(VerificationTier.STANDARD),
-    currency: str = Query("NGN"),
-):
-    return SuccessResponse[PricingSnapshotDto](data=pricing_service.quote(tier, currency))
+    return SuccessResponse[VerificationDto](data=_to_dto(v))

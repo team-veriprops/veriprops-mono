@@ -1,5 +1,5 @@
 # ---- Base Python Image ----
-FROM python:3.11-slim-bullseye
+FROM python:3.12-slim-bookworm
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \

@@ -43,12 +43,12 @@ class TestOtpKeys:
 
 class TestRecipientFor:
     def test_email_channel_returns_lowercased_email(self):
-        assert recipient_for(OtpChannel.EMAIL, email="Foo@Example.com",
-                             dial_code=None, phone=None) == "foo@example.com"
+        result = recipient_for(OtpChannel.EMAIL, email="Foo@Example.com", dial_code=None, phone=None)
+        assert result.email == "foo@example.com"
 
     def test_phone_channel_builds_e164(self):
-        assert recipient_for(OtpChannel.PHONE, email=None,
-                             dial_code="+234", phone="8012345678") == "+2348012345678"
+        result = recipient_for(OtpChannel.PHONE, email=None, dial_code="+234", phone="8012345678")
+        assert result.international_number == "+2348012345678"
 
     def test_email_channel_without_email_raises(self):
         with pytest.raises(InvalidTokenException):

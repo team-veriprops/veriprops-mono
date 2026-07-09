@@ -52,6 +52,9 @@ class UserService:
     async def get_user_by_email(self, email: str) -> Optional[User]:
         return await self._user_repo.get_by_email(email)
 
+    async def get_user_by_phone_e164(self, phone_e164: str) -> Optional[User]:
+        return await self._user_repo.get_by_phone_e164(phone_e164)
+
     # ── Writes ────────────────────────────────────────────────────
     async def create_user(self, dto: CreateUserDto) -> User:
         await self._user_validator.should_not_exist_by_email(dto.email)

@@ -31,39 +31,39 @@ DRAFT_TTL = timedelta(days=7)
 @decorate_all_methods(transactional(), exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class SignupDraftService:
-    def __init__(self, repo: SignupDraftRepo):
-        self._repo = repo
+    def __init__(self, signup_draft_repo: SignupDraftRepo):
+        self._signup_draft_repo = signup_draft_repo
 
     async def upsert(self, *, email: str, step: int, payload: Dict[str, Any]) -> SignupDraftDto:
         normalised = email.lower()
         encoded = json.dumps(payload)
         expires_at = Utils.datetime_now_plus(seconds=int(DRAFT_TTL.total_seconds()))
 
-        existing = await self._repo.get_active_by_email(normalised)
+        existing = await self._signup_draft_repo.get_active_by_email(normalised)
         if existing:
-            await self._repo.update(
+            await self._signup_draft_repo.update(
                 str(existing.id),
                 UpdateSignupDraftDto(step=step, payload=encoded, expires_at=expires_at),
             )
-            row = await self._repo.get_active_by_email(normalised)
+            row = await self._signup_draft_repo.get_active_by_email(normalised)
         else:
-            await self._repo.create(CreateSignupDraftDto(
+            await self._signup_draft_repo.create(CreateSignupDraftDto(
                 email=normalised, step=step, payload=encoded, expires_at=expires_at,
             ))
-            row = await self._repo.get_active_by_email(normalised)
+            row = await self._signup_draft_repo.get_active_by_email(normalised)
 
         return self._to_dto(row)
 
     async def get(self, email: str) -> Optional[SignupDraftDto]:
-        row = await self._repo.get_active_by_email(email.lower())
+        row = await self._signup_draft_repo.get_active_by_email(email.lower())
         return self._to_dto(row) if row else None
 
     async def discard(self, email: str) -> None:
-        existing = await self._repo.get_active_by_email(email.lower())
+        existing = await self._signup_draft_repo.get_active_by_email(email.lower())
         if existing:
             # Soft-delete via GenericRepo; deleted rows are excluded by
             # `get_active_by_email` so a fresh signup will create a new draft.
-            await self._repo.delete(str(existing.id))
+            await self._signup_draft_repo.soft_delete(str(existing.id))
 
     @staticmethod
     def _to_dto(row: Optional[SignupDraft]) -> Optional[SignupDraftDto]:
@@ -78,5 +78,5 @@ class SignupDraftService:
             email=row.email,
             step=row.step,
             payload=payload,
-            updated_at=row.date_updated or row.date_created,
+            date_updated=row.date_updated or row.date_created,
         )

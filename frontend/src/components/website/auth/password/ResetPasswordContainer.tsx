@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, ShieldCheck, AlertTriangle } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
@@ -34,7 +34,7 @@ export default function ResetPasswordContainer({ token }: Props) {
     mode: "onBlur",
   });
 
-  const password = form.watch("password");
+  const password = useWatch({ control: form.control, name: "password" });
 
   const onSubmit = async (values: ResetPasswordValues) => {
     setErrorMessage(null);
@@ -77,7 +77,7 @@ export default function ResetPasswordContainer({ token }: Props) {
         </p>
       </div>
 
-      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="reset-password-form">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
             New password
@@ -88,6 +88,7 @@ export default function ResetPasswordContainer({ token }: Props) {
               autoComplete="new-password"
               placeholder="At least 8 characters"
               className="pr-10"
+              data-testid="reset-password-password"
               {...form.register("password")}
             />
             <button

@@ -131,6 +131,17 @@ class InvalidResourceStateException(AppodusBaseException):
         )
 
 
+class IllegalStateTransitionException(InvalidResourceStateException):
+    """Raised when a state-machine transition is not permitted (PRD §0.2 / §0.3)."""
+    def __init__(self, resource: str, from_state: str, to_state: str, message: str = None):
+        super().__init__(
+            resource=resource,
+            message=message or f"{resource}: illegal transition {from_state} → {to_state}",
+        )
+        self.from_state = from_state
+        self.to_state = to_state
+
+
 # ────────────────────────────────
 # Validation
 # ────────────────────────────────

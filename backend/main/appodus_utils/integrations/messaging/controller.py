@@ -12,6 +12,7 @@ from kink import di
 from starlette import status
 
 from main.app.config.settings import settings
+from main.appodus_utils.config.settings import SECRET_PLACEHOLDER
 
 messagin_router = APIRouter(prefix="/webhooks")
 
@@ -51,7 +52,8 @@ async def handle_whatsapp_webhook(
     logger.info("Message signature checked ok")
     body = await request.json()
 
-    logger.info(f"Request body: {body}")
+    # Do not log the full webhook body — it carries message content / PII.
+    logger.debug("WhatsApp webhook received with %d entries", len(body.get("entry", [])))
     # payload = FacebookPageWebhookPayload(**body)
 
     for entry in body.get("entry", []):
@@ -73,16 +75,23 @@ async def handle_whatsapp_webhook(
 
 async def _validate_signature(request: Request, signature: str) -> bool:
     """
-    Validate the X-Hub-Signature to ensure the request is from Facebook.
+    Validate the X-Hub-Signature-256 to ensure the request is from WhatsApp/Meta.
     """
     if not signature or not signature.startswith("sha256="):
+        return False
+
+    # The WhatsApp Business webhook is HMAC-signed with the app secret. A missing/
+    # placeholder secret means the integration is misconfigured — fail closed.
+    app_secret = settings.WHATSAPP_APP_SECRET_KEY
+    if not app_secret or app_secret == SECRET_PLACEHOLDER:
+        logger.error("WhatsApp webhook signature check skipped — WHATSAPP_APP_SECRET_KEY is not configured")
         return False
 
     try:
         body = await request.body()
         expected_signature = hmac.new(
-            settings.FACEBOOK_APP_SECRET_KEY.encode(), body, hashlib.sha256
+            app_secret.encode(), body, hashlib.sha256
         ).hexdigest()
         return hmac.compare_digest(signature.split("=")[1], expected_signature)
-    except Exception as e:
+    except Exception:
         return False

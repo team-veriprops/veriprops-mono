@@ -3,19 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Plus, Clock } from "lucide-react";
-import { pricingTiers, fxRates } from "./home.data";
-
-const currencies = ["NGN", "USD", "GBP", "EUR"] as const;
-type Currency = (typeof currencies)[number];
-
-function formatPrice(priceNGN: number, currency: Currency): string {
-  const { symbol, rate } = fxRates[currency];
-  const amount = priceNGN * rate;
-  if (currency === "NGN") {
-    return `${symbol}${(amount / 1000).toFixed(0)}k`;
-  }
-  return `${symbol}${amount.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
-}
+import { pricingTiers, currencies, formatPrice, CTA_VERIFY_HREF, type Currency } from "./home.data";
 
 export default function PricingSection() {
   const [currency, setCurrency] = useState<Currency>("NGN");
@@ -187,7 +175,7 @@ export default function PricingSection() {
 
                 {/* CTA button */}
                 <Link
-                  href={`/auth/login?intent=verify&tier=${tier.name.toLowerCase()}`}
+                  href={`${CTA_VERIFY_HREF}&tier=${tier.name.toLowerCase()}`}
                   className="block text-center py-4 rounded-xl font-bold text-sm transition-all duration-200 hover:scale-[0.98] active:scale-95"
                   style={
                     tier.ctaStyle === "gradient"

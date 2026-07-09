@@ -63,7 +63,7 @@ def _user_to_session_dto(user: User, has_password: bool, linked: List[str]) -> S
         has_password=has_password,
         linked_providers=[SocialAuthProvider(p) for p in linked if p in {sp.value for sp in SocialAuthProvider}],
         avatar_url=user.avatar_url,
-        created_at=user.date_created,
+        date_created=user.date_created,
     )
 
 @inject
@@ -93,7 +93,7 @@ class SessionService:
         user_service: UserService = di[UserService]
 
         user = await user_service.get_user_by_email(req.email)
-        now = datetime.now(timezone.utc)
+        now = Utils.datetime_now()
 
         if user and user.locked_until and user.locked_until > now:
             await self.record_event(
@@ -280,6 +280,28 @@ class SessionService:
     async def list_recent_events(self, user_id: str, limit: int = 50) -> List[SecurityEvent]:
         return await self._event_repo.list_recent_for_user(user_id, limit=limit)
 
+    async def page_security_events(self, user_id: str, page: int = 0, page_size: int = 20):
+        """Paginated Security Activity Log (PRD pagination convention, zero-indexed)."""
+        from main.app.domain.user.auth.session.models import SecurityEventDto
+        from main.appodus_utils.db.db_utils import DbUtils
+
+        rows, total = await self._event_repo.page_for_user(
+            user_id, offset=page * page_size, limit=page_size
+        )
+        items = [
+            SecurityEventDto(
+                id=str(e.id),
+                type=e.type,
+                description=e.description,
+                ip_address=e.ip_address,
+                approx_location=e.approx_location,
+                device=e.device,
+                occurred_at=e.occurred_at,
+            )
+            for e in rows
+        ]
+        return DbUtils.build_page(items, total=total, page=page, page_size=page_size)
+
     # ── Password reset token ─────────────────────────────────────
     async def create_password_reset_token(
             self, user_id: str, token_hash: str, expires_at: datetime,
@@ -292,7 +314,7 @@ class SessionService:
         token = await self._reset_repo.get_by_token_hash(token_hash)
         if not token:
             return None
-        if token.expires_at and token.expires_at <= datetime.now(timezone.utc):
+        if token.expires_at and token.expires_at <= Utils.datetime_now():
             return None
         await self._reset_repo.update(
             str(token.id), UpdatePasswordResetTokenDto(consumed_at=Utils.datetime_now()),

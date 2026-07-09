@@ -572,7 +572,7 @@
 #             # Get VAPID settings from config
 #             vapid_private_key = settings.WEB_PUSH_PRIVATE_KEY
 #             vapid_claims = {
-#                 "sub": f"mailto:{settings.WEB_PUSH_SUBJECT_EMAIL}"
+#                 "sub": f"mailto:{settings.WEB_PUSH_CONTACT_EMAIL}"
 #             }
 #
 #             # Send the web push

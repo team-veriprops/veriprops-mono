@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Shield, Users } from "lucide-react";
+import { CTA_VERIFY_HREF, CTA_AGENT_HREF } from "./home.data";
 
 export default function CTASection() {
   return (
@@ -50,20 +51,19 @@ export default function CTASection() {
                 }}
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                ✅ Veriprops Verified
+                Verify before you pay
               </div>
 
               <h2
                 className="text-4xl md:text-5xl font-extrabold editorial-spacing font-display leading-[1.1] text-white mb-6"
               >
-                Your legacy is too valuable{" "}
-                <span style={{ color: "#a5d0b9" }}>to risk on hearsay.</span>
+                You&apos;ve worked too hard{" "}
+                <span style={{ color: "#a5d0b9" }}>to risk it on hearsay.</span>
               </h2>
 
               <p className="text-lg leading-relaxed mb-10 text-white/70 max-w-lg">
-                Veriprops provides the sovereign certainty required to build
-                generational wealth in Nigeria — from anywhere in the world.
-                Verify everything. Trust nothing blindly.
+                Get started in under five minutes. Your Verification ID is assigned the moment you 
+                submit — and our team gets to work.
               </p>
 
               {/* Disclaimer */}
@@ -82,7 +82,7 @@ export default function CTASection() {
               {/* CTAs */}
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
-                  href="/auth/login?intent=verify"
+                  href={CTA_VERIFY_HREF}
                   className="group inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:opacity-90 hover:scale-[0.98]"
                   style={{
                     backgroundColor: "var(--brand-viridian)",
@@ -94,7 +94,7 @@ export default function CTASection() {
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <Link
-                  href="/auth/login?intent=agent"
+                  href={CTA_AGENT_HREF}
                   className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:bg-white/10"
                   style={{
                     color: "#fff",

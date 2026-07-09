@@ -1,12 +1,15 @@
+import { ROUTES, buildAuthUrl } from "./routes";
+
 export interface HttpClient {
-  get<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
-  post<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
-  put<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
-  patch<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
-  delete<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
+  get<T = unknown>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
+  getBlob(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<Blob>;
+  post<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
+  put<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
+  patch<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R>;
+  delete<T = unknown>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
 }
 
-export class HttpError<T = any> extends Error {
+export class HttpError<T = unknown> extends Error {
   status?: string;
   url: string;
   body?: T;
@@ -31,7 +34,7 @@ export class FetchHttpClient implements HttpClient {
 
   private async request<T>(
     url: string,
-    options: RequestInit & { _retry?: boolean; timeout?: number } = {}
+    options: RequestInit & { _retry?: boolean; timeout?: number; _responseType?: 'blob' } = {}
   ): Promise<T> {
     const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
@@ -53,7 +56,7 @@ export class FetchHttpClient implements HttpClient {
       headers["X-TIMEZONE"] = timezone;
       headers["X-LOCALE"] = locale;
 
-      const csrfToken = this.getCookie("csrf_access");
+      const csrfToken = this.getCookie("__Host-access_csrf_token");
       if (csrfToken) {
         headers["X-CSRF-Token"] = csrfToken;
       }
@@ -78,7 +81,7 @@ export class FetchHttpClient implements HttpClient {
 
       if (!response.ok) {
         if (response.status === 401 && !options._retry) {
-          return this.handle401<T>(url, options);
+          return this.handle401<T>(url, options, headers);
         }
         if (response.status === 403) {
           this.redirectToAccessDenied();
@@ -89,7 +92,6 @@ export class FetchHttpClient implements HttpClient {
 
         const errorBody = await this.safeJson(response);
 
-        console.log("errorBody: ", errorBody)
         throw new HttpError(
           errorBody?.error?.message || `An error occurred`,
           url,
@@ -98,9 +100,12 @@ export class FetchHttpClient implements HttpClient {
         );
       }
 
+      if (options._responseType === 'blob') {
+        return response.blob() as unknown as T;
+      }
       return this.safeJson(response);
-    } catch (error: any) {
-      if (error.name === "AbortError") {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
         throw new HttpError("Request aborted (timeout or manual cancel)", url);
       }
       if (error instanceof TypeError) {
@@ -115,12 +120,13 @@ export class FetchHttpClient implements HttpClient {
 
   private async handle401<T>(
     url: string,
-    options: RequestInit & { _retry?: boolean }
+    options: RequestInit & { _retry?: boolean },
+    headers: Record<string, string>
   ): Promise<T> {
     options._retry = true;
 
     try {
-      await this.refreshToken();
+      await this.refreshToken(headers);
       this.notifySubscribers();
       return this.request<T>(url, options);
     } catch (err) {
@@ -130,14 +136,19 @@ export class FetchHttpClient implements HttpClient {
     }
   }
 
-  private async refreshToken(): Promise<void> {
+  private async refreshToken(headers: Record<string, string>): Promise<void> {
     if (this.isRefreshing) {
       return new Promise((resolve) => this.refreshSubscribers.push(resolve));
     }
     this.isRefreshing = true;
+    const csrfToken = this.getCookie("__Host-refresh_csrf_token");
+      if (csrfToken) {
+        headers["X-CSRF-Token"] = csrfToken;
+      }
     try {
       await fetch(`/api/users/auth/sessions/current`, {
         method: "POST",
+        headers,
         credentials: "include",
       });
     } finally {
@@ -167,20 +178,19 @@ export class FetchHttpClient implements HttpClient {
   private redirectToLogin() {
     if (typeof window !== "undefined") {
       const current = window.location.pathname + window.location.search;
-      window.location.href = `/login?redirect=${encodeURIComponent(current)}`;
+      window.location.href = buildAuthUrl(ROUTES.AUTH.LOGIN, { redirect: current });
     }
   }
 
   private redirectToAccessDenied() {
     if (typeof window !== "undefined") {
-      window.location.href = `/403`;
+      window.location.href = ROUTES.FORBIDDEN;
     }
   }
 
   private notifyNetworkError() {
     if (typeof window !== "undefined") {
       console.error("Network error. Please check your internet connection.");
-      alert("Network error. Please check your internet connection.");
     }
   }
 
@@ -193,18 +203,16 @@ export class FetchHttpClient implements HttpClient {
     return controller.signal;
   }
 
-  private isLogout(response: Response, method: string): boolean{
-    const logoutUrl = "/users/auth/sessions/current"
-
-    return response.url.indexOf(logoutUrl) > 0 && method.toLocaleUpperCase() === "DELETE"
-  }
-
   // --- HttpClient methods ---
-  async get<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T> {
+  async get<T = unknown>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T> {
     return this.request<T>(url, { ...config, method: "GET" });
   }
 
-  async post<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
+  async getBlob(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<Blob> {
+    return this.request<Blob>(url, { ...config, method: "GET", _responseType: "blob" });
+  }
+
+  async post<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
     return this.request<R>(url, {
       ...config,
       method: "POST",
@@ -212,7 +220,7 @@ export class FetchHttpClient implements HttpClient {
     });
   }
 
-  async put<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
+  async put<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
     return this.request<R>(url, {
       ...config,
       method: "PUT",
@@ -220,7 +228,7 @@ export class FetchHttpClient implements HttpClient {
     });
   }
 
-  async patch<T = any, R = any>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
+  async patch<T = unknown, R = unknown>(url: string, data?: T, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<R> {
     return this.request<R>(url, {
       ...config,
       method: "PATCH",
@@ -228,7 +236,7 @@ export class FetchHttpClient implements HttpClient {
     });
   }
 
-  async delete<T = any>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T> {
+  async delete<T = unknown>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T> {
     return this.request<T>(url, { ...config, method: "DELETE" });
   }
 

@@ -1,15 +1,13 @@
 "use client";
 
 import { Toaster } from "@components/3rdparty/ui/toaster";
-import { publicConfig } from "@lib/config/public";
-import { LoadScript } from "@react-google-maps/api";
+import { isAutomationEnvironment } from "@lib/automation";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import ConsentReacceptanceModal from "@components/website/auth/ConsentReacceptanceModal";
 
 export function ClientWrapperProvider({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState<boolean>(false);
   // Use useState to ensure the client is stable across renders
   const [queryClient] = useState(
     () =>
@@ -22,14 +20,11 @@ export function ClientWrapperProvider({ children }: { children: React.ReactNode 
   );
 
   useEffect(() => {
-    setTimeout(()=>{
-    setMounted(true);
-    }, 0)
+    if (isAutomationEnvironment()) {
+      window.__app_ready__ = true;
+      window.__TEST_MODE__ = true;
+    }
   }, []);
-
-  if (!mounted) return null;
-
-  const googleLibraries: ("places")[] = ["places"];
 
   return (
     <ThemeProvider

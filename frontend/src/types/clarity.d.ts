@@ -4,6 +4,6 @@ export {};
 
 declare global {
   interface Window {
-    clarity?: (...args: [string, ...unknown[]]) => void;
+    clarity?: ((...args: unknown[]) => void) & { q?: unknown[][] };
   }
 }

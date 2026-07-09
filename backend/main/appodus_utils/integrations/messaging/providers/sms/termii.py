@@ -1,5 +1,6 @@
 from decimal import Decimal
-from typing import Dict, Any
+from logging import Logger
+from typing import Optional
 
 from httpx import AsyncClient
 from kink import inject, di
@@ -13,6 +14,7 @@ from main.appodus_utils.integrations.messaging.models import MessageChannel, Mes
 from main.appodus_utils.integrations.messaging.providers.models import IMessageProvider
 from main.appodus_utils import Utils
 
+logger: Logger = di['logger']
 
 @inject
 class TermiiSMSProvider(IMessageProvider):
@@ -42,19 +44,21 @@ class TermiiSMSProvider(IMessageProvider):
             "to": message.to.recipient,
             "from": message.payload.sender_id,
             "sms": message.payload.text,
-            "type": "plain",
+            "type": "unicode" if message.payload.unicode else "plain",
             "channel": "generic",
-            "api_key": self.api_key
+            "api_key": self.api_key,
         }
 
         response = await self.client.post(url, json=payload)
 
-        if response.status_code == 401 or response.status_code == 403:
+        if response.status_code in (401, 403):
             raise IntegrationAuthenticationException("Invalid Termii API key")
         if response.status_code == 402:
             raise IntegrationInsufficientBalanceException("Insufficient Termii balance")
         if response.status_code == 429:
-            raise IntegrationRateLimitException(key=message.recipient, reset_at=Utils.datetime_now_plus(minutes=5))
+            raise IntegrationRateLimitException(
+                key=message.to.recipient, reset_at=Utils.datetime_now_plus(minutes=5)
+            )
         if 400 <= response.status_code < 500:
             raise IntegrationException(response.text or "Termii API error")
         if response.status_code >= 500:
@@ -71,13 +75,13 @@ class TermiiSMSProvider(IMessageProvider):
         message.provider_id = data.get("message_id", "")
         return message
 
-    async def get_message_status(self, message_id: str) -> Dict[str, Any]:
+    async def get_message_status(self, message_id: str) -> str | None:
         url = f"{self.BASE_URL}/sms/{message_id}"
         params = {"api_key": self.api_key}
-
         try:
             response = await self.client.get(url, params=params)
             response.raise_for_status()
-            return response.json()
+            return response.json().get("status")
         except Exception as e:
-            return {"error": str(e)}
+            logger.debug("Termii get_message_status failed for {}: %s", message_id, e)
+            return None

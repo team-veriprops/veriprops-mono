@@ -2,9 +2,10 @@ import enum
 from datetime import datetime
 from typing import Optional, Dict
 
-from sqlalchemy import Column, String, JSON, Integer, DateTime
+from sqlalchemy import Column, String, Integer
 
 from main.appodus_utils import BaseEntity, PageRequest, BaseQueryDto, Object
+from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 from main.app.domain.message.models import UpsertMessageDto
 from main.appodus_utils.integrations.messaging.models import MessageChannel
 
@@ -18,14 +19,14 @@ class DLQStatus(str, enum.Enum):
 
 class DLQ(BaseEntity):
     __tablename__ = 'dlq_entries'
-    original_message = Column(JSON, nullable=False)
+    original_message = Column(JSONB_VARIANT, nullable=False)
     channel = Column(String(20), nullable=False)
     provider = Column(String(50), nullable=False)
     error = Column(String(500), nullable=False)
     attempts = Column(Integer, default=0, nullable=False)
-    next_retry_at = Column(DateTime, nullable=False)
-    status = Column(String(15), default="pending", nullable=False)
-    extras = Column(JSON, default={})
+    next_retry_at = Column(UTCDateTime, nullable=False)
+    status = Column(String(15), default=DLQStatus.PENDING.value, nullable=False)
+    extras = Column(JSONB_VARIANT, default=dict)
 
 
 class DLQBaseDto(Object):

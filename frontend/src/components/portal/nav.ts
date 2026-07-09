@@ -1,23 +1,13 @@
-import { NavItem } from "@components/nav/PortalSidebar";
-import {
-  LayoutDashboard,
-  FileCheck,
-  ClipboardList,
-  AlertTriangle,
-  MessageSquare,
-  CreditCard,
-  Settings,
-  HelpCircle,
-} from "lucide-react";
+import { ROUTES } from "@/lib/routes";
+import { NavItem } from "@/components/nav/MenuSidebar";
 
-
+// Only routes with a built page appear here — items for later slices (e.g. Payment
+// History) are restored as their slices land, so nothing in the sidebar 404s.
 export const portalNavItems: NavItem[] = [
-  { title: "Dashboard", href: "/portal/dashboard", icon: LayoutDashboard, has_separator_after: false },
-  { title: "My Verifications", href: "/portal/verifications", icon: FileCheck, has_separator_after: false },
-  { title: "Payments", href: "/portal/payments", icon: CreditCard, has_separator_after: false },
-  { title: "Chats", href: "/portal/chats", icon: MessageSquare, has_separator_after: false },
-  { title: "Disputes", href: "/portal/disputes", icon: AlertTriangle, has_separator_after: false },
-  { title: "Tasks", href: "/portal/tasks", icon: ClipboardList, has_separator_after: true },
-  { title: "Settings", href: "/portal/settings", icon: Settings, has_separator_after: false },
-  { title: "Support & Help", href: "/portal/support", icon: HelpCircle, has_separator_after: false },
+  { title: "Dashboard", href: ROUTES.PORTAL.DASHBOARD, icon: "dashboard", has_separator_after: false },
+  { title: "My Verifications", href: ROUTES.PORTAL.VERIFICATIONS, icon: "clipboardList", has_separator_after: false },
+  { title: "New Verification", href: ROUTES.PORTAL.VERIFICATIONS_NEW, icon: "fileCheck", has_separator_after: false },
+  { title: "Messages", href: ROUTES.PORTAL.CHAT, icon: "messageSquare", has_separator_after: false },
+  { title: "Refer & earn", href: ROUTES.PORTAL.REFERRALS, icon: "gift", has_separator_after: false },
+  { title: "Support", href: ROUTES.PORTAL.SUPPORT, icon: "helpCircle", has_separator_after: false },
 ];

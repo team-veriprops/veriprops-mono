@@ -1,201 +1,127 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Stepper from "./Stepper";
-import TypeSelectionStep from "./TypeSelectionStep";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@3rdparty/ui/button";
+import { toast } from "@components/3rdparty/ui/use-toast";
+import WizardOverlay from "@components/ui/wizard/WizardOverlay";
+import { ROUTES } from "@lib/routes";
+import { AgentRole, SubmitAgentApplicationRequest } from "@/types/agent";
+import {
+  useAgentDraftQuery,
+  useAgentTermsQuery,
+  useSaveAgentDraftMutation,
+  useSubmitAgentApplicationMutation,
+} from "@components/agents/libs/useAgentQueries";
+import { AGENT_WIZARD_STEPS, AgentWizardState, EMPTY_WIZARD_STATE } from "./types";
+import { canAdvanceStep, canSubmit } from "./validation";
+import RolesStep from "./RolesStep";
 import KycStep from "./KycStep";
 import CredentialsStep from "./CredentialsStep";
 import ReviewStep from "./ReviewStep";
-import ApprovalStatusCard from "./ApprovalStatusCard";
-import {
-  useAgentApplication,
-  useSaveCredentialsMutation,
-  useSaveTypesStepMutation,
-  useSubmitApplicationMutation,
-  useUploadKycDocsMutation,
-  useVerifyBvnMutation,
-} from "../libs/useAgentApplicationQueries";
-import type { AgentType } from "../libs/agent-service";
-import { getErrorMessage } from "@lib/utils";
-
-const STEPS = ["Roles", "KYC", "Credentials", "Review"];
 
 export default function AgentOnboardingContainer() {
-  const { data: application, isLoading } = useAgentApplication();
+  const router = useRouter();
   const [step, setStep] = useState(0);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [state, setState] = useState<AgentWizardState>(EMPTY_WIZARD_STATE);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const restored = useRef(false);
 
-  const saveTypes = useSaveTypesStepMutation();
-  const verifyBvn = useVerifyBvnMutation();
-  const uploadDocs = useUploadKycDocsMutation();
-  const saveCredentials = useSaveCredentialsMutation();
-  const submitApp = useSubmitApplicationMutation();
+  const { data: draft } = useAgentDraftQuery();
+  const { data: terms } = useAgentTermsQuery();
+  const saveDraft = useSaveAgentDraftMutation();
+  const submit = useSubmitAgentApplicationMutation();
 
-  // Resume the wizard at the right step based on persisted server state.
+  // Restore a saved draft once (refresh/relogin resumes at the saved step).
   useEffect(() => {
-    if (!application) return;
-    if (application.status !== "DRAFT") return;
-    let resumeAt = 0;
-    if (application.types.length > 0) resumeAt = 1;
-    if (
-      (application.kycMethod === "BVN" && application.bvnVerifiedAt) ||
-      (application.kycMethod === "ID_DOC" && application.idDocUploaded && application.selfieUploaded)
-    ) {
-      resumeAt = 2;
-    }
-    if (application.coverageStates.length > 0) resumeAt = 3;
-    setStep((s) => (s === 0 ? resumeAt : s));
-  }, [application]);
+    if (restored.current || !draft) return;
+    restored.current = true;
+    setState({ ...EMPTY_WIZARD_STATE, ...(draft.payload as Partial<AgentWizardState>) });
+    setStep(Math.min(draft.step, AGENT_WIZARD_STEPS.length - 1));
+  }, [draft]);
 
-  if (isLoading || !application) {
-    return (
-      <div
-        className="text-sm py-12 text-center"
-        style={{ color: "var(--brand-on-surface-variant)" }}
-      >
-        Loading…
-      </div>
-    );
-  }
+  const update = (patch: Partial<AgentWizardState>) => setState((s) => ({ ...s, ...patch }));
 
-  if (application.status !== "DRAFT") {
-    return <ApprovalStatusCard application={application} />;
-  }
+  const persist = (nextStep: number, nextState: AgentWizardState) => {
+    saveDraft.mutate({ step: nextStep, payload: nextState as unknown as Record<string, unknown> });
+  };
 
-  const handleTypes = async (types: AgentType[]) => {
+  const close = () => router.push(ROUTES.AGENT.DASHBOARD);
+
+  const goNext = () => {
+    const next = Math.min(step + 1, AGENT_WIZARD_STEPS.length - 1);
+    setStep(next);
+    persist(next, state);
+  };
+
+  const goBack = () => setStep((s) => Math.max(0, s - 1));
+
+  const onSubmit = async () => {
+    if (!canSubmit(state, termsAccepted)) return;
+    const payload: SubmitAgentApplicationRequest = {
+      roles: state.roles,
+      kyc: state.kyc,
+      credentials: state.credentials,
+      coverage: state.coverage,
+      bio: state.bio || undefined,
+      yearsExperience: state.yearsExperience,
+      truthfulnessConfirmed: state.truthfulnessConfirmed,
+      agentTermsVersion: terms?.consentVersion ?? "1.0.0",
+    };
     try {
-      setErrorMessage(null);
-      await saveTypes.mutateAsync({ types });
-      setStep(1);
-    } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      await submit.mutateAsync(payload);
+      toast({ title: "Application submitted", description: "We'll review it and get back to you." });
+      router.push(ROUTES.AGENT.DASHBOARD);
+    } catch {
+      toast({ title: "Submission failed", description: "Please try again.", variant: "destructive" });
     }
   };
 
-  const handleVerifyBvn = async (bvn: string) => {
-    try {
-      setErrorMessage(null);
-      const res = await verifyBvn.mutateAsync({ bvn });
-      return res.data ?? null;
-    } catch (e) {
-      setErrorMessage(getErrorMessage(e));
-      return null;
-    }
-  };
+  const isLast = step === AGENT_WIZARD_STEPS.length - 1;
+  const submitting = submit.isPending;
 
-  const handleUploadDocs = async (req: {
-    idDocType: import("../libs/agent-service").IdDocType;
-    idDocUrl: string;
-    selfieUrl: string;
-  }) => {
-    try {
-      setErrorMessage(null);
-      await uploadDocs.mutateAsync(req);
-    } catch (e) {
-      setErrorMessage(getErrorMessage(e));
-    }
-  };
-
-  const handleCredentials = async (
-    req: import("../libs/agent-service").CredentialsStepRequest,
-  ) => {
-    try {
-      setErrorMessage(null);
-      await saveCredentials.mutateAsync(req);
-      setStep(3);
-    } catch (e) {
-      setErrorMessage(getErrorMessage(e));
-    }
-  };
-
-  const handleSubmit = async (req: {
-    truthfulnessAcknowledged: boolean;
-    agentTermsConsentVersion: string;
-  }) => {
-    try {
-      setErrorMessage(null);
-      await submitApp.mutateAsync(req);
-      // Status flips to PENDING — the rendered branch above will switch.
-    } catch (e) {
-      setErrorMessage(getErrorMessage(e));
-    }
-  };
+  const footer = (
+    <>
+      <Button variant="ghost" onClick={goBack} disabled={step === 0} data-testid="agent-apply-back">
+        Back
+      </Button>
+      {isLast ? (
+        <Button
+          onClick={onSubmit}
+          disabled={submitting || !canSubmit(state, termsAccepted)}
+          data-testid="agent-apply-submit"
+        >
+          {submitting ? "Submitting…" : "Submit application"}
+        </Button>
+      ) : (
+        <Button onClick={goNext} disabled={!canAdvanceStep(step, state)} data-testid="agent-apply-continue">
+          Continue
+        </Button>
+      )}
+    </>
+  );
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
-      <header className="space-y-3">
-        <span
-          className="inline-block text-xs font-medium uppercase tracking-wider px-2.5 py-1 rounded-full"
-          style={{
-            color: "var(--brand-viridian)",
-            backgroundColor: "var(--brand-viridian-xlight)",
-          }}
-        >
-          Agent application
-        </span>
-        <h1
-          className="text-3xl sm:text-4xl font-semibold tracking-tight"
-          style={{ color: "var(--brand-navy)", fontFamily: "var(--font-display, Manrope)" }}
-        >
-          Become a verified Veriprops agent
-        </h1>
-      </header>
-
-      <Stepper steps={STEPS} current={step} />
-
-      <section
-        className="rounded-2xl p-6 sm:p-8"
-        style={{
-          backgroundColor: "var(--brand-surface-card)",
-          boxShadow: "0px 24px 48px rgba(0,13,34,0.06)",
-        }}
-      >
-        {errorMessage && (
-          <div
-            className="text-sm mb-4 rounded-md p-3"
-            style={{
-              color: "var(--destructive)",
-              backgroundColor: "rgba(186,26,26,0.06)",
-            }}
-          >
-            {errorMessage}
-          </div>
-        )}
-
-        {step === 0 && (
-          <TypeSelectionStep
-            defaultValue={application.types}
-            pending={saveTypes.isPending}
-            onSubmit={handleTypes}
-          />
-        )}
-        {step === 1 && (
-          <KycStep
-            application={application}
-            onVerifyBvn={handleVerifyBvn}
-            onUploadDocs={handleUploadDocs}
-            onContinue={() => setStep(2)}
-            onBack={() => setStep(0)}
-            pending={verifyBvn.isPending || uploadDocs.isPending}
-          />
-        )}
-        {step === 2 && (
-          <CredentialsStep
-            application={application}
-            pending={saveCredentials.isPending}
-            onBack={() => setStep(1)}
-            onSubmit={handleCredentials}
-          />
-        )}
-        {step === 3 && (
-          <ReviewStep
-            application={application}
-            pending={submitApp.isPending}
-            onBack={() => setStep(2)}
-            onSubmit={handleSubmit}
-          />
-        )}
-      </section>
-    </div>
+    <WizardOverlay
+      steps={AGENT_WIZARD_STEPS}
+      current={step}
+      onClose={close}
+      title="Become a Verified Agent"
+      footer={footer}
+      testIdPrefix="agent-apply"
+    >
+      {step === 0 && <RolesStep value={state.roles} onChange={(roles: AgentRole[]) => update({ roles })} />}
+      {step === 1 && <KycStep value={state.kyc} onChange={(kyc) => update({ kyc })} />}
+      {step === 2 && <CredentialsStep state={state} update={update} />}
+      {step === 3 && (
+        <ReviewStep
+          state={state}
+          update={update}
+          termsAccepted={termsAccepted}
+          onTermsAcceptedChange={setTermsAccepted}
+          termsVersion={terms?.consentVersion}
+        />
+      )}
+    </WizardOverlay>
   );
 }

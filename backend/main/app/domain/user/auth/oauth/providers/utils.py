@@ -1,16 +1,19 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from main.app.domain.user.auth.models import AuthIntent
+
 if TYPE_CHECKING:
     from loguru import Logger
 import json
 import urllib.parse
-from typing import Optional, Tuple
+from datetime import timedelta
+from typing import Optional
 from urllib.parse import urlparse
 
 from kink import di
 from starlette.requests import Request
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, Response
 
 from main.app.config.settings import settings
 from main.app.domain.user.auth.oauth.providers.models import (
@@ -42,7 +45,7 @@ class OauthUtils:
         base_url: str,
         client_id: str,
         scope: str,
-        intent: Optional[str] = None,
+        intent: Optional[AuthIntent] = None,
         mode: OAuthFlowMode = OAuthFlowMode.AUTH,
         link_user_id: Optional[str] = None,
     ) -> str:
@@ -68,26 +71,29 @@ class OauthUtils:
 
         oauth_request_payload = OAuthRequestStoredState(
             code_verifier=code_verifier,
-            intent=intent or "default",
+            intent=intent or AuthIntent.DEFAULT,
             frontend_origin=frontend_origin,
             mode=mode,
             link_user_id=link_user_id,
         )
 
-        await RedisUtils.set_redis(f"oauth:state:{state}", oauth_request_payload)
+        await RedisUtils.set_redis(f"oauth:state:{state}", oauth_request_payload, time_to_live=timedelta(minutes=10))
 
         query_string = urllib.parse.urlencode(params)
         return f"{base_url}?{query_string}"
 
     @staticmethod
-    def callback_redirect_uri(platform: SocialAuthProvider) -> str:
-        """The OAuth redirect_uri registered with each provider. Must point at
-        this backend (not the frontend) — the popup loads the backend HTML
-        callback page, which then postMessages the parent frame and closes."""
-        return f"{settings.BACKEND_PUBLIC_ORIGIN.rstrip('/')}/api/users/auth/oauth/{platform.value}/callback"
+    async def callback_redirect_uri(platform: SocialAuthProvider) -> str:
+        """The OAuth redirect_uri sent to the provider. Points at the frontend
+        proxy (settings.oauth_callback_base) which transparently forwards the
+        request to this backend. The Set-Cookie response flows back through the
+        proxy, so the browser receives the session cookie on the frontend origin
+        rather than the backend origin — making the cookie visible to all
+        subsequent frontend API requests."""
+        return f"{settings.oauth_callback_base}/api/users/auth/oauth/{platform.value}/callback"
 
     @staticmethod
-    def resolve_frontend_origin(request: Request) -> str:
+    async def resolve_frontend_origin(request: Request) -> str:
         """Pick the frontend origin that opened the popup. Validated against
         the allowlist so we can later use it as a `postMessage` targetOrigin
         without spoofing risk. Falls back to the first allowlisted origin if
@@ -103,14 +109,19 @@ class OauthUtils:
                 candidates.append(f"{parsed.scheme}://{parsed.netloc}")
 
         allowed = _allowed_frontend_origins()
+        if not allowed:
+            raise ForbiddenException(message="No OAuth frontend origin allowlist configured.")
+
         for c in candidates:
             normalised = c.rstrip("/")
             if normalised in allowed:
                 return normalised
 
-        if not allowed:
-            raise ForbiddenException(message="No OAuth frontend origin allowlist configured.")
-        # No referer/origin (server-to-server or test). Default to first allowlisted.
+        # Request supplied an explicit origin/referer that is not on the allowlist — reject.
+        if candidates:
+            raise ForbiddenException(message="OAuth origin not permitted.")
+
+        # No origin/referer header (server-to-server or unit test). Default to first allowlisted.
         return allowed[0]
 
     @staticmethod
@@ -125,17 +136,21 @@ class OauthUtils:
         return stored
 
     @staticmethod
-    def popup_response(
+    async def popup_response(
         *,
+        response: Response,
         success: bool,
         target_origin: str,
+        state: Optional[str] = None,
         message: Optional[str] = None,
         extra_headers: Optional[dict] = None,
     ) -> HTMLResponse:
         """Minimal HTML returned by the OAuth callback. It posts a single
         `oauth_result` message to the popup opener and self-closes. The parent
         validates `event.origin` and `event.data.type` before acting."""
-        payload = {"type": "oauth_result", "success": bool(success)}
+        
+        timeout = 200 if success else 10000
+        payload = {"type": "oauth_result", "success": bool(success), "state": state}
         if message:
             payload["message"] = message
         payload_json = json.dumps(payload)
@@ -144,38 +159,45 @@ class OauthUtils:
             message or "Sign-in failed. You can close this window."
         )
         html = f"""<!doctype html>
-<html lang=\"en\">
-<head>
-<meta charset=\"utf-8\" />
-<title>Veriprops — Sign in</title>
-<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />
-<style>
-  body {{ font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
-          background: #0b0d10; color: #e6e8eb; display: flex;
-          align-items: center; justify-content: center; height: 100vh; margin: 0; }}
-  .card {{ max-width: 320px; padding: 24px; text-align: center; }}
-  .muted {{ color: #9aa3ad; font-size: 14px; margin-top: 8px; }}
-</style>
-</head>
-<body>
-<div class=\"card\">
-  <p>{body_text}</p>
-  <p class=\"muted\">If this window did not close automatically, you can close it now.</p>
-</div>
-<script>
-(function () {{
-  try {{
-    if (window.opener && !window.opener.closed) {{
-      window.opener.postMessage({payload_json}, {target_js});
-    }}
-  }} catch (_) {{}}
-  setTimeout(function () {{ try {{ window.close(); }} catch (_) {{}} }}, 200);
-}})();
-</script>
-</body>
-</html>"""
-        response = HTMLResponse(content=html, status_code=200)
+        <html lang=\"en\">
+        <head>
+        <meta charset=\"utf-8\" />
+        <title>Veriprops — Sign in</title>
+        <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />
+        <style>
+          body {{ font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
+                  background: #0b0d10; color: #e6e8eb; display: flex;
+                  align-items: center; justify-content: center; height: 100vh; margin: 0; }}
+          .card {{ max-width: 320px; padding: 24px; text-align: center; }}
+          .muted {{ color: #9aa3ad; font-size: 14px; margin-top: 8px; }}
+        </style>
+        </head>
+        <body>
+        <div class=\"card\">
+          <p>{body_text}</p>
+          <p class=\"muted\">If this window did not close automatically, you can close it now.</p>
+        </div>
+        <script>
+        (function () {{
+          try {{
+            if (window.opener && !window.opener.closed) {{
+              window.opener.postMessage({payload_json}, {target_js});
+            }}
+          }} catch (_) {{}}
+          setTimeout(function () {{ try {{ window.close(); }} catch (_) {{}} }}, {timeout});
+        }})();
+        </script>
+        </body>
+        </html>"""
+        html_response = HTMLResponse(content=html, status_code=200)
+
         if extra_headers:
             for k, v in extra_headers.items():
-                response.headers[k] = v
-        return response
+                html_response.headers[k] = v
+
+        # copy header
+        for header, value in response.raw_headers:
+            if header.lower() == b"set-cookie":  # copy cookie
+                html_response.headers.append(header.decode(), value.decode())
+
+        return html_response

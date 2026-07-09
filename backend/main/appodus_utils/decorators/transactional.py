@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import inspect
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -9,6 +11,7 @@ import functools
 from typing import Awaitable, TypeVar, Optional
 
 from main.appodus_utils.db.session import get_db_session_from_context, create_new_db_session
+from main.appodus_utils.decorators.audit_ctx import drain_audit_writes, reset_audit_ctx
 from kink import di
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,7 +70,7 @@ def transactional(session_policy: TransactionSessionPolicy = TransactionSessionP
         async def _wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             try:
                 # Support Synchronous Functions Gracefully
-                if not asyncio.iscoroutinefunction(func):
+                if not inspect.iscoroutinefunction(func):
                     raise TypeError("@transactional can only be used on async functions")
 
                 db_session: Optional[AsyncSession] = None
@@ -79,11 +82,11 @@ def transactional(session_policy: TransactionSessionPolicy = TransactionSessionP
                 elif session_policy == TransactionSessionPolicy.FALLBACK_NEW:
                     try:
                         db_session = get_db_session_from_context()
+                        return await execute(func, db_session, func_name, *args, **kwargs)
                     except LookupError:
                         logger.debug(f"No session in context, creating new session for {func_name}")
                         async with create_new_db_session() as session:
                             return await execute(func, session, func_name, *args, **kwargs)
-                    return await execute(func, db_session, func_name, *args, **kwargs)
 
                 elif session_policy == TransactionSessionPolicy.USE_IF_PRESENT:
                     db_session = get_db_session_from_context()
@@ -104,23 +107,24 @@ def transactional(session_policy: TransactionSessionPolicy = TransactionSessionP
 
 
 async def execute(func, db_session: AsyncSession, func_name: str, *args: P.args, **kwargs: P.kwargs):
-    # kwargs["db_session"] = db_session
     logger.debug(f"Checking if {func_name} is in an existing transaction")
     if db_session.in_transaction():
+        # Nested: joins an existing transaction owned by the outer @transactional call.
+        # Do not drain audit writes here — the outer call will drain after its own flush.
         logger.debug(f"Using existing transaction for {func_name}")
         logger.debug(f"Arguments for {func_name}: args={args}, kwargs={kwargs}")
-        call_response = await func(*args, **kwargs)
-        await db_session.flush()
+        return await func(*args, **kwargs)
 
-        return call_response
-
+    # Outermost: owns begin/commit. Reset the audit queue for a clean slate, then drain
+    # after flush so audit rows are committed atomically with the business changes.
+    reset_audit_ctx()
     logger.debug(f"Starting transaction for {func_name}")
-    async with db_session.begin():  # automatically committed / rolled back thanks to the context manager
+    async with db_session.begin():
         try:
             logger.debug(f"Arguments for {func_name}: args={args}, kwargs={kwargs}")
             call_response = await func(*args, **kwargs)
             await db_session.flush()
-
+            await drain_audit_writes()
             return call_response
         except SQLAlchemyError as e:
             logger.error(f"SQLAlchemy transaction failed in {func_name}: {e}")

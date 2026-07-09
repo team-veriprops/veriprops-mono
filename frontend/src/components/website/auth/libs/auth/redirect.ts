@@ -1,5 +1,5 @@
-import { ROUTES, AuthIntent } from "@/lib/routes";
-import { AuthUser, UserType, UserPersona } from "@components/website/auth/models";
+import { ROUTES} from "@/lib/routes";
+import { AuthUser, UserType, UserPersona, AuthIntent } from "@components/website/auth/models";
 /**
  * Post-auth redirect logic. Priority (PRD §2.4):
  *   Admin only           → /admin
@@ -11,11 +11,25 @@ import { AuthUser, UserType, UserPersona } from "@components/website/auth/models
  * the default landing — e.g. `intent=verify` lands a Customer on the new-verification
  * wizard rather than the dashboard.
  */
+/**
+ * True only for a safe same-origin relative path. Rejects protocol-relative
+ * (`//evil.com`), backslash (`/\evil.com`), and absolute (`https://…`) URLs so a
+ * `?redirect=` param cannot drive a cross-origin navigation (open-redirect phishing).
+ */
+export function isSafeRedirectPath(value: string | null | undefined): value is string {
+  return (
+    typeof value === "string" &&
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.startsWith("/\\")
+  );
+}
+
 export function resolvePostAuthRedirect(
   user: AuthUser,
   options: { intent?: AuthIntent | null; redirect?: string | null } = {},
 ): string {
-  if (options.redirect && options.redirect.startsWith("/")) {
+  if (isSafeRedirectPath(options.redirect)) {
     return options.redirect;
   }
 
@@ -26,11 +40,11 @@ export function resolvePostAuthRedirect(
   const isAgent = user.personas.includes(UserPersona.AGENT);
   const isCustomer = user.personas.includes(UserPersona.CUSTOMER);
 
-  if (options.intent === "verify" && isCustomer) {
-    return "/portal/verifications/new";
+  if (options.intent === AuthIntent.VERIFY && isCustomer) {
+    return ROUTES.PORTAL.VERIFICATIONS_NEW;
   }
-  if (options.intent === "agent" && !isAgent) {
-    return "/agent/onboarding";
+  if (options.intent === AuthIntent.AGENT && !isAgent) {
+    return ROUTES.AGENT.DASHBOARD;
   }
 
   if (isAgent) return ROUTES.AGENT.DASHBOARD;

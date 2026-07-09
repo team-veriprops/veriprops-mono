@@ -267,7 +267,7 @@ MAX_SESSIONS = 3
 def login(user):
     sessions = get_sessions_by_user(user.id)
     if len(sessions) >= MAX_SESSIONS:
-        oldest = min(sessions, key=lambda s: s['created_at'])
+        oldest = min(sessions, key=lambda s: s['date_created'])
         invalidate_session(oldest['id'])
     return create_session(user)
 ```

@@ -56,7 +56,7 @@ class PaystackInitPaymentDto(Object):
                 "amount": 2500000,
                 "currency": "NGN",
                 "reference": "VRP-2026-00023",
-                "callback_url": "https://veriprops.com/pay/verify",
+                "callback_url": "https://veriprops.ng/pay/verify",
                 "channels": ["card", "bank_transfer", "ussd"],
                 "metadata": {
                     "invoice_id": "inv_123",
@@ -174,7 +174,7 @@ class ChargeSuccessData(Object):
     reference: str
     gateway_response: Optional[str] = None
 
-    created_at: Optional[str] = None
+    date_created: Optional[str] = None
     paid_at: Optional[str] = None
 
     ip_address: Optional[str] = None
@@ -225,7 +225,7 @@ class RefundData(Object):
     transaction: int
     reference: str
     amount: int
-    created_at: str
+    date_created: str
     currency: TransactionCurrency
     channel: str
     status: str
@@ -234,3 +234,22 @@ class RefundData(Object):
 class PaystackWebhookPayload(Object):
     event: PaystackEventType
     data: Union[Optional[RefundData], Optional[TransferData], Optional[ChargeSuccessData], Optional[AuthorizationData], Optional[CustomerData]]
+
+
+# ── Bank transfer collection (POST /charge with bank_transfer field) ──
+
+
+class PaystackBankTransferChargeRequest(Object):
+    email: str
+    amount: int = Field(..., description="Amount in kobo")
+    bank_transfer: Dict[str, Any] = Field(default_factory=dict)
+    currency: str = "NGN"
+    reference: Optional[str] = None
+
+
+class PaystackBankTransferResult(Object):
+    reference: str
+    bank: str
+    account_number: str
+    account_name: Optional[str] = None
+    expiry_date: Optional[str] = None

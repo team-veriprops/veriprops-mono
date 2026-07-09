@@ -35,11 +35,35 @@ class RedisUtils:
         try:
             if redis:
                 logger.debug("Connected to Redis Server to read")
-                return await redis.get(key).decode("utf-8")
+                result = await redis.get(key)
+                return result.decode("utf-8") if result else None
             else:
                 return await key_value_service.get(key)
         except Exception as exc:
             print(exc)
+
+    @staticmethod
+    async def incr_with_ttl(key: str, ttl_seconds: int) -> int:
+        """Atomically increment a counter and (on first hit) set its TTL.
+
+        Backs fixed-window rate limiting. Uses Redis INCR/EXPIRE when available; falls
+        back to a best-effort read-modify-write via the SQL KV store (adequate for the
+        low-per-IP-concurrency auth/OTP paths this guards). Fails OPEN (returns 0) on any
+        backend error so a limiter outage never locks users out of authentication.
+        """
+        try:
+            if redis:
+                count = int(await redis.incr(key))
+                if count == 1:
+                    await redis.expire(key, ttl_seconds)
+                return count
+            current = await key_value_service.get(key)
+            count = int(current or 0) + 1
+            await key_value_service.set(key, timedelta(seconds=ttl_seconds), count)
+            return count
+        except Exception as exc:
+            logger.warning(f"Rate-limit counter for {key!r} failed (allowing request): {exc}")
+            return 0
 
     @staticmethod
     async def delete(key: str) -> Any:
@@ -51,3 +75,40 @@ class RedisUtils:
                 return await key_value_service.delete(key)
         except Exception as exc:
             print(exc)
+
+    @staticmethod
+    async def publish(channel: str, message: Any) -> None:
+        """Publish a message to a Redis pub/sub channel (best-effort; no-op on failure)."""
+        import json
+        try:
+            if redis:
+                payload = json.dumps(message) if not isinstance(message, str) else message
+                await redis.publish(channel, payload)
+        except Exception as exc:
+            logger.warning(f"Redis publish to {channel!r} failed: {exc}")
+
+    @staticmethod
+    async def delete_by_prefix(prefix: str) -> int:
+        """Delete all keys whose names start with *prefix*.
+
+        Redis path: SCAN + batched DELETE (non-blocking, cursor-based).
+        Fallback path (no Redis): delegates to KeyValueService which issues a
+        SQL DELETE WHERE key LIKE '{prefix}%'.
+        """
+        try:
+            if redis:
+                count = 0
+                cursor = 0
+                while True:
+                    cursor, keys = await redis.scan(cursor, match=f"{prefix}*", count=200)
+                    if keys:
+                        await redis.delete(*keys)
+                        count += len(keys)
+                    if cursor == 0:
+                        break
+                return count
+            else:
+                return await key_value_service.delete_by_prefix(prefix)
+        except Exception as exc:
+            print(exc)
+            return 0

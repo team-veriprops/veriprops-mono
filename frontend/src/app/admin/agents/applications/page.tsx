@@ -1,13 +1,12 @@
-import AgentApplicationsQueue from "@components/admin/agents/AgentApplicationsQueue";
-
-export const metadata = {
-  title: "Agent applications — Veriprops Admin",
-};
+import { Suspense } from "react";
+import AgentApplicationsAdmin from "@components/admin/agents/AgentApplicationsAdmin";
 
 export default function AdminAgentApplicationsPage() {
   return (
-    <div className="max-w-6xl mx-auto px-4 py-10">
-      <AgentApplicationsQueue />
+    <div className="p-4 sm:p-6">
+      <Suspense>
+        <AgentApplicationsAdmin />
+      </Suspense>
     </div>
   );
 }

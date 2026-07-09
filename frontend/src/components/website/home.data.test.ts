@@ -7,7 +7,15 @@ import {
   testimonials,
   navLinks,
   footerLinks,
+  faqs,
+  currencies,
+  fxRates,
+  formatPrice,
+  CTA_VERIFY_HREF,
+  CTA_AGENT_HREF,
 } from "./home.data";
+import { AuthIntent } from "./auth/models";
+import { ROUTES } from "@lib/routes";
 
 describe("pricingTiers", () => {
   it("has exactly three tiers", () => {
@@ -198,19 +206,154 @@ describe("navLinks", () => {
 });
 
 describe("footerLinks", () => {
-  it("has resources, company, and socials groups", () => {
-    expect(Array.isArray(footerLinks.resources)).toBe(true);
+  it("has platform, company, legal, and socials groups", () => {
+    expect(Array.isArray(footerLinks.platform)).toBe(true);
     expect(Array.isArray(footerLinks.company)).toBe(true);
+    expect(Array.isArray(footerLinks.legal)).toBe(true);
     expect(Array.isArray(footerLinks.socials)).toBe(true);
   });
 
-  it("resources has at least 3 links", () => {
-    expect(footerLinks.resources.length).toBeGreaterThanOrEqual(3);
+  it("platform has at least 3 links", () => {
+    expect(footerLinks.platform.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("company has Privacy Policy and Terms of Service", () => {
-    const labels = footerLinks.company.map((l) => l.label);
+  it("legal has Privacy Policy and Terms of Service", () => {
+    const labels = footerLinks.legal.map((l) => l.label);
     expect(labels).toContain("Privacy Policy");
     expect(labels).toContain("Terms of Service");
+  });
+
+  it("legal links point at declared /legal routes (not dead # anchors)", () => {
+    for (const link of footerLinks.legal) {
+      expect(link.href.startsWith("/legal/")).toBe(true);
+    }
+  });
+
+  it("Our Story footer link targets the About page", () => {
+    const ourStory = footerLinks.company.find((l) => l.label === "Our Story");
+    expect(ourStory).toBeDefined();
+    expect(ourStory?.href).toBe(ROUTES.ABOUT);
+  });
+
+  it(`Become an Agent footer link targets /auth?intent=${AuthIntent.AGENT} (PRD §1.12)`, () => {
+    const agentLink = footerLinks.company.find((l) => l.label === "Become an Agent");
+    expect(agentLink).toBeDefined();
+    expect(agentLink?.href).toBe(CTA_AGENT_HREF);
+  });
+});
+
+describe("currencies", () => {
+  it("contains exactly NGN, USD, GBP, EUR in order (PRD §1.7)", () => {
+    expect(currencies).toEqual(["NGN", "USD", "GBP", "EUR"]);
+  });
+
+  it("every currency has a symbol and a positive rate in fxRates", () => {
+    for (const c of currencies) {
+      expect(fxRates[c]).toBeDefined();
+      expect(typeof fxRates[c].symbol).toBe("string");
+      expect(fxRates[c].symbol.length).toBeGreaterThan(0);
+      expect(fxRates[c].rate).toBeGreaterThan(0);
+    }
+  });
+
+  it("NGN has rate 1 (no conversion)", () => {
+    expect(fxRates["NGN"].rate).toBe(1);
+  });
+});
+
+describe("formatPrice", () => {
+  it("formats NGN with k suffix — no decimal places", () => {
+    expect(formatPrice(150000, "NGN")).toBe("₦150k");
+    expect(formatPrice(350000, "NGN")).toBe("₦350k");
+    expect(formatPrice(750000, "NGN")).toBe("₦750k");
+  });
+
+  it("formats USD with $ symbol and no k suffix", () => {
+    const result = formatPrice(150000, "USD");
+    expect(result.startsWith("$")).toBe(true);
+    expect(result).not.toContain("k");
+  });
+
+  it("formats GBP with £ symbol", () => {
+    const result = formatPrice(150000, "GBP");
+    expect(result.startsWith("£")).toBe(true);
+  });
+
+  it("formats EUR with € symbol", () => {
+    const result = formatPrice(150000, "EUR");
+    expect(result.startsWith("€")).toBe(true);
+  });
+
+  it("converted prices are less than the NGN price (rate < 1)", () => {
+    const ngnNumeric = 150;
+    for (const c of currencies) {
+      if (c === "NGN") continue;
+      const formatted = formatPrice(150000, c);
+      const numericPart = parseFloat(formatted.replace(/[^0-9.]/g, ""));
+      expect(numericPart).toBeLessThan(ngnNumeric);
+    }
+  });
+
+  it("all three tier prices format correctly in NGN", () => {
+    for (const tier of pricingTiers) {
+      const result = formatPrice(tier.priceNGN, "NGN");
+      expect(result.startsWith("₦")).toBe(true);
+      expect(result.endsWith("k")).toBe(true);
+    }
+  });
+});
+
+describe("faqs (conversion FAQ — PRD §1)", () => {
+  it("has enough questions to address the main objections", () => {
+    expect(faqs.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("every entry has a non-empty question and answer", () => {
+    for (const faq of faqs) {
+      expect(faq.question.trim().length).toBeGreaterThan(0);
+      expect(faq.answer.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it("covers the key closing objections (trust, refund/scam, timing, payment, tiers)", () => {
+    const haystack = faqs
+      .map((f) => `${f.question} ${f.answer}`)
+      .join(" ")
+      .toLowerCase();
+    for (const topic of ["trust", "refund", "agent", "business days", "payment", "premium"]) {
+      expect(haystack).toContain(topic);
+    }
+  });
+});
+
+describe("footerLinks (footer-linked pages)", () => {
+  it("legal links resolve to /legal/* routes", () => {
+    for (const link of footerLinks.legal) {
+      expect(link.href.startsWith("/legal/")).toBe(true);
+    }
+  });
+
+  it("the Sample Report link points to the sample-report page, not an anchor", () => {
+    const sample = footerLinks.platform.find((l) => l.label === "Sample Report");
+    expect(sample?.href).toBe(ROUTES.SAMPLE_REPORT);
+  });
+
+  it("has a socials group with the expected platforms", () => {
+    const labels = footerLinks.socials.map((s) => s.label);
+    expect(labels).toEqual(
+      expect.arrayContaining(["Facebook", "Twitter", "LinkedIn", "Instagram", "YouTube"]),
+    );
+  });
+});
+
+describe("CTA URL constants (PRD §1.12 exit criteria)", () => {
+  it(`CTA_VERIFY_HREF targets /auth with intent=${AuthIntent.VERIFY}, not /auth/login`, () => {
+    expect(CTA_VERIFY_HREF).toBe(`/auth?intent=${AuthIntent.VERIFY}`);
+    expect(CTA_VERIFY_HREF).not.toContain("/auth/login");
+  });
+
+  it(`CTA_AGENT_HREF targets /auth with intent=${AuthIntent.AGENT}, not /auth/login`, () => {
+    expect(CTA_AGENT_HREF).toBe(`/auth?intent=${AuthIntent.AGENT}`);
+    expect(CTA_AGENT_HREF).not.toContain("/auth/login");
   });
 });

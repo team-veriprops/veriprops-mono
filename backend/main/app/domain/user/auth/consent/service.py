@@ -4,16 +4,24 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loguru import Logger
 
-from datetime import datetime, timezone
+import csv
+import io
 from typing import List, Optional
 
 from kink import di, inject
 
+from main.app.domain.user.auth.consent.content import LEGAL_DOCUMENT_CONTENT
 from main.app.domain.user.auth.consent.models import (
     ConsentDocument,
     ConsentDocumentType,
+    ConsentSignoffStatus,
     CreateConsentDocumentDto,
     CreateUserConsentDto,
+    LegalDocumentDto,
+    LegalDocumentSummaryDto,
+    UpdateConsentDocumentDto,
+    UserConsentHistoryItemDto,
+    UserConsentHistoryPageDto,
 )
 from main.app.domain.user.auth.consent.repo import ConsentDocumentRepo, UserConsentRepo
 from main.appodus_utils import Utils
@@ -22,35 +30,6 @@ from main.appodus_utils.decorators.method_trace_logger import method_trace_logge
 from main.appodus_utils.decorators.transactional import transactional
 
 logger: Logger = di["logger"]
-
-# Default registry — must mirror frontend `lib/auth/consent.ts`. Seeded if empty.
-DEFAULT_DOCUMENTS: list[CreateConsentDocumentDto] = [
-    CreateConsentDocumentDto(
-        type=ConsentDocumentType.PLATFORM_TERMS, consent_version="1.0.0",
-        effective_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
-        title="Platform Terms of Service", href="/legal/terms",
-    ),
-    CreateConsentDocumentDto(
-        type=ConsentDocumentType.PRIVACY_POLICY, consent_version="1.0.0",
-        effective_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
-        title="Privacy Policy", href="/legal/privacy",
-    ),
-    CreateConsentDocumentDto(
-        type=ConsentDocumentType.AGENT_TERMS, consent_version="1.0.0",
-        effective_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
-        title="Agent Terms", href="/legal/agent-terms",
-    ),
-    CreateConsentDocumentDto(
-        type=ConsentDocumentType.VERIFICATION_TERMS, consent_version="1.0.0",
-        effective_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
-        title="Verification Terms", href="/legal/verification-terms",
-    ),
-    CreateConsentDocumentDto(
-        type=ConsentDocumentType.REPORT_DISCLAIMER, consent_version="1.0.0",
-        effective_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
-        title="Report Disclaimer", href="/legal/report-disclaimer",
-    ),
-]
 
 
 @inject
@@ -69,6 +48,64 @@ class ConsentService:
 
     async def get_current(self, doc_type: ConsentDocumentType) -> Optional[ConsentDocument]:
         return await self._doc_repo.get_current(doc_type)
+
+    # ── Legal-document content (public marketing /legal/* pages) ─────────────
+
+    async def seed_documents(self) -> None:
+        """Upsert every legal document from the content registry, keyed on
+        (type, consent_version). Idempotent — runs on every boot."""
+        for content in LEGAL_DOCUMENT_CONTENT.values():
+            existing = await self._doc_repo.get_by_type_version(
+                content.type, content.consent_version
+            )
+            if existing:
+                await self._doc_repo.update(existing.id, UpdateConsentDocumentDto(
+                    title=content.title,
+                    href=content.href,
+                    body=content.body,
+                    signoff_status=content.signoff_status,
+                ))
+            else:
+                await self._doc_repo.create(CreateConsentDocumentDto(
+                    type=content.type,
+                    consent_version=content.consent_version,
+                    effective_at=content.effective_at,
+                    title=content.title,
+                    href=content.href,
+                    body=content.body,
+                    signoff_status=content.signoff_status,
+                ))
+
+    async def get_legal_document(self, slug: str) -> Optional[LegalDocumentDto]:
+        """Published legal document (incl. body) for a `/legal/{slug}` page. The
+        slug maps to a document via the stored href."""
+        doc = await self._doc_repo.get_active_by_href(f"/legal/{slug}")
+        if not doc:
+            return None
+        return LegalDocumentDto(
+            type=ConsentDocumentType(doc.type),
+            consent_version=doc.consent_version,
+            effective_at=doc.effective_at,
+            title=doc.title,
+            href=doc.href,
+            signoff_status=ConsentSignoffStatus(doc.signoff_status),
+            body=doc.body,
+        )
+
+    async def list_legal_documents(self) -> List[LegalDocumentSummaryDto]:
+        """Metadata for every published legal document (for sitemap / listings)."""
+        docs = await self._doc_repo.list_active()
+        return [
+            LegalDocumentSummaryDto(
+                type=ConsentDocumentType(d.type),
+                consent_version=d.consent_version,
+                effective_at=d.effective_at,
+                title=d.title,
+                href=d.href,
+                signoff_status=ConsentSignoffStatus(d.signoff_status),
+            )
+            for d in docs
+        ]
 
     async def record_user_consent(
             self,
@@ -103,3 +140,40 @@ class ConsentService:
             if not latest_user or latest_user.consent_version != current.consent_version:
                 missing.append(current)
         return missing
+
+    # ── S57 — R19.4 consent history ──────────────────────────────────────────
+
+    async def list_for_user(
+        self, user_id: str, page: int = 0, page_size: int = 20
+    ) -> UserConsentHistoryPageDto:
+        rows, total = await self._user_consent_repo.list_for_user(
+            user_id=user_id, offset=page * page_size, limit=page_size
+        )
+        items = [
+            UserConsentHistoryItemDto(
+                document_type=r.document_type,
+                consent_version=r.consent_version,
+                accepted_at=r.accepted_at,
+                ip_address=r.ip_address,
+                device_fingerprint=r.device_fingerprint,
+            )
+            for r in rows
+        ]
+        return UserConsentHistoryPageDto(items=items, total=total, page=page, page_size=page_size)
+
+    async def export_for_user_csv(self, user_id: str) -> bytes:
+        rows, _ = await self._user_consent_repo.list_for_user(
+            user_id=user_id, offset=0, limit=10_000
+        )
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["document_type", "consent_version", "accepted_at", "ip_address", "device_fingerprint"])
+        for r in rows:
+            writer.writerow([
+                r.document_type,
+                r.consent_version,
+                r.accepted_at.isoformat() if r.accepted_at else "",
+                r.ip_address or "",
+                r.device_fingerprint or "",
+            ])
+        return buf.getvalue().encode("utf-8")

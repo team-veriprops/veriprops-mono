@@ -1,16 +1,58 @@
 # Final Audit Command
 
-Compare implementation against:
+## Step 0 — Version check
 
-- PRD.md
-- architecture-spec.md
-- requirements-matrix.md
-- execution-plan.md
-- decision-log.md
+Compare:
+
+project version vs skill version
+
+If mismatch:
+
+STOP:
+
+SKILL UPGRADE REQUIRED
+
+Run:
+
+/skill prd-orchestrator upgrade
 
 ---
 
-## Produce:
+## Step 1 — Runtime check
+
+Ensure docs/runtime-state.yaml status is:
+
+- checkpointed
+or
+- idle
+
+If status is:
+
+- running
+- interrupted
+- recovering
+
+STOP.
+
+Require:
+
+resume
+
+before final audit.
+
+---
+
+
+## Step 2 — Read all state
+
+- PRD.md
+- docs/*
+- git status
+- git diff
+
+---
+
+## Step 3 — Produce final audit
 
 docs/final-audit.md
 
@@ -20,15 +62,20 @@ Include:
 - missing items
 - partial implementations
 - security review
-- performance risks
+- performance review
+- architecture deviations
 - migration safety
+- test coverage
 - production readiness
 - remediation steps
 
 ---
 
-## Completion rule
+## Step 4 Completion
 
 Only complete when:
-- all requirements fully satisfied
-- no critical risks remain
+
+- all requirements satisfied
+- no critical risk remains
+
+## Step 5 — STOP

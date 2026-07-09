@@ -10,7 +10,7 @@ from main.appodus_utils.db.types.money import TransactionCurrency
 class GenericPaymentGatewayResponse(Object):
     status: str | bool | None
     message: str
-    data: Optional[Dict[str, str]]  # e.g., {"link": "https://checkout.flutterwave.com/..."}
+    data: Optional[Dict[str, Any]] = None  # e.g., {"link": "..."} or nested objects
 
 
 # initialize_payment – Create Payment Session
@@ -32,7 +32,7 @@ class PaymentInitRequest(Object):
     redirect_url: str
     customer: CustomerInfo
     customizations: Customizations
-    metadata: Optional[Dict[str, Any]] = None
+    details: Optional[Dict[str, Any]] = None
 
 
 # refund_transaction – Refund API
@@ -61,7 +61,7 @@ class BankTransferResponseData(Object):
     account_number: str
     bank_code: str
     full_name: Optional[str]
-    created_at: Optional[str]
+    date_created: Optional[str]
     currency: TransactionCurrency
     amount: float
     fee: Optional[float]

@@ -2,7 +2,7 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { redirect } from "next/navigation";
 import { getFxRate, Measurement, Money, TransactionCurrency } from "@/types/models";
-import { HttpError } from "./FetchHttpClient";
+import { ROUTES } from "./routes";
 
 
 /**
@@ -77,6 +77,13 @@ export const formatMoney = (money: Money | null) => {
     }).format(money.getValue());
 };
 
+/**
+ * Format an integer minor-unit amount (kobo) as currency. Backend money crosses the wire
+ * in minor units (§4.4); this converts to major units and delegates to {@link formatMoney}.
+ */
+export const formatMinor = (minor: number, currency: TransactionCurrency = TransactionCurrency.NGN) =>
+  formatMoney(Money.from({ value: (minor ?? 0) / 100, currency }));
+
 export const formatMoneyFxAware = (currency: TransactionCurrency, money: Money | null) => {
     const formattedMoney = convertMoney(money)
     const fxRateAwareMoney = currency === TransactionCurrency.NGN ? formattedMoney : Money.from({value: (formattedMoney?.getValue() ?? 1) * getFxRate(currency), currency: currency});
@@ -109,7 +116,7 @@ export const formatLocationCoordinates = (coordinates: {lat: number, lng: number
 };
 
 export const onLogoutRedirect = () => {
-  redirect("/");
+  redirect(ROUTES.HOME);
 };
 
 export const getSearchQuery = (searchKey: string, searchParams: string) => {
@@ -278,7 +285,22 @@ export function capitalizeFirst(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-export function getErrorMessage(error: Error, defaultMessage: string): string {
+/**
+ * Humanize a SCREAMING_SNAKE_CASE enum value for display, e.g. "UNDER_REVIEW" → "Under Review".
+ * A presentation-only mapping of a backend enum (not a derived business fact) — safe as a
+ * fallback wherever the backend hasn't supplied a display label (internal admin surfaces).
+ */
+export function humanizeEnumLabel(value: string | null | undefined): string {
+  if (!value) return "";
+  return value
+    .toLowerCase()
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+export function getErrorMessage(error: Error, defaultMessage?: string): string {
   return (
     error?.message || defaultMessage ||
     "Something went wrong"

@@ -219,7 +219,15 @@ export interface BaseQueryDto {
 }
 
 export interface Page<T> {
+  status: string;          // always "success"
+  code: string;            // typically "200"
+  message?: string;
+  traceId?: string;
   items: T[];               // List of items of type T
+  meta: PaginationMeta
+}
+
+export interface PaginationMeta{
   page: number;            // Current page number
   pageSize: number;       // Number of items per page
   count: number;           // Number of items returned in this page
@@ -252,4 +260,44 @@ export interface SuccessResponse<T> {
   message?: string;
   traceId?: string;
   data?: T;
+}
+
+// ─── Legal documents (mirrors backend ConsentDocumentType / ConsentSignoffStatus) ──
+
+export enum ConsentDocumentType {
+  PLATFORM_TERMS = "PLATFORM_TERMS",
+  PRIVACY_POLICY = "PRIVACY_POLICY",
+  AGENT_TERMS = "AGENT_TERMS",
+  VERIFICATION_TERMS = "VERIFICATION_TERMS",
+  REPORT_DISCLAIMER = "REPORT_DISCLAIMER",
+  VERIFICATION_DISCLAIMER = "VERIFICATION_DISCLAIMER",
+  FINDINGS_OPINION_ACK = "FINDINGS_OPINION_ACK",
+  JURISDICTION_PLATFORM_ONLY = "JURISDICTION_PLATFORM_ONLY",
+  COMMUNICATION_RECORDING = "COMMUNICATION_RECORDING",
+  REFUND_POLICY = "REFUND_POLICY",
+}
+
+export enum ConsentSignoffStatus {
+  DRAFT = "DRAFT",
+  FINAL = "FINAL",
+}
+
+export interface LegalDocumentSummary {
+  type: ConsentDocumentType;
+  consentVersion: string;
+  effectiveAt: string;
+  title: string;
+  href: string;
+  signoffStatus: ConsentSignoffStatus;
+}
+
+export interface LegalDocument extends LegalDocumentSummary {
+  body?: string;
+}
+
+// Mirrors backend PublicConfigDto.
+export interface PublicConfig {
+  phoneVerificationEnabled: boolean;
+  // §B go-live gate (D18): whether the Premium Legal Opinion report section is live.
+  legalOpinionEnabled?: boolean;
 }

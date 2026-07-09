@@ -170,7 +170,7 @@ class FlutterwavePaymentGateway(IPaymentGateway):
                 "account_number": "0690000031",
                 "account_bank": "044",
                 "beneficiary_name": "John Doe",
-                "created_at": "2023-06-01T12:00:00.000Z",
+                "date_created": "2023-06-01T12:00:00.000Z",
                 "currency": "NGN"
             }
         }
@@ -224,7 +224,7 @@ class FlutterwavePaymentGateway(IPaymentGateway):
                 "account_number": "0690000031",
                 "bank_code": "044",
                 "full_name": "DOE JOHN",
-                "created_at": "2024-06-16T12:00:00.000Z",
+                "date_created": "2024-06-16T12:00:00.000Z",
                 "currency": "NGN",
                 "amount": 5000,
                 "fee": 10,

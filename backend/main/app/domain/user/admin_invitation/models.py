@@ -1,8 +1,7 @@
-"""Admin invitation domain — PRD Phase 4 (Admin Onboarding & Role Management).
+"""Admin invitation domain models (PRD §4.1).
 
-A Super Admin invites a new admin via tokenised email link. The raw token is
-returned to the inviter once at creation; only its hash is stored. Acceptance
-behaviour depends on whether the invitee already has an account (see service).
+A Super Admin invites a new admin with a sub-role via a tokenised link (72-hour
+validity). Acceptance elevates the accepting user to ADMIN (see decision-log D10).
 """
 from __future__ import annotations
 
@@ -11,102 +10,107 @@ from datetime import datetime
 from typing import Optional
 
 from pydantic import EmailStr
-from sqlalchemy import Column, DateTime, Index, String
+from sqlalchemy import Column, Index, String
 
 from main.app.domain.user.models import AdminSubRole
-from main.appodus_utils import BaseEntity, BaseQueryDto, Object, PageRequest
+from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
+from main.appodus_utils.db.models import UTCDateTime
 
 
 class AdminInvitationStatus(str, enum.Enum):
     PENDING = "PENDING"
     ACCEPTED = "ACCEPTED"
-    EXPIRED = "EXPIRED"
     REVOKED = "REVOKED"
 
 
-# ─── ORM ──────────────────────────────────────────────────────────
+class InviteAcceptScenario(str, enum.Enum):
+    """How the invitee should proceed (PRD §4.1 three scenarios)."""
+
+    NEW_USER = "NEW_USER"          # no account → pre-filled signup then accept
+    EXISTING_USER = "EXISTING_USER"  # has a USER account → log in to merge admin
+    ALREADY_ADMIN = "ALREADY_ADMIN"  # already an admin → friendly no-op
 
 
 class AdminInvitation(BaseEntity):
     __tablename__ = "admin_invitations"
 
+    email = Column(String(254), nullable=False, index=True)
     email_normalized = Column(String(254), nullable=False, index=True)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
     sub_role = Column(String(16), nullable=False)
-    inviter_admin_id = Column(String(36), nullable=False)
-    token_hash = Column(String(128), nullable=False, unique=True)
-    status = Column(String(16), nullable=False, default=AdminInvitationStatus.PENDING.value, index=True)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    accepted_at = Column(DateTime(timezone=True), nullable=True)
-    accepted_by_user_id = Column(String(36), nullable=True)
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    status = Column(String(16), nullable=False, default=AdminInvitationStatus.PENDING.value)
+    invited_by = Column(String(36), nullable=False)
+    expires_at = Column(UTCDateTime, nullable=False)
+    accepted_at = Column(UTCDateTime, nullable=True)
+    accepted_by = Column(String(36), nullable=True)
+
+    __table_args__ = (
+        Index("ix_admin_invitations_email_norm", "email_normalized"),
+    )
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
 
-
 class CreateAdminInvitationDto(Object):
+    email: str
     email_normalized: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     sub_role: AdminSubRole
-    inviter_admin_id: str
     token_hash: str
-    status: AdminInvitationStatus = AdminInvitationStatus.PENDING
+    invited_by: str
     expires_at: datetime
+    status: AdminInvitationStatus = AdminInvitationStatus.PENDING
 
 
 class UpdateAdminInvitationDto(Object):
-    status: Optional[AdminInvitationStatus] = None
-    accepted_at: Optional[datetime] = None
-    accepted_by_user_id: Optional[str] = None
+    status: Optional[str] = None
+    accepted_by: Optional[str] = None
 
 
-class SearchAdminInvitationDto(PageRequest, BaseQueryDto):
-    email_normalized: Optional[str] = None
+class SearchAdminInvitationDto(InternalPageRequest, BaseQueryDto):
+    email: Optional[str] = None
     status: Optional[str] = None
 
 
 class QueryAdminInvitationDto(BaseQueryDto):
-    email_normalized: Optional[str] = None
-    status: Optional[str] = None
+    email: Optional[str] = None
     sub_role: Optional[str] = None
+    status: Optional[str] = None
+    invited_by: Optional[str] = None
+    expires_at: Optional[datetime] = None
 
 
-# ── Inputs / outputs ──
-
+# ─── API request/response DTOs ────────────────────────────────────
 
 class InviteAdminRequestDto(Object):
     email: EmailStr
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     sub_role: AdminSubRole
 
 
-class AcceptInviteRequestDto(Object):
-    token: str
-
-
-class AdminInvitationDto(Object):
+class AdminInvitationSummaryDto(Object):
     id: str
     email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     sub_role: AdminSubRole
     status: AdminInvitationStatus
-    inviter_admin_id: str
+    invited_by: str
     expires_at: datetime
-    accepted_at: Optional[datetime] = None
-    created_at: datetime
+    date_created: datetime
 
 
-class InviteAdminResultDto(Object):
-    invitation: AdminInvitationDto
-    # Raw, single-use token returned to the inviter so they can copy/forward
-    # the link if email delivery fails. Omitted on subsequent reads.
-    raw_token: str
+class InvitePreviewDto(Object):
+    """Unauthenticated preview so the frontend can route the acceptance flow."""
 
-
-class AcceptInviteResultDto(Object):
-    """Branch indicator for the frontend.
-
-    - SIGNUP_REQUIRED: invitee has no account; redirect to signup pre-filled.
-    - LOGIN_REQUIRED: invitee has an account; ask for login then re-call.
-    - ALREADY_ADMIN: invitee is already an admin; show friendly page.
-    - ACCEPTED: invitation was consumed and admin role attached.
-    """
-    branch: str
     email: str
-    sub_role: Optional[AdminSubRole] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    sub_role: AdminSubRole
+    status: AdminInvitationStatus
+    expired: bool
+    scenario: InviteAcceptScenario

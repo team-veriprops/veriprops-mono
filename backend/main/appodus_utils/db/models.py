@@ -1,9 +1,10 @@
 import uuid
-from datetime import datetime
-from typing import TypeVar, Optional, Generic, List, Union
+from datetime import datetime, timezone
+from typing import TypeVar, Optional, Generic, List, Union, Any
 
-from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import Column, Boolean, UUID, TIMESTAMP, Integer, String
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+from sqlalchemy import Column, Boolean, UUID, Integer, String, DateTime, TypeDecorator, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr, DeclarativeBase
 
@@ -109,6 +110,24 @@ class CamelModel(BaseModel):
         extra="ignore",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _stringify_uuids(cls, data):
+        """Coerce raw ``uuid.UUID`` inputs (e.g. hand-built DTOs doing ``id=entity.id``)
+        to their hex string form.
+
+        Entity primary keys are ``uuid.UUID`` objects, but DTO id fields are typed
+        ``str``. The generic-repo path already emits ``uuid.hex`` via ``Utils.uuid_to_hex``;
+        this mirrors that format so hand-built and repo-built DTOs stay consistent and
+        no ``str`` id field crashes on a ``UUID`` input.
+        """
+        if isinstance(data, dict):
+            return {
+                key: (value.hex if isinstance(value, uuid.UUID) else value)
+                for key, value in data.items()
+            }
+        return data
+
 
 class Object(CamelModel, AutoRepr):
     """
@@ -135,6 +154,69 @@ class Object(CamelModel, AutoRepr):
 #         return str_to_datetime(value)
 
 
+class UTCDateTime(TypeDecorator[datetime]):
+    """
+    SQLAlchemy DateTime that assumes DB values are stored in UTC
+    and returns timezone-aware UTC datetime objects.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True  # important for SQLAlchemy 2.x performance
+
+    def process_bind_param(
+            self,
+            value: Optional[datetime],
+            dialect: Any,
+            ) -> Optional[datetime]:
+        if value is None:
+            return None
+
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value)
+
+        # Treat naive datetimes as UTC; normalise tz-aware ones to UTC.
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+
+        return value.astimezone(timezone.utc)
+
+    def process_result_value(
+            self,
+            value: Optional[datetime],
+            dialect: Any,
+    ) -> Optional[datetime]:
+        if value is None:
+            return None
+
+        # Ensure timezone safety
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+
+        # Normalize everything to UTC (safe even if DB sends tz-aware)
+        return value.astimezone(timezone.utc)
+
+
+# JSON column that renders as JSONB on PostgreSQL (indexable, supports the @>
+# containment operator) and falls back to plain JSON on other dialects, so the
+# dual-DB support in settings.SupportedDB still holds.
+def jsonb_variant():
+    """A *fresh* JSON/JSONB variant instance.
+
+    Use this — never the shared ``JSONB_VARIANT`` singleton — for any column wrapped in
+    ``Mutable*.as_mutable(...)``. ``Mutable.as_mutable`` installs a process-global listener
+    that binds its coercion to every mapped column whose type *is the same instance* (identity
+    match). Reusing one shared instance across dict-, list-, and plain-JSON columns leaks the
+    wrong coercion (e.g. ``MutableList``) onto unrelated columns, so assigning a ``dict`` to a
+    plain JSON column then raises "Attribute 'x' does not accept objects of type <class 'dict'>".
+    Giving each mutable column its own instance scopes the listener to that one column.
+    """
+    return JSON().with_variant(JSONB(), "postgresql")
+
+
+# Shared instance for PLAIN JSON columns and Alembic migrations. Never pass to as_mutable().
+JSONB_VARIANT = jsonb_variant()
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -155,15 +237,15 @@ class BaseEntity(Base, AutoRepr):
     id = Column(
         UUID(as_uuid=True),
         primary_key=True,
-        default=uuid.uuid4,
+        default=Utils.generate_uuid,
         unique=True,
         index=True
     )
 
     # Optimized timestamp columns
     date_created = Column(
-        TIMESTAMP(timezone=True),
-        default=Utils.datetime_now_to_db,
+        UTCDateTime,
+        default=Utils.datetime_now,
         nullable=False,
         # index=True
     )
@@ -174,7 +256,7 @@ class BaseEntity(Base, AutoRepr):
     )
 
     date_updated = Column(
-        TIMESTAMP(timezone=True),
+        UTCDateTime,
         nullable=True
     )
 
@@ -192,7 +274,7 @@ class BaseEntity(Base, AutoRepr):
     )
 
     date_deleted = Column(
-        TIMESTAMP(timezone=True),
+        UTCDateTime,
         nullable=True
     )
 
@@ -229,7 +311,7 @@ class BaseQueryDto(Object):
     version: Optional[int] = Field(None, description='The current version number of the record')
 
 
-T = TypeVar('T', bound=Union[BaseQueryDto, bool, str, Object])
+T = TypeVar('T', bound=Union[BaseQueryDto, bool, str, dict, Object, list])
 
 
 class SuccessResponse(Object, Generic[T]):
@@ -243,12 +325,17 @@ class SuccessResponse(Object, Generic[T]):
 
     data: Optional[T] = None
 
+    @classmethod
+    def ok(cls, data: T, message: Optional[str] = None) -> "SuccessResponse[T]":
+        return cls(data=data, message=message)
+
 
 class PaginationMeta(Object):
     page: int = 0
     page_size: int = 10
     count: int = 0
     total: int = 0
+    total_pages: int = 0
     prev_page: Optional[int] = None
     next_page: Optional[int] = None
 
@@ -268,8 +355,26 @@ class Page(Object, Generic[T]):
 
 # @dataclass  # use instead of Object for pydantic data validation
 class PageRequest(Object):
+    """Client-safe pagination request.
+
+    Only ``page``/``page_size`` are safe to bind from the wire. The flexible query
+    controls (``where``/``order_by``/``query_fields``) live on `InternalPageRequest`
+    and must be set server-side only — they can filter/sort on any model column, which
+    is an authorization/oracle surface if a client could set them. Any request DTO that
+    is bound from the wire (FastAPI ``Depends()``/body) must inherit ``PageRequest``,
+    never ``InternalPageRequest``.
+    """
     page: int = 0
     page_size: int = 10
+
+
+class InternalPageRequest(PageRequest):
+    """Server-only pagination request carrying the flexible query controls.
+
+    Search DTOs constructed inside services/repos inherit this. Never bind an
+    ``InternalPageRequest`` (or a Search DTO derived from it) directly from a request —
+    that would let a client supply ``where``/``order_by``/``query_fields``.
+    """
     query_fields: Optional[str] = Field(None, description='Comma separated list of return fields')
     exact_string_values: Optional[bool] = True
     order_by: Optional[str] = Field('date_created desc', description='e.g: username asc, firstname desc')

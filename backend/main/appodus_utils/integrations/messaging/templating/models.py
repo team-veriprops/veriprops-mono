@@ -77,6 +77,23 @@ class AvailableTemplate(str, Enum):
 
     # ============ PRODUCT UPDATES ============
     NEW_FEATURE_ANNOUNCEMENT = "new_feature_announcement"  # Email, Mobile push, Web Push
+
+    # ============ VERIFICATION PLATFORM ============
+    VERIFICATION_PAYMENT_CONFIRMED = "verification_payment_confirmed"  # Email, SMS
+    VERIFICATION_REPORT_READY = "verification_report_ready"  # Email, SMS, Push
+    VERIFICATION_STATUS_CHANGE = "verification_status_change"  # Email
+    VERIFICATION_AGENTS_ASSIGNED = "verification_agents_assigned"  # Email
+    VERIFICATION_JOB_ALERT = "verification_job_alert"  # Email, SMS, Push
+    VERIFICATION_NEW_MESSAGE = "verification_new_message"  # Email
+    VERIFICATION_SLA_BREACH = "verification_sla_breach"  # Email
+    VERIFICATION_REVISION_REQUEST = "verification_revision_request"  # Email
+    VERIFICATION_RECHECK_DECISION = "verification_recheck_decision"  # Email
+    VERIFICATION_DISPUTE_FILED = "verification_dispute_filed"  # Email
+    VERIFICATION_DISPUTE_RESOLVED = "verification_dispute_resolved"  # Email
+    VERIFICATION_REPORT_SHARE = "verification_report_share"  # Email
+    VERIFICATION_PAYOUT_APPROVED = "verification_payout_approved"  # Email
+    VERIFICATION_PAYOUT_HELD = "verification_payout_held"  # Email
+    VERIFICATION_ABANDONMENT_RECOVERY = "verification_abandonment_recovery"  # Email
     INVITE_TEST_NEW_FEATURE = "invite_test_new_feature"  # Email
     FEEDBACK_REQUEST_POST_TRANSACTION = "feedback_request_post_transaction"  # Email, WhatsApp, Mobile push
     SURVEY_PRODUCT_IMPROVEMENT = "survey_product_improvement"  # Email, WhatsApp
@@ -87,3 +104,6 @@ class AvailableTemplate(str, Enum):
     REFERRAL_PROGRAM_INVITATION = "referral_program_invitation"  # Email, WhatsApp, Mobile push
     HOLIDAY_FESTIVE_GREETING = "holiday_festive_greeting"  # Email, WhatsApp
     LIMITED_TIME_PROMO_DISCOUNT = "limited_time_promo_discount"  # Email, WhatsApp, Mobile push, Web Push
+
+    # ============ ADMIN BROADCAST ============
+    ADMIN_BROADCAST = "admin_broadcast"  # Email, Push

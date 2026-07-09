@@ -19,7 +19,7 @@ from kink import di, inject
 from main.app.domain.user.auth.models import (
     OtpChannel,
     ProfileCompletionDto,
-    SignupRequestDto,
+    SignupRequestDto, AuthIntent,
 )
 from main.app.domain.user.auth.otp_service import OtpService, recipient_for
 from main.appodus_utils.db.types.phone import PhoneNumber
@@ -51,6 +51,26 @@ logger: Logger = di["logger"]
 LOCKOUT_THRESHOLD = 7
 LOCKOUT_MINUTES = 15
 
+_COMMON_PASSWORDS = {
+    "password", "password1", "12345678", "123456789", "1234567890",
+    "qwerty123", "abc12345", "letmein1", "welcome1", "admin1234",
+    "iloveyou1", "monkey123", "dragon123", "baseball1", "football1",
+}
+
+
+def _assert_password_strength(password: str) -> None:
+    """Server-side baseline: length, character diversity, and trivial-common rejection."""
+    if len(password) < 8:
+        raise ValidationException(message="Password must be at least 8 characters.")
+    has_letter = any(c.isalpha() for c in password)
+    has_digit_or_special = any(c.isdigit() or not c.isalnum() for c in password)
+    if not has_letter or not has_digit_or_special:
+        raise ValidationException(
+            message="Password must include at least one letter and one number or special character.",
+        )
+    if password.lower() in _COMMON_PASSWORDS:
+        raise ValidationException(message="Password is too common. Please choose a stronger password.")
+
 
 def _phone_e164(dial_code: str, phone: str) -> str:
     digits = "".join(c for c in (dial_code + phone) if c.isdigit())
@@ -68,7 +88,7 @@ class AuthService:
             consent_service: ConsentService,
             session_service: SessionService,
             otp_service: OtpService,
-            oauth_identity_service: OAuthIdentityService
+            oauth_identity_service: OAuthIdentityService,
     ):
         self._user_service = user_service
         self._consent_service = consent_service
@@ -93,24 +113,43 @@ class AuthService:
         if not required.issubset(consent_types):
             raise ValidationException(message="Both Platform Terms and Privacy Policy must be accepted.")
 
-        # Server-side OTP gate — the user must have completed an OTP for both
-        # email and phone within the last 30 minutes (see OtpService.OTP_VERIFIED_TTL).
-        # Reject the signup otherwise; FE keeps the wizard on the verify step.
+        # Email must have a recent OTP marker. Phone is only required when phone
+        # verification is enabled; otherwise the number is collected here and
+        # verified later at the payment step.
+        phone_required = settings.PHONE_VERIFICATION_ENABLED
         email_recipient = EmailRecipient(email=req.email.lower())
         phone_recipient = PhoneNumber(dial_code=req.dial_code, number=req.phone)
         email_ok = await self._otp_service.is_recently_verified(
             OtpChannel.EMAIL, email_recipient.email,
         )
-        phone_ok = await self._otp_service.is_recently_verified(
-            OtpChannel.PHONE, phone_recipient.international_number,
+        phone_ok = (
+            await self._otp_service.is_recently_verified(
+                OtpChannel.PHONE, phone_recipient.international_number,
+            )
+            if phone_required
+            else False
         )
-        if not email_ok or not phone_ok:
+        if not email_ok or (phone_required and not phone_ok):
             raise ValidationException(
-                message="Please verify your email and phone before creating your account.",
+                message=(
+                    "Please verify your email and phone before creating your account."
+                    if phone_required
+                    else "Please verify your email before creating your account."
+                ),
             )
 
         password_hash = Utils.get_password_hash(req.password)
-        intent_persona = UserPersona.AGENT if req.intent == "agent" else UserPersona.CUSTOMER
+        intent_persona = (
+            [UserPersona.AGENT]
+            if req.intent == AuthIntent.AGENT
+            else [UserPersona.CUSTOMER]
+            if req.intent != AuthIntent.INVITED_ADMIN
+            else []
+        )
+
+        # §17.1 referral linkage — resolve the (optional) referral code to a referrer id.
+        # An unknown/invalid code is silently ignored (never blocks signup).
+        referred_by = await self._resolve_referrer(req.referral_code)
 
         user = await self._user_service.create_user(CreateUserDto(
             first_name=req.first_name,
@@ -123,15 +162,17 @@ class AuthService:
             preferred_currency=req.preferred_currency,
             phone_country_code=req.country_code,
             phone_dial_code=req.dial_code,
-            personas=[intent_persona],
-            email_verified=True,
-            phone_verified=True,
+            personas=intent_persona,
+            email_verified=email_ok,
+            phone_verified=phone_ok,
+            referred_by=referred_by,
         ))
 
         # Verified markers are single-use — drop them so a future signup attempt
         # with the same recipient must re-verify.
         await self._otp_service.consume_verified_marker(OtpChannel.EMAIL, email_recipient.email)
-        await self._otp_service.consume_verified_marker(OtpChannel.PHONE, phone_recipient.international_number)
+        if phone_required:
+            await self._otp_service.consume_verified_marker(OtpChannel.PHONE, phone_recipient.international_number)
 
         for consent in req.consents:
             await self._consent_service.record_user_consent(
@@ -151,6 +192,16 @@ class AuthService:
         )
         return user
 
+    async def _resolve_referrer(self, referral_code: Optional[str]) -> Optional[str]:
+        """Map a referral code to the referrer's user id (§17.1). Resolved lazily via DI so
+        the auth domain never imports the referral service at module load. Unknown → None."""
+        if not referral_code:
+            return None
+        from kink import di
+
+        from main.app.domain.referral.service import ReferralService
+        return await di[ReferralService].resolve_referrer_id(referral_code)
+
     # ── OAuth ─────────────────────────────────────────────────────
     async def find_or_create_oauth_user(
             self,
@@ -161,7 +212,7 @@ class AuthService:
             last_name: str,
             avatar_url: Optional[str],
             raw_profile: dict,
-            intent: Optional[str],
+            intent: Optional[AuthIntent],
     ) -> tuple[User, bool]:
         """Returns (user, is_new). Raises if email collision with password account."""
         existing_identity = await self._oauth_identity_service.get_oauth_identity(provider, subject)
@@ -179,7 +230,7 @@ class AuthService:
             )
             return existing_user, False
 
-        intent_persona = UserPersona.AGENT if intent == "agent" else UserPersona.CUSTOMER
+        intent_persona = UserPersona.AGENT if intent == AuthIntent.AGENT else UserPersona.CUSTOMER
         user = await self._user_service.create_user(CreateUserDto(
             first_name=first_name or "Veriprops",
             last_name=last_name or "User",
@@ -232,12 +283,16 @@ class AuthService:
     async def complete_profile(
             self, user_id: str, dto: ProfileCompletionDto,
     ) -> User:
+        e164 = _phone_e164(dto.dial_code, dto.phone)
+        existing = await self._user_service.get_user_by_phone_e164(e164)
+        if existing and str(existing.id) != user_id:
+            raise ValidationException(message="An account with this phone number already exists.")
         await self._user_service.update_user(user_id, UpdateUserDto(
             phone_country_code=dto.country_code,
             phone_dial_code=dto.dial_code,
             phone=dto.phone,
             phone_e164=_phone_e164(dto.dial_code, dto.phone),
-            phone_verified=True,
+            phone_verified=settings.PHONE_VERIFICATION_ENABLED,
             country_of_residence=dto.country_of_residence,
             timezone=dto.timezone,
             preferred_currency=dto.preferred_currency,
@@ -269,6 +324,7 @@ class AuthService:
         return raw_token, fullname
 
     async def reset_password(self, raw_token: str, new_password: str) -> User:
+        _assert_password_strength(new_password)
         token_hash = Utils.sha256(raw_token)
         token = await self._session_service.consume_password_reset_token(token_hash)
         if not token:
@@ -284,6 +340,7 @@ class AuthService:
         return await self._user_service.get_user_model(str(token.user_id))
 
     async def set_password(self, user_id: str, new_password: str) -> None:
+        _assert_password_strength(new_password)
         new_hash = Utils.get_password_hash(new_password)
         await self._user_service.set_password_hash(user_id, new_hash)
         await self._session_service.record_event(
@@ -303,6 +360,16 @@ class AuthService:
             ip_address: Optional[str] = None,
             fullname: Optional[str] = None,
     ) -> int:
+        # During signup / profile completion (no authenticated user), reject if the
+        # contact already belongs to an existing account before issuing the OTP.
+        if user_id is None:
+            if channel == OtpChannel.EMAIL and email:
+                if await self._user_service.get_user_by_email(email):
+                    raise UserAlreadyExistsException(email=email)
+            elif channel == OtpChannel.PHONE and dial_code and phone:
+                e164 = _phone_e164(dial_code, phone)
+                if await self._user_service.get_user_by_phone_e164(e164):
+                    raise ValidationException(message="An account with this phone number already exists.")
         recipient = recipient_for(channel, email=email, dial_code=dial_code, phone=phone, fullname=fullname)
         return await self._otp_service.send_otp(
             channel, recipient, user_id=user_id, ip_address=ip_address,
@@ -322,4 +389,32 @@ class AuthService:
         recipient = recipient_for(channel, email=email, dial_code=dial_code, phone=phone)
         await self._otp_service.verify_otp(
             channel, recipient, code, user_id=user_id, ip_address=ip_address,
+        )
+
+    # ── Phase-5 phone verification (PRD §5) ───────────────────────────
+    # When PHONE_VERIFICATION_ENABLED=false the number is collected but left unverified at
+    # signup; the payment step then requires a verified phone. These two authenticated
+    # helpers send/verify an OTP to the *logged-in user's own* phone and flip phone_verified.
+
+    async def send_phone_otp_for_user(self, user_id: str, *, ip_address: Optional[str] = None) -> int:
+        user = await self._user_service.get_user_model(user_id)
+        return await self.send_otp(
+            OtpChannel.PHONE,
+            dial_code=user.phone_dial_code,
+            phone=user.phone,
+            user_id=user_id,
+            ip_address=ip_address,
+            fullname=f"{user.first_name} {user.last_name}".strip(),
+        )
+
+    async def verify_phone_for_user(self, user_id: str, code: str, *, ip_address: Optional[str] = None) -> None:
+        user = await self._user_service.get_user_model(user_id)
+        recipient = PhoneNumber(dial_code=user.phone_dial_code, number=user.phone)
+        await self._otp_service.verify_otp(
+            OtpChannel.PHONE, recipient, code, user_id=user_id, ip_address=ip_address,
+        )
+        await self._user_service.mark_phone_verified(user_id)
+        # Single-use — drop the marker so the code can't be replayed.
+        await self._otp_service.consume_verified_marker(
+            OtpChannel.PHONE, recipient.international_number,
         )

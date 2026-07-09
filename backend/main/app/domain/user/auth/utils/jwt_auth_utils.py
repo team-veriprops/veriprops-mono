@@ -17,22 +17,33 @@ from fastapi.params import Depends
 from fastapi.security import OAuth2PasswordBearer
 from libre_fastapi_jwt import AuthJWT
 
+from kink import di
+
 from main.appodus_utils.common.utils_settings import utils_settings
 from main.appodus_utils.db.redis_utils import RedisUtils
+
+logger = di['logger']
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auths/access-token", auto_error=False)
 
 
 class _JwtSettings(BaseModel):
+    authjwt_denylist_enabled: bool = True
+
     authjwt_secret_key: str = settings.AUTHJWT_SECRET_KEY
+    # Pin the signing + accepted-decode algorithm so no algorithm-confusion is possible.
+    authjwt_algorithm: str = settings.AUTHJWT_ALGORITHM
+    authjwt_decode_algorithms: List[str] = list(settings.AUTHJWT_DECODE_ALGORITHMS)
     authjwt_token_location: List[str] = list(settings.AUTHJWT_TOKEN_LOCATION)
     authjwt_cookie_secure: bool = settings.AUTHJWT_COOKIE_SECURE
     authjwt_cookie_csrf_protect: bool = settings.AUTHJWT_COOKIE_CSRF_PROTECT
     authjwt_cookie_samesite: str = settings.AUTHJWT_COOKIE_SAMESITE
-    authjwt_access_cookie_key: str = "access_token"
-    authjwt_refresh_cookie_key: str = "refresh_token"
-    authjwt_access_csrf_cookie_key: str = "csrf_access"
-    authjwt_refresh_csrf_cookie_key: str = "csrf_refresh"
+
+    authjwt_access_cookie_key: str = settings.AUTHJWT_ACCESS_COOKIE_KEY
+    authjwt_refresh_cookie_key: str = settings.AUTHJWT_REFRESH_COOKIE_KEY
+
+    authjwt_access_csrf_cookie_key: str = settings.AUTHJWT_ACCESS_CSRF_COOKIE_KEY
+    authjwt_refresh_csrf_cookie_key: str = settings.AUTHJWT_REFRESH_CSRF_COOKIE_KEY
 
 
 class JwtAuthUtils:
@@ -52,11 +63,12 @@ class JwtAuthUtils:
 
     @staticmethod
     async def revoke_token(authorize: AuthJWT) -> bool:
-        authorize.jwt_required()
+        await authorize.jwt_required()
         token_jti = authorize.get_raw_jwt()['jti']
 
-        # TODO: Get the remaining refresh token TTL (time_to_live) from authorize
-        time_to_live = timedelta(seconds=utils_settings.REFRESH_TOKEN_TTL_SECONDS)
+        raw_jwt = authorize.get_raw_jwt() or {}
+        exp_time_secs=int(raw_jwt.get("exp", 0))
+        time_to_live = timedelta(seconds=exp_time_secs)
 
         await RedisUtils.set_redis(f"token_jti:{token_jti}", 'true', time_to_live)  # Store until token expires
 
@@ -96,18 +108,27 @@ class JwtAuthUtils:
             authorize.set_refresh_cookies(refresh_token)
 
             return Utils.sha256(refresh_token)
-        except Exception as exc:
-            print(exc)
-            return ""
+        except Exception:
+            # Never fall through returning an empty hash — that would persist a
+            # device-session row with no usable refresh binding and no cookies set.
+            # Fail loudly so the login/signup transaction rolls back.
+            logger.exception("Failed to issue session tokens")
+            raise
 
     @staticmethod
     async def refresh_access_token(authorize: AuthJWT) :
 
-        authorize.jwt_refresh_token_required()
-        user_id = authorize.get_jwt_subject()
+        await authorize.jwt_refresh_token_required()
+        user_id = str(authorize.get_jwt_subject())
 
-        # TODO: Get user_claims from authorize
-        user_claims = {}
+        raw_jwt = authorize.get_raw_jwt() or {}
+        user_claims = {
+            "user_type": raw_jwt.get('user_type'),
+            # Claim is stored under 'personas' (see set_access_token); reading
+            # 'user_personas' here silently dropped persona-based authz on refresh.
+            "personas": raw_jwt.get('personas', []),
+            "admin_sub_role": raw_jwt.get('admin_sub_role'),
+        }
 
         try:
 
@@ -119,9 +140,9 @@ class JwtAuthUtils:
             raise
 
     @staticmethod
-    async def access_token_protected(token: str = Depends(oauth2_scheme), authorizer: AuthJWT = Depends()):
-        authorizer.jwt_required()
-        return authorizer
+    async def access_token_protected(token: str = Depends(oauth2_scheme), authorize: AuthJWT = Depends()):
+        await authorize.jwt_required()
+        return authorize
 
     @staticmethod
     def generate_pkce() -> tuple[str, str, str]:

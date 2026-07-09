@@ -1,8 +1,24 @@
 # Initialize Command
 
-Read PRD.md completely.
+## Purpose
+Bootstrap implementation state from PRD.md.
 
-Generate:
+---
+
+## Step 1 — Read inputs
+
+Read:
+
+- PRD.md
+- existing docs/
+- repository structure
+- git status
+
+---
+
+## Step 2 — Generate artifacts
+
+Create:
 
 - docs/prd-analysis.md
 - docs/requirements-matrix.md
@@ -10,35 +26,64 @@ Generate:
 - docs/architecture-spec.md
 - docs/execution-plan.md
 - docs/progress.md
+- docs/runtime-state.yaml
 
 ---
 
-## Clarification Gate (MANDATORY)
+## Step 3 — Clarification Gate (MANDATORY)
 
-If ANY ambiguity exists:
-- stop immediately
-- ask user structured clarification questions:
+If ambiguity exists:
 
-Format:
+STOP and ask:
 
 CLARIFICATION REQUIRED:
+
 1. Question
 2. Why it matters
-3. Options (if any)
-4. Default assumption if unanswered
+3. Options (if applicable)
+4. Default assumption (if unanswered)
 
-Do NOT proceed until resolved or defaults approved.
+Do not proceed until resolved or defaults approved.
 
----
+Persist answers in:
 
-## Initialize progress state
-
-Set:
-status = initialized
-next_slice = S1
-completed = []
-blockers = []
+docs/decision-log.md
 
 ---
 
-STOP after initialization.
+## Step 4 — Initialize progress
+
+Set docs/progress.md:
+
+- status: initialized
+- completed_slices: []
+- current_slice: none
+- blockers: []
+- pending_recovery: none
+
+---
+
+## Step 5 — Initialize runtime state
+
+Set docs/runtime-state.yaml:
+
+- status: idle
+- phase: idle
+- current_slice: null
+- current_subtask: null
+- modified_files: []
+- created_files: []
+- tests: default false
+- self_audit: default false
+- clarification_needed: []
+- next_action: null
+
+---
+
+## Step 6 — STOP
+
+No implementation.
+
+Wait for:
+
+run

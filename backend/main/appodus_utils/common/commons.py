@@ -4,8 +4,9 @@ import hashlib
 import io
 import json
 import os
-import random
 import re
+import secrets
+import string
 import uuid
 from _decimal import Decimal
 from datetime import datetime, timedelta, timezone, time
@@ -25,6 +26,7 @@ from passlib.context import CryptContext
 from starlette import status
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
+from uuid6 import uuid7
 
 from main.appodus_utils.exception.exceptions import AppodusBaseException
 
@@ -215,18 +217,6 @@ class Utils:
         return datetime.now(timezone.utc)
 
     @staticmethod
-    def datetime_to_db(date: datetime) -> datetime:
-        return date.replace(tzinfo=None)
-
-    @staticmethod
-    def datetime_now_to_db() -> datetime:
-        return Utils.datetime_to_db(Utils.datetime_now())
-
-    @staticmethod
-    def datetime_from_db(date: datetime) -> datetime:
-        return date.replace(tzinfo=timezone.utc)
-
-    @staticmethod
     def datetime_now_plus(*, seconds: int = 0, minutes: int = 0, hours: int = 0, days: int = 0) -> datetime:
         delta = timedelta(seconds=seconds, minutes=minutes, hours=hours, days=days)
         return Utils.datetime_now() + delta
@@ -400,18 +390,29 @@ class Utils:
 
     @staticmethod
     def get_otp_code(prefix: str = None, suffix: str = None):
-        otp = random.randint(100000, 999999)
+        # OTP_MODE is set as an env var by settings.set_env_vars() at startup.
+        # deterministic → return TEST_OTP (stable, predictable, required in test env)
+        # random        → generate a cryptographically random 6-digit code (required in prod)
+        otp_mode = os.environ.get("OTP_MODE", "deterministic").lower()
+
+        if otp_mode == "deterministic":
+            test_otp = Utils.get_from_env_fail_if_not_exists(env_key="TEST_OTP")
+            return str(test_otp)
+
+        # Cryptographically-secure 6-digit code (100000–999999). Never use the non-crypto
+        # `random` module for OTPs — its PRNG output is predictable.
+        otp = secrets.randbelow(900000) + 100000
         if prefix:
             otp = prefix + '-' + str(otp)
         if suffix:
-            otp = otp + suffix
+            otp = str(otp) + suffix
 
         return str(otp)
 
     @staticmethod
     def get_tran_ref():
         now = Utils.datetime_now()
-        uuid_str = uuid.uuid4().__str__()
+        uuid_str = Utils.generate_uuid().__str__()
         return f'{now.year}' \
                f'-{now.month}' \
                f'-{now.day}' \
@@ -419,16 +420,26 @@ class Utils:
                f'_{now.minute}' \
                f'-{uuid_str[:6]}'
 
+    # Alphabet for security tokens/codes: alphanumeric only (no ambiguous URL chars),
+    # ~5.95 bits of entropy per character from a CSPRNG.
+    _RANDOM_STR_ALPHABET = string.ascii_letters + string.digits
+
     @staticmethod
-    def random_str(length: int = 6):
-        if length > 36:
-            raise AppodusBaseException(message=f"random_str: the maximum length is 36, you requested '{length}'")
-        uuid_str = uuid.uuid4().__str__()
-        return uuid_str[:length]
+    def random_str(length: int = 6) -> str:
+        """Cryptographically-secure random alphanumeric string of exactly ``length``.
+
+        Backs security-sensitive values (password-reset tokens, admin-invite tokens,
+        OAuth state, share tokens, referral codes, payment refs), so it must use
+        ``secrets`` — never a time-ordered UUID or the non-crypto ``random`` module,
+        both of which are partially predictable.
+        """
+        if length < 1:
+            raise AppodusBaseException(message=f"random_str: length must be >= 1, got '{length}'")
+        return "".join(secrets.choice(Utils._RANDOM_STR_ALPHABET) for _ in range(length))
 
     @staticmethod
     def get_document_ref():
-        return uuid.uuid1().hex
+        return Utils.generate_uuid().hex
 
     @staticmethod
     def get_url_str(request: Request) -> str:
@@ -470,8 +481,18 @@ class Utils:
         return scrambled_value
 
     @staticmethod
-    def hex_to_uuid(value: str):
-        return uuid.UUID(hex=value, version=4) if isinstance(value, str) else value
+    def generate_uuid() -> uuid.UUID:
+        return uuid7()
+
+    @staticmethod
+    def hex_to_uuid(value: str | uuid.UUID):
+        if isinstance(value, uuid.UUID):
+            return value
+
+        if isinstance(value, str):
+            return uuid.UUID(value)
+
+        raise TypeError(f"Invalid UUID value: {type(value)}")
 
     @staticmethod
     def uuid_to_hex(value: uuid.UUID):

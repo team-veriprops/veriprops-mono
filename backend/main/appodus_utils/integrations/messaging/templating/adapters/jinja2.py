@@ -9,7 +9,7 @@ from main.appodus_utils.integrations.messaging.templating.engine import Template
 
 
 class Jinja2TemplateEngine(TemplateEngine):
-    def __init__(self, template_dir: str):
+    def __init__(self, template_dir: Path):
         self.template_dir = template_dir
         self.env = self._create_environment()
 
@@ -48,7 +48,7 @@ class Jinja2TemplateEngine(TemplateEngine):
 
 class Jinja2EngineFactory(TemplateEngineFactory):
     def __init__(self):
-        self.template_dir = Path(settings.BASE_DIR) / "app/templates"
+        self.template_dir = self._get_template_dir()
 
     @property
     def template_extension(self) -> str:
@@ -56,3 +56,22 @@ class Jinja2EngineFactory(TemplateEngineFactory):
 
     def create_engine(self) -> TemplateEngine:
         return Jinja2TemplateEngine(template_dir=self.template_dir)
+
+    @staticmethod
+    def _get_template_dir():
+        base_dir = Path(settings.BASE_DIR).resolve(strict=True)
+
+        template_dir = (
+            base_dir
+            .joinpath("integrations", "messaging", "templates")
+            .resolve(strict=True)
+        )
+
+        if not template_dir.is_dir():
+            raise NotADirectoryError(f"Invalid template directory: {template_dir}")
+
+        if base_dir not in template_dir.parents and template_dir != base_dir:
+            raise ValueError("Template directory escapes BASE_DIR")
+
+        return template_dir
+

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
+import { isAutomationEnvironment } from "@lib/automation";
 import { AuthService } from "./auth-service";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import type {
@@ -20,8 +21,10 @@ const authService = new AuthService(httpClient);
 export const authKeys = {
   session: ["auth", "session"] as const,
   devices: ["auth", "devices"] as const,
-  events:  ["auth", "security-events"] as const,
+  events:  (page: number, pageSize: number) => ["auth", "security-events", page, pageSize] as const,
   linked:  ["auth", "linked-providers"] as const,
+  crossPortal: ["auth", "cross-portal"] as const,
+  publicConfig: ["config", "public"] as const,
 };
 
 export function useCurrentSession(enabled = true) {
@@ -32,6 +35,13 @@ export function useCurrentSession(enabled = true) {
     queryFn: async () => {
       const res = await authService.currentSession();
       if (res.data) setSession(res.data);
+      if (isAutomationEnvironment()) {
+        window.__auth_snapshot__ = {
+          isAuthenticated: !!res.data,
+          userId: res.data?.user?.id ?? null,
+          personas: res.data?.user?.personas ?? [],
+        };
+      }
       return res.data ?? null;
     },
     retry: false,
@@ -81,6 +91,13 @@ export const useSendOtpMutation = () =>
 export const useVerifyOtpMutation = () =>
   useMutation({ mutationFn: (payload: OtpVerifyRequest) => authService.verifyOtp(payload) });
 
+/** Phase-5 phone verification for the logged-in user (§5) — the phone comes from the session. */
+export const useSendPhoneOtpMutation = () =>
+  useMutation({ mutationFn: () => authService.sendPhoneOtp() });
+
+export const useVerifyPhoneMutation = () =>
+  useMutation({ mutationFn: (code: string) => authService.verifyPhone(code) });
+
 export const useForgotPasswordMutation = () =>
   useMutation({ mutationFn: (payload: ForgotPasswordRequest) => authService.forgotPassword(payload) });
 
@@ -123,10 +140,28 @@ export function useRevokeAllOtherDevicesMutation() {
   });
 }
 
-export function useSecurityEventsQuery() {
+export function useSecurityEventsQuery(page = 0, pageSize = 20) {
   return useQuery({
-    queryKey: authKeys.events,
-    queryFn: async () => (await authService.listSecurityEvents()).data ?? [],
+    queryKey: authKeys.events(page, pageSize),
+    queryFn: () => authService.listSecurityEvents(page, pageSize),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useCrossPortalSummaryQuery(enabled = true) {
+  return useQuery({
+    queryKey: authKeys.crossPortal,
+    enabled,
+    queryFn: async () => (await authService.getCrossPortalSummary()).data ?? null,
+    staleTime: 30_000,
+  });
+}
+
+export function usePublicConfigQuery() {
+  return useQuery({
+    queryKey: authKeys.publicConfig,
+    queryFn: async () => (await authService.getPublicConfig()).data ?? null,
+    staleTime: 5 * 60_000,
   });
 }
 

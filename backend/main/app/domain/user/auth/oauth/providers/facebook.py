@@ -2,6 +2,8 @@ from typing import Optional
 
 from httpx import AsyncClient
 from kink import di, inject
+
+from main.app.domain.user.auth.models import AuthIntent
 from main.app.domain.user.auth.oauth.interface import ISocialAuthProvider
 from main.app.domain.user.auth.oauth.providers.models import (
     OAuthCallbackRequestDto,
@@ -34,7 +36,7 @@ class FacebookAuthProvider(ISocialAuthProvider):
     async def initialize(
         self,
         request: Request,
-        intent: Optional[str] = None,
+        intent: Optional[AuthIntent] = None,
         mode: OAuthFlowMode = OAuthFlowMode.AUTH,
         link_user_id: Optional[str] = None,
     ) -> str:

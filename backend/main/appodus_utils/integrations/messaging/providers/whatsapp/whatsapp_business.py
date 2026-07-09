@@ -1,26 +1,44 @@
 from decimal import Decimal
-from typing import Dict, Any
+from logging import Logger
+from typing import Any, Dict, List
 
-import httpx
 from httpx import AsyncClient
 from kink import inject, di
 
 from main.app.config.settings import settings
 from main.app.domain.message.models import UpsertMessageDto
 from main.appodus_utils.db.types.money import Money, TransactionCurrency
-from main.appodus_utils.integrations.exception.exceptions import IntegrationException
-from main.appodus_utils.integrations.messaging.models import MessageChannel, MessageProviderName, MessageStatus
+from main.appodus_utils.integrations.exception.exceptions import (
+    IntegrationAuthenticationException,
+    IntegrationException,
+    IntegrationRateLimitException,
+)
+from main.appodus_utils.integrations.messaging.models import (
+    MessageChannel,
+    MessageProviderName,
+    MessageStatus,
+    WhatsappButton,
+    WhatsappPayload,
+    WhatsappSection,
+)
 from main.appodus_utils.integrations.messaging.providers.models import IMessageProvider
-from main.appodus_utils.integrations.messaging.providers.whatsapp.models import WhatsAppMessageType
 from main.appodus_utils import Utils
 
+logger: Logger = di['logger']
 
 @inject
 class WhatsAppBusinessProvider(IMessageProvider):
+    """
+    WhatsApp Business Cloud API (Meta Graph API v22.0).
+    Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages
+    POST https://graph.facebook.com/v22.0/{phone_number_id}/messages
+    Auth: Authorization: Bearer {access_token}
+    Success: 200 OK — message ID at messages[0].id.
+    Errors: 401/403 auth (error.code 190), 400 bad request, 429 rate-limit, 5xx server.
+    """
 
     def __init__(self):
         self.phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID
-        self.business_account_id = settings.WHATSAPP_BUSINESS_ACCOUNT_ID
         self.access_token = settings.WHATSAPP_BUSINESS_ACCESS_TOKEN
         self.client = di[AsyncClient]
         self.BASE_URL = settings.WHATSAPP_API_URL
@@ -40,132 +58,136 @@ class WhatsAppBusinessProvider(IMessageProvider):
         url = f"{self.BASE_URL}/{self.phone_number_id}/messages"
         headers = {
             "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
-        try:
-            content = message.content
-            message_type = content.get("message_type")
+        payload: WhatsappPayload = message.payload
+        body = self._build_body(message.to.recipient, payload)
 
-            if message_type == WhatsAppMessageType.TEXT:
-                payload = self._build_text_payload(message)
-            elif message_type == WhatsAppMessageType.TEMPLATE:
-                payload = self._build_template_payload(message)
-            elif message_type in [
-                WhatsAppMessageType.IMAGE,
-                WhatsAppMessageType.VIDEO,
-                WhatsAppMessageType.AUDIO,
-                WhatsAppMessageType.DOCUMENT
-            ]:
-                payload = self._build_media_payload(message)
-            elif message_type == WhatsAppMessageType.INTERACTIVE:
-                payload = self._build_interactive_payload(message)
-            else:
-                raise IntegrationException(f"Unsupported message type: {message_type}")
+        response = await self.client.post(url, json=body, headers=headers)
 
-            response = await self.client.post(url, json=payload, headers=headers)
+        if response.status_code in (401, 403):
+            error = response.json().get("error", {})
+            raise IntegrationAuthenticationException(
+                f"WhatsApp auth error (code {error.get('code', '')}): {error.get('message', response.text)}"
+            )
+        if response.status_code == 429:
+            raise IntegrationRateLimitException(
+                key=message.to.recipient,
+                reset_at=Utils.datetime_now_plus(minutes=1),
+            )
+        if 400 <= response.status_code < 500:
+            error = response.json().get("error", {})
+            raise IntegrationException(error.get("message", response.text) or "WhatsApp API error")
+        if response.status_code >= 500:
             response.raise_for_status()
-            data = response.json()
 
-            message.sent_at = Utils.datetime_now()
-            message.provider = self.name
-            message.status = MessageStatus.SENT
-            message.provider_id = data.get("messages", [{}])[0].get("id", "")
-            return message
+        data = response.json()
+        message.sent_at = Utils.datetime_now()
+        message.provider = self.name
+        message.status = MessageStatus.SENT
+        message.provider_id = data.get("messages", [{}])[0].get("id", "")
+        return message
 
-        except httpx.HTTPStatusError as e:
-            error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
-            raise WhatsAppBusinessError(error_msg)
-        except Exception as e:
-            raise WhatsAppBusinessError(str(e))
-
-    def _build_media_payload(self, message: UpsertMessageDto) -> Dict[str, Any]:
-        content = message.content
-        media_type = content["message_type"]
-        media = content["media"]
-
-        payload = {
+    def _build_body(self, recipient: str, payload: WhatsappPayload) -> Dict[str, Any]:
+        base = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
-            "to": message.recipient,
-            "type": media_type
+            "to": recipient,
         }
 
-        if media.link:
-            payload[media_type] = {
-                "link": media.link,
-                "caption": media.caption
-            }
-            if media_type == "document" and media.filename:
-                payload[media_type]["filename"] = media.filename
-        else:
-            payload[media_type] = {
-                "id": media.id,
-                "caption": media.caption
-            }
+        if payload.template_name:
+            return {**base, **self._build_template(payload)}
+        if payload.buttons:
+            return {**base, **self._build_interactive_buttons(payload)}
+        if payload.sections:
+            return {**base, **self._build_interactive_list(payload)}
+        if payload.media_url:
+            return {**base, **self._build_media(payload)}
+        return {**base, **self._build_text(payload)}
 
-        return payload
-
-    def _build_interactive_payload(self, message: UpsertMessageDto) -> Dict[str, Any]:
-        content = message.content
-        interactive = content["interactive"]
-
-        payload = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": message.recipient,
-            "type": "interactive",
-            "interactive": {
-                "type": interactive.type,
-                "body": interactive.body
-            }
+    @staticmethod
+    def _build_text(payload: WhatsappPayload) -> Dict[str, Any]:
+        return {
+            "type": "text",
+            "text": {"preview_url": False, "body": payload.text or ""},
         }
 
-        if interactive.header:
-            payload["interactive"]["header"] = interactive.header
+    @staticmethod
+    def _build_template(payload: WhatsappPayload) -> Dict[str, Any]:
+        components = []
+        if payload.template_variables:
+            components.append({
+                "type": "body",
+                "parameters": [
+                    {"type": "text", "text": v}
+                    for _, v in sorted(payload.template_variables.items())
+                ],
+            })
+        return {
+            "type": "template",
+            "template": {
+                "name": payload.template_name,
+                "language": {"code": payload.language_code or "en"},
+                "components": components,
+            },
+        }
 
-        if interactive.footer:
-            payload["interactive"]["footer"] = interactive.footer
+    @staticmethod
+    def _build_media(payload: WhatsappPayload) -> Dict[str, Any]:
+        media_type = payload.media_type.value  # image/video/document/audio
+        media_obj: Dict[str, Any] = {"link": str(payload.media_url)}
+        if payload.caption and media_type != "audio":
+            media_obj["caption"] = payload.caption
+        if media_type == "document" and payload.filename:
+            media_obj["filename"] = payload.filename
+        return {"type": media_type, media_type: media_obj}
 
-        if interactive.action.buttons:
-            payload["interactive"]["action"] = {
-                "buttons": [
-                    {
-                        "type": button.type,
-                        button.type: {
-                            "title": button.title,
-                            "id" if button.type == "reply" else "link":
-                                button.payload if button.type == "reply" else button.url
-                        }
-                    }
-                    for button in interactive.action.buttons
-                ]
+    @staticmethod
+    def _build_interactive_buttons(payload: WhatsappPayload) -> Dict[str, Any]:
+        def _button(btn: WhatsappButton) -> Dict[str, Any]:
+            return {
+                "type": "reply",
+                "reply": {"id": btn.payload or btn.title, "title": btn.title},
             }
-        elif interactive.action.sections:
-            payload["interactive"]["action"] = {
-                "button": interactive.action.button,
-                "sections": [
-                    {
-                        "title": section.title,
-                        "rows": [
-                            {
-                                "id": row.id,
-                                "title": row.title,
-                                "description": row.description
-                            }
-                            for row in section.rows
-                        ]
-                    }
-                    for section in interactive.action.sections
-                ]
+
+        interactive: Dict[str, Any] = {
+            "type": "button",
+            "body": {"text": payload.text or ""},
+            "action": {"buttons": [_button(b) for b in payload.buttons]},
+        }
+        if payload.header:
+            interactive["header"] = {"type": "text", "text": payload.header.get("text", "")}
+        if payload.footer:
+            interactive["footer"] = {"text": payload.footer}
+        return {"type": "interactive", "interactive": interactive}
+
+    @staticmethod
+    def _build_interactive_list(payload: WhatsappPayload) -> Dict[str, Any]:
+        def _section(sec: WhatsappSection) -> Dict[str, Any]:
+            return {
+                "title": sec.title,
+                "rows": [
+                    {"id": r.id, "title": r.title, **({"description": r.description} if r.description else {})}
+                    for r in sec.rows
+                ],
             }
 
-        return payload
+        interactive: Dict[str, Any] = {
+            "type": "list",
+            "body": {"text": payload.text or ""},
+            "action": {
+                "button": "Select",
+                "sections": [_section(s) for s in payload.sections],
+            },
+        }
+        if payload.header:
+            interactive["header"] = {"type": "text", "text": payload.header.get("text", "")}
+        if payload.footer:
+            interactive["footer"] = {"text": payload.footer}
+        return {"type": "interactive", "interactive": interactive}
 
-    async def get_message_status(self, message_id: str) -> Dict[str, Any]:
-        # WhatsApp Business API doesn't provide direct status checking
-        # Status updates come via webhooks
-        return {"status": "unknown", "note": "Check via webhooks"}
-
-    async def close(self):
-        await self.client.aclose()
+    async def get_message_status(self, message_id: str) -> None:
+        # WhatsApp Cloud API does not support polling message status.
+        # Delivery updates are pushed via webhooks configured on the business account.
+        return None

@@ -32,7 +32,7 @@ class WebhookData(Object):
     account_number: Optional[str] = None
     bank_code: Optional[str] = None
     full_name: Optional[str] = None
-    created_at: Optional[str] = None
+    date_created: Optional[str] = None
     reference: Optional[str] = None
     fee: Optional[float] = None
     narration: Optional[str] = None

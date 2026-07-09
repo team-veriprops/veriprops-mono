@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
+
 if TYPE_CHECKING:
     from loguru import Logger
 import json
@@ -13,7 +15,6 @@ from kink import di
 from starlette.responses import Response, RedirectResponse
 
 from main.app.config.settings import IntegratedPlatform
-from main.app.domain.webhook.callback.model import QueryCallbackDto
 from main.appodus_utils.exception.exceptions import UnauthorizedException
 
 logger: Logger = di['logger']
@@ -67,8 +68,14 @@ class BaseWebhookHandler(IWebhookHandler):
 
     @staticmethod
     def _log_event(body: bytes, headers: Dict) -> None:
-        logger.info(f"Webhook processing event, payload: {body}")
-        logger.info(f"Webhook processing event, header: {headers}")
+        # Log metadata only. The raw body carries PII/amounts and the headers carry
+        # provider signatures — neither belongs in logs.
+        content_type = headers.get("content-type") or headers.get("Content-Type")
+        logger.info(
+            "Webhook processing event (bytes=%s, content_type=%s)",
+            len(body or b""),
+            content_type,
+        )
 
     @staticmethod
     async def _retry_logic(action: Callable, max_retries: int = 3) -> None:
