@@ -51,6 +51,15 @@ class TemplatingEngine(str, enum.Enum):
     JINJA2 = "jinja2"
 
 
+class OtpMode(str, enum.Enum):
+    """OTP determinism contract. ``deterministic`` always returns ``TEST_OTP`` (required
+    in test, allowed in dev/local/staging); ``random`` generates a CSPRNG code (required
+    in production). Enforced by ``_enforce_otp_mode_policy``."""
+
+    DETERMINISTIC = "deterministic"
+    RANDOM = "random"
+
+
 # Secrets left at this placeholder must be supplied via the environment before a
 # prod/staging boot. The startup validator (`_enforce_prod_secret_policy`) refuses
 # to start a prod/staging build whose security-critical secrets are still unset or
@@ -84,9 +93,11 @@ def get_full_settings_json() -> Optional[str]:
 
 
 class AppodusBaseSettings(BaseSettings):
+    # Brand identity — the real values are supplied per-env via .env.{env}. Committed
+    # defaults are neutral placeholders, never personal contact details.
     BRAND: str = "appodus"
-    BRAND_SUPPORT_EMAIL: str = "kingsley.ezenwwere@gmail.com"
-    BRAND_SUPPORT_PHONE: str = "2347039018727"
+    BRAND_SUPPORT_EMAIL: str = "support@veriprops.ng"
+    BRAND_SUPPORT_PHONE: str = ""
 
     ENVIRONMENT: Environment = Environment.DEVELOPMENT
     ALLOW_AUTH_BYPASS: bool = False  # Optional
@@ -96,8 +107,9 @@ class AppodusBaseSettings(BaseSettings):
     APP_DOMAIN: str = "http://localhost:8000"
     SHOW_API: bool = True
 
-    # APPODUS
-    APPODUS_SERVICES_URL: str = "https://8d39e6e80670.ngrok-free.app"
+    # APPODUS — the services URL is environment-specific; supply it via .env.{env}
+    # (never commit a personal tunnel URL as the default).
+    APPODUS_SERVICES_URL: str = ""
     APPODUS_CLIENT_ID: str = "b91b0ecb-7bd7-4630-91cb-af20549c8667"
     # Real values live in the git-ignored .env.{env} files, never in committed source.
     APPODUS_CLIENT_SECRET: str = SECRET_PLACEHOLDER
@@ -119,6 +131,8 @@ class AppodusBaseSettings(BaseSettings):
     # AUTH SESSION
     AUTH_LOCKOUT_THRESHOLD: int = 7
     AUTH_LOCKOUT_MINUTES: int = 15
+    # Minimum length enforced by the server-side password-strength baseline.
+    PASSWORD_MIN_LENGTH: int = 8
 
     # TOKEN
     ACCESS_TOKEN_TTL_SECONDS: int = 60 * 15  # 15 mins
@@ -128,6 +142,20 @@ class AppodusBaseSettings(BaseSettings):
     OTP_TOKEN_EXPIRE_SECONDS: Optional[int] = 60 * 5 # 5 mins
     EMAIL_OTP_TOKEN_EXPIRE_SECONDS: Optional[int] = 60 * 30 # 30 mins
     CACHE_DATA_EXPIRES_SECONDS: Optional[int] = 60 * 60 * 24 * 8 # Redis Default
+
+    # OTP delivery & verification knobs (OtpService). The code TTL is the window a
+    # sent code stays valid; resend/failure caps throttle abuse; the verified marker
+    # lets a multi-step signup wizard confirm the OTP step without re-verifying.
+    OTP_CODE_TTL_SECONDS: int = 60 * 10                 # 10 mins — sent-code validity
+    OTP_MAX_RESENDS: int = 3                            # resends allowed within the lockout window
+    OTP_RESEND_LOCKOUT_SECONDS: int = 60 * 30          # 30 mins — resend-count window
+    OTP_MAX_FAILURES: int = 5                           # invalid attempts before a new code is required
+    OTP_VERIFIED_MARKER_TTL_SECONDS: int = 60 * 30     # 30 mins — post-verify "completed" marker
+
+    # OAuth provider caches / short-lived tokens (login popup flow).
+    OAUTH_STATE_TTL_SECONDS: int = 60 * 10             # anti-CSRF state validity
+    OAUTH_JWKS_CACHE_SECONDS: int = 60 * 5             # provider JWKS cache lifetime
+    OAUTH_CLIENT_SECRET_JWT_TTL_SECONDS: int = 60 * 5  # Apple client-secret JWT exp
 
     # WEBHOOK
     WEBHOOK_PATH: Optional[str] = "/webhooks"
@@ -203,6 +231,11 @@ class AppodusBaseSettings(BaseSettings):
     MESSAGING_CATEGORIES: List[str] = []
     MESSAGING_RPS_LIMIT: int = 20
     MESSAGING_BULK_CONCURRENCY: int = 10
+    # Backoff ladder for re-dispatching failed outbound messages; the retry
+    # threshold is the list length (a message fails permanently after that many
+    # retries, or earlier if its expires_at horizon would be crossed).
+    # Env override uses JSON list syntax: MESSAGING_RETRY_INTERVALS_SECONDS=[5,5,5]
+    MESSAGING_RETRY_INTERVALS_SECONDS: List[int] = [60, 300, 900]
 
     # SMTP (Mailpit in dev/test — auto-selected when ENVIRONMENT is not prod/staging)
     SMTP_HOST: Optional[str] = "localhost"
@@ -214,23 +247,21 @@ class AppodusBaseSettings(BaseSettings):
     # TEST CONFIG — canonical test OTP returned when OTP_MODE=deterministic
     TEST_OTP: int = 654123
 
-    # OTP determinism contract
-    # deterministic → always return TEST_OTP (required in test, allowed in dev/local/staging)
-    # random        → always generate a random 6-digit code (required in production)
-    OTP_MODE: str = "deterministic"
+    # OTP determinism contract (see OtpMode).
+    OTP_MODE: OtpMode = OtpMode.DETERMINISTIC
 
     @model_validator(mode="after")
     def _enforce_otp_mode_policy(self) -> "AppodusBaseSettings":
         env = self.ENVIRONMENT
         mode = self.OTP_MODE
-        if env == Environment.TEST and mode != "deterministic":
+        if env == Environment.TEST and mode != OtpMode.DETERMINISTIC:
             raise ValueError(
-                f"ENVIRONMENT=test requires OTP_MODE=deterministic, got '{mode}'. "
-                "Set OTP_MODE=deterministic in .env.test."
+                f"ENVIRONMENT=test requires OTP_MODE={OtpMode.DETERMINISTIC.value}, got '{mode.value}'. "
+                f"Set OTP_MODE={OtpMode.DETERMINISTIC.value} in .env.test."
             )
-        if env == Environment.PRODUCTION and mode != "random":
+        if env == Environment.PRODUCTION and mode != OtpMode.RANDOM:
             raise ValueError(
-                f"ENVIRONMENT=prod requires OTP_MODE=random, got '{mode}'. "
+                f"ENVIRONMENT=prod requires OTP_MODE={OtpMode.RANDOM.value}, got '{mode.value}'. "
                 "Deterministic OTP is forbidden in production."
             )
         return self

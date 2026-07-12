@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { RevisionService } from "./revision-service";
 import {
@@ -72,7 +73,7 @@ export function useOpenDisputeMutation(verificationId: string) {
 }
 
 // ── Admin ─────────────────────────────────────────────────────────
-export function usePendingRechecksQuery(page = 0, pageSize = 10) {
+export function usePendingRechecksQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE) {
   return useQuery({
     queryKey: revisionKeys.pendingRechecks(page),
     queryFn: async () => (await service.listPendingRechecks(page, pageSize)).data ?? null,
@@ -88,7 +89,7 @@ export function useDecideRecheckMutation() {
   });
 }
 
-export function useOpenDisputesQuery(page = 0, pageSize = 10) {
+export function useOpenDisputesQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE) {
   return useQuery({
     queryKey: revisionKeys.openDisputes(page),
     queryFn: async () => (await service.listOpenDisputes(page, pageSize)).data ?? null,

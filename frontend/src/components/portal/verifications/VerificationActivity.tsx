@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { Button } from "@3rdparty/ui/button";
 import { ActivityTimeline } from "@components/shared/activity/ActivityTimeline";
 import { useVerificationActivityQuery } from "../libs/useVerificationQueries";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = DEFAULT_HISTORY_PAGE_SIZE;
 
 /** Customer-facing verification activity log (§19.2) — backend-owned, PII-safe. */
 export default function VerificationActivity({ verificationId }: { verificationId: string }) {

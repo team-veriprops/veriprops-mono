@@ -41,7 +41,9 @@ class DbUtils:
             if w_exclusion:
                 exclusion.update(w_exclusion)
             if w_conditions:
-                where_conditions.append(w_conditions)
+                # Flatten into the criterion list — the caller applies `.where(*criterion)`,
+                # so appending the list itself would nest it and fail SQL coercion.
+                where_conditions.extend(w_conditions)
 
         search_dto_dict = search_dto.model_dump(
             exclude_none=True,

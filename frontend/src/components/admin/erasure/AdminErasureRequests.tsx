@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, XCircle, Trash2, Clock } from "lucide-react";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Action, Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import { PageShell } from "@components/ui/PageShell";
 import { StatusPill } from "@components/ui/StatusPill";
@@ -16,7 +17,7 @@ import {
   useRejectErasureMutation,
 } from "@components/shared/erasure/libs/useErasureQueries";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 // A right-to-erasure request is still actionable while pending or approved; those are the
 // rows whose review SLA matters.

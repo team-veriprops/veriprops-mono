@@ -25,7 +25,11 @@ pnpm vitest run -t "test name pattern"
 
 ## API proxy
 
-`/api/*` requests are rewritten to `${API_BASE_URL}/api/*` by [next.config.ts](next.config.ts). `API_BASE_URL` is server-only (read from [src/lib/config/server.ts](src/lib/config/server.ts), which throws if imported on the client). Public env vars (`NEXT_PUBLIC_*`) live in [src/lib/config/public.ts](src/lib/config/public.ts) — keep them split.
+`/api/*` requests are rewritten to `${API_BASE_URL}/api/*` by [next.config.ts](next.config.ts). `API_BASE_URL` is server-only (read from [src/lib/config/server.ts](src/lib/config/server.ts), which throws if imported on the client). Public env vars (`NEXT_PUBLIC_*`) live in [src/lib/config/public.ts](src/lib/config/public.ts) — keep them split. The proxy target/timeout and dev origins are env-driven (`NEXT_PUBLIC_API_PREFIX`, `PROXY_TIMEOUT_MS`, `ADDITIONAL_DEV_ORIGINS`); [.env.example](.env.example) documents every settable key.
+
+## Client operational constants
+
+Non-env client tuning that would otherwise be duplicated as magic numbers lives in one module: [src/lib/config/app.ts](src/lib/config/app.ts) — pagination defaults (`DEFAULT_PAGE_SIZE`, `DEFAULT_HISTORY_PAGE_SIZE`, `CHAT_MESSAGES_PAGE_SIZE`), SSE reconnect (`SSE_MAX_RETRIES`/`SSE_BASE_BACKOFF_MS`), TanStack Query cadence (`REFETCH_INTERVAL_MS`/`STALE_TIME_MS`/…), `DEFAULT_DIAL_CODE`, upload caps, and `SUPPORT_EMAIL`. Import from here rather than re-hardcoding a page size / interval. **Backend-owned limits are not duplicated here** — e.g. the chat composer `maxLength` reads `chatMessageMaxLength` from `/config/public` (`usePublicConfigQuery`), with `app.ts` holding only a pre-resolve fallback.
 
 ## Auth Guard
 

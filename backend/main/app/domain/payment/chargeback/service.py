@@ -12,6 +12,7 @@ from typing import Optional
 
 from kink import inject
 
+from main.app.config.settings import settings
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.repo import AuditLogRepo
 from main.app.domain.audit.service import AuditLogService
@@ -38,7 +39,7 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
 )
 
-_PACK_PAGE_SIZE = 500
+_PACK_PAGE_SIZE = settings.CHARGEBACK_PACK_PAGE_SIZE
 
 
 @inject
@@ -101,7 +102,9 @@ class ChargebackService:
             resource_type="chargeback",
             resource_id=chargeback.id,
             actor_id=None,
-            details={"verification_id": payment.verification_id, "payment_id": payment.id,
+            details={"verification_id": payment.verification_id,
+                     # payment.id is a uuid.UUID on the ORM row — hex it for the JSON column.
+                     "payment_id": Utils.uuid_to_hex(payment.id),
                      "commissions_frozen": frozen},
         )
         return chargeback

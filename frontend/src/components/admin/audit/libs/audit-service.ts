@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { SuccessResponse } from "@/types/models";
 import { AdminActionLogPage } from "@/types/audit";
 import { ROUTES } from "@/lib/routes";
@@ -13,7 +14,7 @@ export class AuditService {
   listAdminActions(
     actionTypes: string[] | undefined,
     page = 0,
-    pageSize = 20,
+    pageSize = DEFAULT_HISTORY_PAGE_SIZE,
   ): Promise<SuccessResponse<AdminActionLogPage>> {
     const q = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
     (actionTypes ?? []).forEach((t) => q.append("action_types", t));

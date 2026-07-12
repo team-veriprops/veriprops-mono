@@ -48,15 +48,7 @@ export default function LandingNav() {
             <a
               key={link.href}
               href={link.href}
-              className="text-sm font-medium transition-colors duration-150"
-              style={{ color: "var(--brand-on-surface-variant)" }}
-              onMouseEnter={(e) =>
-                ((e.target as HTMLElement).style.color = "var(--brand-navy)")
-              }
-              onMouseLeave={(e) =>
-                ((e.target as HTMLElement).style.color =
-                  "var(--brand-on-surface-variant)")
-              }
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-150"
             >
               {link.label}
             </a>

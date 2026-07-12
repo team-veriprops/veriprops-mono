@@ -4,7 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Send, ShieldCheck, Info } from "lucide-react";
 import { ChatMessage, MessageKind, SenderKind } from "@/types/chat";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
+import { usePublicConfigQuery } from "@components/website/auth/libs/useAuthQueries";
 import { useMarkReadMutation, useMessagesQuery } from "./libs/useChatQueries";
+
+// Fallback until /config/public resolves; backend is the source of truth.
+const DEFAULT_CHAT_MESSAGE_MAX_LENGTH = 2000;
 
 interface ChatThreadProps {
   conversationId: string | null;
@@ -30,6 +34,8 @@ export default function ChatThread({
 }: ChatThreadProps) {
   const session = useAuthStore((s) => s.session);
   const myId = session?.user?.id;
+  const { data: publicConfig } = usePublicConfigQuery();
+  const maxLength = publicConfig?.chatMessageMaxLength ?? DEFAULT_CHAT_MESSAGE_MAX_LENGTH;
   const { data, isLoading } = useMessagesQuery(conversationId, 0);
   const markRead = useMarkReadMutation();
   const [body, setBody] = useState("");
@@ -104,7 +110,7 @@ export default function ChatThread({
                 }
               }}
               rows={2}
-              maxLength={2000}
+              maxLength={maxLength}
               placeholder="Write a message…"
               data-testid="chat-composer"
               className="flex-1 resize-none rounded-lg border border-black/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-viridian)]/30"

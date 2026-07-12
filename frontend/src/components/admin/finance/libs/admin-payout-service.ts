@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import { Payout, PayoutDecisionRequest } from "@/types/payout";
 
@@ -9,7 +10,7 @@ import { Payout, PayoutDecisionRequest } from "@/types/payout";
 export class AdminPayoutService {
   constructor(private readonly http: HttpClient) {}
 
-  listPayouts(page = 0, pageSize = 10, status?: string): Promise<SuccessResponse<Page<Payout>>> {
+  listPayouts(page = 0, pageSize = DEFAULT_PAGE_SIZE, status?: string): Promise<SuccessResponse<Page<Payout>>> {
     const statusParam = status ? `&status=${status}` : "";
     return this.http.get(`/admin/payouts?page=${page}&page_size=${pageSize}${statusParam}`);
   }

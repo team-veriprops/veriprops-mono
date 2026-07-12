@@ -13,6 +13,7 @@ from typing import Optional
 
 from kink import inject
 
+from main.app.config.settings import settings
 from main.app.core.idempotency.service import IdempotencyService
 from main.app.core.realtime import VerificationEventType
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
@@ -49,8 +50,6 @@ from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import ForbiddenException, ResourceNotFoundException
 
 _CREATE_SCOPE = "verification.create"
-_PRICE_LOCK_HOURS = 24
-_ABANDONMENT_AGE_HOURS = 24
 
 
 @inject
@@ -292,7 +291,7 @@ class VerificationService:
         """Fire a one-time recovery email for each unpaid verification untouched for 24h
         (§17.1). ``recovery_reminded_at`` is stamped so the email is sent exactly once.
         Returns the number of drafts reminded."""
-        cutoff = Utils.datetime_now() - timedelta(hours=_ABANDONMENT_AGE_HOURS)
+        cutoff = Utils.datetime_now() - timedelta(hours=settings.VERIFICATION_ABANDONMENT_AGE_HOURS)
         reminded = 0
         for verification in await self._verification_repo.list_abandoned_drafts(cutoff):
             row = await self._verification_repo.get_model(verification.id)
@@ -339,7 +338,7 @@ class VerificationService:
         # price_lock_expires_at is a datetime → set on the model (not the update DTO
         # path, which json-encodes datetimes; see CLAUDE.md GenericRepo note).
         verification = await self._verification_repo.get_model(verification_id)
-        verification.price_lock_expires_at = Utils.datetime_now() + timedelta(hours=_PRICE_LOCK_HOURS)
+        verification.price_lock_expires_at = Utils.datetime_now() + timedelta(hours=settings.PRICE_LOCK_TTL_HOURS)
 
     async def _set_paid_timestamps(self, verification_id: str, tier: VerificationTier) -> None:
         verification = await self._verification_repo.get_model(verification_id)

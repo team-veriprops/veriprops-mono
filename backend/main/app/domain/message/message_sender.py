@@ -3,7 +3,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from loguru import Logger
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from fastapi import BackgroundTasks
 from kink import di
@@ -40,9 +41,15 @@ class BaseMessageSender:
             context_modules: List[MessageContextModule],
             category: MessageCategory,
             default_channels: List[MessageChannel],
-            extra_context: Dict[str, Any] = None
+            extra_context: Dict[str, Any] = None,
+            expires_at: Optional[datetime] = None
     ) -> None:
-        """Core method to handle all message sending logic."""
+        """Core method to handle all message sending logic.
+
+        ``expires_at`` bounds the delivery-retry window for time-bound content
+        (e.g. an OTP is useless past its validity) — leave None for messages
+        that should ride the full retry ladder.
+        """
         recipient, template_context = await self._message_recipient_builder.build_recipient_and_context(
             recipient_user_id, context_modules
         )
@@ -55,7 +62,8 @@ class BaseMessageSender:
             template=template,
             context=template_context,
             category=category,
-            default_channels=default_channels
+            default_channels=default_channels,
+            expires_at=expires_at
         )
 
     async def _send_direct_message(self,
@@ -63,7 +71,8 @@ class BaseMessageSender:
                                    template: AvailableTemplate,
                                    context: Dict[str, Any],
                                    category: MessageCategory,
-                                   default_channels: List[MessageChannel]):
+                                   default_channels: List[MessageChannel],
+                                   expires_at: Optional[datetime] = None):
 
         channels = self._get_available_channels(recipient, default_channels)
         if not channels:
@@ -74,6 +83,10 @@ class BaseMessageSender:
             context=context,
             category=category
         )
+        if expires_at:
+            # Channel request builders lift this onto MessageRequest.expires_at
+            # (same context-key handoff as schedule_at).
+            final_context["expires_at"] = expires_at
 
         request = MultiChannelMessageRequest(
             recipient=recipient,
@@ -86,7 +99,8 @@ class BaseMessageSender:
             # TODO: use BackgroundTasks
             # background_tasks: BackgroundTasks = await self._active_auditor_service.get_background_tasks_from_context()
             # # Fire-and-forget: the request returns immediately without waiting for delivery.
-            # # Transient failures are retried by the router; fatal failures go to the DLQ.
+            # # Transient failures are retried per-attempt by the router; failed dispatches
+            # # are rescheduled by the message retry sweep (MessagingService.process_retries).
             # # There is intentionally no delivery receipt at the call-site.
             # background_tasks.add_task(self._messaging_dispatcher.dispatch_to_channels, request)
             await self._messaging_dispatcher.dispatch_to_channels(request)
@@ -97,7 +111,7 @@ class BaseMessageSender:
                 f"Message dropped (ENABLE_OUT_MESSAGING=False): template='{template}', "
                 f"channels={[c.value for c in channels]}, "
                 f"recipient=(user_id={recipient.user_id}, fullname='{recipient.fullname}', "
-                f"email={recipient.email.email if recipient.email else None}, "
+                f"email={recipient.email if recipient.email else None}, "
                 f"phone={recipient.phone.international_number if recipient.phone else None}, "
                 f"ios_push_tokens={len(recipient.ios_push_token) if recipient.ios_push_token else 0}, "
                 f"android_push_tokens={len(recipient.android_push_token) if recipient.android_push_token else 0}, "

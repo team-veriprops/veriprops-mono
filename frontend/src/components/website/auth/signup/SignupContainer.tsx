@@ -26,6 +26,7 @@ import {
   clearLocalDraft,
 } from "../libs/signupDraft";
 import { ROUTES, isAuthIntent } from "@lib/routes";
+import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 import { resolvePostAuthRedirect } from "@components/website/auth/libs/auth/redirect";
 import { getDeviceFingerprint } from "@components/website/auth/libs/auth/fingerprint";
 import { getErrorMessage } from "@lib/utils";
@@ -97,7 +98,7 @@ export default function SignupContainer() {
       if (payload.emailVerified && payload.phoneVerified) {
         setStep2({
           countryCode: payload.countryCode ?? "NG",
-          dialCode: payload.dialCode ?? "+234",
+          dialCode: payload.dialCode ?? DEFAULT_DIAL_CODE,
           phone: payload.phone ?? "",
           emailVerified: true,
           phoneVerified: true,

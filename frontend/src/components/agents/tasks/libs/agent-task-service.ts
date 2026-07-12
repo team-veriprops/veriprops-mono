@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import { AgentDashboard, AgentTask, EvidenceItem, EvidenceKind } from "@/types/agentTask";
 import { AuditActivityPage } from "@/types/audit";
@@ -63,7 +64,7 @@ export class AgentTaskService {
   }
 
   /** PII-safe state-transition history for one of the agent's own tasks (§19.3). */
-  getHistory(taskId: string, page = 0, pageSize = 20): Promise<SuccessResponse<AuditActivityPage>> {
+  getHistory(taskId: string, page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<AuditActivityPage>> {
     return this.http.get(`${this.base}/${taskId}/history?page=${page}&page_size=${pageSize}`);
   }
 }

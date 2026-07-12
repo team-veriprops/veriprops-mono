@@ -13,6 +13,7 @@ from main.appodus_utils.integrations.messaging.models import EmailRecipient, Mes
 
 from kink import di, inject
 
+from main.app.config.settings import settings
 from main.app.domain.user.auth.models import OtpChannel
 from main.app.domain.user.auth.session.models import SecurityEventType
 from main.app.domain.user.auth.session.service import SessionService
@@ -27,14 +28,22 @@ from main.appodus_utils.exception.exceptions import (
 
 logger: Logger = di["logger"]
 
-OTP_TTL = timedelta(minutes=10)
-MAX_RESENDS = 3
-RESEND_LOCKOUT = timedelta(minutes=30)
-MAX_FAILURES = 5
-# After a successful OTP verification we mint a short-lived "verified" marker
-# so the signup endpoint can confirm the user actually completed the OTP step.
-# 30 minutes lets the user finish a multi-step wizard without re-verifying.
-OTP_VERIFIED_TTL = timedelta(minutes=30)
+# Sent-code validity window. `_validity_label()` derives the human-readable string
+# shown in the delivery message from this same value so the two never drift.
+OTP_TTL = timedelta(seconds=settings.OTP_CODE_TTL_SECONDS)
+MAX_RESENDS = settings.OTP_MAX_RESENDS
+RESEND_LOCKOUT = timedelta(seconds=settings.OTP_RESEND_LOCKOUT_SECONDS)
+MAX_FAILURES = settings.OTP_MAX_FAILURES
+# After a successful OTP verification we mint a short-lived "verified" marker so the
+# signup endpoint can confirm the user actually completed the OTP step, letting the
+# user finish a multi-step wizard without re-verifying.
+OTP_VERIFIED_TTL = timedelta(seconds=settings.OTP_VERIFIED_MARKER_TTL_SECONDS)
+
+
+def _validity_label() -> str:
+    """Human-readable OTP validity (e.g. "10 minutes") derived from OTP_TTL."""
+    minutes = int(OTP_TTL.total_seconds() // 60)
+    return f"{minutes} minutes"
 
 
 def _phone_e164(dial_code: str, phone: str) -> str:
@@ -166,6 +175,9 @@ async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], c
     account_security_messages = di[AccountSecurityMessages]
 
     channel: OtpChannel = OtpChannel.EMAIL
+    # The code is useless (or stale — resends overwrite it) past its validity, so
+    # cap delivery retries at the OTP window instead of the full retry ladder.
+    expires_at = Utils.datetime_now() + OTP_TTL
 
     try:
         if isinstance(recipient, EmailRecipient):
@@ -181,8 +193,9 @@ async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], c
                     MessageContext.FIRST_NAME: firstname,
                     MessageContext.LAST_NAME: lastname,
                     MessageContext.OTP: code,
-                    MessageContext.VALIDITY: "10 minutes",
-                }
+                    MessageContext.VALIDITY: _validity_label(),
+                },
+                expires_at=expires_at
             )
         else:
             channel: OtpChannel = OtpChannel.PHONE
@@ -192,8 +205,9 @@ async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], c
                 ),
                 context={
                     MessageContext.OTP: code,
-                    MessageContext.VALIDITY: "10 minutes",
-                }
+                    MessageContext.VALIDITY: _validity_label(),
+                },
+                expires_at=expires_at
             )
     except Exception as e:
         logger.warning("OTP delivery failed for {} via {}: {}", recipient, channel.value, e)

@@ -27,6 +27,7 @@ from main.app.domain.verification.task.models import (
     VerificationTask,
 )
 from main.app.domain.verification.task.service import VerificationTaskService
+from main.appodus_utils import Utils
 from main.appodus_utils.db.models import Page, PaginationMeta, SuccessResponse
 
 agent_task_router = APIRouter(prefix="/agents/tasks", tags=["Agent: Tasks"])
@@ -35,7 +36,8 @@ evidence_service: EvidenceService = di[EvidenceService]
 
 
 async def _to_agent_dto(t: VerificationTask) -> AgentTaskDto:
-    evidence_count = await evidence_service.count_for_task(t.id)
+    # t.id is a uuid.UUID on the ORM row; the evidence reference column is hex text.
+    evidence_count = await evidence_service.count_for_task(Utils.uuid_to_hex(t.id))
     return AgentTaskDto(
         id=t.id, verification_id=t.verification_id, role=AgentRole(t.role),
         tier=VerificationTier(t.tier), state=TaskState(t.state), in_pool=bool(t.in_pool),

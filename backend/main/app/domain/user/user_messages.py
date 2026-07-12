@@ -3,7 +3,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from loguru import Logger
-from typing import Any, List
+from datetime import datetime
+from typing import Any, List, Optional
 
 from kink import di, inject
 
@@ -73,7 +74,8 @@ class AccountSecurityMessages(BaseMessageSender):
     #         extra_context=extra_context
     #     )
 
-    async def send_direct_email_verification_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any]):
+    async def send_direct_email_verification_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any],
+                                                     expires_at: Optional[datetime] = None):
         await self._send_direct_message(
             recipient=recipient,
             template=AvailableTemplate.EMAIL_VERIFICATION,
@@ -81,7 +83,8 @@ class AccountSecurityMessages(BaseMessageSender):
             category=MessageCategory.VERIFICATION,
             default_channels=[
                 MessageChannel.EMAIL
-            ]
+            ],
+            expires_at=expires_at
         )
 
     # async def send_phone_verification_message(self, recipient_user_id: MessageRecipientUserId,
@@ -98,7 +101,8 @@ class AccountSecurityMessages(BaseMessageSender):
     #         extra_context=extra_context
     #     )
 
-    async def send_direct_phone_verification_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any]):
+    async def send_direct_phone_verification_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any],
+                                                     expires_at: Optional[datetime] = None):
         await self._send_direct_message(
             recipient=recipient,
             template=AvailableTemplate.PHONE_VERIFICATION,
@@ -106,7 +110,8 @@ class AccountSecurityMessages(BaseMessageSender):
             category=MessageCategory.VERIFICATION,
             default_channels=[
                 MessageChannel.SMS
-            ]
+            ],
+            expires_at=expires_at
         )
 
     async def send_login_security_alert_message(self, recipient_user_id: MessageRecipientUserId,
@@ -125,7 +130,8 @@ class AccountSecurityMessages(BaseMessageSender):
         )
 
 
-    async def send_direct_password_reset_request_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any]):
+    async def send_direct_password_reset_request_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any],
+                                                         expires_at: Optional[datetime] = None):
         await self._send_direct_message(
             recipient=recipient,
             template=AvailableTemplate.PASSWORD_RESET_REQUEST,
@@ -133,7 +139,8 @@ class AccountSecurityMessages(BaseMessageSender):
             category=MessageCategory.SECURITY,
             default_channels=[
                 MessageChannel.EMAIL
-            ]
+            ],
+            expires_at=expires_at
         )
 
     # async def send_password_updated_message(self, recipient_user_id: MessageRecipientUserId,

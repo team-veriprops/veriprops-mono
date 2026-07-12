@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_PAGE_SIZE,DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse, TransactionCurrency } from "@/types/models";
 import {
   GeoLocation,
@@ -49,7 +50,7 @@ export class VerificationService {
   // ── Tracking & evidence (§9) — the poll fallback (/tracking) shares one snapshot
   // shape with the /stream SSE endpoint. Backend owns every label and SLA state.
 
-  listMine(page = 0, pageSize = 10): Promise<SuccessResponse<Page<VerificationListItem>>> {
+  listMine(page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<VerificationListItem>>> {
     return this.http.get(`/verifications?page=${page}&pageSize=${pageSize}`);
   }
 
@@ -62,7 +63,7 @@ export class VerificationService {
     return this.http.get(`/verifications/${id}/tracking`);
   }
 
-  getEvidence(id: string, page = 0, pageSize = 10): Promise<SuccessResponse<Page<CustomerEvidence>>> {
+  getEvidence(id: string, page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<CustomerEvidence>>> {
     return this.http.get(`/verifications/${id}/evidence?page=${page}&pageSize=${pageSize}`);
   }
 
@@ -72,7 +73,7 @@ export class VerificationService {
   }
 
   /** PII-safe activity log for the customer (§19.2) — reuses the backend audit read model. */
-  getActivity(id: string, page = 0, pageSize = 20): Promise<SuccessResponse<AuditActivityPage>> {
+  getActivity(id: string, page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<AuditActivityPage>> {
     return this.http.get(`/verifications/${id}/activity?page=${page}&page_size=${pageSize}`);
   }
 

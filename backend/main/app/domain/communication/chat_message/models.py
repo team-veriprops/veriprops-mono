@@ -13,13 +13,14 @@ from typing import List, Optional
 
 from sqlalchemy import Column, Index, String, Text
 
+from main.app.config.settings import settings
 from main.app.core.state.status import ChatMessageState
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
-# Customer-facing agent identity fields (§11.3). Kept in one place so every customer
-# projection returns exactly these — never last name, email, or phone.
-BODY_MAX_LENGTH = 2000
+# Chat message body cap — backend is the source of truth; the frontend reads the same
+# value via /config/public rather than hardcoding its own input maxLength.
+BODY_MAX_LENGTH = settings.CHAT_MESSAGE_MAX_LENGTH
 
 
 class MessageKind(str, enum.Enum):

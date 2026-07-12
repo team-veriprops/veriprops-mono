@@ -58,10 +58,15 @@ async def test_consume_state_is_single_use():
     with patch("main.appodus_utils.db.redis_utils.RedisUtils.get_redis", side_effect=fake_get), \
          patch("main.appodus_utils.db.redis_utils.RedisUtils.delete", new_callable=AsyncMock):
         from main.app.domain.user.auth.oauth.providers.utils import OauthUtils
+        from main.app.domain.user.auth.oauth.providers.models import OAuthRequestStoredState
         first = await OauthUtils.consume_state("state-abc")
         second = await OauthUtils.consume_state("state-abc")
 
-    assert first is not None
+    # RedisUtils returns UTF-8 text, so consume_state must rehydrate the JSON into
+    # the typed model (the callback reads first.frontend_origin / .code_verifier).
+    assert isinstance(first, OAuthRequestStoredState)
+    assert first.frontend_origin == "http://localhost:3000"
+    assert first.code_verifier == "v"
     assert second is None
 
 
@@ -271,3 +276,51 @@ async def test_state_stored_with_ten_minute_ttl():
         c for c in mock_set.call_args_list if "oauth:state:" in str(c.args[0])
     )
     assert state_call.kwargs.get("time_to_live") == timedelta(minutes=10)
+
+
+async def test_oauth_state_round_trips_through_text_store():
+    """init_0auth must persist the state as JSON text (RedisUtils stores UTF-8 only),
+    and consume_state must rehydrate that exact text into the typed model — storing
+    the model object instead round-trips as a bare string and breaks the callback."""
+    kv: dict[str, str] = {}
+
+    async def fake_set(key, value, time_to_live=None):
+        kv[key] = value
+
+    async def fake_get(key):
+        return kv.get(key)
+
+    async def fake_delete(key):
+        kv.pop(key, None)
+
+    with patch("main.appodus_utils.db.redis_utils.RedisUtils.set_redis", side_effect=fake_set), \
+         patch("main.appodus_utils.db.redis_utils.RedisUtils.get_redis", side_effect=fake_get), \
+         patch("main.appodus_utils.db.redis_utils.RedisUtils.delete", side_effect=fake_delete), \
+         patch("main.app.domain.user.auth.oauth.providers.utils.JwtAuthUtils") as mock_jwt_utils, \
+         patch("main.app.domain.user.auth.oauth.providers.utils.OauthUtils.resolve_frontend_origin",
+               new_callable=AsyncMock, return_value="http://localhost:3000"), \
+         patch("main.app.domain.user.auth.oauth.providers.utils.OauthUtils.callback_redirect_uri",
+               new_callable=AsyncMock, return_value="http://localhost:8000/callback"):
+        mock_jwt_utils.generate_pkce.return_value = ("challenge", "verifier", "state-xyz")
+
+        from main.app.domain.user.auth.oauth.providers.utils import OauthUtils
+        from main.app.domain.user.auth.oauth.providers.models import (
+            OAuthRequestStoredState,
+            SocialAuthProvider,
+        )
+
+        await OauthUtils.init_0auth(
+            platform=SocialAuthProvider.GOOGLE,
+            request=_make_request(),
+            base_url="https://accounts.google.com/o/oauth2/v2/auth",
+            client_id="client-id",
+            scope="openid email profile",
+        )
+        # Stored value must be serialized text, never the model object.
+        assert isinstance(kv["oauth:state:state-xyz"], str)
+
+        restored = await OauthUtils.consume_state("state-xyz")
+
+    assert isinstance(restored, OAuthRequestStoredState)
+    assert restored.frontend_origin == "http://localhost:3000"
+    assert restored.code_verifier == "verifier"

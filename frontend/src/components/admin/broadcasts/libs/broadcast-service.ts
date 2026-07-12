@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import {
   Broadcast,
@@ -14,7 +15,7 @@ import {
 export class BroadcastService {
   constructor(private readonly http: HttpClient) {}
 
-  list(page = 0, pageSize = 10, status?: string): Promise<SuccessResponse<Page<Broadcast>>> {
+  list(page = 0, pageSize = DEFAULT_PAGE_SIZE, status?: string): Promise<SuccessResponse<Page<Broadcast>>> {
     const q = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
     if (status) q.set("status", status);
     return this.http.get(`/admin/broadcasts?${q.toString()}`);

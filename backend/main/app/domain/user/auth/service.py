@@ -48,9 +48,6 @@ from main.appodus_utils.exception.exceptions import (
 
 logger: Logger = di["logger"]
 
-LOCKOUT_THRESHOLD = 7
-LOCKOUT_MINUTES = 15
-
 _COMMON_PASSWORDS = {
     "password", "password1", "12345678", "123456789", "1234567890",
     "qwerty123", "abc12345", "letmein1", "welcome1", "admin1234",
@@ -60,8 +57,10 @@ _COMMON_PASSWORDS = {
 
 def _assert_password_strength(password: str) -> None:
     """Server-side baseline: length, character diversity, and trivial-common rejection."""
-    if len(password) < 8:
-        raise ValidationException(message="Password must be at least 8 characters.")
+    if len(password) < settings.PASSWORD_MIN_LENGTH:
+        raise ValidationException(
+            message=f"Password must be at least {settings.PASSWORD_MIN_LENGTH} characters.",
+        )
     has_letter = any(c.isalpha() for c in password)
     has_digit_or_special = any(c.isdigit() or not c.isalnum() for c in password)
     if not has_letter or not has_digit_or_special:

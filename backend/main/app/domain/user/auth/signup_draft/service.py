@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 
 from kink import di, inject
 
+from main.app.config.settings import settings
 from main.app.domain.user.auth.signup_draft.models import (
     CreateSignupDraftDto,
     SignupDraft,
@@ -24,7 +25,7 @@ from main.appodus_utils.decorators.transactional import transactional
 
 logger: Logger = di["logger"]
 
-DRAFT_TTL = timedelta(days=7)
+DRAFT_TTL = timedelta(days=settings.SIGNUP_DRAFT_TTL_DAYS)
 
 
 @inject

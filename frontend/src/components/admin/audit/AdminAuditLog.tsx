@@ -1,6 +1,7 @@
 "use client";
 
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { PageShell } from "@components/ui/PageShell";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
 import { humanizeEnumLabel } from "@lib/utils";
@@ -8,7 +9,7 @@ import { Page } from "@/types/models";
 import { ADMIN_ACTION_TYPES, AuditPackRow } from "@/types/audit";
 import { useAdminActionsQuery } from "./libs/useAuditQueries";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = DEFAULT_HISTORY_PAGE_SIZE;
 
 const columns: Column<AuditPackRow & Record<string, unknown>>[] = [
   {

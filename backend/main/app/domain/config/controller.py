@@ -14,6 +14,7 @@ async def public_config():
     return SuccessResponse[PublicConfigDto](data=PublicConfigDto(
         phone_verification_enabled=settings.PHONE_VERIFICATION_ENABLED,
         legal_opinion_enabled=settings.LEGAL_OPINION_ENABLED,
+        chat_message_max_length=settings.CHAT_MESSAGE_MAX_LENGTH,
     ))
 
 

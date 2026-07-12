@@ -23,6 +23,7 @@ from main.app.domain.referral.service import ReferralService
 from main.app.domain.verification.service import VerificationService
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.app.domain.verification.sla_monitor import SlaMonitorService
+from main.appodus_utils.integrations.messaging.service import MessagingService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.transactional import transactional, TransactionSessionPolicy
 
@@ -114,6 +115,22 @@ class BroadcastSweepJobs:
         return await self._broadcast.sweep_scheduled_broadcasts()
 
 
+@inject
+@decorate_all_methods(
+    transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW), exclude=['__init__']
+)
+class MessageRetrySweepJobs:
+    """Fresh-session wrapper around the outbound-message retry sweep: re-dispatches
+    RETRYING messages whose next_retry_at has passed (backoff ladder + expires_at
+    horizon live in MessagingService)."""
+
+    def __init__(self, messaging_service: MessagingService):
+        self._messaging_service = messaging_service
+
+    async def run_message_retry_sweep(self) -> dict:
+        return await self._messaging_service.process_retries()
+
+
 async def check_sla_breaches() -> None:
     flagged = await di[SlaMonitorJobs].run_sla_breach_sweep()
     if flagged:
@@ -156,6 +173,12 @@ async def check_scheduled_broadcasts() -> None:
         logger.info("broadcast sweep sent {} scheduled broadcast(s)", sent)
 
 
+async def check_message_retries() -> None:
+    stats = await di[MessageRetrySweepJobs].run_message_retry_sweep()
+    if any(stats.values()):
+        logger.info("message-retry sweep: {}", stats)
+
+
 # Register task-monitor background jobs (pool timeout + no-show reclaim) + SLA-breach sweep.
 scheduler.add_job(check_task_pool_timeouts, "interval", minutes=15, id="pool_timeout_check")
 scheduler.add_job(check_task_no_show_timeouts, "interval", minutes=15, id="no_show_check")
@@ -166,6 +189,9 @@ scheduler.add_job(check_abandoned_drafts, "interval", minutes=60, id="abandonmen
 scheduler.add_job(check_referral_credits, "interval", minutes=180, id="referral_credit_check")
 # Scheduled admin broadcasts (§18.1): send those whose time has passed.
 scheduler.add_job(check_scheduled_broadcasts, "interval", minutes=5, id="scheduled_broadcast_check")
+# Outbound-message retries: re-dispatch RETRYING rows whose next_retry_at has passed.
+# Every minute — the first ladder rung defaults to 60s, so a slower sweep would stretch it.
+scheduler.add_job(check_message_retries, "interval", minutes=1, id="message_retry_check")
 
 
 def start_scheduler():

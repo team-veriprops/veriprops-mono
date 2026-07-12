@@ -300,4 +300,6 @@ export interface PublicConfig {
   phoneVerificationEnabled: boolean;
   // §B go-live gate (D18): whether the Premium Legal Opinion report section is live.
   legalOpinionEnabled?: boolean;
+  // Chat message body cap — backend is the source of truth for the input maxLength.
+  chatMessageMaxLength?: number;
 }

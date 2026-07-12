@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { ErasureService } from "./erasure-service";
 
@@ -31,7 +32,7 @@ export function useRequestErasureMutation() {
 export function useAdminErasureRequestsQuery(page = 0, status?: string) {
   return useQuery({
     queryKey: erasureKeys.adminList(page, status),
-    queryFn: async () => (await service.list(status, page, 10)).data ?? null,
+    queryFn: async () => (await service.list(status, page, DEFAULT_PAGE_SIZE)).data ?? null,
   });
 }
 

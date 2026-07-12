@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_HISTORY_PAGE_SIZE, STALE_TIME_MS, SHORT_STALE_TIME_MS, LONG_STALE_TIME_MS } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { isAutomationEnvironment } from "@lib/automation";
 import { AuthService } from "./auth-service";
@@ -45,7 +46,7 @@ export function useCurrentSession(enabled = true) {
       return res.data ?? null;
     },
     retry: false,
-    staleTime: 60_000,
+    staleTime: STALE_TIME_MS,
   });
 }
 
@@ -140,7 +141,7 @@ export function useRevokeAllOtherDevicesMutation() {
   });
 }
 
-export function useSecurityEventsQuery(page = 0, pageSize = 20) {
+export function useSecurityEventsQuery(page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE) {
   return useQuery({
     queryKey: authKeys.events(page, pageSize),
     queryFn: () => authService.listSecurityEvents(page, pageSize),
@@ -153,7 +154,7 @@ export function useCrossPortalSummaryQuery(enabled = true) {
     queryKey: authKeys.crossPortal,
     enabled,
     queryFn: async () => (await authService.getCrossPortalSummary()).data ?? null,
-    staleTime: 30_000,
+    staleTime: SHORT_STALE_TIME_MS,
   });
 }
 
@@ -161,7 +162,7 @@ export function usePublicConfigQuery() {
   return useQuery({
     queryKey: authKeys.publicConfig,
     queryFn: async () => (await authService.getPublicConfig()).data ?? null,
-    staleTime: 5 * 60_000,
+    staleTime: LONG_STALE_TIME_MS,
   });
 }
 
@@ -189,7 +190,7 @@ export function useMissingConsentsQuery(enabled = true) {
     queryKey: authConsentKeys.missing,
     enabled,
     queryFn: async () => (await authService.listMissingConsents()).data?.documents ?? [],
-    staleTime: 60_000,
+    staleTime: STALE_TIME_MS,
   });
 }
 

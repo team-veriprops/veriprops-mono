@@ -20,6 +20,7 @@ from typing import List
 
 from kink import inject
 
+from main.app.config.settings import settings
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.commission.repo import CommissionRepo
 from main.app.domain.payment.chargeback.repo import ChargebackRepo
@@ -40,7 +41,7 @@ from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 
 # Upper bound on consent snapshots pulled into a single pack (a user accrues few).
-_CONSENT_PAGE = 1000
+_CONSENT_PAGE = settings.AUDIT_PACK_CONSENT_PAGE_SIZE
 
 _PACK_COLUMNS = [
     "record_type", "occurred_at", "action", "actor_id",

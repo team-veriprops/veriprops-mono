@@ -24,6 +24,7 @@ import {
   usePublicConfigQuery,
 } from "../libs/useAuthQueries";
 import { getErrorMessage } from "@lib/utils";
+import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 
 interface Props {
   open: boolean;
@@ -60,7 +61,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
       email: user?.email ?? "",
       emailVerified: true,
       countryCode: user?.phoneCountryCode || "NG",
-      dialCode: user?.phoneDialCode || "+234",
+      dialCode: user?.phoneDialCode || DEFAULT_DIAL_CODE,
       phone: user?.phone || "",
       phoneVerified: (user?.phoneVerified ?? false) as true,
       countryOfResidence: user?.countryOfResidence || "",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { ShieldAlert, ShieldCheck, Loader2 } from "lucide-react";
 
 import { useSecurityEventsQuery } from "@components/website/auth/libs/useAuthQueries";
@@ -8,7 +9,7 @@ import { SecurityEventType } from "@components/website/auth/models";
 import { Button } from "@3rdparty/ui/button";
 import { humanizeEnumLabel } from "@lib/utils";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = DEFAULT_HISTORY_PAGE_SIZE;
 
 // Risk-signalling events get a warning style in the log.
 const RISK_EVENTS = new Set<string>([

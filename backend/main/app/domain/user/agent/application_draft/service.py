@@ -12,6 +12,7 @@ from typing import Optional
 
 from kink import inject
 
+from main.app.config.settings import settings
 from main.app.domain.user.agent.application_draft.models import (
     AgentApplicationDraftDto,
     CreateAgentApplicationDraftDto,
@@ -23,9 +24,6 @@ from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
-
-_DRAFT_TTL_DAYS = 30
-
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
@@ -56,7 +54,7 @@ class AgentApplicationDraftService:
                 user_id=user_id,
                 step=dto.step,
                 payload=payload_json,
-                expires_at=Utils.datetime_now() + timedelta(days=_DRAFT_TTL_DAYS),
+                expires_at=Utils.datetime_now() + timedelta(days=settings.AGENT_APPLICATION_DRAFT_TTL_DAYS),
             ))
         return AgentApplicationDraftDto(step=dto.step, payload=dto.payload, date_updated=Utils.datetime_now())
 

@@ -7,6 +7,7 @@ from jose import jwt, exceptions as jose_exceptions
 from kink import di, inject
 from starlette.requests import Request
 
+from main.app.config.settings import settings
 from main.app.domain.user.auth.models import AuthIntent
 from main.app.domain.user.auth.oauth.providers.models import (
     OAuthCallbackRequestDto,
@@ -38,7 +39,11 @@ async def _fetch_and_cache_apple_jwks() -> dict:
     response = await httpx_client.get(_APPLE_JWKS_URL)
     response.raise_for_status()
     jwks = response.json()
-    await RedisUtils.set_redis(_APPLE_JWKS_CACHE_KEY, json.dumps(jwks), time_to_live=timedelta(minutes=5))
+    await RedisUtils.set_redis(
+        _APPLE_JWKS_CACHE_KEY,
+        json.dumps(jwks),
+        time_to_live=timedelta(seconds=settings.OAUTH_JWKS_CACHE_SECONDS),
+    )
     return jwks
 
 
@@ -110,7 +115,7 @@ class AppleAuthProvider(ISocialAuthProvider):
             {
                 "iss": self._iss,
                 "iat": int(Utils.datetime_now().timestamp()),
-                "exp": int((Utils.datetime_now() + timedelta(minutes=5)).timestamp()),
+                "exp": int((Utils.datetime_now() + timedelta(seconds=settings.OAUTH_CLIENT_SECRET_JWT_TTL_SECONDS)).timestamp()),
                 "aud": "https://appleid.apple.com",
                 "sub": self._client_id,
             },

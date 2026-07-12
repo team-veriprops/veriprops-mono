@@ -58,9 +58,6 @@ from main.appodus_utils.exception.exceptions import (
     ValidationException,
 )
 
-_MIN_DESCRIPTION_CHARS = 100  # §14.3
-
-
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
@@ -96,9 +93,10 @@ class DisputeService:
             raise InvalidResourceStateException(
                 resource="verification", message="Only a completed verification can be disputed."
             )
-        if len((dto.description or "").strip()) < _MIN_DESCRIPTION_CHARS:
+        min_chars = await self._config.get_int(ConfigKey.DISPUTE_MIN_DESCRIPTION_CHARS)
+        if len((dto.description or "").strip()) < min_chars:
             raise ValidationException(
-                message=f"Please describe the issue in at least {_MIN_DESCRIPTION_CHARS} characters."
+                message=f"Please describe the issue in at least {min_chars} characters."
             )
         await self._assert_within_window(verification_id)
 

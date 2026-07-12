@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { Loader2, Download, FileText } from "lucide-react";
 import { Button } from "@3rdparty/ui/button";
 import { humanizeEnumLabel } from "@lib/utils";
 import { UserConsentHistoryItem } from "@/types/consentHistory";
 import { useConsentHistoryQuery, consentHistoryService } from "./libs/useConsentHistoryQueries";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = DEFAULT_HISTORY_PAGE_SIZE;
 
 /** Account → Consents (§19.1 / R19.4). Versioned consent history + CSV download. */
 export default function ConsentHistory() {

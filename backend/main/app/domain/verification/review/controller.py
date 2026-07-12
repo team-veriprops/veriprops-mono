@@ -39,9 +39,10 @@ def _task_dto(t) -> TaskDto:
 
 
 def _report_dto(r) -> ReportDto:
-    from main.app.core.state.status import ReportState
+    from main.app.core.state.status import ReportRevisionKind, ReportState
     return ReportDto(
         id=r.id, verification_id=r.verification_id, report_version=r.report_version,
+        revision_kind=ReportRevisionKind(r.revision_kind) if r.revision_kind else ReportRevisionKind.INITIAL,
         state=ReportState(r.state), composite_trust_score=r.composite_trust_score,
         findings=r.findings, release_reason=r.release_reason, released_at=r.released_at,
         superseded_at=r.superseded_at, date_created=r.date_created,

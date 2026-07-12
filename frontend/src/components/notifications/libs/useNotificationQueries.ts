@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { REFETCH_INTERVAL_MS } from "@lib/config/app";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
 import { useUserStream } from "@lib/useUserStream";
@@ -37,7 +38,7 @@ export function useNotificationUnreadQuery(enabled = true) {
     queryKey: notificationKeys.unread(),
     enabled,
     queryFn: async () => (await service.unreadCount()).data?.count ?? 0,
-    refetchInterval: 60_000,
+    refetchInterval: REFETCH_INTERVAL_MS,
   });
 }
 

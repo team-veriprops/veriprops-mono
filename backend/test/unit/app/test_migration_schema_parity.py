@@ -4,8 +4,9 @@ The project runs in a single-migration (`0001_initial_schema`) greenfield
 posture: every table is built by a `_create_<table>()` helper registered in
 `_TABLE_BUILDERS`. A model added without a matching builder produces a mapped
 entity whose table `alembic upgrade head` never creates — every query against
-it then 500s at runtime. This guard fails CI the moment that drift appears
-(it already caught `devices`, `dlq_entries`, and `callbacks`).
+it then 500s at runtime. This guard fails CI the moment that drift appears,
+in both directions — including framework/vendored entities (e.g. `devices`,
+`callbacks`) that live outside `domain/**`.
 """
 import importlib.util
 from pathlib import Path

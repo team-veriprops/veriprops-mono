@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { Button } from "@3rdparty/ui/button";
 import { ActivityTimeline } from "@components/shared/activity/ActivityTimeline";
 import { useTaskHistoryQuery } from "./libs/useAgentTaskQueries";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = DEFAULT_HISTORY_PAGE_SIZE;
 
 /** Agent-facing task transition history (§19.3) — ownership-gated + PII-safe on the backend. */
 export default function TaskHistory({ taskId }: { taskId: string }) {

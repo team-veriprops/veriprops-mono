@@ -109,14 +109,17 @@
   --lock-indicator:                var(--brand-gold);
   --trust-text:                    var(--brand-on-surface-variant);
 
-  /* ── Sidebar ── */
-  --sidebar-background:            var(--brand-surface-base);
-  --sidebar-foreground:            var(--brand-on-surface);
-  --sidebar-primary:               var(--brand-navy);
+  /* ── Sidebar ──
+     The app-shell sidebar is always deep navy, in both UI modes. */
+  --sidebar-background:            var(--brand-navy);
+  --sidebar-foreground:            rgba(255, 255, 255, 0.55);
+  --sidebar-foreground-active:     #ffffff;
+  --sidebar-muted:                 rgba(255, 255, 255, 0.35);
+  --sidebar-primary:               var(--brand-viridian);
   --sidebar-primary-foreground:    #ffffff;
-  --sidebar-accent:                var(--brand-surface-low);
-  --sidebar-accent-foreground:     var(--brand-on-surface);
-  --sidebar-border:                rgba(196, 198, 207, 0.4);
+  --sidebar-accent:                rgba(63, 102, 83, 0.2);
+  --sidebar-accent-foreground:     #a5d0b9;
+  --sidebar-border:                rgba(255, 255, 255, 0.06);
   --sidebar-ring:                  var(--brand-viridian);
 }
 
@@ -216,14 +219,18 @@
   --lock-indicator:                #d4b84a;
   --trust-text:                    #8fa4c0;
 
-  /* ── Sidebar ── */
+  /* ── Sidebar ──
+     Stays navy in dark mode; note --brand-navy flips to a light text color
+     here, so the background is pinned to the dark surface stack instead. */
   --sidebar-background:            #071830;
-  --sidebar-foreground:            #c8d8f0;
+  --sidebar-foreground:            rgba(255, 255, 255, 0.55);
+  --sidebar-foreground-active:     #ffffff;
+  --sidebar-muted:                 rgba(255, 255, 255, 0.35);
   --sidebar-primary:               #6ab88a;
   --sidebar-primary-foreground:    #071830;
-  --sidebar-accent:                #0a2040;
-  --sidebar-accent-foreground:     #c8d8f0;
-  --sidebar-border:                rgba(60, 100, 160, 0.25);
+  --sidebar-accent:                rgba(106, 184, 138, 0.16);
+  --sidebar-accent-foreground:     #a5d0b9;
+  --sidebar-border:                rgba(255, 255, 255, 0.08);
   --sidebar-ring:                  #6ab88a;
 }
 
@@ -286,6 +293,8 @@
   /* Sidebar */
   --color-sidebar:                      var(--sidebar-background);
   --color-sidebar-foreground:           var(--sidebar-foreground);
+  --color-sidebar-foreground-active:    var(--sidebar-foreground-active);
+  --color-sidebar-muted:                var(--sidebar-muted);
   --color-sidebar-primary:             var(--sidebar-primary);
   --color-sidebar-primary-foreground:  var(--sidebar-primary-foreground);
   --color-sidebar-accent:              var(--sidebar-accent);

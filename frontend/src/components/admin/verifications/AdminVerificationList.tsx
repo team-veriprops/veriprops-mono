@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Badge } from "@3rdparty/ui/badge";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import { VerificationStatusBadge } from "@components/portal/verifications/VerificationStatusBadge";
@@ -16,7 +17,7 @@ import {
 } from "@/types/adminVerification";
 import { useAdminVerificationsQuery } from "./libs/useAdminVerificationQueries";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 // Sentinel used in table state to mean "overdue filter on".
 const OVERDUE = "OVERDUE";
 

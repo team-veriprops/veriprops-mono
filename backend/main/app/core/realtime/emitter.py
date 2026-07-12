@@ -21,6 +21,8 @@ from typing import AsyncIterator, Dict, Optional, Set
 
 from kink import di
 
+from main.app.config.settings import settings
+
 
 class VerificationEventType(str, enum.Enum):
     """SSE event names — must match the frontend ``useVerificationStream`` listeners."""
@@ -34,7 +36,7 @@ class VerificationEventType(str, enum.Enum):
 
 # Bound each subscriber queue so a slow/abandoned client cannot grow memory without
 # limit; when full we drop the push (the poll fallback reconciles).
-_QUEUE_MAXSIZE = 100
+_QUEUE_MAXSIZE = settings.SSE_QUEUE_MAXSIZE
 
 
 class VerificationEventEmitter:

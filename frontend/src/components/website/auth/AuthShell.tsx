@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { CheckCircle2, ShieldCheck, Lock, Eye } from "lucide-react";
-import { ROUTES } from "@lib/routes";
+import { ShieldCheck, Lock, Eye } from "lucide-react";
 import BrandLogo from "@/components/ui/BrandLogo";
 
 interface AuthShellProps {
@@ -94,17 +92,7 @@ export default function AuthShell({
       <main className="flex flex-col px-6 sm:px-10 lg:px-16 py-10 lg:py-16 min-h-screen">
         {/* Mobile header */}
         <div className="lg:hidden mb-8 flex items-center justify-between">
-          <Link href={ROUTES.HOME} className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg signature-gradient flex items-center justify-center">
-              <CheckCircle2 className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
-            </div>
-            <span
-              className="text-lg font-extrabold tracking-tight font-display editorial-spacing"
-              style={{ color: "var(--brand-navy)" }}
-            >
-              Veriprops
-            </span>
-          </Link>
+          <BrandLogo variant="dark" size="sm" />
         </div>
 
         <div className="flex-1 flex items-center">

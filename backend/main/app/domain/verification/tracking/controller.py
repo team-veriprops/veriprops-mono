@@ -19,6 +19,7 @@ from fastapi.responses import StreamingResponse
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
+from main.app.config.settings import settings
 from main.app.core.realtime import VerificationEventType
 from main.app.core.realtime.emitter import VerificationEventEmitter
 from main.app.domain.audit.models import AuditActivityPageDto
@@ -37,7 +38,7 @@ verification_service: VerificationService = di[VerificationService]
 
 # Emit a heartbeat if no real event arrives within this window — keeps proxies/mobile
 # connections alive and confirms liveness to the client.
-_HEARTBEAT_SECONDS = 25
+_HEARTBEAT_SECONDS = settings.SSE_HEARTBEAT_SECONDS
 
 
 def _sse_frame(event: str, data: dict) -> str:

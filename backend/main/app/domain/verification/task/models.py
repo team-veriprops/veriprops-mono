@@ -36,6 +36,15 @@ class TaskAssignmentMode(str, enum.Enum):
     BROADCAST = "BROADCAST"  # open pool, first-accept-wins
 
 
+class ReviewDecision(str, enum.Enum):
+    """Admin review outcome recorded on ``VerificationTask.review_decision`` (§8.3).
+    Distinct from ``TaskState`` — the decision is the admin's verdict on a SUBMITTED task,
+    while the state tracks the task's lifecycle position."""
+
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
 # ─── ORM ──────────────────────────────────────────────────────────
 
 class VerificationTask(BaseEntity):

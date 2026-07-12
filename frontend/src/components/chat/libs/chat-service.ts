@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_HISTORY_PAGE_SIZE,CHAT_MESSAGES_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import {
   ChatMessage,
@@ -27,7 +28,7 @@ export class ChatService {
     return this.http.get(`/chat/unread`);
   }
 
-  listMessages(conversationId: string, page = 0, pageSize = 30): Promise<SuccessResponse<Page<ChatMessage>>> {
+  listMessages(conversationId: string, page = 0, pageSize = CHAT_MESSAGES_PAGE_SIZE): Promise<SuccessResponse<Page<ChatMessage>>> {
     return this.http.get(`/chat/conversations/${conversationId}/messages?page=${page}&pageSize=${pageSize}`);
   }
 
@@ -68,7 +69,7 @@ export class ChatService {
 
   // ── Admin surface (RBAC-gated) ─────────────────────────────────────
 
-  heldQueue(page = 0, pageSize = 20): Promise<SuccessResponse<Page<HeldMessage>>> {
+  heldQueue(page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<Page<HeldMessage>>> {
     return this.http.get(`/admin/messages/held?page=${page}&pageSize=${pageSize}`);
   }
 
