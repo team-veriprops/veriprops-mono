@@ -45,7 +45,7 @@ export default function SupportContainer() {
                   {f.question}
                 </span>
                 <ChevronDown
-                  className={`w-4 h-4 flex-shrink-0 transition-transform ${open === i ? "rotate-180" : ""}`}
+                  className={`w-4 h-4 shrink-0 transition-transform ${open === i ? "rotate-180" : ""}`}
                 />
               </button>
               {open === i && <p className="px-4 pb-4 text-sm text-gray-600">{f.answer}</p>}

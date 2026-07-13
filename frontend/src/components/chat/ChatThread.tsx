@@ -73,7 +73,7 @@ export default function ChatThread({
   }
 
   return (
-    <div className="flex flex-col h-full min-h-[24rem] rounded-xl border border-black/5 bg-white overflow-hidden">
+    <div className="flex flex-col h-full min-h-96 rounded-xl border border-black/5 bg-white overflow-hidden">
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
         {isLoading && <p className="text-sm text-gray-400">Loading…</p>}
         {!isLoading && messages.length === 0 && (
@@ -120,7 +120,7 @@ export default function ChatThread({
               onClick={handleSend}
               disabled={sending || !body.trim()}
               data-testid="chat-send"
-              className="h-10 w-10 flex-shrink-0 rounded-lg flex items-center justify-center text-white disabled:opacity-40 bg-brand-viridian"
+              className="h-10 w-10 shrink-0 rounded-lg flex items-center justify-center text-white disabled:opacity-40 bg-brand-viridian"
               aria-label="Send message"
             >
               <Send className="w-4 h-4" />

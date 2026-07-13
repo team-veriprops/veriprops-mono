@@ -40,7 +40,7 @@ export default function TestimonialsSection() {
               >
                 {/* Quote icon */}
                 <Quote
-                  className="w-8 h-8 mb-6 flex-shrink-0 text-brand-viridian/30"
+                  className="w-8 h-8 mb-6 shrink-0 text-brand-viridian/30"
                   strokeWidth={1.5}
                 />
 

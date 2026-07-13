@@ -344,7 +344,7 @@ const findMediaType = (key: string) =>
           <div className="w-full h-full flex flex-col items-center justify-center bg-muted gap-3">
             <FileText className="h-16 w-16 text-muted-foreground" />
             <div className="text-center px-4">
-              <p className="text-sm font-medium text-foreground truncate max-w-[200px]">
+              <p className="text-sm font-medium text-foreground truncate max-w-50">
                 {media.filename}
               </p>
               <p className="text-xs text-muted-foreground mt-1">PDF Document</p>
@@ -489,7 +489,7 @@ const findMediaType = (key: string) =>
         {isVideo && media.size > 50 * 1024 * 1024 && (
           <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
             <div className="flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
               <div className="text-xs text-amber-800 dark:text-amber-200">
                 <p className="font-medium">
                   Large video file ({(media.size / 1024 / 1024).toFixed(1)}MB)
@@ -511,7 +511,7 @@ const findMediaType = (key: string) =>
             className="flex items-start gap-2 p-3 rounded-lg bg-destructive-light text-destructive text-sm"
             role="alert"
           >
-            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
             <div className="flex-1">
               <p className="font-medium">Upload failed</p>
               <p className="text-xs mt-1">{media.error}</p>
@@ -520,7 +520,7 @@ const findMediaType = (key: string) =>
               size="sm"
               variant="outline"
               onClick={() => onRetry(media.id)}
-              className="flex-shrink-0"
+              className="shrink-0"
               aria-label="Retry upload"
             >
               <RefreshCw className="h-3.5 w-3.5 mr-1" />

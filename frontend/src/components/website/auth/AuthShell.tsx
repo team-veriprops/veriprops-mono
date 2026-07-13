@@ -33,7 +33,7 @@ export default function AuthShell({
           className="absolute inset-0 pointer-events-none opacity-40 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.05)_1px,transparent_0)] bg-size-[32px_32px]"
         />
         <div
-          className="absolute -top-40 -right-40 w-[520px] h-[520px] rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.28)_0%,transparent_70%)]"
+          className="absolute -top-40 -right-40 w-130 h-130 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.28)_0%,transparent_70%)]"
         />
 
         <BrandLogo variant="light" />
@@ -78,7 +78,7 @@ export default function AuthShell({
         </div>
 
         <div className="flex-1 flex items-center">
-          <div className="w-full max-w-[440px] mx-auto">{children}</div>
+          <div className="w-full max-w-110 mx-auto">{children}</div>
         </div>
       </main>
     </div>

@@ -87,7 +87,7 @@ export default function VerifiedAgents() {
                       className="flex items-start gap-2 text-xs text-brand-on-surface-variant"
                     >
                       <CheckCircle2
-                        className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-brand-viridian"
+                        className="w-3.5 h-3.5 mt-0.5 shrink-0 text-brand-viridian"
                         strokeWidth={2}
                       />
                       {r}

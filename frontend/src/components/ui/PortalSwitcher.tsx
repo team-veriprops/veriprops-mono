@@ -60,7 +60,7 @@ export default function PortalSwitcher({ dark = false }: { dark?: boolean }) {
         {otherTotal > 0 && (
           <span
             data-testid="portal-switch-badge"
-            className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white bg-danger"
+            className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white bg-danger"
           >
             {otherTotal > 99 ? "99+" : otherTotal}
           </span>
@@ -80,7 +80,7 @@ export default function PortalSwitcher({ dark = false }: { dark?: boolean }) {
                 <span>{home.label}</span>
                 {count > 0 && (
                   <span
-                    className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white bg-danger"
+                    className="min-w-4.5 h-4.5 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white bg-danger"
                   >
                     {count > 99 ? "99+" : count}
                   </span>

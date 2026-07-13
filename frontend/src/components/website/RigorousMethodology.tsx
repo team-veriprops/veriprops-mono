@@ -82,7 +82,7 @@ export default function RigorousMethodology() {
           </div>
           <a
             href={buildAuthUrl(ROUTES.AUTH.GATE, { intent: AuthIntent.VERIFY })}
-            className="flex-shrink-0 inline-flex items-center gap-2 signature-gradient text-white px-8 py-3.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90 hover:scale-[0.98] shadow-[0_6px_20px_-4px_rgba(0,13,34,0.35)]"
+            className="shrink-0 inline-flex items-center gap-2 signature-gradient text-white px-8 py-3.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90 hover:scale-[0.98] shadow-[0_6px_20px_-4px_rgba(0,13,34,0.35)]"
           >
             Start Your Verification
           </a>

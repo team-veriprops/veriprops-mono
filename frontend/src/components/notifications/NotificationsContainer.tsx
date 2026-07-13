@@ -61,7 +61,7 @@ export default function NotificationsContainer() {
             >
               <div className="flex items-center gap-2">
                 {!n.read && (
-                  <span className="w-2 h-2 rounded-full flex-shrink-0 bg-brand-viridian" />
+                  <span className="w-2 h-2 rounded-full shrink-0 bg-brand-viridian" />
                 )}
                 <p className="text-sm font-medium text-brand-navy">
                   {n.title}

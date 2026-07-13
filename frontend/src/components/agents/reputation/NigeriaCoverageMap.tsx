@@ -46,7 +46,7 @@ export function NigeriaCoverageMap({ states, selected, onToggle }: Props) {
     <div className="overflow-x-auto">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="min-w-[520px] max-w-full"
+        className="min-w-130 max-w-full"
         role="group"
         aria-label="Nigeria coverage map"
       >

@@ -52,7 +52,7 @@ export default function TopNavUserMenu({
         {/* Identity header */}
         <DropdownMenuLabel className="font-normal">
           <div className="flex items-center gap-2.5 py-0.5">
-            <Avatar className="size-8 flex-shrink-0">
+            <Avatar className="size-8 shrink-0">
               {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt="" />}
               <AvatarFallback
                 className="text-xs font-bold bg-brand-viridian/12 text-brand-viridian"

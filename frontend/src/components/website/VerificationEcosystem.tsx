@@ -44,7 +44,7 @@ export default function VerificationEcosystem() {
               >
                 {/* Icon container */}
                 <div
-                  className="w-14 h-14 rounded-xl flex items-center justify-center mb-8 transition-colors duration-300 group-hover:bg-opacity-30 bg-brand-viridian/8 border border-brand-viridian/12"
+                  className="w-14 h-14 rounded-xl flex items-center justify-center mb-8 transition-colors duration-300 bg-brand-viridian/8 group-hover:bg-brand-viridian/30 border border-brand-viridian/12"
                 >
                   <Icon
                     className="w-7 h-7 text-brand-viridian"

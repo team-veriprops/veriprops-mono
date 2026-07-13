@@ -126,7 +126,7 @@ function SidebarNav({
     <div className="flex flex-col h-full">
       {/* Brand header zone — matches the top nav height so the borders align */}
       <div
-        className={`flex items-center h-14 flex-shrink-0 border-b border-sidebar-border ${
+        className={`flex items-center h-14 shrink-0 border-b border-sidebar-border ${
           collapsed ? "justify-center px-2" : "justify-between px-4"
         }`}
       >
@@ -179,7 +179,7 @@ function SidebarNav({
                         : "text-sidebar-foreground border-transparent hover:text-sidebar-foreground-active hover:bg-white/5"
                     }`}
                   >
-                    <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={isActive ? 2.5 : 1.75} />
+                    <Icon className="w-4 h-4 shrink-0" strokeWidth={isActive ? 2.5 : 1.75} />
                     {!collapsed && item.title}
                   </Link>
                 );
@@ -206,7 +206,7 @@ function SidebarNav({
               onClick={onNavItemClick}
               className="flex items-center gap-3 flex-1 min-w-0 group"
             >
-              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold bg-sidebar-accent text-sidebar-accent-foreground transition-opacity group-hover:opacity-80">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold bg-sidebar-accent text-sidebar-accent-foreground transition-opacity group-hover:opacity-80">
                 {initials}
               </div>
               <div className="flex-1 min-w-0">
@@ -216,7 +216,7 @@ function SidebarNav({
                 <div className="text-xs truncate text-sidebar-muted">{user?.email ?? ""}</div>
               </div>
             </Link>
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <NotificationBell dark />
             </div>
           </div>
@@ -274,8 +274,8 @@ export default function AppShell({ navItems, children }: AppShellProps) {
     <div className="flex h-screen overflow-hidden">
       {/* Desktop sidebar — navigation only, no user section */}
       <aside
-        className={`hidden lg:flex flex-col flex-shrink-0 h-full bg-sidebar border-r border-sidebar-border transition-[width] duration-200 ${
-          collapsed ? "w-[68px]" : "w-60"
+        className={`hidden lg:flex flex-col shrink-0 h-full bg-sidebar border-r border-sidebar-border transition-[width] duration-200 ${
+          collapsed ? "w-17" : "w-60"
         }`}
       >
         <SidebarNav {...sidebarNavProps} showUserSection={false} collapsed={collapsed} />
@@ -321,7 +321,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Desktop top nav */}
         <header
-          className="hidden lg:flex items-center justify-between px-6 h-14 flex-shrink-0 bg-white border-b border-brand-outline-variant/12"
+          className="hidden lg:flex items-center justify-between px-6 h-14 shrink-0 bg-white border-b border-brand-outline-variant/12"
         >
           <TopNavBreadcrumb />
           <div className="flex items-center gap-1">
@@ -340,7 +340,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
 
         {/* Mobile header */}
         <header
-          className="lg:hidden flex items-center gap-3 px-4 py-3 flex-shrink-0 border-b border-brand-outline-variant/12 bg-white"
+          className="lg:hidden flex items-center gap-3 px-4 py-3 shrink-0 border-b border-brand-outline-variant/12 bg-white"
         >
           <button
             onClick={() => setSidebarOpen(true)}

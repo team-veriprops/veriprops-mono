@@ -16,10 +16,10 @@ export default function CTASection() {
 
           {/* Ambient glow */}
           <div
-            className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.15)_0%,transparent_70%)] translate-x-[30%] translate-y-[-30%]"
+            className="absolute top-0 right-0 w-125 h-125 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.15)_0%,transparent_70%)] translate-x-[30%] translate-y-[-30%]"
           />
           <div
-            className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(190,234,209,0.06)_0%,transparent_70%)] translate-x-[-30%] translate-y-[30%]"
+            className="absolute bottom-0 left-0 w-100 h-100 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(190,234,209,0.06)_0%,transparent_70%)] translate-x-[-30%] translate-y-[30%]"
           />
 
           <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-12">
@@ -72,7 +72,7 @@ export default function CTASection() {
             </div>
 
             {/* Right — trust proof cards */}
-            <div className="flex flex-col gap-4 w-full lg:max-w-[280px]">
+            <div className="flex flex-col gap-4 w-full lg:max-w-70">
               {[
                 {
                   icon: Shield,
@@ -95,7 +95,7 @@ export default function CTASection() {
                   className="flex items-start gap-4 p-5 rounded-2xl bg-white/6 border border-white/8"
                 >
                   <div
-                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-brand-viridian/25"
+                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-brand-viridian/25"
                   >
                     <Icon className="w-4.5 h-4.5 text-white/80" strokeWidth={1.5} />
                   </div>

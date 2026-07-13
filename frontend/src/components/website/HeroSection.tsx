@@ -15,7 +15,7 @@ export default function HeroSection() {
 
       {/* Warm ambient glow — top right */}
       <div
-        className="absolute -top-32 -right-32 w-[600px] h-[600px] rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.06)_0%,transparent_70%)]"
+        className="absolute -top-32 -right-32 w-150 h-150 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.06)_0%,transparent_70%)]"
       />
 
       <div className="relative max-w-7xl mx-auto px-6 lg:px-8 w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center py-16 lg:py-24">
@@ -48,7 +48,7 @@ export default function HeroSection() {
           </h1>
 
           <p
-            className="text-lg md:text-xl leading-relaxed mb-10 max-w-[480px] text-brand-on-surface-variant"
+            className="text-lg md:text-xl leading-relaxed mb-10 max-w-120 text-brand-on-surface-variant"
           >
             Before you send a single naira, we confirm the ownership, the boundaries, 
             the documents, and the truth on the ground. You see exactly what you&rsquo;re
@@ -138,7 +138,7 @@ export default function HeroSection() {
           >
             <div className="flex items-center gap-4 mb-4">
               {/* Score ring */}
-              <div className="relative flex-shrink-0">
+              <div className="relative shrink-0">
                 <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90">
                   <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(196,198,207,0.3)" strokeWidth="4" />
                   <circle

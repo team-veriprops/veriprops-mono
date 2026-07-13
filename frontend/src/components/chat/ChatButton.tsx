@@ -30,7 +30,7 @@ export default function ChatButton({ dark = false }: { dark?: boolean }) {
       {count > 0 && (
         <span
           data-testid="chat-unread-badge"
-          className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center bg-brand-viridian"
+          className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center bg-brand-viridian"
         >
           {badge}
         </span>

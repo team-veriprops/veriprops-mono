@@ -41,7 +41,7 @@ export default function ConversationListContainer() {
               className="flex items-center gap-3 rounded-xl border border-black/5 bg-white px-4 py-3 hover:bg-black/[0.02] transition-colors"
             >
               <div
-                className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-brand-viridian/10 text-brand-viridian"
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-brand-viridian/10 text-brand-viridian"
               >
                 {c.type === ConversationType.GENERAL_SUPPORT ? (
                   <LifeBuoy className="w-4 h-4" />
@@ -57,7 +57,7 @@ export default function ConversationListContainer() {
               </div>
               {c.unread > 0 && (
                 <span
-                  className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center bg-brand-viridian"
+                  className="min-w-4.5 h-4.5 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center bg-brand-viridian"
                 >
                   {c.unread > 9 ? "9+" : c.unread}
                 </span>

@@ -64,7 +64,7 @@ export default function AboutContent() {
       >
         {/* Warm ambient glow */}
         <div
-          className="absolute top-24 left-1/2 -translate-x-1/2 w-[680px] h-[540px] max-w-[90%] pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.08),transparent_68%)]"
+          className="absolute top-24 left-1/2 -translate-x-1/2 w-170 h-135 max-w-[90%] pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.08),transparent_68%)]"
         />
         <div className="relative z-10 max-w-3xl mx-auto px-6 lg:px-8 text-center animate-fade-up">
           <div className="mb-7">
@@ -87,7 +87,7 @@ export default function AboutContent() {
       {/* ── The principle (dark) ── */}
       <section className="relative py-20 lg:py-24 overflow-hidden dark-section-gradient">
         <div
-          className="absolute -top-24 -right-16 w-[320px] h-[320px] rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.16),transparent_70%)]"
+          className="absolute -top-24 -right-16 w-80 h-80 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.16),transparent_70%)]"
         />
         <div className="relative z-10 max-w-4xl mx-auto px-6 lg:px-8 text-center">
           <p className="text-3xl md:text-4xl lg:text-5xl font-display editorial-spacing leading-[1.2] text-white">
@@ -211,7 +211,7 @@ export default function AboutContent() {
       {/* ── Vision (dark split) ── */}
       <section className="relative py-24 lg:py-28 overflow-hidden dark-section-gradient">
         <div
-          className="absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.14),transparent_70%)]"
+          className="absolute -bottom-32 -left-20 w-105 h-105 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.14),transparent_70%)]"
         />
         <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-12 lg:gap-14 items-center">
           <div>

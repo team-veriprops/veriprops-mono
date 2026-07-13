@@ -147,12 +147,12 @@ export default function PricingSection() {
                       >
                         {isEverything ? (
                           <Plus
-                            className="w-4 h-4 flex-shrink-0 mt-0.5 text-brand-viridian"
+                            className="w-4 h-4 shrink-0 mt-0.5 text-brand-viridian"
                             strokeWidth={2.5}
                           />
                         ) : (
                           <CheckCircle2
-                            className="w-4 h-4 flex-shrink-0 mt-0.5 text-brand-viridian"
+                            className="w-4 h-4 shrink-0 mt-0.5 text-brand-viridian"
                             strokeWidth={2}
                           />
                         )}
