@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional
 
 from kink import inject
 
+from main.app.config.settings import settings
 from main.app.core.idempotency.models import (
     CreateIdempotencyKeyDto,
     IdempotencyStatus,
@@ -37,9 +38,6 @@ from main.appodus_utils.exception.exceptions import (
     ResourceConflictException,
     ResourceNotFoundException,
 )
-
-DEFAULT_TTL_HOURS = 24
-
 
 @dataclass(frozen=True)
 class IdempotencyOutcome:
@@ -62,7 +60,7 @@ class IdempotencyService:
         key: str,
         scope: str,
         request_hash: Optional[str] = None,
-        ttl_hours: int = DEFAULT_TTL_HOURS,
+        ttl_hours: Optional[int] = None,
     ) -> IdempotencyOutcome:
         """Reserve ``key`` for ``scope`` or signal a replay of a prior call.
 
@@ -93,7 +91,9 @@ class IdempotencyService:
                 scope=scope,
                 status=IdempotencyStatus.PENDING,
                 request_hash=request_hash,
-                expires_at=Utils.datetime_now() + timedelta(hours=ttl_hours),
+                expires_at=Utils.datetime_now() + timedelta(
+                    hours=ttl_hours if ttl_hours is not None else settings.IDEMPOTENCY_KEY_TTL_HOURS
+                ),
             )
         )
         # The session runs with autoflush=False, so flush the reservation now — otherwise the
@@ -128,7 +128,7 @@ class IdempotencyService:
         self,
         key: str,
         scope: str,
-        ttl_hours: int = DEFAULT_TTL_HOURS,
+        ttl_hours: Optional[int] = None,
     ) -> bool:
         """One-shot dedup for webhooks: True if newly claimed, False if already seen."""
         existing = await self._idempotency_repo.get_by_key(key)
@@ -139,7 +139,9 @@ class IdempotencyService:
                 key=key,
                 scope=scope,
                 status=IdempotencyStatus.COMPLETED,
-                expires_at=Utils.datetime_now() + timedelta(hours=ttl_hours),
+                expires_at=Utils.datetime_now() + timedelta(
+                    hours=ttl_hours if ttl_hours is not None else settings.IDEMPOTENCY_KEY_TTL_HOURS
+                ),
             )
         )
         return True

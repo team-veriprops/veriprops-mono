@@ -1,7 +1,117 @@
+# ==============================================================================
+# Veriprops local stack — `docker compose up --build`
+# ------------------------------------------------------------------------------
+#   postgres  :5432   application database
+#   adminer   :8080   web DB console (http://localhost:8080, server=postgres)
+#   redis     :6379   optional cache/KV (backend falls back to SQL KV if absent)
+#   mailpit   :8025   captured email UI (SMTP on :1025) — http://localhost:8025
+#   backend   :8000   FastAPI (http://localhost:8000/docs)
+#   frontend  :3000   Next.js  (http://localhost:3000)
+#
+# Backend settings come from ./backend/.env.local; the `environment:` overrides
+# below repoint DB/SMTP/Redis at the in-network service names (the env file uses
+# `localhost` for running the backend directly on the host).
+# ==============================================================================
+
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: veriprops_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d veriprops_local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer:5.2.1-standalone
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     restart: unless-stopped
     command: redis-server --save "" --appendonly no
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.local
+    environment:
+      appodus_active_env: local
+      # Repoint at in-network services (override the localhost values in .env.local).
+      DB_SERVER: postgres
+      DB_PORT: "5432"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      REDIS_ENABLED: "true"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    command: sh -c "alembic upgrade head && gunicorn veriprops:app -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:8000 --timeout 300"
+    # Service-account secrets are kept out of the image (see backend/.dockerignore)
+    # and mounted read-only at runtime instead.
+    volumes:
+      - ./backend/service_accounts:/app/service_accounts:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # NEXT_PUBLIC_* are inlined at build time (see frontend/Dockerfile).
+        NEXT_PUBLIC_ENVIRONMENT: local
+        NEXT_PUBLIC_APP_NAME: Veriprops
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+        NEXT_PUBLIC_API_TIMEOUT: "10000"
+        NEXT_PUBLIC_OAUTH_GOOGLE_DISABLED: "false"
+        NEXT_PUBLIC_OAUTH_APPLE_DISABLED: "true"
+        NEXT_PUBLIC_OAUTH_FACEBOOK_DISABLED: "true"
+    restart: unless-stopped
+    environment:
+      # Server-only, read at runtime; the proxy targets the backend service.
+      API_BASE_URL: http://backend:8000
+      BACKEND_SECRET_KEY: local-dev-backend-secret
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

@@ -11,6 +11,9 @@ to). Deliberately in-process and best-effort:
 - **Single process.** Subscribers live in this worker's memory. Horizontal fan-out
   (Redis pub/sub) lands with the Phase-12 event bus (§4.8); the public API here does
   not change when that arrives.
+
+TODO(gap): Redis multi-instance SSE fan-out — subscribers on other workers miss pushes
+until then (the 60s poll fallback keeps correctness) — PRD "Known Gaps & Roadmap".
 """
 from __future__ import annotations
 
@@ -20,6 +23,8 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Dict, Optional, Set
 
 from kink import di
+
+from main.app.config.settings import settings
 
 
 class VerificationEventType(str, enum.Enum):
@@ -34,7 +39,7 @@ class VerificationEventType(str, enum.Enum):
 
 # Bound each subscriber queue so a slow/abandoned client cannot grow memory without
 # limit; when full we drop the push (the poll fallback reconciles).
-_QUEUE_MAXSIZE = 100
+_QUEUE_MAXSIZE = settings.SSE_QUEUE_MAXSIZE
 
 
 class VerificationEventEmitter:

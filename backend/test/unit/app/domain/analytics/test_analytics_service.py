@@ -46,6 +46,8 @@ def _make_service():
     svc._payments = AsyncMock()
     svc._tasks = AsyncMock()
     svc._reports = AsyncMock()
+    svc._config = AsyncMock()
+    svc._config.get_int = AsyncMock(return_value=6)  # ANALYTICS_TREND_MONTHS default
     return svc
 
 

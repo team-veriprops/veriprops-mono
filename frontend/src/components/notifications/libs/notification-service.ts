@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import { AppNotification, NotificationPreference } from "@/types/notification";
 
@@ -10,7 +11,7 @@ import { AppNotification, NotificationPreference } from "@/types/notification";
 export class NotificationService {
   constructor(private readonly http: HttpClient) {}
 
-  list(page = 0, pageSize = 20): Promise<SuccessResponse<Page<AppNotification>>> {
+  list(page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<Page<AppNotification>>> {
     return this.http.get(`/notifications?page=${page}&pageSize=${pageSize}`);
   }
 

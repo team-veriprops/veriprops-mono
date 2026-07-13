@@ -46,7 +46,7 @@ export default function ConsentStep({ loading, errorMessage, onSubmit, onBack }:
 
   return (
     <form className="space-y-6" onSubmit={handleSubmit} noValidate>
-      <p className="text-sm leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
+      <p className="text-sm leading-relaxed text-brand-on-surface-variant">
         We need your explicit acceptance of the documents below before creating your account. We
         record the exact version you accept along with the timestamp.
       </p>
@@ -68,12 +68,7 @@ export default function ConsentStep({ loading, errorMessage, onSubmit, onBack }:
 
       {errorMessage && (
         <div
-          className="p-3 rounded-lg text-sm"
-          style={{
-            backgroundColor: "rgba(186,26,26,0.06)",
-            color: "var(--danger)",
-            border: "1px solid rgba(186,26,26,0.18)",
-          }}
+          className="p-3 rounded-lg text-sm bg-danger/6 text-danger border border-danger/18"
         >
           {errorMessage}
         </div>

@@ -6,6 +6,7 @@ from typing import Optional, Tuple
 
 from kink import inject
 
+from main.app.config.settings import settings
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.admin_invitation.models import (
@@ -31,9 +32,6 @@ from main.appodus_utils.exception.exceptions import (
     InvalidTokenException,
     ResourceNotFoundException,
 )
-
-INVITE_TTL_HOURS = 72
-
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
@@ -69,7 +67,7 @@ class AdminInvitationService:
             sub_role=sub_role,
             token_hash=token_hash,
             invited_by=invited_by,
-            expires_at=Utils.datetime_now() + timedelta(hours=INVITE_TTL_HOURS),
+            expires_at=Utils.datetime_now() + timedelta(hours=settings.ADMIN_INVITE_TTL_HOURS),
         ))
         self._audit_service.schedule(
             action=AuditActionType.ADMIN_INVITED,

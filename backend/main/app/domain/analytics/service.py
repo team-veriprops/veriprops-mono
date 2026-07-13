@@ -27,6 +27,8 @@ from main.app.domain.analytics.models import (
 )
 from main.app.domain.payment.repo import PaymentRepo
 from main.app.domain.verification.report.repo import ReportRepo
+from main.app.domain.system_config.models import ConfigKey
+from main.app.domain.system_config.service import ConfigService
 from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.task.repo import VerificationTaskRepo
 from main.appodus_utils import Utils
@@ -45,7 +47,6 @@ _ACTIVE_STATES = {
     VerificationStatus.UNDER_REVIEW.value,
 }
 _UNKNOWN_STATE = "Unknown"
-_TREND_MONTHS = 6
 
 
 def _rate(num: int, denom: int) -> float:
@@ -62,11 +63,13 @@ class AnalyticsService:
         payment_repo: PaymentRepo,
         task_repo: VerificationTaskRepo,
         report_repo: ReportRepo,
+        config_service: ConfigService,
     ):
         self._verifications = verification_repo
         self._payments = payment_repo
         self._tasks = task_repo
         self._reports = report_repo
+        self._config = config_service
 
     async def funnel(self) -> FunnelDto:
         rows = await self._verifications.analytics_snapshot()
@@ -159,7 +162,8 @@ class AnalyticsService:
         ]
 
     async def agent_trends(self) -> AgentTrendsDto:
-        cutoff = Utils.datetime_now() - timedelta(days=30 * _TREND_MONTHS)
+        trend_months = await self._config.get_int(ConfigKey.ANALYTICS_TREND_MONTHS)
+        cutoff = Utils.datetime_now() - timedelta(days=30 * trend_months)
         rows = await self._tasks.list_approved_since(cutoff)
         counts: Dict[str, int] = defaultdict(int)
         quality: Dict[str, int] = defaultdict(int)

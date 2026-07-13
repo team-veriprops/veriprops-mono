@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { REFETCH_INTERVAL_MS, SHORT_REFETCH_INTERVAL_MS } from "@lib/config/app";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
 import { useUserStream } from "@lib/useUserStream";
@@ -41,7 +42,7 @@ export function useChatUnreadQuery(enabled = true) {
     queryKey: chatKeys.unread(),
     enabled,
     queryFn: async () => (await service.unreadCount()).data?.count ?? 0,
-    refetchInterval: 60_000, // polling fallback shares the counter shape
+    refetchInterval: REFETCH_INTERVAL_MS, // polling fallback shares the counter shape
   });
 }
 
@@ -50,7 +51,7 @@ export function useConversationsQuery(enabled = true) {
     queryKey: chatKeys.conversations(),
     enabled,
     queryFn: async () => (await service.listConversations()).data ?? [],
-    refetchInterval: 60_000,
+    refetchInterval: REFETCH_INTERVAL_MS,
   });
 }
 
@@ -59,7 +60,7 @@ export function useMessagesQuery(conversationId: string | null, page = 0, enable
     queryKey: chatKeys.messages(conversationId ?? "none", page),
     enabled: !!conversationId && enabled,
     queryFn: async () => (await service.listMessages(conversationId as string, page)).data ?? null,
-    refetchInterval: 60_000,
+    refetchInterval: REFETCH_INTERVAL_MS,
   });
 }
 
@@ -148,7 +149,7 @@ export function useHeldQueueQuery(page = 0, enabled = true) {
     queryKey: chatKeys.held(page),
     enabled,
     queryFn: async () => (await service.heldQueue(page)).data ?? null,
-    refetchInterval: 30_000,
+    refetchInterval: SHORT_REFETCH_INTERVAL_MS,
   });
 }
 

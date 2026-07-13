@@ -65,6 +65,7 @@ class Payment(BaseEntity):
     # Anti-farming instrument marker (§17.1, D34) — a gateway-surfaced card fingerprint/
     # authorization token, never raw card data. Null under PAYMENT_STUB_MODE (no live
     # gateway); the referral anti-farming check reads it once the live gateway fills it in.
+    # TODO(gap): capture stays dark until the live gateway populates it — PRD "Known Gaps & Roadmap".
     card_fingerprint = Column(String(128), nullable=True, index=True)
     failure_count = Column(Integer, nullable=False, server_default="0")
     # Chargeback flag (§6a.1) — the sub-process detail lives on the Chargeback row;

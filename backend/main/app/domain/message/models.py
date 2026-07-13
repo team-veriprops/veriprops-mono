@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, Union
 
 from pydantic import model_validator, Field, HttpUrl, ConfigDict
 from sqlalchemy import (Column,
+                        Index,
                         String,
                         Text,
                         Integer)
@@ -25,6 +26,10 @@ from main.appodus_utils.integrations.messaging.models import (MessageRecipient,
 
 class Message(BaseEntity):
     __tablename__ = 'messages'
+    __table_args__ = (
+        # Retry-sweep hot path: WHERE status = RETRYING AND next_retry_at <= now.
+        Index("ix_messages_status_next_retry_at", "status", "next_retry_at"),
+    )
     channel = Column(String(20), nullable=False)
     to = Column(JSONB_VARIANT, nullable=False)
     payload = Column(JSONB_VARIANT, nullable=False)
@@ -32,9 +37,11 @@ class Message(BaseEntity):
     provider = Column(String(50))
     provider_id = Column(String(255))  # Provider's message ID
     error = Column(Text)
-    retry_count = Column(Integer, default=0)
+    retry_count = Column(Integer, default=0)   # retries attempted (0..threshold)
     priority = Column(Integer, default=MessagePriority.NORMAL)  # 1=high, 2=normal, 3=low
     scheduled_at = Column(UTCDateTime, nullable=True)
+    next_retry_at = Column(UTCDateTime, nullable=True)  # when a RETRYING row re-dispatches
+    expires_at = Column(UTCDateTime, nullable=True)  # retry horizon for time-bound content (OTP, reset links)
     sent_at = Column(UTCDateTime, nullable=True)
     delivered_at = Column(UTCDateTime, nullable=True)
     extras = Column(JSONB_VARIANT, default={})
@@ -75,6 +82,9 @@ class UpsertMessageDto(MessageBaseDto):
     retry_count: int = Field(default=0, ge=0, description="Number of retry attempts made so far")
     priority: MessagePriority = Field(default=MessagePriority.NORMAL, description="Delivery priority level")
     scheduled_at: Optional[datetime] = Field(None, description="Time at which message is scheduled to be sent")
+    next_retry_at: Optional[datetime] = Field(None, description="When a RETRYING message becomes eligible for re-dispatch")
+    expires_at: Optional[datetime] = Field(
+        None, description="Retry horizon for time-bound content (e.g. OTP validity) — never re-dispatched past this")
     sent_at: Optional[datetime] = Field(None, description="Timestamp when the message was actually sent")
     delivered_at: Optional[datetime] = Field(None, description="Timestamp when the message was successfully delivered")
     extras: Dict[str, Any] = Field(default_factory=dict, description="Additional custom data or tracking metadata")
@@ -133,13 +143,18 @@ class UpsertMessageDto(MessageBaseDto):
         return obj
 
     @classmethod
-    def  from_request(cls, request: MessageRequest) -> "UpsertMessageDto":
+    def from_request(cls, request: MessageRequest) -> "UpsertMessageDto":
         """Convert a MessageRequest to UpsertMessageDto.
 
         MessageRequest and UpsertMessageDto share a compatible field set by design.
-        Any schema change to either must be mirrored in the other.
+        Any schema change to either must be mirrored in the other. The one naming
+        difference is mapped explicitly: the request's ``schedule_at`` is the DTO's
+        ``scheduled_at`` (this model ignores unknown fields, so relying on the raw
+        dump would silently drop the schedule).
         """
-        return cls(**request.model_dump())
+        data = request.model_dump()
+        data["scheduled_at"] = data.pop("schedule_at", None)
+        return cls(**data)
 
     model_config = ConfigDict(
         json_encoders={
@@ -168,22 +183,27 @@ class UpsertMessageDto(MessageBaseDto):
     )
 
 
+# Pydantic v2: Optional WITHOUT a default is a required field — the explicit
+# ``= None`` defaults below are what make partial constructions
+# (``_UpdateMessageDto(status=..., error=...)``) legal.
 class _UpdateMessageDto(Object):
-    status: Optional[MessageStatus]
-    provider: Optional[MessageProviderName]
-    provider_id: Optional[str]
-    extras: Optional[Dict]
-    error: Optional[str]
-    retry_count: Optional[int]
-    priority: Optional[MessagePriority]
-    sent_at: Optional[datetime]
-    delivered_at: Optional[datetime]
+    status: Optional[MessageStatus] = None
+    provider: Optional[MessageProviderName] = None
+    provider_id: Optional[str] = None
+    extras: Optional[Dict] = None
+    error: Optional[str] = None
+    retry_count: Optional[int] = None
+    priority: Optional[MessagePriority] = None
+    next_retry_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    sent_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
 
 
 class SearchMessageDto(InternalPageRequest, BaseQueryDto, _UpdateMessageDto):
-    channel: Optional[MessageChannel]
-    to: Optional[MessageRecipient]
-    provider: Optional[MessageProviderName]
+    channel: Optional[MessageChannel] = None
+    to: Optional[MessageRecipient] = None
+    provider: Optional[MessageProviderName] = None
 
 
 class QueryMessageDto(UpsertMessageDto, BaseQueryDto):

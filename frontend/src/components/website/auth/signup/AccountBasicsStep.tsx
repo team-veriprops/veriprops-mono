@@ -74,13 +74,13 @@ export default function AccountBasicsStep({ defaultValues, onSubmit }: Props) {
           <button
             type="button"
             aria-label={showPassword ? "Hide password" : "Show password"}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-[var(--brand-surface-low)]"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-brand-surface-low"
             onClick={() => setShowPassword((v) => !v)}
           >
             {showPassword ? (
-              <EyeOff className="w-4 h-4" style={{ color: "var(--brand-on-surface-variant)" }} />
+              <EyeOff className="w-4 h-4 text-brand-on-surface-variant" />
             ) : (
-              <Eye className="w-4 h-4" style={{ color: "var(--brand-on-surface-variant)" }} />
+              <Eye className="w-4 h-4 text-brand-on-surface-variant" />
             )}
           </button>
         </div>
@@ -105,12 +105,12 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+      <label className="text-sm font-semibold text-brand-navy">
         {label}
       </label>
       {children}
       {error && (
-        <p className="text-xs" style={{ color: "var(--danger)" }}>
+        <p className="text-xs text-danger">
           {error}
         </p>
       )}

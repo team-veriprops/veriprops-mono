@@ -643,6 +643,7 @@ class MessageRequestBuilder:
         self._template = None
         self._template_variables = None
         self._schedule_at = None
+        self._expires_at = None
         self._extras: Dict[str, Any] = {}
         self._sandbox_mode = False
 
@@ -683,6 +684,11 @@ class MessageRequestBuilder:
         self._schedule_at = schedule_at
         return self
 
+    def expires_at(self, expires_at: Optional[datetime]) -> 'MessageRequestBuilder':
+        """Set the delivery-usefulness horizon for time-bound content (optional)"""
+        self._expires_at = expires_at
+        return self
+
     def extras(self, extras: Dict[str, Any]) -> 'MessageRequestBuilder':
         """Set analytics/tracking data (optional)"""
         self._extras = extras
@@ -715,6 +721,7 @@ class MessageRequestBuilder:
             template=self._template,
             template_variables=self._template_variables,
             schedule_at=self._schedule_at,
+            expires_at=self._expires_at,
             extras=self._extras,
             sandbox_mode=self._sandbox_mode
         )
@@ -772,6 +779,11 @@ class MessageRequest(Object):
     schedule_at: Optional[datetime] = Field(
         None,
         description="Future delivery time"
+    )
+    expires_at: Optional[datetime] = Field(
+        None,
+        description="Delivery-usefulness horizon for time-bound content (e.g. OTP validity). "
+                    "The retry sweep never re-dispatches past this."
     )
     extras: Optional[Dict[str, Any]] = Field(
         None,

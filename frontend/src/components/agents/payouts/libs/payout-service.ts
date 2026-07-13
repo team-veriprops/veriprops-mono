@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import { AddBankAccountRequest, BankAccount, Payout, RequestPayoutRequest } from "@/types/payout";
 
@@ -8,7 +9,7 @@ import { AddBankAccountRequest, BankAccount, Payout, RequestPayoutRequest } from
 export class PayoutService {
   constructor(private readonly http: HttpClient) {}
 
-  listPayouts(page = 0, pageSize = 10): Promise<SuccessResponse<Page<Payout>>> {
+  listPayouts(page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<Payout>>> {
     return this.http.get(`/agents/payouts?page=${page}&page_size=${pageSize}`);
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { ConsentHistoryService } from "./consent-history-service";
 
@@ -13,7 +14,7 @@ export const consentHistoryKeys = {
 export function useConsentHistoryQuery(page = 0) {
   return useQuery({
     queryKey: consentHistoryKeys.history(page),
-    queryFn: async () => (await service.history(page, 20)).data ?? null,
+    queryFn: async () => (await service.history(page, DEFAULT_HISTORY_PAGE_SIZE)).data ?? null,
   });
 }
 

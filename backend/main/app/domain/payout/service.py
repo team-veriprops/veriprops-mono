@@ -30,6 +30,8 @@ from main.app.domain.payout.models import (
     payout_to_dto,
 )
 from main.app.domain.payout.repo import PayoutRepo
+from main.app.domain.system_config.models import ConfigKey
+from main.app.domain.system_config.service import ConfigService
 from main.appodus_utils import Utils
 from main.appodus_utils.db.models import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -40,8 +42,6 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
-
-_PAYOUT_SLA_BUSINESS_DAYS = 2  # §15.1 "2-business-day SLA"
 
 
 @inject
@@ -54,11 +54,13 @@ class PayoutService:
         earnings_service: EarningsService,
         bank_account_service: BankAccountService,
         audit_service: AuditLogService,
+        config_service: ConfigService,
     ):
         self._payout_repo = payout_repo
         self._earnings = earnings_service
         self._banks = bank_account_service
         self._audit = audit_service
+        self._config = config_service
 
     # ── Agent ─────────────────────────────────────────────────────
 
@@ -78,7 +80,7 @@ class PayoutService:
             bank_name=bank_name, account_number=account_number, account_name=account_name,
         ))
         payout.requested_at = now
-        payout.sla_due_at = self._sla_due(now)
+        payout.sla_due_at = await self._sla_due(now)
         self._audit.schedule(
             action=AuditActionType.PAYOUT_REQUESTED,
             resource_type="payout", resource_id=payout.id, actor_id=agent_id,
@@ -117,6 +119,8 @@ class PayoutService:
 
     async def approve(self, payout_id: str, admin_id: str, dto: PayoutDecisionDto) -> Payout:
         """Approve + disburse (stub) — REQUESTED/HELD → PAID; fires PAYOUT_APPROVED (§12.2)."""
+        # TODO(gap): stub disbursement — approval marks PAID directly; wire a real transfer
+        # gateway behind the payment facade — PRD "Known Gaps & Roadmap".
         payout = await self._get_decidable(payout_id)
         await self._decide(payout, PayoutStatus.PAID, admin_id, dto,
                             AuditActionType.PAYOUT_APPROVED)
@@ -207,7 +211,7 @@ class PayoutService:
             )
         return payout
 
-    @staticmethod
-    def _sla_due(now: datetime) -> datetime:
-        due = add_business_days(now, _PAYOUT_SLA_BUSINESS_DAYS)
+    async def _sla_due(self, now: datetime) -> datetime:
+        sla_days = await self._config.get_int(ConfigKey.PAYOUT_SLA_BUSINESS_DAYS)
+        due = add_business_days(now, sla_days)
         return datetime(due.year, due.month, due.day, tzinfo=timezone.utc)

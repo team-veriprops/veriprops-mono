@@ -41,7 +41,7 @@ from main.app.domain.verification.report.service import ReportService
 from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.review.conflict import ReviewConflict, detect_conflicts
 from main.app.domain.verification.scoring.service import TrustScoreWeightService
-from main.app.domain.verification.task.models import UpdateTaskDto, VerificationTask
+from main.app.domain.verification.task.models import ReviewDecision, UpdateTaskDto, VerificationTask
 from main.app.domain.verification.task.repo import VerificationTaskRepo
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -53,17 +53,13 @@ from main.appodus_utils.exception.exceptions import (
     ValidationException,
 )
 
-_APPROVED_REVIEW = "APPROVED"
-_REJECTED_REVIEW = "REJECTED"
-
-
 def _release_ready(task) -> bool:
     """A task is ready to (re-)release when it is already APPROVED (untouched since the last
     release — e.g. a partial re-check reopened only some tasks, §14.1) or it is SUBMITTED and
     admin review-approved. First release: every task is SUBMITTED+approved; re-release: a mix."""
     if task.state == TaskState.APPROVED.value:
         return True
-    return task.state == TaskState.SUBMITTED.value and task.review_decision == _APPROVED_REVIEW
+    return task.state == TaskState.SUBMITTED.value and task.review_decision == ReviewDecision.APPROVED.value
 
 
 @inject
@@ -106,6 +102,8 @@ class ReviewService:
         ``interim_note`` is an optional one-line reassurance shown to the customer once
         approved (§9.3) — captured here so a positive milestone is delivered with context.
         """
+        # TODO(gap): richer per-role quality rubric — the composite trust score is fed by this
+        # single 0-100 quality number today — PRD "Known Gaps & Roadmap".
         if not 0 <= quality <= 100:
             raise ValidationException(message="Quality score must be between 0 and 100.")
         task = await self._get_task(verification_id, role)
@@ -114,7 +112,7 @@ class ReviewService:
                 resource="task", message="Only a submitted task can be approved."
             )
         await self._tasks.update(task.id, UpdateTaskDto(
-            review_decision=_APPROVED_REVIEW, review_quality=quality,
+            review_decision=ReviewDecision.APPROVED.value, review_quality=quality,
             interim_note=interim_note,
         ))
         self._audit.schedule(
@@ -140,7 +138,7 @@ class ReviewService:
             task.state, TaskState.REJECTED.value, resource="Task"
         )
         await self._tasks.update(task.id, UpdateTaskDto(
-            state=TaskState.REJECTED.value, review_decision=_REJECTED_REVIEW, rejection_reason=reason,
+            state=TaskState.REJECTED.value, review_decision=ReviewDecision.REJECTED.value, rejection_reason=reason,
         ))
         self._audit.schedule(
             action=AuditActionType.TASK_REJECTED,

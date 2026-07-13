@@ -55,7 +55,7 @@ export function TableToolbar({
     <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
       <div className="flex flex-1 flex-wrap items-center gap-3">
         {/* Search Input */}
-        <div className="relative flex-1 min-w-[12rem] max-w-md">
+        <div className="relative flex-1 min-w-48 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"

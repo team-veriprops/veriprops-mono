@@ -65,21 +65,17 @@ export default function ResetPasswordContainer({ token }: Props) {
       />
 
       <div
-        className="mb-6 p-4 rounded-xl flex items-start gap-3"
-        style={{
-          backgroundColor: "rgba(0,13,34,0.04)",
-          border: "1px solid rgba(196,198,207,0.4)",
-        }}
+        className="mb-6 p-4 rounded-xl flex items-start gap-3 bg-brand-navy/4 border border-brand-outline-variant/40"
       >
-        <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5" style={{ color: "var(--brand-viridian)" }} />
-        <p className="text-xs leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
+        <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5 text-brand-viridian" />
+        <p className="text-xs leading-relaxed text-brand-on-surface-variant">
           For your safety, resetting your password signs out every other device.
         </p>
       </div>
 
       <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="reset-password-form">
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <label className="text-sm font-semibold text-brand-navy">
             New password
           </label>
           <div className="relative">
@@ -96,25 +92,25 @@ export default function ResetPasswordContainer({ token }: Props) {
               onClick={() => setShowPassword((v) => !v)}
               tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-[var(--brand-surface-low)]"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-brand-surface-low"
             >
               {showPassword ? (
-                <EyeOff className="w-4 h-4" style={{ color: "var(--brand-on-surface-variant)" }} />
+                <EyeOff className="w-4 h-4 text-brand-on-surface-variant" />
               ) : (
-                <Eye className="w-4 h-4" style={{ color: "var(--brand-on-surface-variant)" }} />
+                <Eye className="w-4 h-4 text-brand-on-surface-variant" />
               )}
             </button>
           </div>
           <PasswordStrengthMeter password={password ?? ""} className="mt-2" />
           {form.formState.errors.password && (
-            <p className="text-xs" style={{ color: "var(--danger)" }}>
+            <p className="text-xs text-danger">
               {form.formState.errors.password.message}
             </p>
           )}
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <label className="text-sm font-semibold text-brand-navy">
             Confirm new password
           </label>
           <Input
@@ -124,7 +120,7 @@ export default function ResetPasswordContainer({ token }: Props) {
             {...form.register("confirmPassword")}
           />
           {form.formState.errors.confirmPassword && (
-            <p className="text-xs" style={{ color: "var(--danger)" }}>
+            <p className="text-xs text-danger">
               {form.formState.errors.confirmPassword.message}
             </p>
           )}
@@ -132,12 +128,7 @@ export default function ResetPasswordContainer({ token }: Props) {
 
         {errorMessage && (
           <div
-            className="p-3 rounded-lg text-sm flex items-start gap-2"
-            style={{
-              backgroundColor: "rgba(186,26,26,0.06)",
-              color: "var(--danger)",
-              border: "1px solid rgba(186,26,26,0.18)",
-            }}
+            className="p-3 rounded-lg text-sm flex items-start gap-2 bg-danger/6 text-danger border border-danger/18"
           >
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             {errorMessage}
@@ -153,11 +144,10 @@ export default function ResetPasswordContainer({ token }: Props) {
           {resetMutation.isPending ? "Updating…" : "Reset password"}
         </Button>
 
-        <p className="text-sm text-center" style={{ color: "var(--brand-on-surface-variant)" }}>
+        <p className="text-sm text-center text-brand-on-surface-variant">
           <Link
             href={ROUTES.AUTH.LOGIN}
-            className="font-semibold underline-offset-2 hover:underline"
-            style={{ color: "var(--brand-navy)" }}
+            className="font-semibold underline-offset-2 hover:underline text-brand-navy"
           >
             Back to sign in
           </Link>

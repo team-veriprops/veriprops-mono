@@ -164,6 +164,9 @@ export const agentTypes: AgentType[] = [
   },
 ];
 
+// Fallback marketing copy — PricingSection.tsx overlays the live price from
+// `pricing_tier_config` (via /config/public) on top of these figures, and only
+// falls back to these static values per-tier when the backend price is unavailable.
 export const pricingTiers: PricingTier[] = [
   {
     name: "Basic",
@@ -298,6 +301,8 @@ export const footerLinks = {
     { label: "Disclaimer", href: ROUTES.LEGAL.REPORT_DISCLAIMER },
   ] as FooterLink[],
   socials: [
+    // TODO(gap): placeholder social links — point at the real profiles before launch —
+    // PRD "Known Gaps & Roadmap".
     { label: "Facebook", href: "#" },
     { label: "Twitter", href: "#" },
     { label: "LinkedIn", href: "#" },

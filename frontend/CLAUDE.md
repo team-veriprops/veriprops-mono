@@ -25,7 +25,11 @@ pnpm vitest run -t "test name pattern"
 
 ## API proxy
 
-`/api/*` requests are rewritten to `${API_BASE_URL}/api/*` by [next.config.ts](next.config.ts). `API_BASE_URL` is server-only (read from [src/lib/config/server.ts](src/lib/config/server.ts), which throws if imported on the client). Public env vars (`NEXT_PUBLIC_*`) live in [src/lib/config/public.ts](src/lib/config/public.ts) — keep them split.
+`/api/*` requests are rewritten to `${API_BASE_URL}/api/*` by [next.config.ts](next.config.ts). `API_BASE_URL` is server-only (read from [src/lib/config/server.ts](src/lib/config/server.ts), which throws if imported on the client). Public env vars (`NEXT_PUBLIC_*`) live in [src/lib/config/public.ts](src/lib/config/public.ts) — keep them split. The proxy target/timeout and dev origins are env-driven (`NEXT_PUBLIC_API_PREFIX`, `PROXY_TIMEOUT_MS`, `ADDITIONAL_DEV_ORIGINS`); [.env.example](.env.example) documents every settable key.
+
+## Client operational constants
+
+Non-env client tuning that would otherwise be duplicated as magic numbers lives in one module: [src/lib/config/app.ts](src/lib/config/app.ts) — pagination defaults (`DEFAULT_PAGE_SIZE`, `DEFAULT_HISTORY_PAGE_SIZE`, `CHAT_MESSAGES_PAGE_SIZE`), SSE reconnect (`SSE_MAX_RETRIES`/`SSE_BASE_BACKOFF_MS`), TanStack Query cadence (`REFETCH_INTERVAL_MS`/`STALE_TIME_MS`/…), `DEFAULT_DIAL_CODE`, upload caps, and `SUPPORT_EMAIL`. Import from here rather than re-hardcoding a page size / interval. **Backend-owned limits are not duplicated here** — e.g. the chat composer `maxLength` reads `chatMessageMaxLength` from `/config/public` (`usePublicConfigQuery`), with `app.ts` holding only a pre-resolve fallback.
 
 ## Auth Guard
 
@@ -85,6 +89,15 @@ Record-detail views and one-off forms / centered modals use the shared right-sid
 - Legal pages render content the backend owns: the dynamic `/legal/[slug]` route fetches via [src/lib/legal.server.ts](src/lib/legal.server.ts) (`fetchLegalDocument`/`fetchLegalDocuments` → `/api/users/auth/consents/documents/...`) and renders Markdown through `LegalDocument`. Do not hardcode legal prose on the frontend.
 - Read runtime flags from the backend, not from `NEXT_PUBLIC_*`. `usePublicConfigQuery()` exposes `/config/public` (e.g. `phoneVerificationEnabled`, which drives whether the signup flow shows the phone-verification step).
 - The `/account/*` security surface (security log, devices, linked accounts, password) lives under `src/app/account/` on `AppShell`; the `PortalSwitcher` in the shell shows the cross-portal badge for multi-persona users.
+
+## Styling
+
+All styling is `className` (Tailwind v4 utilities, generated from [src/styles/theme.css](src/styles/theme.css)'s CSS-first `@theme inline` config) — never the `style` prop. Conditional styling uses `cn()` from [src/lib/utils.ts](src/lib/utils.ts) to merge a base class string with per-branch classes, never a `style={condition ? {...} : {...}}` object. Inline `style` is reserved for two narrow, permanent exceptions:
+
+- **Runtime-computed numeric values** that can't be expressed as a static class: bar-fill/column widths derived from data ratios ([MiniBarBreakdown.tsx](src/components/ui/MiniBarBreakdown.tsx), [AdminAnalytics.tsx](src/components/admin/analytics/AdminAnalytics.tsx)), the sidebar slide transform in [AppShell.tsx](src/components/ui/AppShell.tsx), and per-column pixel widths in [DataTable.tsx](src/components/ui/table/DataTable.tsx).
+- **Vendored third-party CSS-variable contracts** in `src/components/3rdparty/ui/` — `sidebar.tsx`, `sonner.tsx`, and `chart.tsx` theme Radix/Sonner/Recharts by injecting CSS custom properties via `style={{ "--foo": value } as React.CSSProperties}`, which is the documented way to theme those libraries; `progress.tsx`'s Radix fill uses `style={{ transform: ... }}`, the standard Radix animation pattern.
+
+Nothing else should use `style`. If a color/shadow/gradient value isn't yet exposed as a theme token, prefer a Tailwind arbitrary-value class (`bg-[...]`, `shadow-[...]`) over inline `style` — it keeps the value in `className` even before it earns a real token.
 
 ## Design system (shared UI primitives)
 

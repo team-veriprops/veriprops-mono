@@ -52,18 +52,14 @@ export default function ForgotPasswordContainer() {
       {submittedEmail ? (
         <div className="space-y-6">
           <div
-            className="p-5 rounded-xl flex items-start gap-3"
-            style={{
-              backgroundColor: "rgba(63,102,83,0.06)",
-              border: "1px solid rgba(63,102,83,0.2)",
-            }}
+            className="p-5 rounded-xl flex items-start gap-3 bg-brand-viridian/6 border border-brand-viridian/20"
           >
-            <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" style={{ color: "var(--brand-viridian)" }} />
+            <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-brand-viridian" />
             <div>
-              <p className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+              <p className="text-sm font-semibold text-brand-navy">
                 Check {submittedEmail}
               </p>
-              <p className="text-sm mt-1 leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
+              <p className="text-sm mt-1 leading-relaxed text-brand-on-surface-variant">
                 If an account exists for that address, you&apos;ll receive a reset link within a few minutes. The link expires in 60 minutes.
               </p>
             </div>
@@ -89,13 +85,12 @@ export default function ForgotPasswordContainer() {
       ) : (
         <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="forgot-form">
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+            <label className="text-sm font-semibold text-brand-navy">
               Email
             </label>
             <div className="relative">
               <Mail
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
-                style={{ color: "var(--brand-on-surface-variant)" }}
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-brand-on-surface-variant"
               />
               <Input
                 type="email"
@@ -107,7 +102,7 @@ export default function ForgotPasswordContainer() {
               />
             </div>
             {form.formState.errors.email && (
-              <p className="text-xs" style={{ color: "var(--danger)" }}>
+              <p className="text-xs text-danger">
                 {form.formState.errors.email.message}
               </p>
             )}
@@ -123,12 +118,11 @@ export default function ForgotPasswordContainer() {
             {forgotMutation.isPending ? "Sending…" : "Send reset link"}
           </Button>
 
-          <p className="text-sm text-center" style={{ color: "var(--brand-on-surface-variant)" }}>
+          <p className="text-sm text-center text-brand-on-surface-variant">
             Remembered it?{" "}
             <Link
               href={ROUTES.AUTH.LOGIN}
-              className="font-semibold underline-offset-2 hover:underline"
-              style={{ color: "var(--brand-navy)" }}
+              className="font-semibold underline-offset-2 hover:underline text-brand-navy"
             >
               Back to sign in
             </Link>

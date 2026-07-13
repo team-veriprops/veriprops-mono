@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import {
   DecideRecheckRequest,
@@ -27,7 +28,7 @@ export class RevisionService {
     return this.http.get(`/verifications/${verificationId}/rechecks`);
   }
   // ── Re-check (admin) ───────────────────────────────────────────
-  listPendingRechecks(page = 0, pageSize = 10): Promise<SuccessResponse<Page<Recheck>>> {
+  listPendingRechecks(page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<Recheck>>> {
     return this.http.get(`/admin/rechecks?page=${page}&page_size=${pageSize}`);
   }
   decideRecheck(recheckId: string, req: DecideRecheckRequest): Promise<SuccessResponse<Recheck>> {
@@ -57,7 +58,7 @@ export class RevisionService {
     return this.http.post(`/agents/disputes/${disputeId}/defence`, { text });
   }
   // ── Dispute (admin) ────────────────────────────────────────────
-  listOpenDisputes(page = 0, pageSize = 10): Promise<SuccessResponse<Page<Dispute>>> {
+  listOpenDisputes(page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<Dispute>>> {
     return this.http.get(`/admin/disputes?page=${page}&page_size=${pageSize}`);
   }
   getDispute(disputeId: string): Promise<SuccessResponse<Dispute>> {

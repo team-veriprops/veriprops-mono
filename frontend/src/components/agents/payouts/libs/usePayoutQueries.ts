@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { AddBankAccountRequest, RequestPayoutRequest } from "@/types/payout";
 import { PayoutService } from "./payout-service";
@@ -12,7 +13,7 @@ export const payoutKeys = {
   bankAccounts: () => ["payout-bank-accounts"] as const,
 };
 
-export function usePayoutsQuery(page = 0, pageSize = 10) {
+export function usePayoutsQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE) {
   return useQuery({
     queryKey: payoutKeys.list(page),
     queryFn: async () => (await service.listPayouts(page, pageSize)).data ?? null,

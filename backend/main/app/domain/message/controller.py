@@ -1,75 +1,24 @@
-from typing import List
+"""Outbound-message admin controller.
 
-from fastapi import APIRouter, Depends, UploadFile, BackgroundTasks
-from libre_fastapi_jwt import AuthJWT
+URL shape: /messages — the bookkeeping rows themselves have no public listing
+(they carry recipient PII); only the retry sweep trigger is exposed, RBAC-gated.
+"""
+from fastapi import APIRouter, Depends
 from kink import di
 
-from main.appodus_utils import Page
-from main.app.domain.message.service import MessageService
-from main.app.domain.message.models import QueryMessageDto, UpsertMessageDto, \
-    SearchMessageDto
+from main.app.domain.user.auth.utils.permissions import Permission, require_permission
+from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.integrations.messaging.service import MessagingService
 
 message_router = APIRouter(prefix="/messages", tags=["Messages"])
 
-message_service: MessageService = di[MessageService]
 
-
-# @message_router.put("/")
-# async def message_update(
-#         update_dto: UpsertMessageDto,
-#         authorizer: AuthJWT = Depends(),
-# ) -> QueryMessageDto:
-#     return await message_service.update_message(update_dto, authorizer)
-#
-#
-# @message_router.put("/active-user/picture")
-# async def message_update_active_user_picture(
-#         message_picture: UploadFile,
-#         background_tasks: BackgroundTasks  = None,
-#         authorizer: AuthJWT = Depends(),
-# ) -> bool:
-#     return await message_service.update_active_user_picture(message_picture, authorizer, background_tasks)
-#
-#
-# @message_router.put("/active-user/selfie")
-# async def message_update_active_user_selfie(
-#         selfie_picture: UploadFile,
-#         background_tasks: BackgroundTasks  = None,
-#         authorizer: AuthJWT = Depends(),
-# ) -> bool:
-#     return await message_service.update_active_user_selfie(selfie_picture, authorizer, background_tasks)
-#
-#
-# @message_router.put("/active-user/bvn")
-# async def message_update_active_user_bvn(
-#         bvn: str,
-#         authorizer: AuthJWT = Depends(),
-# ) -> bool:
-#     return await message_service.update_active_user_bvn(bvn, authorizer)
-#
-#
-# @message_router.get("/search")
-# async def get_message_page(
-#         search_dto: SearchMessageDto
-# ) -> Page[QueryMessageDto]:
-#     return await message_service.get_message_page(search_dto)
-#
-#
-# @message_router.get("/{message_id}")
-# async def get_message(message_id: str) -> QueryMessageDto:
-#     return await message_service.get_message(message_id)
-#
-#
-# @message_router.get("/{message_id}/kyc-pending")
-# async def get_message_kyc_pending(message_id: str) -> List[KYCAgent]:
-#     return await message_service.get_message_kyc_pending(message_id)
-
-#
-# @message_router.get("/{message_id}/public-message")
-# async def get_public_message(message_id: str) -> QueryMessagePublicDto:
-#     return await message_service.get_public_message(message_id)
-
-
-# @message_router.get("/active-user")
-# async def get_message_for_active_user(authorizer: AuthJWT = Depends(), ) -> QueryMessageDto:
-#     return await message_service.get_message_for_active_user(authorizer)
+@message_router.post("/sweeps/retries", response_model=SuccessResponse[dict])
+async def sweep_message_retries(
+    _admin_id: str = Depends(require_permission(Permission.CONFIGURE_SYSTEM)),
+):
+    """Re-dispatch RETRYING outbound messages whose next_retry_at has passed
+    (backoff ladder + expires_at horizon). Runs on a schedule in non-test envs;
+    this endpoint triggers it on demand (idempotent)."""
+    stats = await di[MessagingService].process_retries()
+    return SuccessResponse[dict](data=stats)

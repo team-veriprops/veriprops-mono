@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { DEFAULT_PAGE_SIZE, REFETCH_INTERVAL_MS } from "@lib/config/app";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
 import { useUserStream } from "@lib/useUserStream";
@@ -17,11 +18,11 @@ export function useEarningsSummaryQuery() {
   return useQuery({
     queryKey: earningsKeys.summary(),
     queryFn: async () => (await service.getSummary()).data ?? null,
-    refetchInterval: 60_000,
+    refetchInterval: REFETCH_INTERVAL_MS,
   });
 }
 
-export function useEarningJobsQuery(page = 0, pageSize = 10) {
+export function useEarningJobsQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE) {
   return useQuery({
     queryKey: earningsKeys.jobs(page),
     queryFn: async () => (await service.listJobs(page, pageSize)).data ?? null,

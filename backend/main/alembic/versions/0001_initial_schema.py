@@ -234,6 +234,8 @@ def _create_messages():
         sa.Column("retry_count", sa.Integer(), nullable=True),
         sa.Column("priority", sa.Integer(), nullable=True),
         sa.Column("scheduled_at", UTCDateTime, nullable=True),
+        sa.Column("next_retry_at", UTCDateTime, nullable=True),
+        sa.Column("expires_at", UTCDateTime, nullable=True),
         sa.Column("sent_at", UTCDateTime, nullable=True),
         sa.Column("delivered_at", UTCDateTime, nullable=True),
         sa.Column("extras", JSONB_VARIANT, nullable=True),
@@ -242,24 +244,8 @@ def _create_messages():
     )
     op.create_index(op.f("ix_messages_deleted"), "messages", ["deleted"], unique=False)
     op.create_index(op.f("ix_messages_id"), "messages", ["id"], unique=True)
-
-
-def _create_dlq_entries():
-    op.create_table(
-        "dlq_entries",
-        sa.Column("original_message", JSONB_VARIANT, nullable=False),
-        sa.Column("channel", sa.String(length=20), nullable=False),
-        sa.Column("provider", sa.String(length=50), nullable=False),
-        sa.Column("error", sa.String(length=500), nullable=False),
-        sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("next_retry_at", UTCDateTime, nullable=False),
-        sa.Column("status", sa.String(length=15), nullable=False, server_default="PENDING"),
-        sa.Column("extras", JSONB_VARIANT, nullable=True),
-        *AlembicUtils.base_audit_columns(),
-    )
-    op.create_index("ix_dlq_entries_status", "dlq_entries", ["status"], unique=False)
-    op.create_index("ix_dlq_entries_next_retry_at", "dlq_entries", ["next_retry_at"], unique=False)
-    op.create_index("ix_dlq_entries_id", "dlq_entries", ["id"], unique=True)
+    # Retry-sweep hot path — name must match the model's __table_args__ Index exactly.
+    op.create_index("ix_messages_status_next_retry_at", "messages", ["status", "next_retry_at"], unique=False)
 
 
 def _create_callbacks():
@@ -1242,7 +1228,6 @@ _TABLE_BUILDERS = [
     ("password_reset_tokens", _create_password_reset_tokens),
     ("signup_drafts", _create_signup_drafts),
     ("messages", _create_messages),
-    ("dlq_entries", _create_dlq_entries),
     ("callbacks", _create_callbacks),
     ("audit_logs", _create_audit_logs),
     ("idempotency_keys", _create_idempotency_keys),

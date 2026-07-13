@@ -98,7 +98,8 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
             )
             .where(
                 User.deleted.is_(False),
-                User.user_id == user_id
+                # users.id is the PK (uuid) — recipient user_ids travel as 36-char strings.
+                User.id == self._ensure_uuid(user_id)
             )
             .limit(1)
         )
@@ -178,7 +179,7 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
             )
             .where(
                 User.deleted.is_(False),
-                User.user_id.in_(user_ids),
+                User.id.in_([self._ensure_uuid(u) for u in user_ids]),
             )
         )
 

@@ -131,7 +131,7 @@ export function DocumentUploadField<T extends FieldValues>({
                   aria-disabled={disabled}
                   className={cn(
                     "p-4 sm:p-3 border-2 rounded-xl sm:rounded-lg transition-all",
-                    "min-h-[100px] sm:min-h-[80px]",
+                    "min-h-25 sm:min-h-20",
                     !disabled && "cursor-pointer hover:border-primary",
                     !disabled &&
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",

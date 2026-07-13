@@ -167,6 +167,9 @@ class AgentReputationService:
         """Ranked eligible agents for a role on a verification (§16.1). Filters by role
         eligibility + credential status + coverage (role-differentiated) + capacity, ordered
         by composite score. Feeds the admin assignment picker."""
+        # TODO(gap): low-performance visibility reduction applies only to this ranking — the
+        # broadcast pool is untargeted accept-by-id, so per-agent pool-feed reduction needs a
+        # targeted/browsable pool — PRD "Known Gaps & Roadmap".
         verification = await self._verifications.get_model(verification_id)
         if verification is None:
             raise ResourceNotFoundException(resource="verification")

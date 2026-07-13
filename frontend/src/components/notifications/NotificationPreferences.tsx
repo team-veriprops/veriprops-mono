@@ -48,8 +48,8 @@ export default function NotificationPreferences() {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="flex items-center gap-2 mb-1">
-        <BellRing className="w-5 h-5" style={{ color: "var(--brand-viridian)" }} />
-        <h1 className="text-xl font-semibold" style={{ color: "var(--brand-navy)" }}>
+        <BellRing className="w-5 h-5 text-brand-viridian" />
+        <h1 className="text-xl font-semibold text-brand-navy">
           Notification preferences
         </h1>
       </div>
@@ -74,7 +74,7 @@ export default function NotificationPreferences() {
                 className="grid grid-cols-[1fr_auto_auto] gap-4 items-center px-4 py-3 border-b border-black/5 last:border-0"
               >
                 <div>
-                  <p className="text-sm font-medium" style={{ color: "var(--brand-navy)" }}>
+                  <p className="text-sm font-medium text-brand-navy">
                     {e.label}
                   </p>
                   <p className="text-xs text-gray-400">{e.description}</p>

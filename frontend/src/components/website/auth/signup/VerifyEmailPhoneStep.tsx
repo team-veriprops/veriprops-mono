@@ -10,6 +10,7 @@ import { verifyFormSchema, type VerifyFormValues } from "@components/ui/verified
 import { useSendOtpMutation, useVerifyOtpMutation, usePublicConfigQuery } from "../libs/useAuthQueries";
 import { OtpChannel } from "@components/website/auth/models";
 import { getErrorMessage } from "@lib/utils";
+import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 
 export type VerifyStepValues = VerifyFormValues;
 
@@ -32,7 +33,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
     defaultValues: {
       email: defaults.email,
       countryCode: defaults.countryCode ?? "NG",
-      dialCode: defaults.dialCode ?? "+234",
+      dialCode: defaults.dialCode ?? DEFAULT_DIAL_CODE,
       phone: defaults.phone ?? "",
       emailVerified: false,
       phoneVerified: false,
@@ -60,8 +61,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
   return (
     <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="verify-form">
       <p
-        className="text-sm leading-relaxed"
-        style={{ color: "var(--brand-on-surface-variant)" }}
+        className="text-sm leading-relaxed text-brand-on-surface-variant"
       >
         {phoneVerificationEnabled
           ? "We need to confirm both your email and phone number. We'll send a 6-digit code to each."

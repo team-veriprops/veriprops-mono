@@ -160,12 +160,7 @@ export default function LoginContainer() {
 
       {isLockedNow && (
         <div
-          className="mb-6 p-4 rounded-xl flex items-start gap-3"
-          style={{
-            backgroundColor: "rgba(186,26,26,0.06)",
-            border: "1px solid rgba(186,26,26,0.18)",
-            color: "var(--danger)",
-          }}
+          className="mb-6 p-4 rounded-xl flex items-start gap-3 bg-danger/6 border border-danger/18 text-danger"
         >
           <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
           <div className="text-sm leading-relaxed">
@@ -177,8 +172,7 @@ export default function LoginContainer() {
             , or use{" "}
             <Link
               href={ROUTES.AUTH.FORGOT_PASSWORD}
-              className="underline font-semibold"
-              style={{ color: "var(--danger)" }}
+              className="underline font-semibold text-danger"
             >
               Forgot password
             </Link>{" "}
@@ -189,12 +183,7 @@ export default function LoginContainer() {
 
       {showWarning && (
         <div
-          className="mb-6 p-4 rounded-xl flex items-start gap-3"
-          style={{
-            backgroundColor: "rgba(176,125,0,0.06)",
-            border: "1px solid rgba(176,125,0,0.2)",
-            color: "var(--warning)",
-          }}
+          className="mb-6 p-4 rounded-xl flex items-start gap-3 bg-warning/6 border border-warning/20 text-warning"
         >
           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm leading-relaxed">
@@ -205,7 +194,7 @@ export default function LoginContainer() {
 
       <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="login-form">
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <label className="text-sm font-semibold text-brand-navy">
             Email
           </label>
           <Input
@@ -217,7 +206,7 @@ export default function LoginContainer() {
             {...form.register("email")}
           />
           {form.formState.errors.email && (
-            <p className="text-xs" style={{ color: "var(--danger)" }}>
+            <p className="text-xs text-danger">
               {form.formState.errors.email.message}
             </p>
           )}
@@ -225,13 +214,12 @@ export default function LoginContainer() {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+            <label className="text-sm font-semibold text-brand-navy">
               Password
             </label>
             <Link
               href={buildAuthUrl(ROUTES.AUTH.FORGOT_PASSWORD, { redirect })}
-              className="text-xs font-semibold"
-              style={{ color: "var(--brand-viridian)" }}
+              className="text-xs font-semibold text-brand-viridian"
             >
               Forgot password?
             </Link>
@@ -249,20 +237,20 @@ export default function LoginContainer() {
             <button
               type="button"
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-[var(--brand-surface-low)]"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-brand-surface-low"
               onClick={() => setShowPassword((v) => !v)}
               tabIndex={-1}
               data-testid="login-password-toggle"
             >
               {showPassword ? (
-                <EyeOff className="w-4 h-4" style={{ color: "var(--brand-on-surface-variant)" }} />
+                <EyeOff className="w-4 h-4 text-brand-on-surface-variant" />
               ) : (
-                <Eye className="w-4 h-4" style={{ color: "var(--brand-on-surface-variant)" }} />
+                <Eye className="w-4 h-4 text-brand-on-surface-variant" />
               )}
             </button>
           </div>
           {form.formState.errors.password && (
-            <p className="text-xs" style={{ color: "var(--danger)" }}>
+            <p className="text-xs text-danger">
               {form.formState.errors.password.message}
             </p>
           )}
@@ -273,19 +261,14 @@ export default function LoginContainer() {
             checked={rememberMe}
             onCheckedChange={(v) => form.setValue("rememberMe", v === true)}
           />
-          <span className="text-sm" style={{ color: "var(--brand-on-surface)" }}>
+          <span className="text-sm text-brand-on-surface">
             Keep me signed in for 30 days
           </span>
         </label>
 
         {errorMessage && !isLockedNow && (
           <div
-            className="p-3 rounded-lg text-sm flex items-start gap-2"
-            style={{
-              backgroundColor: "rgba(186,26,26,0.06)",
-              color: "var(--danger)",
-              border: "1px solid rgba(186,26,26,0.18)",
-            }}
+            className="p-3 rounded-lg text-sm flex items-start gap-2 bg-danger/6 text-danger border border-danger/18"
           >
             <Lock className="w-4 h-4 shrink-0 mt-0.5" />
             {errorMessage}
@@ -306,12 +289,11 @@ export default function LoginContainer() {
       <AuthDivider />
       <SocialAuthButtons verb="Sign in with" intent={intent} />
 
-      <p className="mt-8 text-sm text-center" style={{ color: "var(--brand-on-surface-variant)" }}>
+      <p className="mt-8 text-sm text-center text-brand-on-surface-variant">
         New to Veriprops?{" "}
         <Link
           href={buildAuthUrl(ROUTES.AUTH.SIGNUP, { intent, tier, redirect })}
-          className="font-semibold underline-offset-2 hover:underline"
-          style={{ color: "var(--brand-navy)" }}
+          className="font-semibold underline-offset-2 hover:underline text-brand-navy"
         >
           Create an account
         </Link>

@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { footerLinks, type FooterLink } from "./home.data";
 import BrandLogo from "../ui/BrandLogo";
+import { cn } from "@lib/utils";
 
-const socialColors: Record<string, string> = {
-  Facebook:  "#1877F2",
-  Twitter:   "#14171A",
-  LinkedIn:  "#0A66C2",
-  Instagram: "#E1306C",
-  YouTube:   "#FF0000",
+// Tailwind utilities for each platform's brand token (theme.css `--social-*`).
+const socialHoverClasses: Record<string, string> = {
+  Facebook:  "hover:text-social-facebook hover:border-social-facebook/40 hover:bg-social-facebook/10",
+  Twitter:   "hover:text-social-twitter hover:border-social-twitter/40 hover:bg-social-twitter/10",
+  LinkedIn:  "hover:text-social-linkedin hover:border-social-linkedin/40 hover:bg-social-linkedin/10",
+  Instagram: "hover:text-social-instagram hover:border-social-instagram/40 hover:bg-social-instagram/10",
+  YouTube:   "hover:text-social-youtube hover:border-social-youtube/40 hover:bg-social-youtube/10",
 };
 
 const socialIcons: Record<string, React.ReactNode> = {
@@ -47,24 +49,19 @@ const linkColumns: { title: string; links: FooterLink[] }[] = [
 ];
 
 // Internal app routes use Next <Link>; on-page anchors (#…), mailto:, and external
-// URLs use a plain <a>. Hover handlers are shared so every link behaves identically.
+// URLs use a plain <a>. Same className drives both so every link behaves identically.
 function FooterLinkItem({ label, href }: FooterLink) {
-  const className = "text-sm transition-colors duration-150 hover:underline";
-  const style = { color: "var(--brand-on-surface-variant)" } as React.CSSProperties;
-  const onMouseEnter = (e: React.MouseEvent<HTMLElement>) =>
-    (e.currentTarget.style.color = "var(--brand-navy)");
-  const onMouseLeave = (e: React.MouseEvent<HTMLElement>) =>
-    (e.currentTarget.style.color = "var(--brand-on-surface-variant)");
+  const className = "text-sm transition-colors duration-150 hover:underline text-brand-on-surface-variant hover:text-brand-navy";
 
   if (href.startsWith("/")) {
     return (
-      <Link href={href} className={className} style={style} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      <Link href={href} className={className}>
         {label}
       </Link>
     );
   }
   return (
-    <a href={href} className={className} style={style} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+    <a href={href} className={className}>
       {label}
     </a>
   );
@@ -73,7 +70,7 @@ function FooterLinkItem({ label, href }: FooterLink) {
 export default function LandingFooter() {
   return (
     <footer
-      style={{ backgroundColor: "var(--brand-surface-low)", borderTop: "1px solid rgba(196,198,207,0.2)" }}
+      className="bg-brand-surface-low border-t border-brand-outline-variant/20"
     >
       <div className="max-w-7xl mx-auto px-6 lg:px-8 pt-16 pb-10">
         {/* Main grid */}
@@ -83,9 +80,10 @@ export default function LandingFooter() {
             <BrandLogo />
 
             <p
-              className="text-sm leading-relaxed mb-6"
-              style={{ color: "var(--brand-on-surface-variant)" }}
+              className="text-sm leading-relaxed mb-6 text-brand-on-surface-variant"
             >
+              <br />
+              
               Helping Nigerians buy property safely; through 
               trusted, independent verification and real 
               due diligence. 
@@ -101,11 +99,7 @@ export default function LandingFooter() {
               {footerLinks.socials.map((social) => {
                 const configured = social.href && social.href !== "#";
                 const baseClass =
-                  "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-150";
-                const baseStyle = {
-                  color: "var(--brand-on-surface-variant)",
-                  border: "1px solid rgba(196,198,207,0.3)",
-                } as React.CSSProperties;
+                  "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-150 text-brand-on-surface-variant border border-brand-outline-variant/30";
 
                 if (!configured) {
                   return (
@@ -113,8 +107,7 @@ export default function LandingFooter() {
                       key={social.label}
                       aria-label={social.label}
                       aria-disabled="true"
-                      className={`${baseClass} opacity-50 cursor-default`}
-                      style={baseStyle}
+                      className={cn(baseClass, "opacity-50 cursor-default")}
                     >
                       {socialIcons[social.label]}
                     </span>
@@ -128,21 +121,7 @@ export default function LandingFooter() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={social.label}
-                    className={baseClass}
-                    style={baseStyle}
-                    onMouseEnter={(e) => {
-                      const color = socialColors[social.label];
-                      const el = e.currentTarget;
-                      el.style.color = color;
-                      el.style.borderColor = `${color}40`;
-                      el.style.backgroundColor = `${color}10`;
-                    }}
-                    onMouseLeave={(e) => {
-                      const el = e.currentTarget;
-                      el.style.color = "var(--brand-on-surface-variant)";
-                      el.style.borderColor = "rgba(196,198,207,0.3)";
-                      el.style.backgroundColor = "transparent";
-                    }}
+                    className={cn(baseClass, socialHoverClasses[social.label])}
                   >
                     {socialIcons[social.label]}
                   </a>
@@ -155,8 +134,7 @@ export default function LandingFooter() {
           {linkColumns.map((column) => (
             <div key={column.title}>
               <h4
-                className="text-xs font-bold uppercase tracking-widest mb-5"
-                style={{ color: "var(--brand-navy)" }}
+                className="text-xs font-bold uppercase tracking-widest mb-5 text-brand-navy"
               >
                 {column.title}
               </h4>
@@ -173,16 +151,14 @@ export default function LandingFooter() {
 
         {/* Bottom bar */}
         <div
-          className="flex flex-col md:flex-row items-center justify-between gap-4 pt-8"
-          style={{ borderTop: "1px solid rgba(196,198,207,0.25)" }}
+          className="flex flex-col md:flex-row items-center justify-between gap-4 pt-8 border-t border-brand-outline-variant/25"
         >
-          <p className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>
+          <p className="text-xs text-brand-on-surface-variant">
             © {new Date().getFullYear()} Veriprops. Jurisdiction: Nigeria. All communications
             are recorded for quality and security.
           </p>
           <p
-            className="text-xs italic"
-            style={{ color: "rgba(68,71,78,0.6)" }}
+            className="text-xs italic text-brand-on-surface-variant/60"
           >
             &ldquo;We reduce uncertainty. We do not eliminate it.&rdquo;
           </p>

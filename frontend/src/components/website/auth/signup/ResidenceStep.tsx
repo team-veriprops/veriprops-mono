@@ -13,6 +13,7 @@ import {
   suggestTimezoneForCountry,
 } from "@components/website/auth/libs/auth/locale";
 import { CURRENCY_NAMES, TransactionCurrency } from "@/types/models";
+import { cn } from "@lib/utils";
 
 interface Props {
   defaultValues?: Partial<SignupStep3Values>;
@@ -50,14 +51,14 @@ export default function ResidenceStep({ defaultValues, onSubmit, onBack }: Props
 
   return (
     <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
-      <p className="text-sm leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
+      <p className="text-sm leading-relaxed text-brand-on-surface-variant">
         Tells us where you are so we can show prices in your currency and time things in your timezone.
       </p>
 
       <Field label="Country of residence" error={form.formState.errors.countryOfResidence?.message}>
         <select
           {...form.register("countryOfResidence")}
-          className="w-full h-11 px-3 rounded-md text-sm bg-[var(--brand-surface-card)] border border-[rgba(196,198,207,0.4)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+          className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="">Select your country</option>
           {RESIDENCE_COUNTRIES.map((c) => (
@@ -71,7 +72,7 @@ export default function ResidenceStep({ defaultValues, onSubmit, onBack }: Props
       <Field label="Timezone" error={form.formState.errors.timezone?.message}>
         <select
           {...form.register("timezone")}
-          className="w-full h-11 px-3 rounded-md text-sm bg-[var(--brand-surface-card)] border border-[rgba(196,198,207,0.4)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+          className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-ring"
         >
           {COMMON_TIMEZONES.map((tz) => (
             <option key={tz} value={tz}>
@@ -79,7 +80,7 @@ export default function ResidenceStep({ defaultValues, onSubmit, onBack }: Props
             </option>
           ))}
         </select>
-        <p className="text-xs mt-1" style={{ color: "var(--brand-on-surface-variant)" }}>
+        <p className="text-xs mt-1 text-brand-on-surface-variant">
           Auto-suggested from your country. Adjust if needed.
         </p>
       </Field>
@@ -95,24 +96,19 @@ export default function ResidenceStep({ defaultValues, onSubmit, onBack }: Props
                 onClick={() =>
                   form.setValue("preferredCurrency", c, { shouldValidate: true })
                 }
-                className="px-3 py-2.5 rounded-md text-sm font-semibold transition-all duration-150"
-                style={{
-                  backgroundColor: selected
-                    ? "var(--brand-navy)"
-                    : "var(--brand-surface-card)",
-                  color: selected ? "white" : "var(--brand-navy)",
-                  border: selected
-                    ? "1px solid var(--brand-navy)"
-                    : "1px solid rgba(196,198,207,0.4)",
-                  boxShadow: selected ? "0 4px 12px -3px rgba(0,13,34,0.18)" : undefined,
-                }}
+                className={cn(
+                  "px-3 py-2.5 rounded-md text-sm font-semibold transition-all duration-150",
+                  selected
+                    ? "bg-brand-navy text-white border border-brand-navy shadow-[0_4px_12px_-3px_rgba(0,13,34,0.18)]"
+                    : "bg-brand-surface-card text-brand-navy border border-brand-outline-variant/40"
+                )}
               >
                 <div>{c}</div>
                 <div
-                  className="text-[10px] font-medium mt-0.5"
-                  style={{
-                    color: selected ? "rgba(255,255,255,0.7)" : "var(--brand-on-surface-variant)",
-                  }}
+                  className={cn(
+                    "text-[10px] font-medium mt-0.5",
+                    selected ? "text-white/70" : "text-brand-on-surface-variant"
+                  )}
                 >
                   {CURRENCY_NAMES[c]}
                 </div>
@@ -137,12 +133,12 @@ export default function ResidenceStep({ defaultValues, onSubmit, onBack }: Props
 function Field({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+      <label className="text-sm font-semibold text-brand-navy">
         {label}
       </label>
       {children}
       {error && (
-        <p className="text-xs" style={{ color: "var(--danger)" }}>
+        <p className="text-xs text-danger">
           {error}
         </p>
       )}

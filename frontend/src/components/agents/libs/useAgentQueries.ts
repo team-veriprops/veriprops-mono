@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { SHORT_STALE_TIME_MS, LONG_STALE_TIME_MS } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { AgentService } from "./agent-service";
 import { AgentRole, SubmitAgentApplicationRequest } from "@/types/agent";
@@ -21,7 +22,7 @@ export function useAgentDraftQuery(enabled = true) {
     queryKey: agentKeys.draft,
     enabled,
     queryFn: async () => (await agentService.getDraft()).data ?? null,
-    staleTime: 30_000,
+    staleTime: SHORT_STALE_TIME_MS,
   });
 }
 
@@ -48,7 +49,7 @@ export function useAgentStatusQuery(enabled = true) {
     queryKey: agentKeys.status,
     enabled,
     queryFn: async () => (await agentService.getMyStatus()).data ?? null,
-    staleTime: 30_000,
+    staleTime: SHORT_STALE_TIME_MS,
   });
 }
 
@@ -100,7 +101,7 @@ export function useAgentTermsQuery() {
       );
       return res.data ?? null;
     },
-    staleTime: 5 * 60_000,
+    staleTime: LONG_STALE_TIME_MS,
   });
 }
 

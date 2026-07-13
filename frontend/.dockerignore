@@ -1,0 +1,13 @@
+# Keep local/build cruft and secrets out of the frontend build context/image.
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.*
+npm-debug.log*
+pnpm-debug.log*
+Dockerfile
+.dockerignore
+coverage
+.vscode

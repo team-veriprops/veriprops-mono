@@ -9,6 +9,13 @@ from main.appodus_utils.config.settings import (
 )
 
 
+class PricingFxProvider(str, enum.Enum):
+    """FX-rate source for cross-currency verification pricing (settings.PRICING_FX_PROVIDER)."""
+
+    STUB = "STUB"
+    OPENEXCHANGERATES = "OPENEXCHANGERATES"
+
+
 class IntegratedPlatform(str, enum.Enum):
     ZOHO_DOC_SIGN = "zoho_doc_sign"
     GOOGLE_DRIVE = "google_drive"
@@ -18,6 +25,7 @@ class IntegratedPlatform(str, enum.Enum):
 class PaymentMethod(str, enum.Enum):
     FLUTTERWAVE = "flutterwave"
     PAYSTACK = "paystack"
+    # TODO(gap): STRIPE is an enum value only — no platform mapping/integration — PRD "Known Gaps & Roadmap".
     STRIPE = "stripe"
 
     @property
@@ -30,10 +38,9 @@ PAYMENT_METHOD_TO_PLATFORM: Dict[PaymentMethod, IntegratedPlatform] = {
 }
 
 class Settings(AppodusBaseSettings):
-    # CORS
+    # CORS — machine-specific LAN origins belong in a developer's local .env, never in
+    # the committed default. Add any dev host via ALLOWED_ORIGINS in .env.local.
     ALLOWED_ORIGINS: Optional[str] = """
-    http://192.168.0.107,
-    http://192.168.0.107:3000,
     http://localhost,
     http://localhost:3000,
     http://127.0.0.1,
@@ -120,6 +127,7 @@ class Settings(AppodusBaseSettings):
     # §B go-live gate (D18): the Premium Legal Opinion report section is built but its
     # content stays hidden until NBA counsel sign-off + lawyer-role PI cover. Never
     # default-on. Surfaced to the frontend via GET /config/public.
+    # TODO(gap): launch gate — flip only after NBA sign-off + lawyer PI cover — PRD "Known Gaps & Roadmap".
     LEGAL_OPINION_ENABLED: bool = False
 
     # ZOHO
@@ -176,11 +184,15 @@ class Settings(AppodusBaseSettings):
     SUPER_ADMIN_PASSWORD: Optional[str] = None
     SUPER_ADMIN_EMAIL: Optional[str] = None
 
-    # Geocoding (PRD §5.1) — STUB (deterministic NG fixtures) | GOOGLE_PLACES
-    GEOCODING_PROVIDER: Optional[str] = "STUB"
+    # Geocoding (PRD §5.1) — the defining enum GeoProvider (STUB | GOOGLE_PLACES) lives
+    # in the integrations package, which imports the settings singleton back and so
+    # cannot be imported here (circular). The provider factory coerces the value to the
+    # enum at its boundary — GeoProvider(settings.GEOCODING_PROVIDER).
+    GEOCODING_PROVIDER: str = "STUB"
 
-    # KYC (PRD Open Q #15 / #16) — STUB | MONO | DOJAH
-    KYC_PROVIDER: Optional[str] = "STUB"
+    # KYC (PRD Open Q #15 / #16) — same constraint as GEOCODING_PROVIDER; the KYC factory
+    # coerces via KycProvider(settings.KYC_PROVIDER). STUB | DOJAH.
+    KYC_PROVIDER: str = "STUB"
     # Dojah credentials (required when KYC_PROVIDER=DOJAH)
     DOJAH_APP_ID: str = ""
     DOJAH_PRIVATE_KEY: str = ""
@@ -189,7 +201,7 @@ class Settings(AppodusBaseSettings):
     KYC_SELFIE_REVIEW_THRESHOLD: int = 80
 
     # Verification pricing & FX
-    PRICING_FX_PROVIDER: Optional[str] = "STUB"  # STUB | OPENEXCHANGERATES
+    PRICING_FX_PROVIDER: PricingFxProvider = PricingFxProvider.STUB
     PRICING_FX_CACHE_SECONDS: int = 5 * 60          # 5 min cache
     PRICING_FX_STALE_AFTER_SECONDS: int = 30 * 60   # 30 min => stale-warning
     PRICE_LOCK_TTL_HOURS: int = 24
@@ -211,6 +223,26 @@ class Settings(AppodusBaseSettings):
     # Background scheduler (PRD §6.4/§7.2) — disabled in test; sweeps invoked directly.
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_SWEEP_INTERVAL_SECONDS: int = 15 * 60
+
+    # Draft & abandonment lifetimes
+    SIGNUP_DRAFT_TTL_DAYS: int = 7               # resume-signup draft retention
+    AGENT_APPLICATION_DRAFT_TTL_DAYS: int = 30   # agent-application draft retention
+    VERIFICATION_ABANDONMENT_AGE_HOURS: int = 24 # age after which an unpaid verification is swept
+    IDEMPOTENCY_KEY_TTL_HOURS: int = 24          # replay window for stored idempotency keys
+
+    # Server-Sent Events transport (§4.9)
+    SSE_HEARTBEAT_SECONDS: int = 25              # keep-alive comment interval on every SSE stream
+    SSE_QUEUE_MAXSIZE: int = 100                 # per-subscriber emitter backpressure bound
+
+    # UI limits sourced from the backend (frontend reads via /config/public where noted)
+    CHAT_MESSAGE_MAX_LENGTH: int = 2000          # chat message body cap
+    DASHBOARD_RECENT_LIMIT: int = 5              # customer dashboard recent-items count
+    EVIDENCE_PREVIEW_LIMIT: int = 3              # evidence thumbnails previewed on tracking
+    ADMIN_DASHBOARD_RECENT_LIMIT: int = 8        # admin dashboard recent-items count
+
+    # Compliance/evidence pack pagination (internal batch reads)
+    AUDIT_PACK_CONSENT_PAGE_SIZE: int = 1000     # consent rows pulled per page when building an audit pack
+    CHARGEBACK_PACK_PAGE_SIZE: int = 500         # evidence rows pulled per page when building a chargeback pack
 
 
 settings = Settings()

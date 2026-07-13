@@ -130,7 +130,7 @@ export function UploadZone({
         onKeyDown={handleKeyDown}
         className={cn(
           'hidden md:flex flex-col items-center justify-center',
-          'min-h-[240px] rounded-xl border-2 border-dashed',
+          'min-h-60 rounded-xl border-2 border-dashed',
           'transition-all duration-200 cursor-pointer',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           isDragging && canUpload

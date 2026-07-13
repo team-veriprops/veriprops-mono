@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+import { SSE_BASE_BACKOFF_MS, SSE_MAX_RETRIES } from "@lib/config/app";
+
 /**
  * Per-user SSE subscription (PRD §4.9, §N) — the transport behind the Chat and
  * Notifications top-nav counters. Mirrors `useVerificationStream` but subscribes to the
@@ -18,8 +20,8 @@ interface Options {
   enabled?: boolean;
 }
 
-const MAX_RETRIES = 3;
-const BASE_BACKOFF_MS = 1000;
+const MAX_RETRIES = SSE_MAX_RETRIES;
+const BASE_BACKOFF_MS = SSE_BASE_BACKOFF_MS;
 const EVENTS = ["chat_message", "chat_unread", "notification", "notification_unread"];
 
 export function useUserStream({ onEvent, enabled = true }: Options) {

@@ -78,8 +78,7 @@ export default function AuthGateContainer() {
       <div className="space-y-3">
         <Link
           href={signupHref}
-          className="signature-gradient group flex items-center justify-between gap-3 px-5 py-4 rounded-xl text-white font-bold text-base transition-all duration-200 hover:opacity-95 active:scale-[0.99]"
-          style={{ boxShadow: "0 8px 24px -6px rgba(0,13,34,0.3)" }}
+          className="signature-gradient group flex items-center justify-between gap-3 px-5 py-4 rounded-xl text-white font-bold text-base transition-all duration-200 hover:opacity-95 active:scale-[0.99] shadow-[0_8px_24px_-6px_rgba(0,13,34,0.3)]"
         >
           <span className="inline-flex items-center gap-3">
             {intent === AuthIntent.AGENT ? (
@@ -94,20 +93,14 @@ export default function AuthGateContainer() {
 
         <Link
           href={loginHref}
-          className="group flex items-center justify-between gap-3 px-5 py-4 rounded-xl text-base font-semibold transition-all duration-150 hover:bg-[var(--brand-surface-low)]"
-          style={{
-            border: "1px solid rgba(196,198,207,0.4)",
-            color: "var(--brand-navy)",
-            backgroundColor: "var(--brand-surface-card)",
-          }}
+          className="group flex items-center justify-between gap-3 px-5 py-4 rounded-xl text-base font-semibold transition-all duration-150 hover:bg-brand-surface-low border border-brand-outline-variant/40 text-brand-navy bg-brand-surface-card"
         >
           <span className="inline-flex items-center gap-3">
             <LogIn className="w-5 h-5" strokeWidth={2.2} />
             {copy.secondaryCta}
           </span>
           <ArrowRight
-            className="w-4 h-4 transition-transform group-hover:translate-x-0.5"
-            style={{ color: "var(--brand-on-surface-variant)" }}
+            className="w-4 h-4 transition-transform group-hover:translate-x-0.5 text-brand-on-surface-variant"
           />
         </Link>
       </div>
@@ -116,12 +109,12 @@ export default function AuthGateContainer() {
 
       <SocialAuthButtons verb="Continue with" intent={intent} />
 
-      <div className="mt-10 flex items-start gap-3 p-4 rounded-xl" style={{ backgroundColor: "var(--brand-surface-low)" }}>
-        <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5" style={{ color: "var(--brand-viridian)" }} />
-        <p className="text-xs leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
+      <div className="mt-10 flex items-start gap-3 p-4 rounded-xl bg-brand-surface-low">
+        <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5 text-brand-viridian" />
+        <p className="text-xs leading-relaxed text-brand-on-surface-variant">
           We never ask for your bank details, send payment links via DM, or use your data for anything beyond
           delivering verifications. Read our{" "}
-          <Link href={ROUTES.LEGAL.PRIVACY} className="font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <Link href={ROUTES.LEGAL.PRIVACY} className="font-semibold text-brand-navy">
             Privacy Policy
           </Link>
           .

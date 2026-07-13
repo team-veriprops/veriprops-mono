@@ -60,7 +60,9 @@ class MessageRecipientBuilder:
         return MessageRequestRecipient(
             user_id=user_id,
             fullname=user_contact.full_name,
-            email=EmailRecipient(email=user_contact.email, fullname=user_contact.full_name),
+            # MessageRequestRecipient.email is a plain address string — the email channel
+            # builder feeds it straight into MessageRecipient(recipient=...).
+            email=user_contact.email or None,
             phone=user_contact.phone if user_contact.phone else None,
             ios_push_token=user_contact.ios_push_token,
             android_push_token=user_contact.android_push_token,

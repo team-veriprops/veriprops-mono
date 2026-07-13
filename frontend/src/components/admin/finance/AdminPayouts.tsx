@@ -48,14 +48,16 @@ export default function AdminPayouts() {
             ) : (
               <ul className="divide-y rounded-lg border" data-testid="admin-payouts">
                 {pageData.items.map((p) => (
-                  <button key={p.id} onClick={() => setSelected(p)}
-                    className="flex w-full items-center justify-between gap-3 p-3 text-left text-sm hover:bg-muted/50">
-                    <div className="min-w-0">
-                      <p className="font-semibold tabular-nums">{formatMinor(p.amountMinor, p.currency)}</p>
-                      <p className="truncate text-xs text-muted-foreground">{p.bankName} · {p.accountNumber} · {p.accountName}</p>
-                    </div>
-                    <StatusPill status={p.status} className="shrink-0" />
-                  </button>
+                  <li key={p.id}>
+                    <button onClick={() => setSelected(p)}
+                      className="flex w-full items-center justify-between gap-3 p-3 text-left text-sm hover:bg-muted/50">
+                      <div className="min-w-0">
+                        <p className="font-semibold tabular-nums">{formatMinor(p.amountMinor, p.currency)}</p>
+                        <p className="truncate text-xs text-muted-foreground">{p.bankName} · {p.accountNumber} · {p.accountName}</p>
+                      </div>
+                      <StatusPill status={p.status} className="shrink-0" />
+                    </button>
+                  </li>
                 ))}
               </ul>
             )}

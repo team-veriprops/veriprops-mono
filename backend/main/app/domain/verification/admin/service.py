@@ -13,6 +13,7 @@ from typing import List, Optional
 
 from kink import inject
 
+from main.app.config.settings import settings
 from main.app.core.sla import ACTIVE_SLA_STATES, SlaHealth, add_business_days, compute_sla_health
 from main.app.core.state.dependencies import required_task_count
 from main.app.core.state.machine import verification_state_machine
@@ -32,6 +33,8 @@ from main.app.domain.payment.models import PaymentDto, PaymentMethodKind, Paymen
 from main.app.domain.payment.repo import PaymentRepo
 from main.app.domain.property.models import PropertyDto, PropertyType
 from main.app.domain.property.repo import PropertyRepo
+from main.app.domain.system_config.models import ConfigKey
+from main.app.domain.system_config.service import ConfigService
 from main.app.domain.user.agent.service import AgentService
 from main.app.domain.verification.admin.models import (
     AdminDashboardDto,
@@ -58,9 +61,7 @@ from main.appodus_utils.exception.exceptions import (
 )
 
 # Number of most-recent verifications surfaced on the admin dashboard.
-_DASHBOARD_RECENT_LIMIT = 8
-# Active verifications due within this many days count as SLA-at-risk (§18.1 Mission Control).
-_SLA_AT_RISK_DAYS = 2
+_DASHBOARD_RECENT_LIMIT = settings.ADMIN_DASHBOARD_RECENT_LIMIT
 
 
 @inject
@@ -78,6 +79,7 @@ class AdminVerificationService:
         chargeback_service: ChargebackService,
         agent_service: AgentService,
         audit_service: AuditLogService,
+        config_service: ConfigService,
     ):
         self._verification_repo = verification_repo
         self._property_repo = property_repo
@@ -88,6 +90,7 @@ class AdminVerificationService:
         self._chargebacks = chargeback_service
         self._agents = agent_service
         self._audit = audit_service
+        self._config = config_service
 
     # ── Dashboard summary (§6) ────────────────────────────────────
 
@@ -98,7 +101,7 @@ class AdminVerificationService:
         raw = await self._verification_repo.count_by_status()
         status_counts = {VerificationStatus(s): c for s, c in raw.items()}
         today = Utils.datetime_now().date()
-        horizon = today + timedelta(days=_SLA_AT_RISK_DAYS)
+        horizon = today + timedelta(days=await self._config.get_int(ConfigKey.SLA_AT_RISK_DAYS))
         recent_rows, _ = await self._verification_repo.page_admin(offset=0, limit=_DASHBOARD_RECENT_LIMIT)
         return AdminDashboardDto(
             total=sum(status_counts.values()),

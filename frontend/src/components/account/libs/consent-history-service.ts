@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { SuccessResponse } from "@/types/models";
 import { UserConsentHistoryPage } from "@/types/consentHistory";
 
@@ -9,7 +10,7 @@ import { UserConsentHistoryPage } from "@/types/consentHistory";
 export class ConsentHistoryService {
   constructor(private readonly http: HttpClient) {}
 
-  history(page = 0, pageSize = 20): Promise<SuccessResponse<UserConsentHistoryPage>> {
+  history(page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<UserConsentHistoryPage>> {
     return this.http.get(`/users/auth/consents/history?page=${page}&page_size=${pageSize}`);
   }
 

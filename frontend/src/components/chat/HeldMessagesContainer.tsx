@@ -16,8 +16,8 @@ export default function HeldMessagesContainer() {
   return (
     <div className="max-w-3xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-1">
-        <ShieldAlert className="w-5 h-5" style={{ color: "var(--brand-viridian)" }} />
-        <h1 className="text-xl font-semibold" style={{ color: "var(--brand-navy)" }}>
+        <ShieldAlert className="w-5 h-5 text-brand-viridian" />
+        <h1 className="text-xl font-semibold text-brand-navy">
           Message review
         </h1>
       </div>
@@ -42,22 +42,20 @@ export default function HeldMessagesContainer() {
               {m.flaggedCategories.map((c) => (
                 <span
                   key={c}
-                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: "rgba(220,38,38,0.08)", color: "#b91c1c" }}
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-danger/8 text-danger"
                 >
                   {c}
                 </span>
               ))}
             </div>
-            <p className="text-sm mb-3 whitespace-pre-wrap" style={{ color: "var(--brand-navy)" }}>
+            <p className="text-sm mb-3 whitespace-pre-wrap text-brand-navy">
               {m.body}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => review.mutate({ messageId: m.id, approve: true })}
                 disabled={review.isPending}
-                className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-white disabled:opacity-50"
-                style={{ backgroundColor: "var(--brand-viridian)" }}
+                className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-white bg-brand-viridian disabled:opacity-50"
               >
                 <Check className="w-3.5 h-3.5" /> Approve
               </button>

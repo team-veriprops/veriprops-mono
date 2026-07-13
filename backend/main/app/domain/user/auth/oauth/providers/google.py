@@ -7,6 +7,7 @@ from jose import jwt, exceptions as jose_exceptions
 from kink import di, inject
 from starlette.requests import Request
 
+from main.app.config.settings import settings
 from main.app.domain.user.auth.models import AuthIntent
 from main.app.domain.user.auth.oauth.providers.models import (
     OAuthCallbackRequestDto,
@@ -39,7 +40,11 @@ async def _fetch_and_cache_google_jwks() -> dict:
     response = await httpx_client.get(_GOOGLE_JWKS_URL)
     response.raise_for_status()
     jwks = response.json()
-    await RedisUtils.set_redis(_GOOGLE_JWKS_CACHE_KEY, json.dumps(jwks), time_to_live=timedelta(minutes=5))
+    await RedisUtils.set_redis(
+        _GOOGLE_JWKS_CACHE_KEY,
+        json.dumps(jwks),
+        time_to_live=timedelta(seconds=settings.OAUTH_JWKS_CACHE_SECONDS),
+    )
     return jwks
 
 

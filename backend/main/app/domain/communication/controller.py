@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
+from main.app.config.settings import settings
 from main.app.core.realtime.user_emitter import UserEventEmitter, UserEventType
 from main.app.domain.communication.chat_message.models import (
     ChatMessage,
@@ -42,7 +43,7 @@ admin_chat_router = APIRouter(prefix="/admin", tags=["Admin: Chat"])
 
 comms: CommunicationService = di[CommunicationService]
 
-_HEARTBEAT_SECONDS = 25
+_HEARTBEAT_SECONDS = settings.SSE_HEARTBEAT_SECONDS
 
 
 # ─── Request bodies (defined before the routes reference them) ────────
