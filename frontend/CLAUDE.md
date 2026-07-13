@@ -25,7 +25,11 @@ pnpm vitest run -t "test name pattern"
 
 ## API proxy
 
-`/api/*` requests are rewritten to `${API_BASE_URL}/api/*` by [next.config.ts](next.config.ts). `API_BASE_URL` is server-only (read from [src/lib/config/server.ts](src/lib/config/server.ts), which throws if imported on the client). Public env vars (`NEXT_PUBLIC_*`) live in [src/lib/config/public.ts](src/lib/config/public.ts) — keep them split. The proxy target/timeout and dev origins are env-driven (`NEXT_PUBLIC_API_PREFIX`, `PROXY_TIMEOUT_MS`, `ADDITIONAL_DEV_ORIGINS`); [.env.example](.env.example) documents every settable key.
+`/api/*` requests are rewritten to `${API_BASE_URL}/api/*` by [next.config.ts](next.config.ts). `API_BASE_URL` is server-only (read from [src/lib/config/server.ts](src/lib/config/server.ts), which throws if imported on the client). Public env vars (`NEXT_PUBLIC_*`) live in [src/lib/config/public.ts](src/lib/config/public.ts) — keep them split. The proxy target/timeout and dev origins are env-driven (`NEXT_PUBLIC_API_PREFIX`, `PROXY_TIMEOUT_MS`, `ADDITIONAL_DEV_ORIGINS`).
+
+## Env files (Next.js-native convention)
+
+Committed, **config-only** env files: [.env](.env) (shared base = local-dev values, documents every settable key), [.env.test](.env.test) (deterministic automation env, auto-loaded under `NODE_ENV=test`; Next.js deliberately skips `.env.local` in test mode), and [.env.production](.env.production) (prod-shaped build defaults). `.env.local` stays git-ignored for personal overrides + `BACKEND_SECRET_KEY`. Secrets are Doppler-managed and arrive as env vars (Vercel sync in deploys), which override the files; staging is a Vercel/Doppler override (`NEXT_PUBLIC_ENVIRONMENT=staging`) on top of the production build — there is no `.env.staging` (`NODE_ENV` has no staging value). **Never put a secret in a `NEXT_PUBLIC_*` var** (build-time inlined into the bundle). The backend hygiene guard (`backend/test/unit/app/config/test_env_hygiene.py`) scans these files and fails on any credential-shaped value. Runtime flags still come from the backend's `/config/public`, not new env vars.
 
 ## Client operational constants
 

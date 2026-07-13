@@ -1,8 +1,9 @@
 import enum
-from typing import Optional, Dict
+from typing import ClassVar, Optional, Dict
 
 from main.appodus_utils.config.settings import (
     AppodusBaseSettings,
+    BASE_SECRET_ENV_KEYS,
     SECRET_PLACEHOLDER,
     get_absolute_path,
     FileStorage,
@@ -38,6 +39,37 @@ PAYMENT_METHOD_TO_PLATFORM: Dict[PaymentMethod, IntegratedPlatform] = {
 }
 
 class Settings(AppodusBaseSettings):
+    # Credential fields on top of the base set. Committed .env.{env} files must keep
+    # every one of these absent/empty/CHANGE_ME — real values come from Doppler as
+    # process env vars (which override env_file). Enforced by test_env_hygiene.py.
+    SECRET_ENV_KEYS: ClassVar[frozenset] = BASE_SECRET_ENV_KEYS | frozenset({
+        "FLUTTERWAVE_SECRET_KEY",
+        "FLUTTERWAVE_WEBHOOK_SECRET",
+        "PAYSTACK_SECRET_KEY",
+        "PAYSTACK_WEBHOOK_SECRET",
+        "AWS_ACCESS_KEY",
+        "AWS_SECRET_ACCESS_KEY",
+        "TERMII_API_KEY",
+        "TERMII_API_SECRET_KEY",
+        "MAILJET_API_KEY",
+        "MAILJET_API_SECRET",
+        "SENDGRID_API_KEY",
+        "SENDGRID_API_SECRET",
+        "TWILIO_AUTH_TOKEN",
+        "ZOHO_CLIENT_SECRET",
+        "ZOHO_REFRESH_TOKEN",
+        "ZOHO_WEBHOOK_SECRET",
+        "GOOGLE_WEBHOOK_SECRET",
+        "WHATSAPP_APP_SECRET_KEY",
+        "WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN",
+        "WHATSAPP_BUSINESS_ACCESS_TOKEN",
+        "WEB_PUSH_PRIVATE_KEY",
+        "DOJAH_APP_ID",
+        "DOJAH_PRIVATE_KEY",
+        "DOJAH_WEBHOOK_SECRET",
+        "SUPER_ADMIN_PASSWORD",
+    })
+
     # CORS — machine-specific LAN origins belong in a developer's local .env, never in
     # the committed default. Add any dev host via ALLOWED_ORIGINS in .env.local.
     ALLOWED_ORIGINS: Optional[str] = """

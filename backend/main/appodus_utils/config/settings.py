@@ -76,6 +76,24 @@ _INSECURE_SECRET_VALUES = {
     "d344auth_jwt_s3cr3t-635678$%#agst634",
 }
 
+# Settings fields that hold credentials. Single source of truth for env hygiene:
+# committed .env.{env} files must never carry a real value for any of these keys —
+# real values are injected as process env vars by the secrets manager (Doppler),
+# which pydantic-settings gives precedence over env_file values. The app-level
+# Settings class extends this set with its own credential fields; the guard test
+# (test/unit/app/config/test_env_hygiene.py) enforces the contract on every
+# committed env file (backend and frontend).
+BASE_SECRET_ENV_KEYS: frozenset = frozenset({
+    "AUTHJWT_SECRET_KEY",
+    "APPODUS_CLIENT_SECRET",
+    "APPODUS_CLIENT_SECRET_ENCRYPTION_KEY",
+    "DB_PASSWORD",
+    "SMTP_PASSWORD",
+    "GOOGLE_CLIENT_SECRET",
+    "FACEBOOK_APP_SECRET",
+    "APPLE_PRIVATE_KEY",
+})
+
 # The full settings snapshot (used by utils_settings to reconstruct the object) is
 # kept off `os.environ` so the aggregated secret blob is not exposed via the process
 # environment / `/proc/<pid>/environ` / subprocess inheritance. Read it via
@@ -93,6 +111,9 @@ def get_full_settings_json() -> Optional[str]:
 
 
 class AppodusBaseSettings(BaseSettings):
+    # Credential field names for this class; subclasses extend (see Settings).
+    SECRET_ENV_KEYS: ClassVar[frozenset] = BASE_SECRET_ENV_KEYS
+
     # Brand identity — the real values are supplied per-env via .env.{env}. Committed
     # defaults are neutral placeholders, never personal contact details.
     BRAND: str = "appodus"

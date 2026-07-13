@@ -8,12 +8,15 @@ FastAPI service for Veriprops. Async SQLAlchemy, Alembic migrations, Kink DI, Po
 pip install -r requirements.txt
 
 # Active env selects which .env.{name} file is loaded at import time.
-# Valid names: local, test, dev, staging, prod.
+# Valid names: local, test, dev, staging, prod. The committed .env.{env} files
+# are CONFIG-ONLY; secrets are injected by Doppler as process env vars, which
+# override env-file values (pydantic-settings precedence).
 export appodus_active_env=local        # bash
 $env:appodus_active_env="local"        # PowerShell
 set appodus_active_env=local           # cmd
 
-python veriprops.py                    # dev server, http://localhost:8000 (docs at /docs)
+doppler run -- python veriprops.py     # dev server with secrets, http://localhost:8000 (docs at /docs)
+python veriprops.py                    # also works secret-less for stub-only local use
 
 # Tests — pytest auto-loads conftest.py which defaults appodus_active_env=test.
 # Force the test env explicitly when running migrations against the test DB.
@@ -161,7 +164,7 @@ Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhoo
 
 These are permanent guardrails from the secure-coding audit. Keep them intact:
 
-- **Secrets live in `.env.{env}` (git-ignored), never as committed defaults.** Committed source uses the `SECRET_PLACEHOLDER` sentinel (`appodus_utils/config/settings.py`). The `AUTHJWT_SECRET_KEY` env-var name must match the settings field **exactly** (a prior `JWT_SECRET_KEY` typo silently fell back to a committed default). `_enforce_prod_secret_policy` **fails startup** in prod/staging when `AUTHJWT_SECRET_KEY`/`APPODUS_CLIENT_SECRET` is a placeholder/leaked-default or `ALLOW_AUTH_BYPASS` is true — never weaken it. JWT alg is pinned to HS256 (`AUTHJWT_ALGORITHM`/`AUTHJWT_DECODE_ALGORITHMS`); don't leave it unset.
+- **Secrets live in Doppler, never in committed files or defaults.** The `.env.{env}` files are committed but **config-only**: every key in `Settings.SECRET_ENV_KEYS` (app/config/settings.py — the canonical credential list) stays absent/empty/`CHANGE_ME` there; Doppler injects real values as process env vars, which pydantic-settings gives precedence over env files. `test/unit/app/config/test_env_hygiene.py` enforces this (key rule + provider-token pattern scan across backend and frontend env files) plus the `.env.test`/`.env.prod` contracts — a new credential setting must be added to `SECRET_ENV_KEYS`. Committed source uses the `SECRET_PLACEHOLDER` sentinel (`appodus_utils/config/settings.py`). The `AUTHJWT_SECRET_KEY` env-var name must match the settings field **exactly** (a prior `JWT_SECRET_KEY` typo silently fell back to a committed default). `_enforce_prod_secret_policy` **fails startup** in prod/staging when `AUTHJWT_SECRET_KEY`/`APPODUS_CLIENT_SECRET` is a placeholder/leaked-default or `ALLOW_AUTH_BYPASS` is true — never weaken it. JWT alg is pinned to HS256 (`AUTHJWT_ALGORITHM`/`AUTHJWT_DECODE_ALGORITHMS`); don't leave it unset.
 - **CSPRNG for all tokens.** `Utils.random_str` (alphanumeric) and random-mode OTP use `secrets`, never `uuid7`/`random`. Any new token/code/reference must go through `Utils.random_str` or `secrets` directly.
 - **No pickle for persisted data.** `KeyValueService` stores UTF-8 text and returns decoded strings (mirroring `RedisUtils.get_redis`). Never reintroduce `pickle` on DB/Redis values.
 - **`PageRequest` vs `InternalPageRequest` ([db/models.py](main/appodus_utils/db/models.py)).** `PageRequest` (client-safe: `page`/`page_size`) is the only base a wire-bound request DTO may inherit. The flexible query controls (`where`/`order_by`/`query_fields`/`exact_string_values`) live on `InternalPageRequest` and are **server-set only** — a `Search*Dto` bound from the wire must never expose them (they can filter/sort on any column). `DbUtils`/`GenericRepo` read the controls via `getattr(..., default)` so both bases work.
