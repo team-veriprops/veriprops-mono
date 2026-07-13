@@ -21,4 +21,6 @@ class DocumentStorageProviderFactory:
             self._factory[provider.platform] = provider
 
     def get_active_provider(self) -> IDocumentStorageProvider:
+        # TODO(gap): live document storage — DOCUMENT_STORAGE_STUB_MODE defaults to the stub
+        # provider; production needs S3/R2 configured — PRD "Known Gaps & Roadmap".
         return self._factory.get(settings.AWS_S3_PLATFORM_NAME)

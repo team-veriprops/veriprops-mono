@@ -10,6 +10,9 @@ take the fast lane (empty result → delivered immediately); only a genuinely fl
 message is held for admin review. MVP ships a single hold behaviour (no severity tiers,
 §4.7) — any non-empty result holds the message. The matched categories are recorded so the
 false-positive rate can be instrumented from day one.
+
+TODO(gap): severity tiers (hard-block vs soft-flag) — add once the recorded false-positive
+data shows where the line sits — PRD "Known Gaps & Roadmap".
 """
 from __future__ import annotations
 

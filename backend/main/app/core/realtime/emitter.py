@@ -11,6 +11,9 @@ to). Deliberately in-process and best-effort:
 - **Single process.** Subscribers live in this worker's memory. Horizontal fan-out
   (Redis pub/sub) lands with the Phase-12 event bus (§4.8); the public API here does
   not change when that arrives.
+
+TODO(gap): Redis multi-instance SSE fan-out — subscribers on other workers miss pushes
+until then (the 60s poll fallback keeps correctness) — PRD "Known Gaps & Roadmap".
 """
 from __future__ import annotations
 

@@ -183,6 +183,7 @@ export function useUnlinkProviderMutation() {
 
 export const authConsentKeys = {
   missing: ["auth", "consents", "missing"] as const,
+  document: (slug: string | null) => ["auth", "consents", "document", slug] as const,
 };
 
 export function useMissingConsentsQuery(enabled = true) {
@@ -200,6 +201,17 @@ export function useAcceptConsentsMutation() {
     mutationFn: (consents: Array<{ documentType: string; consentVersion: string; acceptedAt: string }>) =>
       authService.acceptConsents(consents),
     onSuccess: () => qc.invalidateQueries({ queryKey: authConsentKeys.missing }),
+  });
+}
+
+// Fetches a legal document's full body for inline viewing (e.g. in the consent
+// re-acceptance modal). Disabled until a slug is selected.
+export function useLegalDocumentQuery(slug: string | null) {
+  return useQuery({
+    queryKey: authConsentKeys.document(slug),
+    enabled: !!slug,
+    queryFn: async () => (await authService.getLegalDocument(slug!)).data ?? null,
+    staleTime: LONG_STALE_TIME_MS,
   });
 }
 

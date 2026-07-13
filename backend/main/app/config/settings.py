@@ -25,6 +25,7 @@ class IntegratedPlatform(str, enum.Enum):
 class PaymentMethod(str, enum.Enum):
     FLUTTERWAVE = "flutterwave"
     PAYSTACK = "paystack"
+    # TODO(gap): STRIPE is an enum value only — no platform mapping/integration — PRD "Known Gaps & Roadmap".
     STRIPE = "stripe"
 
     @property
@@ -126,6 +127,7 @@ class Settings(AppodusBaseSettings):
     # §B go-live gate (D18): the Premium Legal Opinion report section is built but its
     # content stays hidden until NBA counsel sign-off + lawyer-role PI cover. Never
     # default-on. Surfaced to the frontend via GET /config/public.
+    # TODO(gap): launch gate — flip only after NBA sign-off + lawyer PI cover — PRD "Known Gaps & Roadmap".
     LEGAL_OPINION_ENABLED: bool = False
 
     # ZOHO

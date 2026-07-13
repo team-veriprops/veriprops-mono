@@ -1,7 +1,8 @@
 /**
  * Upload Service - Handles signed URL requests and file uploads
  *
- * TODO: Replace these mock implementations with real API endpoints
+ * TODO(gap): mock implementation — replace with real API endpoints (signed-URL generation +
+ * metadata persistence via the backend storage facade) — PRD "Known Gaps & Roadmap".
  * - POST /api/uploads/sign for signed URL generation
  * - POST /api/properties/{propertyId}/photos for metadata persistence
  */

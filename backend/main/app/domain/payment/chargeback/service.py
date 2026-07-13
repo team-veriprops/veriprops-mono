@@ -219,7 +219,8 @@ class ChargebackService:
                  "currency": p.currency, "charge_currency": p.charge_currency}
                 for p in payments
             ],
-            # Filled in by later slices; present so the pack shape is stable.
+            # TODO(gap): still placeholders — wire the released report + evidence content
+            # hashes into the pack (shape kept stable) — PRD "Known Gaps & Roadmap".
             "report": None,
             "evidence_hashes": [],
         }

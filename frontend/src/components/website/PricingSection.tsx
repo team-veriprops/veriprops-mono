@@ -4,9 +4,29 @@ import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Plus, Clock } from "lucide-react";
 import { pricingTiers, currencies, formatPrice, CTA_VERIFY_HREF, type Currency } from "./home.data";
+import { usePublicConfigQuery } from "./auth/libs/useAuthQueries";
+import { VerificationTier } from "@/types/verification";
+
+// Maps the static marketing tier name onto the backend tier enum so a live
+// pricing_config price can be merged in; falls back per-tier to the static
+// home.data.ts figure when the backend price is unavailable for that tier.
+const TIER_ENUM_BY_NAME: Record<string, VerificationTier> = {
+  Basic: VerificationTier.BASIC,
+  Standard: VerificationTier.STANDARD,
+  Premium: VerificationTier.PREMIUM,
+};
 
 export default function PricingSection() {
   const [currency, setCurrency] = useState<Currency>("NGN");
+  const { data: publicConfig } = usePublicConfigQuery();
+
+  const resolvedTiers = pricingTiers.map((tier) => {
+    const backendMinor = publicConfig?.pricingTiers?.find(
+      (t) => t.tier === TIER_ENUM_BY_NAME[tier.name]
+    )?.priceNgnMinor;
+    // Backend price is in kobo (minor units); home.data.ts prices are whole naira.
+    return backendMinor != null ? { ...tier, priceNGN: backendMinor / 100 } : tier;
+  });
 
   return (
     <section id="pricing" className="py-24 lg:py-32 bg-white">
@@ -77,7 +97,7 @@ export default function PricingSection() {
 
         {/* Tier cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-0 items-stretch">
-          {pricingTiers.map((tier, idx) => {
+          {resolvedTiers.map((tier, idx) => {
             const isPopular = tier.popular;
             return (
               <div

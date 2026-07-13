@@ -102,6 +102,8 @@ class ReviewService:
         ``interim_note`` is an optional one-line reassurance shown to the customer once
         approved (§9.3) — captured here so a positive milestone is delivered with context.
         """
+        # TODO(gap): richer per-role quality rubric — the composite trust score is fed by this
+        # single 0-100 quality number today — PRD "Known Gaps & Roadmap".
         if not 0 <= quality <= 100:
             raise ValidationException(message="Quality score must be between 0 and 100.")
         task = await self._get_task(verification_id, role)

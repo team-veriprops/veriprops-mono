@@ -119,6 +119,8 @@ class PayoutService:
 
     async def approve(self, payout_id: str, admin_id: str, dto: PayoutDecisionDto) -> Payout:
         """Approve + disburse (stub) — REQUESTED/HELD → PAID; fires PAYOUT_APPROVED (§12.2)."""
+        # TODO(gap): stub disbursement — approval marks PAID directly; wire a real transfer
+        # gateway behind the payment facade — PRD "Known Gaps & Roadmap".
         payout = await self._get_decidable(payout_id)
         await self._decide(payout, PayoutStatus.PAID, admin_id, dto,
                             AuditActionType.PAYOUT_APPROVED)

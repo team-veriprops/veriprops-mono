@@ -1,6 +1,6 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
-import { Page, PublicConfig, SuccessResponse } from "@/types/models";
+import { LegalDocument, Page, PublicConfig, SuccessResponse } from "@/types/models";
 import { AuthSession, CrossPortalSummary, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, AuthIntent, SocialProvider, UserConsent } from "@components/website/auth/models";
 /**
  * Frontend-facing auth API. Endpoint paths follow the convention used elsewhere
@@ -186,6 +186,12 @@ export class AuthService {
     documentType: string; consentVersion: string; acceptedAt: string;
   }>): Promise<SuccessResponse<null>> {
     return this.http.post(`${this.base}/consents/accept`, { consents });
+  }
+
+  // Full document body, for rendering a legal document inline (e.g. in the
+  // consent re-acceptance modal) instead of navigating to /legal/[slug].
+  getLegalDocument(slug: string): Promise<SuccessResponse<LegalDocument>> {
+    return this.http.get(`${this.base}/consents/documents/${slug}`);
   }
 
   // ── Resumable signup draft (server-side keyed on email) ─────────

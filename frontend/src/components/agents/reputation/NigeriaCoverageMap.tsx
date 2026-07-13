@@ -10,6 +10,9 @@ import { cn } from "@lib/utils";
  * layout is an approximate north→south, west→east arrangement (not cartographically precise);
  * an exact GeoJSON path set can drop in behind this same component API later. State codes come
  * from the backend canon (D33).
+ *
+ * TODO(gap): swap the schematic grid for cartographic GeoJSON state paths behind the same
+ * component API — PRD "Known Gaps & Roadmap".
  */
 
 // [row, col] on a north(top)→south grid, west(left)→east.

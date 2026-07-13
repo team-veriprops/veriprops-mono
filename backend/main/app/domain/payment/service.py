@@ -45,6 +45,8 @@ _WEBHOOK_SCOPE = "payment.webhook"
 _PAYABLE = {VerificationStatus.SUBMITTED.value, VerificationStatus.PAYMENT_PENDING.value}
 
 
+# TODO(gap): live Paystack/Flutterwave collection — checkout, webhook confirmation, and refunds
+# currently run against the deterministic stub (PAYMENT_STUB_MODE) — PRD "Known Gaps & Roadmap".
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
 import { Button } from "@3rdparty/ui/button";
 import { Checkbox } from "@3rdparty/ui/checkbox";
+import LegalDocument from "@components/website/legal/LegalDocument";
 import {
   useAcceptConsentsMutation,
+  useLegalDocumentQuery,
   useMissingConsentsQuery,
 } from "./libs/useAuthQueries";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
@@ -28,6 +29,8 @@ export default function ConsentReacceptanceModal() {
   const accept = useAcceptConsentsMutation();
   const [accepted, setAccepted] = useState<Record<string, boolean>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [viewingSlug, setViewingSlug] = useState<string | null>(null);
+  const { data: viewingDoc, isLoading: viewingLoading } = useLegalDocumentQuery(viewingSlug);
 
   const open = enabled && documents.length > 0;
   const allAccepted = documents.every((d) => accepted[d.type]);
@@ -52,6 +55,7 @@ export default function ConsentReacceptanceModal() {
   };
 
   return (
+    <>
     <Dialog open={open}>
       <DialogContent showCloseButton={false} className="sm:max-w-lg">
         <DialogHeader>
@@ -86,15 +90,14 @@ export default function ConsentReacceptanceModal() {
                 />
                 <span className="text-sm leading-relaxed" style={{ color: "var(--brand-on-surface)" }}>
                   I have read and accept the{" "}
-                  <Link
-                    href={doc.href}
-                    target="_blank"
-                    rel="noopener"
+                  <button
+                    type="button"
+                    onClick={() => setViewingSlug(doc.href.split("/").pop() ?? null)}
                     className="font-semibold underline-offset-2 hover:underline"
                     style={{ color: "var(--brand-viridian)" }}
                   >
                     {doc.title}
-                  </Link>{" "}
+                  </button>{" "}
                   <span className="font-mono text-[11px]" style={{ color: "var(--brand-on-surface-variant)" }}>
                     v{doc.consentVersion}
                   </span>
@@ -123,5 +126,21 @@ export default function ConsentReacceptanceModal() {
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={!!viewingSlug} onOpenChange={(o) => !o && setViewingSlug(null)}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        {/* LegalDocument renders its own visible heading; this satisfies Radix's
+            accessible-name requirement without duplicating it on screen. */}
+        <DialogTitle className="sr-only">{viewingDoc?.title ?? "Legal document"}</DialogTitle>
+        {viewingLoading || !viewingDoc ? (
+          <p className="text-sm py-10 text-center" style={{ color: "var(--brand-on-surface-variant)" }}>
+            Loading document…
+          </p>
+        ) : (
+          <LegalDocument doc={viewingDoc} />
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

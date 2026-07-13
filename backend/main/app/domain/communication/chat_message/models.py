@@ -65,6 +65,8 @@ class ChatMessage(BaseEntity):
     # §4.7 fraud categories that held the message (empty for a clean fast-lane message).
     flagged_categories = Column(JSONB_VARIANT, nullable=True)
     # Attachment storage refs — column kept forward-compat; no upload wired this slice (D22).
+    # TODO(gap): chat attachments — wire presigned upload (reuse the storage facade) + UI —
+    # PRD "Known Gaps & Roadmap".
     attachments = Column(JSONB_VARIANT, nullable=True)
     delivered_at = Column(UTCDateTime, nullable=True)
     held_at = Column(UTCDateTime, nullable=True)

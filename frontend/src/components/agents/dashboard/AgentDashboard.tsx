@@ -1,5 +1,8 @@
 "use client";
 
+// TODO(gap): one unified dashboard for all agent roles — the role-specific variants
+// (Field/Surveyor map view, Registry document list, Lawyer dependency queue) are a
+// documented follow-up — PRD "Known Gaps & Roadmap".
 import Link from "next/link";
 import { CheckCircle2, ClipboardList, Inbox, Send, Star, TrendingUp } from "lucide-react";
 import { Card } from "@3rdparty/ui/card";
