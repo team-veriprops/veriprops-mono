@@ -6,8 +6,8 @@ import { NavItem } from "@/components/nav/MenuSidebar";
 export const portalNavItems: NavItem[] = [
   { title: "Dashboard", href: ROUTES.PORTAL.DASHBOARD, icon: "dashboard" },
   { title: "My Verifications", href: ROUTES.PORTAL.VERIFICATIONS, icon: "clipboardList" },
-  { title: "New Verification", href: ROUTES.PORTAL.VERIFICATIONS_NEW, icon: "fileCheck" },
+  // { title: "New Verification", href: ROUTES.PORTAL.VERIFICATIONS_NEW, icon: "fileCheck" },
   { title: "Messages", href: ROUTES.PORTAL.CHAT, icon: "messageSquare" },
-  { title: "Refer & earn", href: ROUTES.PORTAL.REFERRALS, icon: "gift" },
+  // { title: "Refer & earn", href: ROUTES.PORTAL.REFERRALS, icon: "gift" },
   { title: "Support", href: ROUTES.PORTAL.SUPPORT, icon: "helpCircle" },
 ];
