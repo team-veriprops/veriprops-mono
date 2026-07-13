@@ -206,24 +206,9 @@ class AppodusBaseSettings(BaseSettings):
     # MESSAGING
     EMAIL_FROM_ADDRESS: Optional[str] = "noreply@example.com"
     EMAIL_FROM_NAME: str = "veriprops"
-    EMAIL_SUBJECTS: Dict[str, str] = {
-        "2fa_subject": "Extra Security: Your 2FA Code Inside",
-        "account_activation_subject": "Important: Your Account Status",
-        "account_deactivation_subject": "Important: Your Account Status",
-        "email_verification_subject": "One Quick Step: Verify Your Email",
-        "login_diff_device_security_alert_subject": "New Login Detected - Was This You?",
-        "name_update_success_subject": "Your Name Has Been Updated ✅",
-        "new_feature_announcement_subject": "Exciting New Features Just Launched!",
-        "new_user_email_verification_subject": "One Quick Step: Verify Your Email",
-        "new_user_welcome_subject": "Welcome to Your Real Estate Journey! 🏡",
-        "password_reset_request_subject": "Reset Your Password - Quick & Easy",
-        "password_update_success_subject": "Your Password Has Been Updated ✅",
-        "phone_verification_subject": "Verify Your Phone - Stay Secure",
-    }
     SMS_SENDER_ID: Optional[str] = "veriprops"
     SMS_TTL: int = 25000
     MESSAGE_TEMPLATE_DIR: str = "resources/templates"
-    MESSAGING_BRAND_NAME: str = "appodus"
 
     MESSAGING_HEADERS: Dict[str, str] = {}
     MESSAGING_PRIORITY: int = 2
@@ -243,6 +228,14 @@ class AppodusBaseSettings(BaseSettings):
     SMTP_USERNAME: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_USE_TLS: bool = False
+    # Bounds the SMTP socket. An SMTP host that accepts but blackholes the connection
+    # (a stopped Mailpit container behind a port proxy) would otherwise pin the sending
+    # worker thread forever and hang the request that triggered the mail. Socket errors
+    # are not retried per-attempt (only httpx ones are), so a dead host costs exactly one
+    # timeout inline and the message-level retry ladder carries the send from there —
+    # keep this comfortably below the caller's HTTP timeout, yet far enough above normal
+    # latency that a busy server never trips it.
+    SMTP_TIMEOUT_SECONDS: int = 15
 
     # TEST CONFIG — canonical test OTP returned when OTP_MODE=deterministic
     TEST_OTP: int = 654123

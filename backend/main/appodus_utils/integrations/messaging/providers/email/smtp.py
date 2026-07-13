@@ -29,8 +29,8 @@ class SmtpEmailProvider(IMessageProvider):
     """Local SMTP email provider for dev/test environments (Mailpit).
 
     Connects to settings.SMTP_HOST:SMTP_PORT via smtplib (no auth required
-    for Mailpit). The synchronous smtplib call runs in a thread-pool executor
-    so it does not block the event loop.
+    for Mailpit), bounded by settings.SMTP_TIMEOUT_SECONDS. The synchronous
+    smtplib call runs in a thread-pool executor so it does not block the event loop.
 
     Hard-fails with ValueError in production or staging — never commit emails
     via SMTP in those environments.
@@ -86,13 +86,17 @@ class SmtpEmailProvider(IMessageProvider):
 
         host = settings.SMTP_HOST
         port = settings.SMTP_PORT
+        # Never open an unbounded socket: an SMTP host that is down (or blackholes the
+        # connection) must fail the attempt so the retry ladder can carry it, not pin the
+        # worker thread and hang the request that triggered the mail.
+        timeout = settings.SMTP_TIMEOUT_SECONDS
         use_tls = settings.SMTP_USE_TLS
         username = settings.SMTP_USERNAME
         password = settings.SMTP_PASSWORD
         raw = mime_msg.as_string()
 
         def _send_sync() -> None:
-            with smtplib.SMTP(host, port) as server:
+            with smtplib.SMTP(host, port, timeout=timeout) as server:
                 if use_tls:
                     server.starttls()
                 if username and password:
