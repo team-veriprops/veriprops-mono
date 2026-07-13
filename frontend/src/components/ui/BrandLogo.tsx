@@ -24,8 +24,8 @@ export default function BrandLogo({
 
   // On navy surfaces the navy tile disappears — switch to viridian with a soft ring.
   const tileClasses = isLight
-    ? "bg-[var(--brand-viridian)] ring-1 ring-white/20"
-    : "bg-[var(--brand-navy)]";
+    ? "bg-brand-viridian ring-1 ring-white/20"
+    : "bg-brand-navy";
 
   const tileSize = size === "sm" ? "h-8 w-8 rounded-lg" : "h-10 w-10 rounded-xl";
   const shieldSize = size === "sm" ? "h-4 w-4" : "h-5 w-5";

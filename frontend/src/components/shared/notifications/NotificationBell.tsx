@@ -94,7 +94,7 @@ export default function NotificationBell({ dark = false }: { dark?: boolean }) {
                     if (n.link) router.push(n.link);
                   }}
                   className={cn(
-                    "w-full text-left px-4 py-2.5 hover:bg-black/[0.02] border-b border-black/5 last:border-0",
+                    "w-full text-left px-4 py-2.5 hover:bg-black/2 border-b border-black/5 last:border-0",
                     !n.read && "bg-brand-viridian/4"
                   )}
                 >
@@ -110,7 +110,7 @@ export default function NotificationBell({ dark = false }: { dark?: boolean }) {
           <Link
             href={ROUTES.PORTAL.NOTIFICATIONS}
             onClick={() => setOpen(false)}
-            className="block text-center text-sm py-2.5 border-t border-black/5 hover:bg-black/[0.02] text-brand-viridian"
+            className="block text-center text-sm py-2.5 border-t border-black/5 hover:bg-black/2 text-brand-viridian"
           >
             View all
           </Link>

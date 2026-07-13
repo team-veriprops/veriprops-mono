@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -22,7 +23,7 @@ export default function TopNavBreadcrumb() {
     <Breadcrumb>
       <BreadcrumbList>
         {crumbs.map((crumb, index) => (
-          <span key={crumb.href} className="inline-flex items-center gap-1.5 sm:gap-2.5">
+          <Fragment key={crumb.href}>
             {index > 0 && <BreadcrumbSeparator />}
             <BreadcrumbItem>
               {crumb.isCurrentPage ? (
@@ -37,7 +38,7 @@ export default function TopNavBreadcrumb() {
                 </BreadcrumbLink>
               )}
             </BreadcrumbItem>
-          </span>
+          </Fragment>
         ))}
       </BreadcrumbList>
     </Breadcrumb>

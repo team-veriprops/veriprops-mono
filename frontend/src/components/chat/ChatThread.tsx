@@ -114,7 +114,7 @@ export default function ChatThread({
               maxLength={maxLength}
               placeholder="Write a message…"
               data-testid="chat-composer"
-              className="flex-1 resize-none rounded-lg border border-black/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-viridian)]/30"
+              className="flex-1 resize-none rounded-lg border border-black/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-viridian/30"
             />
             <button
               onClick={handleSend}

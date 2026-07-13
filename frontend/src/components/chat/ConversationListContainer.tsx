@@ -38,7 +38,7 @@ export default function ConversationListContainer() {
           <li key={c.id}>
             <Link
               href={hrefFor(c)}
-              className="flex items-center gap-3 rounded-xl border border-black/5 bg-white px-4 py-3 hover:bg-black/[0.02] transition-colors"
+              className="flex items-center gap-3 rounded-xl border border-black/5 bg-white px-4 py-3 hover:bg-black/2 transition-colors"
             >
               <div
                 className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-brand-viridian/10 text-brand-viridian"

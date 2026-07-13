@@ -55,7 +55,7 @@ export default function NotificationsContainer() {
                 if (n.link) router.push(n.link);
               }}
               className={cn(
-                "w-full text-left rounded-xl border border-black/5 bg-white px-4 py-3 hover:bg-black/[0.02]",
+                "w-full text-left rounded-xl border border-black/5 bg-white px-4 py-3 hover:bg-black/2",
                 !n.read && "bg-brand-viridian/4"
               )}
             >
