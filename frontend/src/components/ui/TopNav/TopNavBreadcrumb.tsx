@@ -26,12 +26,12 @@ export default function TopNavBreadcrumb() {
             {index > 0 && <BreadcrumbSeparator />}
             <BreadcrumbItem>
               {crumb.isCurrentPage ? (
-                <BreadcrumbPage className="text-sm font-medium" style={{ color: "var(--brand-navy)" }}>
+                <BreadcrumbPage className="text-sm font-medium text-brand-navy">
                   {crumb.label}
                 </BreadcrumbPage>
               ) : (
                 <BreadcrumbLink asChild>
-                  <Link href={crumb.href} className="text-sm" style={{ color: "rgba(0,13,34,0.45)" }}>
+                  <Link href={crumb.href} className="text-sm text-muted-foreground">
                     {crumb.label}
                   </Link>
                 </BreadcrumbLink>

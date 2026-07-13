@@ -2,45 +2,32 @@ export default function WhyWeExist() {
   return (
     <section
       id="why-we-exist"
-      className="relative pt-24 lg:pt-32 pb-16 lg:pb-20 overflow-hidden"
-      style={{ backgroundColor: "var(--brand-surface-low)" }}
+      className="relative pt-24 lg:pt-32 pb-16 lg:pb-20 overflow-hidden bg-brand-surface-low"
     >
       {/* Subtle background grid — distinguishes this section from the plain ecosystem section below */}
       <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 1px 1px, rgba(0,13,34,0.04) 1px, transparent 0)",
-          backgroundSize: "40px 40px",
-        }}
+        className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_1px_1px,rgba(0,13,34,0.04)_1px,transparent_0)] bg-size-[40px_40px]"
       />
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8">
         <div className="max-w-3xl">
           {/* Eyebrow */}
           <div
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-widest mb-8"
-            style={{
-              backgroundColor: "rgba(63,102,83,0.08)",
-              color: "var(--brand-viridian)",
-              border: "1px solid rgba(63,102,83,0.15)",
-            }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-widest mb-8 bg-brand-viridian/8 text-brand-viridian border border-brand-viridian/15"
           >
             Why we exist
           </div>
 
           {/* Opening anecdote — lead emphasis */}
           <p
-            className="text-2xl md:text-3xl font-display editorial-spacing leading-[1.35] mb-8"
-            style={{ color: "var(--brand-navy)" }}
+            className="text-2xl md:text-3xl font-display editorial-spacing leading-[1.35] mb-8 text-brand-navy"
           >
             A friend wired the deposit for a plot in Lekki from London. By the
             time he flew home, he learned the same land had been{" "}
             <span className="relative inline-block">
               sold to four other people
               <span
-                className="absolute -bottom-1 left-0 right-0 h-[3px] rounded-full"
-                style={{ background: "var(--brand-viridian)", opacity: 0.4 }}
+                className="absolute -bottom-1 left-0 right-0 h-0.75 rounded-full bg-brand-viridian/40"
               />
             </span>
             .
@@ -48,8 +35,7 @@ export default function WhyWeExist() {
 
           {/* Body */}
           <div
-            className="space-y-6 text-lg leading-relaxed"
-            style={{ color: "var(--brand-on-surface-variant)" }}
+            className="space-y-6 text-lg leading-relaxed text-brand-on-surface-variant"
           >
             <p>
               That story isn&rsquo;t rare &mdash; it&rsquo;s the norm. For
@@ -69,8 +55,7 @@ export default function WhyWeExist() {
 
           {/* Signature */}
           <p
-            className="mt-10 text-base font-semibold font-display editorial-spacing"
-            style={{ color: "var(--brand-viridian)" }}
+            className="mt-10 text-base font-semibold font-display editorial-spacing text-brand-viridian"
           >
             &mdash; The Veriprops team, Lagos &amp; London
           </p>

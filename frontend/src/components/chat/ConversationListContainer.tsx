@@ -17,7 +17,7 @@ export default function ConversationListContainer() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-xl font-semibold mb-1" style={{ color: "var(--brand-navy)" }}>
+      <h1 className="text-xl font-semibold mb-1 text-brand-navy">
         Messages
       </h1>
       <p className="text-sm text-gray-500 mb-5">Your conversations with our team.</p>
@@ -27,7 +27,7 @@ export default function ConversationListContainer() {
         <div className="text-center py-12 rounded-xl border border-black/5 bg-white">
           <MessageCircle className="w-8 h-8 mx-auto text-gray-300 mb-2" />
           <p className="text-sm text-gray-500">No conversations yet.</p>
-          <Link href={ROUTES.PORTAL.SUPPORT} className="text-sm mt-2 inline-block" style={{ color: "var(--brand-viridian)" }}>
+          <Link href={ROUTES.PORTAL.SUPPORT} className="text-sm mt-2 inline-block text-brand-viridian">
             Contact support
           </Link>
         </div>
@@ -41,8 +41,7 @@ export default function ConversationListContainer() {
               className="flex items-center gap-3 rounded-xl border border-black/5 bg-white px-4 py-3 hover:bg-black/[0.02] transition-colors"
             >
               <div
-                className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: "rgba(63,102,83,0.1)", color: "var(--brand-viridian)" }}
+                className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-brand-viridian/10 text-brand-viridian"
               >
                 {c.type === ConversationType.GENERAL_SUPPORT ? (
                   <LifeBuoy className="w-4 h-4" />
@@ -51,15 +50,14 @@ export default function ConversationListContainer() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: "var(--brand-navy)" }}>
+                <p className="text-sm font-medium truncate text-brand-navy">
                   {titleFor(c)}
                 </p>
                 <p className="text-xs text-gray-400 truncate">{subtitleFor(c)}</p>
               </div>
               {c.unread > 0 && (
                 <span
-                  className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
-                  style={{ backgroundColor: "var(--brand-viridian)" }}
+                  className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center bg-brand-viridian"
                 >
                   {c.unread > 9 ? "9+" : c.unread}
                 </span>

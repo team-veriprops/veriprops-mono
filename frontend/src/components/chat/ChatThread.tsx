@@ -6,6 +6,7 @@ import { ChatMessage, MessageKind, SenderKind } from "@/types/chat";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { usePublicConfigQuery } from "@components/website/auth/libs/useAuthQueries";
 import { useMarkReadMutation, useMessagesQuery } from "./libs/useChatQueries";
+import { cn } from "@lib/utils";
 
 // Fallback until /config/public resolves; backend is the source of truth.
 const DEFAULT_CHAT_MESSAGE_MAX_LENGTH = 2000;
@@ -119,8 +120,7 @@ export default function ChatThread({
               onClick={handleSend}
               disabled={sending || !body.trim()}
               data-testid="chat-send"
-              className="h-10 w-10 flex-shrink-0 rounded-lg flex items-center justify-center text-white disabled:opacity-40"
-              style={{ backgroundColor: "var(--brand-viridian)" }}
+              className="h-10 w-10 flex-shrink-0 rounded-lg flex items-center justify-center text-white disabled:opacity-40 bg-brand-viridian"
               aria-label="Send message"
             >
               <Send className="w-4 h-4" />
@@ -152,12 +152,10 @@ function MessageBubble({ message, mine }: { message: ChatMessage; mine: boolean 
       <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
         {!mine && <span className="text-[11px] text-gray-400 mb-0.5 px-1">{name}</span>}
         <div
-          className="rounded-2xl px-3.5 py-2 text-sm"
-          style={
-            mine
-              ? { backgroundColor: "var(--brand-viridian)", color: "#fff" }
-              : { backgroundColor: "var(--brand-surface-low)", color: "var(--brand-navy)" }
-          }
+          className={cn(
+            "rounded-2xl px-3.5 py-2 text-sm",
+            mine ? "bg-brand-viridian text-white" : "bg-brand-surface-low text-brand-navy",
+          )}
         >
           {message.body}
         </div>

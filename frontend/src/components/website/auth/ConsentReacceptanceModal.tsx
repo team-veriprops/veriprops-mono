@@ -60,12 +60,12 @@ export default function ConsentReacceptanceModal() {
       <DialogContent showCloseButton={false} className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
-            <ShieldCheck className="w-5 h-5" style={{ color: "var(--brand-viridian)" }} />
+            <ShieldCheck className="w-5 h-5 text-brand-viridian" />
             Updated terms — please review
           </DialogTitle>
         </DialogHeader>
 
-        <p className="text-sm leading-relaxed mt-2" style={{ color: "var(--brand-on-surface-variant)" }}>
+        <p className="text-sm leading-relaxed mt-2 text-brand-on-surface-variant">
           We&apos;ve published new versions of the documents below. Please review and accept to continue
           using Veriprops. Your previous acceptance is on record and remains audit-logged.
         </p>
@@ -77,8 +77,7 @@ export default function ConsentReacceptanceModal() {
               <label
                 key={doc.type}
                 htmlFor={id}
-                className="flex items-start gap-3 p-3 rounded-lg cursor-pointer select-none transition-colors hover:bg-[var(--brand-surface-low)]"
-                style={{ backgroundColor: "var(--brand-surface-low)" }}
+                className="flex items-start gap-3 p-3 rounded-lg cursor-pointer select-none transition-colors hover:bg-brand-surface-low bg-brand-surface-low"
               >
                 <Checkbox
                   id={id}
@@ -88,17 +87,16 @@ export default function ConsentReacceptanceModal() {
                   }
                   className="mt-0.5"
                 />
-                <span className="text-sm leading-relaxed" style={{ color: "var(--brand-on-surface)" }}>
+                <span className="text-sm leading-relaxed text-brand-on-surface">
                   I have read and accept the{" "}
                   <button
                     type="button"
                     onClick={() => setViewingSlug(doc.href.split("/").pop() ?? null)}
-                    className="font-semibold underline-offset-2 hover:underline"
-                    style={{ color: "var(--brand-viridian)" }}
+                    className="font-semibold underline-offset-2 hover:underline text-brand-viridian"
                   >
                     {doc.title}
                   </button>{" "}
-                  <span className="font-mono text-[11px]" style={{ color: "var(--brand-on-surface-variant)" }}>
+                  <span className="font-mono text-[11px] text-brand-on-surface-variant">
                     v{doc.consentVersion}
                   </span>
                 </span>
@@ -108,7 +106,7 @@ export default function ConsentReacceptanceModal() {
         </div>
 
         {errorMessage && (
-          <p className="text-sm mt-3" style={{ color: "var(--danger)" }}>
+          <p className="text-sm mt-3 text-danger">
             {errorMessage}
           </p>
         )}
@@ -133,7 +131,7 @@ export default function ConsentReacceptanceModal() {
             accessible-name requirement without duplicating it on screen. */}
         <DialogTitle className="sr-only">{viewingDoc?.title ?? "Legal document"}</DialogTitle>
         {viewingLoading || !viewingDoc ? (
-          <p className="text-sm py-10 text-center" style={{ color: "var(--brand-on-surface-variant)" }}>
+          <p className="text-sm py-10 text-center text-brand-on-surface-variant">
             Loading document…
           </p>
         ) : (

@@ -19,8 +19,8 @@ export default function TaskHistory({ taskId }: { taskId: string }) {
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-8 py-8" data-testid="task-history">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "var(--brand-navy)" }}>Task history</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--brand-on-surface-variant)" }}>
+        <h1 className="text-2xl font-bold text-brand-navy">Task history</h1>
+        <p className="text-sm mt-1 text-brand-on-surface-variant">
           Every state this task has moved through, in order.
         </p>
       </header>
@@ -37,7 +37,7 @@ export default function TaskHistory({ taskId }: { taskId: string }) {
           <Button variant="outline" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
             Previous
           </Button>
-          <span className="text-xs" style={{ color: "var(--brand-on-surface-variant)" }}>
+          <span className="text-xs text-brand-on-surface-variant">
             Page {page + 1} of {totalPages}
           </span>
           <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>

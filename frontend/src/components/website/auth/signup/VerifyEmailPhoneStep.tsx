@@ -61,8 +61,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
   return (
     <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="verify-form">
       <p
-        className="text-sm leading-relaxed"
-        style={{ color: "var(--brand-on-surface-variant)" }}
+        className="text-sm leading-relaxed text-brand-on-surface-variant"
       >
         {phoneVerificationEnabled
           ? "We need to confirm both your email and phone number. We'll send a 6-digit code to each."

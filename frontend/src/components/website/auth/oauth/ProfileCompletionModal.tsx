@@ -23,7 +23,7 @@ import {
   useVerifyOtpMutation,
   usePublicConfigQuery,
 } from "../libs/useAuthQueries";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage, cn } from "@lib/utils";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 
 interface Props {
@@ -123,7 +123,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Complete your profile</DialogTitle>
         </DialogHeader>
-        <p className="text-sm" style={{ color: "var(--brand-on-surface-variant)" }}>
+        <p className="text-sm text-brand-on-surface-variant">
           We need a few more details before you can use Veriprops.
         </p>
 
@@ -192,7 +192,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
           <Field label="Country of residence" error={form.formState.errors.countryOfResidence?.message}>
             <select
               {...form.register("countryOfResidence")}
-              className="w-full h-11 px-3 rounded-md text-sm bg-[var(--brand-surface-card)] border border-[rgba(196,198,207,0.4)]"
+              className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40"
             >
               <option value="">Select your country</option>
               {RESIDENCE_COUNTRIES.map((c) => (
@@ -206,7 +206,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
           <Field label="Timezone" error={form.formState.errors.timezone?.message}>
             <select
               {...form.register("timezone")}
-              className="w-full h-11 px-3 rounded-md text-sm bg-[var(--brand-surface-card)] border border-[rgba(196,198,207,0.4)]"
+              className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40"
             >
               {COMMON_TIMEZONES.map((tz) => (
                 <option key={tz} value={tz}>
@@ -225,21 +225,19 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
                     key={c}
                     type="button"
                     onClick={() => form.setValue("preferredCurrency", c, { shouldValidate: true })}
-                    className="px-3 py-2 rounded-md text-sm font-semibold transition-all"
-                    style={{
-                      backgroundColor: selected ? "var(--brand-navy)" : "var(--brand-surface-card)",
-                      color: selected ? "white" : "var(--brand-navy)",
-                      border: selected
-                        ? "1px solid var(--brand-navy)"
-                        : "1px solid rgba(196,198,207,0.4)",
-                    }}
+                    className={cn(
+                      "px-3 py-2 rounded-md text-sm font-semibold transition-all",
+                      selected
+                        ? "bg-brand-navy text-white border border-brand-navy"
+                        : "bg-brand-surface-card text-brand-navy border border-brand-outline-variant/40"
+                    )}
                   >
                     <div>{c}</div>
                     <div
-                      className="text-[10px] mt-0.5"
-                      style={{
-                        color: selected ? "rgba(255,255,255,0.7)" : "var(--brand-on-surface-variant)",
-                      }}
+                      className={cn(
+                        "text-[10px] mt-0.5",
+                        selected ? "text-white/70" : "text-brand-on-surface-variant"
+                      )}
                     >
                       {CURRENCY_NAMES[c]}
                     </div>
@@ -250,7 +248,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
           </Field>
 
           {form.formState.errors.root && (
-            <p className="text-sm" style={{ color: "var(--danger)" }}>
+            <p className="text-sm text-danger">
               {form.formState.errors.root.message}
             </p>
           )}
@@ -275,12 +273,12 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+      <label className="text-sm font-semibold text-brand-navy">
         {label}
       </label>
       {children}
       {error && (
-        <p className="text-xs" style={{ color: "var(--danger)" }}>
+        <p className="text-xs text-danger">
           {error}
         </p>
       )}

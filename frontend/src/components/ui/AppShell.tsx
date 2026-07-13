@@ -321,11 +321,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Desktop top nav */}
         <header
-          className="hidden lg:flex items-center justify-between px-6 h-14 flex-shrink-0"
-          style={{
-            backgroundColor: "#fff",
-            borderBottom: "1px solid rgba(196,198,207,0.12)",
-          }}
+          className="hidden lg:flex items-center justify-between px-6 h-14 flex-shrink-0 bg-white border-b border-brand-outline-variant/12"
         >
           <TopNavBreadcrumb />
           <div className="flex items-center gap-1">
@@ -344,14 +340,12 @@ export default function AppShell({ navItems, children }: AppShellProps) {
 
         {/* Mobile header */}
         <header
-          className="lg:hidden flex items-center gap-3 px-4 py-3 flex-shrink-0"
-          style={{ borderBottom: "1px solid rgba(196,198,207,0.12)", backgroundColor: "#fff" }}
+          className="lg:hidden flex items-center gap-3 px-4 py-3 flex-shrink-0 border-b border-brand-outline-variant/12 bg-white"
         >
           <button
             onClick={() => setSidebarOpen(true)}
             aria-label="Open menu"
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-            style={{ color: "var(--brand-navy)" }}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-brand-navy"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -363,8 +357,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
             <ChatButton />
             <NotificationBell />
             <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-              style={{ backgroundColor: "rgba(63,102,83,0.12)", color: "var(--brand-viridian)" }}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-brand-viridian/12 text-brand-viridian"
             >
               {initials}
             </div>
@@ -372,7 +365,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
         </header>
 
         {/* Scrollable main */}
-        <main className="flex-1 overflow-y-auto" style={{ backgroundColor: "var(--brand-surface-low)" }}>
+        <main className="flex-1 overflow-y-auto bg-brand-surface-low">
           {children}
         </main>
       </div>

@@ -1,6 +1,7 @@
 import { methodologySteps } from "./home.data";
 import { AuthIntent } from "./auth/models";
 import { ROUTES, buildAuthUrl } from "@lib/routes";
+import { cn } from "@lib/utils";
 
 export default function RigorousMethodology() {
   return (
@@ -12,18 +13,12 @@ export default function RigorousMethodology() {
         {/* Centered header */}
         <div className="text-center max-w-2xl mx-auto mb-20">
           <div
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-widest mb-4"
-            style={{
-              backgroundColor: "rgba(63,102,83,0.08)",
-              color: "var(--brand-viridian)",
-              border: "1px solid rgba(63,102,83,0.15)",
-            }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-widest mb-4 bg-brand-viridian/8 text-brand-viridian border border-brand-viridian/15"
           >
             Our methodology
           </div>
           <h2
-            className="text-4xl md:text-5xl font-extrabold editorial-spacing font-display leading-tight mb-5"
-            style={{ color: "var(--brand-navy)" }}
+            className="text-4xl md:text-5xl font-extrabold editorial-spacing font-display leading-tight mb-5 text-brand-navy"
           >
             Five steps. No shortcuts. No assumptions.
           </h2>
@@ -40,71 +35,30 @@ export default function RigorousMethodology() {
                 {/* Connector line (all except last) */}
                 {!isLast && (
                   <div
-                    className="hidden md:block absolute top-6 w-full h-[2px] z-0"
-                    style={{
-                      left: "50%",
-                      background: "linear-gradient(to right, rgba(196,198,207,0.4), rgba(196,198,207,0.2))",
-                    }}
+                    className="hidden md:block absolute left-1/2 top-6 w-full h-0.5 z-0 bg-[linear-gradient(to_right,rgba(196,198,207,0.4),rgba(196,198,207,0.2))]"
                   />
                 )}
 
                 {/* Step circle */}
                 <div
-                  className="relative z-10 w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm mb-6 transition-transform duration-200 group-hover:scale-110"
-                  style={
+                  className={cn(
+                    "relative z-10 w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm mb-6 transition-transform duration-200 group-hover:scale-110",
                     isFirst
-                      ? {
-                          background: "linear-gradient(135deg, var(--brand-navy) 0%, var(--brand-navy-deep) 100%)",
-                          color: "#fff",
-                          boxShadow: "0 4px 16px rgba(0,13,34,0.3)",
-                        }
+                      ? "signature-gradient text-white shadow-[0_4px_16px_rgba(0,13,34,0.3)]"
                       : isLast
-                      ? {
-                          background: "rgba(63,102,83,0.1)",
-                          color: "var(--brand-viridian)",
-                          border: "2px solid var(--brand-viridian)",
-                        }
-                      : {
-                          background: "var(--brand-surface-low)",
-                          color: "var(--brand-navy)",
-                          border: "1px solid rgba(196,198,207,0.4)",
-                        }
-                  }
+                      ? "bg-brand-viridian/10 text-brand-viridian border-2 border-brand-viridian"
+                      : "bg-brand-surface-low text-brand-navy border border-brand-outline-variant/40"
+                  )}
                 >
                   {step.step}
                 </div>
 
-                {/* Icon */}
-                {/* <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
-                  style={{
-                    backgroundColor: isFirst
-                      ? "rgba(0,13,34,0.05)"
-                      : isLast
-                      ? "rgba(63,102,83,0.08)"
-                      : "var(--brand-surface-low)",
-                  }}
-                >
-                  <Icon
-                    className="w-5 h-5"
-                    strokeWidth={1.5}
-                    style={{
-                      color: isFirst
-                        ? "var(--brand-navy)"
-                        : isLast
-                        ? "var(--brand-viridian)"
-                        : "var(--brand-on-surface-variant)",
-                    }}
-                  />
-                </div> */}
-
                 <h3
-                  className="font-bold font-display text-sm mb-2"
-                  style={{ color: "var(--brand-navy)" }}
+                  className="font-bold font-display text-sm mb-2 text-brand-navy"
                 >
                   {step.title}
                 </h3>
-                <p className="text-sm leading-relaxed px-1" style={{ color: "var(--brand-on-surface-variant)" }}>
+                <p className="text-sm leading-relaxed px-1 text-brand-on-surface-variant">
                   {step.description}
                 </p>
               </div>
@@ -114,24 +68,21 @@ export default function RigorousMethodology() {
 
         {/* Bottom CTA strip */}
         <div
-          className="mt-20 rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-6"
-          style={{ backgroundColor: "var(--brand-surface-low)" }}
+          className="mt-20 rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 bg-brand-surface-low"
         >
           <div>
             <div
-              className="text-lg font-bold font-display mb-1"
-              style={{ color: "var(--brand-navy)" }}
+              className="text-lg font-bold font-display mb-1 text-brand-navy"
             >
               Ready to verify your property?
             </div>
-            <p className="text-sm" style={{ color: "var(--brand-on-surface-variant)" }}>
+            <p className="text-sm text-brand-on-surface-variant">
               Get started in under 5 minutes. Your Verification ID is assigned instantly.
             </p>
           </div>
           <a
             href={buildAuthUrl(ROUTES.AUTH.GATE, { intent: AuthIntent.VERIFY })}
-            className="flex-shrink-0 inline-flex items-center gap-2 signature-gradient text-white px-8 py-3.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90 hover:scale-[0.98]"
-            style={{ boxShadow: "0 6px 20px -4px rgba(0,13,34,0.35)" }}
+            className="flex-shrink-0 inline-flex items-center gap-2 signature-gradient text-white px-8 py-3.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90 hover:scale-[0.98] shadow-[0_6px_20px_-4px_rgba(0,13,34,0.35)]"
           >
             Start Your Verification
           </a>

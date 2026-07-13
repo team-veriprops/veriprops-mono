@@ -283,19 +283,17 @@ export default function SignupContainer() {
 
       {resumed && step > 0 && (
         <p
-          className="mt-6 text-xs text-center"
-          style={{ color: "var(--brand-on-surface-variant)" }}
+          className="mt-6 text-xs text-center text-brand-on-surface-variant"
         >
           We restored your previous progress.
         </p>
       )}
 
-      <p className="mt-8 text-sm text-center" style={{ color: "var(--brand-on-surface-variant)" }}>
+      <p className="mt-8 text-sm text-center text-brand-on-surface-variant">
         Already have an account?{" "}
         <Link
           href={ROUTES.AUTH.LOGIN}
-          className="font-semibold underline-offset-2 hover:underline"
-          style={{ color: "var(--brand-navy)" }}
+          className="font-semibold underline-offset-2 hover:underline text-brand-navy"
         >
           Sign in
         </Link>

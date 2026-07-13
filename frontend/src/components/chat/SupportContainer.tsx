@@ -19,14 +19,11 @@ export default function SupportContainer() {
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-8">
       <div className="flex items-center gap-3">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center"
-          style={{ backgroundColor: "rgba(63,102,83,0.1)", color: "var(--brand-viridian)" }}
-        >
+        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-brand-viridian/10 text-brand-viridian">
           <LifeBuoy className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <h1 className="text-xl font-semibold text-brand-navy">
             Support
           </h1>
           <p className="text-sm text-gray-500">Find an answer, or start a conversation with our team.</p>
@@ -44,7 +41,7 @@ export default function SupportContainer() {
                 onClick={() => setOpen(open === i ? null : i)}
                 className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
               >
-                <span className="text-sm font-medium" style={{ color: "var(--brand-navy)" }}>
+                <span className="text-sm font-medium text-brand-navy">
                   {f.question}
                 </span>
                 <ChevronDown

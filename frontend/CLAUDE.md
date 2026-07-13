@@ -90,6 +90,15 @@ Record-detail views and one-off forms / centered modals use the shared right-sid
 - Read runtime flags from the backend, not from `NEXT_PUBLIC_*`. `usePublicConfigQuery()` exposes `/config/public` (e.g. `phoneVerificationEnabled`, which drives whether the signup flow shows the phone-verification step).
 - The `/account/*` security surface (security log, devices, linked accounts, password) lives under `src/app/account/` on `AppShell`; the `PortalSwitcher` in the shell shows the cross-portal badge for multi-persona users.
 
+## Styling
+
+All styling is `className` (Tailwind v4 utilities, generated from [src/styles/theme.css](src/styles/theme.css)'s CSS-first `@theme inline` config) — never the `style` prop. Conditional styling uses `cn()` from [src/lib/utils.ts](src/lib/utils.ts) to merge a base class string with per-branch classes, never a `style={condition ? {...} : {...}}` object. Inline `style` is reserved for two narrow, permanent exceptions:
+
+- **Runtime-computed numeric values** that can't be expressed as a static class: bar-fill/column widths derived from data ratios ([MiniBarBreakdown.tsx](src/components/ui/MiniBarBreakdown.tsx), [AdminAnalytics.tsx](src/components/admin/analytics/AdminAnalytics.tsx)), the sidebar slide transform in [AppShell.tsx](src/components/ui/AppShell.tsx), and per-column pixel widths in [DataTable.tsx](src/components/ui/table/DataTable.tsx).
+- **Vendored third-party CSS-variable contracts** in `src/components/3rdparty/ui/` — `sidebar.tsx`, `sonner.tsx`, and `chart.tsx` theme Radix/Sonner/Recharts by injecting CSS custom properties via `style={{ "--foo": value } as React.CSSProperties}`, which is the documented way to theme those libraries; `progress.tsx`'s Radix fill uses `style={{ transform: ... }}`, the standard Radix animation pattern.
+
+Nothing else should use `style`. If a color/shadow/gradient value isn't yet exposed as a theme token, prefer a Tailwind arbitrary-value class (`bg-[...]`, `shadow-[...]`) over inline `style` — it keeps the value in `className` even before it earns a real token.
+
 ## Design system (shared UI primitives)
 
 Reach for the shared primitive before hand-rolling markup — the card/tile visual language is centralized so every surface stays consistent.

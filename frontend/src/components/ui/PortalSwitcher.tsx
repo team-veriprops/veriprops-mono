@@ -14,6 +14,7 @@ import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { useCrossPortalSummaryQuery } from "@components/website/auth/libs/useAuthQueries";
 import { UserPersona } from "@components/website/auth/models";
 import { ROUTES } from "@lib/routes";
+import { cn } from "@lib/utils";
 
 const PERSONA_HOME: Record<UserPersona, { label: string; href: string }> = {
   [UserPersona.CUSTOMER]: { label: "Customer portal", href: ROUTES.PORTAL.DASHBOARD },
@@ -50,15 +51,16 @@ export default function PortalSwitcher({ dark = false }: { dark?: boolean }) {
         aria-label="Switch portal"
         data-testid="portal-switch"
         data-other-count={otherTotal}
-        className="relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 hover:bg-black/5"
-        style={{ color: dark ? "rgba(255,255,255,0.8)" : "var(--brand-on-surface-variant)" }}
+        className={cn(
+          "relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 hover:bg-black/5",
+          dark ? "text-white/80" : "text-brand-on-surface-variant"
+        )}
       >
         <ArrowLeftRight className="w-5 h-5" aria-hidden="true" />
         {otherTotal > 0 && (
           <span
             data-testid="portal-switch-badge"
-            className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white"
-            style={{ backgroundColor: "var(--brand-destructive, #ba1a1a)" }}
+            className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white bg-danger"
           >
             {otherTotal > 99 ? "99+" : otherTotal}
           </span>
@@ -78,8 +80,7 @@ export default function PortalSwitcher({ dark = false }: { dark?: boolean }) {
                 <span>{home.label}</span>
                 {count > 0 && (
                   <span
-                    className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white"
-                    style={{ backgroundColor: "var(--brand-destructive, #ba1a1a)" }}
+                    className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white bg-danger"
                   >
                     {count > 99 ? "99+" : count}
                   </span>

@@ -19,21 +19,21 @@ interface ActivityTimelineProps {
 export function ActivityTimeline({ events, isLoading, isError, emptyLabel }: ActivityTimelineProps) {
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 py-12 justify-center" style={{ color: "var(--brand-on-surface-variant)" }}>
+      <div className="flex items-center gap-2 py-12 justify-center text-brand-on-surface-variant">
         <Loader2 className="w-5 h-5 animate-spin" /> Loading activity…
       </div>
     );
   }
   if (isError) {
     return (
-      <p className="py-12 text-center text-sm" style={{ color: "var(--brand-destructive, #ba1a1a)" }}>
+      <p className="py-12 text-center text-sm text-danger">
         Could not load the activity history. Please try again.
       </p>
     );
   }
   if (events.length === 0) {
     return (
-      <p className="py-12 text-center text-sm" style={{ color: "var(--brand-on-surface-variant)" }} data-testid="activity-empty">
+      <p className="py-12 text-center text-sm text-brand-on-surface-variant" data-testid="activity-empty">
         {emptyLabel ?? "No activity yet."}
       </p>
     );
@@ -46,26 +46,24 @@ export function ActivityTimeline({ events, isLoading, isError, emptyLabel }: Act
           key={`${e.action}-${e.occurredAt}-${i}`}
           data-testid="activity-row"
           data-action={e.action}
-          className="flex items-start gap-3 rounded-xl p-4"
-          style={{ backgroundColor: "var(--brand-surface-card)", boxShadow: "0 1px 3px rgba(0,13,34,0.06)" }}
+          className="flex items-start gap-3 rounded-xl p-4 bg-brand-surface-card shadow-card"
         >
           <span
-            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-            style={{ backgroundColor: "var(--brand-viridian-xlight)", color: "var(--brand-viridian)" }}
+            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-brand-viridian-xlight text-brand-viridian"
           >
             <Activity className="w-5 h-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+            <p className="text-sm font-semibold text-brand-navy">
               {humanizeEnumLabel(e.action)}
             </p>
             {(e.fromState || e.toState) && (
-              <p className="text-sm" style={{ color: "var(--brand-on-surface-variant)" }}>
+              <p className="text-sm text-brand-on-surface-variant">
                 {e.fromState ? `${e.fromState} → ` : ""}
                 {e.toState ?? ""}
               </p>
             )}
-            <p className="text-xs mt-1" style={{ color: "rgba(68,71,78,0.55)" }}>
+            <p className="text-xs mt-1 text-brand-on-surface-variant/55">
               {new Date(e.occurredAt).toLocaleString()}
             </p>
           </div>

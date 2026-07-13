@@ -21,10 +21,10 @@ export default function ConnectedDevicesPage() {
     <div className="max-w-4xl mx-auto px-4 md:px-8 py-8" data-testid="devices">
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--brand-navy)" }}>
+          <h1 className="text-2xl font-bold text-brand-navy">
             Connected Devices
           </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--brand-on-surface-variant)" }}>
+          <p className="text-sm mt-1 text-brand-on-surface-variant">
             Devices currently signed in to your account. Revoke any you don&rsquo;t recognise.
           </p>
         </div>
@@ -46,11 +46,11 @@ export default function ConnectedDevicesPage() {
       </header>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 py-12 justify-center" style={{ color: "var(--brand-on-surface-variant)" }}>
+        <div className="flex items-center gap-2 py-12 justify-center text-brand-on-surface-variant">
           <Loader2 className="w-5 h-5 animate-spin" /> Loading devices…
         </div>
       ) : isError ? (
-        <p className="py-12 text-center text-sm" style={{ color: "var(--brand-destructive, #ba1a1a)" }}>
+        <p className="py-12 text-center text-sm text-danger">
           Could not load your devices. Please try again.
         </p>
       ) : (
@@ -59,29 +59,26 @@ export default function ConnectedDevicesPage() {
             <li
               key={d.id}
               data-testid="device-row"
-              className="flex items-center gap-3 rounded-xl p-4"
-              style={{ backgroundColor: "var(--brand-surface-card)", boxShadow: "0 1px 3px rgba(0,13,34,0.06)" }}
+              className="flex items-center gap-3 rounded-xl p-4 bg-brand-surface-card shadow-card"
             >
               <span
-                className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                style={{ backgroundColor: "var(--brand-surface-high)", color: "var(--brand-navy)" }}
+                className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-brand-surface-high text-brand-navy"
               >
                 <Monitor className="w-5 h-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold flex items-center gap-2" style={{ color: "var(--brand-navy)" }}>
+                <p className="text-sm font-semibold flex items-center gap-2 text-brand-navy">
                   {d.device || "Unknown device"}
                   {d.current && (
                     <span
-                      className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
-                      style={{ backgroundColor: "var(--brand-viridian-xlight)", color: "var(--brand-viridian)" }}
+                      className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-brand-viridian-xlight text-brand-viridian"
                       data-testid="device-current-badge"
                     >
                       This device
                     </span>
                   )}
                 </p>
-                <p className="text-xs mt-1" style={{ color: "rgba(68,71,78,0.55)" }}>
+                <p className="text-xs mt-1 text-brand-on-surface-variant/55">
                   {[d.ipAddress, d.approxLocation].filter(Boolean).join(" · ")}
                   {d.lastActiveAt ? ` · active ${new Date(d.lastActiveAt).toLocaleDateString()}` : ""}
                 </p>
@@ -98,7 +95,7 @@ export default function ConnectedDevicesPage() {
                       onError: () => toast.error("Could not revoke device."),
                     })
                   }
-                  style={{ color: "var(--brand-destructive, #ba1a1a)" }}
+                  className="text-danger"
                 >
                   Revoke
                 </Button>

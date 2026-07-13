@@ -75,9 +75,9 @@
   --focus-ring:              rgba(63, 102, 83, 0.35);
 
   /* ── Status Tokens ── */
-  --success:                 #3a9a6a;
+  --success:                 #237a51;
   --success-foreground:      #ffffff;
-  --warning:                 #b07d00;
+  --warning:                 #8a6300;
   --warning-foreground:      #ffffff;
   --danger:                  #ba1a1a;
   --danger-foreground:       #ffffff;
@@ -109,12 +109,22 @@
   --lock-indicator:                var(--brand-gold);
   --trust-text:                    var(--brand-on-surface-variant);
 
+  /* ── Third-party brand identities (fixed — not theme-adaptive) ──
+     Official platform colors for social links and OAuth provider chrome. */
+  --social-facebook:               #1877F2;
+  --social-twitter:                #14171A;
+  --social-linkedin:               #0A66C2;
+  --social-instagram:              #E1306C;
+  --social-youtube:                #FF0000;
+  --oauth-apple-bg:                #000000;
+  --oauth-apple-fg:                #ffffff;
+
   /* ── Sidebar ──
      The app-shell sidebar is always deep navy, in both UI modes. */
   --sidebar-background:            var(--brand-navy);
-  --sidebar-foreground:            rgba(255, 255, 255, 0.55);
+  --sidebar-foreground:            rgba(255, 255, 255, 0.72);
   --sidebar-foreground-active:     #ffffff;
-  --sidebar-muted:                 rgba(255, 255, 255, 0.35);
+  --sidebar-muted:                 rgba(255, 255, 255, 0.55);
   --sidebar-primary:               var(--brand-viridian);
   --sidebar-primary-foreground:    #ffffff;
   --sidebar-accent:                rgba(63, 102, 83, 0.2);
@@ -223,9 +233,9 @@
      Stays navy in dark mode; note --brand-navy flips to a light text color
      here, so the background is pinned to the dark surface stack instead. */
   --sidebar-background:            #071830;
-  --sidebar-foreground:            rgba(255, 255, 255, 0.55);
+  --sidebar-foreground:            rgba(255, 255, 255, 0.72);
   --sidebar-foreground-active:     #ffffff;
-  --sidebar-muted:                 rgba(255, 255, 255, 0.35);
+  --sidebar-muted:                 rgba(255, 255, 255, 0.55);
   --sidebar-primary:               #6ab88a;
   --sidebar-primary-foreground:    #071830;
   --sidebar-accent:                rgba(106, 184, 138, 0.16);
@@ -289,6 +299,15 @@
   --color-danger-foreground:       var(--danger-foreground);
   --color-info:                    var(--info);
   --color-info-foreground:         var(--info-foreground);
+
+  /* Third-party brand identities */
+  --color-social-facebook:          var(--social-facebook);
+  --color-social-twitter:           var(--social-twitter);
+  --color-social-linkedin:          var(--social-linkedin);
+  --color-social-instagram:         var(--social-instagram);
+  --color-social-youtube:           var(--social-youtube);
+  --color-oauth-apple-bg:           var(--oauth-apple-bg);
+  --color-oauth-apple-fg:           var(--oauth-apple-fg);
 
   /* Sidebar */
   --color-sidebar:                      var(--sidebar-background);
@@ -374,6 +393,11 @@
   /* Canonical brand CTA gradient — navy → navy-deep at 135° */
   .signature-gradient {
     background: linear-gradient(135deg, var(--brand-navy) 0%, var(--brand-navy-deep) 100%);
+  }
+
+  /* Three-stop navy immersion gradient for full-bleed dark marketing sections */
+  .dark-section-gradient {
+    background: linear-gradient(135deg, var(--brand-navy) 0%, var(--brand-navy-mid) 50%, var(--brand-navy-deep) 100%);
   }
 
   /* Glassmorphism surface for floating overlays (Trust Score card, modals) */

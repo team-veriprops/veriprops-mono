@@ -8,6 +8,7 @@ import { useCurrentSession } from "./libs/useAuthQueries";
 import { OAuthFlowMode, AuthIntent, SocialProvider } from "@components/website/auth/models";
 import { resolvePostAuthRedirect } from "./libs/auth/redirect";
 import { isAuthIntent, ROUTES } from "@lib/routes";
+import { cn } from "@lib/utils";
 
 interface SocialAuthButtonsProps {
   /** Hint text — "Sign in with" or "Sign up with". */
@@ -52,7 +53,7 @@ interface ProviderConfig {
   provider: SocialProvider;
   label: string;
   glyph: React.ReactNode;
-  brandStyle: React.CSSProperties;
+  brandClassName: string;
 }
 
 const PROVIDERS: ProviderConfig[] = [
@@ -60,33 +61,19 @@ const PROVIDERS: ProviderConfig[] = [
     provider: SocialProvider.GOOGLE,
     label: "Google",
     glyph: <GoogleGlyph />,
-    brandStyle: {
-      backgroundColor: "var(--brand-surface-card)",
-      color: "var(--brand-navy)",
-      border: "1px solid rgba(196,198,207,0.4)",
-      boxShadow: "0 1px 2px rgba(0,13,34,0.04)",
-    },
+    brandClassName: "bg-brand-surface-card text-brand-navy border border-brand-outline-variant/40 shadow-sm",
   },
   {
     provider: SocialProvider.APPLE,
     label: "Apple",
     glyph: <AppleGlyph />,
-    brandStyle: {
-      backgroundColor: "#000",
-      color: "#fff",
-      border: "1px solid #000",
-    },
+    brandClassName: "bg-oauth-apple-bg text-oauth-apple-fg border border-oauth-apple-bg",
   },
   {
     provider: SocialProvider.FACEBOOK,
     label: "Facebook",
     glyph: <FacebookGlyph />,
-    brandStyle: {
-      backgroundColor: "var(--brand-surface-card)",
-      color: "var(--brand-navy)",
-      border: "1px solid rgba(196,198,207,0.4)",
-      boxShadow: "0 1px 2px rgba(0,13,34,0.04)",
-    },
+    brandClassName: "bg-brand-surface-card text-brand-navy border border-brand-outline-variant/40 shadow-sm",
   },
 ];
 
@@ -151,14 +138,16 @@ export default function SocialAuthButtons({
   return (
     <div className={className}>
       <div className="grid grid-cols-1 gap-3">
-        {visible.map(({ provider, label, glyph, brandStyle }) => (
+        {visible.map(({ provider, label, glyph, brandClassName }) => (
           <button
             key={provider}
             type="button"
             onClick={() => handleClick(provider)}
             disabled={pendingProvider !== null}
-            className="group inline-flex items-center justify-center gap-2.5 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-150 disabled:opacity-60"
-            style={brandStyle}
+            className={cn(
+              "group inline-flex items-center justify-center gap-2.5 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-150 disabled:opacity-60",
+              brandClassName
+            )}
             data-testid={`oauth-${provider.toLowerCase()}`}
           >
             {glyph}
@@ -168,12 +157,11 @@ export default function SocialAuthButtons({
       </div>
 
       {popupBlockedUrl && (
-        <p className="mt-3 text-xs text-center" style={{ color: "var(--brand-on-surface-variant)" }}>
+        <p className="mt-3 text-xs text-center text-brand-on-surface-variant">
           Popups are blocked.{" "}
           <a
             href={popupBlockedUrl}
-            className="font-semibold underline"
-            style={{ color: "var(--brand-viridian)" }}
+            className="font-semibold underline text-brand-viridian"
           >
             Continue here →
           </a>
@@ -186,14 +174,13 @@ export default function SocialAuthButtons({
 export function AuthDivider({ label = "or" }: { label?: string }) {
   return (
     <div className="my-6 flex items-center gap-4" aria-hidden>
-      <span className="flex-1 h-px bg-[var(--brand-surface-high)]" />
+      <span className="flex-1 h-px bg-brand-surface-high" />
       <span
-        className="text-xs uppercase tracking-widest font-semibold"
-        style={{ color: "var(--brand-on-surface-variant)" }}
+        className="text-xs uppercase tracking-widest font-semibold text-brand-on-surface-variant"
       >
         {label}
       </span>
-      <span className="flex-1 h-px bg-[var(--brand-surface-high)]" />
+      <span className="flex-1 h-px bg-brand-surface-high" />
     </div>
   );
 }
