@@ -26,3 +26,4 @@ claude mcp add next-devtools -- npx -y next-devtools-mcp@latest
 `
 claude mcp add github -- npx -y @modelcontextprotocol/server-github
 `
+
