@@ -76,13 +76,17 @@ jobs:
         run: npm install -g vercel@latest
       - name: Deploy production
         if: github.event_name == 'push' && github.ref_name == 'master'
-        run: vercel deploy --prod --yes --cwd backend --token "$VERCEL_TOKEN"
+        run: vercel deploy --prod --yes --cwd backend --token "$VERCEL_TOKEN" --env appodus_active_env=prod
       - name: Deploy preview + stable alias
         if: github.event_name == 'workflow_dispatch' || github.ref_name == 'dev'
         env:
           ALIAS: ${{ github.event_name == 'workflow_dispatch' && vars.BACKEND_STAGING_ALIAS || vars.BACKEND_DEV_ALIAS }}
+          # Mirrors the migration step's env-file selector above — without this, the
+          # deployed function falls back to `dev_personal` (DB_SERVER=localhost),
+          # which the serverless sandbox can't reach: ECONNREFUSED on cold start.
+          ACTIVE_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
         run: |
-          url=$(vercel deploy --yes --cwd backend --token "$VERCEL_TOKEN")
+          url=$(vercel deploy --yes --cwd backend --token "$VERCEL_TOKEN" --env appodus_active_env=$ACTIVE_ENV)
           echo "deployed $url"
           if [ -n "$ALIAS" ]; then
             vercel alias set "$url" "$ALIAS" --token "$VERCEL_TOKEN"
