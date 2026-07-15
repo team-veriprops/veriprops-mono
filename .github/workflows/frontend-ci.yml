@@ -47,8 +47,11 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
-      # Reads the pinned version from package.json's packageManager field.
+      # Reads the pinned version from frontend/package.json's packageManager field
+      # (action-setup defaults to the repo-root package.json, which doesn't exist here).
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22 # matches frontend/Dockerfile
