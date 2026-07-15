@@ -53,8 +53,6 @@ class Settings(AppodusBaseSettings):
         "TERMII_API_SECRET_KEY",
         "MAILJET_API_KEY",
         "MAILJET_API_SECRET",
-        "SENDGRID_API_KEY",
-        "SENDGRID_API_SECRET",
         "TWILIO_AUTH_TOKEN",
         "ZOHO_CLIENT_SECRET",
         "ZOHO_REFRESH_TOKEN",
@@ -71,7 +69,7 @@ class Settings(AppodusBaseSettings):
     })
 
     # CORS — machine-specific LAN origins belong in a developer's local .env, never in
-    # the committed default. Add any dev host via ALLOWED_ORIGINS in .env.local.
+    # the committed default. Add any dev host via ALLOWED_ORIGINS in .env.dev_personal.
     ALLOWED_ORIGINS: Optional[str] = """
     http://localhost,
     http://localhost:3000,
@@ -185,9 +183,6 @@ class Settings(AppodusBaseSettings):
     TERMII_API: Optional[str] = 'https://v3.api.termii.com/api'
     TERMII_API_KEY: Optional[str] = SECRET_PLACEHOLDER
     TERMII_API_SECRET_KEY: Optional[str] = SECRET_PLACEHOLDER
-    # SENDGRID
-    SENDGRID_API_KEY: Optional[str] = ""
-    SENDGRID_API_SECRET: Optional[str] = ""
     # MAILJET
     MAILJET_API: Optional[str] = 'https://api.mailjet.com'
     MAILJET_API_KEY: Optional[str] = SECRET_PLACEHOLDER

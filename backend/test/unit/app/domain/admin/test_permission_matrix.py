@@ -9,7 +9,6 @@ Verifies:
 import pytest
 
 from main.app.domain.user.auth.utils.permissions import Permission, has_permission
-from main.app.domain.user.models import AdminSubRole
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

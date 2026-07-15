@@ -16,6 +16,9 @@ from main.appodus_utils import Utils
 class LogLevel(str, enum.Enum):
     DEBUG = 'DEBUG'
     INFO = 'INFO'
+    WARNING = 'WARNING'
+    ERROR = 'ERROR'
+    CRITICAL = 'CRITICAL'
 
 
 class LoggerFactory:
@@ -42,7 +45,7 @@ class LoggerFactory:
         return duplicate_filter
 
     def _init_logger(self):
-        log_level = self._log_level if self._log_level in (LogLevel.DEBUG, LogLevel.INFO) else LogLevel.INFO
+        log_level = self._log_level if self._log_level in set(LogLevel) else LogLevel.INFO
         fmt = "{time:YYYY-MM-DD HH:mm:ss} " + self._app_name + " {level}: {message}"
         duplicate_filter = self._make_duplicate_filter()
 

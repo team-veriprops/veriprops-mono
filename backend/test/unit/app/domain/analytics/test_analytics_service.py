@@ -1,7 +1,6 @@
 """AnalyticsService (§18.1, D38) — pure aggregation over mocked repo pulls."""
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 

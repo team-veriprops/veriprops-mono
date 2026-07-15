@@ -10,7 +10,7 @@ the false-positive rate can be instrumented from day one (§4.7).
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Optional
 
 from kink import inject
 

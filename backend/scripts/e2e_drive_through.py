@@ -18,11 +18,11 @@ prefixes of the default order.
 
 How to run (non-prod only — uses /dev/reset + /dev/seed):
     # 1. migrate the local DB (base→head recreates the current 0001 schema):
-    set appodus_active_env=local && alembic downgrade base && alembic upgrade head
+    set appodus_active_env=dev_personal && alembic downgrade base && alembic upgrade head
     # 2. Mailpit captures real SMTP so the email stage can assert delivery:
     docker compose up -d mailpit
     # 3. start the backend with outbound messaging ON (email → Mailpit, SMS → mock):
-    set appodus_active_env=local && set ENABLE_OUT_MESSAGING=True && python veriprops.py
+    set appodus_active_env=dev_personal && set ENABLE_OUT_MESSAGING=True && python veriprops.py
     # 4. run the full drive-through (or a prefix, e.g. --stages onboarding,agent_onboarding):
     set PYTHONIOENCODING=utf-8 && python scripts/e2e_drive_through.py
 

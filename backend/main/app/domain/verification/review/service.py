@@ -17,7 +17,7 @@ from kink import inject
 
 from main.app.core.realtime import VerificationEventType
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
-from main.app.core.state.dependencies import required_task_count, roles_for_tier
+from main.app.core.state.dependencies import required_task_count
 from main.app.core.state.derive import derive_status
 from main.app.core.state.machine import task_state_machine
 from main.app.core.state.status import (

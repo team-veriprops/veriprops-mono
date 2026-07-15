@@ -7,7 +7,7 @@ The next release bumps the report to v2.0 (revision_kind RECHECK).
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 from kink import inject
 

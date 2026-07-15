@@ -82,7 +82,6 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 #
 # # Middlewares
-# app.add_middleware(ClientAuthMiddleware)
 app.add_middleware(DBSessionMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 # CORS Configuration

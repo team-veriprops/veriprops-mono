@@ -8,7 +8,7 @@
 #   backend   :8000   FastAPI (http://localhost:8000/docs)
 #   frontend  :3000   Next.js  (http://localhost:3000)
 #
-# Backend settings come from ./backend/.env.local; the `environment:` overrides
+# Backend settings come from ./backend/.env.dev_personal; the `environment:` overrides
 # below repoint DB/SMTP/Redis at the in-network service names (the env file uses
 # `localhost` for running the backend directly on the host).
 # ==============================================================================
@@ -64,10 +64,10 @@ services:
     build: ./backend
     restart: unless-stopped
     env_file:
-      - ./backend/.env.local
+      - ./backend/.env.dev_personal
     environment:
-      appodus_active_env: local
-      # Repoint at in-network services (override the localhost values in .env.local).
+      appodus_active_env: dev_personal
+      # Repoint at in-network services (override the localhost values in .env.dev_personal).
       DB_SERVER: postgres
       DB_PORT: "5432"
       SMTP_HOST: mailpit
@@ -95,7 +95,7 @@ services:
       context: ./frontend
       args:
         # NEXT_PUBLIC_* are inlined at build time (see frontend/Dockerfile).
-        NEXT_PUBLIC_ENVIRONMENT: local
+        NEXT_PUBLIC_ENVIRONMENT: dev_personal
         NEXT_PUBLIC_APP_NAME: Veriprops
         NEXT_PUBLIC_SITE_URL: http://localhost:3000
         NEXT_PUBLIC_API_TIMEOUT: "10000"

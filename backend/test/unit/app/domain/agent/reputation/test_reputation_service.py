@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from main.app.core.state.status import AgentRole, VerificationTier
+from main.app.core.state.status import AgentRole
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.user.agent.coverage.models import AgentCoverageInputDto
 from main.app.domain.user.agent.profile.models import AvailabilityStatus

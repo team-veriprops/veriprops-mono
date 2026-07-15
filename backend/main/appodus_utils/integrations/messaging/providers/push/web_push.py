@@ -2,7 +2,7 @@ import asyncio
 import json
 from decimal import Decimal
 from logging import Logger
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from kink import inject, di
 from pywebpush import webpush, WebPushException

@@ -8,12 +8,12 @@ FastAPI service for Veriprops. Async SQLAlchemy, Alembic migrations, Kink DI, Po
 pip install -r requirements.txt
 
 # Active env selects which .env.{name} file is loaded at import time.
-# Valid names: local, test, dev, staging, prod. The committed .env.{env} files
+# Valid names: dev_personal, test, dev, staging, prod. The committed .env.{env} files
 # are CONFIG-ONLY; secrets are injected by Doppler as process env vars, which
 # override env-file values (pydantic-settings precedence).
-export appodus_active_env=local        # bash
-$env:appodus_active_env="local"        # PowerShell
-set appodus_active_env=local           # cmd
+export appodus_active_env=dev_personal        # bash
+$env:appodus_active_env="dev_personal"        # PowerShell
+set appodus_active_env=dev_personal           # cmd
 
 doppler run -- python veriprops.py     # dev server with secrets, http://localhost:8000 (docs at /docs)
 python veriprops.py                    # also works secret-less for stub-only local use
@@ -147,7 +147,7 @@ Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhoo
 - `ACTIVE_DB`, `SQLALCHEMY_DATABASE_URI` — DB selection (PostgreSQL via `asyncpg`; `settings.SupportedDB` still supports other dialects).
 - `ACTIVE_PAYMENT_METHOD` — `FLUTTERWAVE` or `PAYSTACK`.
 - `ALLOWED_ORIGINS` — comma-separated CORS origins.
-- `ENABLE_OUT_MESSAGING`, `ALLOW_AUTH_BYPASS`, `DISABLE_RATE_LIMITING` — gate side effects in non-prod.
+- `ENABLE_OUT_MESSAGING`, `DISABLE_RATE_LIMITING` — gate side effects in non-prod.
 - `GOOGLE_SERVICE_ACCOUNT_FILE` — path resolved via `get_absolute_path` (walks up out of `test/`, `main/`, or `appodus_utils/`).
 - `PHONE_VERIFICATION_ENABLED` — toggles the phone-verification step in the email/OAuth signup flow. When `false`, signup collects the number but stores `phone_verified=False`; phone is then verified at the payment step (PRD §10.5). `AuthService.signup`/`complete_profile` read it; the frontend reads it via `/config/public`.
 
@@ -164,7 +164,7 @@ Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhoo
 
 These are permanent guardrails from the secure-coding audit. Keep them intact:
 
-- **Secrets live in Doppler, never in committed files or defaults.** The `.env.{env}` files are committed but **config-only**: every key in `Settings.SECRET_ENV_KEYS` (app/config/settings.py — the canonical credential list) stays absent/empty/`CHANGE_ME` there; Doppler injects real values as process env vars, which pydantic-settings gives precedence over env files. `test/unit/app/config/test_env_hygiene.py` enforces this (key rule + provider-token pattern scan across backend and frontend env files) plus the `.env.test`/`.env.prod` contracts — a new credential setting must be added to `SECRET_ENV_KEYS`. Committed source uses the `SECRET_PLACEHOLDER` sentinel (`appodus_utils/config/settings.py`). The `AUTHJWT_SECRET_KEY` env-var name must match the settings field **exactly** (a prior `JWT_SECRET_KEY` typo silently fell back to a committed default). `_enforce_prod_secret_policy` **fails startup** in prod/staging when `AUTHJWT_SECRET_KEY`/`APPODUS_CLIENT_SECRET` is a placeholder/leaked-default or `ALLOW_AUTH_BYPASS` is true — never weaken it. JWT alg is pinned to HS256 (`AUTHJWT_ALGORITHM`/`AUTHJWT_DECODE_ALGORITHMS`); don't leave it unset.
+- **Secrets live in Doppler, never in committed files or defaults.** The `.env.{env}` files are committed but **config-only**: every key in `Settings.SECRET_ENV_KEYS` (app/config/settings.py — the canonical credential list) stays absent/empty/`CHANGE_ME` there; Doppler injects real values as process env vars, which pydantic-settings gives precedence over env files. `test/unit/app/config/test_env_hygiene.py` enforces this (key rule + provider-token pattern scan across backend and frontend env files) plus the `.env.test`/`.env.prod` contracts — a new credential setting must be added to `SECRET_ENV_KEYS`. Committed source uses the `SECRET_PLACEHOLDER` sentinel (`appodus_utils/config/settings.py`). The `AUTHJWT_SECRET_KEY` env-var name must match the settings field **exactly** (a prior `JWT_SECRET_KEY` typo silently fell back to a committed default). `_enforce_prod_secret_policy` **fails startup** in prod/staging when `AUTHJWT_SECRET_KEY` is a placeholder/leaked-default — never weaken it. JWT alg is pinned to HS256 (`AUTHJWT_ALGORITHM`/`AUTHJWT_DECODE_ALGORITHMS`); don't leave it unset.
 - **CSPRNG for all tokens.** `Utils.random_str` (alphanumeric) and random-mode OTP use `secrets`, never `uuid7`/`random`. Any new token/code/reference must go through `Utils.random_str` or `secrets` directly.
 - **No pickle for persisted data.** `KeyValueService` stores UTF-8 text and returns decoded strings (mirroring `RedisUtils.get_redis`). Never reintroduce `pickle` on DB/Redis values.
 - **`PageRequest` vs `InternalPageRequest` ([db/models.py](main/appodus_utils/db/models.py)).** `PageRequest` (client-safe: `page`/`page_size`) is the only base a wire-bound request DTO may inherit. The flexible query controls (`where`/`order_by`/`query_fields`/`exact_string_values`) live on `InternalPageRequest` and are **server-set only** — a `Search*Dto` bound from the wire must never expose them (they can filter/sort on any column). `DbUtils`/`GenericRepo` read the controls via `getattr(..., default)` so both bases work.
@@ -183,7 +183,7 @@ Provider-agnostic interfaces in [appodus_utils/integrations/](main/appodus_utils
 | Document signing | Zoho DocSign (webhook in `domain/webhook/`) |
 | File collaboration | Google Drive (service-account auth) |
 | Payments | Flutterwave, Paystack |
-| Email | SendGrid, Mailjet |
+| Email | Mailjet |
 | SMS | Twilio, Termii |
 | WhatsApp | Meta Business API |
 | Push | Firebase, Web Push |

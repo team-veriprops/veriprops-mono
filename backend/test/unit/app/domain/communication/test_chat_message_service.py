@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from main.app.core.state.status import ChatMessageState
 from main.app.domain.communication.chat_message.models import MessageKind, SenderKind
-from main.app.domain.communication.chat_message.service import HELD_NOTICE, ChatMessageService
+from main.app.domain.communication.chat_message.service import ChatMessageService
 from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
 

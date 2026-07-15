@@ -25,14 +25,14 @@ BACKEND_DIR = Path(__file__).resolve().parents[4]
 REPO_ROOT = BACKEND_DIR.parent
 
 # Committed, config-only env files (hygiene-enforced).
-BACKEND_ENV_FILES = [".env.example", ".env.local", ".env.test", ".env.dev", ".env.prod"]
+BACKEND_ENV_FILES = [".env.example", ".env.dev_personal", ".env.test", ".env.dev", ".env.prod"]
 FRONTEND_ENV_FILES = [".env", ".env.test", ".env.production"]
 
 # Deterministic seed credentials for throwaway local/test databases. These are
 # not secrets (they gate nothing outside a developer's own machine / the CI test
 # DB) but they must stay pinned so the automation contract stays deterministic.
 ALLOWED_SEED_CREDENTIALS: Dict[Tuple[str, str], str] = {
-    (".env.local", "SUPER_ADMIN_PASSWORD"): "Admin123!local",
+    (".env.dev_personal", "SUPER_ADMIN_PASSWORD"): "Admin123!dev_personal",
     (".env.test", "SUPER_ADMIN_PASSWORD"): "Admin123!test",
 }
 
@@ -149,7 +149,7 @@ class TestCommittedEnvFilesAreConfigOnly:
             value = values.get("BACKEND_SECRET_KEY", "")
             assert value in INERT_SECRET_VALUES, (
                 f"frontend/{name}: BACKEND_SECRET_KEY must stay empty/{SECRET_PLACEHOLDER} "
-                "in committed files (real value via Doppler / .env.local)."
+                "in committed files (real value via Doppler / .env.dev_personal)."
             )
 
     @pytest.mark.parametrize("path", _all_env_paths(), ids=lambda p: str(p.relative_to(REPO_ROOT)))
@@ -207,7 +207,6 @@ class TestProdEnvContract:
     def test_hardening_flags(self, env):
         assert env["SHOW_API"] == "false"
         assert env["DISABLE_RATE_LIMITING"] == "false"
-        assert env["ALLOW_AUTH_BYPASS"] == "false"
         assert env["DB_ENABLE_LOGS"] == "false"
 
     def test_stub_modes_off(self, env):

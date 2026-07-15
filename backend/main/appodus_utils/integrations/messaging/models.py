@@ -91,7 +91,6 @@ class MessageProviderName(str, Enum):
     WEB_PUSH = "WEB_PUSH"
     FIREBASE_PUSH = "FIREBASE_PUSH"
     TWILIO_SMS = "TWILIO_SMS"
-    SENDGRID_EMAIL = "SENDGRID_EMAIL"
     MAILJET = "MAILJET"
     SMTP = "SMTP"       # Dev/test email capture via Mailpit
     MOCK_SMS = "MOCK_SMS"  # Dev/test SMS suppression (no real SMS sent)
@@ -216,7 +215,7 @@ class EmailPayloadRequest(Object):
     attachments: Optional[List[Attachment]] = Field(default_factory=list)
     provider_template_id: Optional[str] = Field(
         None,
-        description="ID for template services like Mailjet/SendGrid",
+        description="ID for template services like Mailjet",
         examples=["welcome_template"]
     )
     provider_template_variables: Optional[Dict[str, str]] = Field(
@@ -769,7 +768,7 @@ class MessageRequest(Object):
     ]
     template: Optional[AvailableTemplate] = Field(
         None,
-        description="ID for template services like Mailjet/SendGrid",
+        description="ID for template services like Mailjet",
         examples=["welcome_template"]
     )
     template_variables: Optional[Dict[str, Any]] = Field(

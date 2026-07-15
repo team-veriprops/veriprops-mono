@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Optional, Tuple
+from typing import Optional
 
 from kink import inject
 

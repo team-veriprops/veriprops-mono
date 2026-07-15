@@ -45,7 +45,7 @@ class Environment(str, enum.Enum):
     STAGING = "staging"
     TEST = "test"
     DEVELOPMENT = "dev"
-    LOCAL = "local"
+    DEV_PERSONAL = "dev_personal"
 
 class TemplatingEngine(str, enum.Enum):
     JINJA2 = "jinja2"
@@ -53,7 +53,7 @@ class TemplatingEngine(str, enum.Enum):
 
 class OtpMode(str, enum.Enum):
     """OTP determinism contract. ``deterministic`` always returns ``TEST_OTP`` (required
-    in test, allowed in dev/local/staging); ``random`` generates a CSPRNG code (required
+    in test, allowed in dev/dev_personal/staging); ``random`` generates a CSPRNG code (required
     in production). Enforced by ``_enforce_otp_mode_policy``."""
 
     DETERMINISTIC = "deterministic"
@@ -85,8 +85,6 @@ _INSECURE_SECRET_VALUES = {
 # committed env file (backend and frontend).
 BASE_SECRET_ENV_KEYS: frozenset = frozenset({
     "AUTHJWT_SECRET_KEY",
-    "APPODUS_CLIENT_SECRET",
-    "APPODUS_CLIENT_SECRET_ENCRYPTION_KEY",
     "DB_PASSWORD",
     "SMTP_PASSWORD",
     "GOOGLE_CLIENT_SECRET",
@@ -121,22 +119,11 @@ class AppodusBaseSettings(BaseSettings):
     BRAND_SUPPORT_PHONE: str = ""
 
     ENVIRONMENT: Environment = Environment.DEVELOPMENT
-    ALLOW_AUTH_BYPASS: bool = False  # Optional
     ENABLE_OUT_MESSAGING: bool = False
     BASE_DIR: str = str(Path(__file__).parent.parent) # Used for accessing local files, e.g message templates
 
     APP_DOMAIN: str = "http://localhost:8000"
     SHOW_API: bool = True
-
-    # APPODUS — the services URL is environment-specific; supply it via .env.{env}
-    # (never commit a personal tunnel URL as the default).
-    APPODUS_SERVICES_URL: str = ""
-    APPODUS_CLIENT_ID: str = "b91b0ecb-7bd7-4630-91cb-af20549c8667"
-    # Real values live in the git-ignored .env.{env} files, never in committed source.
-    APPODUS_CLIENT_SECRET: str = SECRET_PLACEHOLDER
-    APPODUS_CLIENT_SECRET_ENCRYPTION_KEY: str = SECRET_PLACEHOLDER
-
-    APPODUS_CLIENT_REQUEST_EXPIRES_SECONDS: Optional[int] = 60 * 5 # 5mins
 
     # Enable / Disable Services
     DISABLE_RATE_LIMITING: bool = False
@@ -195,7 +182,7 @@ class AppodusBaseSettings(BaseSettings):
     FACEBOOK_APP_ID: Optional[str] = "mock_value"
     FACEBOOK_APP_SECRET: Optional[str] = "mock_value"
     # APPLE
-    APPLE_AUTH_BASE_URL: str = "https://accounts.google.com/o/oauth2/v2/auth"
+    APPLE_AUTH_BASE_URL: str = "https://appleid.apple.com/auth/authorize"
     APPLE_TEAM_ID: Optional[str] = "mock_value"
     APPLE_CLIENT_ID: Optional[str] = "mock_value"
     APPLE_KEY_ID: Optional[str] = "mock_value"
@@ -210,6 +197,11 @@ class AppodusBaseSettings(BaseSettings):
     # Configure application to store and get JWT from cookies
     AUTHJWT_TOKEN_LOCATION: List[str] = Field(default_factory=lambda: ["cookies"])
     # Only allow JWT cookies to be sent over https
+    # Note: access/refresh cookies use the `__Host-` prefix, which REQUIRES the Secure
+    # attribute — so AUTHJWT_COOKIE_SECURE must stay `true` even locally, or the browser
+    # silently drops the cookie and login never persists. Chrome treats http://localhost
+    # as a secure context and accepts Secure cookies there, so plain http works for dev;
+    # do not rename the cookie keys.
     AUTHJWT_COOKIE_SECURE: bool = True
     # Enable csrf double submit protection. default is True
     AUTHJWT_COOKIE_CSRF_PROTECT: bool = True
@@ -229,7 +221,6 @@ class AppodusBaseSettings(BaseSettings):
     EMAIL_FROM_NAME: str = "veriprops"
     SMS_SENDER_ID: Optional[str] = "veriprops"
     SMS_TTL: int = 25000
-    MESSAGE_TEMPLATE_DIR: str = "resources/templates"
 
     MESSAGING_HEADERS: Dict[str, str] = {}
     MESSAGING_PRIORITY: int = 2
@@ -300,18 +291,6 @@ class AppodusBaseSettings(BaseSettings):
                 "Set AUTHJWT_SECRET_KEY in the environment."
             )
 
-        if (self.APPODUS_CLIENT_SECRET or "").strip() in _INSECURE_SECRET_VALUES:
-            raise ValueError(
-                f"APPODUS_CLIENT_SECRET must be set in '{env_name}'. "
-                "Refusing to start with a placeholder value."
-            )
-
-        if self.ALLOW_AUTH_BYPASS:
-            raise ValueError(
-                f"ALLOW_AUTH_BYPASS must be false in '{env_name}'. "
-                "The client-auth bypass is only permitted in non-production environments."
-            )
-
         return self
 
     # REDIS
@@ -338,7 +317,7 @@ class AppodusBaseSettings(BaseSettings):
     DB_ENABLE_LOGS: Optional[bool] = False
     DB_ENABLE_LOG_POOL: Optional[bool] = True
     DB_MAIN_THREAD_CONTEXT_ID: int = 12345
-    DEPLOYMENT_IS_SERVERLESS: Optional[bool] = True
+    DEPLOYMENT_IS_SERVERLESS: Optional[bool] = False
 
     @field_validator("SQLALCHEMY_DATABASE_URI", mode="before")
     @classmethod
@@ -365,7 +344,7 @@ class AppodusBaseSettings(BaseSettings):
             return db_url
 
     model_config = SettingsConfigDict(
-        env_file=get_absolute_path(f'.env.{os.getenv("appodus_active_env", "local")}'),
+        env_file=get_absolute_path(f'.env.{os.getenv("appodus_active_env", "dev_personal")}'),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

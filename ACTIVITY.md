@@ -91,7 +91,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[>]` deferred (out of 
 - [x] 11.8 Seed first Super Admin via `DataSeeder._seed_super_admin` (uses `SUPER_ADMIN_PASSWORD` env)
 
 ## 12. Real transports & external integrations
-- [x] 12.1 Email OTP via SendGrid (`OtpDeliveryService._send_email`) with dev-mode log fallback
+- [x] 12.1 Email OTP delivery (`OtpDeliveryService._send_email`) with dev-mode log fallback
 - [x] 12.2 SMS OTP via Termii (`OtpDeliveryService._send_sms`) with dev-mode log fallback
 - [x] 12.3 Real Google OAuth — `/users/auth/oauth/google/{start,callback}` with KV-stored state
 

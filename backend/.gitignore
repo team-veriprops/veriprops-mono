@@ -134,7 +134,7 @@ celerybeat.pid
 # test/unit/app/config/test_env_hygiene.py). Backups/overrides stay ignored.
 .env*
 !.env.example
-!.env.local
+!.env.dev_personal
 !.env.test
 !.env.dev
 !.env.prod

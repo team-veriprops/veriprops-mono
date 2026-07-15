@@ -228,7 +228,7 @@ class Utils:
 
     @staticmethod
     def datetime_now_diff_in_sec(start_datetime: datetime):
-        if not datetime:
+        if not start_datetime:
             return 0
 
         if isinstance(start_datetime, str):

@@ -15,7 +15,7 @@
 ## Environment Contract
 
 ```
-NEXT_PUBLIC_ENVIRONMENT=local        → isAutomationEnvironment() = true
+NEXT_PUBLIC_ENVIRONMENT=dev_personal → isAutomationEnvironment() = true
 NEXT_PUBLIC_ENVIRONMENT=development  → isAutomationEnvironment() = true
 NEXT_PUBLIC_ENVIRONMENT=test         → isAutomationEnvironment() = true
 NEXT_PUBLIC_ENVIRONMENT=staging      → isAutomationEnvironment() = false

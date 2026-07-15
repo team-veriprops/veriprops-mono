@@ -14,7 +14,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 from main.app.config.settings import settings
 from main.appodus_utils.integrations.document_sign.interface import IDocumentSignProvider
-from main.appodus_utils.integrations.document_sign.models import Signer, SignActionType
+from main.appodus_utils.integrations.document_sign.models import Signer
 
 logger: Logger = di['logger']
 
@@ -65,7 +65,7 @@ class ZohoDocumentSignProvider(IDocumentSignProvider):
         }
 
         if file_path:
-            data = {
+            form_data = {
                 "data": json.dumps(data)
             }
             with open(file_path, "rb") as file:
@@ -74,7 +74,7 @@ class ZohoDocumentSignProvider(IDocumentSignProvider):
                     "POST",
                     endpoint,
                     files=files,
-                    data=data,
+                    data=form_data,
                     headers=headers
                 )
         elif file_url:

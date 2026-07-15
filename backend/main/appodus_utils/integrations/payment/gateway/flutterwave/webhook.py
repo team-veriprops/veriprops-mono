@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from loguru import Logger
 import hashlib
 import hmac
-from decimal import Decimal
 from typing import Dict, Optional
 
 from fastapi import HTTPException

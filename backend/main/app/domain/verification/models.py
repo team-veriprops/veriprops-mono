@@ -8,7 +8,7 @@ price lock, the consent snapshot, and the SLA due date. The resumable wizard sta
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Optional
 
 from sqlalchemy import BigInteger, Boolean, Column, Date, Float, Integer, String, Text
 

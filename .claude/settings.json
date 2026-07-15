@@ -21,7 +21,7 @@
       "Bash(mkdir -p *)",
       "Bash(Get-ChildItem *)",
       "Bash(git stash *)",
-      "Bash(export appodus_active_env=local)",
+      "Bash(export appodus_active_env=dev_personal)",
       "Bash(export appodus_active_env=test)",
       "PowerShell(Get-ChildItem *)",
       "PowerShell(New-Item -ItemType Directory *)",

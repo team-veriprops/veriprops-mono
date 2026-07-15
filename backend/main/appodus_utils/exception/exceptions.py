@@ -1,6 +1,5 @@
-from typing import Optional, TypedDict, Any
+from typing import Optional, TypedDict
 from fastapi import status
-from starlette.responses import Response
 
 
 class ExceptionContext(TypedDict, total=False):

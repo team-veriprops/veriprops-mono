@@ -41,7 +41,7 @@ from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.common.rate_limit import RateLimiter
 from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.db.types.phone import PhoneNumber
-from main.appodus_utils.integrations.messaging.models import MessageRequestRecipient, EmailRecipient, MessageContext
+from main.appodus_utils.integrations.messaging.models import MessageRequestRecipient, MessageContext
 
 auth_service: AuthService = di[AuthService]
 # consent_service: ConsentService = di[ConsentService]

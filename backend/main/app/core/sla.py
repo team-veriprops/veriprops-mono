@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import enum
 from datetime import date, datetime, timedelta
-from typing import Dict, Iterable, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union
 
 from main.app.core.state.status import VerificationStatus, VerificationTier
 

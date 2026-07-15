@@ -1,5 +1,5 @@
 import enum
-from typing import Literal, Optional
+from typing import Optional
 
 from main.appodus_utils import Object
 from main.appodus_utils.db.types.money import TransactionCurrency

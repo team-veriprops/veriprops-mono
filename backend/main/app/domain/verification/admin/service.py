@@ -9,7 +9,7 @@ is audit-logged.
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import List, Optional
+from typing import Optional
 
 from kink import inject
 
