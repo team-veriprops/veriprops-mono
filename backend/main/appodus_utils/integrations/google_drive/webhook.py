@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from loguru import Logger
 import hashlib
 import hmac
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import HTTPException
 from kink import di, inject
@@ -64,8 +64,9 @@ class GoogleWebhookHandler(BaseWebhookHandler):
         # Compare securely
         return hmac.compare_digest(received_signature, expected_signature)
 
-    async def _process_handle_redirect_payload(self, payload: QueryParams, headers: Dict, response: Response) -> Dict:
-        pass
+    async def _process_handle_redirect_payload(self, payload: QueryParams, headers: Dict, response: Response) -> Optional[Dict]:
+        # Google Drive push notifications have no redirect leg — nothing to process.
+        return None
 
     async def _process_verify_webhook_payload(self, payload: QueryParams):
         """Handle webhook verification challenge"""

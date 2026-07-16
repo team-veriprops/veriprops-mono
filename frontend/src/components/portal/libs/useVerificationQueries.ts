@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { DEFAULT_HISTORY_PAGE_SIZE, REFETCH_INTERVAL_MS, LONG_STALE_TIME_MS } from "@lib/config/app";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
 import { useVerificationStream } from "@lib/useVerificationStream";
@@ -30,7 +31,7 @@ export const verificationKeys = {
 export function useVerificationActivityQuery(id: string, page = 0) {
   return useQuery({
     queryKey: verificationKeys.activity(id, page),
-    queryFn: async () => (await service.getActivity(id, page, 20)).data ?? null,
+    queryFn: async () => (await service.getActivity(id, page, DEFAULT_HISTORY_PAGE_SIZE)).data ?? null,
   });
 }
 
@@ -83,7 +84,7 @@ export function useVerificationTracking(id: string | null, enabled = true) {
     queryKey: verificationKeys.tracking(id ?? "none"),
     enabled: !!id && enabled,
     queryFn: async () => (await service.getTracking(id as string)).data ?? null,
-    refetchInterval: 60_000, // polling fallback — shares the snapshot shape
+    refetchInterval: REFETCH_INTERVAL_MS, // polling fallback — shares the snapshot shape
   });
 
   const onEvent = useCallback(() => {
@@ -107,7 +108,7 @@ export function useQuoteQuery(tier: VerificationTier, currency: TransactionCurre
     queryKey: verificationKeys.quote(tier, currency),
     enabled,
     queryFn: async () => (await service.quote(tier, currency)).data ?? null,
-    staleTime: 5 * 60_000,
+    staleTime: LONG_STALE_TIME_MS,
   });
 }
 
@@ -163,7 +164,7 @@ export function useVerificationTermsQuery() {
       );
       return res.data ?? null;
     },
-    staleTime: 5 * 60_000,
+    staleTime: LONG_STALE_TIME_MS,
   });
 }
 

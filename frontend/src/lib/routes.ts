@@ -51,10 +51,13 @@ export const ROUTES = {
     VERIFICATION_MESSAGES: (vid: string) => `/admin/verifications/${vid}/messages`,
     HELD_MESSAGES: '/admin/messages',
     REPORT_REVIEW: (vid: string) => `/admin/verifications/${vid}/report-review`,
+    // TODO(gap): route declared, page not built — PRD "Known Gaps & Roadmap".
     TASK_REVIEW: (taskId: string) => `/admin/tasks/${taskId}/review`,
     CONFIG: '/admin/config',
     TRUST_SCORE_WEIGHTS: '/admin/config/trust-score-weights',
     SYSTEM_CONFIG: '/admin/config/system',
+    // TODO(gap): routes declared, pages not built (dispute detail, fraud flags) —
+    // PRD "Known Gaps & Roadmap".
     DISPUTE_DETAIL: (id: string) => `/admin/disputes/${id}`,
     FRAUD_FLAGS: '/admin/fraud-flags',
     DISPUTES: '/admin/disputes',
@@ -64,9 +67,12 @@ export const ROUTES = {
     ANALYTICS: '/admin/analytics',
     PRICING: '/admin/pricing',
     FINANCE: '/admin/finance',
+    // TODO(gap): finance payments/commissions sub-pages not built — PRD "Known Gaps & Roadmap".
     FINANCE_PAYMENTS: '/admin/finance/payments',
     FINANCE_PAYOUTS: '/admin/finance/payouts',
     FINANCE_COMMISSIONS: '/admin/finance/commissions',
+    // TODO(gap): admin content CMS pages not built (pairs with the CONTENT_CREATOR/
+    // CONTENT_APPROVER sub-roles) — PRD "Known Gaps & Roadmap".
     CONTENT: '/admin/content',
     CONTENT_HOW_IT_WORKS: '/admin/content/how-it-works',
     CONTENT_FAQS: '/admin/content/faqs',
@@ -75,6 +81,7 @@ export const ROUTES = {
     CONTENT_AREA_INSIGHTS: '/admin/content/area-insights',
     BROADCASTS: '/admin/broadcasts',
     BROADCAST_NEW: '/admin/broadcasts/new',
+    // TODO(gap): route declared, page not built — PRD "Known Gaps & Roadmap".
     BROADCAST_DETAIL: (id: string) => `/admin/broadcasts/${id}`,
     AUDIT_ACTIONS: '/admin/audit/actions',
     VERIFICATION_AUDIT_EXPORT: (vid: string) => `/api/admin/audit/verifications/${vid}/export`,
@@ -100,6 +107,7 @@ export const ROUTES = {
     REFERRALS: '/portal/referrals',
     VERIFICATIONS: '/portal/verifications',
     NOTIFICATIONS: '/portal/notifications',
+    // TODO(gap): route declared, page not built — PRD "Known Gaps & Roadmap".
     PAYMENTS: '/portal/account/payments',
     SUPPORT: '/portal/support',
     CHAT: '/portal/chat',
@@ -122,6 +130,8 @@ export const ROUTES = {
 
   ABOUT: '/about',
   SAMPLE_REPORT: '/sample-report',
+  // TODO(gap): legacy PROJECTS/SETTINGS blocks — no pages; remove or build —
+  // PRD "Known Gaps & Roadmap".
   PROJECTS: {
     ROOT: '/projects',
     DETAIL: (id: string | number) => `/projects/${id}`,

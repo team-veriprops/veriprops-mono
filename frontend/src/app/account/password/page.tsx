@@ -36,10 +36,10 @@ export default function AccountPasswordPage() {
   return (
     <div className="max-w-xl mx-auto px-4 md:px-8 py-8" data-testid="account-password">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "var(--brand-navy)" }}>
+        <h1 className="text-2xl font-bold text-brand-navy">
           Password
         </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--brand-on-surface-variant)" }}>
+        <p className="text-sm mt-1 text-brand-on-surface-variant">
           Set or change your password. A password lets you sign in even if a linked social
           provider is unavailable.
         </p>
@@ -52,7 +52,7 @@ export default function AccountPasswordPage() {
         data-testid="account-password-form"
       >
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <label className="text-sm font-semibold text-brand-navy">
             New password
           </label>
           <div className="relative">
@@ -66,14 +66,13 @@ export default function AccountPasswordPage() {
               type="button"
               onClick={() => setShowPassword((s) => !s)}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-3 top-1/2 -translate-y-1/2"
-              style={{ color: "var(--brand-on-surface-variant)" }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-on-surface-variant"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
           {form.formState.errors.password && (
-            <p className="text-xs" style={{ color: "var(--brand-destructive, #ba1a1a)" }}>
+            <p className="text-xs text-danger">
               {form.formState.errors.password.message}
             </p>
           )}
@@ -81,7 +80,7 @@ export default function AccountPasswordPage() {
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <label className="text-sm font-semibold text-brand-navy">
             Confirm password
           </label>
           <Input
@@ -91,7 +90,7 @@ export default function AccountPasswordPage() {
             {...form.register("confirmPassword")}
           />
           {form.formState.errors.confirmPassword && (
-            <p className="text-xs" style={{ color: "var(--brand-destructive, #ba1a1a)" }}>
+            <p className="text-xs text-danger">
               {form.formState.errors.confirmPassword.message}
             </p>
           )}

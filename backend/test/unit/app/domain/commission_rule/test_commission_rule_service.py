@@ -1,12 +1,12 @@
-"""CommissionRuleService — default rates reproduce the prior flat model + kobo-exact
-commission math (§15.1 / D30). Repos mocked, no DB."""
+"""CommissionRuleService — kobo-exact commission math (§15.1 / D30). Repos mocked,
+no DB. Default-rate seeding is done by migration 0001 and guarded by
+test_migration_seed_parity.py."""
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from main.app.config.settings import settings
 from main.app.core.state.status import AgentRole, VerificationTier
 from main.app.domain.commission_rule.service import CommissionRuleService
 from main.appodus_utils.db.session import db_session_ctx
@@ -40,15 +40,6 @@ def _make_service(rules_by_key=None):
 
     svc._rule_repo.get_for_role_tier = AsyncMock(side_effect=_get)
     return svc
-
-
-class TestDefaultRate:
-    def test_default_rate_reproduces_flat_model(self):
-        # weight_percent/100 × AGENT_COMMISSION_SHARE, in basis points.
-        share = settings.AGENT_COMMISSION_SHARE
-        assert CommissionRuleService._default_rate_bps(100) == round(100 * 100 * share)
-        assert CommissionRuleService._default_rate_bps(40) == round(40 * 100 * share)
-        assert CommissionRuleService._default_rate_bps(0) == 0
 
 
 class TestCommissionMinor:

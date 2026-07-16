@@ -82,6 +82,8 @@ def _service(*, verification=None, report=True, share=None, property_=None):
     svc._properties = MagicMock()
     svc._messages = MagicMock()
     svc._audit = MagicMock()
+    svc._config = AsyncMock()
+    svc._config.get_int = AsyncMock(return_value=30)  # SHARE_LINK_DEFAULT_EXPIRY_DAYS default
 
     v = verification if verification is not None else _verification()
     svc._verification_repo.get_by_vid = AsyncMock(return_value=v)

@@ -1,8 +1,6 @@
 from typing import Type
 
 from kink import inject
-from more_itertools.more import first
-from sqlalchemy import and_, literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.db.repo import GenericRepo

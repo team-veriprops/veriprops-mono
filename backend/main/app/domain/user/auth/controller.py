@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, Request
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
+from main.app.config.settings import settings
 from main.app.domain.user.auth.models import (
     ForgotPasswordDto,
     OtpSendDto,
@@ -40,7 +41,7 @@ from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.common.rate_limit import RateLimiter
 from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.db.types.phone import PhoneNumber
-from main.appodus_utils.integrations.messaging.models import MessageRequestRecipient, EmailRecipient, MessageContext
+from main.appodus_utils.integrations.messaging.models import MessageRequestRecipient, MessageContext
 
 auth_service: AuthService = di[AuthService]
 # consent_service: ConsentService = di[ConsentService]
@@ -209,6 +210,7 @@ async def forgot_password(req: ForgotPasswordDto, request: Request, _: None = De
             domain = ClientUtils.get_referer_domain(request)
             link = f"{domain}/auth/reset-password/{raw_token}"
             firstname, _, lastname = Utils.parse_fullname(fullname)
+            reset_ttl_minutes = settings.PASSWORD_RESET_TTL_SECONDS // 60
 
             await account_security_messages.send_direct_password_reset_request_message(
                 recipient=MessageRequestRecipient(
@@ -220,8 +222,10 @@ async def forgot_password(req: ForgotPasswordDto, request: Request, _: None = De
                     MessageContext.FIRST_NAME: firstname,
                     MessageContext.LAST_NAME: lastname,
                     MessageContext.LINK: link,
-                    MessageContext.VALIDITY: "1 hour",
-                }
+                    MessageContext.VALIDITY: f"{reset_ttl_minutes} minutes",
+                },
+                # The link dies with the token — don't retry delivery past it.
+                expires_at=Utils.datetime_now_plus(seconds=settings.PASSWORD_RESET_TTL_SECONDS)
             )
         except Exception as e:
             logger.warning("Could not send password reset email: {}", e, exc_info=True)

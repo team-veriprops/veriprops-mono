@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck } from "lucide-react";
 import { ROUTES } from "@lib/routes";
+import { cn } from "@lib/utils";
 import {
   useMarkAllReadMutation,
   useMarkNotificationReadMutation,
@@ -45,15 +46,16 @@ export default function NotificationBell({ dark = false }: { dark?: boolean }) {
         aria-label="Notifications"
         data-testid="notification-bell"
         onClick={() => setOpen((o) => !o)}
-        className="relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 hover:bg-black/5"
-        style={{ color: dark ? "rgba(255,255,255,0.8)" : "var(--brand-on-surface-variant)" }}
+        className={cn(
+          "relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 hover:bg-black/5",
+          dark ? "text-white/80" : "text-brand-on-surface-variant"
+        )}
       >
         <Bell className="w-5 h-5" aria-hidden="true" />
         {count > 0 && (
           <span
             data-testid="notification-unread-badge"
-            className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
-            style={{ backgroundColor: "#dc2626" }}
+            className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center bg-red-600"
           >
             {count > 9 ? "9+" : count}
           </span>
@@ -66,7 +68,7 @@ export default function NotificationBell({ dark = false }: { dark?: boolean }) {
           data-testid="notification-dropdown"
         >
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-black/5">
-            <span className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+            <span className="text-sm font-semibold text-brand-navy">
               Notifications
             </span>
             {count > 0 && (
@@ -91,10 +93,12 @@ export default function NotificationBell({ dark = false }: { dark?: boolean }) {
                     setOpen(false);
                     if (n.link) router.push(n.link);
                   }}
-                  className="w-full text-left px-4 py-2.5 hover:bg-black/[0.02] border-b border-black/5 last:border-0"
-                  style={{ backgroundColor: n.read ? undefined : "rgba(63,102,83,0.04)" }}
+                  className={cn(
+                    "w-full text-left px-4 py-2.5 hover:bg-black/2 border-b border-black/5 last:border-0",
+                    !n.read && "bg-brand-viridian/4"
+                  )}
                 >
-                  <p className="text-sm font-medium" style={{ color: "var(--brand-navy)" }}>
+                  <p className="text-sm font-medium text-brand-navy">
                     {n.title}
                   </p>
                   {n.body && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>}
@@ -106,8 +110,7 @@ export default function NotificationBell({ dark = false }: { dark?: boolean }) {
           <Link
             href={ROUTES.PORTAL.NOTIFICATIONS}
             onClick={() => setOpen(false)}
-            className="block text-center text-sm py-2.5 border-t border-black/5 hover:bg-black/[0.02]"
-            style={{ color: "var(--brand-viridian)" }}
+            className="block text-center text-sm py-2.5 border-t border-black/5 hover:bg-black/2 text-brand-viridian"
           >
             View all
           </Link>

@@ -3,12 +3,11 @@ from io import BytesIO
 from typing import Type, List
 
 from main.appodus_utils import BaseEntity
-from main.appodus_utils.db.session import create_new_db_session, AsyncSessionLocal
+from main.appodus_utils.db.session import create_new_db_session
 from fastapi import UploadFile
 from httpx import AsyncClient, ASGITransport
-from sqlalchemy import text, delete
+from sqlalchemy import delete
 from starlette.datastructures import UploadFile as StarletteUploadFile, Headers
-from starlette.testclient import TestClient
 
 from veriprops import app
 

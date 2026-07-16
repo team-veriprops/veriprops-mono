@@ -49,18 +49,16 @@ export default function SampleReportContent() {
         {/* Heading */}
         <div className="text-center mb-12">
           <p
-            className="text-xs font-bold uppercase tracking-widest mb-3"
-            style={{ color: "var(--brand-viridian)" }}
+            className="text-xs font-bold uppercase tracking-widest mb-3 text-brand-viridian"
           >
             Sample Certified Report
           </p>
           <h1
-            className="editorial-spacing text-3xl md:text-4xl font-bold"
-            style={{ color: "var(--brand-navy)", fontFamily: "var(--font-display)" }}
+            className="editorial-spacing text-3xl md:text-4xl font-bold font-display text-brand-navy"
           >
             See exactly what you receive
           </h1>
-          <p className="mt-4 text-sm md:text-base" style={{ color: "var(--brand-on-surface-variant)" }}>
+          <p className="mt-4 text-sm md:text-base text-brand-on-surface-variant">
             A representative, redacted example. Every real report carries a Trust Score,
             a public Verification ID, and a legal footer on every page.
           </p>
@@ -68,8 +66,7 @@ export default function SampleReportContent() {
 
         {/* Report card */}
         <div
-          className="rounded-2xl overflow-hidden"
-          style={{ backgroundColor: "var(--brand-surface-card)", boxShadow: "0 12px 40px -12px rgba(0,13,34,0.18)" }}
+          className="rounded-2xl overflow-hidden bg-brand-surface-card shadow-[0_12px_40px_-12px_rgba(0,13,34,0.18)]"
         >
           {/* Report header */}
           <div className="signature-gradient text-white px-8 py-7 flex flex-wrap items-center justify-between gap-4">
@@ -84,28 +81,27 @@ export default function SampleReportContent() {
           </div>
 
           {/* Redacted property line */}
-          <div className="px-8 py-5 flex items-center gap-2 text-sm" style={{ color: "var(--brand-on-surface-variant)", borderBottom: "1px solid rgba(196,198,207,0.25)" }}>
+          <div className="px-8 py-5 flex items-center gap-2 text-sm text-brand-on-surface-variant border-b border-brand-outline-variant/25">
             <Lock className="w-4 h-4" aria-hidden="true" />
             Property: Plot 1▮, ▮▮▮▮▮ Crescent, Lekki Phase 1, Lagos
             <span className="ml-1 text-xs italic">(redacted in sample)</span>
           </div>
 
           {/* Sections */}
-          <div className="divide-y" style={{ borderColor: "rgba(196,198,207,0.25)" }}>
+          <div className="divide-y border-brand-outline-variant/25">
             {sections.map(({ icon: Icon, title, findings }) => (
               <div key={title} className="px-8 py-6">
                 <div className="flex items-center gap-3 mb-3">
                   <span
-                    className="w-9 h-9 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: "var(--brand-viridian-xlight)", color: "var(--brand-viridian)" }}
+                    className="w-9 h-9 rounded-lg flex items-center justify-center bg-brand-viridian-xlight text-brand-viridian"
                   >
                     <Icon className="w-5 h-5" aria-hidden="true" />
                   </span>
-                  <h2 className="text-base font-bold" style={{ color: "var(--brand-navy)" }}>
+                  <h2 className="text-base font-bold text-brand-navy">
                     {title}
                   </h2>
                 </div>
-                <ul className="list-disc pl-5 space-y-1.5 text-sm leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
+                <ul className="list-disc pl-5 space-y-1.5 text-sm leading-relaxed text-brand-on-surface-variant">
                   {findings.map((f) => (
                     <li key={f}>{f}</li>
                   ))}
@@ -115,7 +111,7 @@ export default function SampleReportContent() {
           </div>
 
           {/* Legal footer */}
-          <p className="px-8 py-5 text-xs italic" style={{ backgroundColor: "var(--brand-surface-low)", color: "rgba(68,71,78,0.7)" }}>
+          <p className="px-8 py-5 text-xs italic bg-brand-surface-low text-brand-on-surface-variant/70">
             This report represents a professional opinion, not a legal guarantee. Findings are
             based on information available at the time of verification. Veriprops — Jurisdiction:
             Nigeria. &ldquo;We reduce uncertainty. We do not eliminate it.&rdquo;

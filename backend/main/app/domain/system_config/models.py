@@ -35,9 +35,15 @@ class ConfigKey(str, enum.Enum):
     # §19 audit & compliance maturity (S23)
     PII_RETENTION_DAYS = "pii_retention_days"                    # PII retention before the NDPA erasure window (§19.2)
     ERASURE_REQUEST_REVIEW_SLA_DAYS = "erasure_request_review_sla_days"  # SLA to review a data-erasure request (§19.1)
+    # Operational SLA / product knobs (admin-tunable without a redeploy)
+    SLA_AT_RISK_DAYS = "sla_at_risk_days"                        # dashboard horizon: active verifications due within N days count as at-risk (§18.1)
+    PAYOUT_SLA_BUSINESS_DAYS = "payout_sla_business_days"        # target business days to settle an approved payout
+    DISPUTE_MIN_DESCRIPTION_CHARS = "dispute_min_description_chars"  # minimum characters required to file a dispute
+    SHARE_LINK_DEFAULT_EXPIRY_DAYS = "share_link_default_expiry_days"  # default lifetime of a report share link
+    ANALYTICS_TREND_MONTHS = "analytics_trend_months"           # trailing months included in analytics trend series
 
 
-# Seeded defaults (idempotent, via DataSeeder). Values are stored as JSON scalars.
+# Seeded defaults (idempotent, by migration 0001). Values are stored as JSON scalars.
 CONFIG_DEFAULTS: dict[ConfigKey, Any] = {
     ConfigKey.DISPUTE_WINDOW_DAYS: 30,
     ConfigKey.RECHECK_PRICE_PCT: 30,
@@ -55,6 +61,11 @@ CONFIG_DEFAULTS: dict[ConfigKey, Any] = {
     ConfigKey.CANCELLATION_SURCHARGE_PCT: 20,
     ConfigKey.PII_RETENTION_DAYS: 2555,  # ≈ 7 years
     ConfigKey.ERASURE_REQUEST_REVIEW_SLA_DAYS: 30,
+    ConfigKey.SLA_AT_RISK_DAYS: 2,
+    ConfigKey.PAYOUT_SLA_BUSINESS_DAYS: 2,
+    ConfigKey.DISPUTE_MIN_DESCRIPTION_CHARS: 100,
+    ConfigKey.SHARE_LINK_DEFAULT_EXPIRY_DAYS: 30,
+    ConfigKey.ANALYTICS_TREND_MONTHS: 6,
 }
 
 CONFIG_DESCRIPTIONS: dict[ConfigKey, str] = {
@@ -74,6 +85,11 @@ CONFIG_DESCRIPTIONS: dict[ConfigKey, str] = {
     ConfigKey.CANCELLATION_SURCHARGE_PCT: "Surcharge percentage applied when a verification is cancelled after assignment.",
     ConfigKey.PII_RETENTION_DAYS: "Days personal data is retained before it is eligible for NDPA erasure (pseudonymisation).",
     ConfigKey.ERASURE_REQUEST_REVIEW_SLA_DAYS: "Target days for an admin to review a submitted data-erasure request.",
+    ConfigKey.SLA_AT_RISK_DAYS: "Active verifications due within this many days are flagged as SLA-at-risk on the admin dashboard.",
+    ConfigKey.PAYOUT_SLA_BUSINESS_DAYS: "Target number of business days to settle an approved agent payout.",
+    ConfigKey.DISPUTE_MIN_DESCRIPTION_CHARS: "Minimum characters a customer must provide when filing a dispute.",
+    ConfigKey.SHARE_LINK_DEFAULT_EXPIRY_DAYS: "Default number of days a report share link stays valid before expiring.",
+    ConfigKey.ANALYTICS_TREND_MONTHS: "Number of trailing months included in analytics trend series.",
 }
 
 

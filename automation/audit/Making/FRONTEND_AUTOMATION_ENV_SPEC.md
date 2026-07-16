@@ -6,7 +6,7 @@ Set in `.env.local` / `.env.test` / CI environment variables. Consumed at build 
 
 | Value | isAutomationEnvironment() | Use case |
 |-------|--------------------------|----------|
-| `local` | `true` | Local developer machine |
+| `dev_personal` | `true` | Local developer machine |
 | `development` | `true` | Shared dev server |
 | `test` | `true` | CI / Playwright runs |
 | `staging` | `false` | Pre-production staging |
@@ -63,7 +63,7 @@ Any future automation-only browser hook must also use `isAutomationEnvironment()
 
 ```bash
 # .env.local
-NEXT_PUBLIC_ENVIRONMENT=local
+NEXT_PUBLIC_ENVIRONMENT=dev_personal
 
 # .env.test (CI)
 NEXT_PUBLIC_ENVIRONMENT=test

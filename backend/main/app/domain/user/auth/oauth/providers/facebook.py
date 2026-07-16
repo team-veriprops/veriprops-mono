@@ -3,6 +3,7 @@ from typing import Optional
 from httpx import AsyncClient
 from kink import di, inject
 
+from main.app.config.settings import settings
 from main.app.domain.user.auth.models import AuthIntent
 from main.app.domain.user.auth.oauth.interface import ISocialAuthProvider
 from main.app.domain.user.auth.oauth.providers.models import (
@@ -25,9 +26,9 @@ httpx_client: AsyncClient = di[AsyncClient]
 @decorate_all_methods(method_trace_logger)
 class FacebookAuthProvider(ISocialAuthProvider):
     def __init__(self):
-        self._client_id = Utils.get_from_env_fail_if_not_exists("FACEBOOK_APP_ID")
-        self._client_secret = Utils.get_from_env_fail_if_not_exists("FACEBOOK_APP_SECRET")
-        self._auth_base_url = Utils.get_from_env_fail_if_not_exists("FACEBOOK_AUTH_BASE_URL")
+        self._client_id = settings.FACEBOOK_APP_ID
+        self._client_secret = settings.FACEBOOK_APP_SECRET
+        self._auth_base_url = settings.FACEBOOK_AUTH_BASE_URL
 
     @property
     def platform(self):

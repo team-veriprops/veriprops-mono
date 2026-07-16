@@ -54,7 +54,7 @@ export default function SetPasswordContainer() {
 
       <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="set-password-form">
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <label className="text-sm font-semibold text-brand-navy">
             New password
           </label>
           <div className="relative">
@@ -71,25 +71,25 @@ export default function SetPasswordContainer() {
               onClick={() => setShowPassword((v) => !v)}
               tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-[var(--brand-surface-low)]"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-brand-surface-low"
             >
               {showPassword ? (
-                <EyeOff className="w-4 h-4" style={{ color: "var(--brand-on-surface-variant)" }} />
+                <EyeOff className="w-4 h-4 text-brand-on-surface-variant" />
               ) : (
-                <Eye className="w-4 h-4" style={{ color: "var(--brand-on-surface-variant)" }} />
+                <Eye className="w-4 h-4 text-brand-on-surface-variant" />
               )}
             </button>
           </div>
           <PasswordStrengthMeter password={password ?? ""} className="mt-2" />
           {form.formState.errors.password && (
-            <p className="text-xs" style={{ color: "var(--danger)" }}>
+            <p className="text-xs text-danger">
               {form.formState.errors.password.message}
             </p>
           )}
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <label className="text-sm font-semibold text-brand-navy">
             Confirm new password
           </label>
           <Input
@@ -100,7 +100,7 @@ export default function SetPasswordContainer() {
             {...form.register("confirmPassword")}
           />
           {form.formState.errors.confirmPassword && (
-            <p className="text-xs" style={{ color: "var(--danger)" }}>
+            <p className="text-xs text-danger">
               {form.formState.errors.confirmPassword.message}
             </p>
           )}
@@ -108,12 +108,7 @@ export default function SetPasswordContainer() {
 
         {errorMessage && (
           <div
-            className="p-3 rounded-lg text-sm flex items-start gap-2"
-            style={{
-              backgroundColor: "rgba(186,26,26,0.06)",
-              color: "var(--danger)",
-              border: "1px solid rgba(186,26,26,0.18)",
-            }}
+            className="p-3 rounded-lg text-sm flex items-start gap-2 bg-danger/6 text-danger border border-danger/18"
           >
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             {errorMessage}

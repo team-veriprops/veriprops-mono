@@ -5,7 +5,7 @@ import enum
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, Index, String, Text, UniqueConstraint
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 

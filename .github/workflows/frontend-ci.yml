@@ -1,0 +1,74 @@
+# Frontend quality gates: eslint, tsc, vitest, next build.
+#
+# Runs directly on PRs; pushes to dev/master run it through deploy.yml (workflow_call),
+# so there is deliberately no `push:` trigger here — adding one would double-run CI.
+#
+# Branch protection should require only the `summary` job (see backend-ci.yml for why).
+name: Frontend CI
+
+on:
+  pull_request:
+    branches: [master, dev]
+  workflow_call:
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/frontend-ci.yml'
+
+  ci:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      # next.config.ts reads these through src/lib/config/server.ts at build time;
+      # real values are Doppler-managed on Vercel — CI only needs them present.
+      API_BASE_URL: http://localhost:8000
+      BACKEND_SECRET_KEY: ci-build-placeholder
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      # Reads the pinned version from frontend/package.json's packageManager field
+      # (action-setup defaults to the repo-root package.json, which doesn't exist here).
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # matches frontend/Dockerfile
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm test
+      - run: pnpm build
+
+  summary:
+    if: always()
+    needs: [changes, ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any needed job failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

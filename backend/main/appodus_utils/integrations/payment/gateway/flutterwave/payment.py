@@ -79,6 +79,8 @@ class FlutterwavePaymentGateway(IPaymentGateway):
 
         response.raise_for_status()
         response_data = GenericPaymentGatewayResponse(**response.json())
+        if response_data.data is None:
+            raise ValueError("Flutterwave /payments response carried no data payload")
         return response_data.data["link"]
 
     async def verify_payment(self, reference: str) -> GenericPaymentGatewayResponse:

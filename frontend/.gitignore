@@ -30,8 +30,15 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — committed ones are CONFIG-ONLY (no secrets; enforced by
+# backend/test/unit/app/config/test_env_hygiene.py). `.env.local` stays
+# git-ignored for personal overrides + the proxy secret.
 .env*
+!.env
+!.env.test
+!.env.dev
+!.env.staging
+!.env.production
 
 # vercel
 .vercel

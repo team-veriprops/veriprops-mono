@@ -3,7 +3,7 @@ import base64
 import json
 from decimal import Decimal
 from logging import Logger
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import boto3
 from botocore.exceptions import ClientError

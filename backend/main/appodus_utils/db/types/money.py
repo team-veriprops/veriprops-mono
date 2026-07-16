@@ -27,6 +27,8 @@ class TransactionCurrency(str, enum.Enum):
         return FX_RATES[self.value]
 
 
+# TODO(gap): hardcoded indicative stub rates — live FX (PRICING_FX_PROVIDER=OPENEXCHANGERATES)
+# is not wired — PRD "Known Gaps & Roadmap".
 FX_RATES: dict[str, Decimal] = {
     TransactionCurrency.NGN: Decimal("1"),
     TransactionCurrency.USD: Decimal("0.00063"),

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ShieldAlert, ArrowLeft, LockKeyhole } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
+import { SUPPORT_EMAIL } from "@lib/config/app";
 
 export default function ForbiddenPage() {
   return (
@@ -73,10 +74,10 @@ export default function ForbiddenPage() {
         <div className="mt-10 border-t border-white/10 pt-6 text-sm text-neutral-500">
           Need help? Contact{" "}
           <a
-            href="mailto:support@novastack.io"
+            href={`mailto:${SUPPORT_EMAIL}`}
             className="font-medium text-blue-400 hover:text-blue-300"
           >
-            support@novastack.io
+            {SUPPORT_EMAIL}
           </a>
         </div>
       </section>

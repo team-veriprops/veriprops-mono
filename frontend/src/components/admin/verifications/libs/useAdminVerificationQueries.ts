@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { AgentRole } from "@/types/agent";
 import { AdminNoteCategory, VerificationListFilters } from "@/types/adminVerification";
@@ -26,7 +27,7 @@ export function useAdminDashboardQuery() {
 export function useAdminVerificationsQuery(
   filters: VerificationListFilters,
   page = 0,
-  pageSize = 10,
+  pageSize = DEFAULT_PAGE_SIZE,
 ) {
   return useQuery({
     queryKey: adminVerificationKeys.list(filters, page, pageSize),

@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from loguru import Logger
-import asyncio
 import enum
 import functools
 from typing import Awaitable, TypeVar, Optional

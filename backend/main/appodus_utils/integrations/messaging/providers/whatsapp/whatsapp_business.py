@@ -1,6 +1,6 @@
 from decimal import Decimal
 from logging import Logger
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from httpx import AsyncClient
 from kink import inject, di

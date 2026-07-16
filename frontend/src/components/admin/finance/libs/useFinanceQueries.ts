@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { PayoutDecisionRequest } from "@/types/payout";
 import { SetCommissionRuleRequest } from "@/types/commission";
@@ -18,7 +19,7 @@ export const financeKeys = {
 };
 
 // ── Payouts ────────────────────────────────────────────────────────
-export function useAdminPayoutsQuery(page = 0, pageSize = 10, status = "") {
+export function useAdminPayoutsQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE, status = "") {
   return useQuery({
     queryKey: financeKeys.payouts(page, status),
     queryFn: async () => (await payoutService.listPayouts(page, pageSize, status || undefined)).data ?? null,

@@ -68,7 +68,7 @@ export function FileChip({ filename, status, onRemove }: FileChipProps) {
                 config.animate && 'animate-spin'
               )}
             />
-            <span className="truncate max-w-[100px] sm:max-w-[120px] text-xs sm:text-sm font-medium">
+            <span className="truncate max-w-25 sm:max-w-30 text-xs sm:text-sm font-medium">
               {filename}
             </span>
             {isPdf && (

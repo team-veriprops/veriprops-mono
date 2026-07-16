@@ -4,7 +4,7 @@
 // false, so a prod/staging build (or a build with the var missing) can never activate the
 // hooks. Only these three explicitly-non-production values enable automation.
 const AUTOMATION_ENVS = [
-  "local",
+  "dev_personal",
   "development",
   "test",
 ] as const;

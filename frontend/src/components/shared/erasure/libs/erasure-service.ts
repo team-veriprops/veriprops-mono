@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import { DataErasureRequest } from "@/types/erasure";
 
@@ -21,7 +22,7 @@ export class ErasureService {
   }
 
   // ── Admin review (MANAGE_COMPLIANCE) ──
-  list(status: string | undefined, page = 0, pageSize = 10): Promise<SuccessResponse<Page<DataErasureRequest>>> {
+  list(status: string | undefined, page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<DataErasureRequest>>> {
     const q = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
     if (status) q.set("status", status);
     return this.http.get(`/admin/erasure-requests?${q.toString()}`);

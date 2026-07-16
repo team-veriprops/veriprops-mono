@@ -8,12 +8,15 @@ FastAPI service for Veriprops. Async SQLAlchemy, Alembic migrations, Kink DI, Po
 pip install -r requirements.txt
 
 # Active env selects which .env.{name} file is loaded at import time.
-# Valid names: local, test, dev, staging, prod.
-export appodus_active_env=local        # bash
-$env:appodus_active_env="local"        # PowerShell
-set appodus_active_env=local           # cmd
+# Valid names: dev_personal, test, dev, staging, prod. The committed .env.{env} files
+# are CONFIG-ONLY; secrets are injected by Doppler as process env vars, which
+# override env-file values (pydantic-settings precedence).
+export appodus_active_env=dev_personal        # bash
+$env:appodus_active_env="dev_personal"        # PowerShell
+set appodus_active_env=dev_personal           # cmd
 
-python veriprops.py                    # dev server, http://localhost:8000 (docs at /docs)
+doppler run -- python veriprops.py     # dev server with secrets, http://localhost:8000 (docs at /docs)
+python veriprops.py                    # also works secret-less for stub-only local use
 
 # Tests — pytest auto-loads conftest.py which defaults appodus_active_env=test.
 # Force the test env explicitly when running migrations against the test DB.
@@ -32,7 +35,7 @@ alembic revision --autogenerate -m "describe change"          # generate
 
 ### Two-layer Python package
 
-- [main/app/](main/app/) — Veriprops-specific business code (domains, settings, seeder, jobs).
+- [main/app/](main/app/) — Veriprops-specific business code (domains, settings, jobs).
 - [main/appodus_utils/](main/appodus_utils/) — reusable framework/library code (DI bootstrap, generic repo, transactional decorator, integrations, middleware, exceptions). Treat as a vendored library: prefer extending via subclass over editing in place. App-side `DiBootstrap` in [main/app/config/bootstrap.py](main/app/config/bootstrap.py) subclasses `BaseDiBootstrap` to inject app-specific deps (Redis).
 
 ### Domain module shape
@@ -85,7 +88,7 @@ A domain is **not considered complete** until:
 * When mapping date/datetime, don't use DateTime or TIMESTAMP directly, instead use UTCDateTime in the file `backend/main/appodus_utils/db/models.py`
 * **JSON columns.** Plain JSON columns use the shared `JSONB_VARIANT` singleton (`Column(JSONB_VARIANT)`) — renders as JSONB on Postgres, JSON elsewhere. **Mutable JSON columns must use a fresh `jsonb_variant()` instance per column** — `Column(MutableDict.as_mutable(jsonb_variant()))`, `Column(MutableList.as_mutable(jsonb_variant()))`. Never pass the shared `JSONB_VARIANT` singleton to `as_mutable(...)`: `Mutable.as_mutable` installs a process-global listener that binds its coercion to every column whose type *is that same instance* (identity match), so reusing one instance leaks (e.g.) `MutableList` coercion onto unrelated dict columns and a `dict` assignment then raises `Attribute 'x' does not accept objects of type <class 'dict'>`. Both `JSONB_VARIANT` and `jsonb_variant()` live in `appodus_utils/db/models.py`; the type instance is irrelevant to generated DDL, so migrations keep using `JSONB_VARIANT`.
 * Always use the pattern implemented in alembic migrations here `backend\main\alembic\versions\0001_initial_schema.py`, including the use separate utility methods for each migration and the use of utility methods, and DRY principle.
-* **Every entity needs a builder — the orphan guard.** Each new `BaseEntity` subclass must get a `_create_<table>()` helper **and** be registered in `_TABLE_BUILDERS`. Forgetting the registration produces a mapped model whose table `alembic upgrade head` never creates — every query then 500s. `test/unit/app/test_migration_schema_parity.py` fails CI on any drift between `BaseEntity.metadata.tables` and `_TABLE_BUILDERS` (in both directions), so it catches the omission before runtime. This applies to framework/vendored entities too (e.g. `devices`, `dlq_entries`, `callbacks`), which live outside `domain/**` but are still reachable through the import graph.
+* **Every entity needs a builder — the orphan guard.** Each new `BaseEntity` subclass must get a `_create_<table>()` helper **and** be registered in `_TABLE_BUILDERS`. Forgetting the registration produces a mapped model whose table `alembic upgrade head` never creates — every query then 500s. `test/unit/app/test_migration_schema_parity.py` fails CI on any drift between `BaseEntity.metadata.tables` and `_TABLE_BUILDERS` (in both directions), so it catches the omission before runtime. This applies to framework/vendored entities too (e.g. `devices`, `callbacks`), which live outside `domain/**` but are still reachable through the import graph.
 
 
 
@@ -129,7 +132,7 @@ Bootstrap runs once at import: importing settings → importing bootstrap → re
 - `DBSessionMiddleware` — opens an async session per request, stores it in a `ContextVar` so `@transactional` can find it.
 - `RequestLoggingMiddleware` — request/response logs.
 - Exception handlers map `AppodusBaseException` and friends to structured HTTP responses (`exception/exception_handlers.py`). All custom exceptions inherit from `AppodusBaseException` and carry context (`user_id`, `resource`, etc.) — raise these, don't `raise HTTPException` directly.
-- Lifespan: `ClientStateManager` opens external clients (HTTPX, Redis), then `DataSeeder.run_data_seed()` seeds reference data.
+- Lifespan: `ClientStateManager` opens external clients (HTTPX, Redis). Reference data is seeded by migration `0001`, not at boot — run `alembic upgrade head` before first launch.
 
 Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhooks`) via `webhook_router`.
 
@@ -144,13 +147,15 @@ Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhoo
 - `ACTIVE_DB`, `SQLALCHEMY_DATABASE_URI` — DB selection (PostgreSQL via `asyncpg`; `settings.SupportedDB` still supports other dialects).
 - `ACTIVE_PAYMENT_METHOD` — `FLUTTERWAVE` or `PAYSTACK`.
 - `ALLOWED_ORIGINS` — comma-separated CORS origins.
-- `ENABLE_OUT_MESSAGING`, `ALLOW_AUTH_BYPASS`, `DISABLE_RATE_LIMITING` — gate side effects in non-prod.
+- `ENABLE_OUT_MESSAGING`, `DISABLE_RATE_LIMITING` — gate side effects in non-prod.
 - `GOOGLE_SERVICE_ACCOUNT_FILE` — path resolved via `get_absolute_path` (walks up out of `test/`, `main/`, or `appodus_utils/`).
-- `PHONE_VERIFICATION_ENABLED` — toggles the phone-verification step in the email/OAuth signup flow. When `false`, signup collects the number but stores `phone_verified=False`; phone is then verified at the Phase-5 payment step. `AuthService.signup`/`complete_profile` read it; the frontend reads it via `/config/public`.
+- `PHONE_VERIFICATION_ENABLED` — toggles the phone-verification step in the email/OAuth signup flow. When `false`, signup collects the number but stores `phone_verified=False`; phone is then verified at the payment step (PRD §10.5). `AuthService.signup`/`complete_profile` read it; the frontend reads it via `/config/public`.
+
+**Where a knob lives — two config layers.** Infra / deploy / security operational knobs (timeouts, TTLs, hosts, SSE heartbeat/queue, OTP resend caps, draft lifetimes, page-batch sizes) are `Settings` fields with sensible in-code defaults, overridable via `.env.{env}`; [.env.example](.env.example) is the committed, secret-free template of every settable key. **Admin-tunable business rules** that must change at runtime without a redeploy (SLA-at-risk horizon, payout SLA, dispute min-length, share-link expiry, analytics trend window — the full table is PRD §R.2) live in the `system_config` `ConfigKey` store — read via `self._config.get_int(ConfigKey.X)`, seeded idempotently by migration `0001` from `CONFIG_DEFAULTS`. **No shadowing constants:** never re-declare a module-level literal that duplicates an existing setting/ConfigKey (a prior `_PRICE_LOCK_HOURS`/`INVITE_TTL_HOURS` silently ignored the setting). Selector/mode values are enum-typed (`OtpMode`, `PricingFxProvider`, `ReviewDecision`); `GEOCODING_PROVIDER`/`KYC_PROVIDER` stay `str` because their enums live in the `integrations` package, which imports the `settings` singleton back (a cycle) — the provider factories coerce at their boundary (`GeoProvider(settings.GEOCODING_PROVIDER)`).
 
 ### Reference content & public config
 
-- **Legal documents are backend-owned.** Prose lives in the content registry at `app/domain/user/auth/consent/content/`, is upserted idempotently by `DataSeeder.run_data_seed` → `ConsentService.seed_documents` (keyed on `(type, consent_version)`), and is served publicly by `GET /users/auth/consents/documents[/{slug}]`. Edit the registry, not the migration — the `0001` rows are metadata only; bodies/sign-off land at seed time. `ConsentSignoffStatus` marks DRAFT vs FINAL wording.
+- **Legal documents are backend-owned.** Prose lives in the content registry at `app/domain/user/auth/consent/content/`, is upserted idempotently by migration `0001` (which imports `LEGAL_DOCUMENT_CONTENT`, keyed on `(type, consent_version)`, bodies included), and is served publicly by `GET /users/auth/consents/documents[/{slug}]`. Edit the registry — the migration's row builders translate it; `test_migration_seed_parity.py` fails on drift. There is no boot-time refresh: an already-migrated DB only picks up wording changes via a `consent_version` bump (new row) or a new data migration. `ConsentSignoffStatus` marks DRAFT vs FINAL wording.
 - **Public runtime flags** the frontend needs go through `app/domain/config` → `GET /config/public` (`PublicConfigDto`). Backend stays the source of truth; don't duplicate flags as frontend env vars.
 - **Cross-portal counts** (`app/domain/user/auth/cross_portal`): `CrossPortalService` keeps a registry of per-persona count sources. It returns 0 per persona until later slices call `register_source(...)`; the `/users/auth/cross-portal/summary` endpoint feeds the frontend's portal badge.
 - **Session revocation is enforced on refresh:** `POST /users/auth/sessions/current` rejects a refresh whose `device_sessions` row is revoked/absent, so device-revoke and reset-time revoke-all actually end sessions. Read the refresh cookie via `settings.AUTHJWT_REFRESH_COOKIE_KEY` (`__Host-refresh_token`) — never the bare literal `"refresh_token"`, or the lookup silently misses and revocation breaks.
@@ -159,12 +164,13 @@ Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhoo
 
 These are permanent guardrails from the secure-coding audit. Keep them intact:
 
-- **Secrets live in `.env.{env}` (git-ignored), never as committed defaults.** Committed source uses the `SECRET_PLACEHOLDER` sentinel (`appodus_utils/config/settings.py`). The `AUTHJWT_SECRET_KEY` env-var name must match the settings field **exactly** (a prior `JWT_SECRET_KEY` typo silently fell back to a committed default). `_enforce_prod_secret_policy` **fails startup** in prod/staging when `AUTHJWT_SECRET_KEY`/`APPODUS_CLIENT_SECRET` is a placeholder/leaked-default or `ALLOW_AUTH_BYPASS` is true — never weaken it. JWT alg is pinned to HS256 (`AUTHJWT_ALGORITHM`/`AUTHJWT_DECODE_ALGORITHMS`); don't leave it unset.
+- **Secrets live in Doppler, never in committed files or defaults.** The `.env.{env}` files are committed but **config-only**: every key in `Settings.SECRET_ENV_KEYS` (app/config/settings.py — the canonical credential list) stays absent/empty/`CHANGE_ME` there; Doppler injects real values as process env vars, which pydantic-settings gives precedence over env files. `test/unit/app/config/test_env_hygiene.py` enforces this (key rule + provider-token pattern scan across backend and frontend env files) plus the `.env.test`/`.env.prod` contracts — a new credential setting must be added to `SECRET_ENV_KEYS`. Committed source uses the `SECRET_PLACEHOLDER` sentinel (`appodus_utils/config/settings.py`). The `AUTHJWT_SECRET_KEY` env-var name must match the settings field **exactly** (a prior `JWT_SECRET_KEY` typo silently fell back to a committed default). `_enforce_prod_secret_policy` **fails startup** in prod/staging when `AUTHJWT_SECRET_KEY` is a placeholder/leaked-default — never weaken it. JWT alg is pinned to HS256 (`AUTHJWT_ALGORITHM`/`AUTHJWT_DECODE_ALGORITHMS`); don't leave it unset.
 - **CSPRNG for all tokens.** `Utils.random_str` (alphanumeric) and random-mode OTP use `secrets`, never `uuid7`/`random`. Any new token/code/reference must go through `Utils.random_str` or `secrets` directly.
 - **No pickle for persisted data.** `KeyValueService` stores UTF-8 text and returns decoded strings (mirroring `RedisUtils.get_redis`). Never reintroduce `pickle` on DB/Redis values.
 - **`PageRequest` vs `InternalPageRequest` ([db/models.py](main/appodus_utils/db/models.py)).** `PageRequest` (client-safe: `page`/`page_size`) is the only base a wire-bound request DTO may inherit. The flexible query controls (`where`/`order_by`/`query_fields`/`exact_string_values`) live on `InternalPageRequest` and are **server-set only** — a `Search*Dto` bound from the wire must never expose them (they can filter/sort on any column). `DbUtils`/`GenericRepo` read the controls via `getattr(..., default)` so both bases work.
 - **Ownership is enforced in the service/repo layer, not auto-scoped.** `build_search_criterion` does not add a tenant filter — every service that returns another user's data must gate on the caller's id (see `VerificationService.get_owned`, `PayoutService._get_owned`). Never expose an unauthenticated list endpoint that binds a `Search*Dto`.
 - **Server-derived identity, never client-claimed.** Chat `sender_kind` is derived from the caller's role + thread type in `CommunicationService.post_message` — never accepted from the request. Admin sub-role changes (`admin_team`) are `INVITE_ADMIN`-gated (SUPER-only), forbid self-targeting, and only a SUPER may grant SUPER.
+- **Edge auth (Cloudflare bypass closure).** `EdgeAuthMiddleware` ([appodus_utils/middleware/edge_auth_middleware.py](main/appodus_utils/middleware/edge_auth_middleware.py), outermost in `veriprops.py`) rejects requests missing the `x-edge-auth` header that the Cloudflare Transform Rule injects — closing the `*.vercel.app`/direct-origin route around the WAF. Governed by `EDGE_AUTH_SECRET` (in `SECRET_ENV_KEYS`, Doppler-injected; blank/`CHANGE_ME` disables) + `EDGE_AUTH_HEADER`. Comparison uses `hmac.compare_digest`; no path exemptions (webhooks/SSE/OAuth arrive via the proxied hostnames). Keep semantics in sync with the frontend's `src/lib/edgeAuth.ts`.
 - **Edge rate limiting.** Sensitive unauthenticated routes (login, `otp/send`, `otp/verify`, `password/forgot`, `password/reset`, `signup`) use the reusable `RateLimiter` dependency ([appodus_utils/common/rate_limit.py](main/appodus_utils/common/rate_limit.py)), which is disabled wholesale by `DISABLE_RATE_LIMITING`. Add it to any new sensitive unauthenticated endpoint.
 - **Webhooks & logging.** Webhook signatures verify with `hmac.compare_digest` and fail closed on a missing/placeholder secret. Never log full webhook bodies or headers (PII + provider signatures) — log metadata only. `DB_ENABLE_LOGS` defaults `False` (SQL echo leaks bound params); keep it off in prod. The full settings snapshot is held in-process (`get_full_settings_json()`), never dumped to `os.environ`.
 
@@ -178,7 +184,7 @@ Provider-agnostic interfaces in [appodus_utils/integrations/](main/appodus_utils
 | Document signing | Zoho DocSign (webhook in `domain/webhook/`) |
 | File collaboration | Google Drive (service-account auth) |
 | Payments | Flutterwave, Paystack |
-| Email | SendGrid, Mailjet |
+| Email | Mailjet |
 | SMS | Twilio, Termii |
 | WhatsApp | Meta Business API |
 | Push | Firebase, Web Push |
@@ -217,7 +223,7 @@ All external channel dispatch (email, SMS, push, WhatsApp) goes through the mess
            recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
            template=AvailableTemplate.MY_NEW_EVENT,
            context_modules=[MessageContextModule.USER],
-           category=MessageCategory.TRANSACTIONAL,
+           category=MessageCategory.TRANSACTION,
            default_channels=[MessageChannel.EMAIL],
            extra_context={MessageContext.MY_EVENT_SOME_FIELD.value: some_field},
        )
@@ -225,7 +231,16 @@ All external channel dispatch (email, SMS, push, WhatsApp) goes through the mess
 
 **Non-negotiable:** Every `AvailableTemplate` entry must have a matching template file for every channel it declares. Registering the enum entry without the template file will cause a runtime error when the notification fires.
 
-### Event bus & notifications (§4.8 / §12)
+### Message bookkeeping & delivery retries
+
+Every dispatch is recorded in the single `messages` table (there is **no separate DLQ entity** — one lifecycle, one source of truth). `MessagingService.send_message` persists the row **before** dispatch and adopts the generated id onto the in-flight DTO; outcomes: `SENT` (with `sent_at`/`provider`), `RETRYING` (transient failure, `next_retry_at` scheduled), `FAILED` (permanent). `MessageService` bookkeeping is `ALWAYS_NEW`-transactional on purpose: the row records an external side effect that already happened, so it must commit independently of the caller's transaction (and it keeps concurrent `send_bulk` branches off the shared request session).
+
+- **Retry sweep.** `MessagingService.process_retries` re-dispatches `RETRYING` rows whose `next_retry_at` passed, via `MessageRouter` (fresh provider selection/circuits). Runs on APScheduler every minute (`message_retry_check` in `app/jobs/scheduled.py`) + on demand via admin `POST /messages/sweeps/retries` (CONFIGURE_SYSTEM).
+- **Backoff & threshold.** `MESSAGING_RETRY_INTERVALS_SECONDS` (Settings, default `[60, 300, 900]`, env override is a JSON list) is the backoff ladder; the retry threshold is its length — after that many failed retries the row goes permanently `FAILED`. Validation/rate-limit errors never retry.
+- **Time-bound content (`expires_at`).** OTPs and reset links are useless (or stale — resends overwrite the KV code) past their validity, so their senders stamp `expires_at` (OTP: `now + OTP_CODE_TTL_SECONDS`; reset: `now + PASSWORD_RESET_TTL_SECONDS`). The pipeline never dispatches or schedules a retry past `expires_at` — expired rows fail permanently with an "expired before delivery" error. Plumbing mirrors `schedule_at`: sender passes `expires_at=` to `BaseMessageSender._send_message`/`_send_direct_message` → context key → channel builders → `MessageRequest.expires_at` → column. Any new time-bound notification must set it.
+- **DTO gotchas.** Pydantic v2 treats `Optional[...]` **without a default** as required — partial-update/search DTOs (`_UpdateMessageDto`, `Search*Dto`) must keep explicit `= None` defaults. `UpsertMessageDto.from_request` maps the request's `schedule_at` → DTO `scheduled_at` explicitly (models ignore extra fields, so a raw dump silently drops it).
+
+### Event bus & notifications (PRD §4.8 / §17)
 
 Every domain event is published **once** on the in-process synchronous bus (`app/core/events/`); subscribers decide surfacing. **Services never call the SSE emitter or an email sender directly** — they publish a `DomainEvent`:
 
@@ -242,11 +257,11 @@ await publish_domain_event(DomainEvent(
 
 Publishing is **best-effort per subscriber** (one failure never breaks another or the emitting transaction). The standard subscribers (registered at bootstrap in `app/core/events/subscribers.py`): `realtime` (re-emits the verification + user SSE), `notification` (rule-table fan-out → in-app + email/SMS), `chat_counter` (Chat counter for `MESSAGE_SENT`), `chat_autopost` (SYSTEM breadcrumb into the customer thread on `STATUS_CHANGED`).
 
-**To make an event notify a user:** add an `EventType`, a row in `notification/rules.py` (`in_app`/`email`/`sms`/`chat_only` + the `AvailableTemplate`), copy + link in `notification/content.py`, and publish the event. The rule table covers the full §12.2 set; some rows are declared-but-unfired until their source slices land. Time-driven events (e.g. `SlaBreached`) fire from a scheduler sweep (`app/jobs/scheduled.py`, `ALWAYS_NEW`, disabled under test, with an admin dev endpoint).
+**To make an event notify a user:** add an `EventType`, a row in `notification/rules.py` (`in_app`/`email`/`sms`/`chat_only` + the `AvailableTemplate`), copy + link in `notification/content.py`, and publish the event. The rule table covers the full PRD §17.2 trigger set. Time-driven events (e.g. `SlaBreached`) fire from a scheduler sweep (`app/jobs/scheduled.py`, `ALWAYS_NEW`, disabled under test, with an admin dev endpoint).
 
 ## Dev/QA endpoints (non-production only)
 
-`POST /dev/reset` + `POST /dev/seed` (`app/domain/dev/`) are the automation-determinism contract: reset clears domain data (keeping the super-admin + reference seeds), seed builds a deterministic scenario (customer + approved agents + an `UNDER_REVIEW`, SLA-overdue verification). **Production-gated twice** — the router only mounts when `settings.ENVIRONMENT != PRODUCTION`, and `_require_non_prod()` 404s in prod. Never remove either guard. The committed live drive-through `backend/scripts/e2e_drive_through.py` exercises the S15/S16 chat + notification stack end-to-end over HTTP against a running server.
+`POST /dev/reset` + `POST /dev/seed` (`app/domain/dev/`) are the automation-determinism contract: reset clears domain data (keeping the super-admin + reference seeds), seed builds a deterministic scenario (customer + approved agents + an `UNDER_REVIEW`, SLA-overdue verification). `GET /dev/messages/latest?recipient=` (bookkeeping snapshot of the newest outbound message) and `POST /dev/messages/rewind?recipient=&rewind_expiry=` (pulls `next_retry_at`/`expires_at` into the past so the retry sweep fires immediately against the default backoff ladder; touches only those timestamps) extend the same contract for the messaging-retry pipeline. **Production-gated twice** — the router only mounts when `settings.ENVIRONMENT != PRODUCTION`, and `_require_non_prod()` 404s in prod. Never remove either guard. The committed live drive-through `backend/scripts/e2e_drive_through.py` runs one cradle-to-grave scenario over HTTP against a running server — fresh signup (referral code) → agent onboarding/KYC-stub + admin-invitation RBAC → draft/quote/submit → stub payment → assignment/execution (evidence) → chat fraud-hold approve+reject/SLA → review (reject/rework, release gate) → release → report PDF → tracking/SSE → sharing → dispute/re-check/upgrade → payouts → PREMIUM finish (LAWYER task, v2/v3 reports, declined re-check, upheld dispute) → referral earn+spend → pricing/analytics/broadcast hardening → pool/no-show/starvation + pause/delay/cancel/fail + chargeback (on the seeded "ops" verification) → audit pack + erasure reject/execute → Mailpit email delivery + password reset → outbound-message failure→retry→threshold→expiry (`messaging_retry`, last: stops/starts the Mailpit container via the docker CLI to induce a real SMTP failure, drives `POST /messages/sweeps/retries` with `/dev/messages/rewind` for interval-independence). Stages live in `backend/scripts/e2e/` (shared harness in `e2e/harness.py`); `--stages` runs a contiguous prefix of the stage order (stages have linear data dependencies). Best coverage: `docker compose up -d mailpit` and run the backend with `ENABLE_OUT_MESSAGING=True` (email → Mailpit, SMS → mock provider); without Mailpit (or docker CLI) the email + messaging_retry stages warn-skip and the rest still passes.
 
 ## Redis
 We don't use Redis directly, rather we rely on `RedisUtils` in `backend/main/appodus_utils/db/redis_utils.py`. This uses Redis when available, but fallback to an SQL implementation when not available.

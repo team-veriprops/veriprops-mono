@@ -1,4 +1,5 @@
-import atexit, asyncio
+import atexit
+import asyncio
 
 from httpx import AsyncClient
 from kink import di

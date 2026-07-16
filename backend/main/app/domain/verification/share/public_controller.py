@@ -6,21 +6,26 @@ report after a disclaimer acknowledgement. Frontend: /verify/[vid] and /shared/[
 """
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from kink import di
 
 from main.app.domain.verification.share.models import PublicSummaryDto, SharedReportDto
 from main.app.domain.verification.share.service import ShareService
+from main.appodus_utils.common.rate_limit import RateLimiter
 from main.appodus_utils.db.models import SuccessResponse
 
 public_share_router = APIRouter(prefix="/public", tags=["Public Lookup & Sharing"])
 share_service: ShareService = di[ShareService]
 
+# Edge throttle for VID lookup (§13.1) — VIDs are non-sequential and responses are
+# summary-only/indistinguishable, but an unbounded IP can still brute-force at scale.
+_vid_lookup_rate_limit = RateLimiter(scope="public_vid_lookup", limit=20, window_seconds=60)
+
 
 @public_share_router.get(
     "/verify/{vid}", response_model=SuccessResponse[PublicSummaryDto]
 )
-async def public_lookup(vid: str):
+async def public_lookup(vid: str, _: None = Depends(_vid_lookup_rate_limit)):
     """Unauthenticated VID lookup (§13.1) — summary only, never the numeric score/address."""
     summary = await share_service.public_lookup(vid)
     return SuccessResponse[PublicSummaryDto](data=summary)

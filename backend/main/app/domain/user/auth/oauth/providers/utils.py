@@ -77,7 +77,14 @@ class OauthUtils:
             link_user_id=link_user_id,
         )
 
-        await RedisUtils.set_redis(f"oauth:state:{state}", oauth_request_payload, time_to_live=timedelta(minutes=10))
+        # RedisUtils persists UTF-8 text only (no pickle), so serialize the state
+        # to JSON here and rehydrate it in consume_state — storing the model object
+        # would come back as a bare string and break attribute access downstream.
+        await RedisUtils.set_redis(
+            f"oauth:state:{state}",
+            oauth_request_payload.model_dump_json(),
+            time_to_live=timedelta(seconds=settings.OAUTH_STATE_TTL_SECONDS),
+        )
 
         query_string = urllib.parse.urlencode(params)
         return f"{base_url}?{query_string}"
@@ -131,9 +138,15 @@ class OauthUtils:
         if not state:
             return None
         key = f"oauth:state:{state}"
-        stored: Optional[OAuthRequestStoredState] = await RedisUtils.get_redis(key)
+        stored = await RedisUtils.get_redis(key)
         await RedisUtils.delete(key)
-        return stored
+        if not stored:
+            return None
+        # RedisUtils returns decoded UTF-8 text, so rehydrate the JSON back into the
+        # typed model (tolerating an already-parsed value for defensive safety).
+        if isinstance(stored, OAuthRequestStoredState):
+            return stored
+        return OAuthRequestStoredState.model_validate_json(stored)
 
     @staticmethod
     async def popup_response(

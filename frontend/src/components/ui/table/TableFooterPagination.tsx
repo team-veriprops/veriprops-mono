@@ -41,7 +41,7 @@ export default function TableFooterPagination({
             onResetPage();
           }}
         >
-          <SelectTrigger className="w-[70px]">
+          <SelectTrigger className="w-17.5">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

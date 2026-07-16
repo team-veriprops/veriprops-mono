@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { AuditService } from "./audit-service";
 
@@ -14,7 +15,7 @@ export function useAdminActionsQuery(page = 0, actionType?: string) {
   return useQuery({
     queryKey: auditKeys.actions(page, actionType),
     queryFn: async () =>
-      (await service.listAdminActions(actionType ? [actionType] : undefined, page, 20)).data ?? null,
+      (await service.listAdminActions(actionType ? [actionType] : undefined, page, DEFAULT_HISTORY_PAGE_SIZE)).data ?? null,
   });
 }
 

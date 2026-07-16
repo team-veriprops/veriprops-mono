@@ -2,7 +2,7 @@
 
 ## Key Design: `"exclusive"` Rule Flag
 
-A routing rule with `"exclusive": True` prevents `_handle_fallback()` from using the "last resort" path (which would try all remaining registered providers). Without this flag, even an empty `fallback_order` was insufficient — the last-resort block would still try Mailjet or Sendgrid after an SMTP failure.
+A routing rule with `"exclusive": True` prevents `_handle_fallback()` from using the "last resort" path (which would try all remaining registered providers). Without this flag, even an empty `fallback_order` was insufficient — the last-resort block would still try Mailjet after an SMTP failure.
 
 **How it works in `_handle_fallback()`:**
 ```python
@@ -33,15 +33,15 @@ if channel in self.routing_rules:
 | `exclusive` | `True` — no last-resort fallback |
 | Default (if rule doesn't match) | N/A — rule always matches in non-prod |
 
-**Behavior:** All email captured by Mailpit. If SMTP fails (e.g., Mailpit not running), `IntegrationFatalException` is raised immediately. Mailjet and Sendgrid are **never contacted** in these environments.
+**Behavior:** All email captured by Mailpit. If SMTP fails (e.g., Mailpit not running), `IntegrationFatalException` is raised immediately. Mailjet is **never contacted** in these environments.
 
 ### Production / Staging environments
 
 | Property | Value |
 |---|---|
 | Rule condition | Does not match (condition is false) |
-| Default providers | `[MAILJET, SENDGRID_EMAIL]` |
-| Fallback | Sendgrid if Mailjet fails; last-resort tries all remaining |
+| Default providers | `[MAILJET]` |
+| Fallback | last-resort tries all remaining registered providers |
 
 **Defense-in-depth:** `SmtpEmailProvider.send_message()` raises `ValueError` if called in production or staging — even if misconfigured routing somehow selected it.
 
@@ -86,5 +86,5 @@ The mock rule condition is false (`ENVIRONMENT` not in the test set), so evaluat
 | `local` | Mailpit (SMTP) | MockSmsProvider | No (exclusive) |
 | `dev` | Mailpit (SMTP) | MockSmsProvider | No (exclusive) |
 | `test` | Mailpit (SMTP) | MockSmsProvider | No (exclusive) |
-| `staging` | Mailjet → Sendgrid | Termii → Twilio | Yes |
-| `prod` | Mailjet → Sendgrid | Termii → Twilio | Yes |
+| `staging` | Mailjet | Termii → Twilio | Yes |
+| `prod` | Mailjet | Termii → Twilio | Yes |

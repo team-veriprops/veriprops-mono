@@ -91,7 +91,7 @@ class GoogleDriveWebhookSubscriptionService:
         try:
             subscription = await self._g_drive_subscription_repo.get(g_drive_subscription_id)
 
-            result = await self._google_drive.stop_watching(subscription.channel_id, subscription.resource_id)
+            await self._google_drive.stop_watching(subscription.channel_id, subscription.resource_id)
 
             return await self._g_drive_subscription_repo.hard_delete(subscription.id)
 

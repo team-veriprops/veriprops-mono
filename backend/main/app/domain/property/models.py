@@ -9,7 +9,7 @@ from __future__ import annotations
 import enum
 from typing import List, Optional
 
-from sqlalchemy import Column, Float, String, Text
+from sqlalchemy import Column, Float, String
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest

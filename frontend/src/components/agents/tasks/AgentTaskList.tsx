@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ImageIcon, Sparkles } from "lucide-react";
 import { Badge } from "@3rdparty/ui/badge";
@@ -27,7 +28,7 @@ import {
 } from "./libs/useAgentTaskQueries";
 
 const ALL = "ALL";
-const PAGE_SIZE = 10;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export default function AgentTaskList() {
   const router = useRouter();

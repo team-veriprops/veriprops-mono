@@ -2,7 +2,6 @@
 customer tracking hooks are untouched; the chat-counter subscriber pushes only chat events."""
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from kink import di
 
 from main.app.core.events.events import DomainEvent, EventType

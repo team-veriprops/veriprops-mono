@@ -31,6 +31,8 @@ from main.appodus_utils.integrations.kyc.models import (
 )
 
 
+# TODO(gap): live Dojah KYC — KYC_PROVIDER defaults to the deterministic STUB provider;
+# production needs Dojah credentials + live flows behind the same facade — PRD "Known Gaps & Roadmap".
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])

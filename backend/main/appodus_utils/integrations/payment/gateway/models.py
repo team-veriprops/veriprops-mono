@@ -2,7 +2,7 @@ from typing import Dict, Any
 from typing import Optional
 
 from main.appodus_utils import Object
-from pydantic import Field, EmailStr
+from pydantic import Field
 
 from main.appodus_utils.db.types.money import TransactionCurrency
 

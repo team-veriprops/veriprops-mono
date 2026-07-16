@@ -1,0 +1,139 @@
+# Backend quality gates: ruff, mypy, pytest, and an Alembic migration roundtrip.
+#
+# Runs directly on PRs; pushes to dev/master run it through deploy.yml (workflow_call),
+# so there is deliberately no `push:` trigger here — adding one would double-run CI.
+#
+# Branch protection should require only the `summary` job: the real jobs are
+# path-filtered on PRs (a docs-only or frontend-only PR skips them), and a
+# path-skipped required check would block merging forever. `summary` always
+# reports and fails iff a needed job failed.
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [master, dev]
+  workflow_call:
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/backend-ci.yml'
+              - 'docker-compose.yml'
+
+  lint:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "ruff>=0.9,<1.0"
+      - run: ruff check .
+
+  typecheck:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/test-requirements.txt
+      # test-requirements.txt does not include requirements.txt (asyncpg & friends
+      # live only there), so both files install together.
+      - run: pip install -r requirements.txt -r test-requirements.txt
+      - run: mypy main
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/test-requirements.txt
+      - run: pip install -r requirements.txt -r test-requirements.txt
+      # conftest.py defaults appodus_active_env=test (.env.test); the unit suite
+      # mocks the DB, so no services are needed here.
+      - run: pytest
+
+  migrations:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: veriprops_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d veriprops_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      appodus_active_env: test
+      # Process env overrides .env.test's CHANGE_ME (pydantic-settings precedence).
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Apply, roll back, and re-apply all migrations
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+
+  summary:
+    if: always()
+    needs: [changes, lint, typecheck, test, migrations]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any needed job failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        working-directory: .
+        run: exit 1

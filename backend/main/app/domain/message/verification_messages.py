@@ -1,7 +1,6 @@
 """VerificationMessages — external channel dispatch for verification events (S39, S40)."""
 from __future__ import annotations
 
-from typing import Any, Dict
 
 from kink import inject
 
@@ -30,7 +29,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_PAYMENT_CONFIRMED,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL, MessageChannel.SMS],
         )
 
@@ -39,7 +38,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_REPORT_READY,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL, MessageChannel.SMS, MessageChannel.PUSH],
         )
 
@@ -48,7 +47,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_STATUS_CHANGE,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
             extra_context={MessageContext.VERIFICATION_NEW_STATUS.value: to_state},
         )
@@ -58,7 +57,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_AGENTS_ASSIGNED,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
         )
 
@@ -67,7 +66,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_JOB_ALERT,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL, MessageChannel.SMS, MessageChannel.PUSH],
         )
 
@@ -76,7 +75,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_NEW_MESSAGE,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
         )
 
@@ -85,7 +84,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_SLA_BREACH,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL, MessageChannel.SMS],
         )
 
@@ -94,7 +93,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_REVISION_REQUEST,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
         )
 
@@ -103,7 +102,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_RECHECK_DECISION,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
             extra_context={MessageContext.RECHECK_DECISION_OUTCOME.value: decision},
         )
@@ -113,7 +112,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_DISPUTE_FILED,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
             extra_context={MessageContext.DISPUTE_VERIFICATION_ID.value: vid},
         )
@@ -123,7 +122,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_DISPUTE_RESOLVED,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
             extra_context={MessageContext.DISPUTE_RESOLUTION_OUTCOME.value: outcome},
         )
@@ -141,7 +140,7 @@ class VerificationMessages(BaseMessageSender):
                 MessageContext.SHARE_VID.value: vid,
                 MessageContext.SHARE_URL.value: share_url,
             },
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
         )
 
@@ -150,7 +149,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_PAYOUT_APPROVED,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
         )
 
@@ -159,7 +158,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_PAYOUT_HELD,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
             extra_context={MessageContext.PAYOUT_HOLD_REASON.value: reason},
         )
@@ -175,7 +174,7 @@ class VerificationMessages(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=AvailableTemplate.VERIFICATION_ABANDONMENT_RECOVERY,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
             extra_context={MessageContext.ABANDONMENT_VID.value: vid},
         )

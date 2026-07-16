@@ -64,12 +64,7 @@ export default function OAuthCallbackContainer({ provider }: Props) {
           subtitle={`Provider ${provider} reported an error. You can try again or sign in with email.`}
         />
         <div
-          className="p-4 rounded-xl flex items-start gap-3 mb-6"
-          style={{
-            backgroundColor: "rgba(186,26,26,0.06)",
-            border: "1px solid rgba(186,26,26,0.18)",
-            color: "var(--danger)",
-          }}
+          className="p-4 rounded-xl flex items-start gap-3 mb-6 bg-danger/6 border border-danger/18 text-danger"
         >
           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
           <div className="text-sm leading-relaxed">
@@ -102,7 +97,7 @@ export default function OAuthCallbackContainer({ provider }: Props) {
           subtitle="Just a moment — we're finalising your session."
         />
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin" style={{ color: "var(--brand-viridian)" }} />
+          <Loader2 className="w-8 h-8 animate-spin text-brand-viridian" />
         </div>
       </AuthShell>
       <ProfileCompletionModal

@@ -33,15 +33,15 @@ class DbUtils:
         exclusion = {'platform', 'page', 'page_size', 'query_fields', 'exact_string_values', 'ocr', 'order_by', 'where'}
         # The flexible query controls live only on InternalPageRequest-derived DTOs.
         # A client-facing PageRequest DTO won't have them — read via getattr so it never
-        # carries a wire-supplied `where`/`exact_string_values`.
-        exact_string_values = getattr(search_dto, 'exact_string_values', True)
-
+        # carries a wire-supplied `where`.
         if getattr(search_dto, 'where', None):
             w_exclusion, w_conditions = self._parse_where_conditions(search_dto)
             if w_exclusion:
                 exclusion.update(w_exclusion)
             if w_conditions:
-                where_conditions.append(w_conditions)
+                # Flatten into the criterion list — the caller applies `.where(*criterion)`,
+                # so appending the list itself would nest it and fail SQL coercion.
+                where_conditions.extend(w_conditions)
 
         search_dto_dict = search_dto.model_dump(
             exclude_none=True,

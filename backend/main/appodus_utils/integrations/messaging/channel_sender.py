@@ -489,6 +489,7 @@ class EmailRequestBuilder(MessageRequestBuilder):
             template=template,
             template_variables=context,
             schedule_at=context.get("schedule_at"),
+            expires_at=context.get("expires_at"),
             sandbox_mode=context.get("sandbox_mode"),
             extras={
                 "user_id": recipient.user_id,
@@ -607,6 +608,7 @@ class SmsRequestBuilder(MessageRequestBuilder):
             template=template,
             template_variables=context,
             schedule_at=context.get("schedule_at"),
+            expires_at=context.get("expires_at"),
             sandbox_mode=context.get("sandbox_mode"),
             extras={
                 "user_id": recipient.user_id,
@@ -707,6 +709,7 @@ class WhatsAppRequestBuilder(MessageRequestBuilder):
             template=template,
             template_variables=context,
             schedule_at=context.get("schedule_at"),
+            expires_at=context.get("expires_at"),
             sandbox_mode=context.get("sandbox_mode"),
             extras={
                 "user_id": recipient.user_id,
@@ -804,6 +807,7 @@ class PushNotificationRequestBuilder(MessageRequestBuilder):
             payload=payload,
             template=template,
             schedule_at=context.get("schedule_at"),
+            expires_at=context.get("expires_at"),
             sandbox_mode=context.get("sandbox_mode"),
             extras={
                 "user_id": recipient.user_id,
@@ -910,6 +914,7 @@ class WebPushRequestBuilder(MessageRequestBuilder):
             template=template,
             template_variables=context,
             schedule_at=context.get("schedule_at"),
+            expires_at=context.get("expires_at"),
             sandbox_mode=context.get("sandbox_mode"),
             extras={
                 "user_id": recipient.user_id,

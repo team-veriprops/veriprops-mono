@@ -63,6 +63,8 @@ def _make_service(available=100_000):
     svc._earnings = AsyncMock()
     svc._banks = AsyncMock()
     svc._audit = MagicMock()
+    svc._config = AsyncMock()
+    svc._config.get_int = AsyncMock(return_value=2)  # PAYOUT_SLA_BUSINESS_DAYS default
     svc._earnings.available_minor = AsyncMock(return_value=available)
     return svc
 

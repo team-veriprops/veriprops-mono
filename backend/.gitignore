@@ -130,8 +130,15 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
-.env.local
+# Committed env files are CONFIG-ONLY (secrets live in Doppler — enforced by
+# test/unit/app/config/test_env_hygiene.py). Backups/overrides stay ignored.
+.env*
+!.env.example
+!.env.dev_personal
+!.env.test
+!.env.dev
+!.env.staging
+!.env.prod
 .venv
 env/
 venv/

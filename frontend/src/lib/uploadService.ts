@@ -1,10 +1,17 @@
 /**
  * Upload Service - Handles signed URL requests and file uploads
- * 
- * TODO: Replace these mock implementations with real API endpoints
+ *
+ * TODO(gap): mock implementation — replace with real API endpoints (signed-URL generation +
+ * metadata persistence via the backend storage facade) — PRD "Known Gaps & Roadmap".
  * - POST /api/uploads/sign for signed URL generation
  * - POST /api/properties/{propertyId}/photos for metadata persistence
  */
+
+import {
+  UPLOAD_MAX_IMAGE_SIZE,
+  UPLOAD_MAX_PDF_SIZE,
+  UPLOAD_MAX_VIDEO_SIZE,
+} from "@lib/config/app";
 
 export interface SignedUrlRequest {
   filename: string;
@@ -200,9 +207,9 @@ export interface ValidationResult {
   error?: string;
 }
 
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024;  // 10MB
-const MAX_PDF_SIZE = 20 * 1024 * 1024;    // 20MB
-const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
+const MAX_IMAGE_SIZE = UPLOAD_MAX_IMAGE_SIZE;
+const MAX_PDF_SIZE = UPLOAD_MAX_PDF_SIZE;
+const MAX_VIDEO_SIZE = UPLOAD_MAX_VIDEO_SIZE;
 const ALLOWED_TYPES = [
   'image/jpeg', 
   'image/png', 

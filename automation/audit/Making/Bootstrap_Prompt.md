@@ -37,10 +37,10 @@ ENVIRONMENT CONTRACT (CANONICAL)
 ====================================================================
 
 Backend:
-ENVIRONMENT=local|development|test|staging|production
+ENVIRONMENT=dev_personal|development|test|staging|production
 
 Frontend:
-NEXT_PUBLIC_ENVIRONMENT=local|development|test|staging|production
+NEXT_PUBLIC_ENVIRONMENT=dev_personal|development|test|staging|production
 
 Automation environments:
 - local

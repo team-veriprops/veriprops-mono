@@ -7,35 +7,19 @@ export default function CTASection() {
     <section className="py-24 lg:py-32">
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
         <div
-          className="relative rounded-3xl overflow-hidden px-10 py-16 md:px-20 md:py-24"
-          style={{
-            background: "linear-gradient(135deg, var(--brand-navy) 0%, var(--brand-navy-mid) 50%, var(--brand-navy-deep) 100%)",
-          }}
+          className="relative rounded-3xl overflow-hidden px-10 py-16 md:px-20 md:py-24 bg-[linear-gradient(135deg,var(--brand-navy)_0%,var(--brand-navy-mid)_50%,var(--brand-navy-deep)_100%)]"
         >
           {/* Background grid pattern */}
           <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0)",
-              backgroundSize: "40px 40px",
-            }}
+            className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.04)_1px,transparent_0)] bg-size-[40px_40px]"
           />
 
           {/* Ambient glow */}
           <div
-            className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full pointer-events-none"
-            style={{
-              background: "radial-gradient(circle, rgba(63,102,83,0.15) 0%, transparent 70%)",
-              transform: "translate(30%, -30%)",
-            }}
+            className="absolute top-0 right-0 w-125 h-125 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.15)_0%,transparent_70%)] translate-x-[30%] translate-y-[-30%]"
           />
           <div
-            className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full pointer-events-none"
-            style={{
-              background: "radial-gradient(circle, rgba(190,234,209,0.06) 0%, transparent 70%)",
-              transform: "translate(-30%, 30%)",
-            }}
+            className="absolute bottom-0 left-0 w-100 h-100 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(190,234,209,0.06)_0%,transparent_70%)] translate-x-[-30%] translate-y-[30%]"
           />
 
           <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-12">
@@ -43,12 +27,7 @@ export default function CTASection() {
             <div className="lg:max-w-[55%]">
               {/* Trust badge */}
               <div
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-8"
-                style={{
-                  backgroundColor: "rgba(63,102,83,0.2)",
-                  color: "#a5d0b9",
-                  border: "1px solid rgba(63,102,83,0.3)",
-                }}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-8 bg-brand-viridian/20 text-sidebar-accent-foreground border border-brand-viridian/30"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Verify before you pay
@@ -58,7 +37,7 @@ export default function CTASection() {
                 className="text-4xl md:text-5xl font-extrabold editorial-spacing font-display leading-[1.1] text-white mb-6"
               >
                 You&apos;ve worked too hard{" "}
-                <span style={{ color: "#a5d0b9" }}>to risk it on hearsay.</span>
+                <span className="text-sidebar-accent-foreground">to risk it on hearsay.</span>
               </h2>
 
               <p className="text-lg leading-relaxed mb-10 text-white/70 max-w-lg">
@@ -68,12 +47,7 @@ export default function CTASection() {
 
               {/* Disclaimer */}
               <div
-                className="text-xs leading-relaxed mb-10 px-4 py-3 rounded-xl"
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.06)",
-                  color: "rgba(255,255,255,0.5)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                }}
+                className="text-xs leading-relaxed mb-10 px-4 py-3 rounded-xl bg-white/6 text-white/50 border border-white/8"
               >
                 We reduce uncertainty. We do not eliminate it. Reports represent professional
                 opinions at the time of verification — not legal guarantees.
@@ -83,23 +57,14 @@ export default function CTASection() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
                   href={CTA_VERIFY_HREF}
-                  className="group inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:opacity-90 hover:scale-[0.98]"
-                  style={{
-                    backgroundColor: "var(--brand-viridian)",
-                    color: "#fff",
-                    boxShadow: "0 8px 24px -4px rgba(63,102,83,0.5)",
-                  }}
+                  className="group inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:opacity-90 hover:scale-[0.98] bg-brand-viridian text-white shadow-[0_8px_24px_-4px_rgba(63,102,83,0.5)]"
                 >
                   Verify a Property Now
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <Link
                   href={CTA_AGENT_HREF}
-                  className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:bg-white/10"
-                  style={{
-                    color: "#fff",
-                    border: "1px solid rgba(255,255,255,0.2)",
-                  }}
+                  className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:bg-white/10 text-white border border-white/20"
                 >
                   Become an Agent
                 </Link>
@@ -107,7 +72,7 @@ export default function CTASection() {
             </div>
 
             {/* Right — trust proof cards */}
-            <div className="flex flex-col gap-4 w-full lg:max-w-[280px]">
+            <div className="flex flex-col gap-4 w-full lg:max-w-70">
               {[
                 {
                   icon: Shield,
@@ -127,15 +92,10 @@ export default function CTASection() {
               ].map(({ icon: Icon, title, body }) => (
                 <div
                   key={title}
-                  className="flex items-start gap-4 p-5 rounded-2xl"
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}
+                  className="flex items-start gap-4 p-5 rounded-2xl bg-white/6 border border-white/8"
                 >
                   <div
-                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: "rgba(63,102,83,0.25)" }}
+                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-brand-viridian/25"
                   >
                     <Icon className="w-4.5 h-4.5 text-white/80" strokeWidth={1.5} />
                   </div>

@@ -144,6 +144,9 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
               <CardTitle>Evidence ({evidenceCount})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* TODO(gap): plain file input — wire the offline retry queue (lib/offlineQueue.ts)
+                  and the compression-capable upload manager (components/ui/upload) into this
+                  flow for low-bandwidth field capture — PRD "Known Gaps & Roadmap". */}
               <div className="flex flex-wrap items-end gap-2">
                 <div className="space-y-1">
                   <Label>Kind</Label>

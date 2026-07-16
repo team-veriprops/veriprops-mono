@@ -45,10 +45,19 @@ class Environment(str, enum.Enum):
     STAGING = "staging"
     TEST = "test"
     DEVELOPMENT = "dev"
-    LOCAL = "local"
+    DEV_PERSONAL = "dev_personal"
 
 class TemplatingEngine(str, enum.Enum):
     JINJA2 = "jinja2"
+
+
+class OtpMode(str, enum.Enum):
+    """OTP determinism contract. ``deterministic`` always returns ``TEST_OTP`` (required
+    in test, allowed in dev/dev_personal/staging); ``random`` generates a CSPRNG code (required
+    in production). Enforced by ``_enforce_otp_mode_policy``."""
+
+    DETERMINISTIC = "deterministic"
+    RANDOM = "random"
 
 
 # Secrets left at this placeholder must be supplied via the environment before a
@@ -67,6 +76,22 @@ _INSECURE_SECRET_VALUES = {
     "d344auth_jwt_s3cr3t-635678$%#agst634",
 }
 
+# Settings fields that hold credentials. Single source of truth for env hygiene:
+# committed .env.{env} files must never carry a real value for any of these keys —
+# real values are injected as process env vars by the secrets manager (Doppler),
+# which pydantic-settings gives precedence over env_file values. The app-level
+# Settings class extends this set with its own credential fields; the guard test
+# (test/unit/app/config/test_env_hygiene.py) enforces the contract on every
+# committed env file (backend and frontend).
+BASE_SECRET_ENV_KEYS: frozenset = frozenset({
+    "AUTHJWT_SECRET_KEY",
+    "DB_PASSWORD",
+    "SMTP_PASSWORD",
+    "GOOGLE_CLIENT_SECRET",
+    "FACEBOOK_APP_SECRET",
+    "APPLE_PRIVATE_KEY",
+})
+
 # The full settings snapshot (used by utils_settings to reconstruct the object) is
 # kept off `os.environ` so the aggregated secret blob is not exposed via the process
 # environment / `/proc/<pid>/environ` / subprocess inheritance. Read it via
@@ -84,26 +109,21 @@ def get_full_settings_json() -> Optional[str]:
 
 
 class AppodusBaseSettings(BaseSettings):
+    # Credential field names for this class; subclasses extend (see Settings).
+    SECRET_ENV_KEYS: ClassVar[frozenset] = BASE_SECRET_ENV_KEYS
+
+    # Brand identity — the real values are supplied per-env via .env.{env}. Committed
+    # defaults are neutral placeholders, never personal contact details.
     BRAND: str = "appodus"
-    BRAND_SUPPORT_EMAIL: str = "kingsley.ezenwwere@gmail.com"
-    BRAND_SUPPORT_PHONE: str = "2347039018727"
+    BRAND_SUPPORT_EMAIL: str = "support@veriprops.ng"
+    BRAND_SUPPORT_PHONE: str = ""
 
     ENVIRONMENT: Environment = Environment.DEVELOPMENT
-    ALLOW_AUTH_BYPASS: bool = False  # Optional
     ENABLE_OUT_MESSAGING: bool = False
     BASE_DIR: str = str(Path(__file__).parent.parent) # Used for accessing local files, e.g message templates
 
     APP_DOMAIN: str = "http://localhost:8000"
     SHOW_API: bool = True
-
-    # APPODUS
-    APPODUS_SERVICES_URL: str = "https://8d39e6e80670.ngrok-free.app"
-    APPODUS_CLIENT_ID: str = "b91b0ecb-7bd7-4630-91cb-af20549c8667"
-    # Real values live in the git-ignored .env.{env} files, never in committed source.
-    APPODUS_CLIENT_SECRET: str = SECRET_PLACEHOLDER
-    APPODUS_CLIENT_SECRET_ENCRYPTION_KEY: str = SECRET_PLACEHOLDER
-
-    APPODUS_CLIENT_REQUEST_EXPIRES_SECONDS: Optional[int] = 60 * 5 # 5mins
 
     # Enable / Disable Services
     DISABLE_RATE_LIMITING: bool = False
@@ -119,6 +139,8 @@ class AppodusBaseSettings(BaseSettings):
     # AUTH SESSION
     AUTH_LOCKOUT_THRESHOLD: int = 7
     AUTH_LOCKOUT_MINUTES: int = 15
+    # Minimum length enforced by the server-side password-strength baseline.
+    PASSWORD_MIN_LENGTH: int = 8
 
     # TOKEN
     ACCESS_TOKEN_TTL_SECONDS: int = 60 * 15  # 15 mins
@@ -128,6 +150,20 @@ class AppodusBaseSettings(BaseSettings):
     OTP_TOKEN_EXPIRE_SECONDS: Optional[int] = 60 * 5 # 5 mins
     EMAIL_OTP_TOKEN_EXPIRE_SECONDS: Optional[int] = 60 * 30 # 30 mins
     CACHE_DATA_EXPIRES_SECONDS: Optional[int] = 60 * 60 * 24 * 8 # Redis Default
+
+    # OTP delivery & verification knobs (OtpService). The code TTL is the window a
+    # sent code stays valid; resend/failure caps throttle abuse; the verified marker
+    # lets a multi-step signup wizard confirm the OTP step without re-verifying.
+    OTP_CODE_TTL_SECONDS: int = 60 * 10                 # 10 mins — sent-code validity
+    OTP_MAX_RESENDS: int = 3                            # resends allowed within the lockout window
+    OTP_RESEND_LOCKOUT_SECONDS: int = 60 * 30          # 30 mins — resend-count window
+    OTP_MAX_FAILURES: int = 5                           # invalid attempts before a new code is required
+    OTP_VERIFIED_MARKER_TTL_SECONDS: int = 60 * 30     # 30 mins — post-verify "completed" marker
+
+    # OAuth provider caches / short-lived tokens (login popup flow).
+    OAUTH_STATE_TTL_SECONDS: int = 60 * 10             # anti-CSRF state validity
+    OAUTH_JWKS_CACHE_SECONDS: int = 60 * 5             # provider JWKS cache lifetime
+    OAUTH_CLIENT_SECRET_JWT_TTL_SECONDS: int = 60 * 5  # Apple client-secret JWT exp
 
     # WEBHOOK
     WEBHOOK_PATH: Optional[str] = "/webhooks"
@@ -146,7 +182,7 @@ class AppodusBaseSettings(BaseSettings):
     FACEBOOK_APP_ID: Optional[str] = "mock_value"
     FACEBOOK_APP_SECRET: Optional[str] = "mock_value"
     # APPLE
-    APPLE_AUTH_BASE_URL: str = "https://accounts.google.com/o/oauth2/v2/auth"
+    APPLE_AUTH_BASE_URL: str = "https://appleid.apple.com/auth/authorize"
     APPLE_TEAM_ID: Optional[str] = "mock_value"
     APPLE_CLIENT_ID: Optional[str] = "mock_value"
     APPLE_KEY_ID: Optional[str] = "mock_value"
@@ -161,6 +197,11 @@ class AppodusBaseSettings(BaseSettings):
     # Configure application to store and get JWT from cookies
     AUTHJWT_TOKEN_LOCATION: List[str] = Field(default_factory=lambda: ["cookies"])
     # Only allow JWT cookies to be sent over https
+    # Note: access/refresh cookies use the `__Host-` prefix, which REQUIRES the Secure
+    # attribute — so AUTHJWT_COOKIE_SECURE must stay `true` even locally, or the browser
+    # silently drops the cookie and login never persists. Chrome treats http://localhost
+    # as a secure context and accepts Secure cookies there, so plain http works for dev;
+    # do not rename the cookie keys.
     AUTHJWT_COOKIE_SECURE: bool = True
     # Enable csrf double submit protection. default is True
     AUTHJWT_COOKIE_CSRF_PROTECT: bool = True
@@ -178,24 +219,8 @@ class AppodusBaseSettings(BaseSettings):
     # MESSAGING
     EMAIL_FROM_ADDRESS: Optional[str] = "noreply@example.com"
     EMAIL_FROM_NAME: str = "veriprops"
-    EMAIL_SUBJECTS: Dict[str, str] = {
-        "2fa_subject": "Extra Security: Your 2FA Code Inside",
-        "account_activation_subject": "Important: Your Account Status",
-        "account_deactivation_subject": "Important: Your Account Status",
-        "email_verification_subject": "One Quick Step: Verify Your Email",
-        "login_diff_device_security_alert_subject": "New Login Detected - Was This You?",
-        "name_update_success_subject": "Your Name Has Been Updated ✅",
-        "new_feature_announcement_subject": "Exciting New Features Just Launched!",
-        "new_user_email_verification_subject": "One Quick Step: Verify Your Email",
-        "new_user_welcome_subject": "Welcome to Your Real Estate Journey! 🏡",
-        "password_reset_request_subject": "Reset Your Password - Quick & Easy",
-        "password_update_success_subject": "Your Password Has Been Updated ✅",
-        "phone_verification_subject": "Verify Your Phone - Stay Secure",
-    }
     SMS_SENDER_ID: Optional[str] = "veriprops"
     SMS_TTL: int = 25000
-    MESSAGE_TEMPLATE_DIR: str = "resources/templates"
-    MESSAGING_BRAND_NAME: str = "appodus"
 
     MESSAGING_HEADERS: Dict[str, str] = {}
     MESSAGING_PRIORITY: int = 2
@@ -203,6 +228,11 @@ class AppodusBaseSettings(BaseSettings):
     MESSAGING_CATEGORIES: List[str] = []
     MESSAGING_RPS_LIMIT: int = 20
     MESSAGING_BULK_CONCURRENCY: int = 10
+    # Backoff ladder for re-dispatching failed outbound messages; the retry
+    # threshold is the list length (a message fails permanently after that many
+    # retries, or earlier if its expires_at horizon would be crossed).
+    # Env override uses JSON list syntax: MESSAGING_RETRY_INTERVALS_SECONDS=[5,5,5]
+    MESSAGING_RETRY_INTERVALS_SECONDS: List[int] = [60, 300, 900]
 
     # SMTP (Mailpit in dev/test — auto-selected when ENVIRONMENT is not prod/staging)
     SMTP_HOST: Optional[str] = "localhost"
@@ -210,27 +240,33 @@ class AppodusBaseSettings(BaseSettings):
     SMTP_USERNAME: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_USE_TLS: bool = False
+    # Bounds the SMTP socket. An SMTP host that accepts but blackholes the connection
+    # (a stopped Mailpit container behind a port proxy) would otherwise pin the sending
+    # worker thread forever and hang the request that triggered the mail. Socket errors
+    # are not retried per-attempt (only httpx ones are), so a dead host costs exactly one
+    # timeout inline and the message-level retry ladder carries the send from there —
+    # keep this comfortably below the caller's HTTP timeout, yet far enough above normal
+    # latency that a busy server never trips it.
+    SMTP_TIMEOUT_SECONDS: int = 15
 
     # TEST CONFIG — canonical test OTP returned when OTP_MODE=deterministic
     TEST_OTP: int = 654123
 
-    # OTP determinism contract
-    # deterministic → always return TEST_OTP (required in test, allowed in dev/local/staging)
-    # random        → always generate a random 6-digit code (required in production)
-    OTP_MODE: str = "deterministic"
+    # OTP determinism contract (see OtpMode).
+    OTP_MODE: OtpMode = OtpMode.DETERMINISTIC
 
     @model_validator(mode="after")
     def _enforce_otp_mode_policy(self) -> "AppodusBaseSettings":
         env = self.ENVIRONMENT
         mode = self.OTP_MODE
-        if env == Environment.TEST and mode != "deterministic":
+        if env == Environment.TEST and mode != OtpMode.DETERMINISTIC:
             raise ValueError(
-                f"ENVIRONMENT=test requires OTP_MODE=deterministic, got '{mode}'. "
-                "Set OTP_MODE=deterministic in .env.test."
+                f"ENVIRONMENT=test requires OTP_MODE={OtpMode.DETERMINISTIC.value}, got '{mode.value}'. "
+                f"Set OTP_MODE={OtpMode.DETERMINISTIC.value} in .env.test."
             )
-        if env == Environment.PRODUCTION and mode != "random":
+        if env == Environment.PRODUCTION and mode != OtpMode.RANDOM:
             raise ValueError(
-                f"ENVIRONMENT=prod requires OTP_MODE=random, got '{mode}'. "
+                f"ENVIRONMENT=prod requires OTP_MODE={OtpMode.RANDOM.value}, got '{mode.value}'. "
                 "Deterministic OTP is forbidden in production."
             )
         return self
@@ -253,18 +289,6 @@ class AppodusBaseSettings(BaseSettings):
                 f"AUTHJWT_SECRET_KEY must be a strong, unique secret in '{env_name}'. "
                 "Refusing to start with a placeholder or the committed default key. "
                 "Set AUTHJWT_SECRET_KEY in the environment."
-            )
-
-        if (self.APPODUS_CLIENT_SECRET or "").strip() in _INSECURE_SECRET_VALUES:
-            raise ValueError(
-                f"APPODUS_CLIENT_SECRET must be set in '{env_name}'. "
-                "Refusing to start with a placeholder value."
-            )
-
-        if self.ALLOW_AUTH_BYPASS:
-            raise ValueError(
-                f"ALLOW_AUTH_BYPASS must be false in '{env_name}'. "
-                "The client-auth bypass is only permitted in non-production environments."
             )
 
         return self
@@ -293,7 +317,7 @@ class AppodusBaseSettings(BaseSettings):
     DB_ENABLE_LOGS: Optional[bool] = False
     DB_ENABLE_LOG_POOL: Optional[bool] = True
     DB_MAIN_THREAD_CONTEXT_ID: int = 12345
-    DEPLOYMENT_IS_SERVERLESS: Optional[bool] = True
+    DEPLOYMENT_IS_SERVERLESS: Optional[bool] = False
 
     @field_validator("SQLALCHEMY_DATABASE_URI", mode="before")
     @classmethod
@@ -320,7 +344,10 @@ class AppodusBaseSettings(BaseSettings):
             return db_url
 
     model_config = SettingsConfigDict(
-        env_file=get_absolute_path(f'.env.{os.getenv("appodus_active_env", "local")}'),
+        # The selector name is lowercase by contract — conftest.py, docker-compose,
+        # the CI workflows, and the Vercel deploy flags all set `appodus_active_env`.
+        # Linux env vars are case-sensitive (only Windows tolerates a mismatch).
+        env_file=get_absolute_path(f'.env.{os.getenv("appodus_active_env", "dev_personal")}'),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

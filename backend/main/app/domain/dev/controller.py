@@ -35,3 +35,20 @@ async def reset():
 async def seed():
     _require_non_prod()
     return SuccessResponse[dict](data=await service.seed())
+
+
+@dev_router.get("/messages/latest", response_model=SuccessResponse[dict])
+async def latest_message(recipient: str):
+    """Bookkeeping snapshot of the newest outbound message to *recipient* — lets the
+    drive-through's messaging_retry stage assert stored/retrying/failed/sent state."""
+    _require_non_prod()
+    return SuccessResponse[dict](data=await service.latest_message(recipient))
+
+
+@dev_router.post("/messages/rewind", response_model=SuccessResponse[dict])
+async def rewind_message(recipient: str, rewind_expiry: bool = False):
+    """Pull the newest matching message's next_retry_at (and optionally expires_at) into
+    the past so the retry sweep fires immediately — determinism helper for e2e runs
+    against the default backoff ladder."""
+    _require_non_prod()
+    return SuccessResponse[dict](data=await service.rewind_message(recipient, rewind_expiry))

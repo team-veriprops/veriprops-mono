@@ -1,7 +1,6 @@
 """Report PDF facade (§10.1/§10.2): both providers emit a valid PDF that carries the
 legal footer on EVERY page (the §10.2 parity exit criterion), embed the QR, and render a
 SUPERSEDED watermark on prior versions."""
-import pytest
 
 from main.appodus_utils.integrations.report_pdf.fpdf2.fpdf2_provider import Fpdf2ReportPdfProvider
 from main.appodus_utils.integrations.report_pdf.stub.stub_provider import StubReportPdfProvider

@@ -40,8 +40,7 @@ export default function TopNavUserMenu({
           <Avatar className="size-8 cursor-pointer">
             {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={`${user.firstName} ${user.lastName}`} />}
             <AvatarFallback
-              className="text-xs font-bold"
-              style={{ backgroundColor: "rgba(63,102,83,0.12)", color: "var(--brand-viridian)" }}
+              className="text-xs font-bold bg-brand-viridian/12 text-brand-viridian"
             >
               {initials}
             </AvatarFallback>
@@ -53,20 +52,19 @@ export default function TopNavUserMenu({
         {/* Identity header */}
         <DropdownMenuLabel className="font-normal">
           <div className="flex items-center gap-2.5 py-0.5">
-            <Avatar className="size-8 flex-shrink-0">
+            <Avatar className="size-8 shrink-0">
               {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt="" />}
               <AvatarFallback
-                className="text-xs font-bold"
-                style={{ backgroundColor: "rgba(63,102,83,0.12)", color: "var(--brand-viridian)" }}
+                className="text-xs font-bold bg-brand-viridian/12 text-brand-viridian"
               >
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+              <p className="truncate text-sm font-semibold text-brand-navy">
                 {user ? `${user.firstName} ${user.lastName}` : "Loading…"}
               </p>
-              <p className="truncate text-xs" style={{ color: "rgba(0,13,34,0.45)" }}>
+              <p className="truncate text-xs text-muted-foreground">
                 {user?.email ?? ""}
               </p>
             </div>

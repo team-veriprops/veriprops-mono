@@ -1,4 +1,5 @@
 import { HttpClient } from "@lib/FetchHttpClient";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import { EarningJob, EarningsSummary } from "@/types/earnings";
 
@@ -14,7 +15,7 @@ export class EarningsService {
     return this.http.get(`/agents/earnings`);
   }
 
-  listJobs(page = 0, pageSize = 10): Promise<SuccessResponse<Page<EarningJob>>> {
+  listJobs(page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<EarningJob>>> {
     return this.http.get(`/agents/earnings/jobs?page=${page}&page_size=${pageSize}`);
   }
 }

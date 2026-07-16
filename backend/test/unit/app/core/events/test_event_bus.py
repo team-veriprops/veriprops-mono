@@ -1,6 +1,5 @@
 """Event bus (§4.8): one publish fans to every subscriber, best-effort (one failure never
 stops another), and pure SSE nudges carry no type."""
-import pytest
 
 from main.app.core.events.bus import EventBus
 from main.app.core.events.events import DomainEvent, EventType

@@ -41,7 +41,7 @@ class NotificationDispatcher(BaseMessageSender):
             recipient_user_id=MessageRecipientUserId(user_id=recipient_user_id),
             template=template,
             context_modules=[MessageContextModule.USER],
-            category=MessageCategory.TRANSACTIONAL,
+            category=MessageCategory.TRANSACTION,
             default_channels=channels,
             extra_context=extra_context or None,
         )

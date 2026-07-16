@@ -228,7 +228,7 @@ class Utils:
 
     @staticmethod
     def datetime_now_diff_in_sec(start_datetime: datetime):
-        if not datetime:
+        if not start_datetime:
             return 0
 
         if isinstance(start_datetime, str):
@@ -393,9 +393,10 @@ class Utils:
         # OTP_MODE is set as an env var by settings.set_env_vars() at startup.
         # deterministic → return TEST_OTP (stable, predictable, required in test env)
         # random        → generate a cryptographically random 6-digit code (required in prod)
-        otp_mode = os.environ.get("OTP_MODE", "deterministic").lower()
+        from main.appodus_utils.config.settings import OtpMode
+        otp_mode = os.environ.get("OTP_MODE", OtpMode.DETERMINISTIC.value).lower()
 
-        if otp_mode == "deterministic":
+        if otp_mode == OtpMode.DETERMINISTIC.value:
             test_otp = Utils.get_from_env_fail_if_not_exists(env_key="TEST_OTP")
             return str(test_otp)
 

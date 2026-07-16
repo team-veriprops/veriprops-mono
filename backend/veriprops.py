@@ -12,7 +12,6 @@ from starlette import status
 
 from main.app.config.settings import settings  # noqa: F401
 from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
-from main.app.db.seeder import DataSeeder
 from main.appodus_utils.integrations.webhook import webhook_router
 from main.appodus_utils.config.client_manager import ClientStateManager
 
@@ -26,6 +25,7 @@ from main.appodus_utils.exception.exception_handlers import (
 )
 from main.appodus_utils.exception.exceptions import AppodusBaseException
 from main.appodus_utils.middleware.db_session_middleware import DBSessionMiddleware
+from main.appodus_utils.middleware.edge_auth_middleware import EdgeAuthMiddleware
 from main.appodus_utils.middleware.request_logging_middleware import RequestLoggingMiddleware
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -38,7 +38,6 @@ from main.app.jobs.scheduled import start_scheduler, stop_scheduler
 
 logger: Logger = di['logger']
 client_state_manager: ClientStateManager = ClientStateManager()
-data_seeder: DataSeeder = DataSeeder()
 
 
 @asynccontextmanager
@@ -46,8 +45,6 @@ async def lifespan_event(app: FastAPI):
     logger.debug("Running lifespan..")
 
     await client_state_manager.init_clients()
-    # Seed data
-    await data_seeder.run_data_seed()
 
     # Start Scheduled Jobs
     start_scheduler()
@@ -82,7 +79,6 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 #
 # # Middlewares
-# app.add_middleware(ClientAuthMiddleware)
 app.add_middleware(DBSessionMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 # CORS Configuration
@@ -92,6 +88,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "X-TIMEZONE", "X-LOCALE", "X-CSRF-Token"], )
+# Edge auth — added last so it runs OUTERMOST: direct-origin traffic that bypassed
+# the Cloudflare proxy is rejected before logging/DB session work. No-op while
+# EDGE_AUTH_SECRET is unset/placeholder (local, test, e2e).
+app.add_middleware(
+    EdgeAuthMiddleware,
+    secret=settings.EDGE_AUTH_SECRET,
+    header_name=settings.EDGE_AUTH_HEADER,
+)
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)

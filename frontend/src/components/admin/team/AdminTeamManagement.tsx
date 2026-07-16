@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Badge } from "@3rdparty/ui/badge";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
@@ -43,7 +44,7 @@ const columns: Column<AdminMember & Record<string, unknown>>[] = [
   },
 ];
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 interface TeamTableState extends Record<string, unknown> {
   page: number;

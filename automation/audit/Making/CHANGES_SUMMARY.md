@@ -18,7 +18,7 @@ This batch of changes establishes a deterministic, automation-stable foundation 
 
 `Utils.get_otp_code()` now reads `OTP_MODE` env var directly instead of doing brittle string comparisons against `ENVIRONMENT`.
 
-**Why:** The old code compared `os.environ["ENVIRONMENT"]` to `"Environment.LOCAL"` — a string representation of an enum — which silently broke whenever the env var serialization changed. The new contract is explicit, enforced at startup, and independent of environment naming.
+**Why:** The old code compared `os.environ["ENVIRONMENT"]` to `"Environment.DEV_PERSONAL"` — a string representation of an enum — which silently broke whenever the env var serialization changed. The new contract is explicit, enforced at startup, and independent of environment naming.
 
 ### 2. Dev reset/seed endpoints (`backend/main/app/domain/dev/`)
 
@@ -49,7 +49,7 @@ Both are gated by `_require_non_prod()` (404 in production) AND the router is on
 **What:**
 - Added `SMTP = "SMTP"` to `MessageProviderName` enum.
 - Added `SmtpEmailProvider(IMessageProvider)` that sends email via `smtplib.SMTP` in `run_in_executor` (non-blocking). Hard-fails in production/staging.
-- Added `"email"` routing rule in `MessageRouter._load_routing_rules()`: when `ENVIRONMENT not in {PRODUCTION, STAGING}`, route to SMTP; fallback to Mailjet/SendGrid.
+- Added `"email"` routing rule in `MessageRouter._load_routing_rules()`: when `ENVIRONMENT not in {PRODUCTION, STAGING}`, route to SMTP; fallback to Mailjet.
 - Added SMTP connection settings to `AppodusBaseSettings` (defaults: `localhost:1025`, no auth).
 
 **Why:** Without email capture, automated tests that trigger emails (OTP, welcome, verification) cannot verify delivery without external mail servers. Mailpit captures all SMTP email in a local UI, making email assertions possible in automation.

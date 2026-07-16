@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import Depends, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from kink import di
 
@@ -18,9 +18,8 @@ from main.app.domain.audit.pack_service import VerificationAuditPackService
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
 from main.appodus_utils.db.models import SuccessResponse
-from main.appodus_utils.router import AppRouter
 
-audit_router = AppRouter(prefix="/admin/audit", tags=["Admin — Audit"])
+audit_router = APIRouter(prefix="/admin/audit", tags=["Admin — Audit"])
 
 @audit_router.get(
     "/actions",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_PAGE_SIZE, DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { EvidenceKind } from "@/types/agentTask";
 import { AgentTaskService } from "./agent-task-service";
@@ -19,7 +20,7 @@ export const agentTaskKeys = {
 export function useTaskHistoryQuery(taskId: string, page = 0) {
   return useQuery({
     queryKey: agentTaskKeys.history(taskId, page),
-    queryFn: async () => (await service.getHistory(taskId, page, 20)).data ?? null,
+    queryFn: async () => (await service.getHistory(taskId, page, DEFAULT_HISTORY_PAGE_SIZE)).data ?? null,
   });
 }
 
@@ -32,7 +33,7 @@ export function useAgentDashboardQuery(enabled = true) {
   });
 }
 
-export function useAgentTasksQuery(state: string | undefined, page = 0, pageSize = 10) {
+export function useAgentTasksQuery(state: string | undefined, page = 0, pageSize = DEFAULT_PAGE_SIZE) {
   return useQuery({
     queryKey: agentTaskKeys.list(state, page, pageSize),
     queryFn: async () => (await service.list(state, page, pageSize)).data ?? null,

@@ -37,10 +37,11 @@ from main.app.domain.verification.share.models import (
     PublicSummaryDto,
     ShareDto,
     SharedReportDto,
-    UpdateVerificationShareDto,
     VerificationShare,
 )
 from main.app.domain.verification.share.repo import VerificationShareRepo
+from main.app.domain.system_config.models import ConfigKey
+from main.app.domain.system_config.service import ConfigService
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
@@ -49,8 +50,6 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
-
-_DEFAULT_SHARE_EXPIRY_DAYS = 30  # §13.2 default; the customer may pass a shorter window.
 
 _PRIVATE_MESSAGE = "Public sharing is not enabled for this verification."
 _IN_PROGRESS_MESSAGE = "This verification is still in progress."
@@ -72,6 +71,7 @@ class ShareService:
         property_repo: PropertyRepo,
         verification_messages: VerificationMessages,
         audit_service: AuditLogService,
+        config_service: ConfigService,
     ):
         self._share_repo = share_repo
         self._verification_repo = verification_repo
@@ -81,6 +81,7 @@ class ShareService:
         self._properties = property_repo
         self._messages = verification_messages
         self._audit = audit_service
+        self._config = config_service
 
     # ── Customer share management (§13.2) ─────────────────────────
 
@@ -117,7 +118,8 @@ class ShareService:
             token=Utils.random_str(36),
             recipient_email=(req.recipient_email or None) if req.share_type == ShareType.NAMED_FULL else None,
         ))
-        days = req.expires_in_days if req.expires_in_days and req.expires_in_days > 0 else _DEFAULT_SHARE_EXPIRY_DAYS
+        default_expiry_days = await self._config.get_int(ConfigKey.SHARE_LINK_DEFAULT_EXPIRY_DAYS)
+        days = req.expires_in_days if req.expires_in_days and req.expires_in_days > 0 else default_expiry_days
         share.expires_at = Utils.datetime_now() + timedelta(days=days)
 
         self._audit.schedule(

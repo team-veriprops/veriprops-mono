@@ -15,7 +15,7 @@ export default function CustomerMessagesContainer({ verificationId }: { verifica
   return (
     <div className="flex flex-col gap-3 h-[70vh]">
       <div>
-        <h1 className="text-lg font-semibold" style={{ color: "var(--brand-navy)" }}>
+        <h1 className="text-lg font-semibold text-brand-navy">
           Messages
         </h1>
         <p className="text-sm text-gray-500">

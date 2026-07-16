@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { CheckCircle2, ShieldCheck, Lock, Eye } from "lucide-react";
-import { ROUTES } from "@lib/routes";
+import { ShieldCheck, Lock, Eye } from "lucide-react";
 import BrandLogo from "@/components/ui/BrandLogo";
 
 interface AuthShellProps {
@@ -25,30 +23,17 @@ export default function AuthShell({
   panelCopy = "We do not eliminate it. Every Veriprops verification follows a rigorous, evidence-backed methodology — so you can act on facts, not hearsay.",
 }: AuthShellProps) {
   return (
-    <div className="min-h-screen grid lg:grid-cols-[5fr_7fr] bg-[var(--brand-surface-base)]">
+    <div className="min-h-screen grid lg:grid-cols-[5fr_7fr] bg-brand-surface">
       {/* ─── Left: brand panel ───────────────────────────────────── */}
       <aside
-        className="hidden lg:flex flex-col justify-between p-12 xl:p-16 relative overflow-hidden text-white"
-        style={{
-          background:
-            "linear-gradient(135deg, var(--brand-navy) 0%, var(--brand-navy-deep) 60%, #0f2d50 100%)",
-        }}
+        className="hidden lg:flex flex-col justify-between p-12 xl:p-16 relative overflow-hidden text-white bg-[linear-gradient(135deg,var(--brand-navy)_0%,var(--brand-navy-deep)_60%,#0f2d50_100%)]"
       >
         {/* Ambient grid + glow */}
         <div
-          className="absolute inset-0 pointer-events-none opacity-40"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0)",
-            backgroundSize: "32px 32px",
-          }}
+          className="absolute inset-0 pointer-events-none opacity-40 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.05)_1px,transparent_0)] bg-size-[32px_32px]"
         />
         <div
-          className="absolute -top-40 -right-40 w-[520px] h-[520px] rounded-full pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(63,102,83,0.28) 0%, transparent 70%)",
-          }}
+          className="absolute -top-40 -right-40 w-130 h-130 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.28)_0%,transparent_70%)]"
         />
 
         <BrandLogo variant="light" />
@@ -56,8 +41,7 @@ export default function AuthShell({
         <div className="relative z-10 max-w-md">
           <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest bg-white/8 border border-white/12">
             <span
-              className="w-1.5 h-1.5 rounded-full"
-              style={{ backgroundColor: "var(--brand-viridian-light)" }}
+              className="w-1.5 h-1.5 rounded-full bg-brand-viridian-light"
             />
             Trusted by Nigerians worldwide
           </span>
@@ -71,13 +55,9 @@ export default function AuthShell({
             {PILLARS.map(({ icon: Icon, label }) => (
               <li key={label} className="flex items-center gap-3 text-sm text-white/85">
                 <span
-                  className="w-9 h-9 flex items-center justify-center rounded-lg shrink-0"
-                  style={{
-                    backgroundColor: "rgba(63,102,83,0.18)",
-                    border: "1px solid rgba(190,234,209,0.2)",
-                  }}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg shrink-0 bg-brand-viridian/18 border border-brand-viridian-light/20"
                 >
-                  <Icon className="w-4 h-4" style={{ color: "var(--brand-viridian-light)" }} />
+                  <Icon className="w-4 h-4 text-brand-viridian-light" />
                 </span>
                 {label}
               </li>
@@ -85,7 +65,7 @@ export default function AuthShell({
           </ul>
         </div>
 
-        <p className="relative z-10 text-xs text-white/40">
+        <p className="relative z-10 text-xs text-white/60">
           © 2026 Veriprops. We reduce uncertainty. We do not eliminate it.
         </p>
       </aside>
@@ -94,21 +74,11 @@ export default function AuthShell({
       <main className="flex flex-col px-6 sm:px-10 lg:px-16 py-10 lg:py-16 min-h-screen">
         {/* Mobile header */}
         <div className="lg:hidden mb-8 flex items-center justify-between">
-          <Link href={ROUTES.HOME} className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg signature-gradient flex items-center justify-center">
-              <CheckCircle2 className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
-            </div>
-            <span
-              className="text-lg font-extrabold tracking-tight font-display editorial-spacing"
-              style={{ color: "var(--brand-navy)" }}
-            >
-              Veriprops
-            </span>
-          </Link>
+          <BrandLogo variant="dark" size="sm" />
         </div>
 
         <div className="flex-1 flex items-center">
-          <div className="w-full max-w-[440px] mx-auto">{children}</div>
+          <div className="w-full max-w-110 mx-auto">{children}</div>
         </div>
       </main>
     </div>

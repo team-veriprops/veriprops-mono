@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+import { SSE_BASE_BACKOFF_MS, SSE_MAX_RETRIES } from "@lib/config/app";
+
 export interface VerificationStreamEvent {
   event: string;
   data: Record<string, unknown>;
@@ -13,8 +15,8 @@ interface Options {
   enabled?: boolean;
 }
 
-const MAX_RETRIES = 3;
-const BASE_BACKOFF_MS = 1000;
+const MAX_RETRIES = SSE_MAX_RETRIES;
+const BASE_BACKOFF_MS = SSE_BASE_BACKOFF_MS;
 
 export function useVerificationStream({ vid, onEvent, enabled = true }: Options) {
   const esRef = useRef<EventSource | null>(null);

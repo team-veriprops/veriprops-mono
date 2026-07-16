@@ -8,6 +8,7 @@ import {
   useMarkNotificationReadMutation,
   useNotificationsQuery,
 } from "./libs/useNotificationQueries";
+import { cn } from "@lib/utils";
 
 /** Full notification history (§N.4 "All notifications"). */
 export default function NotificationsContainer() {
@@ -24,8 +25,8 @@ export default function NotificationsContainer() {
     <div className="max-w-2xl mx-auto p-6">
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
-          <Bell className="w-5 h-5" style={{ color: "var(--brand-viridian)" }} />
-          <h1 className="text-xl font-semibold" style={{ color: "var(--brand-navy)" }}>
+          <Bell className="w-5 h-5 text-brand-viridian" />
+          <h1 className="text-xl font-semibold text-brand-navy">
             Notifications
           </h1>
         </div>
@@ -53,14 +54,16 @@ export default function NotificationsContainer() {
                 markRead.mutate(n.id);
                 if (n.link) router.push(n.link);
               }}
-              className="w-full text-left rounded-xl border border-black/5 bg-white px-4 py-3 hover:bg-black/[0.02]"
-              style={{ backgroundColor: n.read ? undefined : "rgba(63,102,83,0.04)" }}
+              className={cn(
+                "w-full text-left rounded-xl border border-black/5 bg-white px-4 py-3 hover:bg-black/2",
+                !n.read && "bg-brand-viridian/4"
+              )}
             >
               <div className="flex items-center gap-2">
                 {!n.read && (
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: "var(--brand-viridian)" }} />
+                  <span className="w-2 h-2 rounded-full shrink-0 bg-brand-viridian" />
                 )}
-                <p className="text-sm font-medium" style={{ color: "var(--brand-navy)" }}>
+                <p className="text-sm font-medium text-brand-navy">
                   {n.title}
                 </p>
               </div>

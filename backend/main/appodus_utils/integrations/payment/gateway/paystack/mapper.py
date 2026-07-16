@@ -1,5 +1,4 @@
 from typing import Optional
-from math import floor
 
 from main.appodus_utils.integrations.payment.gateway.models import PaymentInitRequest
 from main.appodus_utils.integrations.payment.gateway.paystack.models import PaystackInitPaymentDto

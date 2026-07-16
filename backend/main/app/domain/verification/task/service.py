@@ -142,8 +142,15 @@ class VerificationTaskService:
         await self._assert_capacity(agent_id)
 
         task = await self._task_repo.get_by_role(verification_id, role.value)
-        if task is None:
+        created_now = task is None
+        if created_now:
             tier = VerificationTier(verification.tier)
+            # An out-of-tier task (e.g. LAWYER on STANDARD) would later block release,
+            # which requires exactly the tier's task count.
+            if role not in roles_for_tier(tier):
+                raise ValidationException(
+                    message=f"The {role.value} role is not part of the {tier.value} tier."
+                )
             if not is_unlocked(tier, role, await self._submitted_roles(verification_id)):
                 raise InvalidResourceStateException(
                     resource="task",
@@ -155,13 +162,21 @@ class VerificationTaskService:
 
         reassignment = task.assigned_agent_id is not None and task.assigned_agent_id != agent_id
         self._assert_task_transition(task.state, TaskState.ASSIGNED)
-        await self._task_repo.update(task.id, UpdateTaskDto(
-            state=TaskState.ASSIGNED.value,
-            assigned_agent_id=agent_id,
-            assignment_mode=TaskAssignmentMode.MANUAL.value,
-            in_pool=False,
-        ))
-        await self._set_assign_timestamps(task.id)
+        if created_now:
+            # A row created in this same transaction is invisible to the repo's re-fetching
+            # update path (get-after-create) — set the fields on the attached object instead.
+            task.state = TaskState.ASSIGNED.value
+            task.assigned_agent_id = agent_id
+            task.assignment_mode = TaskAssignmentMode.MANUAL.value
+            task.in_pool = False
+        else:
+            await self._task_repo.update(task.id, UpdateTaskDto(
+                state=TaskState.ASSIGNED.value,
+                assigned_agent_id=agent_id,
+                assignment_mode=TaskAssignmentMode.MANUAL.value,
+                in_pool=False,
+            ))
+        await self._set_assign_timestamps(task)
 
         self._audit.schedule(
             action=AuditActionType.TASK_REASSIGNED if reassignment else AuditActionType.TASK_ASSIGNED,
@@ -173,7 +188,9 @@ class VerificationTaskService:
             details={"verification_id": verification_id, "role": role.value, "agent_id": agent_id},
         )
         await self._derive_and_persist(verification_id, actor_id=admin_id)
-        return await self._task_repo.get_model(task.id)
+        # Fall back to the attached object: a task first created by this very assignment
+        # may not be re-fetchable by id inside the same transaction (get-after-create).
+        return await self._task_repo.get_model(task.id) or task
 
     # ── Agent task execution (§7.1, §7.3) ─────────────────────────
 
@@ -291,15 +308,18 @@ class VerificationTaskService:
             raise InvalidResourceStateException(
                 resource="task", message="Evidence can only be added while the task is in progress."
             )
+        # Entity refs travel as hex: task.id is a uuid.UUID on the ORM row, while
+        # task_evidence.task_id is a String(36) reference column.
         item = await self._evidence.capture(
-            task_id=task.id, verification_id=task.verification_id, agent_id=agent_id,
+            task_id=Utils.uuid_to_hex(task.id), verification_id=task.verification_id,
+            agent_id=agent_id,
             file_bytes=file_bytes, kind=kind, mime_type=mime_type,
             gps_latitude=gps_latitude, gps_longitude=gps_longitude,
         )
         self._audit.schedule(
             action=AuditActionType.EVIDENCE_CAPTURED,
             resource_type="task_evidence", resource_id=item.id, actor_id=agent_id,
-            details={"task_id": task.id, "sha256": item.content_sha256, "kind": item.kind},
+            details={"task_id": Utils.uuid_to_hex(task.id), "sha256": item.content_sha256, "kind": item.kind},
         )
         # Pure SSE refresh — no customer notification at capture (evidence is only
         # customer-visible after review-approval, D17).
@@ -315,7 +335,7 @@ class VerificationTaskService:
         every required task is SUBMITTED (§2.5)."""
         task = await self._get_owned_task(task_id, agent_id)
         validate_submission(AgentRole(task.role), payload)
-        if await self._evidence.count_for_task(task.id) == 0:
+        if await self._evidence.count_for_task(Utils.uuid_to_hex(task.id)) == 0:
             raise ValidationException(
                 message="At least one evidence item is required before submitting."
             )
@@ -488,8 +508,10 @@ class VerificationTaskService:
         task = await self._task_repo.get_model(task_id)
         task.pool_expires_at = expires_at
 
-    async def _set_assign_timestamps(self, task_id: str) -> None:
-        task = await self._task_repo.get_model(task_id)
+    async def _set_assign_timestamps(self, task: VerificationTask) -> None:
+        # Takes the attached ORM object: on the create-then-assign path (e.g. a LAWYER task
+        # first materialised by the assignment itself) a same-transaction re-fetch by id
+        # can return None — the get-after-create gotcha.
         now = Utils.datetime_now()
         task.assigned_at = now
         task.accept_deadline_at = now + timedelta(hours=settings.TASK_NO_SHOW_TIMEOUT_HOURS)

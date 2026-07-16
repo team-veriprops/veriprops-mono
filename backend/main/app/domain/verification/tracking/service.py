@@ -12,6 +12,7 @@ from typing import List, Optional
 
 from kink import inject
 
+from main.app.config.settings import settings
 from main.app.core.sla import (
     ACTIVE_SLA_STATES,
     SLA_BUSINESS_DAYS,
@@ -28,6 +29,7 @@ from main.app.domain.property.repo import PropertyRepo
 from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.service import VerificationService
 from main.app.domain.verification.task.evidence.service import EvidenceService
+from main.app.domain.verification.task.models import ReviewDecision
 from main.app.domain.verification.task.repo import VerificationTaskRepo
 from main.app.domain.verification.tracking.labels import (
     LAWYER_AWAITING_LABEL,
@@ -53,16 +55,16 @@ from main.appodus_utils.decorators.decorate_all_methods import decorate_all_meth
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 
-# review_decision string recorded by the review service on approval (§8.3). A task is
+# review_decision recorded by the review service on approval (§8.3). A task is
 # customer-visible as an interim milestone / its evidence surfaces once this is set,
 # which stays true through release (state→APPROVED) and clears on reopen.
-_REVIEW_APPROVED = "APPROVED"
+_REVIEW_APPROVED = ReviewDecision.APPROVED.value
 # Task states counted as "work done" for the customer progress bar — reaches 100% at
 # UNDER_REVIEW (every required task SUBMITTED), matching §9.3.
 _SETTLED_STATES = {TaskState.SUBMITTED.value, TaskState.APPROVED.value}
-_EVIDENCE_PREVIEW_LIMIT = 3
+_EVIDENCE_PREVIEW_LIMIT = settings.EVIDENCE_PREVIEW_LIMIT
 # Number of most-recent verifications surfaced on the portal dashboard.
-_DASHBOARD_RECENT_LIMIT = 5
+_DASHBOARD_RECENT_LIMIT = settings.DASHBOARD_RECENT_LIMIT
 # Portal dashboard rollups (§9). "In progress" reuses the SLA-active set so the number
 # always matches the SLA countdown surface.
 _AWAITING_PAYMENT_STATUSES = {
@@ -317,8 +319,14 @@ class CustomerTrackingService:
         return [await self._evidence_dto(e, visible[e.task_id]) for e in items]
 
     def _visible_task_roles(self, tasks) -> dict:
-        """task_id → role for tasks whose evidence the customer may see (review-approved, D17)."""
-        return {t.id: AgentRole(t.role) for t in tasks if t.review_decision == _REVIEW_APPROVED}
+        """task_id → role for tasks whose evidence the customer may see (review-approved, D17).
+
+        Keys are hex strings: evidence rows reference tasks via a String(36) column, while
+        the ORM task's ``id`` is a ``uuid.UUID`` — an un-coerced key never matches."""
+        return {
+            Utils.uuid_to_hex(t.id): AgentRole(t.role)
+            for t in tasks if t.review_decision == _REVIEW_APPROVED
+        }
 
     async def _evidence_dto(self, e, role: AgentRole) -> CustomerEvidenceDto:
         return CustomerEvidenceDto(

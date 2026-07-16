@@ -14,7 +14,7 @@ from kink import inject
 from main.app.core.state.status import VerificationTier
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.verification.pricing import TIER_PRICE_NGN_KOBO, is_upgrade, price_ngn_kobo, upgrade_delta_kobo
+from main.app.domain.verification.pricing import is_upgrade, price_ngn_kobo, upgrade_delta_kobo
 from main.app.domain.verification.pricing_config.line_item.models import (
     CreatePricingLineItemDto,
     PricingLineItem,
@@ -49,20 +49,6 @@ class PricingConfigService:
         self._tiers = tier_repo
         self._line_items = line_item_repo
         self._audit = audit_service
-
-    async def seed_defaults(self) -> None:
-        """Idempotently create a tier-price row (+ one default line item) per tier from the
-        static seed defaults. Never overwrites an admin-edited row."""
-        for tier in VerificationTier:
-            if await self._tiers.get_for_tier(tier.value) is None:
-                await self._tiers.create(CreatePricingTierConfigDto(
-                    tier=tier.value, price_ngn_kobo=TIER_PRICE_NGN_KOBO[tier],
-                ))
-            if not await self._line_items.list_for_tier(tier.value):
-                await self._line_items.create(CreatePricingLineItemDto(
-                    tier=tier.value, label="Verification service fee",
-                    amount_minor=TIER_PRICE_NGN_KOBO[tier], sort_order=0,
-                ))
 
     async def tier_price_kobo(self, tier: VerificationTier) -> int:
         """The live contractual NGN price for a tier, in kobo — the single resolver every

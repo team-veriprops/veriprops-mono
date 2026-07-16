@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { AdminService } from "./admin-service";
 import { AdminSubRole } from "@/types/admin";
@@ -14,7 +15,7 @@ export const adminKeys = {
   invitePreview: (token: string) => ["admin", "invite-preview", token] as const,
 };
 
-export function useAdminTeamQuery(page = 0, pageSize = 10, query = "", subRole = "") {
+export function useAdminTeamQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE, query = "", subRole = "") {
   return useQuery({
     queryKey: adminKeys.team(page, pageSize, query, subRole),
     queryFn: async () => (await adminService.listTeam(page, pageSize, query, subRole)).data ?? null,
@@ -22,7 +23,7 @@ export function useAdminTeamQuery(page = 0, pageSize = 10, query = "", subRole =
   });
 }
 
-export function useAdminInvitationsQuery(page = 0, pageSize = 10) {
+export function useAdminInvitationsQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE) {
   return useQuery({
     queryKey: adminKeys.invitations(page, pageSize),
     queryFn: () => adminService.listInvitations(page, pageSize),

@@ -4,7 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Send, ShieldCheck, Info } from "lucide-react";
 import { ChatMessage, MessageKind, SenderKind } from "@/types/chat";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
+import { usePublicConfigQuery } from "@components/website/auth/libs/useAuthQueries";
 import { useMarkReadMutation, useMessagesQuery } from "./libs/useChatQueries";
+import { cn } from "@lib/utils";
+
+// Fallback until /config/public resolves; backend is the source of truth.
+const DEFAULT_CHAT_MESSAGE_MAX_LENGTH = 2000;
 
 interface ChatThreadProps {
   conversationId: string | null;
@@ -30,6 +35,8 @@ export default function ChatThread({
 }: ChatThreadProps) {
   const session = useAuthStore((s) => s.session);
   const myId = session?.user?.id;
+  const { data: publicConfig } = usePublicConfigQuery();
+  const maxLength = publicConfig?.chatMessageMaxLength ?? DEFAULT_CHAT_MESSAGE_MAX_LENGTH;
   const { data, isLoading } = useMessagesQuery(conversationId, 0);
   const markRead = useMarkReadMutation();
   const [body, setBody] = useState("");
@@ -66,7 +73,7 @@ export default function ChatThread({
   }
 
   return (
-    <div className="flex flex-col h-full min-h-[24rem] rounded-xl border border-black/5 bg-white overflow-hidden">
+    <div className="flex flex-col h-full min-h-96 rounded-xl border border-black/5 bg-white overflow-hidden">
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
         {isLoading && <p className="text-sm text-gray-400">Loading…</p>}
         {!isLoading && messages.length === 0 && (
@@ -104,17 +111,16 @@ export default function ChatThread({
                 }
               }}
               rows={2}
-              maxLength={2000}
+              maxLength={maxLength}
               placeholder="Write a message…"
               data-testid="chat-composer"
-              className="flex-1 resize-none rounded-lg border border-black/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-viridian)]/30"
+              className="flex-1 resize-none rounded-lg border border-black/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-viridian/30"
             />
             <button
               onClick={handleSend}
               disabled={sending || !body.trim()}
               data-testid="chat-send"
-              className="h-10 w-10 flex-shrink-0 rounded-lg flex items-center justify-center text-white disabled:opacity-40"
-              style={{ backgroundColor: "var(--brand-viridian)" }}
+              className="h-10 w-10 shrink-0 rounded-lg flex items-center justify-center text-white disabled:opacity-40 bg-brand-viridian"
               aria-label="Send message"
             >
               <Send className="w-4 h-4" />
@@ -146,12 +152,10 @@ function MessageBubble({ message, mine }: { message: ChatMessage; mine: boolean 
       <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
         {!mine && <span className="text-[11px] text-gray-400 mb-0.5 px-1">{name}</span>}
         <div
-          className="rounded-2xl px-3.5 py-2 text-sm"
-          style={
-            mine
-              ? { backgroundColor: "var(--brand-viridian)", color: "#fff" }
-              : { backgroundColor: "var(--brand-surface-low)", color: "var(--brand-navy)" }
-          }
+          className={cn(
+            "rounded-2xl px-3.5 py-2 text-sm",
+            mine ? "bg-brand-viridian text-white" : "bg-brand-surface-low text-brand-navy",
+          )}
         >
           {message.body}
         </div>

@@ -1,3 +1,5 @@
+import type { VerificationTier } from "@/types/verification";
+
 export enum TransactionCurrency {
   NGN = "NGN",
   USD = "USD",
@@ -295,9 +297,19 @@ export interface LegalDocument extends LegalDocumentSummary {
   body?: string;
 }
 
+// Mirrors backend PublicPricingTierDto.
+export interface PublicPricingTier {
+  tier: VerificationTier;
+  priceNgnMinor: number;
+}
+
 // Mirrors backend PublicConfigDto.
 export interface PublicConfig {
   phoneVerificationEnabled: boolean;
   // §B go-live gate (D18): whether the Premium Legal Opinion report section is live.
   legalOpinionEnabled?: boolean;
+  // Chat message body cap — backend is the source of truth for the input maxLength.
+  chatMessageMaxLength?: number;
+  // Live per-tier prices — backend `pricing_tier_config` is the source of truth.
+  pricingTiers?: PublicPricingTier[];
 }

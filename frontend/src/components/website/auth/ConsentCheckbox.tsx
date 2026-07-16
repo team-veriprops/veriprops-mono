@@ -25,20 +25,18 @@ export default function ConsentCheckbox({ doc, checked, onChange, error, id }: C
           onCheckedChange={(value) => onChange(value === true)}
           className="mt-0.5"
         />
-        <span className="text-sm leading-relaxed" style={{ color: "var(--brand-on-surface)" }}>
+        <span className="text-sm leading-relaxed text-brand-on-surface">
           I have read and accept the{" "}
           <Link
             href={doc.href}
             target="_blank"
             rel="noopener"
-            className="font-semibold underline-offset-2 hover:underline"
-            style={{ color: "var(--brand-viridian)" }}
+            className="font-semibold underline-offset-2 hover:underline text-brand-viridian"
           >
             {doc.title}
           </Link>{" "}
           <span
-            className="font-mono text-[11px]"
-            style={{ color: "var(--brand-on-surface-variant)" }}
+            className="font-mono text-[11px] text-brand-on-surface-variant"
             aria-label={`version ${doc.consentVersion}`}
           >
             v{doc.consentVersion}
@@ -46,7 +44,7 @@ export default function ConsentCheckbox({ doc, checked, onChange, error, id }: C
         </span>
       </label>
       {error && (
-        <p className="mt-1.5 ml-7 text-xs" style={{ color: "var(--danger)" }}>
+        <p className="mt-1.5 ml-7 text-xs text-danger">
           {error}
         </p>
       )}

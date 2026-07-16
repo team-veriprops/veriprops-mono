@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import enum
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Optional
 
 from sqlalchemy import Column, Index, String
 

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "@lib/utils";
 
 /**
  * About page narrative — adapted from the supplied reference into the Veriprops
@@ -15,22 +16,14 @@ function Eyebrow({
   children: ReactNode;
   tone?: "light" | "dark";
 }) {
-  const styles =
-    tone === "dark"
-      ? {
-          backgroundColor: "rgba(63,102,83,0.2)",
-          color: "#a5d0b9",
-          border: "1px solid rgba(63,102,83,0.3)",
-        }
-      : {
-          backgroundColor: "rgba(63,102,83,0.08)",
-          color: "var(--brand-viridian)",
-          border: "1px solid rgba(63,102,83,0.15)",
-        };
   return (
     <span
-      className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-widest"
-      style={styles}
+      className={cn(
+        "inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-widest",
+        tone === "dark"
+          ? "bg-brand-viridian/20 text-sidebar-accent-foreground border border-brand-viridian/30"
+          : "bg-brand-viridian/8 text-brand-viridian border border-brand-viridian/15"
+      )}
     >
       {children}
     </span>
@@ -62,36 +55,29 @@ const stats = [
   { value: "1 in 6", label: "Listings flagged with an issue" },
 ];
 
-const darkGradient =
-  "linear-gradient(135deg, var(--brand-navy) 0%, var(--brand-navy-mid) 50%, var(--brand-navy-deep) 100%)";
-
 export default function AboutContent() {
   return (
     <>
       {/* ── Hero ── */}
       <section
-        className="relative pt-32 lg:pt-40 pb-20 lg:pb-24 overflow-hidden"
-        style={{ backgroundColor: "var(--brand-surface-card)" }}
+        className="relative pt-32 lg:pt-40 pb-20 lg:pb-24 overflow-hidden bg-brand-surface-card"
       >
         {/* Warm ambient glow */}
         <div
-          className="absolute top-24 left-1/2 -translate-x-1/2 w-[680px] h-[540px] max-w-[90%] pointer-events-none"
-          style={{ background: "radial-gradient(circle, rgba(63,102,83,0.08), transparent 68%)" }}
+          className="absolute top-24 left-1/2 -translate-x-1/2 w-170 h-135 max-w-[90%] pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.08),transparent_68%)]"
         />
         <div className="relative z-10 max-w-3xl mx-auto px-6 lg:px-8 text-center animate-fade-up">
           <div className="mb-7">
             <Eyebrow>About Veriprops</Eyebrow>
           </div>
           <h1
-            className="text-4xl md:text-5xl lg:text-6xl font-extrabold editorial-spacing font-display leading-[1.08] mb-6"
-            style={{ color: "var(--brand-navy)" }}
+            className="text-4xl md:text-5xl lg:text-6xl font-extrabold editorial-spacing font-display leading-[1.08] mb-6 text-brand-navy"
           >
             {"We help Nigerians buy property at home — "}
-            <em style={{ color: "var(--brand-viridian)" }}>without the fear.</em>
+            <em className="text-brand-viridian">without the fear.</em>
           </h1>
           <p
-            className="text-lg md:text-xl leading-relaxed max-w-2xl mx-auto"
-            style={{ color: "var(--brand-on-surface-variant)" }}
+            className="text-lg md:text-xl leading-relaxed max-w-2xl mx-auto text-brand-on-surface-variant"
           >
             {"Whether you're across the city or across an ocean, you deserve to know exactly what you're buying before you part with a single naira. That certainty is the whole reason we exist."}
           </p>
@@ -99,17 +85,16 @@ export default function AboutContent() {
       </section>
 
       {/* ── The principle (dark) ── */}
-      <section className="relative py-20 lg:py-24 overflow-hidden" style={{ background: darkGradient }}>
+      <section className="relative py-20 lg:py-24 overflow-hidden dark-section-gradient">
         <div
-          className="absolute -top-24 -right-16 w-[320px] h-[320px] rounded-full pointer-events-none"
-          style={{ background: "radial-gradient(circle, rgba(63,102,83,0.16), transparent 70%)" }}
+          className="absolute -top-24 -right-16 w-80 h-80 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.16),transparent_70%)]"
         />
         <div className="relative z-10 max-w-4xl mx-auto px-6 lg:px-8 text-center">
           <p className="text-3xl md:text-4xl lg:text-5xl font-display editorial-spacing leading-[1.2] text-white">
             {"We reduce uncertainty."}
             <br />
             {"We do "}
-            <em style={{ color: "#a5d0b9" }}>not</em>
+            <em className="text-sidebar-accent-foreground">not</em>
             {" eliminate it."}
           </p>
           <p className="mt-6 text-base md:text-lg leading-relaxed max-w-2xl mx-auto text-white/70">
@@ -119,29 +104,26 @@ export default function AboutContent() {
       </section>
 
       {/* ── Origin story ── */}
-      <section className="py-24 lg:py-28" style={{ backgroundColor: "var(--brand-surface-low)" }}>
+      <section className="py-24 lg:py-28 bg-brand-surface-low">
         <div className="max-w-3xl mx-auto px-6 lg:px-8">
           <Eyebrow>Why we exist</Eyebrow>
           <h2
-            className="mt-5 text-3xl md:text-4xl lg:text-5xl font-extrabold editorial-spacing font-display leading-tight mb-8"
-            style={{ color: "var(--brand-navy)" }}
+            className="mt-5 text-3xl md:text-4xl lg:text-5xl font-extrabold editorial-spacing font-display leading-tight mb-8 text-brand-navy"
           >
             It started with a deposit that vanished.
           </h2>
-          <div className="space-y-6 text-lg leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
+          <div className="space-y-6 text-lg leading-relaxed text-brand-on-surface-variant">
             <p>
               {"A friend of ours wired the deposit for a plot of land in Lekki from his flat in London. He'd seen the photos. He'd spoken to an agent who sounded sure of everything. He'd even sent a cousin to walk the land."}
             </p>
             <p
-              className="text-2xl md:text-3xl font-display editorial-spacing leading-[1.35] py-2"
-              style={{ color: "var(--brand-navy)" }}
+              className="text-2xl md:text-3xl font-display editorial-spacing leading-[1.35] py-2 text-brand-navy"
             >
               {"By the time he flew home, he learned the same plot had already been "}
               <span className="relative inline-block">
                 sold to four other people
                 <span
-                  className="absolute -bottom-1 left-0 right-0 h-[3px] rounded-full"
-                  style={{ background: "var(--brand-viridian)", opacity: 0.4 }}
+                  className="absolute -bottom-1 left-0 right-0 h-0.75 rounded-full bg-brand-viridian/40"
                 />
               </span>
               {"."}
@@ -151,7 +133,7 @@ export default function AboutContent() {
             </p>
             <p>
               {"We built "}
-              <strong style={{ color: "var(--brand-navy)" }}>Veriprops</strong>
+              <strong className="text-brand-navy">Veriprops</strong>
               {" because distance should never mean blind trust. Buying property back home should feel like building something — not gambling on it. So we put qualified people on the ground to check what a photo never can: who really owns it, where the boundaries actually fall, whether anyone else has a claim, and whether the document in your hand means what it says."}
             </p>
             <p>
@@ -162,16 +144,15 @@ export default function AboutContent() {
       </section>
 
       {/* ── What we do ── */}
-      <section className="py-24 lg:py-28" style={{ backgroundColor: "var(--brand-surface-card)" }}>
+      <section className="py-24 lg:py-28 bg-brand-surface-card">
         <div className="max-w-3xl mx-auto px-6 lg:px-8">
           <Eyebrow>What we do</Eyebrow>
           <h2
-            className="mt-5 text-3xl md:text-4xl lg:text-5xl font-extrabold editorial-spacing font-display leading-tight mb-8"
-            style={{ color: "var(--brand-navy)" }}
+            className="mt-5 text-3xl md:text-4xl lg:text-5xl font-extrabold editorial-spacing font-display leading-tight mb-8 text-brand-navy"
           >
             {`We turn "I think it's genuine" into "I know it is."`}
           </h2>
-          <div className="space-y-6 text-lg leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
+          <div className="space-y-6 text-lg leading-relaxed text-brand-on-surface-variant">
             <p>
               {"Veriprops is a property verification platform built for the way Nigerians actually buy — often remotely, often on trust, often with everything on the line. You bring us a property, whether you found it online or were shown it in person, and we do the work most buyers can't do for themselves from afar."}
             </p>
@@ -180,11 +161,11 @@ export default function AboutContent() {
             </p>
             <p>
               {"Every verified property comes back with three things: a "}
-              <strong style={{ color: "var(--brand-navy)" }}>Trust Score</strong>
+              <strong className="text-brand-navy">Trust Score</strong>
               {" from 0 to 100 that tells you plainly where you stand, a public "}
-              <strong style={{ color: "var(--brand-navy)" }}>Verification ID</strong>
+              <strong className="text-brand-navy">Verification ID</strong>
               {" you can share with family or a bank, and a signed "}
-              <strong style={{ color: "var(--brand-navy)" }}>certified report</strong>
+              <strong className="text-brand-navy">certified report</strong>
               {" detailed enough to support real financing decisions. No jargon. No guesswork. Just the truth about what you're considering — before your money moves."}
             </p>
           </div>
@@ -192,15 +173,14 @@ export default function AboutContent() {
       </section>
 
       {/* ── Values ── */}
-      <section className="py-24 lg:py-28" style={{ backgroundColor: "var(--brand-surface-low)" }}>
+      <section className="py-24 lg:py-28 bg-brand-surface-low">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <div className="mb-5">
               <Eyebrow>What we stand for</Eyebrow>
             </div>
             <h2
-              className="text-3xl md:text-4xl lg:text-5xl font-extrabold editorial-spacing font-display leading-tight"
-              style={{ color: "var(--brand-navy)" }}
+              className="text-3xl md:text-4xl lg:text-5xl font-extrabold editorial-spacing font-display leading-tight text-brand-navy"
             >
               Three commitments we don&rsquo;t bend on.
             </h2>
@@ -209,22 +189,17 @@ export default function AboutContent() {
             {values.map((value, i) => (
               <div
                 key={value.title}
-                className="landing-card rounded-2xl p-8"
-                style={{
-                  backgroundColor: "var(--brand-surface-card)",
-                  border: "1px solid rgba(196,198,207,0.3)",
-                }}
+                className="landing-card rounded-2xl p-8 bg-brand-surface-card border border-brand-outline-variant/30"
               >
                 <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 font-display font-bold text-lg"
-                  style={{ backgroundColor: "rgba(63,102,83,0.08)", color: "var(--brand-viridian)" }}
+                  className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 font-display font-bold text-lg bg-brand-viridian/8 text-brand-viridian"
                 >
                   {String(i + 1).padStart(2, "0")}
                 </div>
-                <h3 className="text-xl font-bold font-display mb-3" style={{ color: "var(--brand-navy)" }}>
+                <h3 className="text-xl font-bold font-display mb-3 text-brand-navy">
                   {value.title}
                 </h3>
-                <p className="text-sm leading-relaxed" style={{ color: "var(--brand-on-surface-variant)" }}>
+                <p className="text-sm leading-relaxed text-brand-on-surface-variant">
                   {value.body}
                 </p>
               </div>
@@ -234,10 +209,9 @@ export default function AboutContent() {
       </section>
 
       {/* ── Vision (dark split) ── */}
-      <section className="relative py-24 lg:py-28 overflow-hidden" style={{ background: darkGradient }}>
+      <section className="relative py-24 lg:py-28 overflow-hidden dark-section-gradient">
         <div
-          className="absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full pointer-events-none"
-          style={{ background: "radial-gradient(circle, rgba(63,102,83,0.14), transparent 70%)" }}
+          className="absolute -bottom-32 -left-20 w-105 h-105 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.14),transparent_70%)]"
         />
         <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-12 lg:gap-14 items-center">
           <div>
@@ -258,15 +232,14 @@ export default function AboutContent() {
       </section>
 
       {/* ── Stats ── */}
-      <section className="py-24 lg:py-28" style={{ backgroundColor: "var(--brand-surface-card)" }}>
+      <section className="py-24 lg:py-28 bg-brand-surface-card">
         <div className="max-w-5xl mx-auto px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <div className="mb-5">
               <Eyebrow>Where we stand today</Eyebrow>
             </div>
             <h2
-              className="text-3xl md:text-4xl lg:text-5xl font-extrabold editorial-spacing font-display leading-tight"
-              style={{ color: "var(--brand-navy)" }}
+              className="text-3xl md:text-4xl lg:text-5xl font-extrabold editorial-spacing font-display leading-tight text-brand-navy"
             >
               The work, in numbers.
             </h2>
@@ -275,19 +248,14 @@ export default function AboutContent() {
             {stats.map((stat) => (
               <div
                 key={stat.label}
-                className="landing-card rounded-2xl p-6 text-center"
-                style={{
-                  backgroundColor: "var(--brand-surface-card)",
-                  border: "1px solid rgba(196,198,207,0.3)",
-                }}
+                className="landing-card rounded-2xl p-6 text-center bg-brand-surface-card border border-brand-outline-variant/30"
               >
                 <div
-                  className="text-3xl md:text-4xl font-display font-bold editorial-spacing"
-                  style={{ color: "var(--brand-viridian)" }}
+                  className="text-3xl md:text-4xl font-display font-bold editorial-spacing text-brand-viridian"
                 >
                   {stat.value}
                 </div>
-                <div className="mt-2 text-sm" style={{ color: "var(--brand-on-surface-variant)" }}>
+                <div className="mt-2 text-sm text-brand-on-surface-variant">
                   {stat.label}
                 </div>
               </div>

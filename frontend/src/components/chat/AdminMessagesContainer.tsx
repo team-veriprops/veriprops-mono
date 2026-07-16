@@ -4,6 +4,7 @@ import { useState } from "react";
 import ChatThread from "./ChatThread";
 import { ConversationType } from "@/types/chat";
 import { useAdminThreadQuery, useSendMessageMutation } from "./libs/useChatQueries";
+import { cn } from "@lib/utils";
 
 const CHANNELS: { type: ConversationType; label: string }[] = [
   { type: ConversationType.CUSTOMER_ADMIN, label: "Customer" },
@@ -22,7 +23,7 @@ export default function AdminMessagesContainer({ verificationId }: { verificatio
   return (
     <div className="flex flex-col gap-3 h-[70vh]">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-lg font-semibold" style={{ color: "var(--brand-navy)" }}>
+        <h1 className="text-lg font-semibold text-brand-navy">
           Messages
         </h1>
         <div className="flex rounded-lg border border-black/10 overflow-hidden text-sm">
@@ -30,12 +31,12 @@ export default function AdminMessagesContainer({ verificationId }: { verificatio
             <button
               key={c.type}
               onClick={() => setChannel(c.type)}
-              className="px-3 py-1.5"
-              style={
+              className={cn(
+                "px-3 py-1.5",
                 channel === c.type
-                  ? { backgroundColor: "var(--brand-viridian)", color: "#fff" }
-                  : { color: "var(--brand-navy)" }
-              }
+                  ? "bg-brand-viridian text-white"
+                  : "text-brand-navy"
+              )}
             >
               {c.label}
             </button>

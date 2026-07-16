@@ -38,6 +38,9 @@ from main.appodus_utils.decorators.method_trace_logger import method_trace_logge
 _REDACTED = "[erased]"
 
 
+# TODO(gap): secondary-PII scope — card fingerprints, third-party share-recipient emails,
+# and property addresses are not scrubbed yet; each needs its own retention basis —
+# PRD "Known Gaps & Roadmap".
 @inject
 @decorate_all_methods(method_trace_logger, exclude=["__init__", "token_for"], exclude_startswith=["_"])
 class PiiPseudonymiser:

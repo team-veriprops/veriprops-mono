@@ -1,6 +1,5 @@
 from decimal import Decimal
 from logging import Logger
-from typing import Optional
 
 from httpx import AsyncClient
 from kink import inject, di

@@ -23,4 +23,6 @@ class IntegrationUtils:
         init_callback = IntegrationInitStore(
             frontend_origin=frontend_origin
         )
-        await RedisUtils.set_redis(ref_id, init_callback)
+        # RedisUtils persists UTF-8 text only (no pickle) — store JSON and rehydrate
+        # via IntegrationInitStore.model_validate_json on read, never the model object.
+        await RedisUtils.set_redis(ref_id, init_callback.model_dump_json())

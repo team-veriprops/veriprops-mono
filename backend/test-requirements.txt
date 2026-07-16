@@ -25,7 +25,6 @@ filetype>=1.2.0,<1.3.0
 
 
 mailjet_rest>=1.6.0,<1.7.0
-sendgrid>=6.12.5,<6.13.0
 twilio>=9.10.9,<9.11.0
 firebase-admin>=7.4.0,<7.5.0
 pywebpush>=2.3.0,<2.4.0
@@ -49,6 +48,8 @@ pandas>=3.0.3,<3.1.0
 
 
 # TESTs
+ruff>=0.9,<1.0
+mypy>=1.14,<2.0
 pytest>=9.0.3,<9.1.0
 pytest-asyncio>=1.3.0,<2.0.0
 pytest-mock>=3.15.1,<3.16.0

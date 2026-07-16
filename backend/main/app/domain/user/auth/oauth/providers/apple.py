@@ -7,6 +7,7 @@ from jose import jwt, exceptions as jose_exceptions
 from kink import di, inject
 from starlette.requests import Request
 
+from main.app.config.settings import settings
 from main.app.domain.user.auth.models import AuthIntent
 from main.app.domain.user.auth.oauth.providers.models import (
     OAuthCallbackRequestDto,
@@ -38,7 +39,11 @@ async def _fetch_and_cache_apple_jwks() -> dict:
     response = await httpx_client.get(_APPLE_JWKS_URL)
     response.raise_for_status()
     jwks = response.json()
-    await RedisUtils.set_redis(_APPLE_JWKS_CACHE_KEY, json.dumps(jwks), time_to_live=timedelta(minutes=5))
+    await RedisUtils.set_redis(
+        _APPLE_JWKS_CACHE_KEY,
+        json.dumps(jwks),
+        time_to_live=timedelta(seconds=settings.OAUTH_JWKS_CACHE_SECONDS),
+    )
     return jwks
 
 
@@ -70,11 +75,11 @@ async def _decode_apple_id_token(id_token: str, access_token: str, client_id: st
 @decorate_all_methods(method_trace_logger)
 class AppleAuthProvider(ISocialAuthProvider):
     def __init__(self):
-        self._client_id = Utils.get_from_env_fail_if_not_exists("APPLE_CLIENT_ID")
-        self._iss = Utils.get_from_env_fail_if_not_exists("APPLE_TEAM_ID")
-        self._auth_base_url = Utils.get_from_env_fail_if_not_exists("APPLE_AUTH_BASE_URL")
-        self._private_key = Utils.get_from_env_fail_if_not_exists("APPLE_PRIVATE_KEY")
-        self._key_id = Utils.get_from_env_fail_if_not_exists("APPLE_KEY_ID")
+        self._client_id = settings.APPLE_CLIENT_ID
+        self._iss = settings.APPLE_TEAM_ID
+        self._auth_base_url = settings.APPLE_AUTH_BASE_URL
+        self._private_key = settings.APPLE_PRIVATE_KEY
+        self._key_id = settings.APPLE_KEY_ID
 
     @property
     def platform(self):
@@ -110,7 +115,7 @@ class AppleAuthProvider(ISocialAuthProvider):
             {
                 "iss": self._iss,
                 "iat": int(Utils.datetime_now().timestamp()),
-                "exp": int((Utils.datetime_now() + timedelta(minutes=5)).timestamp()),
+                "exp": int((Utils.datetime_now() + timedelta(seconds=settings.OAUTH_CLIENT_SECRET_JWT_TTL_SECONDS)).timestamp()),
                 "aud": "https://appleid.apple.com",
                 "sub": self._client_id,
             },

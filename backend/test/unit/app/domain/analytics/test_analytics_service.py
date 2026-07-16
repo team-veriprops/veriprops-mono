@@ -1,7 +1,6 @@
 """AnalyticsService (§18.1, D38) — pure aggregation over mocked repo pulls."""
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
@@ -46,6 +45,8 @@ def _make_service():
     svc._payments = AsyncMock()
     svc._tasks = AsyncMock()
     svc._reports = AsyncMock()
+    svc._config = AsyncMock()
+    svc._config.get_int = AsyncMock(return_value=6)  # ANALYTICS_TREND_MONTHS default
     return svc
 
 

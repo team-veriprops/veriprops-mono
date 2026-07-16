@@ -1,7 +1,3 @@
-import base64
-import hashlib
-import hmac
-import json
 import tempfile
 from io import BytesIO
 from typing import Type, List
@@ -44,18 +40,3 @@ class TestUtils:
     def get_app_test_client(app: FastAPI):
         client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
         return client
-
-    @staticmethod
-    def generate_signature(method: str, path: str, body: dict, client_secret: str, timestamp: str) -> str:
-        body_json = json.dumps(body)
-        body_hash = hashlib.sha256(body_json.encode()).hexdigest()
-
-        canonical_string = f"{method.upper()}\n{path}\n{timestamp}\n{body_hash}"
-
-        signature = hmac.new(
-            key=client_secret.encode(),
-            msg=canonical_string.encode(),
-            digestmod=hashlib.sha256
-        ).digest()
-
-        return base64.b64encode(signature).decode()

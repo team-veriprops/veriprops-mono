@@ -79,6 +79,8 @@ class TestDashboardSummary:
         svc._task_service = MagicMock()
         svc._agents = MagicMock()
         svc._chargebacks = MagicMock()
+        svc._config = AsyncMock()
+        svc._config.get_int = AsyncMock(return_value=2)  # SLA_AT_RISK_DAYS default
         svc._verification_repo.count_by_status = AsyncMock(return_value=status_counts)
         svc._verification_repo.count_overdue = AsyncMock(return_value=3)
         svc._verification_repo.count_due_within = AsyncMock(return_value=6)
