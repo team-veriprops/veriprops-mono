@@ -344,7 +344,10 @@ class AppodusBaseSettings(BaseSettings):
             return db_url
 
     model_config = SettingsConfigDict(
-        env_file=get_absolute_path(f'.env.{os.getenv("APPODUS_ACTIVE_ENV", "dev_personal")}'),
+        # The selector name is lowercase by contract — conftest.py, docker-compose,
+        # the CI workflows, and the Vercel deploy flags all set `appodus_active_env`.
+        # Linux env vars are case-sensitive (only Windows tolerates a mismatch).
+        env_file=get_absolute_path(f'.env.{os.getenv("appodus_active_env", "dev_personal")}'),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
