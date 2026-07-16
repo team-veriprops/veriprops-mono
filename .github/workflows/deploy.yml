@@ -71,7 +71,12 @@ jobs:
           # Env-file selector (prod/staging/dev) — mirrors the job's `environment`
           # ternary but maps to .env.{name} file names ('prod', not 'production').
           appodus_active_env: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'master' && 'prod' || 'dev') }}
-        run: doppler run -- alembic upgrade head
+        # The DB_NAME echo resolves through Settings (env file + Doppler precedence),
+        # not the raw shell env — it shows the database alembic will actually migrate.
+        run: |
+          echo "appodus_active_env=${appodus_active_env}"
+          doppler run -- python -c "from main.app.config.settings import settings; print(f'DB_NAME={settings.DB_NAME}')"
+          doppler run -- alembic upgrade head
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
       - name: Deploy production
@@ -86,7 +91,7 @@ jobs:
           # which the serverless sandbox can't reach: ECONNREFUSED on cold start.
           ACTIVE_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
         run: |
-          url=$(vercel deploy --yes --cwd backend --token "$VERCEL_TOKEN" --env appodus_active_env=$ACTIVE_ENV)
+          url=$(vercel deploy --yes --cwd backend --token "$VERCEL_TOKEN" --env appodus_active_env="$ACTIVE_ENV")
           echo "deployed $url"
           if [ -n "$ALIAS" ]; then
             vercel alias set "$url" "$ALIAS" --token "$VERCEL_TOKEN"
