@@ -1,20 +1,13 @@
 # Frontend quality gates: eslint, tsc, vitest, next build.
 #
-# Runs directly on PRs; pushes to dev/staging/master run it through deploy.yml
-# (workflow_call), so there is deliberately no `push:` trigger here — adding one
-# would double-run CI.
-#
-# Branch protection should require only the `summary` job (see backend-ci.yml for why).
+# Reusable-only (workflow_call): PRs run it through pull_requests.yml, pushes
+# to dev/staging/master through deploy.yml. Deliberately no direct
+# `pull_request:`/`push:` trigger — either would double-run CI (see
+# backend-ci.yml for the full packaging notes).
 name: Frontend CI
 
 on:
-  pull_request:
-    branches: [master, dev, staging]
   workflow_call:
-
-concurrency:
-  group: frontend-ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:

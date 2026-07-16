@@ -1,23 +1,17 @@
 # Backend quality gates: ruff, mypy, pytest, and an Alembic migration roundtrip.
 #
-# Runs directly on PRs; pushes to dev/staging/master run it through deploy.yml
-# (workflow_call), so there is deliberately no `push:` trigger here — adding one
-# would double-run CI.
+# Reusable-only (workflow_call): PRs run it through pull_requests.yml, pushes
+# to dev/staging/master through deploy.yml. Deliberately no direct
+# `pull_request:`/`push:` trigger — either would double-run CI. Concurrency is
+# the caller's (top-level concurrency in a called workflow is ignored).
 #
-# Branch protection should require only the `summary` job: the real jobs are
-# path-filtered on PRs (a docs-only or frontend-only PR skips them), and a
-# path-skipped required check would block merging forever. `summary` always
-# reports and fails iff a needed job failed.
+# The real jobs are path-filtered on PRs (a docs-only or frontend-only PR skips
+# them) and always run on pushes; `summary` always reports and fails iff a
+# needed job failed. Branch protection requires only `Pull Requests / summary`.
 name: Backend CI
 
 on:
-  pull_request:
-    branches: [master, dev, staging]
   workflow_call:
-
-concurrency:
-  group: backend-ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
