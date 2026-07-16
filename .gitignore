@@ -218,7 +218,7 @@ yarn-error.log*
 # are injected as process env vars (see backend/test/unit/app/config/
 # test_env_hygiene.py, which enforces this). Anything else env-shaped stays
 # ignored: personal overrides (.env.local on the frontend), *.secrets.bak
-# migration backups, and any future .env.staging until it is scrubbed + listed.
+# migration backups, and any future env file until it is scrubbed + listed here.
 .env*
 !.env.example
 !*/.env.example
@@ -229,6 +229,8 @@ yarn-error.log*
 !backend/.env.prod
 !frontend/.env
 !frontend/.env.test
+!frontend/.env.dev
+!frontend/.env.staging
 !frontend/.env.production
 
 # vercel

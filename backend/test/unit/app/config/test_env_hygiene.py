@@ -25,8 +25,10 @@ BACKEND_DIR = Path(__file__).resolve().parents[4]
 REPO_ROOT = BACKEND_DIR.parent
 
 # Committed, config-only env files (hygiene-enforced).
-BACKEND_ENV_FILES = [".env.example", ".env.dev_personal", ".env.test", ".env.dev", ".env.prod"]
-FRONTEND_ENV_FILES = [".env", ".env.test", ".env.production"]
+BACKEND_ENV_FILES = [".env.example", ".env.dev_personal", ".env.test", ".env.dev", ".env.staging", ".env.prod"]
+# .env.dev / .env.staging are deploy-time files (parsed by deploy.yml into
+# --build-env/--env flags — Next.js never auto-loads custom env-file names).
+FRONTEND_ENV_FILES = [".env", ".env.test", ".env.dev", ".env.staging", ".env.production"]
 
 # Deterministic seed credentials for throwaway local/test databases. These are
 # not secrets (they gate nothing outside a developer's own machine / the CI test

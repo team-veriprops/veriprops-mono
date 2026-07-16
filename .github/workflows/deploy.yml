@@ -136,7 +136,18 @@ jobs:
         env:
           # Repo variables override the hardcoded stable domains (see header).
           ALIAS: ${{ github.event_name == 'workflow_dispatch' && (vars.FRONTEND_STAGING_ALIAS || 'staging.veriprops.ng') || (vars.FRONTEND_DEV_ALIAS || 'dev.veriprops.ng') }}
+          # Selects frontend/.env.{dev|staging}. Next.js never auto-loads custom
+          # env-file names, so the file is parsed below into --build-env/--env
+          # flags; real env vars beat .env.production during the build.
+          ACTIVE_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
         run: |
-          url=$(vercel deploy --yes --cwd frontend --token "$VERCEL_TOKEN")
+          env_flags=""
+          while IFS= read -r raw; do
+            line="${raw%%#*}"
+            line="$(printf '%s' "$line" | tr -d '[:space:]')"
+            [ -z "$line" ] && continue
+            env_flags="$env_flags --build-env $line --env $line"
+          done < "frontend/.env.$ACTIVE_ENV"
+          url=$(vercel deploy --yes --cwd frontend --token "$VERCEL_TOKEN" $env_flags)
           echo "deployed $url"
           vercel alias set "$url" "$ALIAS" --token "$VERCEL_TOKEN"
