@@ -48,6 +48,7 @@ Non-env client tuning that would otherwise be duplicated as magic numbers lives 
 
 ### Security invariants (do not regress)
 
+- **Trusted-edge check.** `proxy.ts` runs `isEdgeAuthorized` ([lib/edgeAuth.ts](src/lib/edgeAuth.ts)) first, on a match-everything matcher (except Next internals/static): when the server-only `EDGE_AUTH_SECRET` env var is set, requests lacking the Cloudflare-injected `x-edge-auth` header get 403 — closing the `*.vercel.app` bypass around the Cloudflare WAF. Unset/blank/`CHANGE_ME` ⇒ open (local/test/e2e). Never expose the secret as `NEXT_PUBLIC_*`; keep header name/semantics in sync with the backend `EdgeAuthMiddleware`. Don't re-narrow the matcher to protected routes only.
 - **Open-redirect guard.** Any post-auth navigation to a user-supplied `?redirect=`/`next` value must pass through `isSafeRedirectPath` / `resolvePostAuthRedirect` ([components/website/auth/libs/auth/redirect.ts](src/components/website/auth/libs/auth/redirect.ts)) — a bare `startsWith("/")` is insufficient (`//evil.com` and `/\evil.com` are cross-origin). Only same-origin relative paths are accepted.
 - **JSON-LD escaping.** `<JsonLd>` escapes `<`/`>`/`&` before `dangerouslySetInnerHTML` so a string value can't break out of the `<script>` tag. Don't bypass it.
 - **Automation hooks are fail-closed.** `isAutomationEnvironment()` ([lib/automation.ts](src/lib/automation.ts)) is an allowlist (`dev_personal`/`development`/`test`); staging/production/unset all return `false`. Never invert it or add prod-enabling values.

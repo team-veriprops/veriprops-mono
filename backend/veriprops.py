@@ -25,6 +25,7 @@ from main.appodus_utils.exception.exception_handlers import (
 )
 from main.appodus_utils.exception.exceptions import AppodusBaseException
 from main.appodus_utils.middleware.db_session_middleware import DBSessionMiddleware
+from main.appodus_utils.middleware.edge_auth_middleware import EdgeAuthMiddleware
 from main.appodus_utils.middleware.request_logging_middleware import RequestLoggingMiddleware
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -87,6 +88,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "X-TIMEZONE", "X-LOCALE", "X-CSRF-Token"], )
+# Edge auth — added last so it runs OUTERMOST: direct-origin traffic that bypassed
+# the Cloudflare proxy is rejected before logging/DB session work. No-op while
+# EDGE_AUTH_SECRET is unset/placeholder (local, test, e2e).
+app.add_middleware(
+    EdgeAuthMiddleware,
+    secret=settings.EDGE_AUTH_SECRET,
+    header_name=settings.EDGE_AUTH_HEADER,
+)
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)

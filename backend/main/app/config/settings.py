@@ -66,7 +66,17 @@ class Settings(AppodusBaseSettings):
         "DOJAH_PRIVATE_KEY",
         "DOJAH_WEBHOOK_SECRET",
         "SUPER_ADMIN_PASSWORD",
+        "EDGE_AUTH_SECRET",
     })
+
+    # Edge auth — closes the direct-origin bypass around the Cloudflare proxy
+    # (*.vercel.app deployment URLs on Vercel, the raw origin IP on self-hosted).
+    # A Cloudflare Transform Rule injects `EDGE_AUTH_HEADER: <EDGE_AUTH_SECRET>` on
+    # every request that traverses the proxy; when EDGE_AUTH_SECRET holds a real
+    # value, EdgeAuthMiddleware rejects requests missing it (403). Empty/placeholder
+    # disables the check, so local/test/e2e environments run open by default.
+    EDGE_AUTH_SECRET: str = ""
+    EDGE_AUTH_HEADER: str = "x-edge-auth"
 
     # CORS — machine-specific LAN origins belong in a developer's local .env, never in
     # the committed default. Add any dev host via ALLOWED_ORIGINS in .env.dev_personal.
