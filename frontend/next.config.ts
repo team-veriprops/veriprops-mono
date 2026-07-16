@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   // which severs long synchronous calls like the cold-start seed (~76s of live
   // LLM evaluation) — the backend finishes but the browser sees a socket hang up.
   // Raise it well above the slowest endpoint; override per-env via PROXY_TIMEOUT_MS.
-  experimental: { proxyTimeout: Number(process.env.PROXY_TIMEOUT_MS ?? 180_000) },
+  experimental: { proxyTimeout: serverConfig.proxyTimeoutMs },
   // Machine-specific dev hosts (e.g. a WSL/LAN IP) belong in a developer's local env,
   // never committed here. Set ADDITIONAL_DEV_ORIGINS as a comma-separated list.
   allowedDevOrigins: [

@@ -98,7 +98,6 @@ services:
         NEXT_PUBLIC_ENVIRONMENT: dev_personal
         NEXT_PUBLIC_APP_NAME: Veriprops
         NEXT_PUBLIC_SITE_URL: http://localhost:3000
-        NEXT_PUBLIC_API_TIMEOUT: "10000"
         NEXT_PUBLIC_OAUTH_GOOGLE_DISABLED: "false"
         NEXT_PUBLIC_OAUTH_APPLE_DISABLED: "true"
         NEXT_PUBLIC_OAUTH_FACEBOOK_DISABLED: "true"
