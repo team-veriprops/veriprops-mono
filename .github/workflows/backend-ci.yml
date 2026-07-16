@@ -1,7 +1,8 @@
 # Backend quality gates: ruff, mypy, pytest, and an Alembic migration roundtrip.
 #
-# Runs directly on PRs; pushes to dev/master run it through deploy.yml (workflow_call),
-# so there is deliberately no `push:` trigger here — adding one would double-run CI.
+# Runs directly on PRs; pushes to dev/staging/master run it through deploy.yml
+# (workflow_call), so there is deliberately no `push:` trigger here — adding one
+# would double-run CI.
 #
 # Branch protection should require only the `summary` job: the real jobs are
 # path-filtered on PRs (a docs-only or frontend-only PR skips them), and a
@@ -11,7 +12,7 @@ name: Backend CI
 
 on:
   pull_request:
-    branches: [master, dev]
+    branches: [master, dev, staging]
   workflow_call:
 
 concurrency:
@@ -86,7 +87,7 @@ jobs:
             backend/requirements.txt
             backend/test-requirements.txt
       - run: pip install -r requirements.txt -r test-requirements.txt
-      # conftest.py defaults appodus_active_env=test (.env.test); the unit suite
+      # conftest.py defaults APPODUS_ACTIVE_ENV=test (.env.test); the unit suite
       # mocks the DB, so no services are needed here.
       - run: pytest
 
@@ -110,7 +111,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      appodus_active_env: test
+      APPODUS_ACTIVE_ENV: test
       # Process env overrides .env.test's CHANGE_ME (pydantic-settings precedence).
       DB_PASSWORD: postgres
     steps:

@@ -55,7 +55,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
     CMD curl -fsS http://localhost:8000/health || exit 1
 
-# `appodus_active_env` selects the .env.{env}; compose sets it and the DB/SMTP/Redis
+# `APPODUS_ACTIVE_ENV` selects the .env.{env}; compose sets it and the DB/SMTP/Redis
 # hosts. Alembic migrations are run by the compose command before the server starts.
 CMD ["gunicorn", "veriprops:app", \
      "-k", "uvicorn.workers.UvicornWorker", \

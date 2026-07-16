@@ -11,16 +11,16 @@ pip install -r requirements.txt
 # Valid names: dev_personal, test, dev, staging, prod. The committed .env.{env} files
 # are CONFIG-ONLY; secrets are injected by Doppler as process env vars, which
 # override env-file values (pydantic-settings precedence).
-export appodus_active_env=dev_personal        # bash
-$env:appodus_active_env="dev_personal"        # PowerShell
-set appodus_active_env=dev_personal           # cmd
+export APPODUS_ACTIVE_ENV=dev_personal        # bash
+$env:APPODUS_ACTIVE_ENV="dev_personal"        # PowerShell
+set APPODUS_ACTIVE_ENV=dev_personal           # cmd
 
 doppler run -- python veriprops.py     # dev server with secrets, http://localhost:8000 (docs at /docs)
 python veriprops.py                    # also works secret-less for stub-only local use
 
-# Tests — pytest auto-loads conftest.py which defaults appodus_active_env=test.
+# Tests — pytest auto-loads conftest.py which defaults APPODUS_ACTIVE_ENV=test.
 # Force the test env explicitly when running migrations against the test DB.
-set appodus_active_env=test && alembic upgrade head && pytest
+set APPODUS_ACTIVE_ENV=test && alembic upgrade head && pytest
 pytest test/unit/app/path/to/test_file.py::test_name   # single test
 
 # Alembic
@@ -29,7 +29,7 @@ alembic downgrade -1                                          # roll back one
 alembic revision --autogenerate -m "describe change"          # generate
 ```
 
-`appodus_active_env` is read at module import (see [conftest.py](conftest.py) and [appodus_utils/config/settings.py](main/appodus_utils/config/settings.py) `set_env_vars()`). It must be set before any `main.*` import — that's why `conftest.py` defaults it before importing settings.
+`APPODUS_ACTIVE_ENV` is read at module import (see [conftest.py](conftest.py) and [appodus_utils/config/settings.py](main/appodus_utils/config/settings.py) `set_env_vars()`). It must be set before any `main.*` import — that's why `conftest.py` defaults it before importing settings.
 
 ## Architecture
 
@@ -142,7 +142,7 @@ Routes mount under `/api`. Webhooks mount under `WEBHOOK_PATH` (default `/webhoo
 
 ## Settings
 
-`Settings` ([main/app/config/settings.py](main/app/config/settings.py)) extends `AppodusBaseSettings` and is loaded from `.env.{appodus_active_env}` at import. Notable knobs:
+`Settings` ([main/app/config/settings.py](main/app/config/settings.py)) extends `AppodusBaseSettings` and is loaded from `.env.{APPODUS_ACTIVE_ENV}` at import. Notable knobs:
 
 - `ACTIVE_DB`, `SQLALCHEMY_DATABASE_URI` — DB selection (PostgreSQL via `asyncpg`; `settings.SupportedDB` still supports other dialects).
 - `ACTIVE_PAYMENT_METHOD` — `FLUTTERWAVE` or `PAYSTACK`.

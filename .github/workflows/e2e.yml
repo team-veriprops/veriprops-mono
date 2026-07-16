@@ -4,7 +4,9 @@
 # disputes → payouts → messaging retries → …).
 #
 # Slow and stateful, so it is not part of the per-PR quality gates: it runs on
-# PRs targeting master (release gate, informational), nightly, and on demand.
+# PRs targeting master (pre-merge signal), nightly, on demand, and — via
+# workflow_call from deploy.yml — as the release gate for every push to
+# dev/staging/master (no deploy proceeds until this suite passes).
 name: E2E
 
 on:
@@ -13,6 +15,7 @@ on:
   schedule:
     - cron: "0 3 * * *" # nightly, 03:00 UTC
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -41,7 +44,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      appodus_active_env: test
+      APPODUS_ACTIVE_ENV: test
       DB_PASSWORD: postgres # overrides .env.test's CHANGE_ME
       ENABLE_OUT_MESSAGING: "True" # email → Mailpit, SMS → mock provider
       MAILPIT_CONTAINER: mailpit # stage_messaging_retry docker stop/starts this
