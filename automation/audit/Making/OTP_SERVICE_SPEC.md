@@ -11,7 +11,7 @@ The OTP subsystem is controlled by `OTP_MODE`, which determines whether codes ar
 | `deterministic` | Always returns `TEST_OTP` (654123) | local, dev, test, staging |
 | `random` | Generates a random 6-digit integer | all; **required** in prod |
 
-`OTP_MODE` defaults to `deterministic` in `AppodusBaseSettings`. Loaded from `.env.{appodus_active_env}`.
+`OTP_MODE` defaults to `deterministic` in `AppodusBaseSettings`. Loaded from `.env.{APPODUS_ACTIVE_ENV}`.
 
 ## Startup Enforcement
 

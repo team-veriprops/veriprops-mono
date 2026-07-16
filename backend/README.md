@@ -21,15 +21,15 @@ pip install -r requirements.txt
 docker compose up
 
 ## Test locally (in-memory DB)
-set appodus_active_env=test && pip install -r test-requirements.txt && alembic upgrade head && pytest
+set APPODUS_ACTIVE_ENV=test && pip install -r test-requirements.txt && alembic upgrade head && pytest
 
 # Alembic
 alembic upgrade head
-set appodus_active_env=test && alembic upgrade head
-$env:appodus_active_env="dev_personal"; alembic upgrade head; pytest
-set appodus_active_env=dev && alembic revision -m ""
-set appodus_active_env=dev && alembic revision --autogenerate -m ""
-$env:appodus_active_env="dev_personal"; alembic revision --autogenerate -m "auto_generated"
+set APPODUS_ACTIVE_ENV=test && alembic upgrade head
+$env:APPODUS_ACTIVE_ENV="dev_personal"; alembic upgrade head; pytest
+set APPODUS_ACTIVE_ENV=dev && alembic revision -m ""
+set APPODUS_ACTIVE_ENV=dev && alembic revision --autogenerate -m ""
+$env:APPODUS_ACTIVE_ENV="dev_personal"; alembic revision --autogenerate -m "auto_generated"
 
 
 
