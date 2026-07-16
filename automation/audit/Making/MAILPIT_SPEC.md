@@ -2,7 +2,7 @@
 
 ## Overview
 
-In dev, local, and test environments, all outbound email is captured by Mailpit via SMTP. No external mail provider is contacted. Production and staging always use Mailjet/SendGrid.
+In dev, local, and test environments, all outbound email is captured by Mailpit via SMTP. No external mail provider is contacted. Production and staging always use Mailjet.
 
 ## How It Works
 
@@ -16,10 +16,10 @@ The `MessageRouter._load_routing_rules()` adds an email routing rule:
                 Environment.PRODUCTION, Environment.STAGING
             },
             "providers": [MessageProviderName.SMTP],
-            "fallback_order": [MessageProviderName.MAILJET, MessageProviderName.SENDGRID_EMAIL],
+            "fallback_order": [MessageProviderName.MAILJET],
         }
     ],
-    "default": [MessageProviderName.MAILJET, MessageProviderName.SENDGRID_EMAIL],
+    "default": [MessageProviderName.MAILJET],
 }
 ```
 

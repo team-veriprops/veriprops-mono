@@ -6,7 +6,7 @@ Phase 3 determinism pass. All changes close non-determinism gaps that would caus
 
 ## Fix 1 — Email Routing: Remove Last-Resort Fallback in Test Mode
 
-**Problem:** `MessageRouter._handle_fallback()` had a "last resort" block (lines 248-255) that tried ALL remaining registered providers after exhausting `fallback_order`. Even with `"fallback_order": []`, a failed `SmtpEmailProvider` in test/dev could silently fall back to Mailjet or Sendgrid — real external providers.
+**Problem:** `MessageRouter._handle_fallback()` had a "last resort" block (lines 248-255) that tried ALL remaining registered providers after exhausting `fallback_order`. Even with `"fallback_order": []`, a failed `SmtpEmailProvider` in test/dev could silently fall back to Mailjet — a real external provider.
 
 **Change:**
 - Added `"exclusive": True` to the non-prod email routing rule

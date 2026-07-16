@@ -1,9 +1,9 @@
 """Trust Score Weights service (PRD §8.3, D14).
 
 Owns the admin weight config (per tier × role, summing to 100% within a tier) and the
-deterministic composite computation used by the release gate. Default weights are seeded
-idempotently at startup (like consent docs); admins edit them via the CRUD, enforcing the
-sum-to-100 invariant so a released score is always a true 0–100 blend.
+deterministic composite computation used by the release gate. Default weights
+(``DEFAULT_TRUST_WEIGHTS`` in models.py) are seeded by migration 0001; admins edit them via
+the CRUD, enforcing the sum-to-100 invariant so a released score is always a true 0–100 blend.
 """
 from __future__ import annotations
 
@@ -26,17 +26,6 @@ from main.appodus_utils.decorators.method_trace_logger import method_trace_logge
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import ValidationException
 
-# Default weight map per tier (sums to 100 within each tier). Seeded idempotently.
-_DEFAULT_WEIGHTS: Dict[VerificationTier, Dict[AgentRole, int]] = {
-    VerificationTier.BASIC: {AgentRole.REGISTRY: 100},
-    VerificationTier.STANDARD: {
-        AgentRole.REGISTRY: 40, AgentRole.FIELD: 30, AgentRole.SURVEYOR: 30,
-    },
-    VerificationTier.PREMIUM: {
-        AgentRole.REGISTRY: 30, AgentRole.FIELD: 20, AgentRole.SURVEYOR: 20, AgentRole.LAWYER: 30,
-    },
-}
-
 _FULL_PERCENT = 100
 
 
@@ -47,16 +36,6 @@ class TrustScoreWeightService:
     def __init__(self, weight_repo: TrustScoreWeightRepo, audit_service: AuditLogService):
         self._weight_repo = weight_repo
         self._audit = audit_service
-
-    async def seed_defaults(self) -> None:
-        """Idempotently ensure every (tier, role) default weight exists."""
-        for tier, role_weights in _DEFAULT_WEIGHTS.items():
-            for role, weight in role_weights.items():
-                existing = await self._weight_repo.get_for_tier_role(tier.value, role.value)
-                if existing is None:
-                    await self._weight_repo.create_return_model(CreateTrustWeightDto(
-                        tier=tier, role=role, weight_percent=weight,
-                    ))
 
     async def list_all(self) -> List[TrustScoreWeight]:
         return await self._weight_repo.list_all()

@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 import json
 import time
 from abc import ABC, abstractmethod
-from typing import Dict, List, Callable, Optional
+from typing import Any, Dict, List, Callable, Optional
 
 from httpx import QueryParams
 from kink import di
@@ -78,11 +78,11 @@ class BaseWebhookHandler(IWebhookHandler):
         )
 
     @staticmethod
-    async def _retry_logic(action: Callable, max_retries: int = 3) -> None:
+    async def _retry_logic(action: Callable, max_retries: int = 3) -> Any:
         for attempt in range(max_retries):
             try:
                 return await action()
-            except Exception as e:
+            except Exception:
                 if attempt == max_retries - 1:
                     raise
                 wait_time = 2 ** attempt
@@ -113,7 +113,8 @@ class BaseWebhookHandler(IWebhookHandler):
             raise UnauthorizedException("Invalid signature")
 
         async def _process():
-            logger.info(f"Request body: {body}")
+            # Log metadata only — webhook bodies carry PII + provider signatures.
+            logger.info(f"Webhook body received ({len(body)} bytes)")
             payload = json.loads(body)
             processed_data = await self._process_handle_webhook_payload(payload)
             self._notify_observers(processed_data)

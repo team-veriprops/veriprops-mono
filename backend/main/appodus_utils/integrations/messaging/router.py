@@ -1,7 +1,6 @@
 import asyncio
 import json
 
-import httpx
 from circuitbreaker import CircuitBreakerError
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
@@ -122,10 +121,10 @@ class MessageRouter:
             "sms": {
                 "rules": [
                     {
-                        # Test/dev/local: suppress all SMS. Single-path, no fallback.
+                        # Test/dev/dev_personal: suppress all SMS. Single-path, no fallback.
                         # Exclusive=True prevents last-resort fallback to real SMS providers.
                         "condition": lambda msg: settings.ENVIRONMENT in {
-                            Environment.TEST, Environment.DEVELOPMENT, Environment.LOCAL
+                            Environment.TEST, Environment.DEVELOPMENT, Environment.DEV_PERSONAL
                         },
                         "providers": [MessageProviderName.MOCK_SMS],
                         "fallback_order": [],
@@ -147,9 +146,9 @@ class MessageRouter:
             "email": {
                 "rules": [
                     {
-                        # Route to local Mailpit SMTP in dev/test/local envs.
+                        # Route to local Mailpit SMTP in dev/test/dev_personal envs.
                         # Production and staging always use external providers.
-                        # Exclusive=True prevents last-resort fallback to Mailjet/Sendgrid
+                        # Exclusive=True prevents last-resort fallback to Mailjet
                         # if SMTP fails — misconfigurations fail loudly, not silently.
                         "condition": lambda msg: settings.ENVIRONMENT not in {
                             Environment.PRODUCTION, Environment.STAGING
@@ -159,7 +158,7 @@ class MessageRouter:
                         "exclusive": True,
                     }
                 ],
-                "default": [MessageProviderName.MAILJET, MessageProviderName.SENDGRID_EMAIL],
+                "default": [MessageProviderName.MAILJET],
             },
         }
 

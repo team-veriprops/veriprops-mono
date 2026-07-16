@@ -214,11 +214,24 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — the committed ones are CONFIG-ONLY: secrets live in Doppler and
+# are injected as process env vars (see backend/test/unit/app/config/
+# test_env_hygiene.py, which enforces this). Anything else env-shaped stays
+# ignored: personal overrides (.env.local on the frontend), *.secrets.bak
+# migration backups, and any future env file until it is scrubbed + listed here.
 .env*
-# committed, secret-free templates documenting every settable key
 !.env.example
 !*/.env.example
+!backend/.env.dev_personal
+!backend/.env.test
+!backend/.env.dev
+!backend/.env.staging
+!backend/.env.prod
+!frontend/.env
+!frontend/.env.test
+!frontend/.env.dev
+!frontend/.env.staging
+!frontend/.env.production
 
 # vercel
 .vercel

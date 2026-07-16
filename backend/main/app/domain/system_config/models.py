@@ -43,7 +43,7 @@ class ConfigKey(str, enum.Enum):
     ANALYTICS_TREND_MONTHS = "analytics_trend_months"           # trailing months included in analytics trend series
 
 
-# Seeded defaults (idempotent, via DataSeeder). Values are stored as JSON scalars.
+# Seeded defaults (idempotent, by migration 0001). Values are stored as JSON scalars.
 CONFIG_DEFAULTS: dict[ConfigKey, Any] = {
     ConfigKey.DISPUTE_WINDOW_DAYS: 30,
     ConfigKey.RECHECK_PRICE_PCT: 30,

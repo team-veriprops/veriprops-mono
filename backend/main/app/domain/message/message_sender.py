@@ -6,7 +6,6 @@ if TYPE_CHECKING:
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import BackgroundTasks
 from kink import di
 
 from main.app.config.settings import settings

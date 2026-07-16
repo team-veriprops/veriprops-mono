@@ -29,7 +29,7 @@ def test_all_sweeps_registered_with_expected_intervals():
 
 
 def test_start_scheduler_is_noop_under_test_environment(monkeypatch):
-    # The suite itself runs with ENVIRONMENT=local (no .env.test exists), so pin
+    # The suite itself runs with ENVIRONMENT=dev_personal (no .env.test exists), so pin
     # the module's settings view to TEST to exercise the determinism guard.
     monkeypatch.setattr(
         scheduled, "settings", SimpleNamespace(ENVIRONMENT=Environment.TEST)

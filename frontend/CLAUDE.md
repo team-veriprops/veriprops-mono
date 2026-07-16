@@ -25,7 +25,16 @@ pnpm vitest run -t "test name pattern"
 
 ## API proxy
 
-`/api/*` requests are rewritten to `${API_BASE_URL}/api/*` by [next.config.ts](next.config.ts). `API_BASE_URL` is server-only (read from [src/lib/config/server.ts](src/lib/config/server.ts), which throws if imported on the client). Public env vars (`NEXT_PUBLIC_*`) live in [src/lib/config/public.ts](src/lib/config/public.ts) — keep them split. The proxy target/timeout and dev origins are env-driven (`NEXT_PUBLIC_API_PREFIX`, `PROXY_TIMEOUT_MS`, `ADDITIONAL_DEV_ORIGINS`); [.env.example](.env.example) documents every settable key.
+`/api/*` requests are rewritten to `${API_BASE_URL}/api/*` by [next.config.ts](next.config.ts). `API_BASE_URL` is server-only (read from [src/lib/config/server.ts](src/lib/config/server.ts), which throws if imported on the client). Public env vars (`NEXT_PUBLIC_*`) live in [src/lib/config/public.ts](src/lib/config/public.ts) — keep them split. The proxy target/timeout and dev origins are env-driven (`NEXT_PUBLIC_API_PREFIX`, `PROXY_TIMEOUT_MS`, `ADDITIONAL_DEV_ORIGINS`).
+
+## Env files
+
+Committed, **config-only** env files, in two groups. **Minimal-diff rule:** [.env](.env) is the base + catalog (documents every settable key); every other file declares only keys whose value genuinely differs from `.env` for that environment (or pins a policy against `.env` drift, e.g. the prod OAuth toggles) — never replicate a key just to repeat the same value.
+
+- **Next.js-native (auto-loaded):** [.env](.env) (shared base = local-dev values, documents every settable key), [.env.test](.env.test) (deterministic automation env, auto-loaded under `NODE_ENV=test`; Next.js deliberately skips `.env.local` in test mode), and [.env.production](.env.production) (prod-shaped build defaults for every `next build`). `.env.local` stays git-ignored for personal overrides + `BACKEND_SECRET_KEY`.
+- **Deploy-time (NOT loaded by Next.js):** [.env.dev](.env.dev) and [.env.staging](.env.staging) configure the deployed dev/staging previews (`NODE_ENV` has no dev/staging value, so Next.js can't load them). `deploy.yml` parses the selected file and passes every key to `vercel deploy` as `--build-env`/`--env` flags, which override `.env.production` during the build. Consequences: values must contain no spaces, only keys meant to override `.env.production` belong there, and **never a secret key** — a committed value would override the Doppler-synced Vercel env var.
+
+Secrets are Doppler-managed and arrive as env vars (Vercel sync in deploys), which override all files. Sync topology (Doppler project `veriprops-frontend`): `prd` config → Vercel **Production**, `dev` config → Vercel **Preview** — one Preview sync deliberately covers both the dev and staging previews, since the only live frontend secret (`EDGE_AUTH_SECRET`) is a single zone-wide value shared with the backend and the Cloudflare Transform Rule. Never store a *blank* secret value in a Doppler config — it overrides the file placeholder and (for `EDGE_AUTH_SECRET`) silently disables the trusted-edge check. **Never put a secret in a `NEXT_PUBLIC_*` var** (build-time inlined into the bundle). The backend hygiene guard (`backend/test/unit/app/config/test_env_hygiene.py`) scans all five committed files and fails on any credential-shaped value. Runtime flags still come from the backend's `/config/public`, not new env vars.
 
 ## Client operational constants
 
@@ -44,9 +53,10 @@ Non-env client tuning that would otherwise be duplicated as magic numbers lives 
 
 ### Security invariants (do not regress)
 
+- **Trusted-edge check.** `proxy.ts` runs `isEdgeAuthorized` ([lib/edgeAuth.ts](src/lib/edgeAuth.ts)) first, on a match-everything matcher (except Next internals/static): when the server-only `EDGE_AUTH_SECRET` env var is set, requests lacking the Cloudflare-injected `x-edge-auth` header get 403 — closing the `*.vercel.app` bypass around the Cloudflare WAF. Unset/blank/`CHANGE_ME` ⇒ open (local/test/e2e). Never expose the secret as `NEXT_PUBLIC_*`; keep header name/semantics in sync with the backend `EdgeAuthMiddleware`. Don't re-narrow the matcher to protected routes only.
 - **Open-redirect guard.** Any post-auth navigation to a user-supplied `?redirect=`/`next` value must pass through `isSafeRedirectPath` / `resolvePostAuthRedirect` ([components/website/auth/libs/auth/redirect.ts](src/components/website/auth/libs/auth/redirect.ts)) — a bare `startsWith("/")` is insufficient (`//evil.com` and `/\evil.com` are cross-origin). Only same-origin relative paths are accepted.
 - **JSON-LD escaping.** `<JsonLd>` escapes `<`/`>`/`&` before `dangerouslySetInnerHTML` so a string value can't break out of the `<script>` tag. Don't bypass it.
-- **Automation hooks are fail-closed.** `isAutomationEnvironment()` ([lib/automation.ts](src/lib/automation.ts)) is an allowlist (`local`/`development`/`test`); staging/production/unset all return `false`. Never invert it or add prod-enabling values.
+- **Automation hooks are fail-closed.** `isAutomationEnvironment()` ([lib/automation.ts](src/lib/automation.ts)) is an allowlist (`dev_personal`/`development`/`test`); staging/production/unset all return `false`. Never invert it or add prod-enabling values.
 - **No leaking backend errors to the console.** `FetchHttpClient` must not `console.log` response bodies (they may carry PII/internal detail).
 
 ## Route Definition

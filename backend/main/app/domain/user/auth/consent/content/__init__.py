@@ -1,6 +1,6 @@
 """Legal-document content (PRD §3.5).
 
-The seeder upserts each entry into `consent_documents` by (type, consent_version).
+Migration 0001 upserts each entry into `consent_documents` by (type, consent_version).
 Clauses still awaiting counsel sign-off ship as DRAFT; REPORT_DISCLAIMER is FINAL.
 """
 from __future__ import annotations

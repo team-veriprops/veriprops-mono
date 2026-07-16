@@ -65,11 +65,3 @@ class TestSet:
         await svc.set(ConfigKey.DISPUTE_WINDOW_DAYS, 20, "admin-1")
         svc._audit.schedule.assert_called_once()
 
-
-class TestSeed:
-    async def test_seed_defaults_creates_missing_only(self):
-        # DISPUTE_WINDOW_DAYS already present → only the other two are created.
-        present = {ConfigKey.DISPUTE_WINDOW_DAYS.value: SimpleNamespace(value_json=30)}
-        svc, _ = _service(present)
-        await svc.seed_defaults()
-        assert svc._config_repo.create.await_count == len(CONFIG_DEFAULTS) - 1

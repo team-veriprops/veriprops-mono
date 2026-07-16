@@ -1,7 +1,6 @@
 """VerificationMessages — external channel dispatch for verification events (S39, S40)."""
 from __future__ import annotations
 
-from typing import Any, Dict
 
 from kink import inject
 

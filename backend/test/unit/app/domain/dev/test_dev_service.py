@@ -24,7 +24,7 @@ class TestProductionGate:
         with pytest.raises(ResourceNotFoundException):
             dev_controller._require_non_prod()
 
-    @pytest.mark.parametrize("env", [Environment.LOCAL, Environment.TEST, Environment.DEVELOPMENT, Environment.STAGING])
+    @pytest.mark.parametrize("env", [Environment.DEV_PERSONAL, Environment.TEST, Environment.DEVELOPMENT, Environment.STAGING])
     def test_require_non_prod_passes_outside_production(self, monkeypatch, env):
         monkeypatch.setattr(settings, "ENVIRONMENT", env)
         dev_controller._require_non_prod()  # must not raise

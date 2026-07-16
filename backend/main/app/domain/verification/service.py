@@ -96,7 +96,7 @@ class VerificationService:
         return verification
 
     async def save_draft(self, verification_id: str, customer_id: str, dto: SaveVerificationDraftDto) -> Verification:
-        verification = await self._require_owned(verification_id, customer_id)
+        await self._require_owned(verification_id, customer_id)
         await self._verification_repo.update(verification_id, UpdateVerificationDto(
             draft_step=dto.step,
             draft_payload=json.dumps(dto.payload),

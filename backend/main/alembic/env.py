@@ -54,7 +54,6 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
     )
 
-    print(f'sqlalchemy.url: {url}')
     with context.begin_transaction():
         context.run_migrations()
 

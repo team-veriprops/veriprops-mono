@@ -37,7 +37,6 @@ from main.app.domain.verification.share.models import (
     PublicSummaryDto,
     ShareDto,
     SharedReportDto,
-    UpdateVerificationShareDto,
     VerificationShare,
 )
 from main.app.domain.verification.share.repo import VerificationShareRepo

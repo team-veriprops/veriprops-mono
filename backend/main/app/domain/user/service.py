@@ -18,7 +18,6 @@ from main.app.domain.user.models import (
 )
 from main.app.domain.user.repo import UserRepo
 from main.app.domain.user.validator import UserValidator
-from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional

@@ -34,7 +34,6 @@ class TestNewSettingsDefaults:
 
     def test_committed_defaults_are_not_personal_or_leaked(self):
         # Personal ngrok/gmail/phone were removed from committed defaults (Part C).
-        assert settings.APPODUS_SERVICES_URL == ""
         assert "gmail.com" not in settings.BRAND_SUPPORT_EMAIL
         assert settings.BRAND_SUPPORT_EMAIL == "support@veriprops.ng"
         assert "192.168." not in (settings.ALLOWED_ORIGINS or "")

@@ -20,9 +20,7 @@ def _settings(**over):
     base = dict(
         ENVIRONMENT=Environment.PRODUCTION,
         AUTHJWT_SECRET_KEY="a-strong-unique-key",
-        APPODUS_CLIENT_SECRET="a-real-client-secret",
         OTP_MODE="random",
-        ALLOW_AUTH_BYPASS=False,
     )
     base.update(over)
     return AppodusBaseSettings(**base)
@@ -37,14 +35,6 @@ class TestProdSecretPolicy:
         with pytest.raises(ValidationError):
             _settings(AUTHJWT_SECRET_KEY=_LEAKED_DEFAULT)
 
-    def test_placeholder_client_secret_refuses_to_boot(self):
-        with pytest.raises(ValidationError):
-            _settings(APPODUS_CLIENT_SECRET=SECRET_PLACEHOLDER)
-
-    def test_auth_bypass_forbidden_in_prod(self):
-        with pytest.raises(ValidationError):
-            _settings(ALLOW_AUTH_BYPASS=True)
-
     def test_staging_is_treated_like_prod(self):
         with pytest.raises(ValidationError):
             _settings(ENVIRONMENT=Environment.STAGING, AUTHJWT_SECRET_KEY=SECRET_PLACEHOLDER)
@@ -54,15 +44,15 @@ class TestProdSecretPolicy:
         assert s.ENVIRONMENT == Environment.PRODUCTION
 
     def test_non_prod_allows_placeholder(self):
-        # local/dev/test must still run with placeholder secrets.
+        # dev_personal/dev/test must still run with placeholder secrets.
         s = AppodusBaseSettings(
-            ENVIRONMENT=Environment.LOCAL, AUTHJWT_SECRET_KEY=SECRET_PLACEHOLDER
+            ENVIRONMENT=Environment.DEV_PERSONAL, AUTHJWT_SECRET_KEY=SECRET_PLACEHOLDER
         )
         assert s.AUTHJWT_SECRET_KEY == SECRET_PLACEHOLDER
 
 
 class TestAlgorithmPinned:
     def test_algorithm_and_decode_allowlist_are_hs256(self):
-        s = AppodusBaseSettings(ENVIRONMENT=Environment.LOCAL)
+        s = AppodusBaseSettings(ENVIRONMENT=Environment.DEV_PERSONAL)
         assert s.AUTHJWT_ALGORITHM == "HS256"
         assert s.AUTHJWT_DECODE_ALGORITHMS == ["HS256"]

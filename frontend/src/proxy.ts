@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtDecode } from "jwt-decode";
 import { ROUTES } from "./lib/routes";
+import { EDGE_AUTH_HEADER, isEdgeAuthorized } from "./lib/edgeAuth";
 import { JwtPayload, UserPersona, UserType } from "./components/website/auth/models";
 
 /**
@@ -104,6 +105,15 @@ function redirect(req: NextRequest, path: string) {
 }
 
 export function proxy(req: NextRequest) {
+  // 0. Trusted-edge check — reject traffic that bypassed the Cloudflare proxy
+  // (e.g. direct *.vercel.app URLs). No-op while EDGE_AUTH_SECRET is unset.
+  if (!isEdgeAuthorized(req.headers.get(EDGE_AUTH_HEADER), process.env.EDGE_AUTH_SECRET)) {
+    return NextResponse.json(
+      { error: { code: "EDGE_AUTH_REQUIRED", message: "Requests must come through the trusted edge." } },
+      { status: 403 },
+    );
+  }
+
   const { pathname, search } = req.nextUrl;
   const jwtToken = req.cookies.get(ACCESS_COOKIE_KEY)?.value;
 
@@ -172,17 +182,10 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  
-  // Only run on routes that actually need the guard. Skip Next internals,
-  // static assets, and the public marketing site.
-  matcher: [
-    "/portal/:path*",
-    "/admin/:path*",
-    "/agent/:path*",
-    "/agents/:path*",
-    "/account/:path*",
-    "/auth/login",
-    "/auth/signup",
-    "/auth/login/success-redirect"
-  ],
+
+  // The trusted-edge check must see EVERY request, so match all routes except
+  // Next internals/static assets. The auth guard stays scoped by its own
+  // pathname checks (isProtected/isGuestOnly), so the wider matcher does not
+  // change guard behavior on public marketing pages.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

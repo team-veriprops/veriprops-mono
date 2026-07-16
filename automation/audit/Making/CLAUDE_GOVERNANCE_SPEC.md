@@ -12,7 +12,7 @@ Never compare `ENVIRONMENT` string to choose OTP behaviour. Always read `OTP_MOD
 
 ```python
 # WRONG
-if os.environ.get("ENVIRONMENT") == "Environment.LOCAL":
+if os.environ.get("ENVIRONMENT") == "Environment.DEV_PERSONAL":
     return "654123"
 
 # CORRECT
@@ -122,13 +122,13 @@ await httpx.delete("http://localhost:8025/api/v1/messages")
 
 ### 14. MockSmsProvider must be used for all SMS in test/dev/local
 
-`ENVIRONMENT in {test, dev, local}` routes ALL SMS to `MockSmsProvider`, which logs and suppresses. Never route to Termii or Twilio in those environments. The SMS routing rule must remain first (evaluated before Nigerian-number and high-priority rules).
+`ENVIRONMENT in {test, dev, dev_personal}` routes ALL SMS to `MockSmsProvider`, which logs and suppresses. Never route to Termii or Twilio in those environments. The SMS routing rule must remain first (evaluated before Nigerian-number and high-priority rules).
 
 ```python
 # CORRECT
 {
     "condition": lambda msg: settings.ENVIRONMENT in {
-        Environment.TEST, Environment.DEVELOPMENT, Environment.LOCAL
+        Environment.TEST, Environment.DEVELOPMENT, Environment.DEV_PERSONAL
     },
     "providers": [MessageProviderName.MOCK_SMS],
     "fallback_order": [],
@@ -138,7 +138,7 @@ await httpx.delete("http://localhost:8025/api/v1/messages")
 
 ### 15. `"exclusive": True` must not be removed from test-mode routing rules
 
-Both the SMS test rule and the email non-prod rule carry `"exclusive": True`. This prevents `_handle_fallback()` from falling through to the "last resort" block, which would try real providers. Without it, SMTP or MockSmsProvider failures would silently contact Mailjet, Sendgrid, Termii, or Twilio.
+Both the SMS test rule and the email non-prod rule carry `"exclusive": True`. This prevents `_handle_fallback()` from falling through to the "last resort" block, which would try real providers. Without it, SMTP or MockSmsProvider failures would silently contact Mailjet, Termii, or Twilio.
 
 Never remove `"exclusive": True` from environment-gated routing rules.
 

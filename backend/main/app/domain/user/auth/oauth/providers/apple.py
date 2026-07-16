@@ -75,11 +75,11 @@ async def _decode_apple_id_token(id_token: str, access_token: str, client_id: st
 @decorate_all_methods(method_trace_logger)
 class AppleAuthProvider(ISocialAuthProvider):
     def __init__(self):
-        self._client_id = Utils.get_from_env_fail_if_not_exists("APPLE_CLIENT_ID")
-        self._iss = Utils.get_from_env_fail_if_not_exists("APPLE_TEAM_ID")
-        self._auth_base_url = Utils.get_from_env_fail_if_not_exists("APPLE_AUTH_BASE_URL")
-        self._private_key = Utils.get_from_env_fail_if_not_exists("APPLE_PRIVATE_KEY")
-        self._key_id = Utils.get_from_env_fail_if_not_exists("APPLE_KEY_ID")
+        self._client_id = settings.APPLE_CLIENT_ID
+        self._iss = settings.APPLE_TEAM_ID
+        self._auth_base_url = settings.APPLE_AUTH_BASE_URL
+        self._private_key = settings.APPLE_PRIVATE_KEY
+        self._key_id = settings.APPLE_KEY_ID
 
     @property
     def platform(self):

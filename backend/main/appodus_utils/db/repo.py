@@ -137,7 +137,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
                     try:
                         converted_field = self._convert_camel_case_to_underscore_separated(field)
                         setattr(db_obj, converted_field or field, update_data[field])
-                    except AttributeError as e:
+                    except AttributeError:
                         raise AttributeError(f"Invalid column '{field}' for table '{self._table_name}'")
 
             old_version = update_dict.get("version")

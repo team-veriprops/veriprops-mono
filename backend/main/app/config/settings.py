@@ -1,8 +1,9 @@
 import enum
-from typing import Optional, Dict
+from typing import ClassVar, Optional, Dict
 
 from main.appodus_utils.config.settings import (
     AppodusBaseSettings,
+    BASE_SECRET_ENV_KEYS,
     SECRET_PLACEHOLDER,
     get_absolute_path,
     FileStorage,
@@ -38,8 +39,47 @@ PAYMENT_METHOD_TO_PLATFORM: Dict[PaymentMethod, IntegratedPlatform] = {
 }
 
 class Settings(AppodusBaseSettings):
+    # Credential fields on top of the base set. Committed .env.{env} files must keep
+    # every one of these absent/empty/CHANGE_ME — real values come from Doppler as
+    # process env vars (which override env_file). Enforced by test_env_hygiene.py.
+    SECRET_ENV_KEYS: ClassVar[frozenset] = BASE_SECRET_ENV_KEYS | frozenset({
+        "FLUTTERWAVE_SECRET_KEY",
+        "FLUTTERWAVE_WEBHOOK_SECRET",
+        "PAYSTACK_SECRET_KEY",
+        "PAYSTACK_WEBHOOK_SECRET",
+        "AWS_ACCESS_KEY",
+        "AWS_SECRET_ACCESS_KEY",
+        "TERMII_API_KEY",
+        "TERMII_API_SECRET_KEY",
+        "MAILJET_API_KEY",
+        "MAILJET_API_SECRET",
+        "TWILIO_AUTH_TOKEN",
+        "ZOHO_CLIENT_SECRET",
+        "ZOHO_REFRESH_TOKEN",
+        "ZOHO_WEBHOOK_SECRET",
+        "GOOGLE_WEBHOOK_SECRET",
+        "WHATSAPP_APP_SECRET_KEY",
+        "WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN",
+        "WHATSAPP_BUSINESS_ACCESS_TOKEN",
+        "WEB_PUSH_PRIVATE_KEY",
+        "DOJAH_APP_ID",
+        "DOJAH_PRIVATE_KEY",
+        "DOJAH_WEBHOOK_SECRET",
+        "SUPER_ADMIN_PASSWORD",
+        "EDGE_AUTH_SECRET",
+    })
+
+    # Edge auth — closes the direct-origin bypass around the Cloudflare proxy
+    # (*.vercel.app deployment URLs on Vercel, the raw origin IP on self-hosted).
+    # A Cloudflare Transform Rule injects `EDGE_AUTH_HEADER: <EDGE_AUTH_SECRET>` on
+    # every request that traverses the proxy; when EDGE_AUTH_SECRET holds a real
+    # value, EdgeAuthMiddleware rejects requests missing it (403). Empty/placeholder
+    # disables the check, so local/test/e2e environments run open by default.
+    EDGE_AUTH_SECRET: str = ""
+    EDGE_AUTH_HEADER: str = "x-edge-auth"
+
     # CORS — machine-specific LAN origins belong in a developer's local .env, never in
-    # the committed default. Add any dev host via ALLOWED_ORIGINS in .env.local.
+    # the committed default. Add any dev host via ALLOWED_ORIGINS in .env.dev_personal.
     ALLOWED_ORIGINS: Optional[str] = """
     http://localhost,
     http://localhost:3000,
@@ -153,9 +193,6 @@ class Settings(AppodusBaseSettings):
     TERMII_API: Optional[str] = 'https://v3.api.termii.com/api'
     TERMII_API_KEY: Optional[str] = SECRET_PLACEHOLDER
     TERMII_API_SECRET_KEY: Optional[str] = SECRET_PLACEHOLDER
-    # SENDGRID
-    SENDGRID_API_KEY: Optional[str] = ""
-    SENDGRID_API_SECRET: Optional[str] = ""
     # MAILJET
     MAILJET_API: Optional[str] = 'https://api.mailjet.com'
     MAILJET_API_KEY: Optional[str] = SECRET_PLACEHOLDER

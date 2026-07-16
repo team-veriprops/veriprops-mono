@@ -15,9 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from libre_fastapi_jwt.exceptions import AuthJWTException
 from kink import di
-from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import Response, RedirectResponse
 from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
 from main.appodus_utils.exception.exceptions import AppodusBaseException

@@ -1,7 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
 
-  "buildCommand": "export veriprops_active_env=prod && alembic upgrade head",
+  "git": {
+    "deploymentEnabled": false
+  },
 
   "functions": {
     "api/index.py": {

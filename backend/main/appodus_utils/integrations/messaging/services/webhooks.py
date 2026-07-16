@@ -60,8 +60,6 @@ class WebhookManager:
     def _get_event_type(self, provider: str, data: Dict) -> str:
         if provider == "twilio":
             return data.get("MessageStatus", "unknown")
-        elif provider == "sendgrid":
-            return data[0].get("event", "unknown")
         elif provider == "whatsapp":
             return data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("statuses", [{}])[0].get(
                 "status", "unknown")

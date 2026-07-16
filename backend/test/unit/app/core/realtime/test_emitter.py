@@ -2,7 +2,6 @@
 subscriber teardown, and the DI-resolved publish helper that never raises."""
 import asyncio
 
-import pytest
 from kink import di
 
 from main.app.core.realtime.emitter import (

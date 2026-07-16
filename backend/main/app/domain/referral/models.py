@@ -6,7 +6,6 @@ when the invitee's first payment clears the chargeback window (see ``referral/cr
 """
 from __future__ import annotations
 
-from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import Column, Index, String

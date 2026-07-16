@@ -8,8 +8,7 @@ from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
-from main.appodus_utils.integrations.messaging.models import MessageRequestRecipient, EmailRecipient, \
-    MessageRecipientUserId, \
+from main.appodus_utils.integrations.messaging.models import MessageRequestRecipient, MessageRecipientUserId, \
     MessageContextModule, UserContactDto, MessageContext
 
 

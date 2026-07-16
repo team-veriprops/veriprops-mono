@@ -4,8 +4,7 @@ from typing import Dict, Optional
 
 import pandas as pd
 
-from main.appodus_utils.db.types.money import TransactionCurrency, Money
-from main.appodus_utils.integrations.messaging.models import MessageProviderName
+from main.appodus_utils.db.types.money import Money
 
 
 @dataclass
@@ -24,7 +23,6 @@ class CostTracker:
         # self.rates = {
         #     "twilio_sms": {"us": 0.0075, "international": 0.05},
         #     "termii_sms": {"ng": 2.5, "international": 3.5},  # in NGN
-        #     "sendgrid_email": 0.0001,  # per email
         #     "whatsapp_business": {
         #         "template": 0.01,
         #         "session": 0.005,
