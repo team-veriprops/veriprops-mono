@@ -1,0 +1,61 @@
+# Single PR quality gate — the only workflow with a `pull_request:` trigger.
+# Calls the reusable backend CI, frontend CI, and e2e workflows so every PR
+# shows one run instead of three. Pushes to dev/staging/master run the same
+# reusable workflows through deploy.yml instead.
+#
+# Branch protection should require only THIS workflow's `summary` job: the
+# called workflows path-filter internally (a docs-only PR skips their real
+# jobs) and the e2e call is path-gated below, so any other required check
+# could be skipped and would block merging forever. `summary` always reports
+# and fails iff a needed gate failed (skipped counts as pass).
+name: Pull Requests
+
+on:
+  pull_request:
+    branches: [master, dev, staging]
+
+concurrency:
+  group: pull-requests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Gates only the slow e2e suite: backend/frontend CI do their own internal
+  # path filtering, but e2e.yml has none (deploy.yml must always run it), so
+  # the PR path filter lives here.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            code:
+              - 'backend/**'
+              - 'frontend/**'
+              - '.github/workflows/**'
+              - 'docker-compose.yml'
+
+  backend-ci:
+    uses: ./.github/workflows/backend-ci.yml
+
+  frontend-ci:
+    uses: ./.github/workflows/frontend-ci.yml
+
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    uses: ./.github/workflows/e2e.yml
+
+  summary:
+    if: always()
+    needs: [changes, backend-ci, frontend-ci, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any gate failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

@@ -3,15 +3,14 @@
 # scenario over HTTP (signup → verification → payment → review → release →
 # disputes → payouts → messaging retries → …).
 #
-# Slow and stateful, so it is not part of the per-PR quality gates: it runs on
-# PRs targeting master (pre-merge signal), nightly, on demand, and — via
-# workflow_call from deploy.yml — as the release gate for every push to
-# dev/staging/master (no deploy proceeds until this suite passes).
+# Slow and stateful, so it never triggers on PRs directly: pull_requests.yml
+# calls it (path-gated) as a blocking gate on every code PR, deploy.yml calls
+# it as the release gate for every push to dev/staging/master, and it also
+# runs nightly and on demand. The concurrency group below applies only to the
+# direct schedule/dispatch runs — workflow_call runs use the caller's group.
 name: E2E
 
 on:
-  pull_request:
-    branches: [master]
   schedule:
     - cron: "0 3 * * *" # nightly, 03:00 UTC
   workflow_dispatch:
