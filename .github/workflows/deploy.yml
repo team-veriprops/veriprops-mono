@@ -1,18 +1,37 @@
-# CI + deploy pipeline for pushes:
-#   push to master → full CI → production deploy of both Vercel projects
-#   push to dev    → full CI → preview deploy aliased to the stable dev domain
-#   workflow_dispatch (environment=staging) → full CI → preview deploy aliased
-#     to the staging domain (run it from the ref you want promoted)
+# CI + deploy pipeline — branch-driven, one path per environment:
+#   push to master  → CI + e2e → production deploy of both Vercel projects
+#   push to staging → CI + e2e → preview deploy aliased to the staging domain
+#   push to dev     → CI + e2e → preview deploy aliased to the dev domain
+# The full-stack e2e drive-through gates every deploy (slow ~30-40 min, by
+# design: staging is the human-QA environment and master is production).
 #
 # Database migrations run here — an explicit, serialized, CI-gated step before the
 # backend deploy — not in Vercel's buildCommand (a build is not a release: preview
 # builds must never move schema, and Vercel rollbacks don't downgrade schema).
-# The step runs `doppler run -- alembic upgrade head` under an environment-scoped
-# Doppler service token: alembic imports Settings, whose prod/staging validators
-# require the real secret set, and Doppler stays the single secret store (GitHub
-# holds only the token). Both vercel.json files set git.deploymentEnabled=false so
-# this pipeline is the only deploy path — an out-of-band deploy would skip migrations.
+# Both vercel.json files set git.deploymentEnabled=false so this pipeline is the
+# only deploy path — an out-of-band deploy would skip migrations.
 # deploy-frontend needs deploy-backend: API first, and a failed migration blocks both.
+#
+# Env vars & secrets — Doppler is the single source, injected HERE (no
+# Doppler→Vercel sync, no dashboard env vars):
+#   - Each app has its own Doppler project (veriprops-backend / veriprops-frontend)
+#     with configs prd/stg/dev. Each GitHub Environment (production/staging/dev)
+#     holds two config-scoped read-only service tokens: DOPPLER_TOKEN_BACKEND and
+#     DOPPLER_TOKEN_FRONTEND (a service token pins project+config, so no
+#     --project/--config flags anywhere).
+#   - scripts/doppler_env_args.sh overlays the Doppler config onto the committed
+#     config-only env-file base (Doppler wins per key) and emits --env/--build-env
+#     flags for `vercel deploy`. Backend runtime layering is inherent (pydantic-
+#     settings: process env > bundled .env.{APPODUS_ACTIVE_ENV}); frontend
+#     .env.production is auto-loaded by `next build` as the prod base, while
+#     .env.dev/.env.staging are parsed as the preview base (Next.js can't
+#     auto-load custom env-file names).
+#   - APPODUS_ACTIVE_ENV itself lives in each backend Doppler config (prd=prod,
+#     stg=staging, dev=dev) — migrations pick it up via `doppler run`, deploys
+#     via the injected flags. Doppler key names must be uppercase; settings.py
+#     reads the uppercase name first (lowercase kept as a local-shell fallback).
+#   - Flags are deployment-scoped: rollbacks restore the env a deployment
+#     shipped with, and a rotated Doppler value takes effect on the next deploy.
 #
 # Custom domains:
 #   - dev/staging: each preview deploy is aliased to a stable domain right here
@@ -35,21 +54,14 @@
 #
 # Required repo secrets: VERCEL_TOKEN, VERCEL_ORG_ID,
 #   VERCEL_PROJECT_ID_BACKEND, VERCEL_PROJECT_ID_FRONTEND.
-# Required environment-scoped secret (in each of the production/dev/staging
-#   GitHub Environments): DOPPLER_TOKEN — a read-only Doppler service token for
-#   the matching Doppler config (prd/dev/stg).
+# Required environment-scoped secrets (in each of the production/staging/dev
+#   GitHub Environments): DOPPLER_TOKEN_BACKEND, DOPPLER_TOKEN_FRONTEND —
+#   read-only Doppler service tokens for the matching config (prd/stg/dev).
 name: Deploy
 
 on:
   push:
-    branches: [master, dev]
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: Environment to promote this ref to
-        type: choice
-        options: [staging]
-        required: true
+    branches: [master, dev, staging]
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -60,16 +72,19 @@ jobs:
     uses: ./.github/workflows/backend-ci.yml
   frontend-ci:
     uses: ./.github/workflows/frontend-ci.yml
+  e2e:
+    uses: ./.github/workflows/e2e.yml
 
   deploy-backend:
-    needs: [backend-ci, frontend-ci]
+    needs: [backend-ci, frontend-ci, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'master' && 'production' || 'dev') }}
+    environment: ${{ github.ref_name == 'master' && 'production' || github.ref_name == 'staging' && 'staging' || 'dev' }}
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_BACKEND }}
+      DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_BACKEND }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -83,71 +98,78 @@ jobs:
       - uses: dopplerhq/cli-action@v3
       - name: Run database migrations
         working-directory: backend
-        env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-          # Env-file selector (prod/staging/dev) — mirrors the job's `environment`
-          # ternary but maps to .env.{name} file names ('prod', not 'production').
-          appodus_active_env: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'master' && 'prod' || 'dev') }}
-        # The DB_NAME echo resolves through Settings (env file + Doppler precedence),
-        # not the raw shell env — it shows the database alembic will actually migrate.
+        # APPODUS_ACTIVE_ENV comes from the Doppler config itself; printenv fails
+        # the job fast if the config doesn't define it (otherwise Settings would
+        # silently fall back to dev_personal). The DB_NAME echo resolves through
+        # Settings (env file + Doppler precedence), not the raw shell env — it
+        # shows the database alembic will actually migrate.
         run: |
-          echo "appodus_active_env=${appodus_active_env}"
+          doppler run -- printenv APPODUS_ACTIVE_ENV
           doppler run -- python -c "from main.app.config.settings import settings; print(f'DB_NAME={settings.DB_NAME}')"
           doppler run -- alembic upgrade head
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
+      # The flag file indirection (vs `readarray < <(script)`) is deliberate:
+      # a process-substitution failure is silent, and a failed Doppler download
+      # must abort the deploy, never ship one without secrets.
       - name: Deploy production
-        if: github.event_name == 'push' && github.ref_name == 'master'
-        run: vercel deploy --prod --yes --cwd backend --token "$VERCEL_TOKEN" --env appodus_active_env=prod
+        if: github.ref_name == 'master'
+        run: |
+          bash .github/scripts/doppler_env_args.sh > "$RUNNER_TEMP/env_args.bin"
+          readarray -d '' env_args < "$RUNNER_TEMP/env_args.bin"
+          vercel deploy --prod --yes --cwd backend --token "$VERCEL_TOKEN" "${env_args[@]}"
       - name: Deploy preview + stable alias
-        if: github.event_name == 'workflow_dispatch' || github.ref_name == 'dev'
+        if: github.ref_name != 'master'
         env:
           # Repo variables override the hardcoded stable domains (see header).
-          ALIAS: ${{ github.event_name == 'workflow_dispatch' && (vars.BACKEND_STAGING_ALIAS || 'api-staging.veriprops.ng') || (vars.BACKEND_DEV_ALIAS || 'api-dev.veriprops.ng') }}
-          # Mirrors the migration step's env-file selector above — without this, the
-          # deployed function falls back to `dev_personal` (DB_SERVER=localhost),
-          # which the serverless sandbox can't reach: ECONNREFUSED on cold start.
-          ACTIVE_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+          ALIAS: ${{ github.ref_name == 'staging' && (vars.BACKEND_STAGING_ALIAS || 'api-staging.veriprops.ng') || (vars.BACKEND_DEV_ALIAS || 'api-dev.veriprops.ng') }}
         run: |
-          url=$(vercel deploy --yes --cwd backend --token "$VERCEL_TOKEN" --env appodus_active_env="$ACTIVE_ENV")
+          bash .github/scripts/doppler_env_args.sh > "$RUNNER_TEMP/env_args.bin"
+          readarray -d '' env_args < "$RUNNER_TEMP/env_args.bin"
+          url=$(vercel deploy --yes --cwd backend --token "$VERCEL_TOKEN" "${env_args[@]}")
           echo "deployed $url"
           vercel alias set "$url" "$ALIAS" --token "$VERCEL_TOKEN"
 
   deploy-frontend:
     # deploy-backend included: the API (and its migrations) must land first,
     # and a failed migration blocks the frontend release too.
-    needs: [backend-ci, frontend-ci, deploy-backend]
+    needs: [backend-ci, frontend-ci, e2e, deploy-backend]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'master' && 'production' || 'dev') }}
+    environment: ${{ github.ref_name == 'master' && 'production' || github.ref_name == 'staging' && 'staging' || 'dev' }}
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_FRONTEND }}
+      DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_FRONTEND }}
     steps:
       - uses: actions/checkout@v4
+      - uses: dopplerhq/cli-action@v3
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
+      # Same flag-file indirection as deploy-backend: a failed Doppler download
+      # must abort the deploy, never ship one without secrets.
       - name: Deploy production
-        if: github.event_name == 'push' && github.ref_name == 'master'
-        run: vercel deploy --prod --yes --cwd frontend --token "$VERCEL_TOKEN"
+        if: github.ref_name == 'master'
+        # Base config layer is .env.production (auto-loaded by `next build`);
+        # only the Doppler prd values need to travel as flags.
+        run: |
+          bash .github/scripts/doppler_env_args.sh --build-env > "$RUNNER_TEMP/env_args.bin"
+          readarray -d '' env_args < "$RUNNER_TEMP/env_args.bin"
+          vercel deploy --prod --yes --cwd frontend --token "$VERCEL_TOKEN" "${env_args[@]}"
       - name: Deploy preview + stable alias
-        if: github.event_name == 'workflow_dispatch' || github.ref_name == 'dev'
+        if: github.ref_name != 'master'
         env:
           # Repo variables override the hardcoded stable domains (see header).
-          ALIAS: ${{ github.event_name == 'workflow_dispatch' && (vars.FRONTEND_STAGING_ALIAS || 'staging.veriprops.ng') || (vars.FRONTEND_DEV_ALIAS || 'dev.veriprops.ng') }}
-          # Selects frontend/.env.{dev|staging}. Next.js never auto-loads custom
-          # env-file names, so the file is parsed below into --build-env/--env
-          # flags; real env vars beat .env.production during the build.
-          ACTIVE_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+          ALIAS: ${{ github.ref_name == 'staging' && (vars.FRONTEND_STAGING_ALIAS || 'staging.veriprops.ng') || (vars.FRONTEND_DEV_ALIAS || 'dev.veriprops.ng') }}
+          # Selects frontend/.env.{dev|staging} as the base layer — Next.js never
+          # auto-loads custom env-file names, so the file is merged with the
+          # Doppler config into --build-env/--env flags; real env vars beat
+          # .env.production during the build.
+          ACTIVE_ENV: ${{ github.ref_name == 'staging' && 'staging' || 'dev' }}
         run: |
-          env_flags=""
-          while IFS= read -r raw; do
-            line="${raw%%#*}"
-            line="$(printf '%s' "$line" | tr -d '[:space:]')"
-            [ -z "$line" ] && continue
-            env_flags="$env_flags --build-env $line --env $line"
-          done < "frontend/.env.$ACTIVE_ENV"
-          url=$(vercel deploy --yes --cwd frontend --token "$VERCEL_TOKEN" $env_flags)
+          bash .github/scripts/doppler_env_args.sh --base-file "frontend/.env.$ACTIVE_ENV" --build-env > "$RUNNER_TEMP/env_args.bin"
+          readarray -d '' env_args < "$RUNNER_TEMP/env_args.bin"
+          url=$(vercel deploy --yes --cwd frontend --token "$VERCEL_TOKEN" "${env_args[@]}")
           echo "deployed $url"
           vercel alias set "$url" "$ALIAS" --token "$VERCEL_TOKEN"
