@@ -14,13 +14,26 @@
 # this pipeline is the only deploy path — an out-of-band deploy would skip migrations.
 # deploy-frontend needs deploy-backend: API first, and a failed migration blocks both.
 #
+# Custom domains:
+#   - dev/staging: each preview deploy is aliased to a stable domain right here
+#     (previews never get custom domains any other way). Defaults are hardcoded
+#     below (api.dev.veriprops.ng / dev.veriprops.ng, api.staging.veriprops.ng /
+#     staging.veriprops.ng); the repo variables BACKEND_DEV_ALIAS,
+#     FRONTEND_DEV_ALIAS, BACKEND_STAGING_ALIAS, FRONTEND_STAGING_ALIAS are
+#     optional overrides. The veriprops.ng zone must exist on the Vercel team
+#     (Vercel nameservers, or per-host CNAMEs) for `vercel alias set` to succeed.
+#   - production: deliberately NOT aliased here. Production domains are a Vercel
+#     project setting (one-time dashboard step: veriprops.ng + www.veriprops.ng
+#     with www→apex redirect on the frontend project, api.veriprops.ng on the
+#     backend project) — every `vercel deploy --prod` repoints them natively,
+#     including dashboard instant-rollbacks, and only the dashboard can express
+#     the www redirect.
+#
 # Required repo secrets: VERCEL_TOKEN, VERCEL_ORG_ID,
 #   VERCEL_PROJECT_ID_BACKEND, VERCEL_PROJECT_ID_FRONTEND.
 # Required environment-scoped secret (in each of the production/dev/staging
 #   GitHub Environments): DOPPLER_TOKEN — a read-only Doppler service token for
 #   the matching Doppler config (prd/dev/stg).
-# Optional repo variables (stable non-prod domains): BACKEND_DEV_ALIAS,
-#   FRONTEND_DEV_ALIAS, BACKEND_STAGING_ALIAS, FRONTEND_STAGING_ALIAS.
 name: Deploy
 
 on:
@@ -85,7 +98,8 @@ jobs:
       - name: Deploy preview + stable alias
         if: github.event_name == 'workflow_dispatch' || github.ref_name == 'dev'
         env:
-          ALIAS: ${{ github.event_name == 'workflow_dispatch' && vars.BACKEND_STAGING_ALIAS || vars.BACKEND_DEV_ALIAS }}
+          # Repo variables override the hardcoded stable domains (see header).
+          ALIAS: ${{ github.event_name == 'workflow_dispatch' && (vars.BACKEND_STAGING_ALIAS || 'api.staging.veriprops.ng') || (vars.BACKEND_DEV_ALIAS || 'api.dev.veriprops.ng') }}
           # Mirrors the migration step's env-file selector above — without this, the
           # deployed function falls back to `dev_personal` (DB_SERVER=localhost),
           # which the serverless sandbox can't reach: ECONNREFUSED on cold start.
@@ -93,11 +107,7 @@ jobs:
         run: |
           url=$(vercel deploy --yes --cwd backend --token "$VERCEL_TOKEN" --env appodus_active_env="$ACTIVE_ENV")
           echo "deployed $url"
-          if [ -n "$ALIAS" ]; then
-            vercel alias set "$url" "$ALIAS" --token "$VERCEL_TOKEN"
-          else
-            echo "::notice::no alias variable configured; deployment stays at $url"
-          fi
+          vercel alias set "$url" "$ALIAS" --token "$VERCEL_TOKEN"
 
   deploy-frontend:
     # deploy-backend included: the API (and its migrations) must land first,
@@ -120,12 +130,9 @@ jobs:
       - name: Deploy preview + stable alias
         if: github.event_name == 'workflow_dispatch' || github.ref_name == 'dev'
         env:
-          ALIAS: ${{ github.event_name == 'workflow_dispatch' && vars.FRONTEND_STAGING_ALIAS || vars.FRONTEND_DEV_ALIAS }}
+          # Repo variables override the hardcoded stable domains (see header).
+          ALIAS: ${{ github.event_name == 'workflow_dispatch' && (vars.FRONTEND_STAGING_ALIAS || 'staging.veriprops.ng') || (vars.FRONTEND_DEV_ALIAS || 'dev.veriprops.ng') }}
         run: |
           url=$(vercel deploy --yes --cwd frontend --token "$VERCEL_TOKEN")
           echo "deployed $url"
-          if [ -n "$ALIAS" ]; then
-            vercel alias set "$url" "$ALIAS" --token "$VERCEL_TOKEN"
-          else
-            echo "::notice::no alias variable configured; deployment stays at $url"
-          fi
+          vercel alias set "$url" "$ALIAS" --token "$VERCEL_TOKEN"
