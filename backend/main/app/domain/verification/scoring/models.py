@@ -15,6 +15,19 @@ from sqlalchemy import Column, Integer, String, UniqueConstraint
 from main.app.core.state.status import AgentRole, VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
+# Default weight map per tier (sums to 100 within each tier). Seeded by migration
+# ``0001_initial_schema``; also the source of the default commission rates
+# (``weight/100 × AGENT_COMMISSION_SHARE``, D30) so both tables stay in lock-step.
+DEFAULT_TRUST_WEIGHTS: dict[VerificationTier, dict[AgentRole, int]] = {
+    VerificationTier.BASIC: {AgentRole.REGISTRY: 100},
+    VerificationTier.STANDARD: {
+        AgentRole.REGISTRY: 40, AgentRole.FIELD: 30, AgentRole.SURVEYOR: 30,
+    },
+    VerificationTier.PREMIUM: {
+        AgentRole.REGISTRY: 30, AgentRole.FIELD: 20, AgentRole.SURVEYOR: 20, AgentRole.LAWYER: 30,
+    },
+}
+
 
 # ─── ORM ──────────────────────────────────────────────────────────
 

@@ -137,6 +137,7 @@ celerybeat.pid
 !.env.dev_personal
 !.env.test
 !.env.dev
+!.env.staging
 !.env.prod
 .venv
 env/

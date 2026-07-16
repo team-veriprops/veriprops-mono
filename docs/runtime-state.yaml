@@ -556,7 +556,7 @@ self_audit_s13:
 s12_review_release:
   backend:
     - "Trust Score Weights domain (verification/scoring): trust_score_weight_config table
-       (tier×role, sum-to-100 enforced per tier), idempotent default seed via DataSeeder,
+       (tier×role, sum-to-100 enforced per tier), idempotent default seed (now in migration 0001),
        admin CRUD /admin/trust-score-weights (D14), deterministic compute_composite = Σ
        (weight/100 × per-task quality)."
     - "Report domain (verification/report): versioned Report entity (report_version — NOT the

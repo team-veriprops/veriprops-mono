@@ -1,4 +1,5 @@
-"""Unit tests for ConsentService legal-document seeding + public reads (S5)."""
+"""Unit tests for ConsentService public legal-document reads (S5). Seeding is done
+by migration 0001 and guarded by test_migration_seed_parity.py."""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -7,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from main.app.domain.user.auth.consent.content import LEGAL_DOCUMENT_CONTENT
 from main.app.domain.user.auth.consent.models import (
     ConsentDocumentType,
     ConsentSignoffStatus,
@@ -49,38 +49,6 @@ def _make_doc_row(doc_type, href, body="# body text long enough", status="DRAFT"
     row.body = body
     row.signoff_status = status
     return row
-
-
-class TestSeedDocuments:
-    async def test_inserts_all_documents_when_none_exist(self):
-        doc_repo = MagicMock()
-        doc_repo.get_by_type_version = AsyncMock(return_value=None)
-        doc_repo.create = AsyncMock()
-        doc_repo.update = AsyncMock()
-        svc = _make_svc(doc_repo)
-
-        await svc.seed_documents()
-
-        assert doc_repo.create.await_count == len(LEGAL_DOCUMENT_CONTENT)
-        assert doc_repo.update.await_count == 0
-        # Body + signoff propagate into the create DTO.
-        created = doc_repo.create.await_args_list[0].args[0]
-        assert created.body
-        assert created.signoff_status in (ConsentSignoffStatus.DRAFT, ConsentSignoffStatus.FINAL)
-
-    async def test_updates_existing_documents_idempotently(self):
-        doc_repo = MagicMock()
-        doc_repo.get_by_type_version = AsyncMock(
-            side_effect=lambda t, v: _make_doc_row(t, "/legal/x")
-        )
-        doc_repo.create = AsyncMock()
-        doc_repo.update = AsyncMock()
-        svc = _make_svc(doc_repo)
-
-        await svc.seed_documents()
-
-        assert doc_repo.update.await_count == len(LEGAL_DOCUMENT_CONTENT)
-        assert doc_repo.create.await_count == 0
 
 
 class TestGetLegalDocument:

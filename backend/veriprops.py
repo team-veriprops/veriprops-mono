@@ -12,7 +12,6 @@ from starlette import status
 
 from main.app.config.settings import settings  # noqa: F401
 from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
-from main.app.db.seeder import DataSeeder
 from main.appodus_utils.integrations.webhook import webhook_router
 from main.appodus_utils.config.client_manager import ClientStateManager
 
@@ -38,7 +37,6 @@ from main.app.jobs.scheduled import start_scheduler, stop_scheduler
 
 logger: Logger = di['logger']
 client_state_manager: ClientStateManager = ClientStateManager()
-data_seeder: DataSeeder = DataSeeder()
 
 
 @asynccontextmanager
@@ -46,8 +44,6 @@ async def lifespan_event(app: FastAPI):
     logger.debug("Running lifespan..")
 
     await client_state_manager.init_clients()
-    # Seed data
-    await data_seeder.run_data_seed()
 
     # Start Scheduled Jobs
     start_scheduler()

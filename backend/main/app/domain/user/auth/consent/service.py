@@ -10,16 +10,13 @@ from typing import List, Optional
 
 from kink import di, inject
 
-from main.app.domain.user.auth.consent.content import LEGAL_DOCUMENT_CONTENT
 from main.app.domain.user.auth.consent.models import (
     ConsentDocument,
     ConsentDocumentType,
     ConsentSignoffStatus,
-    CreateConsentDocumentDto,
     CreateUserConsentDto,
     LegalDocumentDto,
     LegalDocumentSummaryDto,
-    UpdateConsentDocumentDto,
     UserConsentHistoryItemDto,
     UserConsentHistoryPageDto,
 )
@@ -50,31 +47,8 @@ class ConsentService:
         return await self._doc_repo.get_current(doc_type)
 
     # ── Legal-document content (public marketing /legal/* pages) ─────────────
-
-    async def seed_documents(self) -> None:
-        """Upsert every legal document from the content registry, keyed on
-        (type, consent_version). Idempotent — runs on every boot."""
-        for content in LEGAL_DOCUMENT_CONTENT.values():
-            existing = await self._doc_repo.get_by_type_version(
-                content.type, content.consent_version
-            )
-            if existing:
-                await self._doc_repo.update(existing.id, UpdateConsentDocumentDto(
-                    title=content.title,
-                    href=content.href,
-                    body=content.body,
-                    signoff_status=content.signoff_status,
-                ))
-            else:
-                await self._doc_repo.create(CreateConsentDocumentDto(
-                    type=content.type,
-                    consent_version=content.consent_version,
-                    effective_at=content.effective_at,
-                    title=content.title,
-                    href=content.href,
-                    body=content.body,
-                    signoff_status=content.signoff_status,
-                ))
+    # Rows are seeded by migration 0001 from the content registry; this service
+    # only reads them.
 
     async def get_legal_document(self, slug: str) -> Optional[LegalDocumentDto]:
         """Published legal document (incl. body) for a `/legal/{slug}` page. The

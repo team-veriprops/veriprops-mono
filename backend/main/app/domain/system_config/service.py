@@ -1,7 +1,8 @@
 """System configuration service (PRD §14, §18.5 / D28).
 
-Typed accessors over an admin-editable key-value store. Reads fall back to the seeded
-defaults, so a missing row never breaks a caller. ``seed_defaults`` is idempotent (DataSeeder).
+Typed accessors over an admin-editable key-value store. Default rows are seeded by
+migration 0001 from ``CONFIG_DEFAULTS``; reads fall back to those defaults, so a
+missing row never breaks a caller.
 """
 from __future__ import annotations
 
@@ -34,14 +35,6 @@ class ConfigService:
     def __init__(self, config_repo: SystemConfigRepo, audit_service: AuditLogService):
         self._config_repo = config_repo
         self._audit = audit_service
-
-    async def seed_defaults(self) -> None:
-        """Idempotently create a row for every known config key at its default value."""
-        for key, default in CONFIG_DEFAULTS.items():
-            if await self._config_repo.get_by_key(key.value) is None:
-                await self._config_repo.create(CreateSystemConfigDto(
-                    key=key.value, value_json=default, description=CONFIG_DESCRIPTIONS.get(key),
-                ))
 
     async def get_int(self, key: ConfigKey) -> int:
         raw = await self._raw(key)

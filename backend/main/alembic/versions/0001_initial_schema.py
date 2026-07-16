@@ -8,8 +8,16 @@ former Postgres-only JSON→JSONB pass is unnecessary.
 
 Each table lives in its own ``_create_<table>()`` helper (mirroring the
 original auto_generated migration) and reuses ``AlembicUtils`` helpers.
-Seed data (consent documents, super admin, trust-score weights, pricing,
-content) is preserved effect-for-effect.
+
+All reference seed data lands here too — there is no app-startup seeder.
+Every writer is idempotent (safe to re-run on an already-seeded database),
+and the rows are sourced from the app-side registries so nothing is
+duplicated: legal-document content (``LEGAL_DOCUMENT_CONTENT``), the super
+admin (``settings``), trust-score weights (``DEFAULT_TRUST_WEIGHTS``),
+system config (``CONFIG_DEFAULTS``), commission rules (derived from the
+weights, D30), and pricing tiers + line items (``TIER_PRICE_NGN_KOBO``).
+Enum members are reduced to their raw ``.value`` strings at row-build time,
+keeping the emitted SQL decoupled from app enums.
 
 Revision ID: 0001_initial_schema
 Revises:
@@ -24,6 +32,11 @@ from alembic import op
 
 from main.alembic.utils import AlembicUtils
 from main.app.config.settings import settings
+from main.app.domain.commission_rule.models import BPS_PER_PERCENT
+from main.app.domain.system_config.models import CONFIG_DEFAULTS, CONFIG_DESCRIPTIONS
+from main.app.domain.user.auth.consent.content import LEGAL_DOCUMENT_CONTENT
+from main.app.domain.verification.pricing import TIER_PRICE_NGN_KOBO
+from main.app.domain.verification.scoring.models import DEFAULT_TRUST_WEIGHTS
 from main.appodus_utils import Utils
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
@@ -1031,98 +1044,228 @@ def _create_report_acknowledgements():
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Seed data
+# Seed data — idempotent writers over pure row builders. The builders are
+# the single translation point from the app-side registries to raw column
+# values (enums reduced via ``.value``); ``test_migration_seed_parity``
+# asserts they stay in lock-step with the registries, no DB needed.
 # ─────────────────────────────────────────────────────────────────────
 
-CONSENT_SEEDS = [
-    ("PLATFORM_TERMS", "1.0.0", "Platform Terms of Service", "/legal/terms"),
-    ("PRIVACY_POLICY", "1.0.0", "Privacy Policy", "/legal/privacy"),
-    ("AGENT_TERMS", "1.0.0", "Agent Terms", "/legal/agent-terms"),
-    ("VERIFICATION_TERMS", "1.0.0", "Verification Terms", "/legal/verification-terms"),
-    ("REPORT_DISCLAIMER", "1.0.0", "Report Disclaimer", "/legal/report-disclaimer"),
-]
 
-VERIFICATION_CONSENT_SEEDS = [
-    ("VERIFICATION_DISCLAIMER", "1.0.0", "Verification Disclaimer", "/legal/verification-disclaimer"),
-    ("FINDINGS_OPINION_ACK", "1.0.0", "Findings & Opinion Acknowledgement", "/legal/findings-opinion"),
-    ("JURISDICTION_PLATFORM_ONLY", "1.0.0", "Jurisdiction & Platform-Only Transactions", "/legal/jurisdiction"),
-    ("COMMUNICATION_RECORDING", "1.0.0", "Communication Recording", "/legal/communication-recording"),
-    ("REFUND_POLICY", "1.0.0", "Refund & Cancellation Policy", "/legal/refund-policy"),
-]
+def _consent_document_rows() -> list[dict]:
+    """One row per legal document in the content registry (§3.5)."""
+    return [
+        {
+            "type": content.type.value,
+            "consent_version": content.consent_version,
+            "effective_at": content.effective_at,
+            "title": content.title,
+            "href": content.href,
+            "body": content.body,
+            "signoff_status": content.signoff_status.value,
+        }
+        for content in LEGAL_DOCUMENT_CONTENT.values()
+    ]
 
 
-def _seed_audit_columns(now: datetime) -> dict:
-    return {
-        "date_created": now,
-        "date_updated": None,
-        "deleted": False,
-        "version": 1,
-    }
+def _trust_weight_rows() -> list[dict]:
+    """One weight per (tier, role); weights sum to 100 within a tier (§8.3 / D14)."""
+    return [
+        {"tier": tier.value, "role": role.value, "weight_percent": weight}
+        for tier, role_weights in DEFAULT_TRUST_WEIGHTS.items()
+        for role, weight in role_weights.items()
+    ]
+
+
+def _system_config_rows() -> list[dict]:
+    """One row per admin-tunable ConfigKey at its default value (§14 / D28)."""
+    return [
+        {
+            "key": key.value,
+            "value_json": json.dumps(default),
+            "description": CONFIG_DESCRIPTIONS.get(key),
+        }
+        for key, default in CONFIG_DEFAULTS.items()
+    ]
+
+
+def _commission_rule_rows() -> list[dict]:
+    """One rate per (role, tier), reproducing the prior flat model
+    ``weight_percent/100 × AGENT_COMMISSION_SHARE`` in basis points (§15.1 / D30)."""
+    return [
+        {
+            "role": role.value,
+            "tier": tier.value,
+            "rate_bps": round(weight * BPS_PER_PERCENT * settings.AGENT_COMMISSION_SHARE),
+        }
+        for tier, role_weights in DEFAULT_TRUST_WEIGHTS.items()
+        for role, weight in role_weights.items()
+    ]
+
+
+def _pricing_tier_rows() -> list[dict]:
+    """Default contractual NGN price per tier, in kobo (§18.1 / D36)."""
+    return [
+        {"tier": tier.value, "price_ngn_kobo": price}
+        for tier, price in TIER_PRICE_NGN_KOBO.items()
+    ]
+
+
+def _pricing_line_item_rows() -> list[dict]:
+    """One default line item per tier itemizing the full service fee (§5.2 / §18.1)."""
+    return [
+        {"tier": tier.value, "label": "Verification service fee",
+         "amount_minor": price, "sort_order": 0}
+        for tier, price in TIER_PRICE_NGN_KOBO.items()
+    ]
 
 
 def _seed_consent_documents() -> None:
-    consent_documents = sa.table(
-        "consent_documents",
-        sa.column("id", sa.UUID),
-        sa.column("type", sa.String),
-        sa.column("consent_version", sa.String),
-        sa.column("effective_at", UTCDateTime),
-        sa.column("title", sa.String),
-        sa.column("href", sa.String),
-        sa.column("date_created", UTCDateTime),
-        sa.column("deleted", sa.Boolean),
-        sa.column("version", sa.Integer),
-    )
-
-    now = Utils.datetime_now()
-
-    op.bulk_insert(
-        consent_documents,
-        [
-            {
-                "id": Utils.generate_uuid(),
-                "type": doc_type,
-                "consent_version": consent_version,
-                "effective_at": now,
-                "title": title,
-                "href": href,
-                **_seed_audit_columns(now),
-            }
-            for doc_type, consent_version, title, href in CONSENT_SEEDS
-        ],
-    )
-
-
-def _seed_verification_consents() -> None:
-    """Idempotent insert of the verification-stage consent documents."""
+    """Upsert every legal document by (type, consent_version): refresh the display
+    fields on an existing row (backfills bodies on metadata-only databases), insert
+    the full row otherwise."""
     conn = op.get_bind()
-    eff = datetime(2026, 5, 1, tzinfo=timezone.utc)
-    for doc_type, ver, title, href in VERIFICATION_CONSENT_SEEDS:
+    now = Utils.datetime_now()
+    for row in _consent_document_rows():
         existing = conn.execute(
             sa.text(
-                "SELECT 1 FROM consent_documents "
-                "WHERE type = :type AND consent_version = :ver LIMIT 1"
+                "SELECT id FROM consent_documents "
+                "WHERE type = :type AND consent_version = :consent_version LIMIT 1"
             ),
-            {"type": doc_type, "ver": ver},
+            {"type": row["type"], "consent_version": row["consent_version"]},
+        ).first()
+        if existing:
+            conn.execute(
+                sa.text(
+                    "UPDATE consent_documents "
+                    "SET title = :title, href = :href, body = :body, "
+                    "signoff_status = :signoff_status, date_updated = :now "
+                    "WHERE id = :id"
+                ),
+                {
+                    "id": existing[0],
+                    "title": row["title"],
+                    "href": row["href"],
+                    "body": row["body"],
+                    "signoff_status": row["signoff_status"],
+                    "now": now,
+                },
+            )
+        else:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO consent_documents "
+                    "(id, type, consent_version, effective_at, title, href, body, "
+                    " signoff_status, date_created, deleted, version) "
+                    "VALUES (:id, :type, :consent_version, :effective_at, :title, :href, "
+                    "        :body, :signoff_status, :now, FALSE, 1)"
+                ),
+                {"id": Utils.generate_uuid(), "now": now, **row},
+            )
+
+
+def _seed_trust_score_weights() -> None:
+    """Insert any missing default (tier, role) weight; never overwrites admin edits."""
+    conn = op.get_bind()
+    for row in _trust_weight_rows():
+        existing = conn.execute(
+            sa.text(
+                "SELECT 1 FROM trust_score_weight_config "
+                "WHERE tier = :tier AND role = :role LIMIT 1"
+            ),
+            {"tier": row["tier"], "role": row["role"]},
         ).first()
         if existing:
             continue
         conn.execute(
             sa.text(
-                "INSERT INTO consent_documents "
-                "(id, type, consent_version, effective_at, title, href, "
-                " date_created, deleted, version) "
-                "VALUES (:id, :type, :ver, :eff, :title, :href, :now, FALSE, 1)"
+                "INSERT INTO trust_score_weight_config "
+                "(id, tier, role, weight_percent, date_created, deleted, version) "
+                "VALUES (:id, :tier, :role, :weight_percent, :now, FALSE, 1)"
             ),
-            {
-                "id": Utils.generate_uuid(),
-                "type": doc_type,
-                "ver": ver,
-                "eff": eff,
-                "title": title,
-                "href": href,
-                "now": Utils.datetime_now(),
-            },
+            {"id": Utils.generate_uuid(), "now": Utils.datetime_now(), **row},
+        )
+
+
+def _seed_system_config() -> None:
+    """Insert any missing config key at its default value; never overwrites admin edits."""
+    conn = op.get_bind()
+    for row in _system_config_rows():
+        existing = conn.execute(
+            sa.text("SELECT 1 FROM system_config WHERE key = :key LIMIT 1"),
+            {"key": row["key"]},
+        ).first()
+        if existing:
+            continue
+        conn.execute(
+            sa.text(
+                "INSERT INTO system_config "
+                "(id, key, value_json, description, date_created, deleted, version) "
+                "VALUES (:id, :key, :value_json, :description, :now, FALSE, 1)"
+            ),
+            {"id": Utils.generate_uuid(), "now": Utils.datetime_now(), **row},
+        )
+
+
+def _seed_commission_rules() -> None:
+    """Insert any missing (role, tier) commission rate; never overwrites admin edits."""
+    conn = op.get_bind()
+    for row in _commission_rule_rows():
+        existing = conn.execute(
+            sa.text(
+                "SELECT 1 FROM commission_rules "
+                "WHERE role = :role AND tier = :tier LIMIT 1"
+            ),
+            {"role": row["role"], "tier": row["tier"]},
+        ).first()
+        if existing:
+            continue
+        conn.execute(
+            sa.text(
+                "INSERT INTO commission_rules "
+                "(id, role, tier, rate_bps, date_created, deleted, version) "
+                "VALUES (:id, :role, :tier, :rate_bps, :now, FALSE, 1)"
+            ),
+            {"id": Utils.generate_uuid(), "now": Utils.datetime_now(), **row},
+        )
+
+
+def _seed_pricing_defaults() -> None:
+    """Insert any missing per-tier price row and default line item; never
+    overwrites admin edits (the line-item check is soft-delete-aware, mirroring
+    ``PricingLineItemRepo.list_for_tier``)."""
+    conn = op.get_bind()
+    for row in _pricing_tier_rows():
+        existing = conn.execute(
+            sa.text("SELECT 1 FROM pricing_tier_config WHERE tier = :tier LIMIT 1"),
+            {"tier": row["tier"]},
+        ).first()
+        if existing:
+            continue
+        conn.execute(
+            sa.text(
+                "INSERT INTO pricing_tier_config "
+                "(id, tier, price_ngn_kobo, date_created, deleted, version) "
+                "VALUES (:id, :tier, :price_ngn_kobo, :now, FALSE, 1)"
+            ),
+            {"id": Utils.generate_uuid(), "now": Utils.datetime_now(), **row},
+        )
+    for row in _pricing_line_item_rows():
+        existing = conn.execute(
+            sa.text(
+                "SELECT 1 FROM pricing_line_items "
+                "WHERE tier = :tier AND deleted = FALSE LIMIT 1"
+            ),
+            {"tier": row["tier"]},
+        ).first()
+        if existing:
+            continue
+        conn.execute(
+            sa.text(
+                "INSERT INTO pricing_line_items "
+                "(id, tier, label, amount_minor, sort_order, date_created, deleted, version) "
+                "VALUES (:id, :tier, :label, :amount_minor, :sort_order, :now, FALSE, 1)"
+            ),
+            {"id": Utils.generate_uuid(), "now": Utils.datetime_now(), **row},
         )
 
 
@@ -1275,12 +1418,15 @@ def upgrade() -> None:
         if not AlembicUtils.table_exists(name):
             builder()
 
-    # Data seeds belong here, not in app-level seeders.
-    if AlembicUtils.table_exists("consent_documents"):
-        _seed_consent_documents()
-        _seed_verification_consents()
-    if AlembicUtils.table_exists("users"):
-        _seed_super_admin()
+    # Reference-data seeds — the builder loop above guarantees every table
+    # exists, and every writer is idempotent on an already-seeded database.
+    _seed_consent_documents()
+    _seed_super_admin()
+    _seed_trust_score_weights()
+    _seed_system_config()
+    # Commission rates derive from the same weights map as the trust scores (D30).
+    _seed_commission_rules()
+    _seed_pricing_defaults()
 
 
 def downgrade() -> None:

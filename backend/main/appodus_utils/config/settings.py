@@ -344,7 +344,7 @@ class AppodusBaseSettings(BaseSettings):
             return db_url
 
     model_config = SettingsConfigDict(
-        env_file=get_absolute_path(f'.env.{os.getenv("appodus_active_env", "dev_personal")}'),
+        env_file=get_absolute_path(f'.env.{os.getenv("APPODUS_ACTIVE_ENV", "dev_personal")}'),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

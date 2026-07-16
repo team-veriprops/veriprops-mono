@@ -47,7 +47,7 @@ jobs:
   deploy-backend:
     needs: [backend-ci, frontend-ci]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'master' && 'production' || 'dev') }}
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -104,7 +104,7 @@ jobs:
     # and a failed migration blocks the frontend release too.
     needs: [backend-ci, frontend-ci, deploy-backend]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'master' && 'production' || 'dev') }}
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
