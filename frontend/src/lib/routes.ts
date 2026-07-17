@@ -44,6 +44,8 @@ export const ROUTES = {
     GATE: '/admin',
     DASHBOARD: '/admin/dashboard',
     TEAM: '/admin/team',
+    USERS: '/admin/users',
+    USER_DETAIL: (uid: string) => `/admin/users/${uid}`,
     AGENT_APPLICATIONS: '/admin/agents/applications',
     INVITE_ACCEPT: (token: string) => `/auth/admin-invite/${token}`,
     VERIFICATIONS: '/admin/verifications',

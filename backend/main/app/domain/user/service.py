@@ -13,6 +13,7 @@ from kink import di, inject
 
 from main.app.domain.user.models import (
     CreateUserDto,
+    TrustStatus,
     UpdateUserDto,
     User, _CreateUserDto,
 )
@@ -119,7 +120,12 @@ class UserService:
         # PRD §2.3: Customer trust = first successful payment;
         # Agent trust = first task submission. We expose this hook so
         # callers can elevate without re-implementing the rule.
-        await self._user_repo.update(user_id, UpdateUserDto(trust_status="TRUSTED"))
+        await self._user_repo.update(user_id, UpdateUserDto(trust_status=TrustStatus.TRUSTED.value))
+
+    async def set_trust_status(self, user_id: str, trust_status: TrustStatus) -> None:
+        # Admin override (§4.2) — unlike upgrade_trust_status_if_eligible this can
+        # also downgrade. Auditing is the caller's responsibility (AdminUsersService).
+        await self._user_repo.update(user_id, UpdateUserDto(trust_status=trust_status.value))
 
 
     async def get_user_contact(self, user_id: str) -> UserContactDto:

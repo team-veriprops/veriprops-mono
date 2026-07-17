@@ -12,7 +12,7 @@ from libre_fastapi_jwt import AuthJWT
 from main.app.config.settings import settings
 from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
 from main.app.domain.user.auth.utils.jwt_auth_utils import JwtAuthUtils
-from main.app.domain.user.models import User
+from main.app.domain.user.models import AccountStatus, User
 from main.appodus_utils.exception.exceptions import UnauthorizedException, InvalidCredentialsException
 
 from kink import di, inject
@@ -60,6 +60,7 @@ def _user_to_session_dto(user: User, has_password: bool, linked: List[str]) -> S
         personas=[UserPersona(p) for p in (user.personas or [])],
         admin_sub_role=user.admin_sub_role,
         trust_status=user.trust_status,
+        account_status=user.account_status or AccountStatus.ACTIVE.value,
         has_password=has_password,
         linked_providers=[SocialAuthProvider(p) for p in linked if p in {sp.value for sp in SocialAuthProvider}],
         avatar_url=user.avatar_url,
@@ -154,6 +155,20 @@ class SessionService:
                 )
             raise InvalidCredentialsException()
 
+        # Admin suspension check (§4.2) — after credential verification so the account
+        # state is only disclosed to the genuine credential holder.
+        if user.account_status == AccountStatus.SUSPENDED.value:
+            await self.record_event(
+                SecurityEventType.LOGIN_FAILURE,
+                "Login attempted on suspended account",
+                user_id=str(user.id),
+                ip_address=ip_address,
+                device_fingerprint=req.device_fingerprint,
+            )
+            raise UnauthorizedException(
+                "This account has been suspended. Contact support for assistance.",
+            )
+
         await user_service.reset_failed_login(user)
         await self.record_event(
             SecurityEventType.LOGIN_SUCCESS,
@@ -175,6 +190,13 @@ class SessionService:
                 device: Optional[str] = None,
                 device_fingerprint: Optional[str] = None,
         ) -> AuthSessionDto:
+
+        # Defense in depth (§4.2): the common issuance choke point also guards the
+        # OAuth login path, which never goes through SessionService.login.
+        if user.account_status == AccountStatus.SUSPENDED.value:
+            raise UnauthorizedException(
+                "This account has been suspended. Contact support for assistance.",
+            )
 
         # Persist server-side device session keyed on a hash of the refresh token.
         from typing import cast, Any

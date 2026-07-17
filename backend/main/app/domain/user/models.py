@@ -28,6 +28,16 @@ class TrustStatus(str, enum.Enum):
     TRUSTED = "TRUSTED"
 
 
+class AccountStatus(str, enum.Enum):
+    """Whole-account availability, admin-controlled (distinct from the agent
+    *role-level* credential suspension in §2.4 and the transient brute-force
+    ``locked_until`` lockout). A SUSPENDED user cannot log in and has all
+    device sessions revoked at suspension time."""
+
+    ACTIVE = "ACTIVE"
+    SUSPENDED = "SUSPENDED"
+
+
 # ─── ORM ──────────────────────────────────────────────────────────
 
 class User(BaseEntity):
@@ -54,6 +64,15 @@ class User(BaseEntity):
     admin_sub_role = Column(String(16), nullable=True)
 
     trust_status = Column(String(16), nullable=False, default=TrustStatus.UNTRUSTED.value)
+
+    # Admin-controlled whole-account availability (§2.4a). Suspension metadata is
+    # kept on the row so the admin directory can show who/why/when without a join.
+    account_status = Column(String(16), nullable=False, default=AccountStatus.ACTIVE.value,
+                            server_default=AccountStatus.ACTIVE.value)
+    suspended_at = Column(UTCDateTime, nullable=True)
+    suspension_reason = Column(String(500), nullable=True)
+    # Admin user id (36-char str form), application-enforced reference.
+    suspended_by = Column(String(36), nullable=True)
 
     # Phase 17 — referral credits (stored in kobo to avoid float precision issues)
     credit_balance_kobo = Column(BigInteger, nullable=False, default=0)
@@ -144,4 +163,5 @@ class QueryUserDto(BaseQueryDto):
     personas: Optional[List[str]] = None
     admin_sub_role: Optional[str] = None
     trust_status: Optional[str] = None
+    account_status: Optional[str] = None
     avatar_url: Optional[str] = None

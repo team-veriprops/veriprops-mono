@@ -42,6 +42,8 @@ class SecurityEventType(str, enum.Enum):
     ADMIN_INVITE_ACCEPTED = "ADMIN_INVITE_ACCEPTED"
     ADMIN_ROLE_CHANGED = "ADMIN_ROLE_CHANGED"
     ADMIN_DEACTIVATED = "ADMIN_DEACTIVATED"
+    ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED"
+    ACCOUNT_REACTIVATED = "ACCOUNT_REACTIVATED"
     TRUST_ELEVATED = "TRUST_ELEVATED"
     PAYMENT_INITIATED = "PAYMENT_INITIATED"
     PAYMENT_SUCCEEDED = "PAYMENT_SUCCEEDED"
@@ -232,6 +234,7 @@ class SessionUserDto(Object):
     personas: List[UserPersona]
     admin_sub_role: Optional[str] = None
     trust_status: str
+    account_status: str
     has_password: bool
     linked_providers: List[SocialAuthProvider]
     avatar_url: Optional[str] = None

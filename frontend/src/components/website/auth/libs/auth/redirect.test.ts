@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { resolvePostAuthRedirect, isSafeRedirectPath } from "./redirect";
 import { TransactionCurrency } from "@/types/models";
-import { AuthUser, AuthIntent, TrustStatus, UserPersona, UserType } from "@components/website/auth/models";
+import { AccountStatus, AuthUser, AuthIntent, TrustStatus, UserPersona, UserType } from "@components/website/auth/models";
 const baseUser: AuthUser = {
   id: "u_1",
   firstName: "Ada",
@@ -18,6 +18,7 @@ const baseUser: AuthUser = {
   userType: UserType.USER,
   personas: [UserPersona.CUSTOMER],
   trustStatus: TrustStatus.UNTRUSTED,
+  accountStatus: AccountStatus.ACTIVE,
   hasPassword: true,
   linkedProviders: [],
   dateCreated: new Date().toISOString(),
