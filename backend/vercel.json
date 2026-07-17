@@ -7,7 +7,7 @@
 
   "functions": {
     "api/index.py": {
-      "maxDuration": 60,
+      "maxDuration": 600,
       "includeFiles": "service_accounts/**"
     }
   },
