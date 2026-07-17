@@ -154,12 +154,23 @@ export const isAuthIntent = (value: string | null | undefined): value is AuthInt
 
 export const buildAuthUrl = (
   base: string,
-  params: { intent?: AuthIntent | null; redirect?: string | null; tier?: string | null } = {},
+  params: {
+    intent?: AuthIntent | null;
+    redirect?: string | null;
+    tier?: string | null;
+    /** Signup prefill (e.g. from an admin-invite preview) — read by SignupContainer. */
+    email?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+  } = {},
 ): string => {
   const search = new URLSearchParams();
   if (params.intent && params.intent !== AuthIntent.DEFAULT) search.set('intent', params.intent);
   if (params.redirect) search.set('redirect', params.redirect);
   if (params.tier) search.set('tier', params.tier);
+  if (params.email) search.set('email', params.email);
+  if (params.firstName) search.set('firstName', params.firstName);
+  if (params.lastName) search.set('lastName', params.lastName);
   const qs = search.toString();
   return qs ? `${base}?${qs}` : base;
 };

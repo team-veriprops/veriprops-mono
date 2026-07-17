@@ -55,10 +55,13 @@ export function SelectableCard({
       onClick={onSelect}
       data-testid={testId}
       className={cn(
-        "relative flex items-start gap-3 rounded-xl border p-4 text-left transition-all",
+        // Solid `bg-card`/`bg-card-selected` surfaces (never transparent): the wizard
+        // page background sits directly behind these cards, and a fill-less card is
+        // unreadable against the dark-mode near-black base.
+        "relative flex items-start gap-3 rounded-xl border p-4 text-left shadow-card transition-all",
         selected
-          ? "border-primary bg-primary/5 ring-1 ring-primary"
-          : "border-border hover:border-primary/40 hover:bg-accent",
+          ? "border-primary bg-card-selected ring-1 ring-primary"
+          : "border-border bg-card hover:border-primary/40 hover:shadow-card-hover",
         className,
       )}
     >

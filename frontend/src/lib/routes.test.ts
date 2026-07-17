@@ -54,4 +54,25 @@ describe("buildAuthUrl", () => {
     expect(url).toContain("tier=standard");
     expect(url).toContain("redirect=%2Fportal%2Fverifications%2Fabc");
   });
+
+  it("carries signup prefill params (email, firstName, lastName), URL-encoded", () => {
+    const url = buildAuthUrl("/auth/signup", {
+      intent: AuthIntent.INVITED_ADMIN,
+      email: "ada+admin@example.com",
+      firstName: "Ada",
+      lastName: "Lovelace Byron",
+    });
+    expect(url).toContain("email=ada%2Badmin%40example.com");
+    expect(url).toContain("firstName=Ada");
+    expect(url).toContain("lastName=Lovelace+Byron");
+  });
+
+  it("omits prefill params that are absent or empty", () => {
+    const url = buildAuthUrl("/auth/signup", {
+      email: "ada@example.com",
+      firstName: null,
+      lastName: "",
+    });
+    expect(url).toBe("/auth/signup?email=ada%40example.com");
+  });
 });
