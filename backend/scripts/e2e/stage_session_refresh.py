@@ -58,6 +58,10 @@ def run(ctx: Ctx) -> None:
     new_access = r.cookies.get(ACCESS)
     check("refresh with the refresh CSRF token re-issues the access cookie",
           r.status_code == 200 and bool(new_access), f"http {r.status_code}")
+    body = r.json().get("data") or {} if r.status_code == 200 else {}
+    check("refresh returns the session DTO the frontend keep-alive schedules from",
+          bool(body.get("accessTokenExpiresAt")) and bool(body.get("user")),
+          f"data keys: {sorted(body.keys())[:6]}")
     check("refresh leaves the refresh cookie itself untouched (no rotation)",
           not r.cookies.get(REFRESH))
 

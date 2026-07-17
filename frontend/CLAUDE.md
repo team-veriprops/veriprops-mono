@@ -59,6 +59,10 @@ Non-env client tuning that would otherwise be duplicated as magic numbers lives 
 - **Automation hooks are fail-closed.** `isAutomationEnvironment()` ([lib/automation.ts](src/lib/automation.ts)) is an allowlist (`dev_personal`/`development`/`test`); staging/production/unset all return `false`. Never invert it or add prod-enabling values.
 - **No leaking backend errors to the console.** `FetchHttpClient` must not `console.log` response bodies (they may carry PII/internal detail).
 
+## Session recovery (token refresh UX)
+
+`FetchHttpClient` auto-refreshes the session (401-triggered and proactively via `useProactiveSessionRefresh`, mounted in `ClientWrapperProvider`, ~60s before `accessTokenExpiresAt`). The refresh has a **transient-only retry budget**: network/5xx failures retry up to `SESSION_REFRESH_MAX_ATTEMPTS` with doubling backoff; a definitive rejection (401/403/419 from the refresh endpoint) short-circuits. The plain-TS client talks to React through the vanilla Zustand bridge [src/lib/sessionRecovery.ts](src/lib/sessionRecovery.ts) (`idle`/`reconnecting`/`expired` — attempt 1 stays silent so routine refreshes never flash UI), rendered by the globally-mounted [SessionRecoveryOverlay](src/components/website/auth/SessionRecoveryOverlay.tsx) (testids `session-recovery-overlay`/`session-recovery-attempt`/`session-signin-now`). On `expired` the overlay clears `useAuthStore` and hands off to `loginRedirectUrl(...)` (loop-guarded on `/auth*`) after a brief pause. The refresh endpoint returns the full `AuthSession` DTO; the overlay pipes it into `useAuthStore` so expiry timestamps stay fresh — `src/lib` must never import components, so that wiring lives on the React side. Tuning constants live in [src/lib/config/app.ts](src/lib/config/app.ts); the client is unit-tested in [FetchHttpClient.test.ts](src/lib/FetchHttpClient.test.ts) and the HTTP contract is pinned by the backend e2e stage `session_refresh`.
+
 ## Route Definition
 * All routes in the application should be declared in `frontend\src\lib\routes.ts` grouped by their surface.
 * All Portal Menu Sidebars are grouped and maintained here `frontend\src\components\portal\nav.ts`,

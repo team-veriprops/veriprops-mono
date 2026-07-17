@@ -66,7 +66,7 @@ async def logout(request: Request, authorize: AuthJWT = Depends()):
     return SuccessResponse[bool](data=True)
 
 
-@session_router.post("/current", response_model=SuccessResponse[bool])
+@session_router.post("/current", response_model=SuccessResponse[AuthSessionDto])
 async def refresh_session(request: Request, authorize: AuthJWT = Depends()):
     # The refresh JWT stays valid until expiry, so check the device session too:
     # a revoked one must not refresh. This is what makes device-revoke and
@@ -80,7 +80,11 @@ async def refresh_session(request: Request, authorize: AuthJWT = Depends()):
 
     await JwtAuthUtils.refresh_access_token(authorize=authorize)
     await session_service.touch_device_session(token_hash)
-    return SuccessResponse[bool](data=True)
+    # Return the full session DTO (not a bare bool): the frontend keep-alive
+    # uses accessTokenExpiresAt to schedule the next proactive refresh.
+    user = await user_service.get_user_model(str(authorize.get_jwt_subject()))
+    session = await session_service.build_session_dto(user)
+    return SuccessResponse[AuthSessionDto](data=session)
 
 
 @session_router.get("/current", response_model=SuccessResponse[AuthSessionDto])

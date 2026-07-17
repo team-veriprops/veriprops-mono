@@ -1,4 +1,14 @@
 import { ROUTES, buildAuthUrl } from "./routes";
+import {
+  SESSION_REFRESH_BACKOFF_MS,
+  SESSION_REFRESH_MAX_ATTEMPTS,
+} from "./config/app";
+import {
+  publishExpired,
+  publishReconnecting,
+  publishRecovered,
+} from "./sessionRecovery";
+import type { AuthSession } from "@components/website/auth/models";
 
 /**
  * Login target for a session that could not be recovered, or null when the
@@ -35,6 +45,19 @@ export class HttpError<T = unknown> extends Error {
     this.body = body;
   }
 }
+
+/** Refresh-call failure, classified for the retry budget (transient vs definitive). */
+class SessionRefreshError extends HttpError {
+  readonly transient: boolean;
+
+  constructor(url: string, status: number | undefined, transient: boolean) {
+    super("Session refresh failed", url, status === undefined ? undefined : String(status));
+    this.name = "SessionRefreshError";
+    this.transient = transient;
+  }
+}
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export class FetchHttpClient implements HttpClient {
   private readonly baseURL: string;
@@ -100,7 +123,9 @@ export class FetchHttpClient implements HttpClient {
           this.redirectToAccessDenied();
         }
         if (response.status === 419) {
-          this.redirectToLogin();
+          // Authentication-timeout: unrecoverable by refresh — hand the user
+          // to the SessionRecoveryOverlay's expired state.
+          this.publishSessionExpired();
         }
 
         const errorBody = await this.safeJson(response);
@@ -138,29 +163,61 @@ export class FetchHttpClient implements HttpClient {
     options._retry = true;
 
     try {
-      await this.refreshToken();
+      await this.refreshSession();
       return this.request<T>(url, options);
     } catch (err) {
       // Status only — never log response bodies (may carry PII/internal detail).
+      // Navigation is owned by SessionRecoveryOverlay via the expired phase
+      // published inside the refresh loop.
       console.error(
         "Session refresh failed",
         err instanceof HttpError ? `(status ${err.status})` : ""
       );
-      this.redirectToLogin();
       return Promise.reject(err);
     }
   }
 
-  private refreshToken(): Promise<void> {
+  /**
+   * Single-flight session refresh with a transient-failure retry budget.
+   * Public so the proactive keep-alive hook can renew the session before the
+   * access token expires; concurrent 401s and the keep-alive all share one
+   * in-flight recovery.
+   */
+  refreshSession(): Promise<void> {
     if (!this.refreshPromise) {
-      this.refreshPromise = this.performRefresh().finally(() => {
+      this.refreshPromise = this.runRefreshWithRetries().finally(() => {
         this.refreshPromise = null;
       });
     }
     return this.refreshPromise;
   }
 
-  private async performRefresh(): Promise<void> {
+  /**
+   * Attempt 1 is silent (routine refreshes must not flash recovery UI). Each
+   * *transient* failure (network / 5xx) publishes a reconnecting attempt for
+   * the overlay and backs off before retrying; a *definitive* rejection
+   * (401/403/419 — the session is dead) or an exhausted budget publishes the
+   * expired phase, whose overlay performs the login handoff.
+   */
+  private async runRefreshWithRetries(): Promise<void> {
+    for (let attempt = 1; attempt <= SESSION_REFRESH_MAX_ATTEMPTS; attempt++) {
+      try {
+        const session = await this.performRefresh();
+        publishRecovered(session);
+        return;
+      } catch (err) {
+        const transient = err instanceof SessionRefreshError && err.transient;
+        if (!transient || attempt === SESSION_REFRESH_MAX_ATTEMPTS) {
+          this.publishSessionExpired();
+          throw err;
+        }
+        publishReconnecting(attempt + 1, SESSION_REFRESH_MAX_ATTEMPTS);
+        await delay(SESSION_REFRESH_BACKOFF_MS * 2 ** (attempt - 1));
+      }
+    }
+  }
+
+  private async performRefresh(): Promise<AuthSession | null> {
     // The HttpOnly refresh cookie rides along via credentials: "include";
     // only its non-HttpOnly CSRF twin must be copied into the header
     // (double-submit pattern). Never reuse the failed request's headers —
@@ -172,14 +229,30 @@ export class FetchHttpClient implements HttpClient {
     }
 
     const refreshPath = "/users/auth/sessions/current";
-    const response = await fetch(this.baseURL + refreshPath, {
-      method: "POST",
-      headers,
-      credentials: "include",
-    });
-    if (!response.ok) {
-      throw new HttpError("Session refresh failed", refreshPath, String(response.status));
+    let response: Response;
+    try {
+      response = await fetch(this.baseURL + refreshPath, {
+        method: "POST",
+        headers,
+        credentials: "include",
+      });
+    } catch {
+      throw new SessionRefreshError(refreshPath, undefined, true);
     }
+    if (!response.ok) {
+      const definitive =
+        response.status === 401 || response.status === 403 || response.status === 419;
+      throw new SessionRefreshError(refreshPath, response.status, !definitive);
+    }
+    // The endpoint returns the session DTO so the keep-alive can reschedule
+    // from the fresh accessTokenExpiresAt.
+    const body = await this.safeJson(response);
+    return (body?.data as AuthSession | undefined) ?? null;
+  }
+
+  private publishSessionExpired() {
+    if (typeof window === "undefined") return;
+    publishExpired(loginRedirectUrl(window.location.pathname, window.location.search));
   }
 
   private async safeJson(response: Response) {
@@ -194,15 +267,6 @@ export class FetchHttpClient implements HttpClient {
     if (typeof document === "undefined") return null;
     const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
     return match ? decodeURIComponent(match[1]) : null;
-  }
-
-  private redirectToLogin() {
-    if (typeof window !== "undefined") {
-      const target = loginRedirectUrl(window.location.pathname, window.location.search);
-      if (target) {
-        window.location.href = target;
-      }
-    }
   }
 
   private redirectToAccessDenied() {
