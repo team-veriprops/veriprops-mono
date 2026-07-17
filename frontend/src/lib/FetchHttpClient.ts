@@ -1,5 +1,18 @@
 import { ROUTES, buildAuthUrl } from "./routes";
 
+/**
+ * Login target for a session that could not be recovered, or null when the
+ * current page is already on the auth surface — redirecting there again would
+ * nest ?redirect= params and loop full page loads (auth pages may legitimately
+ * receive 401s from optional session-scoped queries).
+ */
+export function loginRedirectUrl(pathname: string, search: string): string | null {
+  if (pathname === ROUTES.AUTH.GATE || pathname.startsWith(`${ROUTES.AUTH.GATE}/`)) {
+    return null;
+  }
+  return buildAuthUrl(ROUTES.AUTH.LOGIN, { redirect: pathname + search });
+}
+
 export interface HttpClient {
   get<T = unknown>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
   getBlob(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<Blob>;
@@ -25,8 +38,8 @@ export class HttpError<T = unknown> extends Error {
 
 export class FetchHttpClient implements HttpClient {
   private readonly baseURL: string;
-  private isRefreshing = false;
-  private refreshSubscribers: Array<() => void> = [];
+  /** Single-flight session refresh: concurrent 401s await the same promise. */
+  private refreshPromise: Promise<void> | null = null;
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
@@ -81,7 +94,7 @@ export class FetchHttpClient implements HttpClient {
 
       if (!response.ok) {
         if (response.status === 401 && !options._retry) {
-          return this.handle401<T>(url, options, headers);
+          return this.handle401<T>(url, options);
         }
         if (response.status === 403) {
           this.redirectToAccessDenied();
@@ -120,45 +133,53 @@ export class FetchHttpClient implements HttpClient {
 
   private async handle401<T>(
     url: string,
-    options: RequestInit & { _retry?: boolean },
-    headers: Record<string, string>
+    options: RequestInit & { _retry?: boolean }
   ): Promise<T> {
     options._retry = true;
 
     try {
-      await this.refreshToken(headers);
-      this.notifySubscribers();
+      await this.refreshToken();
       return this.request<T>(url, options);
     } catch (err) {
-      console.error("Token refresh failed:", err);
+      // Status only — never log response bodies (may carry PII/internal detail).
+      console.error(
+        "Session refresh failed",
+        err instanceof HttpError ? `(status ${err.status})` : ""
+      );
       this.redirectToLogin();
       return Promise.reject(err);
     }
   }
 
-  private async refreshToken(headers: Record<string, string>): Promise<void> {
-    if (this.isRefreshing) {
-      return new Promise((resolve) => this.refreshSubscribers.push(resolve));
-    }
-    this.isRefreshing = true;
-    const csrfToken = this.getCookie("__Host-refresh_csrf_token");
-      if (csrfToken) {
-        headers["X-CSRF-Token"] = csrfToken;
-      }
-    try {
-      await fetch(`/api/users/auth/sessions/current`, {
-        method: "POST",
-        headers,
-        credentials: "include",
+  private refreshToken(): Promise<void> {
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.performRefresh().finally(() => {
+        this.refreshPromise = null;
       });
-    } finally {
-      this.isRefreshing = false;
     }
+    return this.refreshPromise;
   }
 
-  private notifySubscribers() {
-    this.refreshSubscribers.forEach((cb) => cb());
-    this.refreshSubscribers = [];
+  private async performRefresh(): Promise<void> {
+    // The HttpOnly refresh cookie rides along via credentials: "include";
+    // only its non-HttpOnly CSRF twin must be copied into the header
+    // (double-submit pattern). Never reuse the failed request's headers —
+    // they carry the ACCESS csrf token, which the refresh endpoint rejects.
+    const headers: Record<string, string> = {};
+    const refreshCsrf = this.getCookie("__Host-refresh_csrf_token");
+    if (refreshCsrf) {
+      headers["X-CSRF-Token"] = refreshCsrf;
+    }
+
+    const refreshPath = "/users/auth/sessions/current";
+    const response = await fetch(this.baseURL + refreshPath, {
+      method: "POST",
+      headers,
+      credentials: "include",
+    });
+    if (!response.ok) {
+      throw new HttpError("Session refresh failed", refreshPath, String(response.status));
+    }
   }
 
   private async safeJson(response: Response) {
@@ -177,8 +198,10 @@ export class FetchHttpClient implements HttpClient {
 
   private redirectToLogin() {
     if (typeof window !== "undefined") {
-      const current = window.location.pathname + window.location.search;
-      window.location.href = buildAuthUrl(ROUTES.AUTH.LOGIN, { redirect: current });
+      const target = loginRedirectUrl(window.location.pathname, window.location.search);
+      if (target) {
+        window.location.href = target;
+      }
     }
   }
 
