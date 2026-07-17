@@ -170,7 +170,6 @@ jobs:
         run: |
           echo "ACTIVE_ENV $ACTIVE_ENV"
           echo "ALIAS $ALIAS"
-          echo "ENV File $RUNNER_TEMP/env_args.bin"
           bash .github/scripts/doppler_env_args.sh --base-file "frontend/.env.$ACTIVE_ENV" --build-env > "$RUNNER_TEMP/env_args.bin"
           readarray -d '' env_args < "$RUNNER_TEMP/env_args.bin"
           url=$(vercel deploy --yes --cwd frontend --token "$VERCEL_TOKEN" "${env_args[@]}")
