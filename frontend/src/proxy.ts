@@ -21,7 +21,8 @@ import { JwtPayload, UserPersona, UserType } from "./components/website/auth/mod
  * cookie presence here.
  */
 
-const ACCESS_COOKIE_KEY = "__Host-access_token";
+// Session is locked when refresh_token expires
+const ACCESS_COOKIE_KEY = "__Host-refresh_token";
 
 const LOGIN_PATH = ROUTES.AUTH.LOGIN;
 const HOME_PATH = ROUTES.HOME ?? "/";

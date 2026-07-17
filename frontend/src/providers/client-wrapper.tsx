@@ -8,6 +8,15 @@ import { useEffect, useState } from "react";
 import ConsentReacceptanceModal from "@components/website/auth/ConsentReacceptanceModal";
 import SessionRecoveryOverlay from "@components/website/auth/SessionRecoveryOverlay";
 import { useProactiveSessionRefresh } from "@components/website/auth/libs/useProactiveSessionRefresh";
+import { usePendingLogoutRetry } from "@components/website/auth/libs/usePendingLogoutRetry";
+
+/** Rendered under `QueryClientProvider` — `usePendingLogoutRetry` needs a QueryClient
+ * in context (it drives `useLogoutMutation`), which isn't available in the parent's
+ * own render (a component can't consume a context it's about to create). */
+function PendingLogoutRetry() {
+  usePendingLogoutRetry();
+  return null;
+}
 
 export function ClientWrapperProvider({ children }: { children: React.ReactNode }) {
   // Keep-alive: silently refresh ahead of access-token expiry (no-op signed out).
@@ -50,6 +59,8 @@ export function ClientWrapperProvider({ children }: { children: React.ReactNode 
         {/* Session-recovery UX: reconnect attempts + expired-session handoff,
             driven by FetchHttpClient via sessionRecoveryStore. */}
         <SessionRecoveryOverlay />
+        {/* Flush a logout that couldn't reach the backend once connectivity returns. */}
+        <PendingLogoutRetry />
         {/* </LoadScript> */}
       </QueryClientProvider>
       <Toaster />

@@ -46,6 +46,12 @@ export class HttpError<T = unknown> extends Error {
   }
 }
 
+/** True when `fetch` itself never got a response (offline, DNS failure, etc.) —
+ * as opposed to a real 4xx/5xx `HttpError` built from a parsed response body. */
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof HttpError && error.status === undefined && error.message === "Network error";
+}
+
 /** Refresh-call failure, classified for the retry budget (transient vs definitive). */
 class SessionRefreshError extends HttpError {
   readonly transient: boolean;

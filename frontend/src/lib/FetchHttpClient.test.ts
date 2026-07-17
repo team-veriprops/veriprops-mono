@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FetchHttpClient, HttpError, loginRedirectUrl } from "./FetchHttpClient";
+import { FetchHttpClient, HttpError, isNetworkError, loginRedirectUrl } from "./FetchHttpClient";
 import {
   consumeRefreshedSession,
   publishExpired,
@@ -338,5 +338,20 @@ describe("non-401 statuses are untouched by the refresh path", () => {
     expect(refreshCalls()).toHaveLength(0);
     expect(accessDenied).not.toHaveBeenCalled();
     expect(phase()).toBe("idle");
+  });
+});
+
+describe("isNetworkError", () => {
+  it("is true for the fetch-never-got-a-response path", () => {
+    expect(isNetworkError(new HttpError("Network error", "/things"))).toBe(true);
+  });
+
+  it("is false for a parsed error-response HttpError", () => {
+    expect(isNetworkError(new HttpError("Forbidden", "/things", "403", { error: { code: "403" } }))).toBe(false);
+  });
+
+  it("is false for a non-HttpError value", () => {
+    expect(isNetworkError(new Error("boom"))).toBe(false);
+    expect(isNetworkError("boom")).toBe(false);
   });
 });
