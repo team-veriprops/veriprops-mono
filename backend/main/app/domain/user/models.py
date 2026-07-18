@@ -28,6 +28,16 @@ class TrustStatus(str, enum.Enum):
     TRUSTED = "TRUSTED"
 
 
+class AccountStatus(str, enum.Enum):
+    """Whole-account availability, admin-controlled (distinct from the agent
+    *role-level* credential suspension in §2.4 and the transient brute-force
+    ``locked_until`` lockout). A SUSPENDED user cannot log in and has all
+    device sessions revoked at suspension time."""
+
+    ACTIVE = "ACTIVE"
+    SUSPENDED = "SUSPENDED"
+
+
 # ─── ORM ──────────────────────────────────────────────────────────
 
 class User(BaseEntity):
@@ -55,6 +65,15 @@ class User(BaseEntity):
 
     trust_status = Column(String(16), nullable=False, default=TrustStatus.UNTRUSTED.value)
 
+    # Admin-controlled whole-account availability (§2.4a). Suspension metadata is
+    # kept on the row so the admin directory can show who/why/when without a join.
+    account_status = Column(String(16), nullable=False, default=AccountStatus.ACTIVE.value,
+                            server_default=AccountStatus.ACTIVE.value)
+    suspended_at = Column(UTCDateTime, nullable=True)
+    suspension_reason = Column(String(500), nullable=True)
+    # Admin user id (36-char str form), application-enforced reference.
+    suspended_by = Column(String(36), nullable=True)
+
     # Phase 17 — referral credits (stored in kobo to avoid float precision issues)
     credit_balance_kobo = Column(BigInteger, nullable=False, default=0)
     # Phase 17 — the referrer this user signed up under (§17.1), user id (str form). Null = organic.
@@ -66,6 +85,11 @@ class User(BaseEntity):
     failed_login_count = Column(Integer(), nullable=False, server_default="0")
     # phone_e164's index is declared inline (index=True) — it auto-names to
     # ix_users_phone_e164, matching the migration. Don't re-declare it here.
+
+    # True once the customer has dirtied their first verification draft (§ auto-launch
+    # the new-verification wizard on first login, never again after). Flipped in
+    # VerificationService.create_draft's "create new" branch — never unset.
+    has_started_verification = Column(Boolean, nullable=False, default=False, server_default="false")
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────
@@ -120,6 +144,7 @@ class UpdateUserDto(Object):
     avatar_url: Optional[str] = None
     locked_until: Optional[datetime] = None
     failed_login_count: Optional[int] = None
+    has_started_verification: Optional[bool] = None
 
 
 class SearchUserDto(InternalPageRequest, BaseQueryDto):
@@ -144,4 +169,5 @@ class QueryUserDto(BaseQueryDto):
     personas: Optional[List[str]] = None
     admin_sub_role: Optional[str] = None
     trust_status: Optional[str] = None
+    account_status: Optional[str] = None
     avatar_url: Optional[str] = None

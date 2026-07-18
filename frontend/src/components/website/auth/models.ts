@@ -45,6 +45,12 @@ export enum TrustStatus {
   TRUSTED = "TRUSTED",
 }
 
+/** Whole-account availability, admin-controlled (PRD §2.4a). */
+export enum AccountStatus {
+  ACTIVE = "ACTIVE",
+  SUSPENDED = "SUSPENDED",
+}
+
 export enum OtpChannel {
   EMAIL = "EMAIL",
   PHONE = "PHONE",
@@ -82,10 +88,12 @@ export interface AuthUser {
   personas: UserPersona[];
   adminSubRole?: AdminSubRole;
   trustStatus: TrustStatus;
+  accountStatus: AccountStatus;
   hasPassword: boolean;
   linkedProviders: SocialProvider[];
   avatarUrl?: string;
   dateCreated: string;
+  hasStartedVerification: boolean;
 }
 
 export interface AuthSession {
@@ -115,6 +123,8 @@ export enum SecurityEventType {
   PASSWORD_CHANGED = "PASSWORD_CHANGED",
   PASSWORD_RESET_REQUESTED = "PASSWORD_RESET_REQUESTED",
   ACCOUNT_LOCKED = "ACCOUNT_LOCKED",
+  ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED",
+  ACCOUNT_REACTIVATED = "ACCOUNT_REACTIVATED",
   SESSION_REVOKED = "SESSION_REVOKED",
   OAUTH_LINKED = "OAUTH_LINKED",
   OAUTH_UNLINKED = "OAUTH_UNLINKED",

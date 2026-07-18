@@ -79,6 +79,14 @@ class VerificationService:
     # ── Draft (VID/DRAFT on step-1 load; idempotent create) ───────
 
     async def create_draft(self, customer_id: str, idempotency_key: Optional[str] = None) -> Verification:
+        # Auto-resume (§ can't start a second verification while one is unpaid):
+        # a dirtied, still-unpaid draft always wins over creating a new one. A
+        # still-blank draft (draft_step == 0) never matches this query, so a
+        # genuinely-new idempotent create below is unaffected.
+        resumable = await self._verification_repo.latest_unpaid_for_customer(customer_id)
+        if resumable:
+            return resumable
+
         if idempotency_key:
             outcome = await self._idempotency.begin_or_replay(idempotency_key, _CREATE_SCOPE)
             if outcome.is_replay and outcome.resource_id:
@@ -93,7 +101,16 @@ class VerificationService:
         ))
         if idempotency_key:
             await self._idempotency.complete(idempotency_key, resource_id=verification.id)
+        # First verification this customer has ever started (§ auto-launch the
+        # new-verification wizard once, on the login before this moment).
+        await self._users.update_user(customer_id, UpdateUserDto(has_started_verification=True))
         return verification
+
+    async def get_resumable_draft(self, customer_id: str) -> Optional[Verification]:
+        """Read-only check for a dirtied, still-unpaid draft — used by the frontend
+        to silently resume instead of staging a brand-new blank draft (§ new-
+        verification staging is dirty-gated; this lookup never creates anything)."""
+        return await self._verification_repo.latest_unpaid_for_customer(customer_id)
 
     async def save_draft(self, verification_id: str, customer_id: str, dto: SaveVerificationDraftDto) -> Verification:
         await self._require_owned(verification_id, customer_id)

@@ -1,6 +1,7 @@
 """Live cradle-to-grave end-to-end drive-through of the whole PRD spine (S1–S23).
 
-Runs against a real backend on :8000. One continuous scenario: a fresh customer signs up
+Runs against a real backend on :8000. One continuous scenario: the session-refresh
+auth contract (silent re-auth happy path + CSRF/missing-cookie/revoked failures) → a fresh customer signs up
 (email OTP + consents + the seeded customer's referral code) → agent onboarding/KYC + admin
 invitation RBAC → draft/quote/submit → stub payment → assignment → agent execution with
 content-hashed evidence → chat + fraud hold/reject + SLA sweep → admin review (reject/rework
@@ -23,7 +24,7 @@ How to run (non-prod only — uses /dev/reset + /dev/seed):
     docker compose up -d mailpit
     # 3. start the backend with outbound messaging ON (email → Mailpit, SMS → mock):
     set APPODUS_ACTIVE_ENV=dev_personal && set ENABLE_OUT_MESSAGING=True && python veriprops.py
-    # 4. run the full drive-through (or a prefix, e.g. --stages onboarding,agent_onboarding):
+    # 4. run the full drive-through (or a prefix, e.g. --stages session_refresh,onboarding):
     set PYTHONIOENCODING=utf-8 && python scripts/e2e_drive_through.py
 
 Without Mailpit (or with ENABLE_OUT_MESSAGING=False) everything still passes — the final
@@ -51,6 +52,7 @@ from e2e import (
     stage_ops_unhappy,
     stage_premium_release,
     stage_review_release,
+    stage_session_refresh,
     stage_sharing,
     stage_tracking,
 )
@@ -58,6 +60,7 @@ from e2e.harness import Ctx, check, client, failures, login
 
 # Ordered pipeline — each stage consumes state the previous ones produced (Ctx).
 STAGES = [
+    ("session_refresh", stage_session_refresh),      # §2 — FetchHttpClient silent re-auth contract
     ("onboarding", stage_onboarding),                # Phases 2+5, §17.1 quote/re-lock
     ("agent_onboarding", stage_agent_onboarding),    # S7 — application, KYC stub, approve/reject
     ("admin_team", stage_admin_team),                # S8 — invite, accept, RBAC, revoke, deactivate

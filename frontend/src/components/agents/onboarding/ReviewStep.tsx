@@ -29,7 +29,7 @@ export default function ReviewStep({
 }: Props) {
   return (
     <div className="space-y-6" data-testid="agent-apply-review">
-      <dl className="divide-y divide-border rounded-xl border border-border text-sm">
+      <dl className="divide-y divide-border rounded-xl border border-border bg-card text-sm shadow-card">
         <SummaryRow label="Roles" value={state.roles.map(humanizeEnumLabel).join(", ") || "—"} />
         <SummaryRow label="Identity" value={KYC_METHOD_LABELS[state.kyc.method]} />
         <SummaryRow

@@ -18,6 +18,8 @@ from main.appodus_utils.exception.exceptions import UnauthorizedException
 
 session_router = APIRouter(prefix="/sessions", tags=["Sessions"])
 
+logger = di['logger']
+
 user_service: UserService = di[UserService]
 session_service: SessionService = di[SessionService]
 
@@ -57,16 +59,26 @@ async def login(
 
 @session_router.delete("/current", response_model=SuccessResponse[bool])
 async def logout(request: Request, authorize: AuthJWT = Depends()):
-    await authorize.jwt_required()
-    refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
-    if refresh_cookie:
-        await session_service.revoke_current_device(refresh_cookie)
+    # Best-effort: logout must end the session client-side even when there is
+    # nothing valid left to revoke (expired/missing token) or a revoke write
+    # fails (DB/Redis error) — the cookies are HttpOnly, so this response is
+    # the client's only way to actually clear them.
+    try:
+        await authorize.jwt_required()
+        refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
+        if refresh_cookie:
+            await session_service.revoke_current_device(refresh_cookie)
 
-    await JwtAuthUtils.revoke_token(authorize=authorize)
+        await JwtAuthUtils.revoke_token(authorize=authorize)
+    except Exception:  # noqa: BLE001 — logout must clear cookies even if revocation fails
+        logger.exception("Logout revocation failed; clearing session cookies anyway")
+    finally:
+        authorize.unset_jwt_cookies()
+
     return SuccessResponse[bool](data=True)
 
 
-@session_router.post("/current", response_model=SuccessResponse[bool])
+@session_router.post("/current", response_model=SuccessResponse[AuthSessionDto])
 async def refresh_session(request: Request, authorize: AuthJWT = Depends()):
     # The refresh JWT stays valid until expiry, so check the device session too:
     # a revoked one must not refresh. This is what makes device-revoke and
@@ -80,7 +92,11 @@ async def refresh_session(request: Request, authorize: AuthJWT = Depends()):
 
     await JwtAuthUtils.refresh_access_token(authorize=authorize)
     await session_service.touch_device_session(token_hash)
-    return SuccessResponse[bool](data=True)
+    # Return the full session DTO (not a bare bool): the frontend keep-alive
+    # uses accessTokenExpiresAt to schedule the next proactive refresh.
+    user = await user_service.get_user_model(str(authorize.get_jwt_subject()))
+    session = await session_service.build_session_dto(user)
+    return SuccessResponse[AuthSessionDto](data=session)
 
 
 @session_router.get("/current", response_model=SuccessResponse[AuthSessionDto])

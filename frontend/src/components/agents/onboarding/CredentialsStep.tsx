@@ -53,7 +53,7 @@ export default function CredentialsStep({ state, update }: Props) {
           {requiredRoles.map((role) => {
             const cred = state.credentials.find((c) => c.role === role);
             return (
-              <div key={role} className="rounded-xl border border-border p-4">
+              <div key={role} className="rounded-xl border border-border bg-card p-4 shadow-card">
                 <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
                   <BadgeCheck className="size-4 shrink-0 text-primary" />
                   {humanizeEnumLabel(role)}

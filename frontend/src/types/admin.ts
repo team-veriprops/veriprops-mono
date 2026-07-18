@@ -1,5 +1,13 @@
 // Admin onboarding & RBAC types — mirror backend camelCase DTOs (PRD §4.1).
 
+import {
+  AccountStatus,
+  SecurityEvent,
+  TrustStatus,
+  UserPersona,
+  UserType,
+} from "@components/website/auth/models";
+
 export enum AdminSubRole {
   SUPER = "SUPER",
   OPERATIONS = "OPERATIONS",
@@ -46,6 +54,44 @@ export interface AdminInvitationSummary {
   invitedBy: string;
   expiresAt: string;
   dateCreated: string;
+}
+
+// ── Admin user management (PRD §4.2) — mirrors backend admin_users/models.py ──
+
+export interface AdminUserSummary {
+  id: string;
+  name: string;
+  email: string;
+  emailVerified: boolean;
+  phone: string;
+  phoneDialCode: string;
+  userType: UserType;
+  personas: UserPersona[];
+  adminSubRole?: AdminSubRole;
+  trustStatus: TrustStatus;
+  accountStatus: AccountStatus;
+  avatarUrl?: string;
+  dateCreated: string;
+}
+
+export interface AdminUserDetail extends AdminUserSummary {
+  firstName: string;
+  lastName: string;
+  phoneCountryCode: string;
+  phoneVerified: boolean;
+  countryOfResidence: string;
+  timezone: string;
+  preferredCurrency: string;
+  creditBalanceKobo: number;
+  referredBy?: string;
+  lockedUntil?: string;
+  suspendedAt?: string;
+  suspensionReason?: string;
+  suspendedBy?: string;
+  verificationCounts: Record<string, number>;
+  verificationsTotal: number;
+  paymentsCount: number;
+  recentSecurityEvents: SecurityEvent[];
 }
 
 export interface InvitePreview {

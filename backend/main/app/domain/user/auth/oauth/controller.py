@@ -44,7 +44,9 @@ from main.app.domain.user.auth.service import AuthService
 from main.app.domain.user.auth.session.service import SessionService
 from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.exception.exceptions import UserAlreadyExistsException
+from main.appodus_utils.integrations.messaging.models import MessageRequestRecipient, MessageContext
 
 oauth_router = APIRouter(prefix="/oauth", tags=["OAuth"])
 social_auth_service_factory: SocialAuthProviderFactory = di[SocialAuthProviderFactory]
@@ -176,6 +178,26 @@ async def auth_callback(
             raw_profile=user_info.model_dump(),
             intent=stored_state.intent,
         )
+        
+        if _is_new:
+            try:
+                from main.app.domain.user.user_messages import AccountSecurityMessages
+                acct_msgs = di[AccountSecurityMessages]
+                fullname = f"{user.first_name} {user.last_name}".strip()
+                await acct_msgs.send_direct_new_user_welcome_message(
+                    recipient=MessageRequestRecipient(
+                        fullname=fullname,
+                        email=user.email,
+                        phone=PhoneNumber(dial_code=user.phone_dial_code, number=user.phone),
+                    ),
+                    context={
+                        MessageContext.FIRST_NAME: user.first_name,
+                        MessageContext.LAST_NAME: user.last_name,
+                        MessageContext.FULL_NAME: fullname,
+                    },
+                )
+            except Exception:
+                logger.warning("Could not send welcome message after OAuth signup", exc_info=True)
     except UserAlreadyExistsException:
         # Email exists with a password account, no link yet → REJECT per spec.
         return await OauthUtils.popup_response(

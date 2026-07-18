@@ -47,6 +47,9 @@ _CONTENT = {
     EventType.DISPUTE_RESOLVED: ("Dispute resolved", "A dispute has been resolved.", _admin_link),
     EventType.PAYMENT_SETTLED: ("Payment settled", "A payment has settled.", _admin_link),
     EventType.ERASURE_STATUS_CHANGED: ("Data & privacy", "{message}", lambda _v: "/account/data-privacy"),
+    # §4.2 admin user management — the suspension reason is admin-internal and never surfaces here.
+    EventType.ACCOUNT_SUSPENDED: ("Account suspended", "Your account has been suspended. Contact support for assistance.", lambda _v: None),
+    EventType.ACCOUNT_REACTIVATED: ("Account reactivated", "Your account is active again. Welcome back.", lambda _v: None),
 }
 
 

@@ -24,8 +24,9 @@ from main.appodus_utils.config.settings import SECRET_PLACEHOLDER
 BACKEND_DIR = Path(__file__).resolve().parents[4]
 REPO_ROOT = BACKEND_DIR.parent
 
-# Committed, config-only env files (hygiene-enforced).
-BACKEND_ENV_FILES = [".env.example", ".env.dev_personal", ".env.test", ".env.dev", ".env.staging", ".env.prod"]
+# Committed, config-only env files (hygiene-enforced). .env.dev_personal is
+# deliberately excluded — it's gitignored/per-developer, not committed.
+BACKEND_ENV_FILES = [".env.example", ".env.test", ".env.dev", ".env.staging", ".env.prod"]
 # .env.dev / .env.staging are deploy-time files (parsed by deploy.yml into
 # --build-env/--env flags — Next.js never auto-loads custom env-file names).
 FRONTEND_ENV_FILES = [".env", ".env.test", ".env.dev", ".env.staging", ".env.production"]
@@ -34,7 +35,6 @@ FRONTEND_ENV_FILES = [".env", ".env.test", ".env.dev", ".env.staging", ".env.pro
 # not secrets (they gate nothing outside a developer's own machine / the CI test
 # DB) but they must stay pinned so the automation contract stays deterministic.
 ALLOWED_SEED_CREDENTIALS: Dict[Tuple[str, str], str] = {
-    (".env.dev_personal", "SUPER_ADMIN_PASSWORD"): "Admin123!dev_personal",
     (".env.test", "SUPER_ADMIN_PASSWORD"): "Admin123!test",
 }
 

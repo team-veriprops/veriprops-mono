@@ -1,12 +1,14 @@
+from datetime import datetime
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import select, func, or_, update as sa_update
+from sqlalchemy import String, cast, desc, select, func, or_, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.user.auth.session.device.models import Device
 from main.app.domain.user.auth.session.models import UserType
 from main.app.domain.user.models import (
+    AccountStatus,
     AdminSubRole,
     QueryUserDto,
     SearchUserDto,
@@ -66,6 +68,78 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         stmt = select(User).where(*conditions)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def page_users(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        query: Optional[str] = None,
+        persona: Optional[str] = None,
+        user_type: Optional[str] = None,
+        trust_status: Optional[str] = None,
+        account_status: Optional[str] = None,
+    ) -> tuple[List[User], int]:
+        """Paged all-users directory for the admin panel (PRD §4.2), newest first.
+
+        Filters are pre-validated enum values (the controller coerces through the
+        enums), so the persona JSON-text match below never sees free-form input.
+        """
+        conditions = [User.deleted.is_(False)]
+        if user_type:
+            conditions.append(User.user_type == user_type)
+        if trust_status:
+            conditions.append(User.trust_status == trust_status)
+        if account_status:
+            conditions.append(User.account_status == account_status)
+        if persona:
+            # personas is a JSON list of enum values; a quoted-substring match is
+            # dialect-portable (JSONB @> is Postgres-only) and safe on enum input.
+            conditions.append(cast(User.personas, String).like(f'%"{persona}"%'))
+        if query and query.strip():
+            like = f"%{query.strip()}%"
+            conditions.append(
+                or_(
+                    User.first_name.ilike(like),
+                    User.last_name.ilike(like),
+                    User.email.ilike(like),
+                    User.phone_e164.ilike(like),
+                )
+            )
+        base = select(User).where(*conditions)
+        total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
+        rows = (
+            await self._session.execute(
+                base.order_by(desc(User.date_created)).offset(offset).limit(limit)
+            )
+        ).scalars().all()
+        return list(rows), total or 0
+
+    async def suspend_user(self, user_id: str, *, reason: str, admin_id: str, at: datetime) -> None:
+        stmt = (
+            sa_update(User)
+            .where(User.id == self._ensure_uuid(user_id), User.deleted.is_(False))
+            .values(
+                account_status=AccountStatus.SUSPENDED.value,
+                suspended_at=at,
+                suspension_reason=reason,
+                suspended_by=admin_id,
+            )
+        )
+        await self._session.execute(stmt)
+
+    async def reactivate_user(self, user_id: str) -> None:
+        stmt = (
+            sa_update(User)
+            .where(User.id == self._ensure_uuid(user_id), User.deleted.is_(False))
+            .values(
+                account_status=AccountStatus.ACTIVE.value,
+                suspended_at=None,
+                suspension_reason=None,
+                suspended_by=None,
+            )
+        )
+        await self._session.execute(stmt)
 
     async def demote_to_user(self, user_id: str) -> None:
         stmt = (
