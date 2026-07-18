@@ -44,7 +44,7 @@ export default function WizardOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex flex-col bg-background"
+      className="fixed inset-0 z-70 flex flex-col bg-background"
       role="dialog"
       aria-modal="true"
       aria-label={title}

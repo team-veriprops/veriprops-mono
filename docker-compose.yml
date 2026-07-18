@@ -8,9 +8,11 @@
 #   backend   :8000   FastAPI (http://localhost:8000/docs)
 #   frontend  :3000   Next.js  (http://localhost:3000)
 #
-# Backend settings come from ./backend/.env.dev_personal; the `environment:` overrides
-# below repoint DB/SMTP/Redis at the in-network service names (the env file uses
-# `localhost` for running the backend directly on the host).
+# Backend settings come from ./backend/.env.dev_personal if present — it's gitignored
+# and per-developer (copy backend/.env.example to get one, or skip it and rely on
+# Doppler/in-code defaults); the `environment:` overrides below repoint DB/SMTP/Redis
+# at the in-network service names (the env file uses `localhost` for running the
+# backend directly on the host).
 # ==============================================================================
 
 services:
@@ -64,7 +66,8 @@ services:
     build: ./backend
     restart: unless-stopped
     env_file:
-      - ./backend/.env.dev_personal
+      - path: ./backend/.env.dev_personal
+        required: false
     environment:
       APPODUS_ACTIVE_ENV: dev_personal
       # Repoint at in-network services (override the localhost values in .env.dev_personal).

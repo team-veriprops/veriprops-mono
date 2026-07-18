@@ -222,7 +222,6 @@ yarn-error.log*
 .env*
 !.env.example
 !*/.env.example
-!backend/.env.dev_personal
 !backend/.env.test
 !backend/.env.dev
 !backend/.env.staging

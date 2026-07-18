@@ -8,9 +8,14 @@ FastAPI service for Veriprops. Async SQLAlchemy, Alembic migrations, Kink DI, Po
 pip install -r requirements.txt
 
 # Active env selects which .env.{name} file is loaded at import time.
-# Valid names: dev_personal, test, dev, staging, prod. The committed .env.{env} files
-# are CONFIG-ONLY; secrets are injected by Doppler as process env vars, which
-# override env-file values (pydantic-settings precedence).
+# Valid names: dev_personal, test, dev, staging, prod. The committed .env.{test,dev,
+# staging,prod} files are CONFIG-ONLY; secrets are injected by Doppler as process env
+# vars, which override env-file values (pydantic-settings precedence). .env.dev_personal
+# is NOT committed (gitignored) — it's your own machine's file; pydantic-settings
+# tolerates it being absent entirely (falls back to in-code defaults), and
+# `docker compose up backend` treats it as an optional env_file for the same reason.
+# Copy backend/.env.example to backend/.env.dev_personal to get started, or rely on
+# Doppler alone (`doppler run -- python veriprops.py` works without the file).
 export APPODUS_ACTIVE_ENV=dev_personal        # bash
 $env:APPODUS_ACTIVE_ENV="dev_personal"        # PowerShell
 set APPODUS_ACTIVE_ENV=dev_personal           # cmd
