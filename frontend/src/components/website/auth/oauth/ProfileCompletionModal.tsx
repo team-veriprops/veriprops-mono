@@ -119,7 +119,11 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
 
   return (
     <Dialog open={open}>
-      <DialogContent showCloseButton={false} className="sm:max-w-lg max-h-[92vh] overflow-y-auto">
+      <DialogContent
+        showCloseButton={false}
+        preventOutsideClose
+        className="sm:max-w-lg max-h-[92vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Complete your profile</DialogTitle>
         </DialogHeader>

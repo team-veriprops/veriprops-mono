@@ -164,7 +164,9 @@ A user may hold both `CUSTOMER` and `AGENT`. Signup intent (`AuthIntent`: `defau
 ### 2.3 Trust status
 
 `TrustStatus`: `UNTRUSTED` → `TRUSTED`. A customer becomes trusted on first successful payment; an agent on
-first task submission. Trust status reduces friction on later flows and feeds fraud thresholds.
+first task submission. Trust status reduces friction on later flows and feeds fraud thresholds. An admin
+holding `MANAGE_USERS` may override it in either direction from the Users directory (§9.4); every override
+is audit-logged (`TRUST_STATUS_CHANGED`, from→to).
 
 ### 2.4 Credential expiry & role-level suspension
 
@@ -173,6 +175,15 @@ SUSPENDED`). On expiry of a role's required credential, **only that role** is su
 receiving and can no longer submit that role's tasks; other roles are unaffected. A suspended role is
 restored when a renewed credential is uploaded and admin-verified. Expiring credentials are flagged ahead of
 time (lead-time configurable).
+
+#### Whole-account suspension (`AccountStatus`)
+
+Distinct from role-level credential suspension and from the transient brute-force `locked_until` lockout:
+`AccountStatus` (`ACTIVE` / `SUSPENDED`) is an admin-controlled kill switch on the whole account, operated
+from the Users directory (§9.4). Suspension revokes every device session immediately (refresh dies at once;
+access tokens die at their TTL) and login/OAuth session issuance refuse a SUSPENDED account. Suspension
+metadata (`suspended_at` / `suspension_reason` / `suspended_by`) lives on `users`; the reason is
+admin-internal and never shown to the user.
 
 ### 2.5 Portal routing & switching
 
@@ -757,10 +768,32 @@ unsanctioned self-promotion. Existing personas are preserved (the portal switche
 ### 9.3 RBAC & team management
 
 A permissions matrix maps sub-roles to `Permission`s (invite admins, approve agents, assign agents, manage
-verifications, approve payouts, configure pricing, view analytics, resolve disputes, release reports,
-`MANAGE_COMPLIANCE` — SUPER-only). Every admin endpoint is permission-checked. Team management: list,
-deactivate (demotes to plain USER), change sub-role (no self-targeting; only SUPER grants SUPER). All role
-changes are audit-logged.
+verifications, manage users (§9.4 — `MANAGE_USERS`, held by SUPER + OPERATIONS), approve payouts, configure
+pricing, view analytics, resolve disputes, release reports, `MANAGE_COMPLIANCE` — SUPER-only). Every admin
+endpoint is permission-checked. Team management: list, deactivate (demotes to plain USER), change sub-role
+(no self-targeting; only SUPER grants SUPER). All role changes are audit-logged.
+
+### 9.4 User administration (Users directory)
+
+**Where:** backend `app/domain/user/admin_users/`; frontend `/admin/users` (DataTable) +
+`/admin/users/[id]` (deep-linkable detail drawer). Every endpoint gates on `MANAGE_USERS`.
+
+- **Directory** — paginated, searchable (name/email/phone) list of all users; server-side filters:
+  persona, user type, trust status, account status. Pseudonymised (erased, §24.4) users appear with their
+  token PII by design.
+- **Detail** — profile, personas, trust/account status, referral credit, verification counts by status,
+  payment count, and the 10 most recent security events.
+- **Suspend / reactivate** — suspend requires a reason (admin-internal, stored on the row + audit
+  `details`); guards: no self-targeting, no ADMIN targets (admin accounts go through §9.3 Team
+  deactivation), no double-suspend. Suspension revokes all device sessions and fires
+  `ACCOUNT_SUSPENDED` (in-app + email — the email is the only channel that still reaches a suspended
+  user); reactivation fires `ACCOUNT_REACTIVATED`. Semantics in §2.4.
+- **Forced password reset** — reuses the self-service reset flow (same token TTL + email template) and
+  revokes all sessions; refused on a suspended account (reactivate first).
+- **Trust-status override** — up or down, no-op changes rejected (§2.3).
+- **Audit** — `USER_SUSPENDED` / `USER_REACTIVATED` / `PASSWORD_RESET_FORCED` / `TRUST_STATUS_CHANGED`,
+  all surfaced on the admin action log (§24.2); suspension/reactivation also land in the user's own
+  security activity log.
 
 ---
 
@@ -1079,7 +1112,8 @@ Every domain event is published once through the bus (§4.8); the notification s
 
 Customer: payment confirmed (email+SMS) · status change · agents assigned · new evidence · report ready
 (email+SMS) · report versioned · SLA breach (email+SMS) · re-check decision · dispute filed/resolved ·
-abandonment recovery (email-only) · referral credit earned. Agent: new job (email+SMS) · task rejected /
+abandonment recovery (email-only) · referral credit earned · account suspended/reactivated (in-app + email,
+§9.4). Agent: new job (email+SMS) · task rejected /
 revision request · commission cleared (in-app only — the positive-movement alert) · payout approved/held ·
 dispute defence window. Admin: SLA breach · conflict flags · agent no-show · fraud-held messages · dispute
 filed · broadcast announcements. Email/SMS render through the `VERIFICATION_*` template set
@@ -1268,6 +1302,8 @@ itself is untargeted accept-by-id today, so per-agent pool-feed reduction is a f
 - **Mission Control** (`/admin/dashboard`): active verifications, pending assignments, SLA-at-risk
   (`sla_at_risk_days` horizon), revenue, available agents; action items (pending agent applications, team
   invitations).
+- **Users** (`/admin/users`) — the §9.4 user-administration directory: search/filter all users, detail
+  drawer, suspend/reactivate, forced password reset, trust-status override. RBAC `MANAGE_USERS`.
 - **Analytics** — computed on read in Python over targeted repo pulls (nothing stored; materialise only if
   it becomes a hotspot): conversion funnel, avg verification time by tier, agent performance trends
   (`analytics_trend_months`, 6), revenue by tier & location, regional performance. RBAC `VIEW_ANALYTICS`;
@@ -1408,9 +1444,9 @@ settings · notification preferences.
 ### Admin portal (`/admin`)
 
 Dashboard (Mission Control) · Analytics · Verifications (list, detail control panel, messages,
-report-review) · Disputes · Re-checks · Held messages · Broadcasts (+ compose) · Agent applications · Team ·
-Finance (+ payouts) · Commission rules · Pricing · System config · Trust-score weights · Audit action log ·
-Erasure requests.
+report-review) · Disputes · Re-checks · Held messages · Broadcasts (+ compose) · Users (directory + detail
+drawer, §9.4) · Agent applications · Team · Finance (+ payouts) · Commission rules · Pricing · System
+config · Trust-score weights · Audit action log · Erasure requests.
 
 ### Account area (`/account`)
 

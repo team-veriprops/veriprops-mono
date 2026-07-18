@@ -28,6 +28,11 @@ class AuditActionType(str, enum.Enum):
     ADMIN_INVITED = "ADMIN_INVITED"
     ADMIN_INVITE_ACCEPTED = "ADMIN_INVITE_ACCEPTED"
     ADMIN_ROLE_CHANGED = "ADMIN_ROLE_CHANGED"
+    # ── Admin user management (§4.2) ───────────────────────────────
+    USER_SUSPENDED = "USER_SUSPENDED"
+    USER_REACTIVATED = "USER_REACTIVATED"
+    PASSWORD_RESET_FORCED = "PASSWORD_RESET_FORCED"
+    TRUST_STATUS_CHANGED = "TRUST_STATUS_CHANGED"
     # ── Payment ────────────────────────────────────────────────────
     PAYMENT_INITIATED = "PAYMENT_INITIATED"
     PAYMENT_SUCCEEDED = "PAYMENT_SUCCEEDED"

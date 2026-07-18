@@ -40,11 +40,14 @@ export function resolvePostAuthRedirect(
   const isAgent = user.personas.includes(UserPersona.AGENT);
   const isCustomer = user.personas.includes(UserPersona.CUSTOMER);
 
-  if (options.intent === AuthIntent.VERIFY && isCustomer) {
-    return ROUTES.PORTAL.VERIFICATIONS_NEW;
-  }
   if (options.intent === AuthIntent.AGENT && !isAgent) {
     return ROUTES.AGENT.DASHBOARD;
+  }
+  // Explicit verify intent, or a customer who has never started a verification
+  // (first login after signup, or any later login before their first start) —
+  // land straight on the new-verification wizard.
+  if (isCustomer && (options.intent === AuthIntent.VERIFY || !user.hasStartedVerification)) {
+    return ROUTES.PORTAL.VERIFICATIONS_NEW;
   }
 
   if (isAgent) return ROUTES.AGENT.DASHBOARD;

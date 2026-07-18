@@ -248,8 +248,10 @@ export default function AppShell({ navItems, children }: AppShellProps) {
 
   const logout = useLogoutMutation();
   const handleLogout = () => {
+    // Redirect regardless of outcome — local session state is already
+    // cleared by useLogoutMutation's onSettled even if the backend call failed.
     logout.mutate(undefined, {
-      onSuccess: () => router.push(ROUTES.AUTH.LOGIN),
+      onSettled: () => router.push(ROUTES.AUTH.LOGIN),
     });
   };
 

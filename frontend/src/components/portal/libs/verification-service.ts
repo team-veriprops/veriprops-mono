@@ -35,6 +35,11 @@ export class VerificationService {
     });
   }
 
+  /** Read-only check for a dirtied, still-unpaid draft to silently resume — never creates anything. */
+  getResumableDraft(): Promise<SuccessResponse<VerificationDraft | null>> {
+    return this.http.get(`/verifications/draft/resumable`);
+  }
+
   saveDraft(id: string, step: number, payload: Record<string, unknown>): Promise<SuccessResponse<VerificationDraft>> {
     return this.http.put(`/verifications/${id}/draft`, { step, payload });
   }

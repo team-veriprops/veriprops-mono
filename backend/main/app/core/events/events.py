@@ -47,6 +47,9 @@ class EventType(str, enum.Enum):
     MESSAGE_SENT = "MESSAGE_SENT"              # routine → Chat counter only (not a notification)
     # Compliance (§19) — NDPA data-erasure request state change (source: S23), in-app only
     ERASURE_STATUS_CHANGED = "ERASURE_STATUS_CHANGED"
+    # Account lifecycle (§4.2) — admin suspended/reactivated a user account
+    ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED"
+    ACCOUNT_REACTIVATED = "ACCOUNT_REACTIVATED"
 
 
 @dataclass

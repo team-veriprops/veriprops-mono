@@ -66,6 +66,14 @@ class PaymentRepo(
         ).group_by(Payment.verification_id)
         return {vid: int(total or 0) for vid, total in (await self._session.execute(stmt)).all()}
 
+    async def count_for_customer(self, customer_id: str) -> int:
+        """How many payments a customer has made — the admin user-detail panel (§4.2)."""
+        stmt = select(func.count()).select_from(Payment).where(
+            Payment.deleted.is_(False),
+            Payment.customer_id == customer_id,
+        )
+        return int(await self._session.scalar(stmt) or 0)
+
     async def list_card_fingerprints_for_customer(self, customer_id: str) -> set[str]:
         """Distinct non-null card fingerprints a customer has ever paid with — the referral
         anti-farming check (§17.1, D34) rejects a referrer/invitee sharing an instrument."""

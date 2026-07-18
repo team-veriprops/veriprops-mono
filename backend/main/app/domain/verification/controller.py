@@ -75,6 +75,16 @@ async def create_draft(
     return SuccessResponse[VerificationDraftDto](data=_to_draft_dto(v))
 
 
+@verification_router.get("/draft/resumable", response_model=SuccessResponse[Optional[VerificationDraftDto]])
+async def get_resumable_draft(authorize: AuthJWT = Depends()):
+    """Read-only check for a dirtied, still-unpaid draft to silently resume — never
+    creates anything (§ new-verification staging is dirty-gated)."""
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    v = await verification_service.get_resumable_draft(customer_id)
+    return SuccessResponse[Optional[VerificationDraftDto]](data=_to_draft_dto(v) if v else None)
+
+
 @verification_router.put("/{verification_id}/draft", response_model=SuccessResponse[VerificationDraftDto])
 async def save_draft(verification_id: str, req: SaveVerificationDraftDto, authorize: AuthJWT = Depends()):
     await authorize.jwt_required()

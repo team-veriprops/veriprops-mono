@@ -120,25 +120,9 @@ async def profile_complete(req: ProfileCompletionDto, authorize: AuthJWT = Depen
     user_id = str(authorize.get_jwt_subject())
     user = await auth_service.complete_profile(user_id, req)
 
-    try:
-        from main.app.domain.user.user_messages import AccountSecurityMessages
-        acct_msgs = di[AccountSecurityMessages]
-        fullname = f"{user.first_name} {user.last_name}".strip()
-        await acct_msgs.send_direct_new_user_welcome_message(
-            recipient=MessageRequestRecipient(
-                fullname=fullname,
-                email=user.email,
-                phone=PhoneNumber(dial_code=req.dial_code, number=req.phone),
-            ),
-            context={
-                MessageContext.FIRST_NAME: user.first_name,
-                MessageContext.LAST_NAME: user.last_name,
-                MessageContext.FULL_NAME: fullname,
-            },
-        )
-    except Exception:
-        logger.warning("Could not send welcome message after profile completion", exc_info=True)
-
+    # Welcome email already sent at OAuth-signup time (this endpoint is only ever
+    # reached from the OAuth profile-completion modal) — sending it again here
+    # would double-send.
     return SuccessResponse[AuthSessionDto](data=await session_service.build_session_dto(user))
 
 

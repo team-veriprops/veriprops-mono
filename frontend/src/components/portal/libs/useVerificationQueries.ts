@@ -49,6 +49,24 @@ export function useCreateDraftMutation() {
   });
 }
 
+/** Silent auto-resume check (§ can't start a second unpaid verification) — read-only,
+ * fetched once on the new-verification wizard's mount, never creates a draft. A failed
+ * check is treated as "nothing to resume" (best-effort) so `data` always settles to
+ * either the draft or `null`, never staying `undefined` past the initial fetch. */
+export function useResumableDraftQuery() {
+  return useQuery({
+    queryKey: ["verification", "draft", "resumable"],
+    queryFn: async () => {
+      try {
+        return (await service.getResumableDraft()).data ?? null;
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 0,
+  });
+}
+
 export function useSaveDraftMutation() {
   return useMutation({
     mutationFn: ({ id, step, payload }: { id: string; step: number; payload: Record<string, unknown> }) =>

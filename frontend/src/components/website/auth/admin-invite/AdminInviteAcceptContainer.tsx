@@ -67,10 +67,13 @@ export default function AdminInviteAcceptContainer({ token }: { token: string })
             <Button
               onClick={() =>
                 router.push(
-                  `${buildAuthUrl(ROUTES.AUTH.SIGNUP, {
+                  buildAuthUrl(ROUTES.AUTH.SIGNUP, {
                     intent: AuthIntent.INVITED_ADMIN,
                     redirect: acceptRedirect,
-                  })}&email=${encodeURIComponent(preview.email)}`,
+                    email: preview.email,
+                    firstName: preview.firstName,
+                    lastName: preview.lastName,
+                  }),
                 )
               }
               data-testid="admin-invite-signup"

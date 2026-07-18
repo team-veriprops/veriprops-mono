@@ -67,6 +67,10 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.MESSAGE_SENT: NotificationRule(in_app=False, chat_only=True),
     # Compliance (§19): NDPA erasure decision to the data subject — in-app only, no external template.
     EventType.ERASURE_STATUS_CHANGED: NotificationRule(in_app=True),
+    # Admin user management (§4.2): a suspended user cannot log in, so email is the only
+    # channel that reaches them; the in-app entry still lands for post-reactivation review.
+    EventType.ACCOUNT_SUSPENDED: NotificationRule(email=True, template=_T.ACCOUNT_DEACTIVATION),
+    EventType.ACCOUNT_REACTIVATED: NotificationRule(email=True, template=_T.ACCOUNT_ACTIVATION),
 }
 
 # Fallback for any event not explicitly listed — in-app only, no external fan-out.

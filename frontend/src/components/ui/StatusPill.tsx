@@ -24,6 +24,7 @@ const STATUS_TONE: Record<string, StatusTone> = {
   EXECUTED: "positive",
   RESOLVED: "positive",
   ACTIVE: "positive",
+  TRUSTED: "positive",
   // in-flight work
   IN_PROGRESS: "active",
   UNDER_REVIEW: "active",
@@ -46,6 +47,7 @@ const STATUS_TONE: Record<string, StatusTone> = {
   REVERSED: "negative",
   CANCELLED: "negative",
   OVERDUE: "negative",
+  SUSPENDED: "negative",
 };
 
 /** Resolve a backend status enum value to its display tone. */

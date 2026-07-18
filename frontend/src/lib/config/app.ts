@@ -24,6 +24,12 @@ export const STALE_TIME_MS = 60_000;
 export const SHORT_STALE_TIME_MS = 30_000;
 export const LONG_STALE_TIME_MS = 5 * 60_000;
 
+// ── Session recovery (FetchHttpClient retry budget + SessionRecoveryOverlay) ──
+export const SESSION_REFRESH_MAX_ATTEMPTS = 3; // total refresh attempts for transient failures
+export const SESSION_REFRESH_BACKOFF_MS = 1_000; // doubles per retry (1s, 2s)
+export const SESSION_REFRESH_LEAD_MS = 60_000; // proactive refresh this long before expiry
+export const SESSION_EXPIRED_REDIRECT_DELAY_MS = 1_500; // expired-state handoff before login redirect
+
 // ── Phone / locale ──
 export const DEFAULT_DIAL_CODE = "+234";
 
