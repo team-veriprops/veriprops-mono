@@ -308,6 +308,7 @@ export const footerLinks = {
     { label: "LinkedIn", href: "#" },
     { label: "Instagram", href: "#" },
     { label: "YouTube", href: "#" },
+    { label: "TikTok", href: "#" },
   ] as FooterLink[],
 };
 

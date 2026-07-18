@@ -116,6 +116,7 @@
   --social-linkedin:               #0A66C2;
   --social-instagram:              #E1306C;
   --social-youtube:                #FF0000;
+  --social-tiktok:                 #000000;
   --oauth-apple-bg:                #000000;
   --oauth-apple-fg:                #ffffff;
 
@@ -308,6 +309,7 @@
   --color-social-linkedin:          var(--social-linkedin);
   --color-social-instagram:         var(--social-instagram);
   --color-social-youtube:           var(--social-youtube);
+  --color-social-tiktok:            var(--social-tiktok);
   --color-oauth-apple-bg:           var(--oauth-apple-bg);
   --color-oauth-apple-fg:           var(--oauth-apple-fg);
 
