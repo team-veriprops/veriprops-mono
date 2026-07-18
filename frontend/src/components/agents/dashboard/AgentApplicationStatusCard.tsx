@@ -1,11 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Button } from "@3rdparty/ui/button";
 import { Badge } from "@3rdparty/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
-import { ROUTES } from "@lib/routes";
 import { AgentApplicationStatus } from "@/types/agent";
 import { useAgentStatusQuery } from "@components/agents/libs/useAgentQueries";
 
@@ -16,33 +12,15 @@ const STATUS_BADGE: Record<AgentApplicationStatus, { label: string; variant: "de
 };
 
 /**
- * PRD §3.1 Approval Status Dashboard — the agent's landing view. Prompts an
- * application when none exists; otherwise shows Pending / Approved / Rejected.
+ * PRD §3.1 Approval Status Dashboard. Only ever mounts for PENDING/APPROVED —
+ * the `/agents` layout's compulsory onboarding gate forces "no application" and
+ * REJECTED agents into the onboarding wizard before this card can render.
  */
 export default function AgentApplicationStatusCard() {
-  const router = useRouter();
   const { data: status, isLoading } = useAgentStatusQuery();
 
-  if (isLoading) {
+  if (isLoading || !status) {
     return <div className="text-muted-foreground" data-testid="agent-status-loading">Loading…</div>;
-  }
-
-  if (!status) {
-    return (
-      <Card data-testid="agent-status-empty">
-        <CardHeader>
-          <CardTitle>Become a Verified Agent</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Apply to carry out verifications as a Field Agent, Surveyor, Registry Agent, or Lawyer.
-          </p>
-          <Button onClick={() => router.push(ROUTES.AGENT.APPLY)} data-testid="agent-apply-cta">
-            Start application
-          </Button>
-        </CardContent>
-      </Card>
-    );
   }
 
   const badge = STATUS_BADGE[status.status];
@@ -64,18 +42,10 @@ export default function AgentApplicationStatusCard() {
             <span className="font-medium">{status.activeRoles.join(", ") || "—"}</span>
           </div>
         )}
-        {status.status === AgentApplicationStatus.REJECTED && status.rejectionReason && (
-          <p className="text-destructive">Reason: {status.rejectionReason}</p>
-        )}
         {status.status === AgentApplicationStatus.PENDING && (
           <p className="text-muted-foreground">
             Your application is under review. Pending applications don&apos;t receive jobs yet.
           </p>
-        )}
-        {status.status === AgentApplicationStatus.REJECTED && (
-          <Link href={ROUTES.AGENT.APPLY} className="text-primary underline">
-            Re-apply
-          </Link>
         )}
       </CardContent>
     </Card>

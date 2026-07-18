@@ -20,6 +20,8 @@ interface WizardOverlayProps {
   footer?: ReactNode;
   /** data-testid prefix, e.g. "agent-apply" → "agent-apply-overlay". */
   testIdPrefix: string;
+  /** Hides the close (✕) control for a compulsory, non-dismissible flow. Default true. */
+  closable?: boolean;
 }
 
 /**
@@ -36,6 +38,7 @@ export default function WizardOverlay({
   children,
   footer,
   testIdPrefix,
+  closable = true,
 }: WizardOverlayProps) {
   useBodyOverflowHidden(true);
 
@@ -51,15 +54,17 @@ export default function WizardOverlay({
       <header className="shrink-0 border-b border-border bg-card/95 backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <BrandLogo />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            aria-label="Close"
-            data-testid={`${testIdPrefix}-close`}
-          >
-            <X className="h-5 w-5" />
-          </Button>
+          {closable && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              aria-label="Close"
+              data-testid={`${testIdPrefix}-close`}
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          )}
         </div>
         <div className="mx-auto w-full max-w-3xl px-4 pb-4 sm:px-6">
           <Stepper steps={steps} current={current} />

@@ -8,6 +8,7 @@ import WizardOverlay from "@components/ui/wizard/WizardOverlay";
 import { ROUTES } from "@lib/routes";
 import {
   useCreateDraftMutation,
+  useResumableDraftQuery,
   useSaveDraftMutation,
   useSubmitVerificationMutation,
   useVerificationTermsQuery,
@@ -26,19 +27,27 @@ export default function SubmissionContainer() {
   const [step, setStep] = useState(0);
   const [state, setState] = useState<SubmissionState>(EMPTY_SUBMISSION);
   const [verificationId, setVerificationId] = useState<string | null>(null);
-  // Generated once in the mount effect (below), not during render — the create
-  // call is idempotent on this client key, so a refresh won't create a duplicate.
+  // Generated once inside startDraft, not during render — the create call is
+  // idempotent on this client key, so a refresh won't create a duplicate.
   const idempotencyKey = useRef<string>("");
-  const created = useRef(false);
+  // Guards startDraft() from firing twice (resumed drafts never need it at all).
+  const draftStartRequested = useRef(false);
+  // Guards the resumable-draft mount decision (resume vs. wait-for-dirty) from re-running.
+  const resumeChecked = useRef(false);
+  // Has the customer changed anything from EMPTY_SUBMISSION yet — staging only begins once true.
+  const dirtiedRef = useRef(false);
   const [draftFailed, setDraftFailed] = useState(false);
 
   const createDraft = useCreateDraftMutation();
   const saveDraft = useSaveDraftMutation();
   const submit = useSubmitVerificationMutation();
   const { data: terms } = useVerificationTermsQuery();
+  const { data: resumable } = useResumableDraftQuery();
 
-  // VID/DRAFT created on step-1 load (idempotent on the client key → no dup on refresh).
+  // VID/DRAFT created on first dirty change (idempotent on the client key → no dup on refresh).
   const startDraft = () => {
+    if (draftStartRequested.current) return;
+    draftStartRequested.current = true;
     setDraftFailed(false);
     if (!idempotencyKey.current) {
       idempotencyKey.current =
@@ -48,21 +57,52 @@ export default function SubmissionContainer() {
       .mutateAsync(idempotencyKey.current)
       .then((res) => {
         if (res.data) setVerificationId(res.data.id);
-        else setDraftFailed(true);
+        else {
+          setDraftFailed(true);
+          draftStartRequested.current = false;
+        }
       })
-      .catch(() => setDraftFailed(true));
+      .catch(() => {
+        setDraftFailed(true);
+        draftStartRequested.current = false;
+      });
   };
 
+  // Silent auto-resume (§ can't start a second unpaid verification): once the
+  // read-only resumable check settles (its query never leaves `data` undefined
+  // past the initial fetch — a failed check resolves to `null`), either hydrate
+  // the existing dirtied draft directly, or — if the customer already typed
+  // something while it was loading — start staging immediately. Otherwise
+  // staging waits for the first dirty change (below), never firing for an
+  // untouched, abandoned wizard.
   useEffect(() => {
-    if (created.current) return;
-    created.current = true;
-    startDraft();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (resumable === undefined || resumeChecked.current || !resumable) return;
+    resumeChecked.current = true;
+    draftStartRequested.current = true; // already have a draft id — startDraft must never fire
+    setVerificationId(resumable.id);
+    setStep(Math.min(resumable.step, LAST_IN_WIZARD_STEP));
+    setState((s) => ({ ...s, ...(resumable.payload as Partial<SubmissionState>) }));
+  }, [resumable]);
 
-  const update = (patch: Partial<SubmissionState>) => setState((s) => ({ ...s, ...patch }));
-  const updateProperty = (patch: Partial<SubmissionState["property"]>) =>
+  // Nothing to resume — either wait for the first dirty change (below), or, if the
+  // customer already typed something while the resumable check was loading, start now.
+  useEffect(() => {
+    if (resumable === undefined || resumable || resumeChecked.current) return;
+    resumeChecked.current = true;
+    if (dirtiedRef.current) startDraft();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumable]);
+
+  const update = (patch: Partial<SubmissionState>) => {
+    setState((s) => ({ ...s, ...patch }));
+    dirtiedRef.current = true;
+    if (resumeChecked.current) startDraft();
+  };
+  const updateProperty = (patch: Partial<SubmissionState["property"]>) => {
     setState((s) => ({ ...s, property: { ...s.property, ...patch } }));
+    dirtiedRef.current = true;
+    if (resumeChecked.current) startDraft();
+  };
 
   const persist = (nextStep: number, nextState: SubmissionState) => {
     if (verificationId) {

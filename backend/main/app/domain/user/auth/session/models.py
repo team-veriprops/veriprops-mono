@@ -239,3 +239,4 @@ class SessionUserDto(Object):
     linked_providers: List[SocialAuthProvider]
     avatar_url: Optional[str] = None
     date_created: datetime
+    has_started_verification: bool

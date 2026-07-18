@@ -20,7 +20,12 @@ import KycStep from "./KycStep";
 import CredentialsStep from "./CredentialsStep";
 import ReviewStep from "./ReviewStep";
 
-export default function AgentOnboardingContainer() {
+interface AgentOnboardingContainerProps {
+  /** False for the compulsory login-time gate (no application yet / REJECTED) — hides the close control. */
+  closable?: boolean;
+}
+
+export default function AgentOnboardingContainer({ closable = true }: AgentOnboardingContainerProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [state, setState] = useState<AgentWizardState>(EMPTY_WIZARD_STATE);
@@ -109,6 +114,7 @@ export default function AgentOnboardingContainer() {
       title="Become a Verified Agent"
       footer={footer}
       testIdPrefix="agent-apply"
+      closable={closable}
     >
       {step === 0 && <RolesStep value={state.roles} onChange={(roles: AgentRole[]) => update({ roles })} />}
       {step === 1 && <KycStep value={state.kyc} onChange={(kyc) => update({ kyc })} />}

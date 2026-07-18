@@ -65,6 +65,7 @@ def _user_to_session_dto(user: User, has_password: bool, linked: List[str]) -> S
         linked_providers=[SocialAuthProvider(p) for p in linked if p in {sp.value for sp in SocialAuthProvider}],
         avatar_url=user.avatar_url,
         date_created=user.date_created,
+        has_started_verification=bool(user.has_started_verification),
     )
 
 @inject

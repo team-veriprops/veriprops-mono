@@ -22,6 +22,7 @@ const baseUser: AuthUser = {
   hasPassword: true,
   linkedProviders: [],
   dateCreated: new Date().toISOString(),
+  hasStartedVerification: true,
 };
 
 describe("resolvePostAuthRedirect", () => {
@@ -58,6 +59,36 @@ describe("resolvePostAuthRedirect", () => {
 
   it("intent=verify routes a customer to verifications/new", () => {
     const dest = resolvePostAuthRedirect(baseUser, { intent: AuthIntent.VERIFY });
+    expect(dest).toBe("/portal/verifications/new");
+  });
+
+  it("a customer who has never started a verification lands on verifications/new, no intent needed", () => {
+    const dest = resolvePostAuthRedirect({ ...baseUser, hasStartedVerification: false });
+    expect(dest).toBe("/portal/verifications/new");
+  });
+
+  it("never-started still routes to verifications/new on a later standalone login (not just post-signup)", () => {
+    const dest = resolvePostAuthRedirect(
+      { ...baseUser, hasStartedVerification: false },
+      { intent: AuthIntent.DEFAULT },
+    );
+    expect(dest).toBe("/portal/verifications/new");
+  });
+
+  it("an explicit safe redirect still overrides the never-started default", () => {
+    const dest = resolvePostAuthRedirect(
+      { ...baseUser, hasStartedVerification: false },
+      { redirect: "/portal/verifications/abc" },
+    );
+    expect(dest).toBe("/portal/verifications/abc");
+  });
+
+  it("agent+customer, never started, still lands on verifications/new (customer-first default wins)", () => {
+    const dest = resolvePostAuthRedirect({
+      ...baseUser,
+      personas: [UserPersona.AGENT, UserPersona.CUSTOMER],
+      hasStartedVerification: false,
+    });
     expect(dest).toBe("/portal/verifications/new");
   });
 

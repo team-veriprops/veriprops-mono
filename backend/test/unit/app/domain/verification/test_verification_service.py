@@ -84,6 +84,8 @@ def _make_service(credit_balance_kobo=0, has_paid=False):
     svc._verification_repo.create_return_model = AsyncMock(return_value=_verification())
     svc._verification_repo.update = AsyncMock()
     svc._verification_repo.has_paid_verification = AsyncMock(return_value=has_paid)
+    # No resumable draft by default — individual tests override to exercise auto-resume.
+    svc._verification_repo.latest_unpaid_for_customer = AsyncMock(return_value=None)
     svc._property_service.create = AsyncMock(return_value=SimpleNamespace(id="prop-1"))
     svc._consent_service.record_user_consent = AsyncMock()
     svc._config.get_int = AsyncMock(side_effect=lambda key: _CONFIG_VALUES[key])
@@ -125,6 +127,50 @@ class TestCreateDraft:
         await svc.create_draft("cust-1", idempotency_key="k-1")
         svc._verification_repo.create_return_model.assert_awaited_once()
         svc._idempotency.complete.assert_awaited_once()
+
+    async def test_flips_has_started_verification_on_create_new(self):
+        svc = _make_service()
+        await svc.create_draft("cust-1")
+        svc._users.update_user.assert_awaited_once()
+        args = svc._users.update_user.call_args.args
+        assert args[0] == "cust-1"
+        assert args[1].has_started_verification is True
+
+    async def test_resumes_existing_dirtied_draft_instead_of_creating(self):
+        """§ can't start a second unpaid verification: a dirtied, still-unpaid draft
+        always wins — no new row, no idempotency check, no flag flip."""
+        svc = _make_service()
+        resumable = _verification(id="ver-existing", draft_step=1)
+        svc._verification_repo.latest_unpaid_for_customer = AsyncMock(return_value=resumable)
+
+        result = await svc.create_draft("cust-1", idempotency_key="k-1")
+
+        assert result.id == "ver-existing"
+        svc._verification_repo.create_return_model.assert_not_called()
+        svc._idempotency.begin_or_replay.assert_not_called()
+        svc._users.update_user.assert_not_called()
+
+    async def test_blank_undirtied_draft_is_not_resumable(self):
+        """A still-blank draft (draft_step == 0) never satisfies latest_unpaid_for_customer
+        in production (its query excludes it) — this just documents create_draft doesn't
+        special-case draft_step itself; the repo owns that filter."""
+        svc = _make_service()
+        await svc.create_draft("cust-1")
+        svc._verification_repo.latest_unpaid_for_customer.assert_awaited_once_with("cust-1")
+
+
+class TestGetResumableDraft:
+    async def test_returns_repo_result(self):
+        svc = _make_service()
+        resumable = _verification(id="ver-existing", draft_step=1)
+        svc._verification_repo.latest_unpaid_for_customer = AsyncMock(return_value=resumable)
+        result = await svc.get_resumable_draft("cust-1")
+        assert result is resumable
+
+    async def test_returns_none_when_nothing_to_resume(self):
+        svc = _make_service()
+        result = await svc.get_resumable_draft("cust-1")
+        assert result is None
 
 
 class TestSubmit:

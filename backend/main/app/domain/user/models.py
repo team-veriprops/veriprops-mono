@@ -86,6 +86,11 @@ class User(BaseEntity):
     # phone_e164's index is declared inline (index=True) — it auto-names to
     # ix_users_phone_e164, matching the migration. Don't re-declare it here.
 
+    # True once the customer has dirtied their first verification draft (§ auto-launch
+    # the new-verification wizard on first login, never again after). Flipped in
+    # VerificationService.create_draft's "create new" branch — never unset.
+    has_started_verification = Column(Boolean, nullable=False, default=False, server_default="false")
+
 
 # ─── DTOs ─────────────────────────────────────────────────────────
 
@@ -139,6 +144,7 @@ class UpdateUserDto(Object):
     avatar_url: Optional[str] = None
     locked_until: Optional[datetime] = None
     failed_login_count: Optional[int] = None
+    has_started_verification: Optional[bool] = None
 
 
 class SearchUserDto(InternalPageRequest, BaseQueryDto):

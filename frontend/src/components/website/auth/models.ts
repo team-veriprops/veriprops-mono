@@ -93,6 +93,7 @@ export interface AuthUser {
   linkedProviders: SocialProvider[];
   avatarUrl?: string;
   dateCreated: string;
+  hasStartedVerification: boolean;
 }
 
 export interface AuthSession {
