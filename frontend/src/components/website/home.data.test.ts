@@ -341,7 +341,7 @@ describe("footerLinks (footer-linked pages)", () => {
   it("has a socials group with the expected platforms", () => {
     const labels = footerLinks.socials.map((s) => s.label);
     expect(labels).toEqual(
-      expect.arrayContaining(["Facebook", "Twitter", "LinkedIn", "Instagram", "YouTube"]),
+      expect.arrayContaining(["Facebook", "Twitter", "LinkedIn", "Instagram", "YouTube", "TikTok"]),
     );
   });
 });

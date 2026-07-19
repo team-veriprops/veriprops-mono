@@ -657,7 +657,7 @@ public pages crawlable; VID lookup pages `noindex` unless publicly shared.
 - Pricing cards show Basic / Standard ("Most Popular") / Premium with a client-side currency toggle
   (NGN · USD · GBP · EUR) using **display-only** FX rates. Canonical pricing is the backend quote (§10.2);
   the marketing figures are static copy and currently diverge from the seeded backend prices (§G).
-- Footer: dynamic copyright year + the golden line. Social links are placeholders (§G).
+- Footer: dynamic copyright year + the golden line. Social links point at the `veriprops` handle on each platform.
 
 ---
 
@@ -1539,7 +1539,6 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Role-specific agent dashboard variants (one unified dashboard today) | `frontend/src/components/agents/dashboard/AgentDashboard.tsx` |
 | Cartographic Nigeria map paths (schematic geo-grid today) | `frontend/src/components/agents/reputation/NigeriaCoverageMap.tsx` |
 | Declared-but-unbuilt routes: admin content CMS (how-it-works / FAQs / testimonials / spotlights / area insights), fraud-flags, finance payments/commissions sub-pages, dispute/broadcast/task detail pages, portal payments page | `frontend/src/lib/routes.ts` |
-| Marketing footer social links are placeholders | `frontend/src/components/website/home.data.ts` |
 
 ### G.3 Launch gates (business/legal — not code)
 
