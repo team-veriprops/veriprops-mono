@@ -1,10 +1,12 @@
 """initial_schema — full Veriprops schema in one migration.
 
 This single migration is a squash of the original 20-file chain
-(fdd959a2cfda … f3a4b5c6d7e8). Every table is created once in its final
-shape: later add_column / alter_column steps are folded into the relevant
-CREATE TABLE, and JSON columns are declared with ``JSONB_VARIANT`` so the
-former Postgres-only JSON→JSONB pass is unnecessary.
+(fdd959a2cfda … f3a4b5c6d7e8), later re-squashed to fold in
+0002_user_account_status (users.account_status/suspended_*) and
+0003_user_verify_started (users.has_started_verification). Every table is
+created once in its final shape: later add_column / alter_column steps are
+folded into the relevant CREATE TABLE, and JSON columns are declared with
+``JSONB_VARIANT`` so the former Postgres-only JSON→JSONB pass is unnecessary.
 
 Each table lives in its own ``_create_<table>()`` helper (mirroring the
 original auto_generated migration) and reuses ``AlembicUtils`` helpers.
@@ -41,7 +43,7 @@ from main.appodus_utils import Utils
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
 # revision identifiers, used by Alembic.
-revision: str = "0001_initial_schema"
+revision: str = "0003_user_verify_started"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -80,6 +82,14 @@ def _create_users():
         sa.Column("credit_balance_kobo", sa.BigInteger(), nullable=False, server_default="0"),
         # §17.1 referral linkage — the referrer this user signed up under (S21).
         sa.Column("referred_by", sa.String(length=36), nullable=True),
+        # folded from 0002_user_account_status (PRD §2.4a) — admin-controlled suspension.
+        sa.Column("account_status", sa.String(length=16), nullable=False, server_default="ACTIVE"),
+        sa.Column("suspended_at", UTCDateTime, nullable=True),
+        sa.Column("suspension_reason", sa.String(length=500), nullable=True),
+        # Admin user id (36-char str form) — application-enforced reference, no FK.
+        sa.Column("suspended_by", sa.String(length=36), nullable=True),
+        # folded from 0003_user_verify_started — first-login new-verification auto-launch gate.
+        sa.Column("has_started_verification", sa.Boolean(), nullable=False, server_default="false"),
         *AlembicUtils.base_audit_columns(),
         sa.UniqueConstraint("email_normalized", name="uq_users_email"),
     )
