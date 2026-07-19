@@ -301,14 +301,12 @@ export const footerLinks = {
     { label: "Disclaimer", href: ROUTES.LEGAL.REPORT_DISCLAIMER },
   ] as FooterLink[],
   socials: [
-    // TODO(gap): placeholder social links — point at the real profiles before launch —
-    // PRD "Known Gaps & Roadmap".
-    { label: "Facebook", href: "#" },
-    { label: "Twitter", href: "#" },
-    { label: "LinkedIn", href: "#" },
-    { label: "Instagram", href: "#" },
-    { label: "YouTube", href: "#" },
-    { label: "TikTok", href: "#" },
+    { label: "Facebook", href: "https://www.facebook.com/veriprops" },
+    { label: "Twitter", href: "https://x.com/veriprops" },
+    { label: "LinkedIn", href: "https://www.linkedin.com/company/veriprops" },
+    { label: "Instagram", href: "https://www.instagram.com/veriprops" },
+    { label: "YouTube", href: "https://www.youtube.com/@veriprops" },
+    { label: "TikTok", href: "https://www.tiktok.com/@veriprops" },
   ] as FooterLink[],
 };
 
