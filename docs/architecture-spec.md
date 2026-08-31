@@ -27,7 +27,7 @@ Meta Cloud API ◀── facade.send ◀───┴── bot replies / agent r
 | Webhook receiver | `app/domain/channel/whatsapp/webhook/` (controller + signature verifier) | raw-body HMAC pattern; Cloudflare/edge-auth exemption handled like other public webhooks |
 | WhatsApp facade | `appodus_utils/integrations/messaging/providers/whatsapp/` — **existing** `whatsapp_business.py` (live send) + new `stub.py` (deterministic) + inbound normalization models | existing `MessageRouter`, WhatsApp payload models (templates, interactive) in `messaging/models.py` |
 | Bot engine | `app/domain/channel/whatsapp/bot/` — session store, flow FSMs, guardrails, escalation | verification/service + submission-draft services via the same service layer the dashboard uses (§7.3.1, D45) |
-| Intent classifier | `appodus_utils/integrations/intent/` facade: `STUB` (keyword table) \| `CLAUDE` | §4.13 facade pattern (`KYC_PROVIDER=STUB` shape); `ANTHROPIC_API_KEY` via Doppler |
+| Intent classifier | `appodus_utils/integrations/intent/` facade (provider-agnostic, D48): `STUB` (keyword table) \| `ANTHROPIC` \| `OPENAI_COMPATIBLE` (base URL + model + key — covers OpenAI, DeepSeek, Groq, Ollama, …) | §4.13 facade pattern (`KYC_PROVIDER=STUB` shape); messaging provider-registry shape; provider API key via Doppler |
 | Console adapter | extension of `app/domain/communication/` — WhatsApp-sourced messages join the existing conversation pipeline with source labeling; replies fan back through the facade | `ChatMessageState` machine, fraud scan (`fraud_scan.py`), SSE emitters |
 | Fraud-scan pipeline | unchanged — WhatsApp text enters the same scan as web chat (WA-13) | `communication/service.py` |
 | Token service | `app/domain/channel/whatsapp/handoff/` — RS256 issue/validate, jti single-use | `secrets` for nonces; idempotency-key storage pattern (§4.6) for redemptions |
@@ -80,9 +80,9 @@ All enums get real Python enums (repo rule); migrations keep raw strings.
 | Knob | Values | Contract |
 |---|---|---|
 | `WHATSAPP_PROVIDER` | `STUB` (default non-prod) \| `META` | stub records outbound + injects inbound via dev endpoints; e2e runs entirely on stub (D43) |
-| `INTENT_PROVIDER` | `STUB` (default non-prod/test) \| `CLAUDE` | STUB = deterministic keyword table (D44) |
+| `INTENT_PROVIDER` | `STUB` (default non-prod/test) \| `ANTHROPIC` \| `OPENAI_COMPATIBLE` | STUB = deterministic keyword table (D44/D48); `INTENT_MODEL` + provider base-URL/key knobs select the live target |
 | `OTP_MODE` | existing contract | linking OTPs deterministic in test |
-| RS256 keypair, `ANTHROPIC_API_KEY`, existing `WHATSAPP_*` secrets | Doppler | committed env files placeholder-only; `test_env_hygiene.py` extended |
+| RS256 keypair, intent-provider API key(s), existing `WHATSAPP_*` secrets | Doppler | committed env files placeholder-only; `test_env_hygiene.py` extended |
 
 Dev endpoints (`/dev/whatsapp/inbound`, stub outbox reader) follow the existing `_require_non_prod()`
 double gate.

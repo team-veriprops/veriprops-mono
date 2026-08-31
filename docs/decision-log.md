@@ -1160,6 +1160,8 @@ Better free-text handling from day one; escalation-rate metric (§7.10) still me
 
 ### Revisit
 Model choice and prompt once real conversation data accrues (concierge corpus, §7.11).
+**Amended by D48 (2026-08-31):** the classifier facade is provider-agnostic — no lock-in to
+Anthropic/Claude; the Claude-specific knob and key named above are superseded.
 
 ## Decision: D45 — §7.3.2 channel states are a projection, not a new case state machine
 
@@ -1220,3 +1222,41 @@ artifact generation.
 
 ### Revisit
 n/a.
+
+## Decision: D48 — Intent LLM is provider-agnostic (amends D44)
+
+### Context
+User refinement after initialize (2026-08-31): the LLM used for intent classification must not be
+locked to one platform (OpenAI, Anthropic, DeepSeek, …). D44's original wording committed to
+Claude specifically (`INTENT_PROVIDER=STUB|CLAUDE`, `ANTHROPIC_API_KEY`).
+
+### Options Considered
+1. **In-house facade + adapters** — `IntentClassifier` interface in
+   `appodus_utils/integrations/intent/` with named providers, mirroring the messaging provider
+   registry: `STUB` (deterministic keyword table, CI/e2e), `ANTHROPIC` (native adapter), and
+   `OPENAI_COMPATIBLE` (generic adapter with configurable base URL + model + API key — one adapter
+   covers OpenAI, DeepSeek, Groq, Ollama, and most other providers).
+2. LiteLLM dependency as the multi-provider layer.
+3. Defer the abstraction shape to slice S5.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation).
+
+### Rationale
+Matches existing repo conventions (messaging registry, `KYC_PROVIDER=STUB` facade shape), adds
+zero dependencies for what is a single structured `classify()` call, and the OpenAI-compatible
+adapter makes provider switching a config change, not a code change.
+
+### Tradeoffs / Constraints
+- Pros: no vendor lock-in; provider/model swappable via settings (`INTENT_PROVIDER`,
+  `INTENT_MODEL`, base URL + key) with secrets in Doppler; STUB path unchanged so the
+  determinism contract holds.
+- Cons: two small adapters to maintain in-house; no built-in cross-provider retry/fallback at v1
+  (can be added later in the router shape the email chain uses, if ever needed).
+- Everything else in D44 stands unchanged: flows and guardrails deterministic and outside the
+  classifier; closed intent enum only; classifier failure/low-confidence ⇒ human routing.
+- Default provider/model chosen at S5 (Haiku-class-or-equivalent latency/cost target); the
+  provider's API key joins `SECRET_ENV_KEYS`.
+
+### Revisit
+Add a fallback chain across providers only if live error rates warrant it.

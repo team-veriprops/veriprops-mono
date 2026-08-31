@@ -124,7 +124,8 @@ Resolved at the initialize gate (see decision log D42–D47). Residual, carried 
   decided at S2 design; PRD requires "one conversation object" across surfaces (§7.8).
 - [ ] SMS-OTP fallback provider (§B pending) → D46: deferred, `TODO(gap):`; WhatsApp auth
   template is the only linking OTP transport at v1.
-- [ ] Claude model for intent classification → D44 default Haiku-class; revisable knob.
+- [ ] Intent-LLM provider/model → D48 (amends D44): provider-agnostic facade; default provider +
+  model chosen at S5 via settings, targeting Haiku-class-or-equivalent latency/cost.
 
 ## Recommended Implementation Order
 

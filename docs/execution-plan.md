@@ -92,7 +92,7 @@ unit: 1:1 enforcement, re-link, cold-thread; e2e both directions under determini
 Deterministic flow FSM with per-conversation sessions; welcome (disclosure + pledge + menu);
 FAQ/pricing from content set; status flow with short-code disambiguation and unlinked-number
 defense; human escalation w/ G1-hours copy; health-checked failure auto-reply + console alert;
-intent-classifier facade (STUB + CLAUDE).
+intent-classifier facade (STUB + provider-agnostic LLM adapters, D48).
 
 ### Requirements Covered
 WA-03, WA-04, WA-07, WA-08, WA-11, WA-17, WA-22, WA-29, WA-30, WA-33, WA-36, WA-37, WA-39, WA-40
@@ -226,4 +226,4 @@ pen-check list executed; live smoke script (manual/gated, never CI); e2e full-su
 ## External prerequisites (tracked, non-blocking for S1–S10)
 Meta Business verification + green tick · template approvals (draft early — S8 registry holds
 status) · number custody (+2349167624347) · Doppler secrets (WHATSAPP_*, RS256 keypair,
-ANTHROPIC_API_KEY) · counsel items (§7.8 retention, ToS copy).
+intent-provider API key(s)) · counsel items (§7.8 retention, ToS copy).
