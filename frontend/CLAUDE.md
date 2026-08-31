@@ -169,6 +169,28 @@ Vitest + jsdom. Tests sit beside the module they cover (`*.test.ts(x)`) — see 
 
 When working on UI/UX, use the `frontend-design` skill. When implementing features, follow the `test-driven-development` skill (write the test first).
 
+## UAT suite (Playwright, browser-driven acceptance)
+
+`e2e/` is the browser UAT suite defined by [docs/uat-strategy.md](../docs/uat-strategy.md) — net-new *UI* coverage, distinct from `backend/scripts/e2e_drive_through.py` (which drives the API directly). Run it against a live local stack (strategy §9); it is **not** wired into CI yet.
+
+```bash
+pnpm dev:https                            # REQUIRED — the suite runs against https://localhost:3000
+pnpm e2e                                  # full six-engine matrix
+UAT_ENGINES=chromium-desktop pnpm e2e     # one engine (fast local loop)
+pnpm e2e specs/auth.spec.ts --grep UAT-AUTH-05
+pnpm e2e:report                           # open the HTML report
+```
+
+- **The suite must run over HTTPS.** Session cookies are `__Host-` prefixed ⇒ `Secure`. Chromium treats `http://localhost` as a secure context and keeps them; **WebKit drops all four**, failing every authenticated scenario for a reason that cannot happen in production. `pnpm dev:https` reads a per-machine cert from `certificates/` (gitignored) — see strategy §9 for generating one without admin rights. Playwright sets `ignoreHTTPSErrors`, so a self-signed cert is fine.
+
+- **Scenario ids.** Every test is `UAT-<AREA>-<n> · <business-observable outcome>` and carries its PRD reference in the describe/file docstring. Risk tags (`@P0`/`@P1`/`@P2`) go on the describe so `--grep @P0` scopes a partial run.
+- **Seed once, bootstrap per spec.** [global-setup.ts](e2e/global-setup.ts) runs one `/dev/reset` + `/dev/seed` and logs every persona in, saving `storageState` per persona; specs consume it via `test.use({ storageState: storageStatePath(PERSONAS.X) })`. A spec needing a precondition the seed lacks creates it with the API helper in its own setup — never by depending on another spec's UI actions.
+- **Helpers before new plumbing.** [e2e/helpers/](e2e/helpers/): `api()`/`anonymousApi()` (CSRF-aware HTTP for preconditions **only** — never for assertions), `loginViaUi`, `goto`/`waitReady`/`expectAuthenticated` (window hooks), `readSeed`, `waitForEmail`/`extractLinkFromEmail` (Mailpit), `expectNoA11yViolations`.
+- **Deterministic waits only.** `waitReady(page)` (`__app_ready__`) and web-first assertions — never `waitForTimeout`.
+- **A11y is an acceptance criterion, not a separate pass.** Call `expectNoA11yViolations(page)` on every page state a scenario visits; serious/critical axe violations fail the scenario. `A11Y_BASELINE` in [helpers/a11y.ts](e2e/helpers/a11y.ts) is tracked, justified debt to burn down — prefer fixing the violation.
+- **Assert business-observable outcomes** through rendered UI (visible label, state, artifact, email), never "no error thrown".
+- Artifacts (`e2e/.auth/`, `playwright-report/`, `test-results/`) are gitignored; specs and helpers are committed.
+
 ## Automation determinism (permanent rules — do not remove)
 
 ### data-testid policy
@@ -180,6 +202,8 @@ Auth form elements carry stable `data-testid` selectors for Playwright automatio
 | Signup step 1 | `signup-basics-form`, `signup-first-name`, `signup-last-name`, `signup-email`, `signup-password`, `signup-basics-submit` |
 | Signup stepper | `signup-stepper` |
 | Verify step | `verify-form`, `verify-submit`, `verify-back` |
+| Forgot password | `forgot-form`, `forgot-email`, `forgot-submit` |
+| Reset password | `reset-password-form`, `reset-password-password`, `reset-password-confirm`, `reset-password-submit` |
 | OAuth buttons | `oauth-google`, `oauth-apple`, `oauth-facebook` |
 
 When adding new forms, follow the same `{flow}-{element}` pattern.

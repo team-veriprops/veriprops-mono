@@ -78,7 +78,7 @@ export default function ConnectedDevicesPage() {
                     </span>
                   )}
                 </p>
-                <p className="text-xs mt-1 text-brand-on-surface-variant/55">
+                <p className="text-xs mt-1 text-brand-on-surface-variant">
                   {[d.ipAddress, d.approxLocation].filter(Boolean).join(" · ")}
                   {d.lastActiveAt ? ` · active ${new Date(d.lastActiveAt).toLocaleDateString()}` : ""}
                 </p>

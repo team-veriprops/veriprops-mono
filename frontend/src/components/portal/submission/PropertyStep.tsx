@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Building2, LandPlot, MapPin } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
@@ -165,14 +165,19 @@ export default function PropertyStep({ value, onChange }: Props) {
   );
 }
 
+/* Both helpers bind their Label to the control with a generated id. Without it the label
+   is only visual: a `<select>` then has no accessible name at all (axe `select-name`,
+   critical), and an `<input>` falls back to its placeholder — which disappears on typing. */
+
 function DetailText({ label, value, onChange, placeholder, testId, inputMode }: {
   label: string; value?: string; onChange: (v: string) => void;
   placeholder?: string; testId: string; inputMode?: "numeric" | "text";
 }) {
+  const id = useId();
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)}
+      <Label htmlFor={id} className="text-xs">{label}</Label>
+      <Input id={id} value={value ?? ""} onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder} inputMode={inputMode} data-testid={testId} />
     </div>
   );
@@ -181,10 +186,12 @@ function DetailText({ label, value, onChange, placeholder, testId, inputMode }: 
 function DetailSelect({ label, options, value, onChange, testId }: {
   label: string; options: string[]; value?: string; onChange: (v: string) => void; testId: string;
 }) {
+  const id = useId();
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
+      <Label htmlFor={id} className="text-xs">{label}</Label>
       <select
+        id={id}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
         data-testid={testId}

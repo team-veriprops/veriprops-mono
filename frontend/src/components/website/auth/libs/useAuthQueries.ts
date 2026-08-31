@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_HISTORY_PAGE_SIZE, STALE_TIME_MS, SHORT_STALE_TIME_MS, LONG_STALE_TIME_MS } from "@lib/config/app";
 import { httpClient } from "@/containers";
-import { isAutomationEnvironment } from "@lib/automation";
+import { publishAuthSnapshot } from "@lib/automation";
 import { isNetworkError } from "@lib/FetchHttpClient";
 import { AuthService } from "./auth-service";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
@@ -36,14 +36,10 @@ export function useCurrentSession(enabled = true) {
     enabled,
     queryFn: async () => {
       const res = await authService.currentSession();
+      // setSession publishes the automation snapshot; a signed-out result never reaches
+      // a store setter, so publish the "not authenticated" state explicitly.
       if (res.data) setSession(res.data);
-      if (isAutomationEnvironment()) {
-        window.__auth_snapshot__ = {
-          isAuthenticated: !!res.data,
-          userId: res.data?.user?.id ?? null,
-          personas: res.data?.user?.personas ?? [],
-        };
-      }
+      else publishAuthSnapshot(null);
       return res.data ?? null;
     },
     retry: false,

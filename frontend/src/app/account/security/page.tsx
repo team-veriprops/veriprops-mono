@@ -76,7 +76,7 @@ export default function SecurityActivityPage() {
                   <p className="text-sm text-brand-on-surface-variant">
                     {e.description}
                   </p>
-                  <p className="text-xs mt-1 text-brand-on-surface-variant/55">
+                  <p className="text-xs mt-1 text-brand-on-surface-variant">
                     {new Date(e.occurredAt).toLocaleString()}
                     {e.ipAddress ? ` · ${e.ipAddress}` : ""}
                     {e.device ? ` · ${e.device}` : ""}

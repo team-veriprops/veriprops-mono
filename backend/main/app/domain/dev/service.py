@@ -31,6 +31,7 @@ from main.app.domain.user.agent.credential.models import (
     CredentialStatus,
 )
 from main.app.domain.user.agent.profile.models import AgentProfile
+from main.app.domain.user.auth.consent.models import REQUIRED_SIGNUP_CONSENTS, UserConsent
 from main.app.domain.user.auth.session.models import UserType
 from main.app.domain.user.models import User
 from main.app.domain.verification.models import Verification
@@ -71,6 +72,10 @@ _RESET_TABLES = [
     "data_erasure_requests",
     # Admin onboarding (§4) + messaging bookkeeping (rows accrue when ENABLE_OUT_MESSAGING=True).
     "admin_invitations", "messages",
+    # Per-user consent acceptances (§3.2) — user data, not reference data (the
+    # consent_documents they point at are preserved). Cleared so seed() can re-record them
+    # for the fresh users and the surviving super-admin without stacking duplicates.
+    "user_consents",
 ]
 
 
@@ -279,6 +284,13 @@ class DevSeedService:
                 ip_address="198.51.100.7", occurred_at=now,
             ))
 
+        # Consents for every seeded account — see _record_required_consents.
+        await self._record_required_consents(
+            session,
+            [str(customer.id), str(erasable.id)] + [str(a.id) for a in agents.values()],
+            now,
+        )
+
         await session.flush()
         return {
             "customer": {"id": str(customer.id), "email": CUSTOMER_EMAIL, "password": CUSTOMER_PASSWORD},
@@ -290,6 +302,47 @@ class DevSeedService:
             "tasks": task_ids,
             "ops": {"id": ops_hex, "vid": ops.vid, "txRef": ops_tx_ref, "tasks": ops_task_ids},
         }
+
+    async def _record_required_consents(self, session, user_ids, now) -> None:
+        """Accept the current version of every required consent for each seeded user.
+
+        Seeded users are inserted directly, bypassing ``AuthService.signup`` — the only
+        path that normally records consents. The super-admin is likewise inserted by
+        migration ``0001``. Without these rows every persona looks like an account with
+        outdated terms and is held behind the **non-dismissible** re-acceptance modal
+        (§3.2) on every authenticated page, which blocks UI automation and misrepresents a
+        normal signed-up user.
+
+        The current version is read from ``consent_documents`` rather than hardcoded:
+        accepting a superseded version still counts as missing, so a version bump in the
+        content registry must not silently re-trap every seeded account.
+        """
+        required = {t.value for t in REQUIRED_SIGNUP_CONSENTS}
+        rows = (await session.execute(text(
+            "SELECT type, consent_version FROM consent_documents "
+            "ORDER BY effective_at DESC"
+        ))).all()
+
+        current: Dict[str, str] = {}
+        for row in rows:
+            if row.type in required and row.type not in current:
+                current[row.type] = row.consent_version
+
+        # The super-admin survives reset(), so it is not in the seeded-user list but needs
+        # the same treatment — an admin trapped by the modal blocks every admin scenario.
+        admin_row = (await session.execute(
+            text("SELECT id FROM users WHERE email = :email LIMIT 1"),
+            {"email": settings.SUPER_ADMIN_EMAIL},
+        )).first()
+        all_ids = list(user_ids) + ([str(admin_row.id)] if admin_row else [])
+
+        for user_id in all_ids:
+            for document_type, consent_version in current.items():
+                session.add(self._new(
+                    UserConsent,
+                    user_id=user_id, document_type=document_type,
+                    consent_version=consent_version, accepted_at=now,
+                ))
 
     async def latest_message(self, recipient: str) -> Dict[str, Any]:
         """Snapshot of the newest outbound-message row addressed to *recipient* (fragment
