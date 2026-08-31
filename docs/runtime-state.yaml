@@ -1,0 +1,35 @@
+# Orchestrator runtime state — cycle 2 (WhatsApp Channel, PRD.md §7)
+# Cycle-1 state archived at docs.back/runtime-state.yaml.
+
+session_id: null
+command: initialize
+
+status: idle
+phase: idle
+
+current_slice: null
+current_subtask: null
+
+modified_files: []
+created_files: []
+
+tests:
+  written: false
+  executed: false
+  passing: false
+
+self_audit:
+  started: false
+  completed: false
+  findings: []
+
+clarification_needed: []
+
+git:
+  branch: dev
+  dirty: false
+
+next_action: "await `run` — begin S1 (widget + attribution) per docs/execution-plan.md"
+
+started_at: "2026-08-31"
+last_checkpoint: "2026-08-31 initialize complete"
