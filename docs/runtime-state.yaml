@@ -2,26 +2,33 @@
 # Cycle-1 state archived at docs.back/runtime-state.yaml.
 
 session_id: null
-command: initialize
+command: run
 
-status: idle
-phase: idle
+status: in_progress
+phase: implementation
 
-current_slice: null
-current_subtask: null
+current_slice: S2
+current_subtask: "not started — S1 landed and committed"
 
 modified_files: []
 created_files: []
 
 tests:
-  written: false
-  executed: false
-  passing: false
+  written: true
+  executed: true
+  passing: true
 
 self_audit:
-  started: false
-  completed: false
-  findings: []
+  started: true
+  completed: true
+  findings:
+    - "S1: backend 1042 unit tests, ruff + mypy clean; frontend 478 unit tests, eslint clean, next build ok."
+    - "S1: widget number/flag served from /config/public only — no frontend fallback number (WA-02)."
+    - "S1 side-fix: eslint now ignores gitignored Playwright artifacts (e2e/playwright-report|test-results|.auth),
+       which had been producing ~3000 findings on any local `pnpm lint` after a UAT run. CI was unaffected."
+    - "Carried into S2: ChatMessageService.send fraud-scans SYSTEM/SYSTEM_AUTO messages despite
+       CommunicationService.auto_post_customer's docstring claiming it skips them — bot copy carrying
+       veriprops.ng / wa.me links would be held for review. Fix lands with the console adapter."
 
 clarification_needed: []
 
@@ -29,7 +36,7 @@ git:
   branch: dev
   dirty: false
 
-next_action: "await `run` — begin S1 (widget + attribution) per docs/execution-plan.md"
+next_action: "S2 — transport layer first (inbound models, stub provider, signed webhook handler, whatsapp routing block)"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-08-31 initialize complete"
+last_checkpoint: "2026-08-31 S1 complete (widget + attribution); gate decisions D49–D52 locked"

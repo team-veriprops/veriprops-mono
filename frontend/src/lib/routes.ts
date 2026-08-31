@@ -115,6 +115,15 @@ export const ROUTES = {
     CHAT: '/portal/chat',
   },
 
+  // WhatsApp -> website handoff landings (PRD §7.4.2). Each consumes a signed
+  // single-use action token; they are public by design — the token is the authorization,
+  // so they must stay outside PROTECTED_PREFIXES in proxy.ts.
+  WA: {
+    PAY: (token: string) => `/wa/pay/${token}`,
+    UPLOAD: (token: string) => `/wa/upload/${token}`,
+    REPORT: (token: string) => `/wa/report/${token}`,
+  },
+
   FORBIDDEN: '/forbidden',
 
   LEGAL: {
@@ -144,6 +153,17 @@ export const ROUTES = {
     NOTIFICATIONS: '/settings/notifications',
   },
 } as const;
+
+/**
+ * Paths that sit *inside* a payment flow. Kept beside the route builders they mirror so
+ * the two cannot drift: each pattern matches what `PORTAL.VERIFICATION_PAY` / `WA.PAY`
+ * produce. The WhatsApp widget suppresses itself here (PRD §7.4.1 — no distraction at
+ * the highest-value moment).
+ */
+export const PAYMENT_FLOW_PATH_PATTERNS: readonly RegExp[] = [
+  /^\/portal\/verifications\/[^/]+\/pay\/?$/,
+  /^\/wa\/pay(\/|$)/,
+] as const;
 
 // export type AuthIntent = 'verify' | 'agent' | 'default';
 

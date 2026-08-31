@@ -212,6 +212,13 @@ class Settings(AppodusBaseSettings):
     WHATSAPP_PHONE_NUMBER_ID: Optional[str] = "766140453239478"
     WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = "1412930669928110"
     WHATSAPP_BUSINESS_ACCESS_TOKEN: Optional[str] = SECRET_PLACEHOLDER
+    # The one official customer-facing number (PRD §7.1.2 anti-impersonation). Digits only,
+    # E.164 without the leading '+', so it drops straight into a wa.me link. Backend is the
+    # single source: the site widget, report footers, and bot copy all read it from here.
+    WHATSAPP_OFFICIAL_NUMBER: str = "2349167624347"
+    # §7.4.1 concierge phase — the widget is live now against the WhatsApp Business app,
+    # ahead of the Cloud API cutover. Kill switch if the number ever goes dark.
+    WHATSAPP_WIDGET_ENABLED: bool = True
 
     # PUSH Providers
     # Firebase
