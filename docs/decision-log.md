@@ -1260,3 +1260,119 @@ adapter makes provider switching a config change, not a code change.
 
 ### Revisit
 Add a fallback chain across providers only if live error rates warrant it.
+
+## Decision: D49 — `0001` frozen; additive migrations from `0002` onward
+
+### Context
+D9 made `0001_initial_schema.py` the single editable migration while the schema was
+greenfield, and scoped that posture itself: "once a non-throwaway database exists
+(staging/prod), stop editing `0001`". Cycle 2 adds **columns to existing tables**
+(`conversations`, `chat_messages`), and `0001` builds a table only when it is absent — so
+a column added there is silently skipped on every already-migrated database.
+
+### Options Considered
+1. **Additive `0002`+ from here; `0001` frozen.**
+2. Keep editing `0001`, requiring every existing database to be dropped and rebuilt.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation).
+
+### Rationale
+Column additions actually apply. The local dev database, the dev-branch deploy, and the
+UAT suite's seeded data all survive. It is D9's own revisit condition, reached.
+
+### Tradeoffs / Constraints
+- Migration history grows again, which D9 had deliberately collapsed.
+- Additive revisions carry **no** `table_exists` guard: alembic's version table already
+  runs each once, and the guard breaks offline (`--sql`) generation.
+- `test_migration_schema_parity.py` now reads builders from every migration in
+  `versions/`, not only `0001`.
+
+### Revisit
+Not expected — this is the normal posture from here.
+
+## Decision: D50 — Landing depth is per-intent, not uniform
+
+### Context
+§7.4.2 says the three `/wa/*` landings are "pre-authenticated for that action"; §7.5 says
+the token is not a session; and locked Decision B says report delivery is an
+**authenticated** portal link. Those cannot all be satisfied by one uniform depth.
+
+### Options Considered
+1. **`pay` token-scoped; `upload` and `report` hand off to the authenticated portal.**
+2. All three fully token-scoped.
+3. All three validate then hand off to login.
+
+### Chosen Option
+**Option 1** (user-selected after asking for the risk in option 2).
+
+### Rationale
+The intents carry very different downside. A leaked `pay` link costs a stranger paying
+someone else's bill — no disclosure, no card data, and payment friction is what §7.10
+calls the channel's most important metric. A leaked `report` link would let whoever taps
+first in a forwarded family group open the full report, deciding access by tap order and
+bypassing the §13.2/§13.3 sharing model whose exit criterion is that revocation works. A
+leaked `upload` link would let anyone inject evidence into the canonical verification file
+(§7.1.6/M1) — the conversation-hijack class §7.4.3 exists to defeat.
+
+### Tradeoffs / Constraints
+- Two of three landings still require a login; both pre-fill the redirect so a signed-in
+  customer is one tap away.
+- Option 2 would have required a new decision overriding locked Decision B.
+
+### Revisit
+If seam-conversion data shows the report login is costing materially, revisit `report`
+alone — with a fresh decision, not silently.
+
+## Decision: D51 — Redeem once, then hold a short-lived scoped grant
+
+### Context
+§7.5 records the `jti` on redemption and rejects replays. Read literally, the link burns
+on the first page load — a refresh, a back-navigation, or WhatsApp's own link-preview
+fetch is enough.
+
+### Options Considered
+1. **Redeem once, issue a grant scoped to that intent + case, valid until the token's own
+   expiry.**
+2. Strict: every page load redeems.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation).
+
+### Rationale
+Preserves replay rejection where it matters (a forwarded copy is dead) without making a
+refresh on a phone destroy the customer's link.
+
+### Tradeoffs / Constraints
+- The grant is explicitly **not a session**: HttpOnly, path-scoped to
+  `/api/public/wa/handoff`, `SameSite=Lax` (the customer arrives cross-site from
+  WhatsApp), expiring with its token, carrying no role or persona.
+- `redeem` accepts the caller's existing grant nonce so the original holder resumes;
+  anyone else presenting the same token is refused. **Writing the e2e scenario for this is
+  what caught that the landing re-redeemed on every mount** — the grant existed but was
+  never consulted.
+- One more concept to pen-check; tracked in `docs/handoff-token-pen-check.md`.
+
+### Revisit
+Not expected.
+
+## Decision: D52 — Widget config split by ownership
+
+### Context
+WA-02 requires the official number to render "from a single config source", and repo rule
+5 makes the backend the only source of truth — but page-code attribution describes
+frontend routes the backend does not model.
+
+### Chosen Option
+The number and a `whatsappWidgetEnabled` flag join `/config/public`; page codes derive
+from the frontend route registry, with a first-segment fallback so a new page stays
+attributable without a table edit.
+
+### Rationale
+The number is published on the site, on certified reports, and in bot copy — one backend
+value keeps them from drifting, and the widget renders nothing rather than falling back to
+a hardcoded number. Route naming is genuinely frontend knowledge.
+
+### Revisit
+If the backend ever needs to reason about page codes (e.g. server-side attribution
+reporting), move the table server-side then.

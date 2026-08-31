@@ -63,6 +63,8 @@ class Settings(AppodusBaseSettings):
         "WHATSAPP_APP_SECRET_KEY",
         "WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN",
         "WHATSAPP_BUSINESS_ACCESS_TOKEN",
+        "WHATSAPP_HANDOFF_PRIVATE_KEY",
+        "WHATSAPP_HANDOFF_PUBLIC_KEY",
         "WEB_PUSH_PRIVATE_KEY",
         "DOJAH_APP_ID",
         "DOJAH_PRIVATE_KEY",
@@ -220,6 +222,12 @@ class Settings(AppodusBaseSettings):
     # §7.4.1 concierge phase — the widget is live now against the WhatsApp Business app,
     # ahead of the Cloud API cutover. Kill switch if the number ever goes dark.
     WHATSAPP_WIDGET_ENABLED: bool = True
+    # PRD 7.5 handoff-token keypair (RS256, PEM). Prod/staging refuse to sign without
+    # it; elsewhere an ephemeral per-process pair is generated so local and CI runs
+    # need no key material. Literal backslash-n escapes are restored, so a PEM
+    # survives a one-line env var.
+    WHATSAPP_HANDOFF_PRIVATE_KEY: str = SECRET_PLACEHOLDER
+    WHATSAPP_HANDOFF_PUBLIC_KEY: str = SECRET_PLACEHOLDER
 
     # PUSH Providers
     # Firebase

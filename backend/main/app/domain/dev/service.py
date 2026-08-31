@@ -439,6 +439,22 @@ class DevSeedService:
             "chat_message_id": record.chat_message_id if record else None,
         }
 
+    async def issue_handoff_token(
+        self, case_id: str, customer_id: str, intent: str
+    ) -> Dict[str, Any]:
+        """Mint a §7.5 handoff link without going through a bot conversation.
+
+        The bot flows that normally issue these land in later slices, so this is how an
+        automated run reaches the landing pages. It calls the real service, so ownership
+        is still checked and the token is signed exactly as a live one would be.
+        """
+        from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
+        from main.app.domain.channel.whatsapp.handoff.service import HandoffTokenService
+
+        handoff_service: HandoffTokenService = di[HandoffTokenService]
+        token = await handoff_service.issue(customer_id, case_id, HandoffIntent(intent))
+        return {"token": token, "intent": intent, "case_id": case_id}
+
     async def whatsapp_outbox(self, recipient: Optional[str] = None) -> Dict[str, Any]:
         """What the stub transport recorded, newest last."""
         messages = (

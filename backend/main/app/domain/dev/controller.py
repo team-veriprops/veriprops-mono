@@ -16,6 +16,7 @@ from main.app.domain.dev.service import DevSeedService
 from main.appodus_utils.config.settings import Environment
 from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
+from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
 from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import InboundKind
 
 dev_router = APIRouter(prefix="/dev", tags=["Dev"])
@@ -86,6 +87,20 @@ async def inject_whatsapp_inbound(
         wamid=wamid,
         sender_name=sender_name,
         interactive_id=interactive_id,
+    ))
+
+
+@dev_router.post("/whatsapp/handoff-token", response_model=SuccessResponse[dict])
+async def issue_handoff_token(
+    case_id: str = Body(..., embed=True),
+    customer_id: str = Body(..., embed=True),
+    intent: str = Body(default=HandoffIntent.PAY.value, embed=True),
+):
+    """Mint a handoff link for a case — the entry point the /wa landings need before the
+    bot flows that normally issue them exist."""
+    _require_non_prod()
+    return SuccessResponse[dict](data=await service.issue_handoff_token(
+        case_id=case_id, customer_id=customer_id, intent=intent,
     ))
 
 

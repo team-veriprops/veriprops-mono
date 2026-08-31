@@ -4,11 +4,11 @@
 session_id: null
 command: run
 
-status: in_progress
-phase: implementation
+status: idle
+phase: idle
 
-current_slice: S3
-current_subtask: "not started — S1 and S2 landed and committed"
+current_slice: null
+current_subtask: null
 
 modified_files: []
 created_files: []
@@ -22,19 +22,24 @@ self_audit:
   started: true
   completed: true
   findings:
-    - "S2: backend 1115 unit tests (74 new), ruff + mypy clean; frontend 481 unit tests, eslint clean, build ok."
-    - "S2: migration 0002 verified by offline SQL generation only — Docker/Postgres was not running,
-       so it has NOT been applied to a live database. Apply before the S3 e2e run."
-    - "S2 defect fixed: ChatMessageService.send fraud-scanned SYSTEM/SYSTEM_AUTO messages, contradicting
-       CommunicationService.auto_post_customer's docstring. Bot copy carrying veriprops.ng / wa.me links
-       (the payment pledge itself) would have been held for admin review."
-    - "S2 side-fix: BaseDiBootstrap._get_all_subclasses_instances asked the container for abstract
-       intermediates (PushNotificationProvider), so whether the process started depended on provider
-       import order. Now skipped; regression test added."
-    - "S2 side-fix: test_migration_schema_parity read builders from 0001 only; widened to every migration
-       under versions/ now that D49 makes later migrations additive."
-    - "Deferred to S7 by design: outbound console replies, the 24h window, and the §7.6.3 policy replies
-       for non-text inbound. S2 journals and labels non-text, it does not answer it."
+    - "S1–S3 gates green: backend 1156 unit tests, ruff + mypy clean; frontend 494 unit tests,
+       eslint clean, next build ok."
+    - "OPEN: migrations 0002 and 0003 are verified by offline SQL generation only — Docker/Postgres
+       was not running locally, so neither has been applied to a live database. Apply them and run
+       the drive-through before trusting them."
+    - "OPEN: the UAT specs added this cycle (whatsapp-widget, wa-handoff) have not been executed —
+       they need a live HTTPS stack. They are written against the seeded scenario and the dev
+       endpoints, so they should run as-is once one is up."
+    - "S2 defect fixed: the fraud scan ran on SYSTEM/SYSTEM_AUTO messages despite the docstring
+       claiming otherwise, so bot copy carrying veriprops.ng / wa.me links would have been held."
+    - "S3 defect fixed (found by writing UAT-WAH-03): the landing re-redeemed on every mount, so a
+       refresh burned the link — the D51 grant existed but was never consulted on resume."
+    - "S2 side-fix: DI subclass registration asked the container for abstract intermediates, making
+       startup depend on provider import order."
+    - "S2 side-fix: migration parity guard read builders from 0001 only; widened for D49."
+    - "S1 side-fix: eslint now ignores gitignored Playwright artifacts."
+    - "Deferred by design: S7 owns agent replies, Meta's 24h window, and the §7.6.3 policy replies
+       for non-text inbound. S2 journals and labels non-text; it does not answer it."
 
 clarification_needed: []
 
@@ -42,7 +47,7 @@ git:
   branch: dev
   dirty: false
 
-next_action: "S3 — RS256 handoff token service + redemption entity + migration 0003, then the /wa landings"
+next_action: "await `run` — begin S4 (OTP account linking, E1) per docs/execution-plan.md"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-08-31 S2 complete (webhook, transports, console inbound)"
+last_checkpoint: "2026-09-01 S1–S3 complete (widget, channel foundation, handoff tokens)"
