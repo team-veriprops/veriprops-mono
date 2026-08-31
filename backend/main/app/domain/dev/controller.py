@@ -6,7 +6,9 @@ returns 404 in production.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Optional
+
+from fastapi import APIRouter, Body
 from kink import di
 
 from main.app.config.settings import settings
@@ -14,6 +16,7 @@ from main.app.domain.dev.service import DevSeedService
 from main.appodus_utils.config.settings import Environment
 from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
+from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import InboundKind
 
 dev_router = APIRouter(prefix="/dev", tags=["Dev"])
 service: DevSeedService = di[DevSeedService]
@@ -52,3 +55,49 @@ async def rewind_message(recipient: str, rewind_expiry: bool = False):
     against the default backoff ladder."""
     _require_non_prod()
     return SuccessResponse[dict](data=await service.rewind_message(recipient, rewind_expiry))
+
+
+# ── WhatsApp channel (PRD §7, D43) ────────────────────────────────
+# The stub transport has no external counterpart to drive it, so these two endpoints are
+# how an automated run plays both sides of a conversation: inject what a customer
+# "sent", then read back what Veriprops would have replied. Same double prod gate as the
+# rest of this router.
+
+
+@dev_router.post("/whatsapp/inbound", response_model=SuccessResponse[dict])
+async def inject_whatsapp_inbound(
+    from_phone: str = Body(..., embed=True),
+    text: Optional[str] = Body(default=None, embed=True),
+    kind: str = Body(default=InboundKind.TEXT.value, embed=True),
+    wamid: Optional[str] = Body(default=None, embed=True),
+    sender_name: Optional[str] = Body(default=None, embed=True),
+    interactive_id: Optional[str] = Body(default=None, embed=True),
+):
+    """Deliver an inbound WhatsApp message as if Meta had posted it.
+
+    Enters the same ingestion path as a real signed delivery — thread resolution, fraud
+    scan, console post — so an e2e run exercises the production code, not a shortcut.
+    """
+    _require_non_prod()
+    return SuccessResponse[dict](data=await service.inject_whatsapp_inbound(
+        from_phone=from_phone,
+        text=text,
+        kind=kind,
+        wamid=wamid,
+        sender_name=sender_name,
+        interactive_id=interactive_id,
+    ))
+
+
+@dev_router.get("/whatsapp/outbox", response_model=SuccessResponse[dict])
+async def whatsapp_outbox(recipient: Optional[str] = None):
+    """What the stub transport recorded — the assertion surface for outbound copy."""
+    _require_non_prod()
+    return SuccessResponse[dict](data=await service.whatsapp_outbox(recipient))
+
+
+@dev_router.delete("/whatsapp/outbox", response_model=SuccessResponse[dict])
+async def clear_whatsapp_outbox():
+    """Reset the recorded outbound messages so a scenario starts from a known point."""
+    _require_non_prod()
+    return SuccessResponse[dict](data=await service.clear_whatsapp_outbox())

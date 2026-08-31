@@ -21,6 +21,9 @@ def _settings(**over):
         ENVIRONMENT=Environment.PRODUCTION,
         AUTHJWT_SECRET_KEY="a-strong-unique-key",
         OTP_MODE="random",
+        # Prod also pins the live WhatsApp transport (D43); without it the settings
+        # object fails on that contract instead of the one under test.
+        WHATSAPP_PROVIDER="meta",
     )
     base.update(over)
     return AppodusBaseSettings(**base)

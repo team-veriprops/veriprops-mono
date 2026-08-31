@@ -7,9 +7,9 @@ so an admin can immediately drive release, hold-review, and the SLA sweep agains
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from kink import inject
+from kink import di, inject
 from sqlalchemy import text
 
 from main.app.config.settings import settings
@@ -41,6 +41,12 @@ from main.appodus_utils.db.session import get_db_session_from_context
 from main.appodus_utils.db.types.money import TransactionCurrency
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
+    InboundKind,
+    InboundWhatsAppMessage,
+)
+from main.appodus_utils.integrations.messaging.providers.whatsapp.phone import to_e164
+from main.appodus_utils.integrations.messaging.providers.whatsapp.stub import whatsapp_outbox
 
 # Deterministic e2e credentials (non-prod only). A non-special-use domain — the email
 # validator rejects reserved TLDs like `.test`/`example.com`.
@@ -392,6 +398,57 @@ class DevSeedService:
             {"frag": f"%{recipient}%"},
         )).first()
         return {"rewound": row is not None, "id": row.id.hex if row else None}
+
+    # ── WhatsApp channel (PRD §7, D43) ────────────────────────────
+
+    async def inject_whatsapp_inbound(
+        self,
+        from_phone: str,
+        text: Optional[str] = None,
+        kind: str = InboundKind.TEXT.value,
+        wamid: Optional[str] = None,
+        sender_name: Optional[str] = None,
+        interactive_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Deliver an inbound message as if Meta had posted it.
+
+        Goes through the real ``WhatsAppInboundService``, so an automated run exercises
+        thread resolution, the fraud scan, and the console post — the same code a signed
+        Meta delivery reaches. Only the transport is simulated.
+        """
+        from main.app.domain.channel.whatsapp.inbound.service import WhatsAppInboundService
+
+        inbound_service: WhatsAppInboundService = di[WhatsAppInboundService]
+        message = InboundWhatsAppMessage(
+            # A distinct default id per injection, so repeated calls read as separate
+            # messages while an explicit wamid can still exercise the dedup path.
+            wamid=wamid or f"wamid.dev.{Utils.random_str(16)}",
+            from_phone=to_e164(from_phone),
+            kind=InboundKind(kind),
+            text=text,
+            interactive_id=interactive_id,
+            sender_name=sender_name,
+            received_at=Utils.datetime_now(),
+            raw={"injected": True},
+        )
+        record = await inbound_service.ingest(message)
+        return {
+            "wamid": message.wamid,
+            "ingested": record is not None,
+            "duplicate": record is None,
+            "chat_message_id": record.chat_message_id if record else None,
+        }
+
+    async def whatsapp_outbox(self, recipient: Optional[str] = None) -> Dict[str, Any]:
+        """What the stub transport recorded, newest last."""
+        messages = (
+            whatsapp_outbox.for_recipient(recipient) if recipient else whatsapp_outbox.all()
+        )
+        return {"count": len(messages), "messages": [m.model_dump() for m in messages]}
+
+    async def clear_whatsapp_outbox(self) -> Dict[str, Any]:
+        whatsapp_outbox.clear()
+        return {"cleared": True}
 
     @staticmethod
     def _new(model, **fields):

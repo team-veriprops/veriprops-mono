@@ -51,6 +51,19 @@ class TemplatingEngine(str, enum.Enum):
     JINJA2 = "jinja2"
 
 
+class WhatsAppProvider(str, enum.Enum):
+    """WhatsApp transport selection (PRD §7, D43).
+
+    ``stub`` records outbound messages and accepts injected inbound ones, so the whole
+    channel is exercisable without touching Meta — the contract CI and the e2e suite run
+    on. ``meta`` is the live Cloud API. Enforced by ``_enforce_whatsapp_provider_policy``:
+    test may never run live, production may never run on the stub.
+    """
+
+    STUB = "stub"
+    META = "meta"
+
+
 class OtpMode(str, enum.Enum):
     """OTP determinism contract. ``deterministic`` always returns ``TEST_OTP`` (required
     in test, allowed in dev/dev_personal/staging); ``random`` generates a CSPRNG code (required
@@ -255,6 +268,9 @@ class AppodusBaseSettings(BaseSettings):
     # OTP determinism contract (see OtpMode).
     OTP_MODE: OtpMode = OtpMode.DETERMINISTIC
 
+    # WhatsApp transport contract (see WhatsAppProvider).
+    WHATSAPP_PROVIDER: WhatsAppProvider = WhatsAppProvider.STUB
+
     @model_validator(mode="after")
     def _enforce_otp_mode_policy(self) -> "AppodusBaseSettings":
         env = self.ENVIRONMENT
@@ -268,6 +284,27 @@ class AppodusBaseSettings(BaseSettings):
             raise ValueError(
                 f"ENVIRONMENT=prod requires OTP_MODE={OtpMode.RANDOM.value}, got '{mode.value}'. "
                 "Deterministic OTP is forbidden in production."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_whatsapp_provider_policy(self) -> "AppodusBaseSettings":
+        """Keep the test suite off Meta and production off the stub (D43).
+
+        Staging is deliberately unconstrained: it is the human-QA environment that has to
+        boot on the stub before the Meta assets exist and switch to live afterwards.
+        """
+        env = self.ENVIRONMENT
+        provider = self.WHATSAPP_PROVIDER
+        if env == Environment.TEST and provider != WhatsAppProvider.STUB:
+            raise ValueError(
+                f"ENVIRONMENT=test requires WHATSAPP_PROVIDER={WhatsAppProvider.STUB.value}, "
+                f"got '{provider.value}'. Automated runs must never reach Meta."
+            )
+        if env == Environment.PRODUCTION and provider != WhatsAppProvider.META:
+            raise ValueError(
+                f"ENVIRONMENT=prod requires WHATSAPP_PROVIDER={WhatsAppProvider.META.value}, "
+                f"got '{provider.value}'. The stub must never serve real customers."
             )
         return self
 

@@ -10,6 +10,21 @@ export enum ConversationType {
   GENERAL_SUPPORT = "GENERAL_SUPPORT",
 }
 
+/**
+ * Which surface a thread originated on / a message arrived on (§7.3.3 source labeling).
+ * Orthogonal to ConversationType and SenderKind: the same customer can speak from either
+ * surface, and the console shows which one so a reply goes back the right way.
+ */
+export enum ConversationChannel {
+  WEB = "WEB",
+  WHATSAPP = "WHATSAPP",
+}
+
+export enum MessageSource {
+  WEB = "WEB",
+  WHATSAPP = "WHATSAPP",
+}
+
 /** §4.7 message lifecycle. */
 export enum ChatMessageState {
   PENDING_SCAN = "PENDING_SCAN",
@@ -42,6 +57,9 @@ export interface Conversation {
   type: ConversationType;
   verificationId?: string | null;
   subject?: string | null;
+  channel?: ConversationChannel;
+  /** The sender's E.164 number for a WhatsApp thread — null for a web thread. */
+  externalRef?: string | null;
   lastMessageAt?: string | null;
   closed: boolean;
   unread: number;
@@ -63,6 +81,7 @@ export interface ChatMessage {
   taskId?: string | null;
   state: ChatMessageState;
   messageKind: MessageKind;
+  source?: MessageSource;
   clarificationStatus?: ClarificationStatus | null;
   sender: ChatSender;
   heldNotice?: string | null;
@@ -78,6 +97,7 @@ export interface HeldMessage {
   verificationId?: string | null;
   senderUserId?: string | null;
   senderKind: SenderKind;
+  source?: MessageSource;
   body: string;
   flaggedCategories: string[];
   heldAt?: string | null;

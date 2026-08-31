@@ -7,8 +7,8 @@ command: run
 status: in_progress
 phase: implementation
 
-current_slice: S2
-current_subtask: "not started — S1 landed and committed"
+current_slice: S3
+current_subtask: "not started — S1 and S2 landed and committed"
 
 modified_files: []
 created_files: []
@@ -22,13 +22,19 @@ self_audit:
   started: true
   completed: true
   findings:
-    - "S1: backend 1042 unit tests, ruff + mypy clean; frontend 478 unit tests, eslint clean, next build ok."
-    - "S1: widget number/flag served from /config/public only — no frontend fallback number (WA-02)."
-    - "S1 side-fix: eslint now ignores gitignored Playwright artifacts (e2e/playwright-report|test-results|.auth),
-       which had been producing ~3000 findings on any local `pnpm lint` after a UAT run. CI was unaffected."
-    - "Carried into S2: ChatMessageService.send fraud-scans SYSTEM/SYSTEM_AUTO messages despite
-       CommunicationService.auto_post_customer's docstring claiming it skips them — bot copy carrying
-       veriprops.ng / wa.me links would be held for review. Fix lands with the console adapter."
+    - "S2: backend 1115 unit tests (74 new), ruff + mypy clean; frontend 481 unit tests, eslint clean, build ok."
+    - "S2: migration 0002 verified by offline SQL generation only — Docker/Postgres was not running,
+       so it has NOT been applied to a live database. Apply before the S3 e2e run."
+    - "S2 defect fixed: ChatMessageService.send fraud-scanned SYSTEM/SYSTEM_AUTO messages, contradicting
+       CommunicationService.auto_post_customer's docstring. Bot copy carrying veriprops.ng / wa.me links
+       (the payment pledge itself) would have been held for admin review."
+    - "S2 side-fix: BaseDiBootstrap._get_all_subclasses_instances asked the container for abstract
+       intermediates (PushNotificationProvider), so whether the process started depended on provider
+       import order. Now skipped; regression test added."
+    - "S2 side-fix: test_migration_schema_parity read builders from 0001 only; widened to every migration
+       under versions/ now that D49 makes later migrations additive."
+    - "Deferred to S7 by design: outbound console replies, the 24h window, and the §7.6.3 policy replies
+       for non-text inbound. S2 journals and labels non-text, it does not answer it."
 
 clarification_needed: []
 
@@ -36,7 +42,7 @@ git:
   branch: dev
   dirty: false
 
-next_action: "S2 — transport layer first (inbound models, stub provider, signed webhook handler, whatsapp routing block)"
+next_action: "S3 — RS256 handoff token service + redemption entity + migration 0003, then the /wa landings"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-08-31 S1 complete (widget + attribution); gate decisions D49–D52 locked"
+last_checkpoint: "2026-08-31 S2 complete (webhook, transports, console inbound)"

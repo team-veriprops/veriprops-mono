@@ -22,6 +22,7 @@ class IntegratedPlatform(str, enum.Enum):
     GOOGLE_DRIVE = "google_drive"
     FLUTTERWAVE = "flutterwave"
     PAYSTACK = "paystack"
+    WHATSAPP = "whatsapp"
 
 class PaymentMethod(str, enum.Enum):
     FLUTTERWAVE = "flutterwave"

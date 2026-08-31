@@ -28,6 +28,7 @@ from main.app.domain.communication.chat_message.models import (
     CreateChatMessageDto,
     HeldMessageDto,
     MessageKind,
+    MessageSource,
     SenderKind,
 )
 from main.app.domain.communication.chat_message.repo import ChatMessageRepo
@@ -51,6 +52,11 @@ from main.appodus_utils.exception.exceptions import (
 # Sender-facing notice while a message is held for review (§11.2) — worded so it never
 # reads as suspicion of the sender.
 HELD_NOTICE = "Just a moment while we check this through."
+
+
+def _is_platform_authored(sender_kind: SenderKind, kind: MessageKind) -> bool:
+    """True for copy Veriprops writes about itself, which is not scan material."""
+    return sender_kind == SenderKind.SYSTEM or kind == MessageKind.SYSTEM_AUTO
 
 
 @inject
@@ -82,9 +88,15 @@ class ChatMessageService:
         *,
         task_id: Optional[str] = None,
         kind: MessageKind = MessageKind.CHAT,
+        source: MessageSource = MessageSource.WEB,
+        external_message_id: Optional[str] = None,
     ) -> ChatMessage:
         """Send a message into a thread. Clean messages deliver immediately (fast lane);
-        flagged messages are held for admin review (§4.7)."""
+        flagged messages are held for admin review (§4.7).
+
+        ``source`` records which surface the message came from — WhatsApp text runs the
+        same scan as web chat (§7.3.3), so the hold behaviour is identical on both.
+        """
         body = (body or "").strip()
         if not body:
             raise ValidationException(message="Message body is required")
@@ -93,7 +105,13 @@ class ChatMessageService:
                 message=f"Message exceeds the {BODY_MAX_LENGTH}-character limit"
             )
 
-        categories = scan_message(body)
+        # The scan exists to stop people being taken off-platform, so it applies to what
+        # people write — not to what the platform writes about itself. Platform-authored
+        # copy legitimately carries veriprops.ng links and the official WhatsApp number,
+        # both of which the URL/social rules match; holding our own status updates and
+        # bot replies for review would stall the very messages that keep a customer
+        # oriented.
+        categories = [] if _is_platform_authored(sender_kind, kind) else scan_message(body)
         now = Utils.datetime_now()
         held = bool(categories)
 
@@ -106,6 +124,8 @@ class ChatMessageService:
                 conversation_id=Utils.uuid_to_hex(conversation.id),
                 sender_user_id=sender_user_id,
                 sender_kind=sender_kind,
+                source=source,
+                external_message_id=external_message_id,
                 body=body,
                 task_id=task_id,
                 state=ChatMessageState.HELD if held else ChatMessageState.DELIVERED,
@@ -241,6 +261,7 @@ class ChatMessageService:
             task_id=message.task_id,
             state=ChatMessageState(message.state),
             message_kind=MessageKind(message.message_kind),
+            source=MessageSource(message.source or MessageSource.WEB.value),
             clarification_status=(
                 ClarificationStatus(message.clarification_status)
                 if message.clarification_status
@@ -275,6 +296,7 @@ class ChatMessageService:
             verification_id=conversation.verification_id if conversation else None,
             sender_user_id=message.sender_user_id,
             sender_kind=SenderKind(message.sender_kind),
+            source=MessageSource(message.source or MessageSource.WEB.value),
             body=message.body,
             flagged_categories=list(message.flagged_categories or []),
             held_at=message.held_at,

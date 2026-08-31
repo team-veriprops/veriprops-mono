@@ -8,3 +8,4 @@ from main.appodus_utils.integrations.messaging.providers.sms.mock import MockSms
 from main.appodus_utils.integrations.messaging.providers.sms.termii import TermiiSMSProvider
 from main.appodus_utils.integrations.messaging.providers.sms.twilio_sms import TwilioSMSProvider
 from main.appodus_utils.integrations.messaging.providers.whatsapp.whatsapp_business import WhatsAppBusinessProvider
+from main.appodus_utils.integrations.messaging.providers.whatsapp.stub import WhatsAppStubProvider

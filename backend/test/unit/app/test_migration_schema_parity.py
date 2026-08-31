@@ -1,12 +1,14 @@
 """Schema/migration parity guard.
 
-The project runs in a single-migration (`0001_initial_schema`) greenfield
-posture: every table is built by a `_create_<table>()` helper registered in
-`_TABLE_BUILDERS`. A model added without a matching builder produces a mapped
-entity whose table `alembic upgrade head` never creates — every query against
-it then 500s at runtime. This guard fails CI the moment that drift appears,
-in both directions — including framework/vendored entities (e.g. `devices`,
-`callbacks`) that live outside `domain/**`.
+Every table is built by a `_create_<table>()` helper registered in that migration's
+`_TABLE_BUILDERS`. A model added without a matching builder produces a mapped entity
+whose table `alembic upgrade head` never creates — every query against it then 500s at
+runtime. This guard fails CI the moment that drift appears, in both directions —
+including framework/vendored entities (e.g. `devices`, `callbacks`) that live outside
+`domain/**`.
+
+`0001_initial_schema` is frozen and later migrations are additive (decision D49), so the
+guard reads the builders of **every** migration in `versions/`, not just the first.
 """
 import importlib.util
 from pathlib import Path
@@ -20,16 +22,36 @@ from main.appodus_utils import BaseEntity
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 
 
-def _load_initial_migration():
-    migration_path = _BACKEND_ROOT / "main" / "alembic" / "versions" / "0001_initial_schema.py"
-    spec = importlib.util.spec_from_file_location("veriprops_initial_migration", migration_path)
+def _load_migration(migration_path: Path):
+    spec = importlib.util.spec_from_file_location(
+        f"veriprops_migration_{migration_path.stem}", migration_path
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
 def _builder_tables() -> set[str]:
-    return {table_name for table_name, _builder in _load_initial_migration()._TABLE_BUILDERS}
+    """Every table any migration creates.
+
+    A migration declares its tables either through a `_TABLE_BUILDERS` list (the squashed
+    initial schema) or through `_create_<table>()` helpers called directly from
+    `upgrade()` (the additive migrations that followed).
+    """
+    versions_dir = _BACKEND_ROOT / "main" / "alembic" / "versions"
+    tables: set[str] = set()
+    for migration_path in sorted(versions_dir.glob("*.py")):
+        module = _load_migration(migration_path)
+        builders = getattr(module, "_TABLE_BUILDERS", None)
+        if builders:
+            tables.update(table_name for table_name, _builder in builders)
+            continue
+        tables.update(
+            name.removeprefix("_create_")
+            for name in dir(module)
+            if name.startswith("_create_") and callable(getattr(module, name))
+        )
+    return tables
 
 
 def _mapped_tables() -> set[str]:

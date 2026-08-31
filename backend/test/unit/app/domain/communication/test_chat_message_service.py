@@ -8,7 +8,11 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from main.app.core.state.status import ChatMessageState
-from main.app.domain.communication.chat_message.models import MessageKind, SenderKind
+from main.app.domain.communication.chat_message.models import (
+    MessageKind,
+    MessageSource,
+    SenderKind,
+)
 from main.app.domain.communication.chat_message.service import ChatMessageService
 from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
@@ -46,6 +50,8 @@ def _service():
             conversation_id=dto.conversation_id,
             sender_user_id=dto.sender_user_id,
             sender_kind=dto.sender_kind.value,
+            source=dto.source.value,
+            external_message_id=dto.external_message_id,
             body=dto.body,
             task_id=dto.task_id,
             state=dto.state.value,
@@ -165,3 +171,54 @@ async def test_clarification_request_carries_open_status():
     )
     assert msg.message_kind == MessageKind.CLARIFICATION_REQUEST.value
     assert msg.clarification_status == "OPEN"
+
+
+# ── Source labeling + the platform-authored scan exemption (§7.3.3, §7.6) ──
+
+
+async def test_whatsapp_text_runs_the_same_fraud_scan_as_web_chat():
+    # WA-13: a WhatsApp message is held on exactly the same signals — the channel
+    # changes where it came from, never how it is policed.
+    svc = _service()
+    msg = await svc.send(
+        _conversation(), "cust-1", SenderKind.CUSTOMER, "call me on 08031234567",
+        source=MessageSource.WHATSAPP,
+    )
+    assert msg.state == ChatMessageState.HELD.value
+    assert msg.source == MessageSource.WHATSAPP.value
+
+
+async def test_whatsapp_message_records_its_channel_native_id():
+    svc = _service()
+    msg = await svc.send(
+        _conversation(), "cust-1", SenderKind.CUSTOMER, "Hello",
+        source=MessageSource.WHATSAPP, external_message_id="wamid.A1",
+    )
+    assert msg.external_message_id == "wamid.A1"
+
+
+async def test_messages_default_to_the_web_surface():
+    svc = _service()
+    msg = await svc.send(_conversation(), "cust-1", SenderKind.CUSTOMER, "Hello")
+    assert msg.source == MessageSource.WEB.value
+
+
+async def test_platform_authored_copy_is_never_held():
+    # Bot replies and status auto-posts carry veriprops.ng links and the official
+    # WhatsApp number by design (the payment pledge, §7.1.1). Scanning them would hold
+    # the very messages that keep a customer oriented.
+    svc = _service()
+    pledge = "Payments only ever happen at veriprops.ng — check the address bar before you pay."
+    msg = await svc.send(
+        _conversation(), None, SenderKind.SYSTEM, pledge, kind=MessageKind.SYSTEM_AUTO
+    )
+    assert msg.state == ChatMessageState.DELIVERED.value
+    assert msg.flagged_categories is None
+
+
+async def test_a_human_message_with_the_same_text_is_still_scanned():
+    # The exemption is about who authored the copy, not about the words in it.
+    svc = _service()
+    pledge = "Payments only ever happen at veriprops.ng — check the address bar before you pay."
+    msg = await svc.send(_conversation(), "cust-1", SenderKind.CUSTOMER, pledge)
+    assert msg.state == ChatMessageState.HELD.value

@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from main.app.config.settings import settings
 from main.app.domain.message.models import UpsertMessageDto
 from main.appodus_utils.config.bootstrap import base_di_bootstrap
-from main.appodus_utils.config.settings import Environment
+from main.appodus_utils.config.settings import Environment, WhatsAppProvider
 from main.appodus_utils.db.redis_utils import RedisUtils
 from main.appodus_utils.integrations.exception.exceptions import IntegrationFatalException
 from main.appodus_utils.integrations.messaging.models import Stat, MessageProviderName
@@ -180,6 +180,28 @@ class MessageRouter:
                     MessageProviderName.MAILJET,
                     MessageProviderName.AWS_SES,
                 ],
+            },
+            "whatsapp": {
+                "rules": [
+                    {
+                        # The transport is an explicit contract, not a fallback chain
+                        # (PRD §7, D43): CI and e2e run entirely on the stub, and both
+                        # rules are exclusive so a misconfiguration can never silently
+                        # cross over — production reaching the stub, or a test run
+                        # reaching Meta, are both startup failures instead.
+                        "condition": lambda msg: settings.WHATSAPP_PROVIDER == WhatsAppProvider.STUB,
+                        "providers": [MessageProviderName.WHATSAPP_STUB],
+                        "fallback_order": [],
+                        "exclusive": True,
+                    },
+                    {
+                        "condition": lambda msg: settings.WHATSAPP_PROVIDER == WhatsAppProvider.META,
+                        "providers": [MessageProviderName.WHATSAPP_BUSINESS],
+                        "fallback_order": [],
+                        "exclusive": True,
+                    },
+                ],
+                "default": [MessageProviderName.WHATSAPP_STUB],
             },
         }
 

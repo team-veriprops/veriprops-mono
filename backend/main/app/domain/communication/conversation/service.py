@@ -13,6 +13,7 @@ from kink import inject
 
 from main.app.domain.communication.conversation.models import (
     Conversation,
+    ConversationChannel,
     ConversationDto,
     ConversationType,
     CreateConversationDto,
@@ -69,6 +70,29 @@ class ConversationService:
             )
         )
 
+    async def get_or_create_whatsapp_thread(
+        self, phone: str, user_id: Optional[str] = None, subject: Optional[str] = None
+    ) -> Conversation:
+        """The single thread for a WhatsApp number (§7.3.1, §7.8 — one conversation object).
+
+        It is an ordinary general-support thread that happens to have arrived over
+        WhatsApp, so once the number is linked to an account the same row simply gains an
+        owner — there is no second thread to reconcile.
+        """
+        existing = await self._conversation_repo.get_whatsapp_thread(phone)
+        if existing:
+            return existing
+        return await self._conversation_repo.create_return_model(
+            CreateConversationDto(
+                type=ConversationType.GENERAL_SUPPORT,
+                verification_id=None,
+                subject=subject or "WhatsApp enquiry",
+                created_by=user_id,
+                channel=ConversationChannel.WHATSAPP,
+                external_ref=phone,
+            )
+        )
+
     async def get_owned_participant(self, conversation_id: str, user_id: str) -> Conversation:
         """The thread, asserting the user is a participant — raises 404 otherwise (so a
         non-member cannot probe a thread's existence)."""
@@ -105,7 +129,7 @@ class ConversationService:
     async def list_for_admin(self, admin_id: str) -> List[ConversationDto]:
         """Admin shared inbox (§N.3): every verification thread, unread computed against this
         admin's own read state (a thread the admin has never opened reads as unread)."""
-        threads = await self._conversation_repo.list_verification_threads()
+        threads = await self._conversation_repo.list_admin_inbox_threads()
         result: List[ConversationDto] = []
         for convo in threads:
             participant = await self._participants.get_for(convo.id, admin_id)
@@ -114,7 +138,7 @@ class ConversationService:
         return result
 
     async def unread_count_for_admin(self, admin_id: str) -> int:
-        threads = await self._conversation_repo.list_verification_threads()
+        threads = await self._conversation_repo.list_admin_inbox_threads()
         count = 0
         for convo in threads:
             participant = await self._participants.get_for(convo.id, admin_id)
@@ -129,6 +153,8 @@ class ConversationService:
             type=ConversationType(convo.type),
             verification_id=convo.verification_id,
             subject=convo.subject,
+            channel=ConversationChannel(convo.channel or ConversationChannel.WEB.value),
+            external_ref=convo.external_ref,
             last_message_at=convo.last_message_at,
             closed=convo.closed,
             unread=unread,

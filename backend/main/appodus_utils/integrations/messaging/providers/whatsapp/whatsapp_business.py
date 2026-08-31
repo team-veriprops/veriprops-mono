@@ -22,6 +22,7 @@ from main.appodus_utils.integrations.messaging.models import (
     WhatsappSection,
 )
 from main.appodus_utils.integrations.messaging.providers.models import IMessageProvider
+from main.appodus_utils.integrations.messaging.providers.whatsapp.outbound import assert_no_outbound_voice
 from main.appodus_utils import Utils
 
 logger: Logger = di['logger']
@@ -62,6 +63,7 @@ class WhatsAppBusinessProvider(IMessageProvider):
         }
 
         payload: WhatsappPayload = message.payload
+        assert_no_outbound_voice(payload)
         body = self._build_body(message.to.recipient, payload)
 
         response = await self.client.post(url, json=body, headers=headers)

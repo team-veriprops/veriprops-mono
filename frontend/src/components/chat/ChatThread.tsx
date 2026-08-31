@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Send, ShieldCheck, Info } from "lucide-react";
 import { ChatMessage, MessageKind, SenderKind } from "@/types/chat";
+import ChannelBadge from "./ChannelBadge";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { usePublicConfigQuery } from "@components/website/auth/libs/useAuthQueries";
 import { useMarkReadMutation, useMessagesQuery } from "./libs/useChatQueries";
@@ -150,7 +151,12 @@ function MessageBubble({ message, mine }: { message: ChatMessage; mine: boolean 
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
-        {!mine && <span className="text-[11px] text-gray-400 mb-0.5 px-1">{name}</span>}
+        {!mine && (
+          <span className="text-[11px] text-gray-400 mb-0.5 px-1 flex items-center gap-1.5">
+            {name}
+            <ChannelBadge source={message.source} />
+          </span>
+        )}
         <div
           className={cn(
             "rounded-2xl px-3.5 py-2 text-sm",

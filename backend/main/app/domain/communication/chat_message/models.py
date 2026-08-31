@@ -39,6 +39,17 @@ class ClarificationStatus(str, enum.Enum):
     ANSWERED = "ANSWERED"
 
 
+class MessageSource(str, enum.Enum):
+    """Which surface a message arrived on (PRD §7.3.3 source labeling, §7.8).
+
+    Orthogonal to ``SenderKind``: the same customer can speak from either surface, and
+    the admin console shows which one so a reply goes back the right way.
+    """
+
+    WEB = "WEB"
+    WHATSAPP = "WHATSAPP"
+
+
 class SenderKind(str, enum.Enum):
     """Which side sent a message — used to gate the customer identity projection (§11.3)."""
 
@@ -56,6 +67,10 @@ class ChatMessage(BaseEntity):
     conversation_id = Column(String(36), nullable=False, index=True)
     sender_user_id = Column(String(36), nullable=True)  # null for SYSTEM auto-posts
     sender_kind = Column(String(16), nullable=False, server_default=SenderKind.SYSTEM.value)
+    source = Column(String(10), nullable=False, server_default=MessageSource.WEB.value)
+    # The channel-native id (Meta's wamid) for a message that came from or went to
+    # WhatsApp — the audit trail back to the raw inbound record.
+    external_message_id = Column(String(128), nullable=True)
     body = Column(Text, nullable=False)
     # Admin↔Agent task tag (§11.1) — which role's work this message is about.
     task_id = Column(String(36), nullable=True, index=True)
@@ -85,6 +100,8 @@ class CreateChatMessageDto(Object):
     conversation_id: str
     sender_user_id: Optional[str] = None
     sender_kind: SenderKind
+    source: MessageSource = MessageSource.WEB
+    external_message_id: Optional[str] = None
     body: str
     task_id: Optional[str] = None
     state: ChatMessageState = ChatMessageState.PENDING_SCAN
@@ -141,6 +158,7 @@ class ChatMessageDto(Object):
     task_id: Optional[str] = None
     state: ChatMessageState
     message_kind: MessageKind
+    source: MessageSource = MessageSource.WEB
     clarification_status: Optional[ClarificationStatus] = None
     sender: ChatSenderDto
     held_notice: Optional[str] = None  # sender-facing "being checked" copy while HELD (§11.2)
@@ -157,6 +175,7 @@ class HeldMessageDto(Object):
     verification_id: Optional[str] = None
     sender_user_id: Optional[str] = None
     sender_kind: SenderKind
+    source: MessageSource = MessageSource.WEB
     body: str
     flagged_categories: List[str] = []
     held_at: Optional[datetime] = None

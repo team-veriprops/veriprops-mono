@@ -1,0 +1,130 @@
+"""Inbound WhatsApp ingestion (PRD §7.3.3, §7.8, WA-09/WA-12/WA-13).
+
+Where a Meta delivery becomes an ordinary Veriprops conversation. Two properties matter
+more than anything else here:
+
+* **Exactly once.** Meta redelivers until it gets a 2xx, so ingestion is keyed on the
+  `wamid`: a repeat is recorded as already-seen and produces no second console message.
+  That guarantee is what lets the webhook acknowledge every authenticated delivery.
+* **No special path.** A WhatsApp message joins the *same* conversation pipeline as web
+  chat, which means it runs the same send-time fraud scan and lands in the same admin
+  console (Decision K). The channel changes where a message came from, never how it is
+  policed or who mediates it.
+
+Non-text inbound is journalled and surfaced as a labelled placeholder so nothing is
+silently dropped (§7.6.3); the policy replies that go back out — the evidence rule, the
+upload handoff, the audio acknowledgement — are the bot engine's job and land with it.
+"""
+from __future__ import annotations
+
+from typing import Optional
+
+from kink import inject
+
+from main.app.domain.channel.whatsapp.inbound.models import (
+    CreateWhatsAppInboundMessageDto,
+    WhatsAppInboundMessage,
+)
+from main.app.domain.channel.whatsapp.inbound.repo import WhatsAppInboundMessageRepo
+from main.app.domain.communication.chat_message.models import MessageSource, SenderKind
+from main.app.domain.communication.chat_message.service import ChatMessageService
+from main.app.domain.communication.conversation.service import ConversationService
+from main.appodus_utils import Utils
+from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
+from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
+from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
+    InboundKind,
+    InboundWhatsAppMessage,
+)
+
+# What the console shows for a message whose content is not text. The customer's own
+# words are always shown when there are any (a caption); otherwise the agent sees what
+# kind of thing arrived, never an empty bubble.
+_PLACEHOLDER_BY_KIND = {
+    InboundKind.IMAGE: "[sent an image]",
+    InboundKind.DOCUMENT: "[sent a document]",
+    InboundKind.VIDEO: "[sent a video]",
+    InboundKind.AUDIO: "[sent a voice note]",
+    InboundKind.STICKER: "[sent a sticker]",
+    InboundKind.LOCATION: "[shared a location pin]",
+    InboundKind.CONTACTS: "[shared a contact card]",
+    InboundKind.UNSUPPORTED: "[sent an unsupported message type]",
+}
+
+
+@inject
+@decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
+@decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
+class WhatsAppInboundService:
+    def __init__(
+        self,
+        whatsapp_inbound_message_repo: WhatsAppInboundMessageRepo,
+        conversation_service: ConversationService,
+        chat_message_service: ChatMessageService,
+    ):
+        self._whatsapp_inbound_message_repo = whatsapp_inbound_message_repo
+        self._conversations = conversation_service
+        self._chat = chat_message_service
+
+    async def ingest(self, message: InboundWhatsAppMessage) -> Optional[WhatsAppInboundMessage]:
+        """Record an inbound message and surface it in the admin console.
+
+        Returns the journal row, or ``None`` when this delivery has already been handled.
+        """
+        already_seen = await self._whatsapp_inbound_message_repo.get_by_wamid(message.wamid)
+        if already_seen is not None:
+            # A Meta redelivery, not a new turn in the conversation.
+            return None
+
+        record = await self._whatsapp_inbound_message_repo.create_return_model(
+            CreateWhatsAppInboundMessageDto(
+                wamid=message.wamid,
+                from_phone=message.from_phone,
+                kind=message.kind,
+                text=message.text,
+                interactive_id=message.interactive_id,
+                media_id=message.media_id,
+                media_mime_type=message.media_mime_type,
+                sender_name=message.sender_name,
+                payload=message.raw,
+                received_at=message.received_at,
+            )
+        )
+
+        conversation = await self._conversations.get_or_create_whatsapp_thread(
+            message.from_phone, subject=self._subject_for(message)
+        )
+        chat_message = await self._chat.send(
+            conversation,
+            # The sender is a phone number, not yet an account. Identity is resolved
+            # server-side by the linking flow (§7.4.4) — never claimed by the message.
+            None,
+            SenderKind.CUSTOMER,
+            self._body_for(message),
+            source=MessageSource.WHATSAPP,
+            external_message_id=message.wamid,
+        )
+
+        # Setting these on the attached row rather than re-fetching: the record was
+        # created in this same uncommitted transaction.
+        record.chat_message_id = Utils.uuid_to_hex(chat_message.id)
+        record.processed_at = Utils.datetime_now()
+        self._whatsapp_inbound_message_repo._session.add(record)
+        return record
+
+    @staticmethod
+    def _body_for(message: InboundWhatsAppMessage) -> str:
+        """What the console shows. Never empty — an empty bubble reads as a bug."""
+        if message.text:
+            return message.text
+        if message.kind == InboundKind.TEXT:
+            return _PLACEHOLDER_BY_KIND[InboundKind.UNSUPPORTED]
+        return _PLACEHOLDER_BY_KIND.get(
+            message.kind, _PLACEHOLDER_BY_KIND[InboundKind.UNSUPPORTED]
+        )
+
+    @staticmethod
+    def _subject_for(message: InboundWhatsAppMessage) -> str:
+        """Thread subject: the sender's WhatsApp profile name when Meta supplies one."""
+        return f"WhatsApp · {message.sender_name}" if message.sender_name else "WhatsApp enquiry"
