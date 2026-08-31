@@ -92,6 +92,8 @@ class MessageProviderName(str, Enum):
     FIREBASE_PUSH = "FIREBASE_PUSH"
     TWILIO_SMS = "TWILIO_SMS"
     MAILJET = "MAILJET"
+    RESEND = "RESEND"
+    AWS_SES = "AWS_SES"
     SMTP = "SMTP"       # Dev/test email capture via Mailpit
     MOCK_SMS = "MOCK_SMS"  # Dev/test SMS suppression (no real SMS sent)
 

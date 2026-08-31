@@ -53,6 +53,7 @@ class Settings(AppodusBaseSettings):
         "TERMII_API_SECRET_KEY",
         "MAILJET_API_KEY",
         "MAILJET_API_SECRET",
+        "RESEND_API_KEY",
         "TWILIO_AUTH_TOKEN",
         "ZOHO_CLIENT_SECRET",
         "ZOHO_REFRESH_TOKEN",
@@ -197,6 +198,9 @@ class Settings(AppodusBaseSettings):
     MAILJET_API: Optional[str] = 'https://api.mailjet.com'
     MAILJET_API_KEY: Optional[str] = SECRET_PLACEHOLDER
     MAILJET_API_SECRET: Optional[str] = SECRET_PLACEHOLDER
+    # RESEND
+    RESEND_API: Optional[str] = 'https://api.resend.com'
+    RESEND_API_KEY: Optional[str] = SECRET_PLACEHOLDER
 
 
     # WhatsApp Providers — app id / phone / account ids are non-secret identifiers;

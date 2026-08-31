@@ -189,7 +189,7 @@ Provider-agnostic interfaces in [appodus_utils/integrations/](main/appodus_utils
 | Document signing | Zoho DocSign (webhook in `domain/webhook/`) |
 | File collaboration | Google Drive (service-account auth) |
 | Payments | Flutterwave, Paystack |
-| Email | Mailjet |
+| Email | Resend (primary), Mailjet then AWS SES (fallback) |
 | SMS | Twilio, Termii |
 | WhatsApp | Meta Business API |
 | Push | Firebase, Web Push |

@@ -156,9 +156,30 @@ class MessageRouter:
                         "providers": [MessageProviderName.SMTP],
                         "fallback_order": [],
                         "exclusive": True,
-                    }
+                    },
+                    {
+                        # Production and staging: Resend primary, Mailjet then AWS SES
+                        # as automatic fallbacks.
+                        "condition": lambda msg: settings.ENVIRONMENT in {
+                            Environment.PRODUCTION, Environment.STAGING
+                        },
+                        "providers": [
+                            MessageProviderName.RESEND,
+                            MessageProviderName.MAILJET,
+                            MessageProviderName.AWS_SES,
+                        ],
+                        "fallback_order": [
+                            MessageProviderName.RESEND,
+                            MessageProviderName.MAILJET,
+                            MessageProviderName.AWS_SES,
+                        ],
+                    },
                 ],
-                "default": [MessageProviderName.MAILJET],
+                "default": [
+                    MessageProviderName.RESEND,
+                    MessageProviderName.MAILJET,
+                    MessageProviderName.AWS_SES,
+                ],
             },
         }
 
