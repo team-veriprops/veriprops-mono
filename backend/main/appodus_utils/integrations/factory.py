@@ -52,6 +52,17 @@ class PaymentGatewayFactory:
 
 @inject
 class WebhookHandlerFactory:
+    """Routes an inbound webhook to the handler that owns its platform.
+
+    The table is **rebuilt on a miss** rather than fixed at construction. Handlers are
+    discovered through ``BaseWebhookHandler.__subclasses__()``, so the set depends on
+    which integration packages have been imported at that instant — and the app's entry
+    point imports the webhook router before some of them. A fixed table meant a handler
+    that loaded later was invisible forever, and its endpoint answered "platform not
+    supported" with nothing in the logs to say why (the WhatsApp channel shipped that
+    way). Rebuilding costs one pass over the subclasses, and only on a miss.
+    """
+
     def __init__(self, handlers: List[BaseWebhookHandler]):
         self._handlers = handlers
         self._factory = {}
@@ -61,8 +72,17 @@ class WebhookHandlerFactory:
         for handler in self._handlers:
             self._factory[handler.platform] = handler
 
+    def _rediscover(self) -> None:
+        """Pick up handlers whose packages were imported after this factory was built."""
+        self._handlers = di_bootstrap.register_all_subclasses(BaseWebhookHandler)
+        self._init_factory()
+
     def get_handler(self, platform: IntegratedPlatform) -> IWebhookHandler:
-        return self._factory.get(platform)
+        handler = self._factory.get(platform)
+        if handler is None:
+            self._rediscover()
+            handler = self._factory.get(platform)
+        return handler
 
     def get_handlers(self) -> List[IWebhookHandler]:
         return self._handlers

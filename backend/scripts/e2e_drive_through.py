@@ -9,7 +9,9 @@ cycle, release gate) → release → report + branded PDF → tracking/SSE → p
 dispute/re-check/upgrade → payouts → the finished PREMIUM leg (LAWYER + v2/v3 reports,
 declined re-check, upheld dispute) → referral earn+spend → pricing/analytics/broadcast
 hardening → pool/no-show/starvation + pause/delay/cancel/fail + chargeback → audit pack +
-NDPA erasure (reject + execute) → Mailpit email delivery + password reset → outbound-message
+NDPA erasure (reject + execute) → the WhatsApp channel (signature-verified Meta webhook,
+redelivery dedup, console inbound under the same fraud scan, and a handoff link carried all
+the way to a PAID case) → Mailpit email delivery + password reset → outbound-message
 failure→retry→threshold→expiry pipeline (stops/starts the Mailpit container via the docker
 CLI; warn-skips without docker). Prints PASS/FAIL per step; exits non-zero on any failure.
 
@@ -55,6 +57,7 @@ from e2e import (
     stage_session_refresh,
     stage_sharing,
     stage_tracking,
+    stage_whatsapp,
 )
 from e2e.harness import Ctx, check, client, failures, login
 
@@ -75,6 +78,7 @@ STAGES = [
     ("admin_ops", stage_admin_ops),                  # S22 — pricing, analytics, broadcast hardening
     ("ops_unhappy", stage_ops_unhappy),              # §6/§7.2/§8.5/§6a — pool, lifecycle, chargeback
     ("compliance", stage_compliance),                # S23 — audit pack, erasure reject + execute
+    ("whatsapp", stage_whatsapp),                    # §7 S1–S3 — signed webhook, console inbound, handoff
     ("email", stage_email),                          # Mailpit delivery + password reset (warn-skips)
     ("messaging_retry", stage_messaging_retry),      # failure→retry→threshold→expiry (warn-skips)
 ]

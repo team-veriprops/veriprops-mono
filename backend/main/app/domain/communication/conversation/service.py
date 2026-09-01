@@ -104,15 +104,18 @@ class ConversationService:
             raise ResourceNotFoundException(resource="Conversation")
         return convo
 
-    async def touch(self, conversation_id: str, at: datetime) -> None:
+    async def touch(self, conversation: Conversation, at: datetime) -> None:
         """Advance ``last_message_at`` to a delivered message's time (drives unread state).
 
-        Set on the attached row rather than the update DTO path (datetime columns)."""
-        convo = await self._conversation_repo.get_model(conversation_id)
-        if convo is None:
-            return
-        convo.last_message_at = at
-        self._conversation_repo._session.add(convo)
+        Takes the conversation **object**, not its id, on purpose: a thread opened by the
+        same request that posts its first message (a WhatsApp enquiry from a new number,
+        say) has not been committed yet, and re-fetching it by id returns ``None`` — the
+        bump would be silently skipped and the thread would never surface in a list that
+        orders by ``last_message_at``. Set on the attached row rather than the update DTO
+        path, which json-encodes datetimes.
+        """
+        conversation.last_message_at = at
+        self._conversation_repo._session.add(conversation)
 
     async def list_for_user(self, user_id: str) -> List[ConversationDto]:
         """The user's threads (Chat conversation list, §N.3), each with its unread count."""

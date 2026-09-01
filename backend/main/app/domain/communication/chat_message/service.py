@@ -236,7 +236,7 @@ class ChatMessageService:
         """Bump the thread timestamp and publish MESSAGE_SENT on the §4.8 bus. The
         chat-counter subscriber pushes the Chat counter to the other participants; the rule
         table keeps a routine message out of Notifications (§12.3)."""
-        await self._conversations.touch(conversation.id, message.delivered_at or Utils.datetime_now())
+        await self._conversations.touch(conversation, message.delivered_at or Utils.datetime_now())
         participants = await self._participants._participant_repo.list_for_conversation(conversation.id)
         recipients = tuple(p.user_id for p in participants if p.user_id != sender_user_id)
         await publish_domain_event(DomainEvent(

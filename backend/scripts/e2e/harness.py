@@ -59,6 +59,18 @@ def pin_session_cookies(c: httpx.Client) -> None:
         c.headers["X-CSRF-Token"] = csrf
 
 
+def pin_cookie_header(c: httpx.Client) -> None:
+    """Pin whatever the jar holds onto an explicit Cookie header.
+
+    Same reason as ``pin_session_cookies``: these are ``Secure`` cookies and the
+    drive-through runs over plain http, so httpx will not resend them on its own. Used
+    for the WhatsApp handoff grant, which is how a redeemed landing survives a reload.
+    """
+    jar = {k: v for k, v in c.cookies.items()}
+    if jar:
+        c.headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in jar.items())
+
+
 def login(email: str, password: str) -> httpx.Client:
     c = client()
     c.post("/users/auth/sessions", json={"email": email, "password": password}).raise_for_status()
@@ -144,6 +156,7 @@ class Ctx:
     conv_id: str = ""                           # fresh customer↔admin chat thread
     agents: Dict[str, httpx.Client] = field(default_factory=dict)   # role → client
     task_ids: Dict[str, str] = field(default_factory=dict)          # role → fresh task id
+    wa_wamid: str = ""                          # the Meta message id the WhatsApp stage signed
 
     @property
     def seed_vid_id(self) -> str:

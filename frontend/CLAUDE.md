@@ -58,6 +58,7 @@ Non-env client tuning that would otherwise be duplicated as magic numbers lives 
 - **JSON-LD escaping.** `<JsonLd>` escapes `<`/`>`/`&` before `dangerouslySetInnerHTML` so a string value can't break out of the `<script>` tag. Don't bypass it.
 - **Automation hooks are fail-closed.** `isAutomationEnvironment()` ([lib/automation.ts](src/lib/automation.ts)) is an allowlist (`dev_personal`/`development`/`test`); staging/production/unset all return `false`. Never invert it or add prod-enabling values.
 - **No leaking backend errors to the console.** `FetchHttpClient` must not `console.log` response bodies (they may carry PII/internal detail).
+- **A 403 navigates the whole page to `/forbidden`.** `FetchHttpClient` treats it as "this session lacks permission" and hard-redirects. That is right for the authenticated app and wrong for a public page whose *expected* failure is a dead link, so those endpoints answer **not-found** instead (the WhatsApp handoff landings do; so does a revoked share token). If you add a public capability-link surface, don't return 403 for a spent link — you will replace your own recovery page with the access-denied screen.
 
 ## Session recovery (token refresh UX)
 
@@ -97,6 +98,13 @@ Record-detail views and one-off forms / centered modals use the shared right-sid
 - Build a page's metadata with `buildMetadata({ title, description, path, image?, type?, noindex? })` from [src/lib/seo.ts](src/lib/seo.ts) — export it as `metadata` (static) or `generateMetadata` (dynamic). It sets canonical, Open Graph, Twitter, and robots from one place; don't hand-roll `Metadata`.
 - Add structured data with `<JsonLd data={...} />` ([src/components/seo/JsonLd.tsx](src/components/seo/JsonLd.tsx)) using the builders in `seo.ts` (`organizationJsonLd`, `websiteJsonLd`, `faqJsonLd`, `legalDocumentJsonLd`).
 - Keep [src/app/sitemap.ts](src/app/sitemap.ts) and [src/app/robots.ts](src/app/robots.ts) current: public marketing + legal routes are crawlable; `/portal`, `/admin`, `/agents`, `/account`, `/auth` are disallowed. VID-lookup pages pass `noindex` until `COMPLETED`.
+
+## WhatsApp channel surfaces (PRD §7)
+
+- **The widget** ([components/website/WhatsAppWidget.tsx](src/components/website/WhatsAppWidget.tsx)) mounts once in `ClientWrapperProvider`, so it rides every surface without per-layout wiring. It is `position: fixed` — that is what makes "zero CLS" structural rather than a promise — and it renders **nothing** until `/config/public` supplies the number: the number is the customer's anti-impersonation anchor (§7.1.2), so there is deliberately no hardcoded fallback. It suppresses itself inside the payment flow (§7.4.1).
+- **Page codes** ([lib/whatsapp.ts](src/lib/whatsapp.ts)) are the one thing here the backend does not own — they describe frontend routes it does not model. Explicit entries win; anything else derives from the first path segment, so a new page stays attributable without a table edit (§7.10). Payment-flow suppression matches `PAYMENT_FLOW_PATH_PATTERNS` in [routes.ts](src/lib/routes.ts), kept beside the route builders it mirrors.
+- **Handoff landings** (`/wa/{pay,upload,report}/[token]`, [components/website/handoff/](src/components/website/handoff/)) are public by design — the token is the authorization, so they must stay out of `PROTECTED_PREFIXES`. Redemption happens in an **effect, never during render**: it is single-use, and WhatsApp fetches the URL to build its link preview. The page must acknowledge the case it picked up (silent context loss is a spec violation) and must **never** explain why a link failed — expired, spent, and forged are one state. Only `pay` completes there; `upload`/`report` hand into the authenticated portal (D50).
+- **Source labels.** WhatsApp and the website feed one admin console, so a thread/message carries `channel`/`source` and renders [ChannelBadge](src/components/chat/ChannelBadge.tsx). Web is the unlabelled default, so the badge means "notice this" rather than decorating every row.
 
 ## Backend-served content & public flags
 
@@ -189,6 +197,8 @@ pnpm e2e:report                           # open the HTML report
 - **Deterministic waits only.** `waitReady(page)` (`__app_ready__`) and web-first assertions — never `waitForTimeout`.
 - **A11y is an acceptance criterion, not a separate pass.** Call `expectNoA11yViolations(page)` on every page state a scenario visits; serious/critical axe violations fail the scenario. `A11Y_BASELINE` in [helpers/a11y.ts](e2e/helpers/a11y.ts) is tracked, justified debt to burn down — prefer fixing the violation.
 - **Assert business-observable outcomes** through rendered UI (visible label, state, artifact, email), never "no error thrown".
+- **A11y checks find pre-existing debt when a spec visits a page nothing else covered.** The WhatsApp specs were the first to run axe on `/` and `/sample-report` and surfaced serious contrast failures there — including the sample report's legal footer. Fix the violation rather than scoping the check or growing `A11Y_BASELINE`; decorative *text* is the one case where the fix is to stop it being text (render it as a CSS pseudo-element), because `aria-hidden` alone still leaves it visible and failing.
+- Suites: `auth`, `dev-contracts`, `golden-path`, `whatsapp-widget` (§7.4.1 — reachable everywhere, absent in the payment flow), `wa-handoff` (§7.4.2/§7.5 — a link lands in context, a forwarded copy is dead, the holder can still reload). `wa-handoff` mints links through `POST /dev/whatsapp/handoff-token` with `anonymousApi()`: the landing needs no session, which is the property under test.
 - Artifacts (`e2e/.auth/`, `playwright-report/`, `test-results/`) are gitignored; specs and helpers are committed.
 
 ## Automation determinism (permanent rules — do not remove)

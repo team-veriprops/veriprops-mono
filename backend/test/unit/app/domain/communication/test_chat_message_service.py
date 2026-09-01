@@ -222,3 +222,20 @@ async def test_a_human_message_with_the_same_text_is_still_scanned():
     pledge = "Payments only ever happen at veriprops.ng — check the address bar before you pay."
     msg = await svc.send(_conversation(), "cust-1", SenderKind.CUSTOMER, pledge)
     assert msg.state == ChatMessageState.HELD.value
+
+
+async def test_a_brand_new_thread_is_bumped_by_its_first_message():
+    """A thread opened by the same request that posts into it must still be bumped.
+
+    `touch` used to re-fetch the conversation by id; for a WhatsApp enquiry from an
+    unknown number the thread is created in that same uncommitted transaction, so the
+    fetch returned None, the bump was skipped, and the thread never appeared in the
+    admin inbox (which orders on `last_message_at`).
+    """
+    svc = _service()
+    convo = _conversation()
+    await svc.send(convo, "cust-1", SenderKind.CUSTOMER, "Hello")
+
+    touched, at = svc._conversations.touch.await_args.args
+    assert touched is convo, "touch must receive the live object, not an id to re-fetch"
+    assert at is not None

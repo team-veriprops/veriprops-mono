@@ -34,6 +34,14 @@ self_audit:
        camelCase body binding on the new dev endpoints; 403 on a dead handoff link hard-navigating
        the browser to /forbidden instead of the recovery page; and pre-existing WCAG AA contrast
        failures on the marketing pages, one of them the §3.5 legal disclaimer."
+    - "The drive-through gained a `whatsapp` stage and immediately found two more: the webhook
+       handler was never imported, so the channel's public endpoint answered \"platform not
+       supported\" (the factory now rebuilds its table on a miss, and a guard test pins every
+       platform); and ConversationService.touch re-fetched a thread created in the same
+       uncommitted transaction, so a WhatsApp thread never got its last_message_at bump and never
+       reached the admin inbox."
+    - "Full drive-through: ALL PASSED. Backend 1164 unit tests, ruff + mypy clean; frontend 494
+       unit tests, eslint clean, build ok; UAT 24/24 on chromium-desktop."
     - "S2 defect fixed: the fraud scan ran on SYSTEM/SYSTEM_AUTO messages despite the docstring
        claiming otherwise, so bot copy carrying veriprops.ng / wa.me links would have been held."
     - "S3 defect fixed (found by writing UAT-WAH-03): the landing re-redeemed on every mount, so a
@@ -54,4 +62,4 @@ git:
 next_action: "await `run` — begin S4 (OTP account linking, E1) per docs/execution-plan.md"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-01 S1–S3 complete and live-verified (migrations applied, UAT 24/24 on chromium)"
+last_checkpoint: "2026-09-01 S1–S3 complete, live-verified, drive-through stage added (ALL PASSED)"
