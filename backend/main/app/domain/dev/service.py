@@ -456,11 +456,20 @@ class DevSeedService:
         return {"token": token, "intent": intent, "case_id": case_id}
 
     async def whatsapp_outbox(self, recipient: Optional[str] = None) -> Dict[str, Any]:
-        """What the stub transport recorded, newest last."""
+        """What the stub transport recorded, newest last.
+
+        Serialised `by_alias`, like every other response the app returns. A bare
+        `model_dump()` emits the Python field names, so this endpoint alone answered in
+        snake_case — and an assertion written against the documented camelCase contract
+        read `templateName` as absent and reported a working template send as free text.
+        """
         messages = (
             whatsapp_outbox.for_recipient(recipient) if recipient else whatsapp_outbox.all()
         )
-        return {"count": len(messages), "messages": [m.model_dump() for m in messages]}
+        return {
+            "count": len(messages),
+            "messages": [m.model_dump(by_alias=True) for m in messages],
+        }
 
     async def clear_whatsapp_outbox(self) -> Dict[str, Any]:
         whatsapp_outbox.clear()

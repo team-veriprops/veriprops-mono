@@ -1,6 +1,7 @@
 """Inbound WhatsApp message data access."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional, Type
 
 from kink import inject
@@ -45,6 +46,20 @@ class WhatsAppInboundMessageRepo(
         """
         stmt = select(WhatsAppInboundMessage).where(WhatsAppInboundMessage.wamid == wamid)
         return (await self._session.execute(stmt)).scalars().first()
+
+    async def last_received_at(self, from_phone: str) -> Optional[datetime]:
+        """When this number last messaged us — the basis of Meta's 24-hour window.
+
+        Read from the journal rather than a denormalised column so the window and the
+        message history can never disagree about when the customer last wrote.
+        """
+        stmt = select(func.max(WhatsAppInboundMessage.received_at)).where(
+            and_(
+                WhatsAppInboundMessage.deleted.is_(False),
+                WhatsAppInboundMessage.from_phone == from_phone,
+            )
+        )
+        return (await self._session.execute(stmt)).scalar()
 
     async def count_by_kind(self, kind: InboundKind) -> int:
         """How many messages of *kind* arrived — the §7.10 voice-note volume metric."""

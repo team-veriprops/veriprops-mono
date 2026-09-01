@@ -22,21 +22,27 @@ def run(ctx: Ctx) -> None:
     ops_id = ops["id"]
 
     # 1. No-show sweep (§7.2): the seeded REGISTRY assignment blew its accept deadline.
+    #
+    # The assertions are on the **outcome**, not on this call's reclaim count. The same
+    # sweep also runs on a 15-minute APScheduler interval, so on a long-lived server the
+    # background job can reclaim the seeded task seconds before this request arrives —
+    # leaving a correct system reporting `reclaimed=0`. The property under test is that an
+    # unaccepted assignment gets reclaimed, not that this particular caller did it.
     swept = admin.post("/admin/verifications/sweeps/no-show").json()["data"]
-    check("no-show sweep reclaims the unaccepted assignment (§7.2)", swept["reclaimed"] >= 1,
-          f"reclaimed={swept['reclaimed']}")
+    check("no-show sweep endpoint responds (§7.2)", "reclaimed" in swept, f"body={swept}")
     reg = _ops_task(ctx, "REGISTRY")
-    check("reclaimed task returns to PENDING with a decline strike (§7.2)",
+    check("an unaccepted assignment is reclaimed to PENDING with a decline strike (§7.2)",
           reg["state"] == "PENDING" and reg["declineCount"] >= 1,
-          f"state={reg['state']} declines={reg['declineCount']}")
+          f"state={reg['state']} declines={reg['declineCount']} sweep={swept}")
 
     # 2. Pool-starvation sweep (§7.2): the seeded FIELD pool window expired unclaimed.
+    # Same reasoning — assert the task left the pool, not who pushed it out.
     starved = admin.post("/admin/verifications/sweeps/pool-starvation").json()["data"]
-    check("pool-starvation sweep escalates the expired pool task (§7.2)",
-          starved["escalated"] >= 1, f"escalated={starved['escalated']}")
+    check("pool-starvation sweep endpoint responds (§7.2)", "escalated" in starved,
+          f"body={starved}")
     fld = _ops_task(ctx, "FIELD")
-    check("starved task leaves the pool for targeted assignment (§7.2)",
-          fld["inPool"] is False, f"in_pool={fld['inPool']}")
+    check("an expired pool task leaves the pool for targeted assignment (§7.2)",
+          fld["inPool"] is False, f"in_pool={fld['inPool']} sweep={starved}")
 
     # 3. Decline → back to pool → first-accept-wins re-claim (§7.1).
     surveyor = ctx.agent("SURVEYOR")

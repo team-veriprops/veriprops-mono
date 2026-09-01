@@ -104,7 +104,7 @@ class CustomerReportService:
 
     def _to_pdf_context(self, content: CustomerReportDto) -> ReportPdfContext:
         return ReportPdfContext(
-            brand=settings.REPORT_BRAND_NAME,
+            brand=settings.BRAND_DISPLAY_NAME,
             vid=content.vid,
             tier=content.tier.value if content.tier else None,
             address=content.address,

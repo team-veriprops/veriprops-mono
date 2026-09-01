@@ -9,6 +9,7 @@ from main.app.domain.config.controller import config_router
 from main.app.domain import channel  # noqa: F401
 from main.app.domain.channel.whatsapp.handoff.controller import handoff_router
 from main.app.domain.channel.whatsapp.link.controller import whatsapp_link_router
+from main.app.domain.channel.whatsapp.template.controller import whatsapp_template_router
 from main.app.domain.message.controller import message_router
 from main.app.domain.user.controller import user_router
 from main.app.domain.verification.controller import verification_router
@@ -61,6 +62,7 @@ router = APIRouter()
 router.include_router(config_router)
 router.include_router(handoff_router)
 router.include_router(whatsapp_link_router)
+router.include_router(whatsapp_template_router)
 router.include_router(message_router)
 router.include_router(user_router)
 router.include_router(verification_router)

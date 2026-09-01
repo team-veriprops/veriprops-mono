@@ -1545,3 +1545,66 @@ code would be a second thing to keep in sync for no gain.
 
 ### Revisit
 Not expected.
+
+## Decision: D59 — Meta template registry: definitions in code, status from Meta
+
+### Context
+S4 shipped the `otp_auth` linking OTP, but `render_whatsapp_payload` could only produce
+free text. Meta accepts free text only inside the 24-hour service window, and an OTP to a
+number that has never messaged us is definitionally outside it — so the path worked on the
+stub and would have failed live. Closing it means building §7.7, which also unblocks the
+launch gate: "all §7.7 templates approved" is on the critical path because approval lags,
+and nothing in the app could say which templates existed or what Meta thought of them.
+
+### Options Considered
+1. **Code-owned definitions + a Meta-synced status table + a read-only admin page.**
+2. Code-owned definitions only; approval tracked in the launch-gate checklist.
+3. A full CRUD registry — names, categories and parameters editable by an admin.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation), in three parts:
+
+**D59a — definitions in code, status from Meta.** The Meta template name, category,
+language, ordered parameter list and button kind live in
+`appodus_utils/integrations/messaging/templating/whatsapp_templates.py`. Approval status
+lives in `whatsapp_templates`, populated from `GET /{waba_id}/message_templates` through a
+`WHATSAPP_PROVIDER`-selected directory facade. Closes WA-15/WA-41.
+
+**D59b — template-by-registration, not window-by-send.** A declared §7.7 template always
+sends as a template; free text is reserved for in-conversation bot replies. All seven §7.7
+templates are business-initiated and therefore outside the window by construction, and a
+bot reply is inside it by construction — so the rule is a property of the message, not a
+runtime guess about timing.
+
+**D59c — approval is advisory at send time.** An unapproved template shows in the registry
+and on the §7.11 checklist; it never fails a send. A stale sync must not be able to take
+the channel down.
+
+### Rationale
+The code is what fills a template's parameters, so a DB-editable parameter list nothing
+reads would describe something the app does not do — and the failure would surface as a
+rejected send in production. Status is the opposite: it is genuinely Meta's, changes
+without a deploy, and is what the launch gate asks about. Splitting them on that line
+gives each half an owner that can actually be right.
+
+### Tradeoffs / Constraints
+- The declaration's parameter **order** is the wire contract: Meta's body parameters are
+  positional and unnamed, so a reordered list delivers the right values in the wrong
+  sentence. `_build_template` now orders numerically — string ordering put "10" before
+  "2", harmless at today's counts and silently wrong past nine parameters.
+- `StubTemplateDirectory` reports the declared set as `APPROVED` so the channel stays
+  fully demoable without Meta; the live directory is the same interface behind the other
+  transport, and CI/e2e never reach Meta.
+- An unreadable or absent status becomes `NOT_FOUND`, never `APPROVED`: optimism here
+  would let the §7.11 gate pass on a template that cannot be delivered.
+- All seven templates are declared with bodies although only `otp_auth` has a sender —
+  §7.7 exists to get them submitted early. Their consumer until S6–S9 is the registry page
+  and the Meta submission.
+- **TODO(gap):** the authentication-template *button* component shape (copy-code /
+  one-tap) could not be confirmed from Meta's public send-side documentation, so it is
+  declared per template and `otp_auth` ships body-only. Confirm against the real approved
+  template during the S11 live smoke.
+
+### Revisit
+If ops needs same-day copy edits at volume, promote the bodies to a table plus an editor —
+the registry page already has the shape for it.

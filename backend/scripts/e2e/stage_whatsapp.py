@@ -108,6 +108,9 @@ def run(ctx: Ctx) -> None:
     # ── S4: the number becomes an identity, and stops being one on unlink ─────
     _run_linking_checks(ctx)
 
+    # ── §7.7: the template registry the launch gate reads ────────────────────
+    _run_template_registry_checks(ctx)
+
 
 def _run_webhook_checks(ctx: Ctx) -> None:
     root = ctx.root
@@ -321,6 +324,21 @@ def _run_linking_checks(ctx: Ctx) -> None:
           any(TEST_OTP in (m.get("text") or "") for m in messages),
           f"bodies={[(m.get('text') or '')[:60] for m in messages]}")
 
+    # §7.7/D59b: an OTP to a number that has never messaged us is outside Meta's 24-hour
+    # window, so it must go as the approved **template** — free text would be rejected
+    # live. The stub records both halves, which is the only place this is observable.
+    templated = [m for m in messages if m.get("templateName") == "otp_auth"]
+    check("the linking OTP is sent as the §7.7 `otp_auth` template, not free text",
+          bool(templated), f"templates={[m.get('templateName') for m in messages]}")
+    if templated:
+        variables = templated[-1].get("templateVariables") or {}
+        check("the code is Meta's first positional body parameter",
+              variables.get("1") == TEST_OTP, f"variables={variables}")
+
+    check("the customer-facing brand is the display name, not the lowercase slug",
+          any((m.get("text") or "").startswith("Veriprops") for m in messages),
+          f"bodies={[(m.get('text') or '')[:30] for m in messages]}")
+
     # A number mid-attempt is not a link: nothing may resolve to the account yet.
     pending = customer.get("/channel/whatsapp/link/me").json()["data"]
     check("a pending attempt is not yet a link (§7.4.4)", pending.get("status") == "PENDING",
@@ -364,6 +382,49 @@ def _run_linking_checks(ctx: Ctx) -> None:
     check("an unlinked account can start a fresh link (WA-25)", r.status_code == 200,
           f"http {r.status_code}: {r.text[:200]}")
     customer.delete("/channel/whatsapp/link/me")
+
+
+_PRD_TEMPLATES = {
+    "otp_auth", "payment_confirmed", "verification_started", "inspection_complete",
+    "report_ready", "window_reopen", "delegate_status",
+}
+
+
+def _run_template_registry_checks(ctx: Ctx) -> None:
+    """§7.7 template registry (WA-15/WA-41).
+
+    The §7.11 launch gate turns on "all §7.7 templates approved", so the operational
+    question is whether an admin can actually see that answer. Under the stub the
+    directory reports the declared set as approved, which is what makes the whole channel
+    demoable without Meta — the live directory is the same interface behind a different
+    transport.
+    """
+    admin, customer = ctx.admin, ctx.customer
+
+    registry = admin.get("/admin/config/whatsapp-templates").json()["data"]
+    check("the admin registry lists all seven §7.7 templates (WA-15)",
+          {t["name"] for t in registry} == _PRD_TEMPLATES,
+          f"names={sorted(t['name'] for t in registry)}")
+    otp = next((t for t in registry if t["name"] == "otp_auth"), {})
+    check("each row carries its category and ordered parameters",
+          otp.get("category") == "AUTHENTICATION" and otp.get("parameters") == ["OTP", "VALIDITY"],
+          f"otp={otp}")
+
+    result = admin.post("/admin/config/whatsapp-templates/sync").json()["data"]
+    check("syncing reads every declared template's status back (WA-41)",
+          result.get("synced") == len(_PRD_TEMPLATES), f"result={result}")
+
+    synced = admin.get("/admin/config/whatsapp-templates").json()["data"]
+    check("the synced status is persisted for the launch-gate view",
+          all(t["status"] == "APPROVED" for t in synced),
+          f"statuses={sorted({t['status'] for t in synced})}")
+    check("a synced row records when it was last checked",
+          all(t.get("lastSyncedAt") for t in synced))
+
+    # The registry is operational configuration, not customer-visible state.
+    r = customer.get("/admin/config/whatsapp-templates")
+    check("a customer cannot read the template registry (CONFIGURE_SYSTEM)",
+          r.status_code == 403, f"http {r.status_code}")
 
 
 def _create_payable_case(ctx: Ctx) -> str:

@@ -15,9 +15,6 @@ class AvailableTemplate(str, Enum):
     NEW_AGENT_WELCOME = "new_agent_welcome"  # Email, WhatsApp, Mobile push
     EMAIL_VERIFICATION = "email_verification"  # Email
     PHONE_VERIFICATION = "phone_verification"  # SMS, WhatsApp
-    # PRD §7.7 — the Meta authentication template that carries the account-linking OTP.
-    # The slug is the Meta template name, so the registry and the wire agree.
-    WHATSAPP_OTP_AUTH = "otp_auth"  # WhatsApp
     NAME_UPDATE_SUCCESS= "name_update_success" # Email
     LOGIN_DIFF_DEVICE_SECURITY_ALERT = "login_diff_device_security_alert"  # SMS, Email, WhatsApp, Mobile push
     PASSWORD_UPDATE_SUCCESS = "password_update_success"  # Email
@@ -110,3 +107,16 @@ class AvailableTemplate(str, Enum):
 
     # ============ ADMIN BROADCAST ============
     ADMIN_BROADCAST = "admin_broadcast"  # Email, Push
+
+    # ============ WHATSAPP CHANNEL (PRD §7.7) ============
+    # The seven Meta templates. Each slug **is** the Meta template name, so the
+    # declaration in providers/whatsapp/templates.py, the Jinja body, and the wire cannot
+    # drift apart. Category, language and the ordered parameter list live in that
+    # declaration; approval status is synced from Meta into `whatsapp_templates`.
+    WHATSAPP_OTP_AUTH = "otp_auth"                              # WhatsApp — E1 linking
+    WHATSAPP_PAYMENT_CONFIRMED = "payment_confirmed"            # WhatsApp — milestone
+    WHATSAPP_VERIFICATION_STARTED = "verification_started"      # WhatsApp — milestone
+    WHATSAPP_INSPECTION_COMPLETE = "inspection_complete"        # WhatsApp — milestone
+    WHATSAPP_REPORT_READY = "report_ready"                      # WhatsApp — report delivery
+    WHATSAPP_WINDOW_REOPEN = "window_reopen"                    # WhatsApp — 24h window reply
+    WHATSAPP_DELEGATE_STATUS = "delegate_status"                # WhatsApp — delegate milestone

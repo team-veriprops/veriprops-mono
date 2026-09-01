@@ -22,37 +22,43 @@ self_audit:
   started: true
   completed: true
   findings:
-    - "S4 gates green: backend 1227 unit tests, ruff + mypy clean; frontend 509 unit tests,
+    - "S4.1 gates green: backend 1283 unit tests, ruff + mypy clean; frontend 515 unit tests,
        eslint clean, next build ok. Full drive-through (all 18 stages): ALL PASSED."
-    - "Migration 0004 verified three ways against live Postgres — additive on an
-       already-migrated schema, full chain on a fresh database, and a downgrade/re-upgrade
-       round trip; the in-place result is column-for-column identical to the fresh chain.
-       Both 1:1 constraints were shown to reject a duplicate, and two released (NULL)
-       numbers were shown to coexist — the property that lets a number move accounts."
-    - "The live run found a defect stack no unit test could: the entire WhatsApp *outbound*
-       path had never executed. Four independent faults — `render_whatsapp_payload` passed
-       `template_name=` to a parameter called `template`; its result was never awaited; it
-       JSON-parsed plain-text templates; and `MessageRequestRecipient.phone_digits` did not
-       exist. `_build_requests_for_channels` swallows per-channel build errors, so every
-       WhatsApp send in the system (including the pre-existing `new_user_welcome`) had been
-       failing as a logged 'partial failure' nobody read. All four fixed, with a test that
-       renders every committed WhatsApp template and builds a real request."
-    - "Also fixed: `whatsapp/new_user_welcome.jinja2` carried an email `Subject:` header as
-       its first line — invisible while the path was dead, a visible bug the moment it ran."
-    - "`PhoneInputWithCountry` was bound to one form's shape (`UseFormReturn<VerifyFormValues>`),
-       which had already forced a `form as never` cast at one of its two call sites. Made it
-       value-controlled and updated all three consumers; the cast is gone."
-    - "e2e determinism: the whatsapp stage now uses a per-run number. OTP resend counters live
-       in Redis/KV keyed on the *number*, which `/dev/reset` does not clear, so a fixed number
-       failed the second run inside the lockout window on an unrelated rate limit."
-    - "Two ops_unhappy failures on one full run were a pre-existing race, not a regression: the
-       dev server's own 15-minute APScheduler no-show sweep fired 28 seconds before the stage's
-       manual sweep and consumed the seeded task. Restarting the backend (fresh tick) → ALL PASSED."
-    - "Deferred by design: Meta-approved template sends (`template_name` + positional
-       `template_variables`) are S8's, with the §7.7 registry. Until then WhatsApp goes out as
-       text — accepted by the Cloud API only inside the 24-hour window. TODO(gap) marked."
-    - "Deferred by design: the bot-side half of WA-24 (resuming the conversation after a link
-       completes) is S5's, and short-code resolution (WA-22/WA-21) is S6's."
+    - "Migration 0005 verified three ways against live Postgres — additive on an already-migrated
+       schema, full chain on a fresh database, and a downgrade/re-upgrade round trip; the in-place
+       result is column-for-column identical to the fresh chain."
+    - "S4's deferred gap is closed (D59). All seven §7.7 templates are declared with bodies and
+       ordered parameters; `otp_auth` now sends as a real Meta template rather than free text,
+       which is what the Cloud API requires outside the 24-hour window — the exact case a linking
+       OTP to a cold number always is."
+    - "Registry split on the line that has an owner: definitions in code (the code fills the
+       parameters), approval status synced from Meta through a WHATSAPP_PROVIDER-selected
+       directory facade. Admin page at /admin/config/whatsapp-templates, read-only by design."
+    - "Fixed: `_build_template` ordered Meta's positional body parameters as strings, so \"10\"
+       preceded \"2\" — harmless at today's counts, silently wrong past nine parameters."
+    - "Fixed: `MessageContext.BRAND` was fed `settings.BRAND`, a lowercase *slug* documented for
+       log lines. Every customer message read 'veriprops: …', including the linking OTP — the one
+       message §7.1.2's anti-impersonation posture depends on. Renamed REPORT_BRAND_NAME to
+       BRAND_DISPLAY_NAME and injected it; one display name now serves reports and every template."
+    - "Fixed: the /dev/whatsapp/outbox endpoint serialised with a bare model_dump(), so it alone
+       answered in snake_case against the repo's camelCase wire contract — an assertion written to
+       the contract read a working template send as free text. Found by that assertion failing."
+    - "Fixed: four orphan template files (email/sms/whatsapp `otp.jinja2`, push
+       `new_house_listing.jinja2`) had no AvailableTemplate entry and a stale variable vocabulary.
+       Deleted, with a guard test that every template file maps to an enum entry — the reverse of
+       the existing rule, so dead copy cannot accumulate again."
+    - "Fixed: the ops_unhappy sweep checks asserted this caller's reclaim count, which the dev
+       server's own 15-minute APScheduler sweep can consume seconds earlier. They now assert the
+       outcome (task back to PENDING with a strike, task out of the pool) — the property under
+       test is that an unaccepted assignment gets reclaimed, not who reclaimed it."
+    - "Deferred by design: the authentication-template *button* component shape (copy-code /
+       one-tap) is not confirmable from Meta's public send-side docs, so it is declared per
+       template and `otp_auth` ships body-only. TODO(gap) to confirm at the S11 live smoke."
+    - "Deferred by design: six of the seven templates have no sender yet — milestones and report
+       delivery at S8, `window_reopen` at S7 (WhatsAppWindowService already landed),
+       `delegate_status` at S9. Declaring them early is the point of §7.7."
+    - "Not fixable here: the D46 SMS fallback stays a TODO(gap) — blocked on the unmade upstream
+       §B provider decision."
 
 clarification_needed: []
 
@@ -60,7 +66,7 @@ git:
   branch: dev
   dirty: false
 
-next_action: "await review of S4, then `run` — begin S5 (bot engine core) per docs/execution-plan.md"
+next_action: "await review of S4.1, then `run` — begin S5 (bot engine core) per docs/execution-plan.md"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-01 S4 complete, live-verified, full drive-through ALL PASSED"
+last_checkpoint: "2026-09-01 S4.1 complete (§7.7 registry + S4 follow-up defects), full drive-through ALL PASSED"

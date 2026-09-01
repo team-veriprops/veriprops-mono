@@ -29,6 +29,10 @@ from main.appodus_utils.integrations.messaging.templating.model_template_service
     ModelTemplateService,
 )
 from main.appodus_utils.integrations.messaging.templating.models import AvailableTemplate
+from main.appodus_utils.integrations.messaging.templating.whatsapp_templates import (
+    declared_templates,
+    meta_template_for,
+)
 
 # Every context key any WhatsApp template uses. Jinja renders an unknown variable as an
 # empty string rather than failing, so a superset is safe and keeps this list from
@@ -40,6 +44,9 @@ _CONTEXT = {
     "VALIDITY": "10 minutes",
     "BRAND_SUPPORT_EMAIL": "support@veriprops.ng",
     "BRAND_SUPPORT_PHONE": "+2349167624347",
+    "SHARE_VID": "VP-2026-ABC123",
+    "LINK": "https://veriprops.ng/portal/verifications/abc/report",
+    "VERIFICATION_NEW_STATUS": "Report Ready",
 }
 
 # backend/test/unit/appodus_utils/integrations/messaging/<this file> -> backend/ is parents[5].
@@ -156,3 +163,131 @@ class TestWhatsAppRequestBuilder:
                 template=AvailableTemplate.WHATSAPP_OTP_AUTH,
                 context=_CONTEXT,
             )
+
+
+class TestMetaTemplatePayloads:
+    """§7.7 template sends (D59a/D59b).
+
+    Meta will not deliver a business-initiated message as free text, so every declared
+    template has to produce a `template_name` plus **positionally ordered** variables. The
+    ordering is the part worth guarding: Meta's body parameters carry no names, so a
+    reordered list does not fail — it delivers the customer the right values in the wrong
+    sentence.
+    """
+
+    @pytest.mark.parametrize(
+        "declaration", declared_templates(), ids=lambda d: d.name
+    )
+    async def test_every_declared_template_sends_as_a_template(self, declaration):
+        payload = await di[ModelTemplateService].render_whatsapp_payload(
+            declaration.template, _CONTEXT
+        )
+        assert payload.template_name == declaration.name
+        # `validate_content` refuses a template without variables, so an empty map here
+        # would be a send that fails at the boundary rather than a missing placeholder.
+        assert payload.template_variables
+
+    @pytest.mark.parametrize(
+        "declaration", declared_templates(), ids=lambda d: d.name
+    )
+    async def test_variables_are_numbered_from_one_in_declared_order(self, declaration):
+        payload = await di[ModelTemplateService].render_whatsapp_payload(
+            declaration.template, _CONTEXT
+        )
+        expected_positions = [str(i) for i in range(1, len(declaration.parameters) + 1)]
+        assert list(payload.template_variables.keys()) == expected_positions
+        assert [
+            payload.template_variables[position] for position in expected_positions
+        ] == [_CONTEXT.get(p.value, "") for p in declaration.parameters]
+
+    @pytest.mark.parametrize(
+        "declaration", declared_templates(), ids=lambda d: d.name
+    )
+    async def test_the_readable_body_travels_alongside_the_template(self, declaration):
+        # The live provider prefers the template; the text is what the console, the stub
+        # outbox and the drive-through read, so it must never be dropped.
+        payload = await di[ModelTemplateService].render_whatsapp_payload(
+            declaration.template, _CONTEXT
+        )
+        assert payload.text
+
+    async def test_the_otp_code_is_the_first_parameter(self):
+        # Position 1 is what the approved authentication template renders as the code.
+        payload = await di[ModelTemplateService].render_whatsapp_payload(
+            AvailableTemplate.WHATSAPP_OTP_AUTH, _CONTEXT
+        )
+        assert payload.template_variables["1"] == "654123"
+
+    async def test_in_conversation_copy_still_goes_out_as_plain_text(self):
+        # A bot reply answers a message that just arrived, so it is inside Meta's service
+        # window by construction and needs no approved template.
+        payload = await di[ModelTemplateService].render_whatsapp_payload(
+            AvailableTemplate.NEW_USER_WELCOME, _CONTEXT
+        )
+        assert payload.template_name is None
+        assert payload.text
+
+    def test_the_seven_prd_templates_are_declared(self):
+        assert {d.name for d in declared_templates()} == {
+            "otp_auth", "payment_confirmed", "verification_started",
+            "inspection_complete", "report_ready", "window_reopen", "delegate_status",
+        }
+
+    def test_a_missing_context_value_degrades_one_placeholder_not_the_message(self):
+        declaration = meta_template_for(AvailableTemplate.WHATSAPP_OTP_AUTH)
+        variables = declaration.positional_variables({})
+        assert variables == {"1": "", "2": ""}
+
+
+class TestPositionalOrdering:
+    """The wire ordering, at the provider boundary."""
+
+    def test_positions_past_nine_are_ordered_numerically(self):
+        # String ordering puts "10" before "2". Harmless at today's parameter counts and
+        # silently wrong the day a template grows past nine.
+        from main.appodus_utils.integrations.messaging.models import WhatsappPayload
+        from main.appodus_utils.integrations.messaging.providers.whatsapp.whatsapp_business import (
+            WhatsAppBusinessProvider,
+        )
+
+        payload = WhatsappPayload(
+            template_name="wide",
+            template_variables={str(i): f"v{i}" for i in range(1, 13)},
+        )
+        body = WhatsAppBusinessProvider._build_template(payload)
+        rendered = [p["text"] for p in body["template"]["components"][0]["parameters"]]
+        assert rendered == [f"v{i}" for i in range(1, 13)]
+
+
+class TestBrandDisplayName:
+    """The brand a customer reads is the display name, never the slug."""
+
+    async def test_the_rendered_body_carries_the_display_name(self):
+        from main.app.config.settings import settings
+        from main.app.domain.message.message_payload_builder import MessageRecipientBuilder
+
+        context = await MessageRecipientBuilder.build_global_context.__wrapped__(
+            object.__new__(MessageRecipientBuilder), {}
+        )
+        from main.appodus_utils.integrations.messaging.models import MessageContext
+
+        assert context[MessageContext.BRAND] == settings.BRAND_DISPLAY_NAME
+        # The slug is lowercase and stays out of customer copy.
+        assert context[MessageContext.BRAND] != settings.BRAND
+
+
+def test_every_template_file_maps_to_a_registered_template():
+    """The reverse of the "every entry has a file" rule.
+
+    Three `otp.jinja2` files sat in the tree with no enum entry and a stale variable
+    vocabulary — unreachable, and indistinguishable from the real OTP templates to anyone
+    reading the directory. Dead copy is worse than missing copy: it gets edited.
+    """
+    templates_root = _TEMPLATE_DIR.parent
+    slugs = {t.value for t in AvailableTemplate}
+    orphans = {
+        f"{channel.name}/{path.name}"
+        for channel in templates_root.iterdir() if channel.is_dir()
+        for path in channel.glob("*.jinja2") if path.stem not in slugs
+    }
+    assert not orphans, f"template files with no AvailableTemplate entry: {sorted(orphans)}"

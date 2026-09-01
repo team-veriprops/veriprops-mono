@@ -61,6 +61,8 @@ export const ROUTES = {
     CONFIG: '/admin/config',
     TRUST_SCORE_WEIGHTS: '/admin/config/trust-score-weights',
     SYSTEM_CONFIG: '/admin/config/system',
+    // PRD §7.7 — Meta template approval status, read-only (definitions are code-owned).
+    WHATSAPP_TEMPLATES: '/admin/config/whatsapp-templates',
     // TODO(gap): routes declared, pages not built (dispute detail, fraud flags) —
     // PRD "Known Gaps & Roadmap".
     DISPUTE_DETAIL: (id: string) => `/admin/disputes/${id}`,

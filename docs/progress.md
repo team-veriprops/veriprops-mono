@@ -1,27 +1,28 @@
 # Progress Tracker — WhatsApp Channel (cycle 2)
 
-status: in progress — S1–S4 complete
+status: in progress — S1–S4 complete (+ S4.1 template registry)
 
 ## Completed Slices
 - S1 widget + attribution (dc7adb4)
 - S2 channel foundation (webhook + facade + console inbound)
 - S3 handoff tokens + /wa/* landings
 - S4 OTP account linking (E1) + number lifecycle
+- S4.1 §7.7 Meta template registry + S4 follow-up defects
 
 ## Current Slice
-- none — S5 is next (awaiting review of S4)
+- none — S5 is next (awaiting review of S4.1)
 
 ## Pending Slices
 - S5 bot engine core
 - S6 intake flow + payment handoff + continuation
 - S7 console adapter completion
-- S8 templates + consent + milestones + report delivery
+- S8 consent + milestones + report delivery (template registry landed in S4.1)
 - S9 delegates (O2)
 - S10 channel analytics
 - S11 live hardening & launch-gate closeout
 
 ## Runtime State
-- idle (checkpointed after S4)
+- idle (checkpointed after S4.1)
 
 ## Pending Recovery
 - none
@@ -33,11 +34,14 @@ status: in progress — S1–S4 complete
 - none (gate decisions D42–D48; run-time decisions D49–D58)
 
 ## Carried into later slices
-- Meta-approved **template** sends are still not wired: `WhatsappPayload.validate_content`
-  rejects a template without its variables, and the per-template variable mapping is the
-  §7.7 registry's job. Until S8 lands it, WhatsApp goes out as text — which the Cloud API
-  accepts only inside the 24-hour service window. `TODO(gap):` in
-  `model_template_service.render_whatsapp_payload`.
+- Meta **template** sends are wired (D59): all seven §7.7 templates are declared with
+  bodies, `otp_auth` sends as a template, and the admin registry syncs approval status.
+  The one open piece is the authentication-template **button** component shape — Meta's
+  public send-side docs do not specify it, so `otp_auth` ships body-only with a
+  `TODO(gap)` to confirm during the S11 live smoke.
+- Six of the seven templates have no sender yet: milestones + report delivery land in S8,
+  `window_reopen` in S7 (`WhatsAppWindowService` is already in place), `delegate_status`
+  in S9.
 - Migrations 0002/0003 are applied and verified against live Postgres; the UAT suite is
   green on chromium-desktop (24/24). The remaining five engines have not been run.
 - S7 owns the outbound half of the console: agent replies, Meta's 24-hour window, and the
@@ -46,7 +50,9 @@ status: in progress — S1–S4 complete
 
 ## Launch-gate checklist (§7.11 — external/business items, mirrored from PRD)
 - [ ] Meta Business verification approved; green tick granted
-- [ ] All §7.7 templates approved
+- [~] All §7.7 templates approved — all 7 declared with bodies and visible in the admin
+      registry (`/admin/config/whatsapp-templates`) with Meta-synced status; submission
+      and approval remain external
 - [ ] Number custody confirmed and documented (+2349167624347)
 - [ ] Fraud-scan pipeline verified against WhatsApp-sourced messages (S2 test evidence)
 - [~] Token service pen-checked (S3/S11) — automated coverage landed + checklist drafted
@@ -62,7 +68,7 @@ status: in progress — S1–S4 complete
   live-path external assets (D43 fallback: stub keeps everything demoable).
 
 ## Last Commit
-- S4: OTP cross-channel account linking
+- S4.1: Meta template registry (§7.7) + S4 follow-up defects
 
 ## Completion %
-- ~36 (4 of 11 slices)
+- ~38 (4 of 11 slices, plus the §7.7 registry from S8)

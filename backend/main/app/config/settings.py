@@ -166,8 +166,12 @@ class Settings(AppodusBaseSettings):
     REPORT_PDF_STUB_MODE: bool = False
     # Public base URL the report PDF's QR deep-links to (public lookup, §10.1/§13).
     PUBLIC_APP_BASE_URL: str = "https://veriprops.ng"
-    # Brand name printed on the report cover + PDF (§10.1).
-    REPORT_BRAND_NAME: str = "Veriprops"
+    # The customer-facing brand name, as written. Distinct from `BRAND`, which is a
+    # lowercase *slug* used in log lines and internal identifiers — that slug leaking into
+    # a message read "veriprops: 654123 is your code", on precisely the message §7.1.2's
+    # anti-impersonation posture depends on. One display name, every customer surface:
+    # the report cover + PDF (§10.1) and every message template's brand variable.
+    BRAND_DISPLAY_NAME: str = "Veriprops"
     # §B go-live gate (D18): the Premium Legal Opinion report section is built but its
     # content stays hidden until NBA counsel sign-off + lawyer-role PI cover. Never
     # default-on. Surfaced to the frontend via GET /config/public.
