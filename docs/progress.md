@@ -1,6 +1,6 @@
 # Progress Tracker — WhatsApp Channel (cycle 2)
 
-status: in progress — S1–S4 complete (+ S4.1 template registry)
+status: in progress — S1–S5 complete (+ S4.1 template registry)
 
 ## Completed Slices
 - S1 widget + attribution (dc7adb4)
@@ -8,12 +8,12 @@ status: in progress — S1–S4 complete (+ S4.1 template registry)
 - S3 handoff tokens + /wa/* landings
 - S4 OTP account linking (E1) + number lifecycle
 - S4.1 §7.7 Meta template registry + S4 follow-up defects
+- S5 bot engine core (intent facade, guardrails, status flow, admin console mode + hand-back)
 
 ## Current Slice
-- none — S5 is next (awaiting review of S4.1)
+- none — S6 is next
 
 ## Pending Slices
-- S5 bot engine core
 - S6 intake flow + payment handoff + continuation
 - S7 console adapter completion
 - S8 consent + milestones + report delivery (template registry landed in S4.1)
@@ -22,7 +22,7 @@ status: in progress — S1–S4 complete (+ S4.1 template registry)
 - S11 live hardening & launch-gate closeout
 
 ## Runtime State
-- idle (checkpointed after S4.1)
+- idle (checkpointed after S5)
 
 ## Pending Recovery
 - none
@@ -46,9 +46,17 @@ status: in progress — S1–S4 complete (+ S4.1 template registry)
   in S9.
 - Migrations 0002/0003 are applied and verified against live Postgres; the UAT suite is
   green on chromium-desktop (24/24). The remaining five engines have not been run.
-- S7 owns the outbound half of the console: agent replies, Meta's 24-hour window, and the
-  §7.6.3 policy replies for non-text inbound. S2 journals and labels non-text; it does not
-  answer it.
+- S7 owns the rest of the outbound console: Meta's 24-hour window on an agent's late reply
+  (`window_reopen`), and the richer §7.6.3 media handling. S5 landed the agent-reply path
+  (`/admin/messages` → WhatsApp tab, posting through the generic conversation endpoint) and
+  the bot's own §7.6.3 answer — a voice note, pin or contact card is acknowledged and handed
+  to a person rather than journalled in silence.
+- S5 deferred two things it names honestly rather than fakes: `START_VERIFICATION` escalates
+  to a human (`CAPABILITY_NOT_OFFERED`) until S6 builds the intake flow, and `LINK_ACCOUNT`
+  points at S4's linking rather than driving it. Both are `TODO(gap):`-free because they are
+  scheduled slices, not gaps.
+- The §7.3.2 channel-state projection (`bot/projection.py`) is built and unit-tested over
+  every `VerificationStatus`, but nothing reads it yet — S10's analytics is its consumer.
 
 ## Launch-gate checklist (§7.11 — external/business items, mirrored from PRD)
 - [ ] Meta Business verification approved; green tick granted
@@ -59,7 +67,9 @@ status: in progress — S1–S4 complete (+ S4.1 template registry)
 - [ ] Fraud-scan pipeline verified against WhatsApp-sourced messages (S2 test evidence)
 - [~] Token service pen-checked (S3/S11) — automated coverage landed + checklist drafted
       (docs/handoff-token-pen-check.md); the human/proxy items remain
-- [ ] Failure fallback tested (S5/S11 drill)
+- [~] Failure fallback tested — §7.6.5 is implemented and unit-tested (any bot exception
+      becomes a warm handover + a `BOT_PIPELINE_FAILED` admin notification); the live drill
+      against a real classifier outage belongs to S11
 - [ ] ToS + privacy policy updated per §7.8 (counsel: chat-log retention duration)
 - [ ] Console rota covering G1 hours
 - [ ] Concierge → Cloud API cutover scheduled (number binding is one-way)

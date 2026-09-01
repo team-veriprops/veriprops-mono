@@ -111,6 +111,9 @@ def run(ctx: Ctx) -> None:
     # ── §7.7: the template registry the launch gate reads ────────────────────
     _run_template_registry_checks(ctx)
 
+    # ── S5: the bot actually answers, and refuses what it must ───────────────
+    _run_bot_checks(ctx)
+
 
 def _run_webhook_checks(ctx: Ctx) -> None:
     root = ctx.root
@@ -431,6 +434,118 @@ def _run_template_registry_checks(ctx: Ctx) -> None:
     r = customer.get("/admin/config/whatsapp-templates")
     check("a customer cannot read the template registry (CONFIGURE_SYSTEM)",
           r.status_code == 403, f"http {r.status_code}")
+
+
+def _run_bot_checks(ctx: Ctx) -> None:
+    """The bot engine over the wire (§7.6, WA-11/WA-39).
+
+    Unit tests already pin the gauntlet's branching. What only a live stack proves is that
+    a message posted at the webhook comes back out of the **stub transport** as a real
+    outbound reply — the whole path through ingestion, the session row, the classifier
+    facade, the conversation mirror and the provider. Three of the four faults that killed
+    the outbound path before were invisible to unit tests for exactly that reason.
+
+    A fresh number, so the welcome is genuinely a first contact: §7.6.1 short-circuits
+    every other rule, and asserting an answer on a number this stage already used would
+    silently test nothing.
+    """
+    root, admin = ctx.root, ctx.admin
+    phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+
+    def say(text: str, kind: str = "TEXT") -> list[dict]:
+        """Deliver a message and return whatever the stub sent back to this number."""
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        payload = {"fromPhone": phone, "text": text} if kind == "TEXT" else {
+            "fromPhone": phone, "kind": kind
+        }
+        root.post("/dev/whatsapp/inbound", json=payload).raise_for_status()
+        messages = root.get("/dev/whatsapp/outbox").json()["data"].get("messages", [])
+        # The stub records the Meta `wa_id` form (digits, no '+') under `to`.
+        return [m for m in messages if phone[-10:] in str(m.get("to", ""))]
+
+    # §7.6.1 — first contact opens with the disclosure and the payment pledge.
+    replies = say("Hi")
+    check("the bot answers a first message over the real transport (§7.6.1)",
+          len(replies) == 1, f"outbound={len(replies)}")
+    if not replies:
+        warn("bot drive-through stopped", "no outbound reply to assert against")
+        return
+    welcome = str(replies[0].get("text", ""))
+    check("the welcome discloses that it is a bot (§7.1.4)",
+          "automated assistant" in welcome, welcome[:120])
+    check("the welcome carries the payment pledge (§7.1.1)",
+          "veriprops.ng" in welcome and "address bar" in welcome, welcome[:160])
+
+    # The menu it just offered has to work — a number is the one input it invited.
+    replies = say("5")
+    pricing = str(replies[0].get("text", "")) if replies else ""
+    check("a menu number is answered deterministically (§7.6.1)",
+          "₦" in pricing, pricing[:120])
+    check("pricing is quoted from the live admin config, not from copy (D54)",
+          "per property" in pricing, pricing[:160])
+
+    # §7.6.4 — the guardrail that matters most, over the wire rather than in a unit test.
+    replies = say("Is this land genuine? Should I buy it?")
+    verdict = str(replies[0].get("text", "")) if replies else ""
+    check("the bot refuses to judge a property and routes to a person (§7.6.4)",
+          "our verifiers" in verdict or "team" in verdict, verdict[:160])
+    check("the refusal renders no verdict of its own (§7.1.3)",
+          not any(word in verdict.lower() for word in ("looks genuine", "seems fine", "is safe")),
+          verdict[:160])
+
+    # §7.4.3 — an unlinked number is never read case data.
+    replies = say("What is the status of my verification?")
+    status = str(replies[0].get("text", "")) if replies else ""
+    check("an unlinked number is refused case data and offered linking (§7.4.3)",
+          "isn't linked" in status, status[:160])
+
+    # §7.6.3 — a voice note is acknowledged and handed over, never ignored.
+    replies = say("", kind="AUDIO")
+    audio = str(replies[0].get("text", "")) if replies else ""
+    check("a voice note is acknowledged and handed to a person (§7.6.3)",
+          "can't read" in audio or "passing it" in audio, audio[:160])
+
+    # D57 — the console is what silences the bot, and the only way back.
+    session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
+    check("the console can read a thread's bot mode (D57)",
+          session.get("mode") == "BOT", f"mode={session.get('mode')}")
+
+    threads = admin.get("/chat/conversations").json()["data"]
+    thread = next((t for t in threads if str(t.get("externalRef", "")).endswith(phone[-10:])), None)
+    check("the bot's own replies are in the console thread (Decision K)", thread is not None)
+    if thread:
+        msgs = admin.get(f"/chat/conversations/{thread['id']}/messages").json()["data"]["items"]
+        check("the console shows what the bot said, as platform copy",
+              any(m.get("sender", {}).get("kind") == "SYSTEM" for m in msgs),
+              f"kinds={[m.get('sender', {}).get('kind') for m in msgs][:6]}")
+
+        admin.post(f"/chat/conversations/{thread['id']}/messages",
+                   json={"body": "Hi, I'll take this one."}).raise_for_status()
+        session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
+        check("an agent's reply takes the thread off the bot (D57)",
+              session.get("mode") == "HUMAN", f"mode={session.get('mode')}")
+
+        # With a human on the thread the bot must stay silent — the rule's whole point.
+        replies = say("and how much was it again?")
+        check("the bot stays silent while a human owns the thread (D57)",
+              len(replies) == 0, f"outbound={len(replies)}")
+
+        admin.post(f"/admin/whatsapp/bot/sessions/{phone}/hand-back").raise_for_status()
+        session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
+        check("hand-back returns the thread to the bot (D57)",
+              session.get("mode") == "BOT", f"mode={session.get('mode')}")
+        replies = say("how much?")
+        check("the bot answers again once it is handed back",
+              len(replies) == 1, f"outbound={len(replies)}")
+
+    readiness = admin.get("/admin/whatsapp/bot/readiness").json()["data"]
+    check("the launch gate can read the channel's configuration (§7.11)",
+          readiness.get("whatsappProvider") == "stub"
+          and readiness.get("intentProvider") == "stub",
+          f"readiness={readiness}")
+    check("readiness never carries a credential",
+          not any("key" in k.lower() and "configured" not in k.lower() for k in readiness),
+          f"keys={list(readiness)}")
 
 
 def _create_payable_case(ctx: Ctx) -> str:

@@ -65,6 +65,7 @@ class Settings(AppodusBaseSettings):
         "WHATSAPP_BUSINESS_ACCESS_TOKEN",
         "WHATSAPP_HANDOFF_PRIVATE_KEY",
         "WHATSAPP_HANDOFF_PUBLIC_KEY",
+        "INTENT_API_KEY",
         "WEB_PUSH_PRIVATE_KEY",
         "DOJAH_APP_ID",
         "DOJAH_PRIVATE_KEY",
@@ -260,6 +261,22 @@ class Settings(AppodusBaseSettings):
     DOJAH_WEBHOOK_SECRET: str = ""
     # Selfie scores below this threshold route to admin UNDER_REVIEW queue (D18)
     KYC_SELFIE_REVIEW_THRESHOLD: int = 80
+
+    # Bot intent classification (PRD §7.6, D53). INTENT_PROVIDER itself is enum-typed on
+    # the base settings so a startup validator can pin test to the stub; the knobs below
+    # select the live target. Haiku-class is the deliberate choice: this is a single
+    # closed-set classification, the cheapest and fastest tier that does it well.
+    INTENT_MODEL: str = "claude-haiku-4-5"
+    INTENT_API_KEY: str = SECRET_PLACEHOLDER
+    # OPENAI_COMPATIBLE only — the provider's chat-completions base URL (OpenAI, DeepSeek,
+    # Groq, Ollama, …). Unused by the anthropic adapter, which knows its own endpoint.
+    INTENT_API_BASE_URL: str = ""
+    # Below this the classifier's answer is discarded and the turn routes to a human
+    # (§7.6.4: low confidence is never a guess).
+    INTENT_MIN_CONFIDENCE: float = 0.6
+    # A classifier that is slow is a bot that looks broken; past this the turn routes to
+    # a human, which is the same outcome as an error.
+    INTENT_TIMEOUT_SECONDS: float = 8.0
 
     # Verification pricing & FX
     PRICING_FX_PROVIDER: PricingFxProvider = PricingFxProvider.STUB

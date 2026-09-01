@@ -73,6 +73,24 @@ class OtpMode(str, enum.Enum):
     RANDOM = "random"
 
 
+class IntentProvider(str, enum.Enum):
+    """Free-text intent classification backend (PRD §7.6, D44/D48/D53).
+
+    ``stub`` is a deterministic keyword table — the contract CI and the e2e suite run on,
+    so no automated run ever calls a model. ``anthropic`` is the live default; ``openai
+    compatible`` covers every other provider through one base-URL + model + key adapter,
+    which is what keeps the choice a config change rather than a code change. Enforced by
+    ``_enforce_intent_provider_policy``: test may never reach a live model.
+
+    Only the classifier is LLM-assisted. Flows and guardrails stay deterministic and sit
+    outside it (D44), so a provider outage degrades to human routing, never to a guess.
+    """
+
+    STUB = "stub"
+    ANTHROPIC = "anthropic"
+    OPENAI_COMPATIBLE = "openai_compatible"
+
+
 # Secrets left at this placeholder must be supplied via the environment before a
 # prod/staging boot. The startup validator (`_enforce_prod_secret_policy`) refuses
 # to start a prod/staging build whose security-critical secrets are still unset or
@@ -271,6 +289,9 @@ class AppodusBaseSettings(BaseSettings):
     # WhatsApp transport contract (see WhatsAppProvider).
     WHATSAPP_PROVIDER: WhatsAppProvider = WhatsAppProvider.STUB
 
+    # Intent-classification contract (see IntentProvider).
+    INTENT_PROVIDER: IntentProvider = IntentProvider.STUB
+
     @model_validator(mode="after")
     def _enforce_otp_mode_policy(self) -> "AppodusBaseSettings":
         env = self.ENVIRONMENT
@@ -305,6 +326,23 @@ class AppodusBaseSettings(BaseSettings):
             raise ValueError(
                 f"ENVIRONMENT=prod requires WHATSAPP_PROVIDER={WhatsAppProvider.META.value}, "
                 f"got '{provider.value}'. The stub must never serve real customers."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_intent_provider_policy(self) -> "AppodusBaseSettings":
+        """Keep the test suite off every live model (D53).
+
+        Unlike the WhatsApp contract there is no production floor: the channel stays
+        useful with the keyword table if a provider is unavailable, because every
+        unmatched intent routes to a human by design (§7.6.4). Test, though, must be
+        deterministic — a classifier that occasionally disagrees with itself would make
+        the guardrail suite flaky in exactly the place flakiness is unacceptable.
+        """
+        if self.ENVIRONMENT == Environment.TEST and self.INTENT_PROVIDER != IntentProvider.STUB:
+            raise ValueError(
+                f"ENVIRONMENT=test requires INTENT_PROVIDER={IntentProvider.STUB.value}, "
+                f"got '{self.INTENT_PROVIDER.value}'. Automated runs must never call a model."
             )
         return self
 

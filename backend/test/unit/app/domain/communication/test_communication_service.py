@@ -8,10 +8,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 from main.app.core.state.status import TaskState
 from main.app.domain.communication.chat_message.models import SenderKind
-from main.app.domain.communication.conversation.models import ConversationType
+from main.app.domain.communication.conversation.models import (
+    ConversationChannel,
+    ConversationType,
+)
 from main.app.domain.communication.service import CommunicationService
 from main.appodus_utils.db.session import db_session_ctx
-from main.appodus_utils.exception.exceptions import ForbiddenException
+from main.appodus_utils.exception.exceptions import ForbiddenException, ResourceNotFoundException
 
 
 @pytest.fixture(autouse=True)
@@ -115,8 +118,26 @@ async def test_customer_send_delegates_through_ownership_gate():
 
 # ── sender_kind is derived server-side, never trusted from the client (H2) ──────
 
-def _convo(convo_type):
-    return SimpleNamespace(id="conv-1", type=convo_type.value, deleted=False)
+def _expect_thread(svc, convo):
+    """Stub whichever fetch the caller's role will take.
+
+    Admins go through the ungated shared-inbox fetch and everyone else through the
+    membership check, so a test that stubbed only one silently exercised neither.
+    """
+    svc._conversations.get_owned_participant = AsyncMock(return_value=convo)
+    svc._conversations.get_for_admin = AsyncMock(return_value=convo)
+
+
+def _convo(convo_type, channel=ConversationChannel.WEB, external_ref=None):
+    # `channel`/`external_ref` are what the D57 bot hand-over check reads: an agent
+    # replying on a WhatsApp thread takes it off the bot, and a web thread must not.
+    return SimpleNamespace(
+        id="conv-1",
+        type=convo_type.value,
+        deleted=False,
+        channel=channel.value,
+        external_ref=external_ref,
+    )
 
 
 async def test_post_message_customer_cannot_spoof_admin_or_system():
@@ -135,9 +156,7 @@ async def test_post_message_customer_cannot_spoof_admin_or_system():
 
 async def test_post_message_admin_derives_admin_kind():
     svc = _service(tasks=[], user_type="ADMIN")
-    svc._conversations.get_owned_participant = AsyncMock(
-        return_value=_convo(ConversationType.CUSTOMER_ADMIN)
-    )
+    _expect_thread(svc, _convo(ConversationType.CUSTOMER_ADMIN))
     svc._chat.send = AsyncMock(return_value=SimpleNamespace(id="msg-1"))
 
     await svc.post_message("conv-1", "admin-1", "hello")
@@ -155,3 +174,108 @@ async def test_post_message_agent_thread_derives_agent_kind():
     await svc.post_message("conv-1", "agent-1", "on my way")
 
     assert svc._chat.send.call_args.args[2] == SenderKind.AGENT
+
+
+# ── D57: a human reply silences the bot ───────────────────────────
+
+def _stub_take_over(monkeypatch) -> AsyncMock:
+    """Replace `take_over` on the class rather than the container entry.
+
+    Kink resolves an `@inject` class through a registered factory, so swapping an entry
+    in the service registry is quietly ignored and the real service runs. Patching the
+    method covers whatever instance the container decides to build, and monkeypatch
+    restores it — a leaked fake would silently disarm D57 for the rest of the run.
+    """
+    from main.app.domain.channel.whatsapp.bot.session.service import (
+        WhatsAppBotSessionService,
+    )
+
+    take_over = AsyncMock()
+    monkeypatch.setattr(WhatsAppBotSessionService, "take_over", take_over)
+    return take_over
+
+
+async def test_an_admin_reply_on_a_whatsapp_thread_takes_it_off_the_bot(monkeypatch):
+    """The other half of the sticky-HUMAN rule. Without this the bot would keep answering
+    over an agent mid-conversation, which is the failure customers notice most."""
+    svc = _service(tasks=[], user_type="ADMIN")
+    _expect_thread(
+        svc,
+        _convo(
+            ConversationType.GENERAL_SUPPORT,
+            channel=ConversationChannel.WHATSAPP,
+            external_ref="+2348012345678",
+        ),
+    )
+    svc._chat.send = AsyncMock(return_value=SimpleNamespace(id="msg-1"))
+    take_over = _stub_take_over(monkeypatch)
+
+    await svc.post_message("conv-1", "admin-1", "Hi, I'll take it from here.")
+
+    take_over.assert_awaited_once_with("+2348012345678")
+
+
+async def test_a_web_thread_never_touches_the_bot_session(monkeypatch):
+    svc = _service(tasks=[], user_type="ADMIN")
+    _expect_thread(svc, _convo(ConversationType.CUSTOMER_ADMIN))
+    svc._chat.send = AsyncMock(return_value=SimpleNamespace(id="msg-1"))
+    take_over = _stub_take_over(monkeypatch)
+
+    await svc.post_message("conv-1", "admin-1", "hello")
+
+    take_over.assert_not_awaited()
+
+
+async def test_a_customers_own_message_does_not_silence_the_bot(monkeypatch):
+    """A customer writing on their own WhatsApp thread is the bot's whole job — only a
+    *human agent* speaking takes the thread over."""
+    svc = _service(tasks=[], user_type="USER")
+    svc._conversations.get_owned_participant = AsyncMock(
+        return_value=_convo(
+            ConversationType.GENERAL_SUPPORT,
+            channel=ConversationChannel.WHATSAPP,
+            external_ref="+2348012345678",
+        )
+    )
+    svc._chat.send = AsyncMock(return_value=SimpleNamespace(id="msg-1"))
+    take_over = _stub_take_over(monkeypatch)
+
+    await svc.post_message("conv-1", "cust-1", "any update?")
+
+    take_over.assert_not_awaited()
+
+
+# ── Admins are a shared inbox for writing too (§N.3, G4) ─────────
+
+async def test_an_admin_can_reply_to_a_thread_they_never_joined():
+    """The gap the WhatsApp console found: admins work threads they are not participants
+    of, so requiring membership left a §7.8 enquiry readable and unanswerable — and D57's
+    bot take-over, which fires on an agent's reply, could never happen."""
+    svc = _service(tasks=[], user_type="ADMIN")
+    svc._conversations.get_owned_participant = AsyncMock(
+        side_effect=AssertionError("an admin must not be gated on membership")
+    )
+    svc._conversations.get_for_admin = AsyncMock(
+        return_value=_convo(ConversationType.GENERAL_SUPPORT)
+    )
+    svc._chat.send = AsyncMock(return_value=SimpleNamespace(id="msg-1"))
+
+    await svc.post_message("conv-1", "admin-1", "Hi, I'll take this one.")
+
+    svc._conversations.get_for_admin.assert_awaited_once_with("conv-1")
+    assert svc._chat.send.call_args.args[2] == SenderKind.ADMIN
+
+
+async def test_a_non_admin_is_still_gated_on_membership():
+    """The shared inbox is an admin privilege, not a hole: a customer must still be a
+    participant, or a thread id becomes a way to read someone else's conversation."""
+    svc = _service(tasks=[], user_type="USER")
+    svc._conversations.get_owned_participant = AsyncMock(
+        side_effect=ResourceNotFoundException(resource="Conversation")
+    )
+    svc._conversations.get_for_admin = AsyncMock(
+        side_effect=AssertionError("a non-admin must never reach the ungated fetch")
+    )
+
+    with pytest.raises(ResourceNotFoundException):
+        await svc.post_message("conv-1", "cust-1", "let me in")

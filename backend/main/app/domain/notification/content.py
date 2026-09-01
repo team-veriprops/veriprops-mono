@@ -43,6 +43,7 @@ _CONTENT = {
     EventType.CONFLICT_FLAGGED: ("Conflict detected", "A conflict was flagged on a verification.", _admin_link),
     EventType.AGENT_NO_SHOW: ("Agent no-show", "An assigned agent did not accept in time.", _admin_link),
     EventType.FRAUD_FLAGGED_MESSAGE: ("Message held for review", "A message was flagged and is awaiting review.", lambda _v: "/admin/messages"),
+    EventType.BOT_PIPELINE_FAILED: ("WhatsApp bot needs a human", "The bot could not answer a customer and handed the conversation over.", lambda _v: "/admin/messages"),
     EventType.DISPUTE_OPENED: ("Dispute opened", "A dispute was opened on a verification.", _admin_link),
     EventType.DISPUTE_RESOLVED: ("Dispute resolved", "A dispute has been resolved.", _admin_link),
     EventType.PAYMENT_SETTLED: ("Payment settled", "A payment has settled.", _admin_link),

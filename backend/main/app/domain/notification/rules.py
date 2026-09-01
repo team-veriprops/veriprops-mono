@@ -60,6 +60,10 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.CONFLICT_FLAGGED: NotificationRule(in_app=True),
     EventType.AGENT_NO_SHOW: NotificationRule(in_app=True),
     EventType.FRAUD_FLAGGED_MESSAGE: NotificationRule(in_app=True),
+    # §7.6.5: in-app only, and deliberately so. The customer has already been answered
+    # with the handover copy, so this is an operational signal — emailing it would page
+    # the team for something the conversation has already recovered from.
+    EventType.BOT_PIPELINE_FAILED: NotificationRule(in_app=True),
     EventType.DISPUTE_OPENED: NotificationRule(email=True, template=_T.VERIFICATION_DISPUTE_FILED),
     EventType.DISPUTE_RESOLVED: NotificationRule(email=True, template=_T.VERIFICATION_DISPUTE_RESOLVED),
     EventType.PAYMENT_SETTLED: NotificationRule(in_app=True),

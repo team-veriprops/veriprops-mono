@@ -12,14 +12,21 @@ more than anything else here:
   policed or who mediates it.
 
 Non-text inbound is journalled and surfaced as a labelled placeholder so nothing is
-silently dropped (§7.6.3); the policy replies that go back out — the evidence rule, the
-upload handoff, the audio acknowledgement — are the bot engine's job and land with it.
+silently dropped (§7.6.3); the policy replies that go back out are the bot engine's job,
+which this service hands the turn to once the message is safely recorded.
+
+**Recording comes first, answering second.** The journal row and the console message are
+what make the turn idempotent and visible; a bot failure after that point costs a reply,
+not the message. The engine has its own §7.6.5 fallback, and anything that still escapes
+is logged rather than raised — the webhook must keep acknowledging, or Meta throttles and
+eventually disables the subscription.
 """
 from __future__ import annotations
 
+from logging import Logger
 from typing import Optional
 
-from kink import inject
+from kink import di, inject
 
 from main.app.domain.channel.whatsapp.inbound.models import (
     CreateWhatsAppInboundMessageDto,
@@ -28,6 +35,7 @@ from main.app.domain.channel.whatsapp.inbound.models import (
 from main.app.domain.channel.whatsapp.inbound.repo import WhatsAppInboundMessageRepo
 from main.app.domain.communication.chat_message.models import MessageSource, SenderKind
 from main.app.domain.communication.chat_message.service import ChatMessageService
+from main.app.domain.communication.conversation.models import Conversation
 from main.app.domain.communication.conversation.service import ConversationService
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -37,6 +45,8 @@ from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import
     InboundKind,
     InboundWhatsAppMessage,
 )
+
+logger: Logger = di["logger"]
 
 # What the console shows for a message whose content is not text. The customer's own
 # words are always shown when there are any (a caption); otherwise the agent sees what
@@ -111,7 +121,25 @@ class WhatsAppInboundService:
         record.chat_message_id = Utils.uuid_to_hex(chat_message.id)
         record.processed_at = Utils.datetime_now()
         self._whatsapp_inbound_message_repo._session.add(record)
+
+        await self._answer(message, conversation)
         return record
+
+    async def _answer(
+        self, message: InboundWhatsAppMessage, conversation: Conversation
+    ) -> None:
+        """Hand the turn to the bot, best-effort.
+
+        The engine is resolved here rather than injected because it depends, transitively,
+        on this package — an inbound message is what a bot turn *is*. Resolving at call
+        time keeps that cycle out of the import graph.
+        """
+        from main.app.domain.channel.whatsapp.bot.engine import WhatsAppBotEngine
+
+        try:
+            await di[WhatsAppBotEngine].handle(message, conversation)
+        except Exception as exc:  # noqa: BLE001 — see the module docstring
+            logger.error(f"Bot failed to answer {message.from_phone}: {exc}")
 
     @staticmethod
     def _body_for(message: InboundWhatsAppMessage) -> str:

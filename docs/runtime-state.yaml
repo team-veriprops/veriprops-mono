@@ -2,82 +2,118 @@
 # Cycle-1 state archived at docs.back/runtime-state.yaml.
 
 session_id: null
-command: run
+command: resume
 
-status: idle
-phase: idle
+status: in_progress
+phase: implementation
 
-current_slice: null
-current_subtask: null
+current_slice: S5
+current_subtask: "S5 committed; S6 next"
 
-modified_files: []
-created_files: []
+modified_files:
+  - docs/decision-log.md
+  - backend/.env.example
+  - backend/.env.prod
+  - backend/.env.test
+  - backend/requirements.txt
+  - backend/test-requirements.txt
+  - backend/CLAUDE.md
+  - backend/main/app/config/settings.py
+  - backend/main/appodus_utils/config/settings.py
+  - backend/main/app/core/events/events.py
+  - backend/main/app/domain/__init__.py
+  - backend/main/app/domain/notification/rules.py
+  - backend/main/app/domain/notification/content.py
+  - backend/main/app/domain/system_config/models.py
+  - backend/main/app/domain/communication/service.py
+  - backend/main/app/domain/channel/whatsapp/__init__.py
+  - backend/main/app/domain/channel/whatsapp/inbound/service.py
+  - backend/main/app/domain/message/models.py
+  - backend/scripts/e2e/stage_whatsapp.py
+  - backend/test/unit/app/config/test_env_hygiene.py
+  - backend/test/unit/app/domain/communication/test_communication_service.py
+  - frontend/CLAUDE.md
+  - frontend/src/types/chat.ts
+  - frontend/src/app/admin/messages/page.tsx
+  - frontend/src/components/chat/HeldMessagesContainer.tsx
+  - frontend/src/components/chat/libs/chat-service.ts
+  - frontend/src/components/chat/libs/useChatQueries.ts
+
+created_files:
+  - backend/main/appodus_utils/integrations/intent/  # models, interface, factory, service + 3 adapters
+  - backend/main/app/domain/channel/whatsapp/bot/    # engine, guardrails, capabilities, content,
+                                                     # projection, reply, sender, support_hours,
+                                                     # flows/, session/
+  - backend/main/alembic/versions/0006_whatsapp_bot_sessions.py
+  - backend/test/unit/appodus_utils/integrations/intent/
+  - backend/test/unit/app/domain/channel/whatsapp/bot/
+  - backend/test/unit/app/domain/message/test_upsert_from_request.py
+  - frontend/src/components/chat/AdminMessagesTabs.tsx
+  - frontend/src/components/chat/AdminWhatsAppInboxContainer.tsx
+  - frontend/src/components/chat/WhatsAppBotModeBanner.tsx
+  - frontend/src/components/chat/WhatsAppBotModeBanner.test.tsx
+  - frontend/src/components/chat/libs/whatsapp-bot-service.ts
+  - frontend/src/components/chat/libs/useWhatsAppBotQueries.ts
 
 tests:
   written: true
   executed: true
   passing: true
+  detail: "backend 1617 unit passed; frontend 520 passed / 75 files; ruff + mypy + tsc + eslint
+           clean; frontend build clean; migration 0006 applied and rolled back against the live
+           test DB (table + 4 system_config rows created, both dropped on downgrade); live
+           drive-through green at 306 checks including the whole S5 section."
 
 self_audit:
-  started: true
-  completed: true
+  started: false
+  completed: false
   findings:
-    - "S4.1 gates green: backend 1283 unit tests, ruff + mypy clean; frontend 515 unit tests,
-       eslint clean, next build ok. Full drive-through (all 18 stages): ALL PASSED."
-    - "Migration 0005 verified three ways against live Postgres — additive on an already-migrated
-       schema, full chain on a fresh database, and a downgrade/re-upgrade round trip; the in-place
-       result is column-for-column identical to the fresh chain."
-    - "S4's deferred gap is closed (D59). All seven §7.7 templates are declared with bodies and
-       ordered parameters; `otp_auth` now sends as a real Meta template rather than free text,
-       which is what the Cloud API requires outside the 24-hour window — the exact case a linking
-       OTP to a cold number always is."
-    - "Registry split on the line that has an owner: definitions in code (the code fills the
-       parameters), approval status synced from Meta through a WHATSAPP_PROVIDER-selected
-       directory facade. Admin page at /admin/config/whatsapp-templates, read-only by design."
-    - "Fixed: `_build_template` ordered Meta's positional body parameters as strings, so \"10\"
-       preceded \"2\" — harmless at today's counts, silently wrong past nine parameters."
-    - "Fixed: `MessageContext.BRAND` was fed `settings.BRAND`, a lowercase *slug* documented for
-       log lines. Every customer message read 'veriprops: …', including the linking OTP — the one
-       message §7.1.2's anti-impersonation posture depends on. Renamed REPORT_BRAND_NAME to
-       BRAND_DISPLAY_NAME and injected it; one display name now serves reports and every template."
-    - "Fixed: the /dev/whatsapp/outbox endpoint serialised with a bare model_dump(), so it alone
-       answered in snake_case against the repo's camelCase wire contract — an assertion written to
-       the contract read a working template send as free text. Found by that assertion failing."
-    - "Fixed: four orphan template files (email/sms/whatsapp `otp.jinja2`, push
-       `new_house_listing.jinja2`) had no AvailableTemplate entry and a stale variable vocabulary.
-       Deleted, with a guard test that every template file maps to an enum entry — the reverse of
-       the existing rule, so dead copy cannot accumulate again."
-    - "Fixed: `tsc --noEmit` — a CI gate — had been red since S1/S3 on eight errors in two test
-       files, invisible locally because neither `pnpm lint` nor `pnpm build` typechecks tests.
-       A `ROUTES.HOME` initialiser narrowed a variable to the literal \"/\", and an HttpClient mock
-       was missing `getBlob`. Both fixed, and `pnpm typecheck` added so the gate is runnable
-       outside CI."
-    - "Fixed: the ops_unhappy sweep checks asserted this caller's reclaim count, which the dev
-       server's own 15-minute APScheduler sweep can consume seconds earlier. They now assert the
-       outcome (task back to PENDING with a strike, task out of the pool) — the property under
-       test is that an unaccepted assignment gets reclaimed, not who reclaimed it."
-    - "CLOSED (D61): the authentication-template button is wired. Meta mandates an OTP button on
-       authentication templates, so `otp_auth` could not have been delivered without it. Meta's own
-       send-side pages 404, but four BSP docs that mirror their contract agree on the shape
-       (sub_type url, index \"0\", the code as the single parameter), and copy-code and one-tap
-       send identically. The stub records the button parameter, so a stub run proves a component
-       the live send requires. Remaining: confirm the approved template matches, at the S11 smoke."
-    - "Deferred by design: six of the seven templates have no sender yet — milestones and report
-       delivery at S8, `window_reopen` at S7 (WhatsAppWindowService already landed),
-       `delegate_status` at S9. Declaring them early is the point of §7.7."
-    - "CLOSED (D60, amending D46): the §7.4.4 SMS fallback is wired. D46 deferred it on the unmade
-       §B *provider* decision, but MessageRouter's sms channel already encoded the whole chain —
-       MOCK_SMS exclusively in test/dev, Termii → Twilio for +234 in prod. The decision had been
-       made in the router and nothing was reading it. WhatsApp first, SMS to the same number when
-       that fails; one code under one key, so verification is unaffected by which transport won."
+    - "Resumed 2026-09-01 to implement S5-S9 in one pass, one commit per slice (user-chosen
+       cadence). Gate decisions D62-D68 recorded before coding."
+    - "D62 (user): the /wa/pay landing carries VERIFICATION_TERMS + the two §7.4.6 opt-ins and
+       submits the case on the D51 grant - D56 read against the code leaves no other place for
+       consent that keeps a WhatsApp-only customer able to finish."
+    - "D63 (user): a WhatsAppConsent entity, not a notification_preferences column - §7.8 wants
+       timestamps and provenance, which the per-event preference model has neither of."
+    - "D64 (user): STOP revokes both consents; START restores utility only."
+    - "D65: NotificationRule gains whatsapp + a distinct whatsapp_template; the recipient is the
+       LINKED number, never user.phone; delegates are a separate audience."
+    - "D66: VERIFICATION_STARTED and INSPECTION_COMPLETE become real events rather than a
+       subscriber sniffing another event's data dict."
+    - "D67: CaseDelegate carries its own phone; resolution order is linked account, then delegate."
+    - "D68: G1 support hours are system_config ConfigKeys, seeded additively."
+    - "S5 amends D48's 'zero dependencies': the Claude adapter uses the official `anthropic` SDK
+       (version headers, typed errors, retries on a live customer path). The generic adapter stays
+       raw httpx. Recorded in the decision log under D53."
+    - "S5 drive-through found a latent bug outside the slice: `UpsertMessageDto.from_request`
+       rejected any `MessageRequest` built by direct construction rather than the builder, because
+       `model_dump` emits an explicit `extras=None` and pydantic applies a default only for an
+       absent key. It failed silently (logged, swallowed) - the bot's first reply was never
+       delivered. Fixed at the seam + regression-tested for both construction routes."
+    - "S5 drive-through found a second latent bug: `CommunicationService.post_message` was the
+       only chat path that did not grant admins the shared inbox, so a WhatsApp thread was
+       readable from the console and unanswerable - and D57's take-over, which fires on a human
+       reply, could never have run in production. `list_conversations`/`mark_read`/`list_messages`
+       already special-cased admins; the write path now does too."
+    - "S5 self-audit found a third: the stub classifier never emits the keyword-only intents, so a
+       customer texting STOP got 'sorry, I didn't quite get that'. STOP/START and quoted `VP-…`
+       references are now matched on literal words ahead of the classifier and routed to a person
+       until S6/S8 build the real flows."
+    - "`decorate_all_methods` wraps @staticmethod too - a pure mapper on a decorated service
+       returns a coroutine and 500s at runtime while every log line reads as success. Session DTO
+       mapping moved to a module-level function; regression-tested."
+    - "D57's sticky-HUMAN mode needed both halves shipped together: `CommunicationService.post_message`
+       flips a WhatsApp thread when an admin/agent posts, and the new `/admin/messages` WhatsApp tab
+       carries the hand-back control. Without the control the first agent reply would silence a
+       customer's thread permanently."
 
 clarification_needed: []
 
 git:
   branch: dev
-  dirty: false
+  dirty: true
 
-next_action: "await review of S4.1, then `run` — begin S5 (bot engine core) per docs/execution-plan.md"
+next_action: "S6 - chat intake + payment handoff (D62) + short-code continuation (D58)"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-01 S4.1 + follow-up (auth button D61, SMS fallback D60, tsc gate), full drive-through ALL PASSED"
+last_checkpoint: "2026-09-01: S5 complete and committed - drive-through green at 306 checks"

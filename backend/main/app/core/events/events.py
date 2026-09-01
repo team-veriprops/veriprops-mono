@@ -40,6 +40,10 @@ class EventType(str, enum.Enum):
     CONFLICT_FLAGGED = "CONFLICT_FLAGGED"
     AGENT_NO_SHOW = "AGENT_NO_SHOW"
     FRAUD_FLAGGED_MESSAGE = "FRAUD_FLAGGED_MESSAGE"
+    # §7.6.5 — the bot failed to answer a customer. The customer already got the warm
+    # handover copy; this is what tells an admin a person now has to finish that
+    # conversation, and that the channel may be degraded.
+    BOT_PIPELINE_FAILED = "BOT_PIPELINE_FAILED"
     DISPUTE_OPENED = "DISPUTE_OPENED"          # source: S18 (declared, unfired)
     DISPUTE_RESOLVED = "DISPUTE_RESOLVED"      # source: S18 (declared, unfired)
     PAYMENT_SETTLED = "PAYMENT_SETTLED"

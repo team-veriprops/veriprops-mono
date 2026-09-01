@@ -103,3 +103,49 @@ export interface HeldMessage {
   heldAt?: string | null;
   dateCreated: string;
 }
+
+// ── WhatsApp bot state (PRD §7.6, D57) ───────────────────────────────
+
+/** Who is answering a WhatsApp thread. Sticky once a human joins (D57). */
+export enum BotMode {
+  BOT = "BOT",
+  HUMAN = "HUMAN",
+}
+
+/** A multi-step conversation the bot is part-way through; null between flows. */
+export enum BotFlow {
+  WELCOME = "WELCOME",
+  STATUS = "STATUS",
+}
+
+/** Why a conversation went to a person (§7.6.2, §7.10). */
+export enum EscalationReason {
+  EXPLICIT_REQUEST = "EXPLICIT_REQUEST",
+  GUARDRAIL_TOPIC = "GUARDRAIL_TOPIC",
+  REFUND_OR_CANCELLATION = "REFUND_OR_CANCELLATION",
+  UNMATCHED_INTENTS = "UNMATCHED_INTENTS",
+  NON_ENGLISH = "NON_ENGLISH",
+  CAPABILITY_NOT_OFFERED = "CAPABILITY_NOT_OFFERED",
+  UNSUPPORTED_MEDIA = "UNSUPPORTED_MEDIA",
+  PIPELINE_FAILURE = "PIPELINE_FAILURE",
+}
+
+/** The bot's state for one WhatsApp number, as the console shows it. */
+export interface BotSession {
+  phoneE164: string;
+  mode: BotMode;
+  modeChangedAt?: string | null;
+  currentFlow?: BotFlow | null;
+  lastInboundAt?: string | null;
+  lastEscalationReason?: EscalationReason | null;
+  lastEscalatedAt?: string | null;
+}
+
+/** Whether the channel is wired for live traffic (§7.11). Never carries a credential. */
+export interface BotChannelReadiness {
+  whatsappProvider: string;
+  intentProvider: string;
+  intentModel: string;
+  intentConfigured: boolean;
+  humanModeSessions: number;
+}

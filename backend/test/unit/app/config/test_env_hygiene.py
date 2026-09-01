@@ -176,6 +176,15 @@ class TestTestEnvContract:
         assert env["ENVIRONMENT"] == "test"
         assert env["OTP_MODE"] == "deterministic"
 
+    def test_external_providers_are_pinned_to_their_stubs(self, env):
+        """The automation-determinism contract: no automated run reaches Meta or a model.
+
+        Both are also enforced at startup, but a committed file that disagreed with the
+        validator would fail every test run with a boot error instead of saying why.
+        """
+        assert env["WHATSAPP_PROVIDER"] == "stub"
+        assert env["INTENT_PROVIDER"] == "stub"
+
     def test_no_background_or_outbound_side_effects(self, env):
         assert env["SCHEDULER_ENABLED"] == "false"
         assert env["ENABLE_OUT_MESSAGING"] == "false"
@@ -215,6 +224,10 @@ class TestProdEnvContract:
         assert env["PAYMENT_STUB_MODE"] == "false"
         assert env["DOCUMENT_STORAGE_STUB_MODE"] == "false"
         assert env["REPORT_PDF_STUB_MODE"] == "false"
+        # The stub transport must never serve a real customer (D43); the intent stub is
+        # a keyword table, which would quietly halve the bot's free-text coverage.
+        assert env["WHATSAPP_PROVIDER"] == "meta"
+        assert env["INTENT_PROVIDER"] != "stub"
 
 
 class TestTemplateDriftGuard:

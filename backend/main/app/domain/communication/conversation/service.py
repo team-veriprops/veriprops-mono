@@ -122,6 +122,20 @@ class ConversationService:
             raise ResourceNotFoundException(resource="Conversation")
         return convo
 
+    async def get_for_admin(self, conversation_id: str) -> Conversation:
+        """Any live thread, without a membership check.
+
+        Admins are a **shared inbox** (§N.3, G4): they are not participants of the threads
+        they work, so requiring membership would leave a WhatsApp enquiry readable from the
+        console and unanswerable — which is also how D57's take-over would never fire.
+        RBAC is enforced at the controller; the caller must already have established that
+        this user is an admin.
+        """
+        convo = await self._conversation_repo.get_model(conversation_id)
+        if convo is None or convo.deleted:
+            raise ResourceNotFoundException(resource="Conversation")
+        return convo
+
     async def touch(self, conversation: Conversation, at: datetime) -> None:
         """Advance ``last_message_at`` to a delivered message's time (drives unread state).
 

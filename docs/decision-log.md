@@ -1408,6 +1408,15 @@ a config change, so there is no lock-in despite a named default.
 If live error rates warrant it, add a cross-provider fallback chain in the shape the
 email router already uses.
 
+**Implementation note (S5, 2026-09-01) — amends D48's "zero dependencies".** The Claude
+adapter uses the official `anthropic` SDK rather than raw HTTP: it maintains the API
+version headers, typed errors and retry behaviour we would otherwise reimplement on a
+live customer path, and Anthropic's own guidance is to use the SDK where one exists. The
+generic adapter stays raw `httpx`, since "OpenAI-compatible" is a wire shape, not a
+vendor. Net cost is one dependency — not the multi-provider abstraction layer D48
+rejected, and the lock-in D48 guarded against is still absent because the provider is
+selected by config and the second adapter reaches every other vendor.
+
 ## Decision: D54 — FAQ content is code-owned; pricing answers come from the live config
 
 ### Context
@@ -1686,3 +1695,197 @@ justified deferring.
 ### Revisit
 If Meta publishes a distinct one-tap send shape, split `MetaTemplateButton` at the
 provider boundary — the declaration already carries the distinction.
+
+## Decision: D62 — The `pay` landing carries consent and submit
+
+### Context
+D56 put chat intake's full field set in the bot and left "consent and payment on the `pay`
+landing". Read against the code, that has a consequence D56 did not spell out: a `pay`
+token can only be issued for a case, `VerificationService.submit` is what sets the locked
+price the landing displays, and submit requires a VERIFICATION_TERMS consent. So either
+the bot captures consent (D56's rejected option 3) or the landing does more than pay.
+
+### Options Considered
+1. **The landing becomes review → consent → submit → pay, all on the D51 grant.**
+2. Bot captures the terms acceptance in chat and submits; the landing only pays.
+3. Chat collects fields; the customer logs in on the web to submit and pay.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation).
+
+### Rationale
+Honours D56 literally and keeps the WhatsApp-only customer able to finish — the seam
+§7.10 calls the channel's most important number. Option 2 is D56's own rejected option 3:
+it downgrades a consent record that has to stand up as a legal artefact. Option 3 is
+D56's rejected option 2.
+
+### Tradeoffs / Constraints
+- Adds a public write endpoint, `POST /public/wa/handoff/pay/submit`, that transitions a
+  case. It is grant-scoped: the case id comes from the grant cookie, **never** from the
+  request body, so a holder of one link cannot submit against another case. Same posture
+  as `pay/initiate`, which already works this way.
+- The landing is the §7.4.6 consent screen too, so all three controls (VERIFICATION_TERMS,
+  utility opt-in, marketing opt-in) render on one page — the placement §7.4.6 names.
+- A case reaching the landing is a DRAFT, so the landing shows a quote rather than a
+  locked price until submit.
+
+### Revisit
+If chat intake ever needs to complete without a web round trip, that is a fresh decision
+about consent evidence, not a change to this endpoint.
+
+## Decision: D63 — `WhatsAppConsent` entity is the §7.4.6 consent store
+
+### Context
+§7.4.6 puts two separate unticked consents (utility, marketing) "on the customer object";
+§7.8 requires consent records to be timestamped and exportable.
+
+### Options Considered
+1. **A `WhatsAppConsent` entity in `channel/whatsapp/consent/`** — one row per user,
+   `utility_*`/`marketing_*` granted/revoked timestamps, and the `source` that set them.
+2. A `whatsapp_enabled` column on the existing per-event `notification_preferences`.
+3. Two booleans + two timestamps on `users`.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation).
+
+### Rationale
+The §7.8 export becomes a query rather than a reconstruction, and provenance ("who turned
+this off — the pay screen, account settings, or a STOP keyword?") is recorded at the point
+it is known. Option 2's model is per-event while these consents are channel-wide, and it
+carries neither timestamp nor source. Option 3 loses revocation history and widens `users`
+for every future consent.
+
+### Tradeoffs / Constraints
+- A new table and migration.
+- Two consents in one row rather than one row per consent: they are captured together, on
+  one screen, and revoked together by STOP (D64).
+
+### Revisit
+If a third WhatsApp consent appears, promote to one row per consent kind.
+
+## Decision: D64 — STOP kills both consents; START restores utility only
+
+### Context
+§7.4.6 requires both opt-ins to be revocable "via STOP-style keywords in chat" and does
+not say what re-subscribing looks like.
+
+### Chosen Option
+`STOP`/`UNSUBSCRIBE`/`CANCEL`/`END`/`QUIT` revoke **both** consents and get a confirmation
+reply. `START`/`UNSTOP`/`SUBSCRIBE` restore the **utility** consent only; marketing needs a
+deliberate opt-in on the web.
+
+### Rationale
+Matches the opt-out convention WhatsApp users already expect, and keeps marketing
+re-consent an explicit evidenced act rather than a one-word chat message — marketing
+opt-in is exactly the consent §7.10 counts as a growth asset, so its record has to be
+worth counting.
+
+### Tradeoffs / Constraints
+- A customer who typed STOP by accident restores marketing in account settings.
+- Keywords are matched before intent dispatch, so a STOP never reaches the classifier.
+
+### Revisit
+Only if opt-out volume suggests the keyword set is missing a common variant.
+
+## Decision: D65 — Milestones extend the notification rule table, with two named wrinkles
+
+### Context
+`architecture-spec.md` places milestone delivery in "the existing declarative rule table
+with a WhatsApp channel + consent gate". Two things the spec did not name have to be
+settled before that is buildable.
+
+### Chosen Option
+`NotificationRule` gains `whatsapp: bool` and a **distinct** `whatsapp_template` — the
+§7.7 template is not the email template, and one field cannot be both. The WhatsApp branch
+of `NotificationService._dispatch_external` (a) reads the D63 consent, (b) resolves the
+recipient's **linked** number via `WhatsAppLinkService`, not `user.phone`, and (c) sends
+the §7.7 template. Delegates are not users, so `delegate_status` goes out through a
+separate audience path in the same subscriber.
+
+### Rationale
+Consent enforcement stays in the router, never at a send site — the WA-16/WA-27 property.
+Sending to `user.phone` would deliver case milestones to a number that was never
+OTP-verified as this customer's WhatsApp, which is precisely what §7.4.3 forbids.
+
+### Tradeoffs / Constraints
+The rule table now carries a channel whose recipient address is resolved elsewhere; that
+asymmetry is the price of the link being the join key rather than the profile phone.
+
+### Revisit
+If a second phone-addressed channel appears, lift recipient resolution into the dispatcher.
+
+## Decision: D66 — `VERIFICATION_STARTED` and `INSPECTION_COMPLETE` are real events
+
+### Context
+§7.7 names four milestone templates. `payment_confirmed` and `report_ready` already have
+events; "verification started" and "field inspection complete" do not — today they are
+implicit in a `STATUS_CHANGED` payload and a `TASK_UPDATED` SSE nudge.
+
+### Options Considered
+1. **Publish two new `EventType`s at the two moments.**
+2. Have the WhatsApp subscriber inspect `STATUS_CHANGED.data["status"]` and the task role
+   behind `TASK_UPDATED`.
+
+### Chosen Option
+**Option 1.**
+
+### Rationale
+Four milestones are four triggers. Option 2 makes a subscriber depend on another event's
+`data` dict shape — the coupling the declarative rule table exists to remove, and a silent
+breakage the day a payload key is renamed.
+
+### Tradeoffs / Constraints
+Both rules are declared `in_app=False, email=False`: they add a WhatsApp send and nothing
+else, so no customer gets a second in-app entry for a status change they were already told
+about.
+
+### Revisit
+If either moment ever warrants an email, flip the flag — the rule row already exists.
+
+## Decision: D67 — Delegate identity is independent of `WhatsAppLink`
+
+### Context
+§7.4.5 has a delegate OTP-verified "via the same E1 mechanics (narrower grant)".
+`WhatsAppLink` is 1:1 between an account and a number, and a delegate has no account.
+
+### Chosen Option
+`CaseDelegate` carries its own `phone_e164` and `verified_at`; it never writes
+`whatsapp_links`. The bot resolves an inbound number as: linked account first, then
+delegate rows.
+
+### Rationale
+Reusing `WhatsAppLink` would either break its 1:1 constraint or silently give a delegate
+an account-shaped identity. The resolution order settles the overlap case: a number that
+is both a customer's link and someone's delegate is a customer first — the account grant
+is strictly wider, and reading it as a delegate would *lose* the customer their own data.
+
+### Tradeoffs / Constraints
+- Two identity lookups instead of one, so `resolve_user_for_phone` stays the single
+  account lookup (§7.4.3's audit surface) and the delegate lookup sits beside it rather
+  than inside it.
+- An OTP to a phone that is mid-linking and mid-delegate-authorization shares the
+  `OtpChannel.WHATSAPP` key space; the second send overwrites the first, which is the
+  existing resend semantics, not a new failure.
+
+### Revisit
+The §7.9 delegate enhancements (multiple delegates, granular permissions) would revisit
+the shape.
+
+## Decision: D68 — G1 support hours live in `system_config`
+
+### Context
+§7.6.2 escalation copy and §7.6.5 failure copy both state a response window that depends
+on Decision G's coverage hours (8am–8pm WAT weekdays + Saturday morning).
+
+### Chosen Option
+Four `ConfigKey`s — `support_hours_start`, `support_hours_end`, `support_saturday_end`,
+`offline_response_hours` — seeded by an additive migration, read through
+`SystemConfigService`.
+
+### Rationale
+A rota change is an ops decision, and the CLAUDE.md config rule puts admin-tunable
+business rules in `system_config` rather than `Settings`. Hardcoding the hours would put a
+redeploy between the founder and a changed rota.
+
+### Revisit
+If coverage becomes per-day rather than weekday/Saturday, promote to a table.
