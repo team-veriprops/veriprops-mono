@@ -363,6 +363,13 @@ class WhatsappPayload(Object):
         None,
         description="Variables for template messages"
     )
+    template_button_parameter: Optional[str] = Field(
+        None,
+        description=(
+            "The value Meta's OTP button carries (the verification code). Authentication "
+            "templates require a button component; utility templates leave this unset."
+        )
+    )
     language_code: str = Field(
         "en",
         pattern=r'^[a-z]{2}(_[A-Z]{2})?$',

@@ -149,6 +149,7 @@ class ModelTemplateService:
             text=body.strip(),
             template_name=declaration.name,
             template_variables=declaration.positional_variables(context),
+            template_button_parameter=declaration.button_parameter(context),
             language_code=declaration.language,
             **kwargs,
         )

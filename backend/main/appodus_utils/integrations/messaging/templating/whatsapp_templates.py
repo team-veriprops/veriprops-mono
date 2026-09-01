@@ -43,21 +43,26 @@ class MetaTemplateCategory(str, enum.Enum):
 
 
 class MetaTemplateButton(str, enum.Enum):
-    """The button an authentication template carries, if any.
+    """The OTP button an authentication template carries.
 
-    Meta's authentication templates can ship a copy-code or one-tap autofill button, and a
-    send must then include a matching `button` component. The exact component shape could
-    not be confirmed from Meta's public send-side documentation, so it is declared per
-    template rather than assumed.
+    Meta **mandates** an OTP button on authentication templates — copy-code or one-tap
+    autofill — and a send must then include a matching `button` component alongside the
+    body. Omitting it is not a cosmetic difference: the message is rejected.
 
-    TODO(gap): confirm the copy-code / one-tap button component shape against the real
-    approved template during the S11 live smoke, then move `otp_auth` off `NONE` if the
-    approved template carries a button — PRD "Known Gaps & Roadmap".
+    Both kinds are sent identically. The button is created as a URL button, so the send
+    uses `sub_type: "url"` at `index: "0"` and passes the verification code as its single
+    parameter; the difference between copy-code and one-tap is in how the *client* handles
+    the tap, not in what we transmit.
     """
 
+    # Utility templates carry no OTP button.
     NONE = "NONE"
     COPY_CODE = "COPY_CODE"
     ONE_TAP = "ONE_TAP"
+
+    @property
+    def is_otp_button(self) -> bool:
+        return self is not MetaTemplateButton.NONE
 
 
 class MetaTemplate:
@@ -98,15 +103,28 @@ class MetaTemplate:
             for position, parameter in enumerate(self.parameters, start=1)
         }
 
+    def button_parameter(self, context: Dict) -> Optional[str]:
+        """The value Meta's OTP button carries — the code itself.
+
+        The button repeats the code so the client can copy or autofill it, which is why
+        the *first* declared parameter feeds it: on an authentication template that is the
+        one-time password by construction.
+        """
+        if not self.button.is_otp_button or not self.parameters:
+            return None
+        return str(context.get(self.parameters[0], ""))
+
 
 # PRD §7.7. Marketing templates: none at v1, by decision — drafted only when a consented
 # campaign is planned (P1 audience).
 _DECLARED: Sequence[MetaTemplate] = (
-    # E1 linking flows (§7.4.4). The only one with a live sender today.
+    # E1 linking flows (§7.4.4). The only one with a live sender today, and the only
+    # AUTHENTICATION template — hence the mandatory OTP button.
     MetaTemplate(
         AvailableTemplate.WHATSAPP_OTP_AUTH,
         MetaTemplateCategory.AUTHENTICATION,
         parameters=(MessageContext.OTP, MessageContext.VALIDITY),
+        button=MetaTemplateButton.COPY_CODE,
     ),
     # Milestone templates (§7.6.2) — opt-in, fired by state events. Senders land in S8.
     MetaTemplate(

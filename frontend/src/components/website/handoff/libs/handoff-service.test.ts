@@ -3,7 +3,17 @@ import { HandoffIntent } from "@/types/handoff";
 import { HandoffService } from "./handoff-service";
 
 function client() {
-  return { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() };
+  // Every method on HttpClient, `getBlob` included — a partial mock does not satisfy the
+  // interface and fails `tsc --noEmit`, which is a CI gate even though it is not a
+  // `pnpm lint` or `pnpm build` one.
+  return {
+    get: vi.fn(),
+    getBlob: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  };
 }
 
 describe("HandoffService", () => {

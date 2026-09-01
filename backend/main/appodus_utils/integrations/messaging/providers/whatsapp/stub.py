@@ -45,6 +45,9 @@ class StubOutboundMessage(Object):
     text: Optional[str] = None
     template_name: Optional[str] = None
     template_variables: Optional[Dict[str, str]] = None
+    # The OTP button's value on an authentication template — recorded because it is a
+    # required component of the live send, so a stub run has to be able to prove it.
+    template_button_parameter: Optional[str] = None
     media_url: Optional[str] = None
     media_type: Optional[str] = None
     buttons: List[str] = []
@@ -123,6 +126,7 @@ class WhatsAppStubProvider(IMessageProvider):
             text=payload.text,
             template_name=payload.template_name,
             template_variables=payload.template_variables,
+            template_button_parameter=payload.template_button_parameter,
             media_url=str(payload.media_url) if payload.media_url else None,
             media_type=payload.media_type.value if payload.media_type else None,
             buttons=[b.title for b in (payload.buttons or [])],

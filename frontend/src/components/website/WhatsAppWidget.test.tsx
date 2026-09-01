@@ -3,7 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { PublicConfig } from "@/types/models";
 import { ROUTES } from "@lib/routes";
 
-let pathname = ROUTES.HOME;
+// Annotated, not inferred: `ROUTES` is `as const`, so `ROUTES.HOME` has the literal type
+// `"/"` and every later reassignment to another route fails to typecheck.
+let pathname: string = ROUTES.HOME;
 let config: PublicConfig | null = null;
 
 vi.mock("next/navigation", () => ({ usePathname: () => pathname }));

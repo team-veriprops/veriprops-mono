@@ -1600,11 +1600,89 @@ gives each half an owner that can actually be right.
 - All seven templates are declared with bodies although only `otp_auth` has a sender —
   §7.7 exists to get them submitted early. Their consumer until S6–S9 is the registry page
   and the Meta submission.
-- **TODO(gap):** the authentication-template *button* component shape (copy-code /
-  one-tap) could not be confirmed from Meta's public send-side documentation, so it is
-  declared per template and `otp_auth` ships body-only. Confirm against the real approved
-  template during the S11 live smoke.
+- The authentication-template *button* component was initially left unwired because Meta's
+  own send-side pages 404 or omit it. **Closed by D61** once the shape was confirmed from
+  the BSP documentation that mirrors Meta's contract.
 
 ### Revisit
 If ops needs same-day copy edits at volume, promote the bodies to a table plus an editor —
 the registry page already has the shape for it.
+
+## Decision: D60 — SMS fallback for the linking OTP (amends D46)
+
+### Context
+D46 deferred the §7.4.4 SMS fallback entirely, on the grounds that the upstream §B SMS
+**provider** decision was unmade. Revisiting the code while closing S4's gaps showed that
+premise no longer holds: `MessageRouter`'s `sms` channel already encodes the full chain —
+`MOCK_SMS` exclusively in test/dev/dev_personal, and Termii → Twilio with a fallback order
+for `+234` numbers in production. The decision D46 was waiting on had already been made,
+in the router, and nothing was reading it.
+
+### Options Considered
+1. **Wire the fallback through the existing router chain** — WhatsApp first, SMS to the
+   same number when that send fails.
+2. Keep deferring until §B is formally minuted.
+3. Send both transports every time.
+
+### Chosen Option
+**Option 1.**
+
+### Rationale
+§7.4.4 names SMS as E1's fallback, and a WhatsApp send can fail for reasons that have
+nothing to do with the customer — an unapproved template, a Meta outage, a number with no
+WhatsApp account. Each of those dead-ends account linking for somebody who did nothing
+wrong, and the fallback costs one `except` branch over provider selection that already
+exists.
+
+### Tradeoffs / Constraints
+- The code is stored once, under the `WHATSAPP` channel key, so verification is unaffected
+  by which transport carried it — no key change, no second code.
+- Option 3 is rejected outright: two codes for one request reads as a compromised account.
+- The fallback logs when it fires. A customer who got the PRD's second-choice experience
+  is worth seeing when linking rates diverge from send counts.
+- Delivery stays best-effort — a failing fallback never propagates, because the code is
+  already stored and raising would turn an undelivered message into a failed API call.
+- A code delivered by SMS proves control of the *phone* rather than of WhatsApp on it.
+  That is §7.4.4's own trade, not a new one.
+
+### Revisit
+If §B later names a different provider, it changes the router's chain, not this call site.
+
+## Decision: D61 — Authentication templates send their mandatory OTP button
+
+### Context
+D59 shipped the §7.7 registry with the authentication-template *button* component unwired:
+Meta's public send-side documentation 404s or omits the shape, and shipping a guessed JSON
+as though it were verified was the worse error. Meta **mandates** an OTP button on
+authentication templates, so `otp_auth` could not actually have been delivered.
+
+### Chosen Option
+Emit the button component, with the shape confirmed against the BSP documentation that
+mirrors Meta's contract (360dialog, Infobip, Messangi, YCloud all agree):
+
+```json
+{"type": "button", "sub_type": "url", "index": "0",
+ "parameters": [{"type": "text", "text": "<the code>"}]}
+```
+
+`otp_auth` declares `COPY_CODE`; the declaration's **first** parameter feeds the button,
+which on an authentication template is the one-time password by construction.
+
+### Rationale
+Copy-code and one-tap buttons are both *created* as URL buttons, so both **send**
+identically — the difference is in how the client handles the tap, not in what we
+transmit. That makes one code path correct for either, and removes the guesswork that
+justified deferring.
+
+### Tradeoffs / Constraints
+- The button parameter rides on `WhatsappPayload.template_button_parameter` and is
+  recorded by the stub, so a stub run proves a component the live send requires.
+- Utility templates emit no button — sending a component Meta did not approve is itself a
+  rejection.
+- A guard test fails any AUTHENTICATION template declared without a button.
+- Still to confirm at the S11 live smoke: that the approved template's button matches this
+  shape. The risk is now a mismatch to correct, not an unimplemented requirement.
+
+### Revisit
+If Meta publishes a distinct one-tap send shape, split `MetaTemplateButton` at the
+provider boundary — the declaration already carries the distinction.

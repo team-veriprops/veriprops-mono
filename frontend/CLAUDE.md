@@ -12,6 +12,7 @@ pnpm dev          # http://localhost:3000
 pnpm build
 pnpm start
 pnpm lint
+pnpm typecheck    # tsc --noEmit — a CI gate; neither `lint` nor `build` typechecks test files
 pnpm test         # vitest run
 pnpm test:watch
 ```

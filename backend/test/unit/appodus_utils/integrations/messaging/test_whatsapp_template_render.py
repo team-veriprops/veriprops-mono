@@ -239,6 +239,68 @@ class TestMetaTemplatePayloads:
         assert variables == {"1": "", "2": ""}
 
 
+class TestAuthenticationButton:
+    """Meta mandates an OTP button on authentication templates (§7.7).
+
+    The send must carry a matching `button` component or the message is rejected — so
+    this is not decoration, it is a delivery requirement. Copy-code and one-tap buttons
+    are both created as URL buttons and send identically; the difference is in how the
+    client handles the tap.
+    """
+
+    async def test_the_otp_template_carries_the_code_on_its_button(self):
+        payload = await di[ModelTemplateService].render_whatsapp_payload(
+            AvailableTemplate.WHATSAPP_OTP_AUTH, _CONTEXT
+        )
+        # The button repeats the code so the client can copy or autofill it.
+        assert payload.template_button_parameter == "654123"
+
+    async def test_utility_templates_carry_no_button(self):
+        # Only AUTHENTICATION templates take an OTP button; sending one on a utility
+        # template would be a component Meta did not approve.
+        payload = await di[ModelTemplateService].render_whatsapp_payload(
+            AvailableTemplate.WHATSAPP_REPORT_READY, _CONTEXT
+        )
+        assert payload.template_button_parameter is None
+
+    def test_every_authentication_template_declares_a_button(self):
+        for declaration in declared_templates():
+            if declaration.category.value == "AUTHENTICATION":
+                assert declaration.button.is_otp_button, (
+                    f"{declaration.name} is an authentication template with no OTP button; "
+                    "Meta rejects the send"
+                )
+
+    def test_the_wire_shape_is_a_url_button_at_index_zero(self):
+        from main.appodus_utils.integrations.messaging.models import WhatsappPayload
+        from main.appodus_utils.integrations.messaging.providers.whatsapp.whatsapp_business import (
+            WhatsAppBusinessProvider,
+        )
+
+        payload = WhatsappPayload(
+            template_name="otp_auth",
+            template_variables={"1": "654123", "2": "10 minutes"},
+            template_button_parameter="654123",
+        )
+        components = WhatsAppBusinessProvider._build_template(payload)["template"]["components"]
+        button = next(c for c in components if c["type"] == "button")
+        assert button["sub_type"] == "url"
+        assert button["index"] == "0"
+        assert button["parameters"] == [{"type": "text", "text": "654123"}]
+        # The body still leads: Meta reads the components in order.
+        assert components[0]["type"] == "body"
+
+    def test_no_button_component_when_the_template_has_no_button(self):
+        from main.appodus_utils.integrations.messaging.models import WhatsappPayload
+        from main.appodus_utils.integrations.messaging.providers.whatsapp.whatsapp_business import (
+            WhatsAppBusinessProvider,
+        )
+
+        payload = WhatsappPayload(template_name="report_ready", template_variables={"1": "VP-1"})
+        components = WhatsAppBusinessProvider._build_template(payload)["template"]["components"]
+        assert all(c["type"] != "button" for c in components)
+
+
 class TestPositionalOrdering:
     """The wire ordering, at the provider boundary."""
 

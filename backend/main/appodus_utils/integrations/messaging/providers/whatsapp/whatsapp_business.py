@@ -137,6 +137,17 @@ class WhatsAppBusinessProvider(IMessageProvider):
                     )
                 ],
             })
+        if payload.template_button_parameter is not None:
+            # Meta mandates an OTP button on authentication templates, and the send must
+            # carry a matching component or the message is rejected. Copy-code and
+            # one-tap buttons are both created as URL buttons, so both send this shape —
+            # the difference is in how the client handles the tap.
+            components.append({
+                "type": "button",
+                "sub_type": "url",
+                "index": "0",
+                "parameters": [{"type": "text", "text": payload.template_button_parameter}],
+            })
         return {
             "type": "template",
             "template": {

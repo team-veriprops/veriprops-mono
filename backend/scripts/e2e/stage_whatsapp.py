@@ -331,9 +331,15 @@ def _run_linking_checks(ctx: Ctx) -> None:
     check("the linking OTP is sent as the §7.7 `otp_auth` template, not free text",
           bool(templated), f"templates={[m.get('templateName') for m in messages]}")
     if templated:
-        variables = templated[-1].get("templateVariables") or {}
+        sent_template = templated[-1]
+        variables = sent_template.get("templateVariables") or {}
         check("the code is Meta's first positional body parameter",
               variables.get("1") == TEST_OTP, f"variables={variables}")
+        # Meta mandates an OTP button on authentication templates and rejects a send
+        # without the matching component, so the button parameter is part of delivery.
+        check("the authentication template carries its mandatory OTP button parameter",
+              sent_template.get("templateButtonParameter") == TEST_OTP,
+              f"button={sent_template.get('templateButtonParameter')}")
 
     check("the customer-facing brand is the display name, not the lowercase slug",
           any((m.get("text") or "").startswith("Veriprops") for m in messages),

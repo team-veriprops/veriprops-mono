@@ -34,11 +34,13 @@ status: in progress — S1–S4 complete (+ S4.1 template registry)
 - none (gate decisions D42–D48; run-time decisions D49–D58)
 
 ## Carried into later slices
-- Meta **template** sends are wired (D59): all seven §7.7 templates are declared with
-  bodies, `otp_auth` sends as a template, and the admin registry syncs approval status.
-  The one open piece is the authentication-template **button** component shape — Meta's
-  public send-side docs do not specify it, so `otp_auth` ships body-only with a
-  `TODO(gap)` to confirm during the S11 live smoke.
+- Meta **template** sends are wired (D59/D61): all seven §7.7 templates are declared with
+  bodies, `otp_auth` sends as a template with its mandatory OTP button, and the admin
+  registry syncs approval status. Still to confirm at the S11 live smoke: that the
+  approved template's button matches the shape we send — a mismatch to correct, not an
+  unimplemented requirement.
+- The §7.4.4 SMS fallback is wired (D60, amending D46): a failed WhatsApp send falls back
+  to SMS on the same number through the router's existing Termii → Twilio chain.
 - Six of the seven templates have no sender yet: milestones + report delivery land in S8,
   `window_reopen` in S7 (`WhatsAppWindowService` is already in place), `delegate_status`
   in S9.

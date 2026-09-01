@@ -47,18 +47,29 @@ self_audit:
        `new_house_listing.jinja2`) had no AvailableTemplate entry and a stale variable vocabulary.
        Deleted, with a guard test that every template file maps to an enum entry — the reverse of
        the existing rule, so dead copy cannot accumulate again."
+    - "Fixed: `tsc --noEmit` — a CI gate — had been red since S1/S3 on eight errors in two test
+       files, invisible locally because neither `pnpm lint` nor `pnpm build` typechecks tests.
+       A `ROUTES.HOME` initialiser narrowed a variable to the literal \"/\", and an HttpClient mock
+       was missing `getBlob`. Both fixed, and `pnpm typecheck` added so the gate is runnable
+       outside CI."
     - "Fixed: the ops_unhappy sweep checks asserted this caller's reclaim count, which the dev
        server's own 15-minute APScheduler sweep can consume seconds earlier. They now assert the
        outcome (task back to PENDING with a strike, task out of the pool) — the property under
        test is that an unaccepted assignment gets reclaimed, not who reclaimed it."
-    - "Deferred by design: the authentication-template *button* component shape (copy-code /
-       one-tap) is not confirmable from Meta's public send-side docs, so it is declared per
-       template and `otp_auth` ships body-only. TODO(gap) to confirm at the S11 live smoke."
+    - "CLOSED (D61): the authentication-template button is wired. Meta mandates an OTP button on
+       authentication templates, so `otp_auth` could not have been delivered without it. Meta's own
+       send-side pages 404, but four BSP docs that mirror their contract agree on the shape
+       (sub_type url, index \"0\", the code as the single parameter), and copy-code and one-tap
+       send identically. The stub records the button parameter, so a stub run proves a component
+       the live send requires. Remaining: confirm the approved template matches, at the S11 smoke."
     - "Deferred by design: six of the seven templates have no sender yet — milestones and report
        delivery at S8, `window_reopen` at S7 (WhatsAppWindowService already landed),
        `delegate_status` at S9. Declaring them early is the point of §7.7."
-    - "Not fixable here: the D46 SMS fallback stays a TODO(gap) — blocked on the unmade upstream
-       §B provider decision."
+    - "CLOSED (D60, amending D46): the §7.4.4 SMS fallback is wired. D46 deferred it on the unmade
+       §B *provider* decision, but MessageRouter's sms channel already encoded the whole chain —
+       MOCK_SMS exclusively in test/dev, Termii → Twilio for +234 in prod. The decision had been
+       made in the router and nothing was reading it. WhatsApp first, SMS to the same number when
+       that fails; one code under one key, so verification is unaffected by which transport won."
 
 clarification_needed: []
 
@@ -69,4 +80,4 @@ git:
 next_action: "await review of S4.1, then `run` — begin S5 (bot engine core) per docs/execution-plan.md"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-01 S4.1 complete (§7.7 registry + S4 follow-up defects), full drive-through ALL PASSED"
+last_checkpoint: "2026-09-01 S4.1 + follow-up (auth button D61, SMS fallback D60, tsc gate), full drive-through ALL PASSED"

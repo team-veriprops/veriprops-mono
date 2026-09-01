@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loguru import Logger
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional, Union
 
 from main.appodus_utils.db.types.phone import PhoneNumber
@@ -184,17 +184,12 @@ async def send_verification_msg(
 
     try:
         if channel == OtpChannel.WHATSAPP:
-            # PRD §7.4.4 / D46: WhatsApp account linking delivers its code over WhatsApp
-            # itself, using the §7.7 `otp_auth` template.
-            # TODO(gap): SMS fallback (D46) — wire the router's fallback chain here once
-            # the upstream SMS provider decision (§B) lands.
-            await account_security_messages.send_whatsapp_link_verification_message(
-                recipient=MessageRequestRecipient(phone=recipient),
-                context={
-                    MessageContext.OTP: code,
-                    MessageContext.VALIDITY: _validity_label(),
-                },
-                expires_at=expires_at,
+            # PRD §7.4.4: WhatsApp account linking delivers its code over WhatsApp itself,
+            # using the §7.7 `otp_auth` template, and falls back to SMS on the same number
+            # (D60, amending D46). The code is stored under the WHATSAPP channel key
+            # either way, so verification is unaffected by which transport carried it.
+            await _send_whatsapp_otp_with_sms_fallback(
+                account_security_messages, recipient, code, expires_at
             )
         elif isinstance(recipient, EmailRecipient):
             firstname, _, lastname = Utils.parse_fullname(str(recipient.fullname))
@@ -226,3 +221,47 @@ async def send_verification_msg(
             )
     except Exception as e:
         logger.warning("OTP delivery failed for {} via {}: {}", recipient, channel.value, e)
+
+
+async def _send_whatsapp_otp_with_sms_fallback(
+        account_security_messages,
+        recipient: PhoneNumber,
+        code: str,
+        expires_at: datetime,
+) -> None:
+    """Deliver an account-linking OTP over WhatsApp, falling back to SMS (§7.4.4, D60).
+
+    WhatsApp is the primary transport because the number being linked *is* a WhatsApp
+    number, so a code that arrives there is the most direct proof of control. But a
+    WhatsApp send can fail for reasons that have nothing to do with the customer — an
+    unapproved template, a Meta outage, a number with no WhatsApp account — and a linking
+    flow that dead-ends on any of those strands somebody who did nothing wrong.
+
+    SMS to the same number is the fallback §7.4.4 names. The provider chain is the
+    messaging router's existing one (Termii → Twilio for +234, the mock provider in
+    dev/test), so this needs no new provider decision — which is the blocker D46 deferred
+    on, and which the router had already settled.
+
+    The fallback is deliberately **not** silent: a customer who received the code by SMS
+    got the experience the PRD's second choice describes, and that is worth seeing in the
+    logs when diagnosing why linking rates differ from send counts.
+    """
+    context = {MessageContext.OTP: code, MessageContext.VALIDITY: _validity_label()}
+    try:
+        await account_security_messages.send_whatsapp_link_verification_message(
+            recipient=MessageRequestRecipient(phone=recipient),
+            context=context,
+            expires_at=expires_at,
+        )
+        return
+    except Exception as e:
+        logger.warning(
+            "WhatsApp OTP delivery failed for {}; falling back to SMS (§7.4.4): {}",
+            recipient.international_number, e,
+        )
+
+    await account_security_messages.send_direct_phone_verification_message(
+        recipient=MessageRequestRecipient(phone=recipient),
+        context=context,
+        expires_at=expires_at,
+    )
