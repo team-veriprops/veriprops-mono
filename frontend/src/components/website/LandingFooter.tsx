@@ -163,9 +163,9 @@ export default function LandingFooter() {
             © {new Date().getFullYear()} Veriprops. Jurisdiction: Nigeria. All communications
             are recorded for quality and security.
           </p>
-          <p
-            className="text-xs italic text-brand-on-surface-variant/60"
-          >
+          {/* Full-strength colour: this is the standing accuracy caveat, not decoration,
+              so it has to be readable (WCAG AA) rather than merely present. */}
+          <p className="text-xs italic text-brand-on-surface-variant">
             &ldquo;We reduce uncertainty. We do not eliminate it.&rdquo;
           </p>
         </div>

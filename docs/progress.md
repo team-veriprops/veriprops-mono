@@ -33,8 +33,8 @@ status: in progress — S1–S3 complete
 - none (gate decisions D42–D48; run-time decisions D49–D52)
 
 ## Carried into later slices
-- Migration 0002/0003 verified by offline SQL generation only — no database was running
-  locally. Apply and re-run the drive-through before relying on them.
+- Migrations 0002/0003 are applied and verified against live Postgres; the UAT suite is
+  green on chromium-desktop (24/24). The remaining five engines have not been run.
 - S7 owns the outbound half of the console: agent replies, Meta's 24-hour window, and the
   §7.6.3 policy replies for non-text inbound. S2 journals and labels non-text; it does not
   answer it.

@@ -8,12 +8,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter
 from kink import di
 
 from main.app.config.settings import settings
 from main.app.domain.dev.service import DevSeedService
 from main.appodus_utils.config.settings import Environment
+from main.appodus_utils import Object
 from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
@@ -65,15 +66,27 @@ async def rewind_message(recipient: str, rewind_expiry: bool = False):
 # rest of this router.
 
 
+class InjectWhatsAppInboundDto(Object):
+    """Body for a simulated Meta delivery. A DTO rather than embedded `Body` scalars so
+    the wire stays camelCase like every other endpoint — `Body(embed=True)` binds the raw
+    Python parameter name and would quietly break that convention."""
+
+    from_phone: str
+    text: Optional[str] = None
+    kind: InboundKind = InboundKind.TEXT
+    wamid: Optional[str] = None
+    sender_name: Optional[str] = None
+    interactive_id: Optional[str] = None
+
+
+class IssueHandoffTokenDto(Object):
+    case_id: str
+    customer_id: str
+    intent: HandoffIntent = HandoffIntent.PAY
+
+
 @dev_router.post("/whatsapp/inbound", response_model=SuccessResponse[dict])
-async def inject_whatsapp_inbound(
-    from_phone: str = Body(..., embed=True),
-    text: Optional[str] = Body(default=None, embed=True),
-    kind: str = Body(default=InboundKind.TEXT.value, embed=True),
-    wamid: Optional[str] = Body(default=None, embed=True),
-    sender_name: Optional[str] = Body(default=None, embed=True),
-    interactive_id: Optional[str] = Body(default=None, embed=True),
-):
+async def inject_whatsapp_inbound(req: InjectWhatsAppInboundDto):
     """Deliver an inbound WhatsApp message as if Meta had posted it.
 
     Enters the same ingestion path as a real signed delivery — thread resolution, fraud
@@ -81,26 +94,22 @@ async def inject_whatsapp_inbound(
     """
     _require_non_prod()
     return SuccessResponse[dict](data=await service.inject_whatsapp_inbound(
-        from_phone=from_phone,
-        text=text,
-        kind=kind,
-        wamid=wamid,
-        sender_name=sender_name,
-        interactive_id=interactive_id,
+        from_phone=req.from_phone,
+        text=req.text,
+        kind=req.kind.value,
+        wamid=req.wamid,
+        sender_name=req.sender_name,
+        interactive_id=req.interactive_id,
     ))
 
 
 @dev_router.post("/whatsapp/handoff-token", response_model=SuccessResponse[dict])
-async def issue_handoff_token(
-    case_id: str = Body(..., embed=True),
-    customer_id: str = Body(..., embed=True),
-    intent: str = Body(default=HandoffIntent.PAY.value, embed=True),
-):
+async def issue_handoff_token(req: IssueHandoffTokenDto):
     """Mint a handoff link for a case — the entry point the /wa landings need before the
     bot flows that normally issue them exist."""
     _require_non_prod()
     return SuccessResponse[dict](data=await service.issue_handoff_token(
-        case_id=case_id, customer_id=customer_id, intent=intent,
+        case_id=req.case_id, customer_id=req.customer_id, intent=req.intent.value,
     ))
 
 

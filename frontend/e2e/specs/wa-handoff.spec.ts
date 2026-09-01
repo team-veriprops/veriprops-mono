@@ -11,21 +11,25 @@ import { expect, test } from "@playwright/test";
 import { ROUTES } from "@lib/routes";
 import { HandoffIntent } from "@/types/handoff";
 
-import { api } from "../helpers/api";
+import { anonymousApi } from "../helpers/api";
 import { expectNoA11yViolations } from "../helpers/a11y";
 import { goto } from "../helpers/app";
 import { readSeed } from "../helpers/seed";
 
-/** Mint a link the way the bot will once its flows land (backend dev contract). */
+/** Mint a link the way the bot will once its flows land (backend dev contract).
+ *
+ * Anonymous on purpose: the dev endpoint needs no session, and neither does the landing
+ * it produces a link for — that is the property under test. */
 async function mintToken(intent: HandoffIntent): Promise<string> {
   const seed = readSeed();
-  const client = await api();
-  const res = await client.post("/dev/whatsapp/handoff-token", {
+  const client = await anonymousApi();
+  // ApiClient unwraps the SuccessResponse envelope, so this is the payload itself.
+  const minted = await client.post<{ token: string }>("/dev/whatsapp/handoff-token", {
     caseId: seed.verification.id,
     customerId: seed.customer.id,
     intent,
   });
-  return res.data.token;
+  return minted.token;
 }
 
 test.describe("UAT-WAH — handoff landings @P0", () => {

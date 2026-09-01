@@ -24,12 +24,16 @@ self_audit:
   findings:
     - "S1–S3 gates green: backend 1156 unit tests, ruff + mypy clean; frontend 494 unit tests,
        eslint clean, next build ok."
-    - "OPEN: migrations 0002 and 0003 are verified by offline SQL generation only — Docker/Postgres
-       was not running locally, so neither has been applied to a live database. Apply them and run
-       the drive-through before trusting them."
-    - "OPEN: the UAT specs added this cycle (whatsapp-widget, wa-handoff) have not been executed —
-       they need a live HTTPS stack. They are written against the seeded scenario and the dev
-       endpoints, so they should run as-is once one is up."
+    - "CLOSED: migrations 0002/0003 applied to a live Postgres. Verified three ways — additive on an
+       already-migrated schema, full chain on a fresh database, and a downgrade/re-upgrade round
+       trip. The in-place result is column-for-column identical to the fresh chain, and both unique
+       constraints (wamid, jti) were shown to reject a duplicate."
+    - "CLOSED: full UAT suite green on chromium-desktop, 24/24, including the 9 new scenarios.
+       Still to run: the other five engines (webkit especially, per the __Host- cookie note)."
+    - "Live run found three defects the mocked tests could not (see the S1–S3 hardening commit):
+       camelCase body binding on the new dev endpoints; 403 on a dead handoff link hard-navigating
+       the browser to /forbidden instead of the recovery page; and pre-existing WCAG AA contrast
+       failures on the marketing pages, one of them the §3.5 legal disclaimer."
     - "S2 defect fixed: the fraud scan ran on SYSTEM/SYSTEM_AUTO messages despite the docstring
        claiming otherwise, so bot copy carrying veriprops.ng / wa.me links would have been held."
     - "S3 defect fixed (found by writing UAT-WAH-03): the landing re-redeemed on every mount, so a
@@ -50,4 +54,4 @@ git:
 next_action: "await `run` — begin S4 (OTP account linking, E1) per docs/execution-plan.md"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-01 S1–S3 complete (widget, channel foundation, handoff tokens)"
+last_checkpoint: "2026-09-01 S1–S3 complete and live-verified (migrations applied, UAT 24/24 on chromium)"

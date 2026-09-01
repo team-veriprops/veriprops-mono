@@ -40,7 +40,7 @@ from main.app.domain.payment.service import PaymentService
 from main.app.domain.verification.service import VerificationService
 from main.appodus_utils.common.rate_limit import RateLimiter
 from main.appodus_utils.db.models import SuccessResponse
-from main.appodus_utils.exception.exceptions import ForbiddenException
+from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 
 handoff_router = APIRouter(prefix="/public/wa/handoff", tags=["WhatsApp Handoff"])
 handoff_service: HandoffTokenService = di[HandoffTokenService]
@@ -84,7 +84,12 @@ async def redeem(
         )
     except HandoffTokenError:
         # One response for every failure — expired, replayed, forged, wrong landing.
-        raise ForbiddenException(message=TOKEN_REJECTED_MESSAGE)
+        # **Not-found, not forbidden**, matching how a revoked share token reads (§13.3).
+        # "Forbidden" concedes that the link exists and someone else may use it; not-found
+        # concedes nothing, which is the whole point of making failures indistinguishable.
+        # It also keeps a dead link on its own recovery page: the shared HTTP client
+        # hard-navigates the browser to /forbidden on any 403.
+        raise ResourceNotFoundException(resource=TOKEN_REJECTED_MESSAGE)
 
     verification = await verification_service.get_by_id(claims.case)
     set_grant_cookie(response, claims)
@@ -109,7 +114,7 @@ async def initiate_payment(request: Request):
     """
     grant = read_grant(request, HandoffIntent.PAY)
     if grant is None:
-        raise ForbiddenException(message=TOKEN_REJECTED_MESSAGE)
+        raise ResourceNotFoundException(resource=TOKEN_REJECTED_MESSAGE)
 
     payment = await payment_service.initiate(
         grant.case_id, grant.customer_id, PaymentMethodKind.CARD,

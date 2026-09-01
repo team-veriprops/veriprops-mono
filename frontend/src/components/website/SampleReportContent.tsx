@@ -110,8 +110,9 @@ export default function SampleReportContent() {
             ))}
           </div>
 
-          {/* Legal footer */}
-          <p className="px-8 py-5 text-xs italic bg-brand-surface-low text-brand-on-surface-variant/70">
+          {/* Legal footer — full-strength colour. This is the disclaimer the §3.5
+              liability framing rests on; a caveat nobody can read is not a caveat. */}
+          <p className="px-8 py-5 text-xs italic bg-brand-surface-low text-brand-on-surface-variant">
             This report represents a professional opinion, not a legal guarantee. Findings are
             based on information available at the time of verification. Veriprops — Jurisdiction:
             Nigeria. &ldquo;We reduce uncertainty. We do not eliminate it.&rdquo;
