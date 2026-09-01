@@ -24,7 +24,16 @@ import os
 import time
 import uuid
 
-from .harness import CONSENT_VERSION, Ctx, check, client, idem_key, pin_cookie_header, warn
+from .harness import (
+    CONSENT_VERSION,
+    TEST_OTP,
+    Ctx,
+    check,
+    client,
+    idem_key,
+    pin_cookie_header,
+    warn,
+)
 
 # The webhook secret is Doppler-managed and absent from committed env files, so the
 # signature checks run only when the operator started the backend with one and exported
@@ -34,7 +43,11 @@ from .harness import CONSENT_VERSION, Ctx, check, client, idem_key, pin_cookie_h
 _APP_SECRET = os.environ.get("WHATSAPP_APP_SECRET_KEY", "")
 _VERIFY_TOKEN = os.environ.get("WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN", "")
 _PLACEHOLDERS = {"", "CHANGE_ME"}
-_CUSTOMER_PHONE = "2348012345678"
+# A fresh number per run. `/dev/reset` clears the database, but the OTP service's
+# resend counters live in Redis/KV and are keyed on the **number**, not the account — so
+# a fixed number made the second run inside the lockout window fail on a rate limit that
+# has nothing to do with what the stage is testing.
+_CUSTOMER_PHONE = f"23480{uuid.uuid4().int % 10**8:08d}"
 
 
 def _envelope(wamid: str, text: str, phone: str = _CUSTOMER_PHONE) -> bytes:
@@ -91,6 +104,9 @@ def run(ctx: Ctx) -> None:
 
     # ── S3: a handoff link carries a real payment to PAID ─────────────────────
     _run_handoff_checks(ctx)
+
+    # ── S4: the number becomes an identity, and stops being one on unlink ─────
+    _run_linking_checks(ctx)
 
 
 def _run_webhook_checks(ctx: Ctx) -> None:
@@ -157,7 +173,10 @@ def _run_console_checks(ctx: Ctx) -> None:
 
     # Exactly one console message for the redelivered wamid (the dedup, proved end to end).
     threads = admin.get("/chat/conversations").json()["data"]
-    wa_threads = [t for t in threads if t.get("channel") == "WHATSAPP"]
+    # Selected by this run's own number: a WhatsApp thread from an earlier run would
+    # otherwise be picked up and asserted against.
+    wa_threads = [t for t in threads if t.get("channel") == "WHATSAPP"
+                  and str(t.get("externalRef", "")).endswith(_CUSTOMER_PHONE[-10:])]
     check("a WhatsApp enquiry opens a thread in the admin console (Decision K)",
           len(wa_threads) >= 1, f"threads={len(wa_threads)}")
 
@@ -267,6 +286,84 @@ def _run_handoff_checks(ctx: Ctx) -> None:
     r = client().post("/public/wa/handoff/pay/initiate")
     check("payment initiation is refused without a grant", r.status_code == 404,
           f"http {r.status_code}")
+
+
+def _run_linking_checks(ctx: Ctx) -> None:
+    """§7.4.4 account linking, end to end on the stub transport (WA-23/WA-24/WA-25).
+
+    Three things cannot be proved without a live stack, and all three are the point of
+    the slice: the code really goes out over **WhatsApp** (the stub outbox is the
+    evidence), the console thread this number has been talking in really gains an owner
+    rather than a second thread appearing, and unlinking really releases the number so
+    another account could claim it.
+    """
+    root, customer, admin = ctx.root, ctx.customer, ctx.admin
+
+    link = customer.get("/channel/whatsapp/link/me").json()["data"]
+    check("a fresh account starts with no WhatsApp link (§7.4.4)",
+          link.get("status") != "ACTIVE" and not link.get("phoneE164"), f"link={link}")
+
+    root.delete("/dev/whatsapp/outbox")
+    r = customer.post("/channel/whatsapp/link/me/start",
+                      json={"phoneE164": f"+{_CUSTOMER_PHONE}"})
+    check("starting a link is accepted (§7.4.4, WA-23)", r.status_code == 200,
+          f"http {r.status_code}: {r.text[:200]}")
+    if r.status_code != 200:
+        return
+
+    # D46: the linking code travels over WhatsApp itself, not SMS. The stub outbox is
+    # the only place that can prove it — a unit test mocks the transport away.
+    sent = root.get("/dev/whatsapp/outbox", params={"recipient": _CUSTOMER_PHONE}).json()["data"]
+    messages = sent.get("messages", [])
+    check("the linking code goes out over WhatsApp, not SMS (D46)",
+          bool(messages), f"outbox={sent}")
+    check("it carries the deterministic code, to the number being linked",
+          any(TEST_OTP in (m.get("text") or "") for m in messages),
+          f"bodies={[(m.get('text') or '')[:60] for m in messages]}")
+
+    # A number mid-attempt is not a link: nothing may resolve to the account yet.
+    pending = customer.get("/channel/whatsapp/link/me").json()["data"]
+    check("a pending attempt is not yet a link (§7.4.4)", pending.get("status") == "PENDING",
+          f"status={pending.get('status')}")
+
+    r = customer.post("/channel/whatsapp/link/me/confirm",
+                      json={"phoneE164": f"+{_CUSTOMER_PHONE}", "code": "000000"})
+    check("a wrong code does not link the number", r.status_code >= 400, f"http {r.status_code}")
+
+    r = customer.post("/channel/whatsapp/link/me/confirm",
+                      json={"phoneE164": f"+{_CUSTOMER_PHONE}", "code": TEST_OTP})
+    check("the right code links the number (deterministic OTP)", r.status_code == 200,
+          f"http {r.status_code}: {r.text[:200]}")
+    linked = customer.get("/channel/whatsapp/link/me").json()["data"]
+    check("the account now shows an active WhatsApp link",
+          linked.get("status") == "ACTIVE" and linked.get("phoneE164", "").endswith(
+              _CUSTOMER_PHONE[-10:]), f"link={linked}")
+
+    # §7.8: one conversation object per person — the *existing* thread gains an owner.
+    threads = admin.get("/chat/conversations").json()["data"]
+    wa_threads = [t for t in threads if t.get("channel") == "WHATSAPP"
+                  and str(t.get("externalRef", "")).endswith(_CUSTOMER_PHONE[-10:])]
+    check("linking adopts the existing thread instead of opening a second one (§7.8)",
+          len(wa_threads) == 1, f"threads={len(wa_threads)}")
+
+    # WA-25: unlinking releases the number and the thread goes cold.
+    r = customer.delete("/channel/whatsapp/link/me")
+    check("the customer can unlink their number (WA-25)", r.status_code == 200,
+          f"http {r.status_code}: {r.text[:160]}")
+    after = customer.get("/channel/whatsapp/link/me").json()["data"]
+    check("an unlinked account holds no number at all — a retained one would lock that "
+          "number out of every other account forever",
+          after.get("status") != "ACTIVE" and not after.get("phoneE164"), f"link={after}")
+
+    # An unlinked account can start over. Deliberately a *different* number: the OTP
+    # service caps resends per number, so re-sending to the one just used would be
+    # refused by that cap rather than by anything about linking — the row's release is
+    # proved by the unique constraints in the unit and migration checks.
+    r = customer.post("/channel/whatsapp/link/me/start",
+                      json={"phoneE164": f"+23481{uuid.uuid4().int % 10**8:08d}"})
+    check("an unlinked account can start a fresh link (WA-25)", r.status_code == 200,
+          f"http {r.status_code}: {r.text[:200]}")
+    customer.delete("/channel/whatsapp/link/me")
 
 
 def _create_payable_case(ctx: Ctx) -> str:

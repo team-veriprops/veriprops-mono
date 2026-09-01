@@ -117,11 +117,23 @@ class ModelTemplateService:
             context: Dict[str, Any],
             **kwargs
     ) -> WhatsappPayload:
-        """Convenience method specifically for rendering WhatsappPayload"""
-        return await self.render_model(
-            model_class=WhatsappPayload,
+        """Render a WhatsApp payload from its template.
+
+        Unlike the push payloads above, this does **not** go through ``render_model``:
+        those templates emit JSON that is parsed into a model, while every WhatsApp
+        template in this repo is the plain message body a customer reads in the thread.
+        Feeding one to a JSON parser fails on the first word.
+
+        TODO(gap): Meta-approved template sends (`template_name` + positional
+        `template_variables`) are not wired here. `WhatsappPayload.validate_content`
+        rejects a template without its variables, and the variable mapping per template
+        is the §7.7 registry's job — it lands with the registry in S8. Until then a
+        WhatsApp message goes out as text, which the Cloud API accepts only inside the
+        24-hour service window.
+        """
+        body = await self.template_service.render_message(
             channel=MessageChannel.WHATSAPP,
             template_name=template,
             context=context,
-            **kwargs
         )
+        return WhatsappPayload(text=body.strip(), **kwargs)

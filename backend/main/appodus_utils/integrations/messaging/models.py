@@ -580,6 +580,19 @@ class MessageRequestRecipient(Object):
         description="BCC recipient(s). Only applicable for email channel."
     )
 
+    @property
+    def phone_digits(self) -> str:
+        """The recipient's number in the digits-only form WhatsApp addresses (``wa_id``).
+
+        Meta identifies a participant by digits with no leading ``+``, while the rest of
+        the app keys identity on E.164 — one character apart, and the reason the WhatsApp
+        request builder reads this rather than `phone.international_number`.
+        """
+        from main.appodus_utils.integrations.messaging.providers.whatsapp.phone import (
+            to_wa_recipient,
+        )
+        return to_wa_recipient(self.phone.international_number) if self.phone else ""
+
 
 class MultiChannelMessageRequest(Object):
     recipient: MessageRequestRecipient

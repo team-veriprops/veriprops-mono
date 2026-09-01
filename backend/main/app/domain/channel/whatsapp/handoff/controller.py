@@ -25,7 +25,7 @@ from main.app.domain.channel.whatsapp.handoff.grant import (
     read_grant,
     set_grant_cookie,
 )
-from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
+from main.app.domain.channel.whatsapp.handoff.models import ACTION_INTENTS, HandoffIntent
 from main.app.domain.channel.whatsapp.handoff.service import HandoffTokenService
 from main.app.domain.channel.whatsapp.handoff.tokens import (
     TOKEN_REJECTED_MESSAGE,
@@ -72,6 +72,12 @@ async def redeem(
     "Picking up where you left off" is a spec requirement (§7.4.2): silently losing the
     customer's context is a violation, not a cosmetic gap.
     """
+    if intent not in ACTION_INTENTS:
+        # `link` tokens are redeemed by the authenticated linking endpoints, never here:
+        # this router hands out case context, and a link token names no case. Answering
+        # not-found keeps the two token shapes from being probed against each other.
+        raise ResourceNotFoundException(resource=TOKEN_REJECTED_MESSAGE)
+
     # A grant the caller already holds for this intent means they may be reloading the
     # page rather than replaying a forwarded link (D51).
     held = read_grant(request, intent)

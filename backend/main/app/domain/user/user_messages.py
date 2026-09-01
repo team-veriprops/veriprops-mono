@@ -114,6 +114,25 @@ class AccountSecurityMessages(BaseMessageSender):
             expires_at=expires_at
         )
 
+    async def send_whatsapp_link_verification_message(self, recipient: MessageRequestRecipient,
+                                                      context: dict[MessageContext, Any],
+                                                      expires_at: Optional[datetime] = None):
+        """The §7.4.4 account-linking OTP, delivered over WhatsApp itself (D46).
+
+        WhatsApp-only on purpose: the code proves control of *this* WhatsApp number, so
+        delivering it anywhere else would prove something different.
+        """
+        await self._send_direct_message(
+            recipient=recipient,
+            template=AvailableTemplate.WHATSAPP_OTP_AUTH,
+            context=context,
+            category=MessageCategory.VERIFICATION,
+            default_channels=[
+                MessageChannel.WHATSAPP
+            ],
+            expires_at=expires_at
+        )
+
     async def send_login_security_alert_message(self, recipient_user_id: MessageRecipientUserId,
                                                 context_modules:List[MessageContextModule]):
         await self._send_message(

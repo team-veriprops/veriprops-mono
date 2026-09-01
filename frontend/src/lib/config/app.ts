@@ -32,6 +32,9 @@ export const SESSION_EXPIRED_REDIRECT_DELAY_MS = 1_500; // expired-state handoff
 
 // ── Phone / locale ──
 export const DEFAULT_DIAL_CODE = "+234";
+// The ISO country the dial code above belongs to. Kept beside it so a country selector
+// and the dial code it implies cannot start the page disagreeing.
+export const DEFAULT_COUNTRY_CODE = "NG";
 
 // ── Brand contact (customer-facing support address) ──
 export const SUPPORT_EMAIL = "support@veriprops.ng";

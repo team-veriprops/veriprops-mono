@@ -20,6 +20,9 @@ export const ROUTES = {
     SECURITY: '/account/security',
     DEVICES: '/account/devices',
     LINKED: '/account/linked',
+    // PRD §7.4.4 — the WhatsApp number link, separate from the OAuth sign-in providers
+    // above: it has its own OTP lifecycle and its own consequences when revoked.
+    WHATSAPP: '/account/whatsapp',
     PASSWORD: '/account/password',
     CONSENTS: '/account/consents',
     DATA_PRIVACY: '/account/data-privacy',
@@ -122,6 +125,11 @@ export const ROUTES = {
     PAY: (token: string) => `/wa/pay/${token}`,
     UPLOAD: (token: string) => `/wa/upload/${token}`,
     REPORT: (token: string) => `/wa/report/${token}`,
+    // §7.4.4 WhatsApp→web linking. Unlike its siblings this one *does* need a session —
+    // the token says which number is being claimed, the login says which account claims
+    // it — so `WA_LINK_PREFIX` puts it inside `proxy.ts`'s protected set and the customer
+    // is sent to sign in (or register) and returned here.
+    LINK: (token: string) => `/wa/link/${token}`,
   },
 
   FORBIDDEN: '/forbidden',
@@ -164,6 +172,15 @@ export const PAYMENT_FLOW_PATH_PATTERNS: readonly RegExp[] = [
   /^\/portal\/verifications\/[^/]+\/pay\/?$/,
   /^\/wa\/pay(\/|$)/,
 ] as const;
+
+/**
+ * The one `/wa/*` landing that needs a session (PRD §7.4.4). Its siblings are public —
+ * the handoff token *is* the authorization there — but linking has to know which account
+ * is claiming the number, so this prefix joins `proxy.ts`'s protected set. A static
+ * prefix rather than the `WA.LINK(token)` builder, because the guard matches path
+ * segments, not a specific token.
+ */
+export const WA_LINK_PREFIX = '/wa/link';
 
 // export type AuthIntent = 'verify' | 'agent' | 'default';
 

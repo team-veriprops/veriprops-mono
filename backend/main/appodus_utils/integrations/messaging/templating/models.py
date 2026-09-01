@@ -15,6 +15,9 @@ class AvailableTemplate(str, Enum):
     NEW_AGENT_WELCOME = "new_agent_welcome"  # Email, WhatsApp, Mobile push
     EMAIL_VERIFICATION = "email_verification"  # Email
     PHONE_VERIFICATION = "phone_verification"  # SMS, WhatsApp
+    # PRD §7.7 — the Meta authentication template that carries the account-linking OTP.
+    # The slug is the Meta template name, so the registry and the wire agree.
+    WHATSAPP_OTP_AUTH = "otp_auth"  # WhatsApp
     NAME_UPDATE_SUCCESS= "name_update_success" # Email
     LOGIN_DIFF_DEVICE_SECURITY_ALERT = "login_diff_device_security_alert"  # SMS, Email, WhatsApp, Mobile push
     PASSWORD_UPDATE_SUCCESS = "password_update_success"  # Email

@@ -16,15 +16,26 @@ from main.appodus_utils.db.models import UTCDateTime
 
 
 class HandoffIntent(str, enum.Enum):
-    """The one action a token authorizes (PRD §7.4.2).
+    """The one action a token authorizes (PRD §7.4.2, §7.4.4).
 
-    Deliberately closed and small: a token names an intent and a case, and nothing in the
-    system will honour it for anything else.
+    Deliberately closed and small: a token names an intent and a subject, and nothing in
+    the system will honour it for anything else.
+
+    The set has two shapes, and they are mutually exclusive by construction (D55). The
+    three **action** intents name a case and the customer who owns it. ``LINK`` names a
+    phone number and nothing else — it is minted for a WhatsApp number that has no
+    account yet, so there is no customer to name and no case to scope to.
     """
 
     PAY = "pay"
     UPLOAD = "upload"
     REPORT = "report"
+    LINK = "link"
+
+
+# The intents that act on a case. Membership is what the claim-shape validator keys on,
+# so a fourth action intent added above is covered by simply being listed here.
+ACTION_INTENTS = frozenset({HandoffIntent.PAY, HandoffIntent.UPLOAD, HandoffIntent.REPORT})
 
 
 # ─── ORM ──────────────────────────────────────────────────────────
@@ -36,8 +47,12 @@ class HandoffTokenRedemption(BaseEntity):
     # not bookkeeping: two concurrent redemptions race here and exactly one wins.
     jti = Column(String(64), nullable=False)
     intent = Column(String(10), nullable=False)
-    case_id = Column(String(36), nullable=False)
+    # Null for a `link` token, which names a phone number rather than a case (D55).
+    case_id = Column(String(36), nullable=True)
     customer_id = Column(String(36), nullable=True)
+    # The number a `link` token was minted for — the other half of the pen-check trail
+    # when the redemption names no case.
+    phone_e164 = Column(String(32), nullable=True)
     redeemed_at = Column(UTCDateTime, nullable=False)
     # Kept for the §7.11 pen-check trail: which client actually burned the link.
     redeemed_ip = Column(String(45), nullable=True)
@@ -52,8 +67,9 @@ class HandoffTokenRedemption(BaseEntity):
 class CreateHandoffTokenRedemptionDto(Object):
     jti: str
     intent: HandoffIntent
-    case_id: str
+    case_id: Optional[str] = None
     customer_id: Optional[str] = None
+    phone_e164: Optional[str] = None
     redeemed_at: datetime
     redeemed_ip: Optional[str] = None
 

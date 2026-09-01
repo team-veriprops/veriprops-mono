@@ -33,6 +33,7 @@ from main.app.domain.channel.whatsapp.handoff.tokens import (
     HandoffTokenError,
     decode_handoff_token,
     issue_handoff_token,
+    issue_link_token,
 )
 from main.app.domain.verification.service import VerificationService
 from main.appodus_utils import Utils
@@ -62,6 +63,15 @@ class HandoffTokenService:
         """
         await self._verifications.get_owned(case_id, customer_id)
         return issue_handoff_token(customer_id=customer_id, case_id=case_id, intent=intent)
+
+    async def issue_link(self, phone_e164: str) -> str:
+        """Mint a §7.4.4 linking link for a WhatsApp number.
+
+        There is deliberately no ownership check: the whole point is that this number has
+        no account yet. The token proves only *which* number crossed to the website —
+        identity is still established by the OTP that follows.
+        """
+        return issue_link_token(phone_e164)
 
     async def redeem(
         self,
@@ -99,11 +109,31 @@ class HandoffTokenService:
                 intent=claims.intent,
                 case_id=claims.case,
                 customer_id=claims.sub,
+                phone_e164=claims.phone,
                 redeemed_at=Utils.datetime_now(),
                 redeemed_ip=redeemed_ip,
             )
         )
         return claims
+
+    async def decode_link(self, token: str) -> HandoffClaims:
+        """Read a `link` token without spending it.
+
+        Starting a linking attempt must not burn the bot's link: a code can fail to
+        arrive, and a customer who asks for a resend should not find the page dead. The
+        nonce is spent on confirmation instead, which is the step that actually changes
+        anything.
+        """
+        claims = decode_handoff_token(token)
+        if claims.intent != HandoffIntent.LINK:
+            raise HandoffTokenError()
+        if await self._handoff_token_redemption_repo.get_by_jti(claims.jti) is not None:
+            raise HandoffTokenError()
+        return claims
+
+    async def redeem_link(self, token: str, redeemed_ip: Optional[str] = None) -> HandoffClaims:
+        """Spend a `link` token — one completed linking attempt per link the bot sent."""
+        return await self.redeem(token, HandoffIntent.LINK, redeemed_ip=redeemed_ip)
 
     async def redemption_for(self, jti: str) -> Optional[HandoffTokenRedemption]:
         """The redemption record for a nonce, if it has been spent."""

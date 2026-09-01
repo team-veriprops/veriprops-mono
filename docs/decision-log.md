@@ -1376,3 +1376,172 @@ a hardcoded number. Route naming is genuinely frontend knowledge.
 ### Revisit
 If the backend ever needs to reason about page codes (e.g. server-side attribution
 reporting), move the table server-side then.
+
+## Decision: D53 — Intent facade: in-house, three providers, Anthropic default
+
+### Context
+D48 settled that intent classification is provider-agnostic and left the default provider
+and model "chosen at S5". S5 needs the answer before the facade is written.
+
+### Options Considered
+1. **Both adapters, Anthropic default** — `STUB` (keyword table, CI/e2e), `ANTHROPIC`
+   (native, structured tool-use), `OPENAI_COMPATIBLE` (base URL + model + key).
+2. Generic OpenAI-compatible adapter only, pointed at Anthropic's compat endpoint.
+3. STUB only now; live adapter deferred to S11.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation). Prod default `INTENT_PROVIDER=ANTHROPIC`,
+`INTENT_MODEL=claude-haiku-4-5`.
+
+### Rationale
+Native structured output is the most reliable way to force an answer from the closed
+intent enum — the guarantee §7.6.4 rests on. The generic adapter keeps provider switching
+a config change, so there is no lock-in despite a named default.
+
+### Tradeoffs / Constraints
+- Two live adapters to maintain instead of one.
+- `ENVIRONMENT=test ⇒ INTENT_PROVIDER=STUB`, enforced at startup like the
+  `WHATSAPP_PROVIDER`/`OTP_MODE` contracts. CI and e2e never call a model.
+- The provider's API key joins `SECRET_ENV_KEYS`.
+
+### Revisit
+If live error rates warrant it, add a cross-provider fallback chain in the shape the
+email router already uses.
+
+## Decision: D54 — FAQ content is code-owned; pricing answers come from the live config
+
+### Context
+WA-30 requires FAQ/Learn/Pricing answers from "a maintained content set", and the
+requirements matrix marked it `Schema: yes`. Pricing is already admin-tunable through
+`PricingConfigService`.
+
+### Options Considered
+1. **Code-owned content module + pricing rendered from `PricingConfigService`.**
+2. `whatsapp_content_entries` table with an admin CRUD editor in S5.
+3. Table seeded from code, read-only in S5, editing deferred to S8.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation). Amends WA-30's `Schema: yes` — no
+content table is created.
+
+### Rationale
+A second source of pricing truth is the failure the "backend is the only source of truth"
+rule exists to prevent: a stale table would have the bot quoting a price the website does
+not charge. Prose changes are copy, and copy benefits from review.
+
+### Tradeoffs / Constraints
+A wording fix needs a deploy. Accepted: the alternative was an admin CRUD surface inside
+an already-large S5, for content that changes rarely.
+
+### Revisit
+If ops needs same-day copy edits at volume, promote the module to a table plus the admin
+editor S8's template registry will already have the shape for.
+
+## Decision: D55 — `HandoffIntent.LINK`: one signer, two exclusive claim shapes
+
+### Context
+WA-24 (WhatsApp→web linking) needs a signed link carrying a phone number. §7.5's claim
+list is `sub · case · intent · exp · jti` — an action token's shape. A linking token has
+no case, and no customer either: it is minted for a number with no account yet.
+
+### Options Considered
+1. **Extend `HandoffIntent` with `LINK`; make `case`/`sub` optional and add a `phone`
+   claim, with a validator holding the two shapes apart.**
+2. A separate link-token module with its own signer and redemption table.
+3. No token — an unsigned deep link, with the OTP carrying all the weight.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation).
+
+### Rationale
+One RS256 signer, one `jti` ledger, one pen-check surface. A second implementation would
+double what §7.11's token pen-check has to cover, for a token that is strictly weaker than
+the ones already there.
+
+### Tradeoffs / Constraints
+- Deviates from §7.5's literal claim list — hence this entry.
+- The shapes are **mutually exclusive by construction**: a model validator rejects a
+  `link` token naming a case and an action token missing one, and `_encode` emits only the
+  keys a shape uses, so neither carries the other's claims even on the wire.
+- The public `/public/wa/handoff/{intent}/…` landings refuse `link` outright — those
+  routes hand out case context, and a link token names no case.
+- `handoff_token_redemptions.case_id` becomes nullable (migration `0004`), with a
+  `phone_e164` column so a link redemption is still traceable.
+- Starting a linking attempt **reads** the token; only confirmation spends it. Burning it
+  at page load would strand a customer whose first code never arrived.
+
+### Revisit
+If a fourth intent shape appears, promote the shape rules to a per-intent schema rather
+than growing the validator.
+
+## Decision: D56 — Chat intake collects the full field set; consent and payment stay on web
+
+### Context
+§7.6.2 requires chat intake to collect "the same fields as web intake", while §7.4.6 puts
+the two consent controls at payment confirmation and the §7.3.4 capability matrix makes
+payment web-only.
+
+### Options Considered
+1. **Full field set + tier in chat; consent and payment on the `pay` landing.**
+2. Core fields in chat, finish on web.
+3. Full parity including consent captured as chat confirmations.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation).
+
+### Rationale
+Honours "same fields" without moving consent off the screen §7.4.6 names. Option 2 leaves
+the WhatsApp-only customer unable to finish; option 3 downgrades the evidentiary quality
+of a consent record that has to stand up as a legal artefact.
+
+### Tradeoffs / Constraints
+The longest bot flow in the cycle. Both surfaces write the same `verifications` draft row
+(`draft_step`/`draft_payload`), which is what makes resumption real rather than claimed.
+
+### Revisit
+If chat intake completion rates are poor, revisit the step granularity — not the seam.
+
+## Decision: D57 — Sticky human mode with explicit hand-back
+
+### Context
+Every inbound WhatsApp message already lands in the admin console. Once an agent is in the
+thread, the bot must stop answering — §7.6.2's escalation says "routed to console", which
+only means something if the bot then goes quiet.
+
+### Options Considered
+1. **Sticky `HUMAN` mode; an admin hands control back from the console.**
+2. Time-window suppression after any admin message.
+3. Bot always replies.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation).
+
+### Rationale
+A bot talking over an agent mid-conversation is the failure customers notice most, and a
+time window is a guess that will be wrong for slow threads. It also makes §7.10's
+escalation-rate metric exactly countable rather than inferred.
+
+### Tradeoffs / Constraints
+An agent who forgets to hand back leaves the thread bot-less, so the console shows the
+mode; a 30-day idle also resets to the welcome flow.
+
+### Revisit
+If hand-back is routinely forgotten, add an inactivity auto-return with a visible notice —
+not a silent one.
+
+## Decision: D58 — WA-21's opaque short code is the existing VID
+
+### Context
+§7.4.3 requires "Continue on WhatsApp" affordances to carry an opaque case code, never an
+address or customer name, because WhatsApp renders message previews.
+
+### Chosen Option
+Reuse the existing `vid` (`VP-YYYY-XXXXXX`, `app/core/vid.py`). No new column.
+
+### Rationale
+It is already opaque, already CSPRNG-suffixed, already the code the customer sees on the
+dashboard and on their report, and already what the handoff landings acknowledge. A second
+code would be a second thing to keep in sync for no gain.
+
+### Revisit
+Not expected.

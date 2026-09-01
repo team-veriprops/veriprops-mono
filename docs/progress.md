@@ -1,17 +1,17 @@
 # Progress Tracker — WhatsApp Channel (cycle 2)
 
-status: in progress — S1–S3 complete
+status: in progress — S1–S4 complete
 
 ## Completed Slices
 - S1 widget + attribution (dc7adb4)
 - S2 channel foundation (webhook + facade + console inbound)
 - S3 handoff tokens + /wa/* landings
+- S4 OTP account linking (E1) + number lifecycle
 
 ## Current Slice
-- none — S4 is next
+- none — S5 is next (awaiting review of S4)
 
 ## Pending Slices
-- S4 OTP account linking (E1)
 - S5 bot engine core
 - S6 intake flow + payment handoff + continuation
 - S7 console adapter completion
@@ -21,7 +21,7 @@ status: in progress — S1–S3 complete
 - S11 live hardening & launch-gate closeout
 
 ## Runtime State
-- idle (checkpointed after S3)
+- idle (checkpointed after S4)
 
 ## Pending Recovery
 - none
@@ -30,9 +30,14 @@ status: in progress — S1–S3 complete
 - none (S11 live path awaits external Meta assets — tracked, not blocking S1–S10)
 
 ## Open Questions
-- none (gate decisions D42–D48; run-time decisions D49–D52)
+- none (gate decisions D42–D48; run-time decisions D49–D58)
 
 ## Carried into later slices
+- Meta-approved **template** sends are still not wired: `WhatsappPayload.validate_content`
+  rejects a template without its variables, and the per-template variable mapping is the
+  §7.7 registry's job. Until S8 lands it, WhatsApp goes out as text — which the Cloud API
+  accepts only inside the 24-hour service window. `TODO(gap):` in
+  `model_template_service.render_whatsapp_payload`.
 - Migrations 0002/0003 are applied and verified against live Postgres; the UAT suite is
   green on chromium-desktop (24/24). The remaining five engines have not been run.
 - S7 owns the outbound half of the console: agent replies, Meta's 24-hour window, and the
@@ -57,7 +62,7 @@ status: in progress — S1–S3 complete
   live-path external assets (D43 fallback: stub keeps everything demoable).
 
 ## Last Commit
-- S3: RS256 handoff tokens + /wa landings
+- S4: OTP cross-channel account linking
 
 ## Completion %
-- ~27 (3 of 11 slices)
+- ~36 (4 of 11 slices)

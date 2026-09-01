@@ -22,36 +22,37 @@ self_audit:
   started: true
   completed: true
   findings:
-    - "S1–S3 gates green: backend 1156 unit tests, ruff + mypy clean; frontend 494 unit tests,
-       eslint clean, next build ok."
-    - "CLOSED: migrations 0002/0003 applied to a live Postgres. Verified three ways — additive on an
-       already-migrated schema, full chain on a fresh database, and a downgrade/re-upgrade round
-       trip. The in-place result is column-for-column identical to the fresh chain, and both unique
-       constraints (wamid, jti) were shown to reject a duplicate."
-    - "CLOSED: full UAT suite green on chromium-desktop, 24/24, including the 9 new scenarios.
-       Still to run: the other five engines (webkit especially, per the __Host- cookie note)."
-    - "Live run found three defects the mocked tests could not (see the S1–S3 hardening commit):
-       camelCase body binding on the new dev endpoints; 403 on a dead handoff link hard-navigating
-       the browser to /forbidden instead of the recovery page; and pre-existing WCAG AA contrast
-       failures on the marketing pages, one of them the §3.5 legal disclaimer."
-    - "The drive-through gained a `whatsapp` stage and immediately found two more: the webhook
-       handler was never imported, so the channel's public endpoint answered \"platform not
-       supported\" (the factory now rebuilds its table on a miss, and a guard test pins every
-       platform); and ConversationService.touch re-fetched a thread created in the same
-       uncommitted transaction, so a WhatsApp thread never got its last_message_at bump and never
-       reached the admin inbox."
-    - "Full drive-through: ALL PASSED. Backend 1164 unit tests, ruff + mypy clean; frontend 494
-       unit tests, eslint clean, build ok; UAT 24/24 on chromium-desktop."
-    - "S2 defect fixed: the fraud scan ran on SYSTEM/SYSTEM_AUTO messages despite the docstring
-       claiming otherwise, so bot copy carrying veriprops.ng / wa.me links would have been held."
-    - "S3 defect fixed (found by writing UAT-WAH-03): the landing re-redeemed on every mount, so a
-       refresh burned the link — the D51 grant existed but was never consulted on resume."
-    - "S2 side-fix: DI subclass registration asked the container for abstract intermediates, making
-       startup depend on provider import order."
-    - "S2 side-fix: migration parity guard read builders from 0001 only; widened for D49."
-    - "S1 side-fix: eslint now ignores gitignored Playwright artifacts."
-    - "Deferred by design: S7 owns agent replies, Meta's 24h window, and the §7.6.3 policy replies
-       for non-text inbound. S2 journals and labels non-text; it does not answer it."
+    - "S4 gates green: backend 1227 unit tests, ruff + mypy clean; frontend 509 unit tests,
+       eslint clean, next build ok. Full drive-through (all 18 stages): ALL PASSED."
+    - "Migration 0004 verified three ways against live Postgres — additive on an
+       already-migrated schema, full chain on a fresh database, and a downgrade/re-upgrade
+       round trip; the in-place result is column-for-column identical to the fresh chain.
+       Both 1:1 constraints were shown to reject a duplicate, and two released (NULL)
+       numbers were shown to coexist — the property that lets a number move accounts."
+    - "The live run found a defect stack no unit test could: the entire WhatsApp *outbound*
+       path had never executed. Four independent faults — `render_whatsapp_payload` passed
+       `template_name=` to a parameter called `template`; its result was never awaited; it
+       JSON-parsed plain-text templates; and `MessageRequestRecipient.phone_digits` did not
+       exist. `_build_requests_for_channels` swallows per-channel build errors, so every
+       WhatsApp send in the system (including the pre-existing `new_user_welcome`) had been
+       failing as a logged 'partial failure' nobody read. All four fixed, with a test that
+       renders every committed WhatsApp template and builds a real request."
+    - "Also fixed: `whatsapp/new_user_welcome.jinja2` carried an email `Subject:` header as
+       its first line — invisible while the path was dead, a visible bug the moment it ran."
+    - "`PhoneInputWithCountry` was bound to one form's shape (`UseFormReturn<VerifyFormValues>`),
+       which had already forced a `form as never` cast at one of its two call sites. Made it
+       value-controlled and updated all three consumers; the cast is gone."
+    - "e2e determinism: the whatsapp stage now uses a per-run number. OTP resend counters live
+       in Redis/KV keyed on the *number*, which `/dev/reset` does not clear, so a fixed number
+       failed the second run inside the lockout window on an unrelated rate limit."
+    - "Two ops_unhappy failures on one full run were a pre-existing race, not a regression: the
+       dev server's own 15-minute APScheduler no-show sweep fired 28 seconds before the stage's
+       manual sweep and consumed the seeded task. Restarting the backend (fresh tick) → ALL PASSED."
+    - "Deferred by design: Meta-approved template sends (`template_name` + positional
+       `template_variables`) are S8's, with the §7.7 registry. Until then WhatsApp goes out as
+       text — accepted by the Cloud API only inside the 24-hour window. TODO(gap) marked."
+    - "Deferred by design: the bot-side half of WA-24 (resuming the conversation after a link
+       completes) is S5's, and short-code resolution (WA-22/WA-21) is S6's."
 
 clarification_needed: []
 
@@ -59,7 +60,7 @@ git:
   branch: dev
   dirty: false
 
-next_action: "await `run` — begin S4 (OTP account linking, E1) per docs/execution-plan.md"
+next_action: "await review of S4, then `run` — begin S5 (bot engine core) per docs/execution-plan.md"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-01 S1–S3 complete, live-verified, drive-through stage added (ALL PASSED)"
+last_checkpoint: "2026-09-01 S4 complete, live-verified, full drive-through ALL PASSED"

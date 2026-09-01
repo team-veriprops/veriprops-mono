@@ -106,6 +106,11 @@ class AuditActionType(str, enum.Enum):
     MESSAGE_HELD = "MESSAGE_HELD"
     MESSAGE_APPROVED = "MESSAGE_APPROVED"
     MESSAGE_REJECTED = "MESSAGE_REJECTED"
+    # ── Conversational channels (§7.4.4) ───────────────────────────
+    # The number a link named is recorded in `details`, so a released number is still
+    # traceable after the link row has stopped holding it.
+    WHATSAPP_NUMBER_LINKED = "WHATSAPP_NUMBER_LINKED"
+    WHATSAPP_NUMBER_UNLINKED = "WHATSAPP_NUMBER_UNLINKED"
     # ── Data retention / erasure (S58) ─────────────────────────────
     DATA_ERASURE_REQUESTED = "DATA_ERASURE_REQUESTED"
     DATA_ERASURE_APPROVED = "DATA_ERASURE_APPROVED"

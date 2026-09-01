@@ -106,7 +106,7 @@ class OtpService:
         await self._kv.set(_otp_key(channel, recipient), OTP_TTL, code)
         await self._kv.set(r_key, RESEND_LOCKOUT, attempts)
 
-        await send_verification_msg(recipient=recipient, code=code)
+        await send_verification_msg(recipient=recipient, code=code, channel=channel)
         await self._session_service.record_event(
             SecurityEventType.OTP_SENT,
             f"OTP sent via {channel.value.lower()}",
@@ -170,17 +170,33 @@ def recipient_for(channel: OtpChannel, *, email: Optional[str], dial_code: Optio
     return PhoneNumber(dial_code=dial_code, number=phone)
 
 
-async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], code: str) -> None:
+async def send_verification_msg(
+        recipient: Union[EmailRecipient, PhoneNumber],
+        code: str,
+        channel: OtpChannel = OtpChannel.EMAIL,
+) -> None:
     from main.app.domain.user.user_messages import AccountSecurityMessages
     account_security_messages = di[AccountSecurityMessages]
 
-    channel: OtpChannel = OtpChannel.EMAIL
     # The code is useless (or stale — resends overwrite it) past its validity, so
     # cap delivery retries at the OTP window instead of the full retry ladder.
     expires_at = Utils.datetime_now() + OTP_TTL
 
     try:
-        if isinstance(recipient, EmailRecipient):
+        if channel == OtpChannel.WHATSAPP:
+            # PRD §7.4.4 / D46: WhatsApp account linking delivers its code over WhatsApp
+            # itself, using the §7.7 `otp_auth` template.
+            # TODO(gap): SMS fallback (D46) — wire the router's fallback chain here once
+            # the upstream SMS provider decision (§B) lands.
+            await account_security_messages.send_whatsapp_link_verification_message(
+                recipient=MessageRequestRecipient(phone=recipient),
+                context={
+                    MessageContext.OTP: code,
+                    MessageContext.VALIDITY: _validity_label(),
+                },
+                expires_at=expires_at,
+            )
+        elif isinstance(recipient, EmailRecipient):
             firstname, _, lastname = Utils.parse_fullname(str(recipient.fullname))
 
             await account_security_messages.send_direct_email_verification_message(
@@ -198,7 +214,6 @@ async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], c
                 expires_at=expires_at
             )
         else:
-            channel: OtpChannel = OtpChannel.PHONE
             await account_security_messages.send_direct_phone_verification_message(
                 recipient=MessageRequestRecipient(
                     phone=recipient

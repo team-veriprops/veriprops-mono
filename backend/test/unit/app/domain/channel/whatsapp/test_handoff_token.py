@@ -19,11 +19,13 @@ from main.app.domain.channel.whatsapp.handoff.tokens import (
     decode_handoff_token,
     handoff_keys,
     issue_handoff_token,
+    issue_link_token,
 )
 from main.appodus_utils import Utils
 
 CASE_ID = "ca5e00000000000000000000000000ab"
 CUSTOMER_ID = "11111111-2222-3333-4444-555555555555"
+PHONE = "+2348012345678"
 
 
 def token(**over):
@@ -134,6 +136,76 @@ class TestScope:
         # carries no role, persona, or session claim to be mistaken for one.
         payload = jwt.get_unverified_claims(token())
         assert set(payload) == {"sub", "case", "intent", "jti", "exp", "iat"}
+
+
+class TestLinkTokenShape:
+    """§7.4.4 linking tokens (D55) — the same signer, a deliberately different shape.
+
+    The two shapes must never be readable as one another: an action token authorizes
+    something on a case, a link token only says *which number* crossed to the website.
+    A token that could wear both sets of claims would be an authorization bug waiting to
+    happen, so the boundary is tested from both directions.
+    """
+
+    def test_a_link_token_names_a_phone_and_nothing_else(self):
+        claims = decode_handoff_token(issue_link_token(PHONE))
+        assert claims.intent == HandoffIntent.LINK
+        assert claims.phone == PHONE
+        assert claims.sub is None and claims.case is None
+
+    def test_a_link_token_carries_no_case_claim_on_the_wire(self):
+        payload = jwt.get_unverified_claims(issue_link_token(PHONE))
+        assert set(payload) == {"phone", "intent", "jti", "exp", "iat"}
+
+    def test_an_action_token_carries_no_phone_claim_on_the_wire(self):
+        assert "phone" not in jwt.get_unverified_claims(token())
+
+    def test_a_link_token_cannot_be_read_as_authority_over_a_case(self):
+        claims = decode_handoff_token(issue_link_token(PHONE))
+        with pytest.raises(HandoffTokenError):
+            claims.assert_scope(HandoffIntent.PAY, CASE_ID)
+
+    def test_a_link_token_is_scoped_to_one_number(self):
+        claims = decode_handoff_token(issue_link_token(PHONE))
+        claims.assert_link_scope(PHONE)
+        with pytest.raises(HandoffTokenError):
+            claims.assert_link_scope("+2349990000000")
+
+    def test_an_action_token_never_satisfies_a_link_scope(self):
+        with pytest.raises(HandoffTokenError):
+            decode_handoff_token(token()).assert_link_scope(PHONE)
+
+    def test_a_link_intent_cannot_be_minted_against_a_case(self):
+        with pytest.raises(HandoffTokenError):
+            issue_handoff_token(customer_id=CUSTOMER_ID, case_id=CASE_ID,
+                                intent=HandoffIntent.LINK)
+
+    def test_a_well_signed_token_whose_claims_contradict_its_intent_is_refused(self):
+        # Forged with our own key, so only the claim-shape validator stands between this
+        # and a `link` token that names someone's case.
+        forged = jwt.encode(
+            {"sub": CUSTOMER_ID, "case": CASE_ID, "phone": PHONE,
+             "intent": HandoffIntent.LINK.value, "jti": "x",
+             "iat": Utils.datetime_now(),
+             "exp": Utils.datetime_now() + timedelta(minutes=5)},
+            handoff_keys().private_key, algorithm=HANDOFF_ALGORITHM,
+        )
+        with pytest.raises(HandoffTokenError):
+            decode_handoff_token(forged)
+
+    def test_an_action_token_missing_its_case_is_refused(self):
+        forged = jwt.encode(
+            {"sub": CUSTOMER_ID, "intent": HandoffIntent.PAY.value, "jti": "x",
+             "iat": Utils.datetime_now(),
+             "exp": Utils.datetime_now() + timedelta(minutes=5)},
+            handoff_keys().private_key, algorithm=HANDOFF_ALGORITHM,
+        )
+        with pytest.raises(HandoffTokenError):
+            decode_handoff_token(forged)
+
+    def test_a_link_token_expires_on_the_same_schedule(self):
+        claims = decode_handoff_token(issue_link_token(PHONE))
+        assert timedelta(minutes=14) <= (claims.expires_at - claims.issued_at) <= timedelta(minutes=16)
 
 
 def _forge_hs256(payload: dict, secret: str) -> str:

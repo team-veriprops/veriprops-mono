@@ -693,7 +693,7 @@ class WhatsAppRequestBuilder(MessageRequestBuilder):
             raise ValueError("WhatsApp error: Phone number is required")
 
         if template:
-            payload = self.model_template_service.render_whatsapp_payload(template, context)
+            payload = await self.model_template_service.render_whatsapp_payload(template, context)
         else:
             payload = context.get('payload')
             if not payload:

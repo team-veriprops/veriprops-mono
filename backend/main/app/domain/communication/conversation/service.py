@@ -93,6 +93,24 @@ class ConversationService:
             )
         )
 
+    async def set_whatsapp_thread_owner(
+        self, phone: str, user_id: Optional[str]
+    ) -> Optional[Conversation]:
+        """Attach (or detach) the account that owns the thread for a WhatsApp number.
+
+        §7.8 wants one conversation object per person, not one per surface, so linking a
+        number gives the *existing* thread an owner rather than opening a second one.
+        Passing ``None`` is the other half of that: an unlinked number's thread goes cold
+        (§7.4.4) — it stays in the console for the agents, but it no longer belongs to
+        anyone's account, so nothing will read case data into it.
+        """
+        conversation = await self._conversation_repo.get_whatsapp_thread(phone)
+        if conversation is None:
+            return None
+        conversation.created_by = user_id
+        self._conversation_repo._session.add(conversation)
+        return conversation
+
     async def get_owned_participant(self, conversation_id: str, user_id: str) -> Conversation:
         """The thread, asserting the user is a participant — raises 404 otherwise (so a
         non-member cannot probe a thread's existence)."""

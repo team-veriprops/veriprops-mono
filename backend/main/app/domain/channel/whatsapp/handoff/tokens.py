@@ -21,10 +21,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from jose import JWTError, jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError, model_validator
 
 from main.app.config.settings import settings
-from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
+from main.app.domain.channel.whatsapp.handoff.models import ACTION_INTENTS, HandoffIntent
 from main.appodus_utils import Utils
 from main.appodus_utils.config.settings import SECRET_PLACEHOLDER, Environment
 
@@ -51,18 +51,39 @@ class HandoffTokenError(Exception):
 
 
 class HandoffClaims(BaseModel):
-    """The verified contents of a handoff token."""
+    """The verified contents of a handoff token.
 
-    sub: str                 # customer id
-    case: str                # verification id
+    Two shapes, held apart by the validator below (D55): an **action** token names a
+    customer and a case; a **link** token names a phone number that has no account yet.
+    Neither can wear the other's claims, so a token minted to identify a stranger can
+    never be replayed as authority over someone's case.
+    """
+
+    sub: Optional[str] = None      # customer id — action tokens only
+    case: Optional[str] = None     # verification id — action tokens only
+    phone: Optional[str] = None    # E.164 number — link tokens only
     intent: HandoffIntent
     jti: str
     issued_at: datetime
     expires_at: datetime
 
+    @model_validator(mode="after")
+    def _claims_match_the_intent(self) -> "HandoffClaims":
+        if self.intent in ACTION_INTENTS:
+            if not self.sub or not self.case or self.phone:
+                raise ValueError("action token must name a customer and a case, and no phone")
+        elif not self.phone or self.sub or self.case:
+            raise ValueError("link token must name a phone, and no customer or case")
+        return self
+
     def assert_scope(self, intent: HandoffIntent, case_id: str) -> None:
         """Confirm this token authorizes *intent* on *case_id* — and nothing else."""
         if self.intent != intent or self.case != case_id:
+            raise HandoffTokenError()
+
+    def assert_link_scope(self, phone_e164: str) -> None:
+        """Confirm this token was minted to identify *phone_e164* — and nothing else."""
+        if self.intent != HandoffIntent.LINK or self.phone != phone_e164:
             raise HandoffTokenError()
 
 
@@ -138,12 +159,35 @@ def issue_handoff_token(
     The payload carries nothing beyond the §7.5 claims — no role, persona, or session
     marker that a later reader could mistake for proof of login.
     """
+    if intent not in ACTION_INTENTS:
+        # A link token names no case; minting one here would produce a token whose
+        # claims contradict its intent, and decode would refuse it anyway.
+        raise HandoffTokenError()
+    return _encode({"sub": customer_id, "case": case_id, "intent": intent.value}, ttl)
+
+
+def issue_link_token(phone_e164: str, ttl: timedelta = HANDOFF_TOKEN_TTL) -> str:
+    """Mint a token identifying *phone_e164* for the §7.4.4 WhatsApp→web linking flow.
+
+    Deliberately weaker than an action token, because it is handed to a number we cannot
+    yet attribute to anyone: it names no customer and no case, so on its own it unlocks
+    nothing. Proving the number still requires the OTP that follows — the token only
+    carries *which* number is being claimed across to the website, single-use, so a
+    forwarded copy cannot start a second linking attempt.
+    """
+    return _encode({"phone": phone_e164, "intent": HandoffIntent.LINK.value}, ttl)
+
+
+def _encode(claims: dict, ttl: timedelta) -> str:
+    """Sign *claims* with the standard nonce and lifetime.
+
+    Only the keys a shape actually uses are emitted, so an action token has no `phone`
+    key to confuse and a link token has no `case` key to be probed for.
+    """
     issued_at = Utils.datetime_now()
     return jwt.encode(
         {
-            "sub": customer_id,
-            "case": case_id,
-            "intent": intent.value,
+            **claims,
             # CSPRNG, per the repo-wide token rule — never uuid7 or random.
             "jti": Utils.random_str(32),
             "iat": issued_at,
@@ -169,16 +213,19 @@ def decode_handoff_token(token: str) -> HandoffClaims:
     try:
         intent = HandoffIntent(payload["intent"])
         return HandoffClaims(
-            sub=payload["sub"],
-            case=payload["case"],
+            sub=payload.get("sub"),
+            case=payload.get("case"),
+            phone=payload.get("phone"),
             intent=intent,
             jti=payload["jti"],
             issued_at=_as_datetime(payload["iat"]),
             expires_at=_as_datetime(payload["exp"]),
         )
-    except (KeyError, ValueError) as exc:
+    except (KeyError, ValidationError, ValueError) as exc:
         # A well-signed token whose claims we do not recognise is still not one we will
-        # act on — an unknown intent must never be coerced into a known one.
+        # act on — an unknown intent must never be coerced into a known one, and a token
+        # whose claims contradict its intent (a `link` naming a case, say) is refused
+        # rather than read for whichever half looks usable.
         raise HandoffTokenError() from exc
 
 
