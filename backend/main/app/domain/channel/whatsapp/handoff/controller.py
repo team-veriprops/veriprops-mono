@@ -25,6 +25,12 @@ from main.app.domain.channel.whatsapp.handoff.grant import (
     read_grant,
     set_grant_cookie,
 )
+from main.app.domain.channel.whatsapp.consent.models import (
+    SetWhatsAppConsentDto,
+    WhatsAppConsentDto,
+    WhatsAppConsentSource,
+)
+from main.app.domain.channel.whatsapp.consent.service import WhatsAppConsentService
 from main.app.domain.channel.whatsapp.handoff.models import ACTION_INTENTS, HandoffIntent
 from main.app.domain.channel.whatsapp.handoff.service import HandoffTokenService
 from main.app.domain.channel.whatsapp.handoff.tokens import (
@@ -46,6 +52,7 @@ handoff_router = APIRouter(prefix="/public/wa/handoff", tags=["WhatsApp Handoff"
 handoff_service: HandoffTokenService = di[HandoffTokenService]
 verification_service: VerificationService = di[VerificationService]
 payment_service: PaymentService = di[PaymentService]
+whatsapp_consent_service: WhatsAppConsentService = di[WhatsAppConsentService]
 
 # A handoff link is a bearer credential on a public endpoint, so the redeem route is
 # throttled like the other unauthenticated sensitive routes — a token is unguessable, but
@@ -134,6 +141,31 @@ async def initiate_payment(request: Request):
         amount_minor=payment.amount_minor,
         currency=payment.currency,
     ))
+
+
+@handoff_router.put("/pay/consent", response_model=SuccessResponse[WhatsAppConsentDto])
+async def set_consents(req: SetWhatsAppConsentDto, request: Request):
+    """Record the §7.4.6 opt-ins from the payment landing (D76).
+
+    This is the one moment a WhatsApp-native customer is asked. Without it they could opt
+    in only by finding account settings on a site they arrived at from a chat link — and
+    §7.10 counts the opt-in rate as the channel's consent asset.
+
+    Grant-scoped exactly like `pay/initiate`: the customer id comes from the grant cookie,
+    never from the request body, so a holder of one link cannot consent on someone else's
+    behalf.
+    """
+    grant = read_grant(request, HandoffIntent.PAY)
+    if grant is None:
+        raise ResourceNotFoundException(resource=TOKEN_REJECTED_MESSAGE)
+
+    consents = await whatsapp_consent_service.set_consents(
+        grant.customer_id,
+        req.utility,
+        req.marketing,
+        WhatsAppConsentSource.WA_PAY_LANDING,
+    )
+    return SuccessResponse[WhatsAppConsentDto](data=consents)
 
 
 @handoff_router.post("/release", response_model=SuccessResponse[dict])

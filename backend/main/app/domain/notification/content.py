@@ -26,6 +26,10 @@ _CONTENT = {
     EventType.STATUS_CHANGED: ("Verification updated", "Your verification status changed to {status}.", _portal_link),
     EventType.AGENTS_ASSIGNED: ("Agents assigned", "Our agents have started work on your verification.", _portal_link),
     EventType.EVIDENCE_ADDED: ("New evidence", "New evidence is available on your verification.", _portal_link),
+    # Declared for completeness; both rules are in_app=False (D66), so these titles exist
+    # for the fallback path and for anyone who later flips the flag.
+    EventType.VERIFICATION_STARTED: ("Verification started", "Our team has started work on your verification.", _portal_link),
+    EventType.INSPECTION_COMPLETE: ("Inspection complete", "The field inspection on your property is done.", _portal_link),
     EventType.REPORT_READY: ("Report ready", "Your verification report is ready to view.", _portal_link),
     EventType.REPORT_VERSIONED: ("Report updated", "A new version of your report has been released.", _portal_link),
     EventType.SLA_BREACHED: ("Taking longer than planned", "Your verification is past its target date; we're on it.", _portal_link),
@@ -51,6 +55,8 @@ _CONTENT = {
     # §4.2 admin user management — the suspension reason is admin-internal and never surfaces here.
     EventType.ACCOUNT_SUSPENDED: ("Account suspended", "Your account has been suspended. Contact support for assistance.", lambda _v: None),
     EventType.ACCOUNT_REACTIVATED: ("Account reactivated", "Your account is active again. Welcome back.", lambda _v: None),
+    # §7.4.5 (D77) — the delegate's own name is in `event.data`, so the buyer knows who.
+    EventType.DELEGATE_REVOKED: ("Delegate updates stopped", "{name} opted out of WhatsApp updates, so they are no longer a delegate on this verification.", _portal_link),
 }
 
 

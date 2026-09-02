@@ -33,14 +33,17 @@ import uuid
 
 from .harness import (
     CONSENT_VERSION,
+    MINIMAL_PNG,
     TEST_OTP,
     Ctx,
     check,
     client,
     idem_key,
     pin_cookie_header,
+    stub_pay,
     warn,
 )
+from .stage_execution import ROLE_PAYLOADS as _ROLE_PAYLOADS
 
 # The webhook secret is Doppler-managed and absent from committed env files, so the
 # signature checks run only when the operator started the backend with one and exported
@@ -126,6 +129,15 @@ def run(ctx: Ctx) -> None:
 
     # ── S7: §7.6.3 — every non-text type answered per the table ──────────────
     _run_media_checks(ctx)
+
+    # ── S8: §7.4.6 consent, and the milestones it gates ──────────────────────
+    # `_run_media_checks` leaves the customer unlinked (the 1:1 rule), so these two
+    # re-link on their own number before touching anything case-scoped.
+    consent_phone = _run_consent_checks(ctx)
+    _run_milestone_checks(ctx, consent_phone)
+
+    # ── S9: §7.4.5 — one delegate, status only, revocable ────────────────────
+    _run_delegate_checks(ctx)
 
 
 def _run_webhook_checks(ctx: Ctx) -> None:
@@ -876,3 +888,381 @@ def _create_payable_case(ctx: Ctx) -> str:
     check("created a payable case for the WhatsApp handoff", r.status_code == 200,
           f"submit http {r.status_code}: {r.text[:200]}")
     return case_id if r.status_code == 200 else ""
+
+
+def _run_consent_checks(ctx: Ctx) -> str:
+    """§7.4.6's two opt-ins and D64's keywords, over the real surfaces (WA-27).
+
+    Returns the linked number, so the milestone stage can keep using it.
+
+    What only a live stack shows here is the *shape of the answer*: STOP has to be honoured
+    by the bot in one turn, from the customer's literal word, with the ledger actually
+    written — a unit test can prove the service method was called, but not that the word
+    reached it through the keyword table, the classifier bypass and the transaction.
+    """
+    root, customer = ctx.root, ctx.customer
+    phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+
+    def say(text: str) -> str:
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        root.post("/dev/whatsapp/inbound",
+                  json={"fromPhone": phone, "text": text}).raise_for_status()
+        replies = _outbound_to(ctx, phone)
+        return str(replies[0].get("text", "")) if replies else ""
+
+    def consents() -> dict:
+        return customer.get("/channel/whatsapp/consent/me").json()["data"]
+
+    # Both unticked before anyone is asked — §7.4.6's required default, and the one place
+    # where "no record" must not be read as anything else.
+    initial = consents()
+    check("a customer who has never been asked has consented to nothing (§7.4.6)",
+          initial.get("utility") is False and initial.get("marketing") is False,
+          f"consents={initial}")
+
+    # The pay screen's capture point.
+    saved = customer.put("/channel/whatsapp/consent/me?source=PAY_SCREEN",
+                         json={"utility": True, "marketing": True})
+    check("the payment step records both opt-ins (§7.4.6)",
+          saved.status_code == 200 and saved.json()["data"]["utility"] is True,
+          f"http {saved.status_code}: {saved.text[:160]}")
+
+    # The landing's grant-scoped twin refuses a caller holding no grant — the same
+    # not-found posture as every other handoff endpoint (D76, §7.5).
+    ungranted = client().put("/public/wa/handoff/pay/consent",
+                             json={"utility": True, "marketing": True})
+    check("the landing's consent endpoint refuses a caller with no grant (D76)",
+          ungranted.status_code == 404, f"http {ungranted.status_code}")
+
+    if not _link_number(ctx, phone):
+        return ""
+
+    # A fresh number: let §7.6.1's welcome have its turn before the keywords are tested.
+    say("Hi")
+
+    stopped = say("STOP")
+    check("STOP is answered by the bot in one turn, never routed to a person (D64)",
+          "stopped" in stopped.lower(), stopped[:200])
+    after_stop = consents()
+    check("STOP revokes both consents — the customer said stop, not stop some (D64)",
+          after_stop.get("utility") is False and after_stop.get("marketing") is False,
+          f"consents={after_stop}")
+
+    started = say("START")
+    after_start = consents()
+    check("START restores progress updates (D64)",
+          after_start.get("utility") is True, f"consents={after_start}")
+    check("START leaves marketing off — re-consent is a deliberate act on the web (D64)",
+          after_start.get("marketing") is False, f"consents={after_start}")
+    check("the reply says so, so the customer is not left assuming otherwise",
+          "offers" in started.lower(), started[:200])
+
+    return phone
+
+
+def _run_milestone_checks(ctx: Ctx, phone: str) -> None:
+    """§7.6.2 milestones and §7.7 report delivery, driven by real state (WA-34/WA-35).
+
+    Every assertion here needs the whole stack standing up at once — a domain event, the
+    rule table, the D63 consent ledger, the linked-number lookup and Meta's template shape
+    — which is exactly the seam four stacked faults hid behind the last time this channel
+    shipped an outbound path that was quietly dead.
+
+    The negative half matters as much as the positive: a customer who revokes consent must
+    stop receiving WhatsApp and **keep** receiving email (WA-35).
+    """
+    if not phone:
+        warn("WhatsApp milestone checks skipped", "the consent stage could not link a number")
+        return
+    root, admin, customer = ctx.root, ctx.admin, ctx.customer
+
+    def outbound_names() -> list:
+        return [m.get("templateName") for m in _outbound_to(ctx, phone)]
+
+    def templates_to(name: str) -> list:
+        return [m for m in _outbound_to(ctx, phone) if m.get("templateName") == name]
+
+    # Consent on for the positive half. START above restored utility, which is the gate
+    # that matters, but set both explicitly so this stage does not depend on that order.
+    customer.put("/channel/whatsapp/consent/me?source=ACCOUNT_SETTINGS",
+                 json={"utility": True, "marketing": True}).raise_for_status()
+
+    case_id = _create_standard_case(ctx)
+    if not case_id:
+        return
+    vid = customer.get(f"/verifications/{case_id}").json()["data"]["vid"]
+
+    # ── payment_confirmed ────────────────────────────────────────────────────
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    payment = customer.post(f"/payments/initiate/{case_id}", json={"method": "CARD"},
+                            headers={"Idempotency-Key": idem_key()}).json()["data"]
+    stub_pay(customer, payment["checkoutUrl"])
+
+    confirmed = templates_to("payment_confirmed")
+    check("payment confirmation reaches the consented customer as a §7.7 template (WA-34)",
+          bool(confirmed), f"templates={outbound_names()}")
+    if confirmed:
+        check("the case reference is Meta's first positional body parameter",
+              confirmed[0].get("templateVariables", {}).get("1") == vid,
+              f"variables={confirmed[0].get('templateVariables')}")
+
+    # ── verification_started ─────────────────────────────────────────────────
+    roles = list(ctx.seed["tasks"].keys())
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    _drive_tasks_to_submitted(ctx, case_id, roles)
+    check("work starting announces itself as its own milestone (D66, WA-34)",
+          bool(templates_to("verification_started")), f"templates={outbound_names()}")
+
+    # ── inspection_complete ──────────────────────────────────────────────────
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    admin.post(f"/admin/review/{case_id}/tasks/FIELD/approve",
+               json={"quality": 92}).raise_for_status()
+    check("approving the field task announces the inspection (D66, WA-34)",
+          bool(templates_to("inspection_complete")), f"templates={outbound_names()}")
+
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    admin.post(f"/admin/review/{case_id}/tasks/REGISTRY/approve",
+               json={"quality": 90}).raise_for_status()
+    check("approving another role announces no inspection — only FIELD is the inspection",
+          not templates_to("inspection_complete"), f"templates={outbound_names()}")
+
+    # ── report_ready (§7.7, D75) ─────────────────────────────────────────────
+    for role in roles:
+        if role not in ("FIELD", "REGISTRY"):
+            admin.post(f"/admin/review/{case_id}/tasks/{role}/approve",
+                       json={"quality": 90}).raise_for_status()
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    released = admin.post(f"/admin/review/{case_id}/release",
+                          json={"reason": "All checks passed."})
+    check("the milestone case released", released.status_code == 200,
+          f"http {released.status_code}: {released.text[:200]}")
+
+    ready = templates_to("report_ready")
+    check("report-ready reaches the consented customer on WhatsApp (WA-35)",
+          bool(ready), f"templates={outbound_names()}")
+    if ready:
+        link = ready[0].get("templateVariables", {}).get("2", "")
+        check("the report link is the portal deep link, not a 15-minute token (D75)",
+              "/portal/verifications/" in link and "/wa/report/" not in link,
+              f"link={link}")
+        check("the link names the customer's own case", vid in link, f"link={link}")
+
+    # ── The negative half: consent revoked, email unaffected (WA-35) ──────────
+    root.post("/dev/whatsapp/inbound",
+              json={"fromPhone": phone, "text": "STOP"}).raise_for_status()
+    revoked = customer.get("/channel/whatsapp/consent/me").json()["data"]
+    check("the customer is opted out again for the negative half",
+          revoked.get("utility") is False, f"consents={revoked}")
+
+    second = _create_standard_case(ctx)
+    if not second:
+        return
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    payment = customer.post(f"/payments/initiate/{second}", json={"method": "CARD"},
+                            headers={"Idempotency-Key": idem_key()}).json()["data"]
+    stub_pay(customer, payment["checkoutUrl"])
+
+    check("an opted-out customer receives no WhatsApp milestone (WA-16/WA-27)",
+          not templates_to("payment_confirmed"), f"templates={outbound_names()}")
+
+    delivered = root.get(f"/dev/messages/latest?recipient={ctx.customer_email}").json()["data"]
+    check("their email still arrives — the durable record never depends on a messaging "
+          "preference (WA-35)",
+          delivered.get("found") is True, f"latest={delivered}")
+
+
+def _create_standard_case(ctx: Ctx) -> str:
+    """A STANDARD-tier submitted case, so its task set matches the seeded agents' roles."""
+    customer = ctx.customer
+    r = customer.post("/verifications/draft", headers={"Idempotency-Key": idem_key()})
+    if r.status_code != 200:
+        check("created a case for the milestone checks", False,
+              f"draft http {r.status_code}: {r.text[:160]}")
+        return ""
+    case_id = r.json()["data"]["id"]
+    r = customer.post(f"/verifications/{case_id}/submit", json={
+        "property": {
+            "property_type": "LAND", "address": "9 Bourdillon Road, Ikoyi",
+            "state": "Lagos", "lga": "Eti-Osa", "landmark": "Near the roundabout",
+        },
+        "tier": "STANDARD", "currency": "NGN",
+        "consent": {"consent_version": CONSENT_VERSION},
+    })
+    check("created a case for the milestone checks", r.status_code == 200,
+          f"submit http {r.status_code}: {r.text[:200]}")
+    return case_id if r.status_code == 200 else ""
+
+
+def _drive_tasks_to_submitted(ctx: Ctx, case_id: str, roles: list) -> None:
+    """Assign, accept, start and submit every role, so the case derives to UNDER_REVIEW.
+
+    A condensed replay of `stage_execution` against a second case — the milestones need
+    real transitions, and a status forced from the outside would prove nothing about the
+    events those transitions publish.
+    """
+    admin = ctx.admin
+    for role in roles:
+        admin.post(f"/admin/verifications/{case_id}/tasks/{role}/assign",
+                   json={"agentId": ctx.seed["agents"][role]}).raise_for_status()
+        agent = ctx.agent(role)
+        tasks = agent.get("/agents/tasks").json()["data"]["items"]
+        mine = next((t for t in tasks if t["verificationId"] == case_id), None)
+        if mine is None:
+            check(f"the {role} agent was assigned the milestone case", False)
+            continue
+        agent.post(f"/agents/tasks/{mine['id']}/accept").raise_for_status()
+        agent.post(f"/agents/tasks/{mine['id']}/start").raise_for_status()
+        agent.post(
+            f"/agents/tasks/{mine['id']}/evidence",
+            files={"file": (f"{role.lower()}-site.png", MINIMAL_PNG, "image/png")},
+            data={"kind": "PHOTO", "gps_latitude": "6.4478", "gps_longitude": "3.4723"},
+        ).raise_for_status()
+        agent.post(f"/agents/tasks/{mine['id']}/submit",
+                   json={"payload": _ROLE_PAYLOADS[role]}).raise_for_status()
+
+
+def _run_delegate_checks(ctx: Ctx) -> None:
+    """§7.4.5's slim delegate, end to end (Decision O, D67/D77; WA-26).
+
+    The properties that only a live stack can show, and that matter most because this is
+    access control:
+
+    * a delegate's number resolves through a **second** lookup, so the bot answers them
+      about their one case without `whatsapp_links` ever knowing them;
+    * what they are answered carries no report link and no upload link — asserted against
+      the real reply, not against a template's declaration;
+    * a stranger with the same question gets nothing at all; and
+    * revocation is effective on the very next milestone, because the audience is resolved
+      at send time.
+    """
+    root, customer = ctx.root, ctx.customer
+    delegate_phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+    stranger_phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+
+    def say(phone: str, text: str) -> str:
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        root.post("/dev/whatsapp/inbound",
+                  json={"fromPhone": phone, "text": text}).raise_for_status()
+        replies = _outbound_to(ctx, phone)
+        return str(replies[0].get("text", "")) if replies else ""
+
+    def templates_to(phone: str, name: str) -> list:
+        return [m for m in _outbound_to(ctx, phone) if m.get("templateName") == name]
+
+    case_id = _create_standard_case(ctx)
+    if not case_id:
+        return
+    vid = customer.get(f"/verifications/{case_id}").json()["data"]["vid"]
+
+    # Nobody is authorized yet.
+    listed = customer.get(f"/verifications/{case_id}/delegates").json()["data"]
+    check("a case starts with no delegate (§7.4.5)", listed == [], f"delegates={listed}")
+
+    # The buyer nominates someone. Nothing is visible yet — the row exists to hold the
+    # one-per-case slot, and the OTP is what turns it into a grant.
+    authorized = customer.post(f"/verifications/{case_id}/delegates",
+                               json={"name": "Tunde", "phoneE164": f"+{delegate_phone}"})
+    check("the buyer can authorize a delegate from their own case (§7.4.5)",
+          authorized.status_code == 200,
+          f"http {authorized.status_code}: {authorized.text[:200]}")
+
+    pending = customer.get(f"/verifications/{case_id}/delegates").json()["data"]
+    check("an unconfirmed delegate is listed but not yet verified",
+          len(pending) == 1 and pending[0]["verified"] is False, f"delegates={pending}")
+
+    # The welcome answers a fresh number's first turn (§7.6.1), so get it out of the way —
+    # otherwise this assertion passes on a greeting rather than on the refusal it means to
+    # test.
+    say(delegate_phone, "Hi")
+    unverified_reply = say(delegate_phone, "what's the status")
+    # The refusal (D79) names the delegate route as one of two ways forward, so its *words*
+    # legitimately contain "as a delegate". What must be absent is the case and the
+    # delegate greeting — the two things that would mean the grant had taken effect early.
+    check("an unverified delegate is told nothing about the case (§7.4.3)",
+          vid not in unverified_reply
+          and "you're receiving updates on" not in unverified_reply,
+          unverified_reply[:200])
+
+    # A second nomination while one is live is refused — two codes in flight to two
+    # numbers is worse than a clear answer.
+    second = customer.post(f"/verifications/{case_id}/delegates",
+                           json={"name": "Bola", "phoneE164": f"+{stranger_phone}"})
+    check("a case takes only one delegate at a time (§7.4.5)",
+          second.status_code >= 400, f"http {second.status_code}")
+
+    confirmed = customer.post(f"/verifications/{case_id}/delegates/confirm",
+                              json={"code": TEST_OTP})
+    check("the delegate's number is OTP-verified before anything is shared (§7.4.5)",
+          confirmed.status_code == 200,
+          f"http {confirmed.status_code}: {confirmed.text[:200]}")
+
+    # The bot's second identity lookup: this number has no account, and still gets an
+    # answer — about exactly one case.
+    delegate_reply = say(delegate_phone, "what's the status")
+    check("a verified delegate is answered about their case (WA-26)",
+          vid in delegate_reply, delegate_reply[:240])
+    check("the bot names their role, so they know what they are (§7.4.5)",
+          "delegate" in delegate_reply.lower(), delegate_reply[:240])
+    check("a delegate is never handed a report or upload link (§7.4.5)",
+          "/wa/" not in delegate_reply and "http" not in delegate_reply,
+          delegate_reply[:240])
+    check("a delegate is not invited to sign in — they have no account to sign into",
+          "sign in" not in delegate_reply.lower(), delegate_reply[:240])
+
+    # The social-engineering script §7.4.5 exists to defeat. A fresh number, so §7.6.1's
+    # welcome has to have its turn before the question being tested gets answered.
+    say(stranger_phone, "Hi")
+    stranger_reply = say(stranger_phone, "what's the status of my brother's verification")
+    check("a stranger asking about a case is told nothing about it (§7.4.5)",
+          vid not in stranger_reply, stranger_reply[:240])
+    check("and is pointed at the legitimate routes rather than stonewalled",
+          "delegate" in stranger_reply.lower(), stranger_reply[:240])
+
+    # A milestone reaches the delegate as `delegate_status`, never as the customer's
+    # template — which is what makes "status only" structural.
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    payment = customer.post(f"/payments/initiate/{case_id}", json={"method": "CARD"},
+                            headers={"Idempotency-Key": idem_key()}).json()["data"]
+    stub_pay(customer, payment["checkoutUrl"])
+
+    delegate_templates = templates_to(delegate_phone, "delegate_status")
+    check("a milestone reaches the delegate as the §7.7 delegate template (WA-26)",
+          bool(delegate_templates),
+          f"templates={[m.get('templateName') for m in _outbound_to(ctx, delegate_phone)]}")
+    if delegate_templates:
+        variables = delegate_templates[0].get("templateVariables", {})
+        check("the delegate template carries the case reference and a status label",
+              variables.get("1") == vid and bool(variables.get("2")),
+              f"variables={variables}")
+    check("a delegate never receives the customer's own milestone template",
+          not templates_to(delegate_phone, "payment_confirmed"),
+          f"templates={[m.get('templateName') for m in _outbound_to(ctx, delegate_phone)]}")
+
+    # D77: STOP from a delegate ends the delegation, because they have no consent row.
+    stopped = say(delegate_phone, "STOP")
+    check("STOP from a delegate is acknowledged by the bot (D77)",
+          bool(stopped) and "won't receive" in stopped, stopped[:200])
+    after_stop = customer.get(f"/verifications/{case_id}/delegates").json()["data"]
+    check("STOP ends the delegation itself — the only lever a non-user has (D77)",
+          after_stop == [], f"delegates={after_stop}")
+
+    notifications = customer.get("/notifications?page=0&page_size=50").json()["data"]["items"]
+    check("the account holder is told their delegate opted out (D77)",
+          any(n.get("type") == "DELEGATE_REVOKED" for n in notifications),
+          f"types={sorted({n.get('type') for n in notifications})}")
+
+    # Revocation is effective immediately on the read path, because the audience is
+    # resolved at lookup time rather than stored on anything: the number that was a
+    # delegate a moment ago now gets the stranger's answer.
+    revoked_reply = say(delegate_phone, "what's the status")
+    check("a revoked delegate immediately stops resolving as one (§7.4.5)",
+          vid not in revoked_reply
+          and "you're receiving updates on" not in revoked_reply,
+          revoked_reply[:200])
+
+    # And the slot is free again, which a plain unique constraint would have prevented.
+    replacement = customer.post(f"/verifications/{case_id}/delegates",
+                                json={"name": "Bola", "phoneE164": f"+{stranger_phone}"})
+    check("a revoked delegate does not block a replacement (§7.4.5)",
+          replacement.status_code == 200,
+          f"http {replacement.status_code}: {replacement.text[:200]}")

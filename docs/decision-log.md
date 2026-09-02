@@ -2051,3 +2051,177 @@ typed: case references travel on receipts and reports.
 ### Revisit
 If most documents arrive from unlinked numbers, consider offering linking and the upload in
 one flow rather than two turns.
+
+## Decision: D75 — `report_ready` carries the portal link, not a handoff token
+
+### Context
+§7.7's `report_ready` template takes a link. WA-35 says a `report` handoff token; Decision
+B says "notification template + authenticated portal link". The two readings had never been
+reconciled, because until S8 nothing sent the template.
+
+### Options Considered
+1. **The portal deep link** (`{PUBLIC_APP_BASE_URL}/portal/verifications/{vid}`).
+2. A freshly minted 15-minute `report` handoff token per send.
+3. Both, in one template body.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation).
+
+### Rationale
+A §7.5 token lives fifteen minutes and a milestone is read whenever the customer next opens
+WhatsApp — so option 2 sends most readers to the expiry page from a message they never
+clicked, turning §7.4.2's recovery path from an edge case into the normal experience.
+Decision B already puts the report behind a real login, and D50 routes `/wa/report/[token]`
+into the authenticated portal anyway, so the token buys no privacy the login does not.
+
+Option 3 puts two links in a utility template. Meta approves the body as written, and two
+links in a milestone is a phishing-shaped message in a scam-saturated category — it also
+doubles what the customer has to judge, which is the opposite of §7.1.2's posture.
+
+### Tradeoffs / Constraints
+- WA-35's wording is amended in the requirements matrix to match.
+- The bot still mints a fresh `report` token **on request** (§7.4.2), so the capability link
+  is used when it is actually needed rather than on every send.
+
+### Revisit
+If a report ever needs to be readable without an account, that is a fresh decision about
+report access, not about this template.
+
+## Decision: D76 — both payment surfaces capture the §7.4.6 consents
+
+### Context
+§7.4.6 puts the two unticked opt-ins "at payment confirmation". By S8 there are two payment
+surfaces: the authenticated web pay screen, and the `/wa/pay/<token>` landing D62 built for
+a customer who arrived from chat.
+
+### Options Considered
+1. **Both surfaces.**
+2. The web pay screen only.
+3. The post-payment confirmation screen.
+
+### Chosen Option
+**Option 1** (user-selected; also the recommendation).
+
+### Rationale
+The handoff-landing payer is the channel's *own* customer. If only the web screen asks, the
+people most likely to want WhatsApp updates are the only ones never offered them, and could
+opt in solely by finding account settings on a site they reached from a chat link. §7.10
+counts the opt-in rate as the channel's consent asset, so that is the population it can
+least afford to miss.
+
+Option 3 fails on timing: `payment_confirmed` fires *at* payment, so a consent captured
+afterwards always misses the first milestone — and the WhatsApp payer never reaches that
+screen at all.
+
+### Tradeoffs / Constraints
+- One more public write endpoint, `PUT /public/wa/handoff/pay/consent`. It is grant-scoped
+  exactly as `pay/initiate` is: the customer id comes from the grant cookie, never from the
+  body, so a holder of one link cannot consent on another customer's behalf.
+- Consent is written **on toggle**, not on payment success. The tick is the consent act;
+  tying it to a gateway outcome would discard it every time a card fails, and would make the
+  §7.8 timestamp mean something other than when the customer decided.
+- The control is one shared presentational component, so the two surfaces cannot drift into
+  asking different questions.
+
+### Revisit
+If a third capture point appears, extend the source enum rather than the component.
+
+## Decision: D77 — STOP from a delegate ends the delegation
+
+### Context
+D64 makes STOP revoke both consents on the customer's D63 row. A §7.4.5 delegate receives
+milestones and has no account, so no consent row exists for them to revoke.
+
+### Options Considered
+1. Escalate to a human (the pre-S8 behaviour for every STOP).
+2. **Revoke the delegation and publish `DELEGATE_REVOKED` to the account holder.**
+3. Revoke the delegation silently.
+
+### Chosen Option
+**Option 2** (user-selected).
+
+### Rationale
+Ending the delegation is the only lever a non-user has: anything less means we keep
+messaging someone who typed STOP, which is exactly what Meta's quality rating is built to
+notice. Option 1 leaves the opt-out unhonoured until a person reads it — outside G1 hours
+the next milestone still sends, so it is not an opt-out at all.
+
+Telling the buyer is what makes the outcome actionable: their useful response is to
+authorize someone else, which they cannot do if they only discover it by opening the case
+page. The notification is in-app only — the buyer needs to know their case has no delegate,
+not to be emailed about someone else's messaging preference.
+
+### Tradeoffs / Constraints
+- A new `EventType.DELEGATE_REVOKED` and an in-app rule row.
+- It tells the buyer something about the delegate's behaviour. Accepted: the buyer
+  authorized them, the grant is theirs to manage, and the alternative is a delegation that
+  silently delivers nothing.
+- Resolution order mirrors D67 — account first, delegate second — so a customer's own STOP
+  still revokes their consents rather than a delegation they happen to also hold.
+
+### Revisit
+If §7.9's multiple-delegate enhancement lands, the event needs to name which delegate left.
+
+## Decision: D78 — "verification started" fires on the first start, not every start
+
+### Context
+D66 gave §7.6.2's "verification started" milestone its own event, published wherever §4.1's
+derivation moves a case into `IN_PROGRESS`. The live drive-through then showed the template
+going out **three times** on a STANDARD case.
+
+### Chosen Option
+Publish only when no task has yet reached `SUBMITTED` or `APPROVED`.
+
+### Rationale
+`derive_status` is a pure projection with no memory: a case drops back to `PAID` when its
+one active task is submitted and re-enters `IN_PROGRESS` when the next agent is assigned, so
+a three-role tier passes through the transition three times. That is correct for a status
+feed and wrong for a milestone — §7.6.2 promises the customer three or four messages per
+verification, not one per agent.
+
+A settled task is exactly the difference between work *starting* and work *continuing*, and
+it is already in hand at both publish sites, so the guard needs no column and no sweep. A
+rework re-activating a case under review is caught by the same rule.
+
+### Tradeoffs / Constraints
+The two derivation sites now pass their task states to the trigger — a slightly wider
+signature, in exchange for the rule living in one place rather than being re-derived by each
+caller.
+
+### Revisit
+If a milestone ever needs true once-only semantics across restarts and backfills, promote it
+to a timestamp column on `verifications`.
+
+## Decision: D79 — one message answers both the unlinked customer and the third party
+
+### Context
+§7.4.3 says an unlinked number asking about a case is offered the linking flow. §7.4.5 says
+a non-delegate third party is "warmly treated as a new enquiry; told the account holder can
+share updates or authorize them as a delegate". Both describe the same inbound message.
+
+### Options Considered
+1. Two messages, chosen by guessing which kind of person is asking.
+2. **One message that names both routes.**
+
+### Chosen Option
+**Option 2.**
+
+### Rationale
+The bot cannot tell the two apart — a customer on a second handset and a stranger send the
+same words — and guessing is wrong in both directions. Sending the stranger through linking
+wastes an OTP on an account that does not have this case on it and answers nothing; sending
+the customer down the delegate route tells them to ask someone's permission for their own
+verification.
+
+So `content.unlinked_number()` states the refusal once and names both legitimate routes:
+link your own account, or have the account holder share updates or authorize you as a
+delegate. §7.4.5's requirement is that the delegate route is *stated*, not that it is stated
+exclusively.
+
+### Tradeoffs / Constraints
+A slightly longer message, in exchange for never giving either reader an answer that cannot
+help them.
+
+### Revisit
+If the classifier ever reliably distinguishes "my verification" from "my brother's", split
+the copy — the two paragraphs are already separable.

@@ -15,6 +15,7 @@ import { VerificationStatusBadge } from "./VerificationStatusBadge";
 import { VerificationProgress } from "./VerificationProgress";
 import { EvidenceGallery } from "./EvidenceGallery";
 import WhatsAppContinueButton from "@components/portal/WhatsAppContinueButton";
+import DelegatePanel from "./DelegatePanel";
 
 // State-specific reassurance copy (§9.3) — frames each phase in plain, calming language.
 const STATE_REASSURANCE: Partial<Record<VerificationStatus, string>> = {
@@ -114,6 +115,12 @@ export default function TrackingContainer({ verificationId }: { verificationId: 
                 </CardContent>
               </Card>
             )}
+
+            {/*
+              §7.4.5 — placed with the people on the case and ahead of the evidence a
+              delegate must never see. The order is the grant, rendered.
+            */}
+            <DelegatePanel verificationId={verificationId} />
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">

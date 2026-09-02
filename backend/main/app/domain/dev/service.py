@@ -82,6 +82,14 @@ _RESET_TABLES = [
     # consent_documents they point at are preserved). Cleared so seed() can re-record them
     # for the fresh users and the surviving super-admin without stacking duplicates.
     "user_consents",
+    # WhatsApp messaging consent (§7.4.6) — keyed on the user, so a row outliving its
+    # account is dead data. The rest of the channel's tables are deliberately left alone:
+    # `whatsapp_links` holds a unique number per row, and the drive-through takes a fresh
+    # number per scenario rather than depending on a reset to release one.
+    "whatsapp_consents",
+    # §7.4.5 delegations are per-verification, and `verifications` is cleared above — a
+    # surviving row would point at a case that no longer exists.
+    "case_delegates",
 ]
 
 

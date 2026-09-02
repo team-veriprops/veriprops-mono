@@ -44,7 +44,8 @@ def _task(role, state=TaskState.SUBMITTED, review=None, payload=None, agent="age
 
 def _verification(status=VerificationStatus.UNDER_REVIEW, tier=VerificationTier.STANDARD, price=1000000):
     return SimpleNamespace(
-        id="v-1", status=status.value, tier=tier.value, price_locked_minor=price, customer_id="cust-1",
+        id="v-1", vid="VP-2026-0001", status=status.value, tier=tier.value,
+        price_locked_minor=price, customer_id="cust-1",
         pending_revision_kind=None,
     )
 
@@ -154,6 +155,79 @@ class TestApproveReject:
 
         rejected = [e for e in published if e.type == EventType.TASK_REJECTED]
         assert rejected and rejected[0].recipient_user_ids == ("agent-1",)
+
+
+class TestMilestoneEvents:
+    """§7.6.2's two new milestone triggers (D66).
+
+    Both exist so the WhatsApp rule table has a real event to hang off, rather than a
+    subscriber inspecting another event's payload — which is the coupling the declarative
+    table exists to remove, and which breaks silently the day a key is renamed.
+    """
+
+    @staticmethod
+    def _capture(monkeypatch):
+        import main.app.domain.verification.review.service as review_mod
+        import main.app.domain.verification.status_events as status_events_mod
+
+        published = []
+        recorder = AsyncMock(side_effect=lambda e: published.append(e))
+        monkeypatch.setattr(review_mod, "publish_domain_event", recorder)
+        # `publish_verification_started` publishes from its own module, so both have to
+        # be captured to see everything one call emits.
+        monkeypatch.setattr(status_events_mod, "publish_domain_event", recorder)
+        return published
+
+    async def test_approving_the_field_task_announces_the_inspection(self, monkeypatch):
+        """Approval, not submission, is the moment: the inspection is complete when an
+        admin has accepted what the agent sent, not when they sent it."""
+        from main.app.core.events.events import EventType
+
+        published = self._capture(monkeypatch)
+        svc = _make_service(_verification(), _standard_tasks(review=None))
+        await svc.approve_task("v-1", AgentRole.FIELD, 90, "admin-1")
+
+        events = [e for e in published if e.type == EventType.INSPECTION_COMPLETE]
+        assert len(events) == 1
+        assert events[0].recipient_user_ids == ("cust-1",)
+        assert events[0].data["vid"] == "VP-2026-0001"
+
+    async def test_approving_another_role_announces_nothing(self, monkeypatch):
+        """Only the field role is the field inspection. A registry approval firing this
+        would tell the customer an inspector had visited their property."""
+        from main.app.core.events.events import EventType
+
+        published = self._capture(monkeypatch)
+        svc = _make_service(_verification(), _standard_tasks(review=None))
+        await svc.approve_task("v-1", AgentRole.REGISTRY, 90, "admin-1")
+
+        assert not [e for e in published if e.type == EventType.INSPECTION_COMPLETE]
+
+    async def test_a_status_move_elsewhere_announces_no_start(self, monkeypatch):
+        from main.app.core.events.events import EventType
+
+        published = self._capture(monkeypatch)
+        svc = _make_service(_verification(), _standard_tasks(review="APPROVED"))
+        await svc.release("v-1", "admin-1", reason="looks good")
+
+        assert not [e for e in published if e.type == EventType.VERIFICATION_STARTED]
+
+    async def test_a_rework_does_not_announce_the_start_again(self, monkeypatch):
+        """Half of the defect the live drive-through caught: `derive_status` has no
+        memory, so a case re-enters IN_PROGRESS whenever a task is sent back — and the
+        customer was told "we've started" again.
+
+        A rejection is only possible on a SUBMITTED task, so work has provably begun by
+        definition here; the guard is exactly that. §7.6.2 promises three or four
+        milestones per verification, not one per agent.
+        """
+        from main.app.core.events.events import EventType
+
+        published = self._capture(monkeypatch)
+        svc = _make_service(_verification(VerificationStatus.UNDER_REVIEW), _standard_tasks(review=None))
+        await svc.reject_task("v-1", AgentRole.FIELD, "blurry photos", "admin-1")
+
+        assert not [e for e in published if e.type == EventType.VERIFICATION_STARTED]
 
 
 class TestRelease:

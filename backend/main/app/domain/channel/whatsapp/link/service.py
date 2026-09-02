@@ -102,6 +102,23 @@ class WhatsAppLinkService:
         link = await self._whatsapp_link_repo.get_active_by_phone(to_e164(phone_e164))
         return link.user_id if link else None
 
+    async def resolve_phone_for_user(self, user_id: str) -> Optional[str]:
+        """The WhatsApp number this account has verified, or ``None``.
+
+        The outbound inverse of `resolve_user_for_phone`, and the **only** address a
+        business-initiated message may use (D65). `users.phone` is a profile field that
+        nobody proved control of over WhatsApp; addressing a milestone to it would deliver
+        case details to a number that was never OTP-verified as this customer's — the
+        §7.4.3 leak, running outwards.
+
+        ACTIVE only, for the same reason the inbound direction is: a pending attempt is
+        not a link.
+        """
+        link = await self._whatsapp_link_repo.get_by_user_id(user_id)
+        if link is None or link.status != WhatsAppLinkStatus.ACTIVE.value:
+            return None
+        return link.phone_e164
+
     # ── Web → WhatsApp (§7.4.4) ───────────────────────────────────
 
     async def start_link(self, user_id: str, phone_e164: str) -> WhatsAppLinkChallengeDto:

@@ -60,6 +60,37 @@ def render(cases: Sequence[CaseSummary]) -> StatusOutcome:
     return StatusOutcome(choose_prompt(cases), tuple(case.vid for case in cases))
 
 
+def render_for_delegate(case: CaseSummary, delegate_name: str) -> StatusOutcome:
+    """The status reply for an authorized delegate (§7.4.5).
+
+    Two things separate this from `_one_case`, and both are the grant showing through:
+
+    * **It names the role.** §7.4.5 requires the bot to identify a delegate as a delegate
+      — partly so they know what they are, and partly so they are not surprised when the
+      next question they ask is treated as a new enquiry.
+    * **It does not end with "sign in for the full details and your report".** A delegate
+      has no account to sign into and no report to read; offering one would promise access
+      the whole design refuses to give.
+
+    There is never a list here: a delegate holds exactly one case, so there is nothing to
+    disambiguate and no flow to park.
+    """
+    lines = [
+        f"Hi {delegate_name} — you're receiving updates on {case.vid} as a delegate.",
+        "",
+        f"📍 {case.property_label}",
+        f"Status: {case.status_label}",
+    ]
+    if case.sla_due_date:
+        lines.append(f"Expected by: {case.sla_due_date.strftime('%d %b %Y')}")
+    lines += [
+        "",
+        "I can share progress on this verification. For documents, the report or anything "
+        "else, the account holder is the person to ask.",
+    ]
+    return StatusOutcome("\n".join(lines))
+
+
 def render_choice(cases: Sequence[CaseSummary], choice: str) -> Optional[StatusOutcome]:
     """The reply once the customer picks from the list, or ``None`` if they did not.
 

@@ -148,27 +148,37 @@ never links to evidence.
 ### Risk — Medium
 ### Commit — `feat(whatsapp): full console mediation, 24h window handling, non-text policy (S7)`
 
-## Slice S8 — Template registry, consent capture, milestones, report delivery
+## Slice S8 — Consent capture, milestones, report delivery ✅
+
+> The §7.7 **registry** half of this slice shipped early, in S4.1: template approval lag is on
+> the critical path, so the registry went in as soon as the templates were declared rather than
+> waiting for the senders that read them.
 
 ### Objective
-§7.7 registry (seeded, approval-tracked, admin UI); §7.4.6 dual unticked consents at payment
-confirmation + settings + STOP keywords; router-enforced consent; milestone templates on domain
-events; report-ready delivery (WhatsApp opt-in + unconditional email).
+§7.4.6 dual unticked consents at payment confirmation + settings + STOP keywords;
+router-enforced consent; milestone templates on domain events; report-ready delivery
+(WhatsApp opt-in + unconditional email).
 
 ### Requirements Covered
-WA-15, WA-16, WA-27, WA-34, WA-35, WA-41 (registry)
+WA-15 (S4.1), WA-16, WA-27, WA-34, WA-35, WA-41 (senders)
 
 ### Dependencies — S5; S6 (consent placement at payment confirmation)
-### Files Impacted
-template entity + migration + admin DataTable page; consent domain extension; notification rule
-table + subscribers; payment-confirmation UI.
-### Tests Required
-router consent-gate units (never send-site enforcement); STOP keyword flow; event→template units;
-e2e milestone + report delivery on stub; email-always assertion.
+### Delivered
+`channel/whatsapp/consent/` + migration `0008` (D63 — grant/revoke timestamp pairs, granted-ness
+derived); `NotificationRule.whatsapp`/`whatsapp_template` + the router's WhatsApp branch (D65 —
+consent and linked-number resolution happen there, never at a send site); `EventType`
+`VERIFICATION_STARTED`/`INSPECTION_COMPLETE` (D66) with the first-start guard (D78);
+`channel/whatsapp/milestones.py` (the three gates); D64's STOP/START answered by the bot in one
+turn; the shared opt-in control on both payment surfaces (D76); `report_ready` carrying the
+portal deep link (D75).
+### Tests
+`test_whatsapp_consent_service.py`, `test_milestones.py`, the rule-table properties in
+`test_notification_service.py`, the D64 keyword matrix in `test_bot_engine.py`, D66/D78 in the
+review + task service suites; drive-through `_run_consent_checks` + `_run_milestone_checks`.
 ### Risk — Medium
-### Commit — `feat(whatsapp): template registry, dual consent, event-driven milestones (S8)`
+### Commit — `feat(whatsapp): dual consent, event-driven milestones, report delivery (S8)`
 
-## Slice S9 — Delegates (O2 slim)
+## Slice S9 — Delegates (O2 slim) ✅
 
 ### Objective
 One OTP-verified delegate per case: authorize from case detail, status-milestones only, instant
@@ -178,11 +188,18 @@ revoke, bot role identification, social-engineering defense for non-delegates.
 WA-26
 
 ### Dependencies — S4 (OTP mechanics), S8 (delegate_status template)
-### Files Impacted
-`CaseDelegate` entity + migration; case-detail UI; bot delegate flow; router delegate audience.
-### Tests Required
-units: one-per-case, revocation-next-event, scope denial (docs/report/chat/intake never sent);
-e2e delegate lifecycle; adversarial non-delegate enquiry test.
+### Delivered
+`verification/delegate/` + migration `0009` (D67 — `case_delegates` independent of
+`WhatsAppLink`; one *live* delegate per case as a partial unique index, so a revoked row does
+not block a replacement); the bot's second identity lookup, asked only after
+`resolve_user_for_phone` answers `None`; `status.render_for_delegate` (no report link exists to
+give); the delegate audience in the notification subscriber (`delegate_status` for all four
+milestones); D77's STOP → revoke + `DELEGATE_REVOKED`; D79's single answer for the unlinked
+customer and the third party; `DelegatePanel` on the case page, between the agents and the
+evidence.
+### Tests
+`test_case_delegate_service.py` (23), `test_delegate_flow.py` (15), `DelegatePanel.test.tsx`,
+`delegate-service.test.ts`; drive-through `_run_delegate_checks`.
 ### Risk — Medium-High (access control) → small batch
 ### Commit — `feat(whatsapp): slim per-case delegates with status-only visibility (S9)`
 

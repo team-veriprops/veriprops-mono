@@ -11,6 +11,8 @@ import { ROUTES } from "@lib/routes";
 import { getCurrencySymbol, TransactionCurrency } from "@/types/models";
 import { HandoffContext, HandoffIntent, HandoffPayment } from "@/types/handoff";
 import { waMeUrl } from "@lib/whatsapp";
+import WhatsAppOptInControls from "@components/shared/whatsapp/WhatsAppOptInControls";
+import { NO_WHATSAPP_CONSENT, WhatsAppConsent } from "@/types/whatsappConsent";
 import { HandoffService } from "./libs/handoff-service";
 
 const service = new HandoffService(httpClient);
@@ -46,6 +48,9 @@ export default function WaHandoffLanding({
   const [payment, setPayment] = useState<HandoffPayment | null>(null);
   const [failed, setFailed] = useState(false);
   const [paying, setPaying] = useState(false);
+  // Both unticked until the customer says otherwise — §7.4.6's required default. The
+  // landing has no session, so there is no prior state to read: this is a fresh capture.
+  const [consent, setConsent] = useState<WhatsAppConsent>(NO_WHATSAPP_CONSENT);
   // Redemption spends the link, so it must fire exactly once even under React's
   // development double-invoke.
   const redeemed = useRef(false);
@@ -58,6 +63,21 @@ export default function WaHandoffLanding({
       .then((res) => (res.data ? setContext(res.data) : setFailed(true)))
       .catch(() => setFailed(true));
   }, [intent, token]);
+
+  /**
+   * §7.4.6's two opt-ins, at the only moment this customer is ever asked (D76). Written on
+   * toggle rather than on payment: the tick is the consent act, and a failed card must not
+   * lose it. Optimistic locally so the box responds immediately on a phone connection, and
+   * best-effort on the wire — a consent that fails to save must never block the payment.
+   */
+  const onConsentChange = async (next: WhatsAppConsent) => {
+    setConsent(next);
+    try {
+      await service.setConsent({ utility: next.utility, marketing: next.marketing });
+    } catch {
+      setConsent(consent);
+    }
+  };
 
   const onPay = async () => {
     setPaying(true);
@@ -84,6 +104,8 @@ export default function WaHandoffLanding({
           payment={payment}
           paying={paying}
           onPay={onPay}
+          consent={consent}
+          onConsentChange={onConsentChange}
         />
       )}
 
@@ -177,11 +199,15 @@ function PaySection({
   payment,
   paying,
   onPay,
+  consent,
+  onConsentChange,
 }: {
   context: HandoffContext;
   payment: HandoffPayment | null;
   paying: boolean;
   onPay: () => void;
+  consent: WhatsAppConsent;
+  onConsentChange: (next: WhatsAppConsent) => void;
 }) {
   const currency = context.currency ?? TransactionCurrency.NGN;
   return (
@@ -197,6 +223,9 @@ function PaySection({
       </div>
 
       <PaymentPledge />
+
+      {/* §7.4.6, D76 — the customer who arrived from chat is asked here or nowhere. */}
+      <WhatsAppOptInControls consent={consent} onChange={onConsentChange} />
 
       {!payment ? (
         <Button onClick={onPay} disabled={paying} data-testid="wa-handoff-pay">

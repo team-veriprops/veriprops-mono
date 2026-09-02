@@ -248,15 +248,28 @@ def account_management_not_offered() -> str:
 
 
 def unlinked_number() -> str:
-    """§7.4.3 — the bot never reads case data to an unverified number.
+    """§7.4.3 + §7.4.5 — the bot never reads case data to an unverified number.
 
-    The refusal is warm and explains the next step, because the person on the other end
-    is usually the customer on a second handset, not an attacker.
+    One message for both people who reach it, because the bot cannot tell them apart and
+    must not guess: the customer on a second handset, and the third party asking about
+    someone else's case ("my relative is handling it" — the social-engineering script
+    §7.4.5 exists to defeat). Guessing wrong in either direction is bad. Sending the
+    stranger down the linking flow wastes an OTP on an account that does not have this
+    case on it; sending the customer down the delegate route tells them to ask permission
+    for their own verification.
+
+    So it states the refusal once and names **both** legitimate routes. Warm throughout,
+    because most people asking are exactly who they say they are.
     """
     return (
         "I can't share verification details with a number that isn't linked to a "
-        "Veriprops account yet — that's how we keep your case private.\n\n"
-        "Say \"link my account\" and I'll send you a secure link to connect this number."
+        "Veriprops account yet — that's how we keep every case private, and we don't "
+        "make exceptions.\n\n"
+        "If the verification is yours, say \"link my account\" and I'll send you a secure "
+        "link to connect this number.\n\n"
+        "If it belongs to someone else, they can share updates with you, or authorize you "
+        "as a delegate from the case page on veriprops.ng — then I can keep you posted on "
+        "its progress."
     )
 
 
@@ -264,6 +277,52 @@ def no_cases() -> str:
     return (
         "I can't find a verification on your account yet. If you'd like to start one, "
         "just say \"start a verification\"."
+    )
+
+
+
+# ─── Messaging consent (§7.4.6, D64) ──────────────────────────────
+
+
+def messages_stopped() -> str:
+    """Confirms a STOP. Answered in one turn, by the bot, always.
+
+    An opt-out is binding the moment it is typed, so it can never wait for a person to
+    read it — and "I didn't understand" in reply to STOP is the single worst thing this
+    channel could say. The confirmation also states the way back, because the common
+    reason for a mistaken STOP is a fat-fingered menu reply.
+    """
+    return (
+        "Done — I've stopped WhatsApp updates and offers to this number.\n\n"
+        "You'll still get everything by email, and your verifications carry on exactly as "
+        "before. Say \"START\" any time to switch progress updates back on."
+    )
+
+
+def messages_restarted() -> str:
+    """Confirms a START, and is honest about what it does *not* restore.
+
+    START brings back progress updates only. Marketing needs a deliberate opt-in on the
+    web (D64), so saying so here is the difference between a customer who knows where the
+    control is and one who thinks a word in chat re-consented them to everything.
+    """
+    return (
+        "Progress updates are back on for this number.\n\n"
+        "News and offers stay off — you can switch those on under WhatsApp in your "
+        "account settings on veriprops.ng."
+    )
+
+
+def messages_stopped_unknown_number() -> str:
+    """A STOP from a number we hold no consent for.
+
+    There is nothing to revoke — we were not messaging them — but the reply still has to
+    read as "yes, understood". Answering "I don't have you on file" would sound like a
+    refusal to a person who just asked to be left alone.
+    """
+    return (
+        "Understood — this number won't receive updates or offers from us.\n\n"
+        "If you'd like help with a verification, just say hello and I'll take it from there."
     )
 
 

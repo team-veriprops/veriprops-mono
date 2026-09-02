@@ -19,23 +19,56 @@ from main.appodus_utils.integrations.messaging.templating.models import Availabl
 class NotificationRule:
     """How one event surfaces. ``in_app`` is always on (§12.1); ``email``/``sms`` are the
     defaults a user may opt out of; ``chat_only`` suppresses the notification entirely
-    (Chat counter only); ``template`` is the external-dispatch template (email/SMS)."""
+    (Chat counter only); ``template`` is the external-dispatch template (email/SMS).
+
+    ``whatsapp`` marks the §7.6.2 milestones (D65). It is a **separate** channel with a
+    **separate** template, because the §7.7 Meta template is not the email template and
+    one field cannot be both. Two further things follow from `whatsapp=True`, and they are
+    the reason it is a flag rather than a second table:
+
+    * the customer's opt-in (§7.4.6) is checked in the router before the send, never at a
+      send site — that is the WA-16/WA-27 property; and
+    * an authorized delegate on the same case receives the milestone too, as
+      `delegate_status` and never as this template (§7.4.5).
+    """
 
     in_app: bool = True
     email: bool = False
     sms: bool = False
     chat_only: bool = False
     template: Optional[AvailableTemplate] = None
+    whatsapp: bool = False
+    whatsapp_template: Optional[AvailableTemplate] = None
 
 
 _T = AvailableTemplate
 RULES: Dict[EventType, NotificationRule] = {
     # Customer
-    EventType.PAYMENT_CONFIRMED: NotificationRule(email=True, sms=True, template=_T.VERIFICATION_PAYMENT_CONFIRMED),
+    EventType.PAYMENT_CONFIRMED: NotificationRule(
+        email=True, sms=True, template=_T.VERIFICATION_PAYMENT_CONFIRMED,
+        whatsapp=True, whatsapp_template=_T.WHATSAPP_PAYMENT_CONFIRMED,
+    ),
     EventType.STATUS_CHANGED: NotificationRule(email=True, template=_T.VERIFICATION_STATUS_CHANGE),
     EventType.AGENTS_ASSIGNED: NotificationRule(email=True, template=_T.VERIFICATION_AGENTS_ASSIGNED),
     EventType.EVIDENCE_ADDED: NotificationRule(in_app=True),
-    EventType.REPORT_READY: NotificationRule(email=True, sms=True, template=_T.VERIFICATION_REPORT_READY),
+    # The two §7.6.2 milestones that exist only to be told on WhatsApp (D66). No in-app
+    # entry and no email: the customer already has a status-change notification for the
+    # same moment, and a second one would be noise rather than news.
+    EventType.VERIFICATION_STARTED: NotificationRule(
+        in_app=False, email=False,
+        whatsapp=True, whatsapp_template=_T.WHATSAPP_VERIFICATION_STARTED,
+    ),
+    EventType.INSPECTION_COMPLETE: NotificationRule(
+        in_app=False, email=False,
+        whatsapp=True, whatsapp_template=_T.WHATSAPP_INSPECTION_COMPLETE,
+    ),
+    # §7.6.2 report delivery (WA-35): WhatsApp respects the opt-in, **email is
+    # unconditional**. The durable record of a delivered report cannot depend on a
+    # messaging preference, so `email=True` here is a requirement, not a default.
+    EventType.REPORT_READY: NotificationRule(
+        email=True, sms=True, template=_T.VERIFICATION_REPORT_READY,
+        whatsapp=True, whatsapp_template=_T.WHATSAPP_REPORT_READY,
+    ),
     EventType.REPORT_VERSIONED: NotificationRule(email=True, template=_T.VERIFICATION_REPORT_READY),
     EventType.SLA_BREACHED: NotificationRule(email=True, sms=True, template=_T.VERIFICATION_SLA_BREACH),
     EventType.REFUND_INITIATED: NotificationRule(in_app=True),
@@ -75,6 +108,10 @@ RULES: Dict[EventType, NotificationRule] = {
     # channel that reaches them; the in-app entry still lands for post-reactivation review.
     EventType.ACCOUNT_SUSPENDED: NotificationRule(email=True, template=_T.ACCOUNT_DEACTIVATION),
     EventType.ACCOUNT_REACTIVATED: NotificationRule(email=True, template=_T.ACCOUNT_ACTIVATION),
+    # §7.4.5 (D77): a delegate opted out in chat. In-app only — the buyer needs to know
+    # their case has no delegate any more, not to be emailed about someone else's
+    # messaging preference.
+    EventType.DELEGATE_REVOKED: NotificationRule(in_app=True),
 }
 
 # Fallback for any event not explicitly listed — in-app only, no external fan-out.

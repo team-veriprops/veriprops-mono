@@ -1,6 +1,7 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { SuccessResponse } from "@/types/models";
 import { HandoffContext, HandoffIntent, HandoffPayment, SeededDraft } from "@/types/handoff";
+import { SetWhatsAppConsent, WhatsAppConsent } from "@/types/whatsappConsent";
 
 /**
  * WhatsApp handoff API (PRD §7.4.2, §7.5). Mirrors the backend controller at
@@ -34,6 +35,17 @@ export class HandoffService {
   /** Start payment for the case the grant names — never a case id from the client. */
   initiatePayment(): Promise<SuccessResponse<HandoffPayment>> {
     return this.http.post(`/public/wa/handoff/pay/initiate`);
+  }
+
+  /**
+   * Record the §7.4.6 opt-ins from the payment landing (D76).
+   *
+   * This is the one moment a WhatsApp-native customer is asked — they arrived from a chat
+   * link and may never open account settings. Grant-scoped like `initiatePayment`: the
+   * customer comes from the grant cookie, never from this body.
+   */
+  setConsent(consent: SetWhatsAppConsent): Promise<SuccessResponse<WhatsAppConsent>> {
+    return this.http.put(`/public/wa/handoff/pay/consent`, consent);
   }
 
   /** Drop the grant once its action is done, so it does not outlive its purpose. */

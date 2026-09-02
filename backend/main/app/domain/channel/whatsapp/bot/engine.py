@@ -51,9 +51,12 @@ from main.app.domain.channel.whatsapp.bot.session.models import (
 )
 from main.app.domain.channel.whatsapp.bot.session.service import WhatsAppBotSessionService
 from main.app.domain.channel.whatsapp.bot.support_hours import Coverage, SupportHoursService
+from main.app.domain.channel.whatsapp.consent.models import WhatsAppConsentSource
+from main.app.domain.channel.whatsapp.consent.service import WhatsAppConsentService
 from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
 from main.app.domain.channel.whatsapp.handoff.service import HandoffTokenService
 from main.app.domain.channel.whatsapp.link.service import WhatsAppLinkService
+from main.app.domain.verification.delegate.service import CaseDelegateService
 from main.app.domain.communication.conversation.models import Conversation
 from main.app.domain.property.service import PropertyService
 from main.app.domain.user.repo import UserRepo
@@ -94,14 +97,19 @@ _MENU_CHOICES = {
 # must not revoke someone's consent or claim a case by inference.
 #
 # Meta and the customer both treat STOP as binding, so it must never be answered with
-# "I didn't understand". The flows that honour these land in S6 (continuation) and S8
-# (consent); until then they route to a person, which is a promise we can actually keep.
+# "I didn't understand" — and never with "a person will get back to you" either, because
+# an opt-out that waits for the next working day is not an opt-out. D64 fixes the two
+# vocabularies: the STOP set revokes **both** §7.4.6 consents, the START set restores
+# progress updates **only**.
 _KEYWORD_INTENTS = {
     "stop": BotIntent.STOP_MESSAGES,
     "unsubscribe": BotIntent.STOP_MESSAGES,
-    "cancel messages": BotIntent.STOP_MESSAGES,
+    "cancel": BotIntent.STOP_MESSAGES,
+    "end": BotIntent.STOP_MESSAGES,
+    "quit": BotIntent.STOP_MESSAGES,
     "start": BotIntent.START_MESSAGES,
-    "resume": BotIntent.START_MESSAGES,
+    "unstop": BotIntent.START_MESSAGES,
+    "subscribe": BotIntent.START_MESSAGES,
 }
 
 # What the closing message invites the customer to say when their 15-minute link has
@@ -136,6 +144,8 @@ class WhatsAppBotEngine:
         whatsapp_bot_session_service: WhatsAppBotSessionService,
         whatsapp_bot_sender: WhatsAppBotSender,
         whatsapp_link_service: WhatsAppLinkService,
+        whatsapp_consent_service: WhatsAppConsentService,
+        case_delegate_service: CaseDelegateService,
         intent_service: IntentService,
         support_hours_service: SupportHoursService,
         pricing_config_service: PricingConfigService,
@@ -148,6 +158,8 @@ class WhatsAppBotEngine:
         self._whatsapp_bot_session_service = whatsapp_bot_session_service
         self._whatsapp_bot_sender = whatsapp_bot_sender
         self._whatsapp_link_service = whatsapp_link_service
+        self._whatsapp_consent_service = whatsapp_consent_service
+        self._case_delegate_service = case_delegate_service
         self._intent_service = intent_service
         self._support_hours_service = support_hours_service
         self._pricing_config_service = pricing_config_service
@@ -277,10 +289,10 @@ class WhatsAppBotEngine:
             # S4 owns the linking flow itself; here the bot only points at it, which is
             # also the right answer for an unlinked number asking about a case.
             return await self._understood(session, content.unlinked_number())
-        if intent in (BotIntent.STOP_MESSAGES, BotIntent.START_MESSAGES):
-            # D64's consent ledger lands in S8. A person can honour the request today;
-            # a bot that replied "I didn't understand" to STOP could not.
-            return await self._escalate(EscalationReason.CAPABILITY_NOT_OFFERED)
+        if intent == BotIntent.STOP_MESSAGES:
+            return await self._stop_messages(session)
+        if intent == BotIntent.START_MESSAGES:
+            return await self._start_messages(session)
         if intent == BotIntent.CONTINUE_CASE:
             return await self._continue_case(session, text)
         if intent == BotIntent.START_VERIFICATION:
@@ -288,12 +300,96 @@ class WhatsAppBotEngine:
 
         return await self._unmatched(session)
 
+    # ─── Messaging consent (§7.4.6, D64) ──────────────────────────
+    #
+    # Handled by the bot, in one turn, always. These two intents are keyword-only —
+    # excluded from `CLASSIFIABLE_INTENTS` — so a model can never revoke someone's consent
+    # by inference; the customer's literal word is the only thing that reaches here.
+
+    async def _stop_messages(self, session: WhatsAppBotSession) -> BotReply:
+        """STOP and its synonyms end **both** §7.4.6 consents (D64)."""
+        user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
+        if not user_id:
+            # D77: a delegate has no consent row, so their opt-out has to end the
+            # delegation — the only lever a non-user has.
+            delegate_reply = await self._delegate_stop(session)
+            if delegate_reply is not None:
+                return delegate_reply
+            return await self._understood(
+                session, content.messages_stopped_unknown_number()
+            )
+        await self._whatsapp_consent_service.revoke_all(
+            user_id, WhatsAppConsentSource.STOP_KEYWORD
+        )
+        return await self._understood(session, content.messages_stopped())
+
+    async def _start_messages(self, session: WhatsAppBotSession) -> BotReply:
+        """START restores progress updates only; marketing needs the web (D64)."""
+        user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
+        if not user_id:
+            # Nothing to restore, and the linking invitation is the honest next step —
+            # updates about a case require an account to have a case on.
+            return await self._understood(session, content.unlinked_number())
+        await self._whatsapp_consent_service.grant_utility(
+            user_id, WhatsAppConsentSource.START_KEYWORD
+        )
+        return await self._understood(session, content.messages_restarted())
+
+    # ─── Delegates (§7.4.5, D67) ──────────────────────────────────
+
+    async def _delegate_status(self, session: WhatsAppBotSession) -> Optional[BotReply]:
+        """The status reply for an authorized delegate, or ``None`` if this is not one.
+
+        Asked only after `resolve_user_for_phone` has answered `None`, so this never
+        overrides an account. It reads the one case the delegation names — never the
+        customer's list — and the reply carries no report link, because
+        `render_for_delegate` has no path to one.
+        """
+        delegate = await self._case_delegate_service.resolve_delegate_for_phone(
+            session.phone_e164
+        )
+        if delegate is None:
+            return None
+        case = await self._load_case(delegate.verification_id)
+        if case is None:
+            # The delegation outlived its verification. Nothing to report, and inventing
+            # a status would be worse than treating them as a new enquiry.
+            return None
+        await self._whatsapp_bot_session_service.clear_flow(session)
+        return await self._understood(
+            session, status_flow.render_for_delegate(case, delegate.name).text
+        )
+
+    async def _delegate_stop(self, session: WhatsAppBotSession) -> Optional[BotReply]:
+        """Honour STOP from a number that is a delegate and nothing else (D77).
+
+        A delegate has no consent row, so ending the delegation is the only lever that
+        actually stops the messages — and a STOP we acknowledge but do not act on is the
+        kind of thing Meta's quality rating is built to notice.
+        """
+        delegate = await self._case_delegate_service.revoke_by_phone(session.phone_e164)
+        if delegate is None:
+            return None
+        return await self._understood(session, content.messages_stopped_unknown_number())
+
     # ─── Status ───────────────────────────────────────────────────
 
     async def _status(self, session: WhatsAppBotSession) -> BotReply:
-        """§7.4.3 — identity first, then the same data the dashboard reads."""
+        """§7.4.3 — identity first, then the same data the dashboard reads.
+
+        Identity is two questions asked in a fixed order (D67): *whose account is this
+        number?*, then *does it hold a delegation?*. The order is the access control — a
+        number that is both resolves as the customer, because the account grant is
+        strictly wider and reading it as a delegate would lose that person their own data.
+        """
         user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
         if not user_id:
+            delegate_reply = await self._delegate_status(session)
+            if delegate_reply is not None:
+                return delegate_reply
+            # One message serves the customer on a second handset and the third party
+            # asking about someone else's case: the bot cannot tell them apart, so it
+            # names both routes rather than guessing (§7.4.3 + §7.4.5).
             return await self._understood(session, content.unlinked_number())
 
         cases = await self._load_cases(user_id)
@@ -573,6 +669,27 @@ class WhatsAppBotEngine:
                 )
             )
         return summaries
+
+    async def _load_case(self, verification_id: str) -> Optional[status_flow.CaseSummary]:
+        """One case, summarised exactly as `_load_cases` summarises the customer's own.
+
+        Keyed by id rather than by customer, because a delegate is granted *this case* and
+        has no list to page. Same labels, same projection: a delegate and the buyer read
+        the same words for the same state.
+        """
+        row = await self._verification_repo.get_model(verification_id)
+        if row is None:
+            return None
+        status = VerificationStatus(row.status)
+        return status_flow.CaseSummary(
+            vid=row.vid,
+            property_label=await self._property_label(row.property_id),
+            status_label=customer_status_label(status),
+            channel_state=channel_state(
+                status, await self._field_task_state(Utils.uuid_to_hex(row.id))
+            ),
+            sla_due_date=row.sla_due_date,
+        )
 
     async def _property_label(self, property_id: Optional[str]) -> str:
         """A one-line address for the property, or a neutral stand-in.

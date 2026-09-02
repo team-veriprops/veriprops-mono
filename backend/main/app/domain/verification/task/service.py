@@ -26,6 +26,7 @@ from main.app.domain.user.auth.session.models import UserPersona
 from main.app.domain.user.service import UserService
 from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.models import UpdateVerificationDto, Verification
+from main.app.domain.verification.status_events import publish_verification_started
 from main.app.domain.verification.task.evidence.service import EvidenceService
 from main.app.domain.verification.task.models import (
     AgentDashboardDto,
@@ -502,6 +503,12 @@ class VerificationTaskService:
             sse_event=VerificationEventType.STATUS_CHANGED.value,
             data={"status": new_status.value},
         ))
+        # §7.6.2's "verification started" milestone (D66), from the task-movement half of
+        # §4.1's derivation. The task states go with it: they are what tells a first start
+        # apart from the next agent picking up a case already under way.
+        await publish_verification_started(
+            verification_id, verification, new_status, task_states
+        )
 
     async def _set_pool_expiry(self, task_id: str, expires_at) -> None:
         # datetime fields are set on the model, not via the json-encoding update path.

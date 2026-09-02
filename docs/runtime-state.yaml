@@ -7,94 +7,98 @@ command: resume
 status: in_progress
 phase: implementation
 
-current_slice: S7
-current_subtask: "S7 complete — drive-through green at 372 checks"
+current_slice: S9
+current_subtask: "S8 + S9 complete — consent, milestones, report delivery, delegates"
 
 modified_files:
   - docs/{progress.md,decision-log.md,requirements-matrix.md,execution-plan.md}
-  - CLAUDE.md                       # §7 bullet: the console reply's return path
-  - backend/CLAUDE.md               # console adapter, §7.6.3 policy, rewind-window
-  - frontend/CLAUDE.md              # window state on the banner, per-message markers
-  - backend/main/app/domain/communication/chat_message/{models,repo,service}.py
-  - backend/main/app/domain/channel/whatsapp/inbound/service.py     # flush + media_kind
+  - CLAUDE.md                       # §7 bullet: router-enforced consent, delegates
+  - backend/CLAUDE.md               # consent ledger, the three milestone gates, D67 order
+  - frontend/CLAUDE.md              # the shared opt-in control, the delegate panel's place
+  - backend/main/app/core/events/events.py            # VERIFICATION_STARTED, INSPECTION_COMPLETE, DELEGATE_REVOKED
+  - backend/main/app/domain/notification/{rules,service,content}.py
+  - backend/main/app/domain/message/verification_messages.py   # the two direct-addressed senders
   - backend/main/app/domain/channel/whatsapp/bot/{engine,content}.py
-  - backend/main/app/domain/channel/whatsapp/bot/flows/status.py    # choose_prompt made public
-  - backend/main/app/domain/channel/whatsapp/bot/session/{models,service,controller}.py
-  - backend/main/app/domain/dev/{controller,service}.py             # /dev/whatsapp/rewind-window
-  - backend/main/app/domain/user/user_messages.py                   # window_reopen sender
+  - backend/main/app/domain/channel/whatsapp/bot/flows/status.py  # render_for_delegate
+  - backend/main/app/domain/channel/whatsapp/handoff/controller.py  # grant-scoped consent (D76)
+  - backend/main/app/domain/channel/whatsapp/link/service.py   # resolve_phone_for_user
+  - backend/main/app/domain/verification/{review,task}/service.py  # D66/D78 publish sites
+  - backend/main/app/domain/{audit/models,dev/service}.py
+  - backend/main/app/domain/__init__.py
   - backend/scripts/e2e/stage_whatsapp.py
-  - frontend/src/types/chat.ts
-  - frontend/src/components/chat/{ChatThread,WhatsAppBotModeBanner}.tsx
+  - frontend/src/app/account/whatsapp/page.tsx
+  - frontend/src/components/portal/submission/PayContainer.tsx
+  - frontend/src/components/portal/verifications/TrackingContainer.tsx
+  - frontend/src/components/website/handoff/{WaHandoffLanding.tsx,libs/handoff-service.ts}
 
 created_files:
-  - backend/main/alembic/versions/0007_chat_channel_delivery.py
-  - backend/main/app/domain/channel/whatsapp/console_sender.py
-  - backend/main/app/domain/channel/whatsapp/bot/flows/media.py
-  - backend/test/unit/app/domain/channel/whatsapp/test_console_sender.py
-  - backend/test/unit/app/domain/channel/whatsapp/bot/test_media_flow.py
-  - frontend/src/components/chat/ChatThread.test.tsx
+  - backend/main/alembic/versions/0008_whatsapp_consent.py
+  - backend/main/alembic/versions/0009_case_delegates.py
+  - backend/main/app/domain/channel/whatsapp/consent/{__init__,models,repo,service,controller}.py
+  - backend/main/app/domain/channel/whatsapp/milestones.py
+  - backend/main/app/domain/verification/status_events.py
+  - backend/main/app/domain/verification/delegate/{__init__,models,repo,service,controller}.py
+  - backend/test/unit/app/domain/channel/whatsapp/{test_whatsapp_consent_service,test_milestones}.py
+  - backend/test/unit/app/domain/channel/whatsapp/bot/test_delegate_flow.py
+  - backend/test/unit/app/domain/verification/test_case_delegate_service.py
+  - frontend/src/types/{whatsappConsent,delegate}.ts
+  - frontend/src/components/shared/whatsapp/WhatsAppOptInControls.tsx (+ test)
+  - frontend/src/components/account/WhatsAppConsentSettings.tsx
+  - frontend/src/components/account/libs/{whatsapp-consent-service,useWhatsAppConsentQueries}.ts (+ test)
+  - frontend/src/components/portal/libs/{delegate-service,useDelegateQueries}.ts (+ test)
+  - frontend/src/components/portal/verifications/DelegatePanel.tsx (+ test)
 
 tests:
   written: true
   executed: true
   passing: true
-  detail: "backend 1872 unit passed; frontend 537 passed / 78 files; ruff + mypy + tsc + eslint
-           clean; frontend build clean. S7 adds test_console_sender.py (window open/closed, the
-           one-nudge rule, SYSTEM and non-WhatsApp threads ignored, a raising transport swallowed)
-           and test_media_flow.py (one case per §7.6.3 row), plus the seam tests on
-           test_chat_message_service.py proving a fraud-held agent reply reaches WhatsApp only on
-           approve.
-           Live drive-through: **372 checks, 0 failed, 1 warn** against live Postgres + Mailpit,
-           migration 0007 applied first. It caught one defect unit tests could not: the bot offered
-           an upload link for a DRAFT, and the landing 500'd because a draft has no tier. Fixed by
-           narrowing the offer to cases that have been paid for (`media.uploadable_cases`) — the
-           landing's required fields then hold by construction. The first narrowing went too far
-           (it excluded DELIVERED, which broke the multi-case checks and is wrong on its own terms:
-           a document about a delivered case is a dispute or a re-check). The cut is at payment."
+  detail: "backend 1969 unit passed; frontend 562 passed / 82 files; ruff + mypy + tsc + eslint
+           clean; frontend build clean. Migrations 0008 and 0009 applied against live Postgres.
+           Live drive-through re-run after each slice."
 
 self_audit:
   started: false
   completed: false
   findings:
-    - "S5 shipped 2026-09-01 (ef59aca) — drive-through green at 306 checks."
-    - "D69 (user): chat intake collects into the bot session; identity happens at the pay landing.
-       Accepted cost: an abandoned chat intake leaves no row in `verifications`, so it is invisible
-       to the console and to the §17.1 recovery sweep. The conversation itself is still in the
-       console."
-    - "D70 (user): chat asks only what the web wizard gates on; §5.1's conditional facts stay on
-       the web. Handing into the existing wizard is what makes this cheap — no chat-specific
-       consent or payment surface exists to keep in sync."
-    - "D71: `intake` is a third handoff-token shape, phone-scoped like `link`. The collected
-       answers stay server-side; the token carries none of them."
-    - "**A third instance of the same bug class**: a synchronous public method on a
-       `decorate_all_methods` class returns an un-awaited coroutine and silently does nothing.
-       `seed_draft_payload` was `def`, so a customer's chat answers never reached their draft —
-       the drive-through caught it; the unit test had mocked the service and could not.
-       `decorate_all_methods` now records which methods it wrapped that were not already
-       coroutines, and `test_decorated_service_contract.py` fails on any of them. A census across
-       143 decorated services found **zero** remaining, so the guard starts clean."
-    - "The `AuthJWT` dependency declares a header parameter named `token`; a path param of the
-       same name makes FastAPI refuse to build the route. `/wa/intake/{handoff_token}/redeem`."
-    - "S7 closed the live defect logged between S5/S6 and S7: an agent's console reply was stored
-       and never delivered. The seam is `ChatMessageService._deliver_effects`, not `post_message`,
-       because both `send` and `approve` pass through it — so a fraud-held agent reply cannot reach
-       the customer's phone before an admin clears it, and that falls out of the design rather than
-       needing a second guard."
-    - "D72: outside Meta's window an agent's words are **queued** (`chat_messages.channel_delivered_at`
-       null) and flushed on the customer's next inbound, with `window_reopen` sent once per closed
-       episode. Nudge-only would have dead-ended the thread: it is sticky-`HUMAN` by then (D57), so
-       the bot would not answer the customer's reply to the nudge either."
-    - "D73: `unofficial_media` is **derived** from `media_kind`, never stored. The evidence rule says
-       chat media is never canonical, so a persisted boolean could only ever drift from the rule it
-       is meant to express. WA-06's 'never enters the verification file' is structural — no path
-       links a chat message to evidence — and is guarded by an explicit test rather than by absence."
-    - "D74: an `upload` token names a customer *and* a case, so §7.6.3's document row splits three
-       ways — one open case issues the link, several ask which (reusing the status flow's list and
-       matcher), and unlinked or none states the evidence rule with no link at all."
+    - "S7 shipped 2026-09-02 (3c53bd2) — drive-through green at 372 checks."
+    - "D75 (user): `report_ready` carries the portal deep link, not a §7.5 token. A token
+       lives 15 minutes and a milestone is read whenever the customer next opens WhatsApp,
+       so a token would make §7.4.2's expiry page the normal experience rather than an edge
+       case. WA-35's wording is amended in the matrix to match."
+    - "D76 (user): both payment surfaces capture the §7.4.6 consents. The handoff-landing
+       payer is the channel's own customer and would otherwise never be asked. The landing's
+       write is grant-scoped — customer id from the cookie, never the body — and consent is
+       written on toggle, so a failed card cannot discard it."
+    - "D77 (user): STOP from a delegate-only number revokes the delegation and notifies the
+       account holder. A delegate has no consent row, so it is the only lever a non-user has,
+       and the buyer's useful response is to authorize someone else."
+    - "**D78 — a defect only the live drive-through could catch.** `verification_started` went
+       out **three times** on a STANDARD case. `derive_status` is a memoryless projection: a
+       case drops back to PAID when its one active task is submitted and re-enters IN_PROGRESS
+       when the next agent is assigned, so a three-role tier crosses the transition three
+       times. Correct for a status feed, wrong for a milestone §7.6.2 promises 3–4 of. Fixed by
+       guarding on a task already SUBMITTED/APPROVED — the difference between work starting and
+       work continuing, needing no column. Both unit suites now pin it; the positive case had
+       to move to the task service, because a rejection requires a SUBMITTED task and so can
+       only ever be work continuing."
+    - "**D79 — a design tension the tests surfaced.** Two existing engine tests failed when the
+       delegate branch answered an unlinked status query with third-party copy. The signal was
+       real: §7.4.3 (offer linking) and §7.4.5 (name the delegate route) describe the *same*
+       inbound message, and the bot cannot tell a customer on a second handset from a stranger.
+       Guessing is wrong both ways. Resolved by one message naming both routes, and
+       `content.third_party_enquiry()` was deleted rather than left as a second answer."
+    - "The decorated-service guard earned its keep again: `status_label_for` shipped as a
+       synchronous public method on a `decorate_all_methods` class and was caught before it
+       could silently return an un-awaited coroutine. Moved to module level, where it belongs
+       anyway — it is pure."
+    - "Kink memoizes a resolved singleton, so `monkeypatch.setitem(di._services, T, mock)`
+       loses to an instance an earlier test already built. `test_milestones.py` patches the
+       **class** instead; the console-sender test's DI swap works only because nothing had
+       resolved that class yet, which is order-dependent."
     - "Reported, not fixed (outside scope): `appodus_utils/domain/webhook/google_drive/` is dead
        and broken — its repo/service/validator import modules that do not exist, and only its
-       model imports cleanly, registering an orphan `g_drive_webhook_subscriptions` table with no
-       migration builder. Nothing in the app's import graph reaches it. Logged in progress.md."
+       model imports cleanly, registering an orphan `g_drive_webhook_subscriptions` table with
+       no migration builder. Nothing in the app's import graph reaches it. Logged in progress.md."
 
 clarification_needed: []
 
@@ -102,9 +106,11 @@ git:
   branch: dev
   dirty: true
 
-next_action: "S8 — consent + milestones + report delivery"
+next_action: "S10 — channel analytics (§7.10). Its inputs now exist: the §7.3.2 projection,
+              escalation reasons, consent state, and the delegate audience."
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-02: S7 built end to end — the console outbound adapter (the live defect
-                  between S5/S6 and S7 is closed), Meta's 24-hour window with queue-and-flush, and
-                  §7.6.3's non-text policy including the upload handoff for a document"
+last_checkpoint: "2026-09-03: S8 + S9 built end to end — the §7.4.6 consent ledger with
+                  router-enforced milestones, all four §7.6.2 milestone templates sending
+                  against real events, report delivery on an authenticated portal link, and
+                  §7.4.5's slim delegate with account-first identity resolution"

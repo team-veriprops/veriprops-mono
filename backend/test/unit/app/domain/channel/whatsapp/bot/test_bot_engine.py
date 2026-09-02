@@ -31,6 +31,7 @@ from main.app.domain.channel.whatsapp.bot.session.models import (
 )
 from main.app.domain.channel.whatsapp.bot.session.service import WhatsAppBotSessionService
 from main.app.domain.channel.whatsapp.bot.support_hours import Coverage, CoverageState
+from main.app.domain.channel.whatsapp.consent.models import WhatsAppConsentSource
 from main.app.domain.verification.pricing_config.models import (
     PricingTierDto,
     TierPricingViewDto,
@@ -170,6 +171,16 @@ def _engine(
 
     engine._user_repo = MagicMock()
     engine._user_repo.list_admins = AsyncMock(return_value=[])
+
+    engine._whatsapp_consent_service = MagicMock()
+    engine._whatsapp_consent_service.revoke_all = AsyncMock()
+    engine._whatsapp_consent_service.grant_utility = AsyncMock()
+
+    # No delegation by default: these cases are about a customer or a stranger, and the
+    # delegate branch has its own suite (test_delegate_flow.py).
+    engine._case_delegate_service = MagicMock()
+    engine._case_delegate_service.resolve_delegate_for_phone = AsyncMock(return_value=None)
+    engine._case_delegate_service.revoke_by_phone = AsyncMock(return_value=None)
 
     return engine, sent
 
@@ -493,29 +504,53 @@ async def test_an_escalation_does_not_silence_the_bot():
 # ── Keyword-only intents: consent and case references (D64, §7.4.3) ──
 
 @pytest.mark.parametrize(
-    "word", ["STOP", "stop", "  Stop  ", "unsubscribe", "cancel messages"]
+    "word", ["STOP", "stop", "  Stop  ", "unsubscribe", "cancel", "end", "quit"]
 )
-async def test_stop_is_never_answered_with_i_did_not_understand(word):
-    """Meta and the customer both treat STOP as binding. Until S8's consent ledger lands,
-    a person honours it — but the one thing the bot must never do is reply "sorry, I
-    didn't quite get that" to an opt-out."""
+async def test_stop_revokes_both_consents_in_one_turn(word):
+    """D64's full STOP vocabulary. Two things must hold for every one of these words:
+    the bot answers *itself* — an opt-out that waits for the next working day is not an
+    opt-out — and both §7.4.6 consents go, because the customer said "stop", not "stop
+    some"."""
     session = _session()
-    engine, _sent = _engine(session, intent=BotIntent.UNKNOWN)
+    engine, _sent = _engine(session, intent=BotIntent.UNKNOWN, user_id="cust-1")
 
     reply = await engine.handle(_inbound(word), MagicMock())
 
-    assert reply.is_escalation
+    assert not reply.is_escalation
     assert "didn't quite get that" not in reply.text
+    engine._whatsapp_consent_service.revoke_all.assert_awaited_once()
+    assert (
+        engine._whatsapp_consent_service.revoke_all.await_args.args[1]
+        is WhatsAppConsentSource.STOP_KEYWORD
+    )
 
 
-@pytest.mark.parametrize("word", ["START", "resume"])
-async def test_start_is_recognised_too(word):
+@pytest.mark.parametrize("word", ["START", "unstop", "subscribe"])
+async def test_start_restores_utility_only(word):
+    """The D64 asymmetry, visible to the customer as well as true in the database: the
+    reply has to say marketing stays off, or a one-word message reads as re-consent to
+    everything."""
     session = _session()
-    engine, _sent = _engine(session, intent=BotIntent.UNKNOWN)
+    engine, _sent = _engine(session, intent=BotIntent.UNKNOWN, user_id="cust-1")
 
     reply = await engine.handle(_inbound(word), MagicMock())
 
-    assert reply.is_escalation
+    engine._whatsapp_consent_service.grant_utility.assert_awaited_once()
+    engine._whatsapp_consent_service.revoke_all.assert_not_called()
+    assert "offers" in reply.text.lower() or "news" in reply.text.lower()
+
+
+async def test_stop_from_an_unlinked_number_is_still_acknowledged():
+    """There is nothing to revoke — we were never messaging them — but "I don't have you
+    on file" reads as a refusal to someone who just asked to be left alone."""
+    session = _session()
+    engine, _sent = _engine(session, intent=BotIntent.UNKNOWN, user_id=None)
+
+    reply = await engine.handle(_inbound("STOP"), MagicMock())
+
+    assert not reply.is_escalation
+    engine._whatsapp_consent_service.revoke_all.assert_not_called()
+    assert "won't receive" in reply.text
 
 
 async def test_a_consent_keyword_never_reaches_the_classifier():

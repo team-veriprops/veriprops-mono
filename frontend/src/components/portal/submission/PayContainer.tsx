@@ -21,6 +21,16 @@ import {
   useStubConfirmMutation,
   useVerificationQuery,
 } from "@components/portal/libs/useVerificationQueries";
+import {
+  useSetWhatsAppConsentMutation,
+  useWhatsAppConsentQuery,
+} from "@components/account/libs/useWhatsAppConsentQueries";
+import WhatsAppOptInControls from "@components/shared/whatsapp/WhatsAppOptInControls";
+import {
+  NO_WHATSAPP_CONSENT,
+  WhatsAppConsent,
+  WhatsAppConsentSource,
+} from "@/types/whatsappConsent";
 import { SUBMISSION_STEPS } from "./types";
 
 function major(minor?: number): string {
@@ -36,6 +46,9 @@ export default function PayContainer({ verificationId }: { verificationId: strin
   const initiate = useInitiatePaymentMutation();
   const stubConfirm = useStubConfirmMutation();
   const refreshLock = useRefreshLockMutation();
+  // §7.4.6's two opt-ins, at the moment the spec names for capturing them.
+  const { data: waConsent } = useWhatsAppConsentQuery();
+  const setWaConsent = useSetWhatsAppConsentMutation(WhatsAppConsentSource.PAY_SCREEN);
 
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -59,6 +72,22 @@ export default function PayContainer({ verificationId }: { verificationId: strin
       await refetchVerification();
     }).catch(() => undefined);
   }, [verificationId, refreshLock, refetchVerification]);
+
+  const onConsentChange = async (next: WhatsAppConsent) => {
+    // Best-effort: a consent that fails to save must not block the payment the customer
+    // came here to make. They can set it again in account settings.
+    try {
+      await setWaConsent.mutateAsync({
+        utility: next.utility,
+        marketing: next.marketing,
+      });
+    } catch {
+      toast({
+        title: "Preference not saved",
+        description: "You can set this later under WhatsApp in your account settings.",
+      });
+    }
+  };
 
   const onSendOtp = async () => {
     await sendPhoneOtp.mutateAsync();
@@ -145,6 +174,20 @@ export default function PayContainer({ verificationId }: { verificationId: strin
               Continue with new price
             </Button>
           </div>
+        )}
+
+        {/*
+          §7.4.6: the two WhatsApp opt-ins are captured **at payment confirmation**. They
+          are written the moment a box is ticked rather than on a successful charge — the
+          tick is the consent act, and tying it to a gateway outcome would lose it every
+          time a card fails.
+        */}
+        {!priceUpdate && (
+          <WhatsAppOptInControls
+            consent={waConsent ?? NO_WHATSAPP_CONSENT}
+            onChange={onConsentChange}
+            disabled={setWaConsent.isPending}
+          />
         )}
 
         {priceUpdate ? null : !phoneVerified ? (
