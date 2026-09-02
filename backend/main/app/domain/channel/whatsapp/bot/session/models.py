@@ -61,6 +61,9 @@ class BotFlow(str, enum.Enum):
     WELCOME = "WELCOME"
     STATUS = "STATUS"
     INTAKE = "INTAKE"
+    # §7.6.3 — the customer sent a document and owns more than one case, so the bot has
+    # asked which one it belongs to before it will issue an `upload` link.
+    UPLOAD = "UPLOAD"
 
 
 class EscalationReason(str, enum.Enum):
@@ -77,7 +80,10 @@ class EscalationReason(str, enum.Enum):
     UNMATCHED_INTENTS = "UNMATCHED_INTENTS"          # two consecutive misses
     NON_ENGLISH = "NON_ENGLISH"                      # English only at v1 (Decision L)
     CAPABILITY_NOT_OFFERED = "CAPABILITY_NOT_OFFERED"  # §7.3.4 — not a WhatsApp action
-    UNSUPPORTED_MEDIA = "UNSUPPORTED_MEDIA"          # §7.6.3 — pins, contacts, voice
+    # §7.6.3 gives voice notes their own row, and §7.10 asks for voice-note volume by
+    # name, so they are counted separately from the media the bot merely cannot open.
+    VOICE_NOTE = "VOICE_NOTE"                        # §7.6.3 — a person will listen
+    UNSUPPORTED_MEDIA = "UNSUPPORTED_MEDIA"          # §7.6.3 — pins, contacts, stickers, video
     PIPELINE_FAILURE = "PIPELINE_FAILURE"            # §7.6.5 — the bot itself failed
 
 
@@ -154,6 +160,11 @@ class BotSessionDto(Object):
 
     The mode is the load-bearing part: D57 leaves a thread bot-less until someone hands
     control back, so an agent has to be able to see that the bot is silent and why.
+
+    ``window_open`` is the second thing an agent needs *before* typing (§7.7): outside
+    Meta's 24-hour window their reply will not be delivered as written, it will be queued
+    behind a `window_reopen` nudge. Knowing that in advance is the difference between
+    writing a short "still here?" and writing a long answer nobody reads for two days.
     """
 
     phone_e164: str
@@ -161,6 +172,7 @@ class BotSessionDto(Object):
     mode_changed_at: Optional[datetime] = None
     current_flow: Optional[BotFlow] = None
     last_inbound_at: Optional[datetime] = None
+    window_open: bool = False
     last_escalation_reason: Optional[EscalationReason] = None
     last_escalated_at: Optional[datetime] = None
 

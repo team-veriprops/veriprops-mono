@@ -7,54 +7,50 @@ command: resume
 status: in_progress
 phase: implementation
 
-current_slice: S5
-current_subtask: "S6 committed; S7 next"
+current_slice: S7
+current_subtask: "S7 complete — drive-through green at 372 checks"
 
 modified_files:
-  - docs/decision-log.md            # D69, D70, D71
-  - docs/progress.md
-  - backend/CLAUDE.md
-  - backend/main/appodus_utils/decorators/decorate_all_methods.py   # records wrapped sync methods
-  - backend/main/app/domain/verification/service.py                 # seed_draft_payload
-  - backend/main/app/domain/channel/whatsapp/handoff/{models,tokens,service}.py
+  - docs/{progress.md,decision-log.md,requirements-matrix.md,execution-plan.md}
+  - CLAUDE.md                       # §7 bullet: the console reply's return path
+  - backend/CLAUDE.md               # console adapter, §7.6.3 policy, rewind-window
+  - frontend/CLAUDE.md              # window state on the banner, per-message markers
+  - backend/main/app/domain/communication/chat_message/{models,repo,service}.py
+  - backend/main/app/domain/channel/whatsapp/inbound/service.py     # flush + media_kind
   - backend/main/app/domain/channel/whatsapp/bot/{engine,content}.py
-  - backend/main/app/domain/channel/whatsapp/bot/session/models.py
-  - backend/main/app/domain/__init__.py
+  - backend/main/app/domain/channel/whatsapp/bot/flows/status.py    # choose_prompt made public
+  - backend/main/app/domain/channel/whatsapp/bot/session/{models,service,controller}.py
+  - backend/main/app/domain/dev/{controller,service}.py             # /dev/whatsapp/rewind-window
+  - backend/main/app/domain/user/user_messages.py                   # window_reopen sender
   - backend/scripts/e2e/stage_whatsapp.py
-  - frontend/CLAUDE.md
-  - frontend/src/lib/{routes,whatsapp}.ts
-  - frontend/src/proxy.ts
-  - frontend/src/types/handoff.ts
-  - frontend/src/components/website/handoff/libs/handoff-service.ts
-  - frontend/src/components/portal/verifications/TrackingContainer.tsx
+  - frontend/src/types/chat.ts
+  - frontend/src/components/chat/{ChatThread,WhatsAppBotModeBanner}.tsx
 
 created_files:
-  - backend/main/app/domain/channel/whatsapp/bot/flows/intake.py
-  - backend/main/app/domain/channel/whatsapp/bot/intake_handoff.py
-  - backend/main/app/domain/channel/whatsapp/bot/intake_controller.py
-  - backend/test/unit/app/domain/channel/whatsapp/bot/test_intake_flow.py
-  - backend/test/unit/app/domain/channel/whatsapp/bot/test_intake_handoff.py
-  - backend/test/unit/app/test_decorated_service_contract.py
-  - frontend/src/app/wa/intake/[token]/page.tsx
-  - frontend/src/components/website/handoff/WaIntakeLanding.tsx (+ .test.tsx)
-  - frontend/src/components/portal/WhatsAppContinueButton.tsx (+ .test.tsx)
+  - backend/main/alembic/versions/0007_chat_channel_delivery.py
+  - backend/main/app/domain/channel/whatsapp/console_sender.py
+  - backend/main/app/domain/channel/whatsapp/bot/flows/media.py
+  - backend/test/unit/app/domain/channel/whatsapp/test_console_sender.py
+  - backend/test/unit/app/domain/channel/whatsapp/bot/test_media_flow.py
+  - frontend/src/components/chat/ChatThread.test.tsx
 
 tests:
   written: true
   executed: true
   passing: true
-  detail: "backend 1825 unit passed; frontend 529 passed / 77 files; ruff + mypy + tsc + eslint
-           clean; frontend build clean (new /wa/intake/[token] route present).
-           Live drive-through: reached 315 checks with the whole S6 section exercised end to end —
-           intake questions, the live-priced tier prompt, the handoff link, an anonymous caller
-           refused, an authenticated redemption returning a draft id, and the spent link dead.
-           Four payload assertions failed and were then proved to be a **test** bug, not a code
-           one: `psql` against the live row showed `draft_payload` written correctly with the
-           chat's exact answers, and the assertions were reading `/verifications/{id}` (whose DTO
-           deliberately carries `draftStep` but not the payload) instead of `/verifications/{id}/draft`,
-           the endpoint the wizard actually resumes from. The assertions now read `/draft`.
-           NOT re-run after that assertion fix: Docker Desktop on this machine keeps stopping
-           (it died twice mid-session, taking Postgres with it). CI's e2e gate covers it."
+  detail: "backend 1872 unit passed; frontend 537 passed / 78 files; ruff + mypy + tsc + eslint
+           clean; frontend build clean. S7 adds test_console_sender.py (window open/closed, the
+           one-nudge rule, SYSTEM and non-WhatsApp threads ignored, a raising transport swallowed)
+           and test_media_flow.py (one case per §7.6.3 row), plus the seam tests on
+           test_chat_message_service.py proving a fraud-held agent reply reaches WhatsApp only on
+           approve.
+           Live drive-through: **372 checks, 0 failed, 1 warn** against live Postgres + Mailpit,
+           migration 0007 applied first. It caught one defect unit tests could not: the bot offered
+           an upload link for a DRAFT, and the landing 500'd because a draft has no tier. Fixed by
+           narrowing the offer to cases that have been paid for (`media.uploadable_cases`) — the
+           landing's required fields then hold by construction. The first narrowing went too far
+           (it excluded DELIVERED, which broke the multi-case checks and is wrong on its own terms:
+           a document about a delivered case is a dispute or a re-check). The cut is at payment."
 
 self_audit:
   started: false
@@ -79,6 +75,22 @@ self_audit:
        143 decorated services found **zero** remaining, so the guard starts clean."
     - "The `AuthJWT` dependency declares a header parameter named `token`; a path param of the
        same name makes FastAPI refuse to build the route. `/wa/intake/{handoff_token}/redeem`."
+    - "S7 closed the live defect logged between S5/S6 and S7: an agent's console reply was stored
+       and never delivered. The seam is `ChatMessageService._deliver_effects`, not `post_message`,
+       because both `send` and `approve` pass through it — so a fraud-held agent reply cannot reach
+       the customer's phone before an admin clears it, and that falls out of the design rather than
+       needing a second guard."
+    - "D72: outside Meta's window an agent's words are **queued** (`chat_messages.channel_delivered_at`
+       null) and flushed on the customer's next inbound, with `window_reopen` sent once per closed
+       episode. Nudge-only would have dead-ended the thread: it is sticky-`HUMAN` by then (D57), so
+       the bot would not answer the customer's reply to the nudge either."
+    - "D73: `unofficial_media` is **derived** from `media_kind`, never stored. The evidence rule says
+       chat media is never canonical, so a persisted boolean could only ever drift from the rule it
+       is meant to express. WA-06's 'never enters the verification file' is structural — no path
+       links a chat message to evidence — and is guarded by an explicit test rather than by absence."
+    - "D74: an `upload` token names a customer *and* a case, so §7.6.3's document row splits three
+       ways — one open case issues the link, several ask which (reusing the status flow's list and
+       matcher), and unlinked or none states the evidence rule with no link at all."
     - "Reported, not fixed (outside scope): `appodus_utils/domain/webhook/google_drive/` is dead
        and broken — its repo/service/validator import modules that do not exist, and only its
        model imports cleanly, registering an orphan `g_drive_webhook_subscriptions` table with no
@@ -90,9 +102,9 @@ git:
   branch: dev
   dirty: true
 
-next_action: "re-run the drive-through, commit S6, then S7 (console adapter completion)"
+next_action: "S8 — consent + milestones + report delivery"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-02: S6 built end to end (chat intake, intake token + landing, short-code
-                  continuation, portal continue button); re-running the drive-through after the
-                  seed_draft_payload fix"
+last_checkpoint: "2026-09-02: S7 built end to end — the console outbound adapter (the live defect
+                  between S5/S6 and S7 is closed), Meta's 24-hour window with queue-and-flush, and
+                  §7.6.3's non-text policy including the upload handoff for a document"

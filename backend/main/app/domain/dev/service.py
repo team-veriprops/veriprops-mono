@@ -475,6 +475,30 @@ class DevSeedService:
         whatsapp_outbox.clear()
         return {"cleared": True}
 
+    async def rewind_whatsapp_window(self, phone: str, hours: int = 25) -> Dict[str, Any]:
+        """Age a number's inbound journal so Meta's 24-hour window reads as closed (§7.7).
+
+        The closed-window path — `window_reopen` instead of free text, and the reply queue
+        behind it — is otherwise unreachable from a test that runs in a few seconds, since
+        `WhatsAppWindowService` derives the window from `whatsapp_inbound_messages` rather
+        than from a column something could set. Same shape and same justification as
+        `rewind_message`: it touches ONLY `received_at`, so what the pipeline under test
+        owns stays owned by it.
+        """
+        session = get_db_session_from_context()
+        # The journal keys on E.164, while callers hand us Meta's digits-only `wa_id` —
+        # the one-character difference the channel converts at every seam.
+        normalized = to_e164(phone)
+        rows = (await session.execute(
+            text(
+                "UPDATE whatsapp_inbound_messages "
+                "SET received_at = received_at - make_interval(hours => :hours) "
+                "WHERE from_phone = :phone RETURNING id"
+            ),
+            {"hours": hours, "phone": normalized},
+        )).all()
+        return {"rewound": len(rows), "phone": normalized, "hours": hours}
+
     @staticmethod
     def _new(model, **fields):
         """Construct a BaseEntity row with the audit bookkeeping the repos set on create.

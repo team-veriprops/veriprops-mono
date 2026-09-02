@@ -1,7 +1,7 @@
-"""Stage — WhatsApp channel (S1–S3, PRD §7).
+"""Stage — WhatsApp channel (S1–S7, PRD §7).
 
-Drives the channel over HTTP the way the outside world does. Three things here cannot be
-proved by unit tests, and all three are load-bearing:
+Drives the channel over HTTP the way the outside world does. Five things here cannot be
+proved by unit tests, and all of them are load-bearing:
 
 * **The webhook is the real entry point.** It is signed with a real HMAC over the raw
   body, so this stage signs its own fixtures rather than injecting through the dev door.
@@ -11,6 +11,13 @@ proved by unit tests, and all three are load-bearing:
   Postgres can demonstrate that.
 * **A handoff link really pays.** §7.10 calls intake→payment the channel's most important
   number, so the stage carries a `pay` token all the way to a PAID verification.
+* **An agent's console reply really leaves the building.** For two commits it did not: the
+  message was written into the thread and delivered nowhere, and this stage asserted only
+  that the thread flipped to `HUMAN` — which passed the whole time. The outbox assertion
+  is the one that would have caught it.
+* **The customer is answered whatever they send.** §7.6.3's three rows are exercised
+  against the real ingestion path, including the photo case that used to be answered
+  with "Sorry, I didn't quite get that".
 
 Runs late: it needs a customer who can own a case, and it creates its own payable
 verification rather than disturbing the one earlier stages built.
@@ -116,6 +123,9 @@ def run(ctx: Ctx) -> None:
 
     # ── S6: a chat intake becomes a real draft on the website ────────────────
     _run_intake_checks(ctx)
+
+    # ── S7: §7.6.3 — every non-text type answered per the table ──────────────
+    _run_media_checks(ctx)
 
 
 def _run_webhook_checks(ctx: Ctx) -> None:
@@ -502,11 +512,13 @@ def _run_bot_checks(ctx: Ctx) -> None:
     check("an unlinked number is refused case data and offered linking (§7.4.3)",
           "isn't linked" in status, status[:160])
 
-    # §7.6.3 — a voice note is acknowledged and handed over, never ignored.
+    # §7.6.3 — a voice note is acknowledged and handed over, never ignored. Its own copy
+    # since S7: "a team member will listen" is the row's promise, and pooling it with the
+    # media the bot merely cannot open lost both the wording and the §7.10 count.
     replies = say("", kind="AUDIO")
     audio = str(replies[0].get("text", "")) if replies else ""
     check("a voice note is acknowledged and handed to a person (§7.6.3)",
-          "can't read" in audio or "passing it" in audio, audio[:160])
+          "listen" in audio, audio[:160])
 
     # D57 — the console is what silences the bot, and the only way back.
     session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
@@ -522,11 +534,24 @@ def _run_bot_checks(ctx: Ctx) -> None:
               any(m.get("sender", {}).get("kind") == "SYSTEM" for m in msgs),
               f"kinds={[m.get('sender', {}).get('kind') for m in msgs][:6]}")
 
+        # S7/WA-12 — the check whose absence let a real defect ship: for two commits an
+        # agent's reply was written into the thread and delivered nowhere, and this stage
+        # asserted only the mode flip below, which passed the whole time.
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
         admin.post(f"/chat/conversations/{thread['id']}/messages",
                    json={"body": "Hi, I'll take this one."}).raise_for_status()
+        outbound = _outbound_to(ctx, phone)
+        check("an agent's console reply reaches the customer over WhatsApp (WA-12)",
+              any("I'll take this one" in str(m.get("text", "")) for m in outbound),
+              f"outbound={[str(m.get('text'))[:40] for m in outbound]}")
+
         session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
         check("an agent's reply takes the thread off the bot (D57)",
               session.get("mode") == "HUMAN", f"mode={session.get('mode')}")
+        check("the console can see that Meta's reply window is open (§7.7)",
+              session.get("windowOpen") is True, f"windowOpen={session.get('windowOpen')}")
+
+        _run_window_checks(ctx, phone, thread["id"])
 
         # With a human on the thread the bot must stay silent — the rule's whole point.
         replies = say("and how much was it again?")
@@ -549,6 +574,205 @@ def _run_bot_checks(ctx: Ctx) -> None:
     check("readiness never carries a credential",
           not any("key" in k.lower() and "configured" not in k.lower() for k in readiness),
           f"keys={list(readiness)}")
+
+
+def _outbound_to(ctx: Ctx, phone: str) -> list[dict]:
+    """What the stub transport has recorded for this number, newest last.
+
+    The stub records Meta's `wa_id` form (digits, no '+') under `to`.
+    """
+    messages = ctx.root.get("/dev/whatsapp/outbox").json()["data"].get("messages", [])
+    return [m for m in messages if phone[-10:] in str(m.get("to", ""))]
+
+
+def _run_window_checks(ctx: Ctx, phone: str, conversation_id: str) -> None:
+    """Meta's 24-hour service window on a late agent reply (§7.7, WA-41).
+
+    Outside the window Meta delivers only an approved template, so the agent's own words
+    are **queued** and the `window_reopen` nudge goes instead. Queueing rather than
+    dropping is what keeps the thread from dead-ending: it is sticky-`HUMAN` by now (D57),
+    so the bot will not answer the customer's next message either.
+
+    Only a live stack proves this. The window is derived from the inbound journal rather
+    than a column, so `/dev/whatsapp/rewind-window` ages the journal — the same trick, and
+    the same justification, as `/dev/messages/rewind` in the messaging-retry stage.
+    """
+    root, admin = ctx.root, ctx.admin
+
+    rewound = root.post("/dev/whatsapp/rewind-window", params={"phone": phone, "hours": 25})
+    if rewound.status_code != 200:
+        warn("WhatsApp 24-hour window checks skipped",
+             f"/dev/whatsapp/rewind-window answered http {rewound.status_code}")
+        return
+    session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
+    check("an aged conversation reads as outside Meta's window (§7.7)",
+          session.get("windowOpen") is False, f"windowOpen={session.get('windowOpen')}")
+
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    late = "Sorry for the delay — the survey came back clean and I'm sending it over."
+    admin.post(f"/chat/conversations/{conversation_id}/messages",
+               json={"body": late}).raise_for_status()
+    outbound = _outbound_to(ctx, phone)
+    check("a late reply goes out as the window_reopen template, not as free text (WA-41)",
+          any("replied to your enquiry" in str(m.get("text", "")) for m in outbound),
+          f"outbound={[str(m.get('text'))[:60] for m in outbound]}")
+    check("Meta is never handed free text it would refuse to deliver",
+          not any("survey came back clean" in str(m.get("text", "")) for m in outbound))
+
+    # The console has to say so, or the agent believes their message went.
+    msgs = admin.get(f"/chat/conversations/{conversation_id}/messages").json()["data"]["items"]
+    queued = [m for m in msgs if m.get("pendingChannelDelivery")]
+    check("the queued reply is marked as undelivered in the console (§7.7)",
+          any("survey came back clean" in m["body"] for m in queued),
+          f"queued={[m['body'][:40] for m in queued]}")
+
+    # One nudge per closed-window episode: three messages must not cost three templates.
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    admin.post(f"/chat/conversations/{conversation_id}/messages",
+               json={"body": "Let me know when you're free to talk."}).raise_for_status()
+    outbound = _outbound_to(ctx, phone)
+    check("a second late reply joins the queue without a second nudge (§7.7)",
+          not any("replied to your enquiry" in str(m.get("text", "")) for m in outbound),
+          f"outbound={[str(m.get('text'))[:60] for m in outbound]}")
+
+    # The customer answers: the window reopens and the queue flushes, in order.
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    root.post("/dev/whatsapp/inbound", json={
+        "fromPhone": phone, "text": "Sorry, just seeing this now",
+    }).raise_for_status()
+    delivered = [str(m.get("text", "")) for m in _outbound_to(ctx, phone)]
+    check("the customer's reply flushes everything the agent queued (§7.7)",
+          any("survey came back clean" in t for t in delivered)
+          and any("free to talk" in t for t in delivered),
+          f"outbound={[t[:50] for t in delivered]}")
+    survey_at = next(i for i, t in enumerate(delivered) if "survey came back clean" in t)
+    talk_at = next(i for i, t in enumerate(delivered) if "free to talk" in t)
+    check("the queue flushes in the order the agent wrote it", survey_at < talk_at,
+          f"survey={survey_at} talk={talk_at}")
+
+    msgs = admin.get(f"/chat/conversations/{conversation_id}/messages").json()["data"]["items"]
+    check("nothing is left marked undelivered once the queue has flushed",
+          not any(m.get("pendingChannelDelivery") for m in msgs))
+
+
+def _run_media_checks(ctx: Ctx) -> None:
+    """§7.6.3 non-text inbound, end to end (WA-06, WA-38).
+
+    The regression this pins is small and embarrassing: image kinds were left out of the
+    bot's unreadable set on the assumption the upload handoff would catch them, and the
+    handoff had not been built — so a customer photographing their survey plan was
+    answered with "Sorry, I didn't quite get that".
+
+    The evidence rule (§7.1.6) is the other half. A document sent here is redirected to
+    the upload page rather than accepted, and the console has to say that what arrived is
+    not evidence — which only a live stack, reading the real DTO, can show.
+    """
+    root, admin, customer = ctx.root, ctx.admin, ctx.customer
+    phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+
+    def send(kind: str) -> str:
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        root.post("/dev/whatsapp/inbound", json={"fromPhone": phone, "kind": kind}).raise_for_status()
+        replies = _outbound_to(ctx, phone)
+        return str(replies[0].get("text", "")) if replies else ""
+
+    def say(text: str) -> str:
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        root.post("/dev/whatsapp/inbound", json={"fromPhone": phone, "text": text}).raise_for_status()
+        replies = _outbound_to(ctx, phone)
+        return str(replies[0].get("text", "")) if replies else ""
+
+    # A fresh number, so §7.6.1's welcome does not answer the turn we are testing.
+    root.post("/dev/whatsapp/inbound", json={"fromPhone": phone, "text": "Hi"}).raise_for_status()
+
+    # An unlinked number: the evidence rule still applies, but no upload link — a token
+    # names a customer *and* a case, and a phone number alone identifies neither (§7.4.3).
+    unlinked = send("IMAGE")
+    check("a photo from an unlinked number is answered with the evidence rule (§7.1.6)",
+          "verification file" in unlinked, unlinked[:200])
+    check("an unlinked number is never handed an upload link (§7.4.3)",
+          "/wa/upload/" not in unlinked, unlinked[:200])
+
+    # §7.6.3 row two — a voice note is acknowledged with its own copy, never dropped.
+    voice = send("AUDIO")
+    check("a voice note is promised a person who will listen (§7.6.3)",
+          "listen" in voice, voice[:200])
+    session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
+    check("a voice note is counted under its own escalation reason (§7.10)",
+          session.get("lastEscalationReason") == "VOICE_NOTE",
+          f"reason={session.get('lastEscalationReason')}")
+
+    # §7.6.3 row three — a pin goes to a person.
+    pin = send("LOCATION")
+    check("a location pin is acknowledged and routed to a person (§7.6.3)",
+          bool(pin) and "team member" in pin, pin[:200])
+
+    # The console's own view: labelled, and labelled as not-evidence.
+    threads = admin.get("/chat/conversations").json()["data"]
+    thread = next((t for t in threads if str(t.get("externalRef", "")).endswith(phone[-10:])), None)
+    check("the media thread is in the console", thread is not None)
+    if thread:
+        msgs = admin.get(f"/chat/conversations/{thread['id']}/messages").json()["data"]["items"]
+        media = [m for m in msgs if m.get("mediaKind")]
+        check("non-text inbound carries what it was, for the console to flag (§7.6.3)",
+              {m.get("mediaKind") for m in media} >= {"IMAGE", "AUDIO", "LOCATION"},
+              f"kinds={[m.get('mediaKind') for m in media]}")
+        check("chat media is flagged unofficial — it never enters the file (WA-06)",
+              media and all(m.get("unofficialMedia") for m in media),
+              f"flags={[m.get('unofficialMedia') for m in media]}")
+        check("plain text is not flagged as media",
+              all(not m.get("unofficialMedia") for m in msgs if not m.get("mediaKind")))
+
+    # A linked number with a real case: now the upload link can be issued and scoped.
+    # The case is the one `_run_handoff_checks` created and paid for on this customer.
+    if not _link_number(ctx, phone):
+        return
+    linked = send("IMAGE")
+
+    # This customer has several cases by now, so the bot must ask which one rather than
+    # guess: an `upload` token authorizes writing to exactly one verification, and
+    # attaching a document to the wrong file is worse than a question.
+    check("a document with several open cases is asked about, never guessed (§7.6.3)",
+          "which one" in linked.lower(), linked[:240])
+    check("the choice lists the customer's own references",
+          "VP-" in linked, linked[:240])
+
+    linked = say("1")
+    check("a linked customer's photo earns an upload link (§7.6.3, WA-38)",
+          "/wa/upload/" in linked, linked[:240])
+    check("the upload answer still states the evidence rule",
+          "verification file" in linked, linked[:240])
+
+    if "/wa/upload/" in linked:
+        token = linked.split("/wa/upload/")[1].split()[0].strip()
+        holder = client()
+        redeemed = holder.post(f"/public/wa/handoff/upload/{token}/redeem")
+        check("the upload link opens the customer's own case (§7.5)",
+              redeemed.status_code == 200, f"http {redeemed.status_code}: {redeemed.text[:160]}")
+        replay = client().post(f"/public/wa/handoff/upload/{token}/redeem")
+        check("a spent upload link is dead, like every other handoff link (§7.5)",
+              replay.status_code == 404, f"http {replay.status_code}")
+
+    # Leave the customer unlinked, as `_run_linking_checks` does: the 1:1 rule means a
+    # stray link would refuse whatever a later stage tries to claim.
+    customer.delete("/channel/whatsapp/link/me")
+
+
+def _link_number(ctx: Ctx, phone: str) -> bool:
+    """Link *phone* to the stage's customer so case-scoped flows can be exercised."""
+    customer = ctx.customer
+    started = customer.post("/channel/whatsapp/link/me/start", json={"phoneE164": f"+{phone}"})
+    if started.status_code != 200:
+        warn("could not link the media number",
+             f"start http {started.status_code}: {started.text[:160]}")
+        return False
+    confirmed = customer.post("/channel/whatsapp/link/me/confirm",
+                              json={"phoneE164": f"+{phone}", "code": TEST_OTP})
+    if confirmed.status_code != 200:
+        warn("could not link the media number",
+             f"confirm http {confirmed.status_code}: {confirmed.text[:160]}")
+        return False
+    return True
 
 
 def _run_intake_checks(ctx: Ctx) -> None:

@@ -38,6 +38,7 @@ from main.app.domain.channel.whatsapp.bot.capabilities import (
     capability_for,
 )
 from main.app.domain.channel.whatsapp.bot.flows import intake as intake_flow
+from main.app.domain.channel.whatsapp.bot.flows import media as media_flow
 from main.app.domain.channel.whatsapp.bot.flows import status as status_flow
 from main.app.domain.channel.whatsapp.bot.projection import channel_state
 from main.app.domain.channel.whatsapp.bot.reply import BotReply
@@ -50,6 +51,7 @@ from main.app.domain.channel.whatsapp.bot.session.models import (
 )
 from main.app.domain.channel.whatsapp.bot.session.service import WhatsAppBotSessionService
 from main.app.domain.channel.whatsapp.bot.support_hours import Coverage, SupportHoursService
+from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
 from main.app.domain.channel.whatsapp.handoff.service import HandoffTokenService
 from main.app.domain.channel.whatsapp.link.service import WhatsAppLinkService
 from main.app.domain.communication.conversation.models import Conversation
@@ -112,12 +114,6 @@ _RESEND_LINK_PHRASES = {
 
 # `VP-2026-0001` — the case reference a customer is handed on every receipt and report.
 _CASE_REFERENCE = re.compile(r"\bVP-\d{4}-\d{3,}\b", re.IGNORECASE)
-
-# Inbound kinds the bot cannot read (§7.6.3). Documents and images are handled by the
-# upload handoff rather than escalated, so they are deliberately absent.
-_UNREADABLE_KINDS = frozenset(
-    {InboundKind.AUDIO, InboundKind.LOCATION, InboundKind.CONTACTS, InboundKind.UNSUPPORTED}
-)
 
 # Which action each intent is asking for, so §7.3.4 is consulted once per turn rather
 # than remembered per flow.
@@ -203,8 +199,12 @@ class WhatsAppBotEngine:
             # disclosure and the payment pledge under a wall of text.
             return BotReply(content.welcome())
 
-        if message.kind in _UNREADABLE_KINDS:
-            return await self._escalate(EscalationReason.UNSUPPORTED_MEDIA)
+        # §7.6.3 owns any non-text turn, caption or not. It runs before the guardrails
+        # because a caption is not what is being answered — the *thing that arrived* is,
+        # and the three answers §7.6.3 gives are all safe ones (an acknowledgment, a
+        # handover, or a link to the customer's own upload page).
+        if media_flow.is_media(message.kind):
+            return await self._media(session, message.kind)
 
         text = (message.text or "").strip()
         if not text:
@@ -306,12 +306,97 @@ class WhatsAppBotEngine:
             await self._whatsapp_bot_session_service.clear_flow(session)
         return await self._understood(session, outcome.text)
 
+    # ─── Non-text inbound (§7.6.3) ────────────────────────────────
+
+    async def _media(self, session: WhatsAppBotSession, kind: InboundKind) -> BotReply:
+        """Answer a photo, a document, a voice note or a pin (§7.6.3, WA-06/WA-38).
+
+        Identity first, as everywhere that could touch a case (§7.4.3): an `upload` link
+        authorizes writing to one specific verification, so it is only ever issued to a
+        number we have proved belongs to the customer who owns that case.
+        """
+        user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
+        cases = await self._load_cases(user_id) if user_id else []
+        outcome = media_flow.render(kind, is_linked=bool(user_id), cases=cases)
+
+        if outcome.is_escalation:
+            await self._whatsapp_bot_session_service.clear_flow(session)
+            return await self._escalate(outcome.escalation_reason)
+
+        if outcome.upload_for_vid:
+            await self._whatsapp_bot_session_service.clear_flow(session)
+            return await self._understood(
+                session, await self._upload_reply(user_id, cases, outcome.upload_for_vid)
+            )
+
+        if outcome.awaits_choice:
+            await self._whatsapp_bot_session_service.enter_flow(
+                session, BotFlow.UPLOAD, context={"vids": list(outcome.offered_vids)}
+            )
+        else:
+            await self._whatsapp_bot_session_service.clear_flow(session)
+        return await self._understood(session, outcome.text)
+
+    async def _upload_reply(
+        self, user_id: str, cases: List[status_flow.CaseSummary], vid: str
+    ) -> str:
+        """The evidence rule plus a link that writes to exactly one case.
+
+        The token is minted from the *case the bot resolved*, never from anything the
+        customer typed: a `vid` is printed on receipts and reports, so accepting one at
+        face value would let a forwarded document target someone else's file.
+        """
+        case = next((c for c in cases if c.vid == vid), None)
+        if case is None:
+            # The case list changed under us between render and issue. Say the honest
+            # thing rather than minting a token for a case we can no longer name.
+            return content.document_received_no_case()
+        verification = await self._verification_repo.get_by_vid(case.vid)
+        if verification is None:
+            return content.document_received_no_case()
+        token = await self._handoff_token_service.issue(
+            user_id, Utils.uuid_to_hex(verification.id), HandoffIntent.UPLOAD
+        )
+        link = f"{settings.PUBLIC_APP_BASE_URL.rstrip('/')}/wa/upload/{token}"
+        return content.document_received_with_link(link)
+
+    async def _resume_upload(
+        self, session: WhatsAppBotSession, text: str
+    ) -> Optional[BotReply]:
+        """The customer picked which case their document belongs to (§7.6.3)."""
+        user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
+        if not user_id:
+            # The link was revoked between the question and the answer — re-run identity
+            # rather than issuing a token off a stale offer.
+            await self._whatsapp_bot_session_service.clear_flow(session)
+            return None
+        offered = (session.context or {}).get("vids") or []
+        # Re-filtered, not just re-read: a case that moved out of an uploadable state
+        # between the question and the answer must stop being selectable, or the token
+        # would be minted for a case the bot would no longer offer.
+        cases = [
+            case
+            for case in media_flow.uploadable_cases(await self._load_cases(user_id))
+            if case.vid in offered
+        ]
+        selected = media_flow.resolve_choice(cases, text)
+        if selected is None:
+            # Not a choice — the customer moved on. Drop the flow and classify fresh.
+            await self._whatsapp_bot_session_service.clear_flow(session)
+            return None
+        await self._whatsapp_bot_session_service.clear_flow(session)
+        return await self._understood(
+            session, await self._upload_reply(user_id, cases, selected.vid)
+        )
+
     async def _resume_flow(
         self, session: WhatsAppBotSession, text: str
     ) -> Optional[BotReply]:
         """Let a parked flow answer, or hand the turn back to normal classification."""
         if session.current_flow == BotFlow.INTAKE.value:
             return await self._continue_intake(session, text)
+        if session.current_flow == BotFlow.UPLOAD.value:
+            return await self._resume_upload(session, text)
         if session.current_flow != BotFlow.STATUS.value:
             return None
         user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)

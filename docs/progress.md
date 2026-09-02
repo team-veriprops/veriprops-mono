@@ -1,6 +1,6 @@
 # Progress Tracker — WhatsApp Channel (cycle 2)
 
-status: in progress — S1–S5 complete (+ S4.1 template registry)
+status: in progress — S1–S7 complete (+ S4.1 template registry)
 
 ## Completed Slices
 - S1 widget + attribution (dc7adb4)
@@ -9,36 +9,27 @@ status: in progress — S1–S5 complete (+ S4.1 template registry)
 - S4 OTP account linking (E1) + number lifecycle
 - S4.1 §7.7 Meta template registry + S4 follow-up defects
 - S5 bot engine core (intent facade, guardrails, status flow, admin console mode + hand-back)
+- S6 resumable chat intake + payment handoff (586de9c)
+- S7 console outbound adapter (WA-12/WA-41) + Meta's 24-hour window + §7.6.3 non-text policy
+  (WA-06/WA-38)
 
 ## Current Slice
-- none — S6 is next
+- none — S8 is next
 
 ## Pending Slices
-- S6 intake flow + payment handoff + continuation
-- S7 console adapter completion
 - S8 consent + milestones + report delivery (template registry landed in S4.1)
 - S9 delegates (O2)
 - S10 channel analytics
 - S11 live hardening & launch-gate closeout
 
 ## Runtime State
-- idle (checkpointed after S5)
+- idle (checkpointed after S7)
 
 ## Pending Recovery
 - none
 
 ## Blockers
 - none (S11 live path awaits external Meta assets — tracked, not blocking S1–S10)
-
-## Known gap between S5/S6 and S7 — close this first in S7
-- **An agent's reply in the WhatsApp console is stored but never delivered.** S5 added the
-  `/admin/messages` WhatsApp tab (needed, because D57's hand-back had to ship with the rule
-  that makes a thread sticky), and it renders a composer. `CommunicationService.post_message`
-  writes the message into the thread and flips the session to `HUMAN`, but nothing fans it
-  back out over WhatsApp — the plan assigns that to S7, so between these commits an agent can
-  type a reply the customer never receives. S7's first task: fan an admin reply on a
-  `channel=WHATSAPP` thread out through the transport, gated by `WhatsAppWindowService.is_open`
-  (free text inside Meta's window, the `window_reopen` §7.7 template outside it).
 
 ## Findings outside the WhatsApp scope (not fixed — awaiting a call)
 - `appodus_utils/domain/webhook/google_drive/` is **dead and broken**: its `repo.py`,
@@ -61,16 +52,14 @@ status: in progress — S1–S5 complete (+ S4.1 template registry)
   unimplemented requirement.
 - The §7.4.4 SMS fallback is wired (D60, amending D46): a failed WhatsApp send falls back
   to SMS on the same number through the router's existing Termii → Twilio chain.
-- Six of the seven templates have no sender yet: milestones + report delivery land in S8,
-  `window_reopen` in S7 (`WhatsAppWindowService` is already in place), `delegate_status`
-  in S9.
+- Five of the seven templates have no sender yet: milestones + report delivery land in S8,
+  `delegate_status` in S9. `window_reopen` gained its sender in S7.
 - Migrations 0002/0003 are applied and verified against live Postgres; the UAT suite is
   green on chromium-desktop (24/24). The remaining five engines have not been run.
-- S7 owns the rest of the outbound console: Meta's 24-hour window on an agent's late reply
-  (`window_reopen`), and the richer §7.6.3 media handling. S5 landed the agent-reply path
-  (`/admin/messages` → WhatsApp tab, posting through the generic conversation endpoint) and
-  the bot's own §7.6.3 answer — a voice note, pin or contact card is acknowledged and handed
-  to a person rather than journalled in silence.
+- S7 left one thing to S11 by design: the `window_reopen` template's **Meta approval** is
+  external, like the other six. The send path is built, exercised through the stub, and
+  asserted by the drive-through; what remains is Meta's verdict, which the registry already
+  displays and which deliberately never blocks a send.
 - S5 deferred two things it names honestly rather than fakes: `START_VERIFICATION` escalates
   to a human (`CAPABILITY_NOT_OFFERED`) until S6 builds the intake flow, and `LINK_ACCOUNT`
   points at S4's linking rather than driving it. Both are `TODO(gap):`-free because they are
@@ -100,7 +89,8 @@ status: in progress — S1–S5 complete (+ S4.1 template registry)
   live-path external assets (D43 fallback: stub keeps everything demoable).
 
 ## Last Commit
-- S4.1: Meta template registry (§7.7) + S4 follow-up defects
+- S7: full console mediation, 24h window handling, non-text policy
+  (drive-through green: 372 checks, 0 failed)
 
 ## Completion %
-- ~38 (4 of 11 slices, plus the §7.7 registry from S8)
+- ~64 (7 of 11 slices, plus the §7.7 registry from S8)

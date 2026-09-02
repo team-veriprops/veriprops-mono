@@ -38,6 +38,22 @@ def mock_db_session():
     db_session_ctx.reset(token)
 
 
+@pytest.fixture(autouse=True)
+def stub_console_sender(monkeypatch):
+    """Ingestion flushes any agent reply queued while Meta's window was shut (§7.7).
+
+    Stubbed here like every other collaborator: these tests are about what ingestion
+    records and answers, and the queue's own behaviour is pinned in
+    `test_console_sender.py`.
+    """
+    from kink import di
+    from main.app.domain.channel.whatsapp.console_sender import WhatsAppConsoleSender
+
+    sender = MagicMock(flush=AsyncMock())
+    monkeypatch.setitem(di._services, WhatsAppConsoleSender, sender)
+    return sender
+
+
 def _service(existing=None):
     svc = object.__new__(WhatsAppInboundService)
     svc._whatsapp_inbound_message_repo = MagicMock()
@@ -55,7 +71,10 @@ def _service(existing=None):
     svc._whatsapp_inbound_message_repo.get_by_wamid = AsyncMock(return_value=existing)
     svc._whatsapp_inbound_message_repo._session = MagicMock()
     svc._conversations.get_or_create_whatsapp_thread = AsyncMock(
-        return_value=SimpleNamespace(id="conv-1", type="GENERAL_SUPPORT", verification_id=None)
+        return_value=SimpleNamespace(
+            id="conv-1", type="GENERAL_SUPPORT", verification_id=None,
+            channel="WHATSAPP", external_ref="+2348012345678",
+        )
     )
     svc._chat.send = AsyncMock(return_value=SimpleNamespace(id=Utils.generate_uuid()))
     return svc

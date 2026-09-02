@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, User, Undo2 } from "lucide-react";
+import { Bot, Clock, User, Undo2 } from "lucide-react";
 import { BotMode, EscalationReason } from "@/types/chat";
 import { humanizeEnumLabel } from "@lib/utils";
 import { cn } from "@lib/utils";
@@ -15,6 +15,10 @@ import { useBotSessionQuery, useHandBackMutation } from "./libs/useWhatsAppBotQu
  * silent bot looks exactly like a working one. This banner is what makes the state legible
  * and reversible, so an agent who answered one question doesn't accidentally take a
  * customer off the bot forever.
+ *
+ * It carries the second invisible fact too: Meta's 24-hour service window (§7.7). Outside
+ * it, a reply typed here is queued behind a `window_reopen` template rather than delivered
+ * as written — which an agent needs to know *before* writing a long answer, not after.
  *
  * Admin-only: the endpoints behind it are `CONFIGURE_SYSTEM`-gated, and a 403 from the
  * shared HTTP client hard-navigates to `/forbidden`. Render it only on an admin surface.
@@ -60,6 +64,23 @@ export default function WhatsAppBotModeBanner({
         </p>
         <p className="text-xs opacity-80">{describe(session.mode, session.lastEscalationReason)}</p>
       </div>
+
+      {session.windowOpen === false && (
+        <span
+          data-testid="wa-window-closed"
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1",
+            "bg-amber-500/15 text-[11px] font-medium text-amber-800",
+          )}
+          title={
+            "Meta only delivers free text within 24 hours of the customer's last message. " +
+            "Your reply is saved and sent automatically when they write back."
+          }
+        >
+          <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+          Reply window closed
+        </span>
+      )}
 
       {isHuman && (
         <button

@@ -57,7 +57,7 @@ def render(cases: Sequence[CaseSummary]) -> StatusOutcome:
         return StatusOutcome(_no_cases())
     if len(cases) == 1:
         return StatusOutcome(_one_case(cases[0]))
-    return StatusOutcome(_choose_prompt(cases), tuple(case.vid for case in cases))
+    return StatusOutcome(choose_prompt(cases), tuple(case.vid for case in cases))
 
 
 def render_choice(cases: Sequence[CaseSummary], choice: str) -> Optional[StatusOutcome]:
@@ -117,7 +117,10 @@ def _one_case(case: CaseSummary) -> str:
     return "\n".join(lines)
 
 
-def _choose_prompt(cases: Sequence[CaseSummary]) -> str:
+def choose_prompt(cases: Sequence[CaseSummary]) -> str:
+    """The numbered "which one?" list. Public because §7.6.3's document flow asks the same
+    question about the same cases, and the customer must be able to answer both the same
+    way — one list format, one matcher (`resolve_choice`)."""
     listed: List[str] = [
         f"{position}. {case.property_label} ({case.vid}) — {case.status_label}"
         for position, case in enumerate(cases, start=1)

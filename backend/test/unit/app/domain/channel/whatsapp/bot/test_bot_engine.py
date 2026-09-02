@@ -442,11 +442,18 @@ async def test_a_understood_turn_resets_the_miss_counter():
 
 
 @pytest.mark.parametrize(
-    "kind",
-    [InboundKind.AUDIO, InboundKind.LOCATION, InboundKind.CONTACTS, InboundKind.UNSUPPORTED],
-    ids=lambda k: k.value,
+    "kind, reason",
+    [
+        # A voice note is counted separately: §7.6.3 gives it its own copy ("a team member
+        # will listen") and §7.10 asks for voice-note volume by name.
+        (InboundKind.AUDIO, EscalationReason.VOICE_NOTE),
+        (InboundKind.LOCATION, EscalationReason.UNSUPPORTED_MEDIA),
+        (InboundKind.CONTACTS, EscalationReason.UNSUPPORTED_MEDIA),
+        (InboundKind.UNSUPPORTED, EscalationReason.UNSUPPORTED_MEDIA),
+    ],
+    ids=lambda value: getattr(value, "value", value),
 )
-async def test_media_the_bot_cannot_read_goes_to_a_person(kind):
+async def test_media_the_bot_cannot_read_goes_to_a_person(kind, reason):
     """§7.6.3 — a voice note or a dropped pin is acknowledged and handed over, never
     silently ignored."""
     session = _session()
@@ -454,7 +461,21 @@ async def test_media_the_bot_cannot_read_goes_to_a_person(kind):
 
     reply = await engine.handle(_inbound("", kind=kind), MagicMock())
 
-    assert reply.escalation_reason == EscalationReason.UNSUPPORTED_MEDIA
+    assert reply.escalation_reason == reason
+
+
+async def test_a_photo_is_answered_with_the_evidence_rule_not_an_apology():
+    """§7.6.3/WA-06 — before this flow existed, a customer photographing their survey plan
+    got "Sorry, I didn't quite get that": the image kinds were left out of the unreadable
+    set on the assumption an upload handoff would catch them, and it had not been built."""
+    session = _session()
+    engine, _sent = _engine(session, intent=BotIntent.UNKNOWN)
+    engine._whatsapp_link_service.resolve_user_for_phone = AsyncMock(return_value=None)
+
+    reply = await engine.handle(_inbound("", kind=InboundKind.IMAGE), MagicMock())
+
+    assert reply.is_escalation is False
+    assert "verification file" in reply.text
 
 
 async def test_an_escalation_does_not_silence_the_bot():

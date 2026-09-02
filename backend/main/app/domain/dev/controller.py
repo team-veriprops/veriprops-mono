@@ -125,3 +125,15 @@ async def clear_whatsapp_outbox():
     """Reset the recorded outbound messages so a scenario starts from a known point."""
     _require_non_prod()
     return SuccessResponse[dict](data=await service.clear_whatsapp_outbox())
+
+
+@dev_router.post("/whatsapp/rewind-window", response_model=SuccessResponse[dict])
+async def rewind_whatsapp_window(phone: str, hours: int = 25):
+    """Age a number's inbound journal so Meta's 24-hour window reads as closed (§7.7).
+
+    Without it the drive-through cannot reach the `window_reopen` path or the reply queue
+    behind it — the window is derived from when the customer last wrote, and a test does
+    not get to wait a day.
+    """
+    _require_non_prod()
+    return SuccessResponse[dict](data=await service.rewind_whatsapp_window(phone, hours))

@@ -215,6 +215,10 @@ _ESCALATION_OPENINGS: dict[EscalationReason, str] = {
     EscalationReason.CAPABILITY_NOT_OFFERED: (
         "I can't do that from WhatsApp, but a team member can help you with it."
     ),
+    EscalationReason.VOICE_NOTE: (
+        "Thanks for the voice note. I can't listen to recordings myself, so a team member "
+        "will listen and reply here."
+    ),
     EscalationReason.UNSUPPORTED_MEDIA: (
         "Thanks for sending that. I can't read it myself, so I'm passing it to a "
         "team member."
@@ -261,6 +265,58 @@ def no_cases() -> str:
         "I can't find a verification on your account yet. If you'd like to start one, "
         "just say \"start a verification\"."
     )
+
+
+# ─── Non-text inbound (§7.6.3) ────────────────────────────────────
+
+# §7.1.6/§7.6.1's evidence rule, in the customer's words. Repeated verbatim wherever a
+# document arrives over chat, because the whole point is that it is the *same* promise
+# every time: what lands in WhatsApp is not what the verifiers work from.
+EVIDENCE_RULE = (
+    "One thing to know: documents sent over WhatsApp don't go into your verification "
+    "file — only uploads made on veriprops.ng do. That's what keeps the evidence trail "
+    "clean."
+)
+
+
+def document_received_with_link(link: str) -> str:
+    """§7.6.3 — a document arrived and we know which case it belongs to."""
+    return (
+        "Thanks for sending that.\n\n"
+        f"{EVIDENCE_RULE}\n\n"
+        "Here's a secure link to upload it properly:\n"
+        f"{link}\n\n"
+        f"⚠️ {PAYMENT_PLEDGE}"
+    )
+
+
+def document_received_unlinked() -> str:
+    """§7.6.3 + §7.4.3 — a document from a number we cannot tie to an account.
+
+    No upload link: an `upload` link authorizes writing to one specific case, so issuing
+    one here would mean guessing whose case it is from a phone number alone.
+    """
+    return (
+        "Thanks for sending that.\n\n"
+        f"{EVIDENCE_RULE}\n\n"
+        "Say \"link my account\" and I'll send you a secure link to connect this number — "
+        "then I can point you straight at the right upload page."
+    )
+
+
+def document_received_no_case() -> str:
+    """A linked customer with nothing open to attach the document to."""
+    return (
+        "Thanks for sending that.\n\n"
+        f"{EVIDENCE_RULE}\n\n"
+        "I can't see an open verification on your account to attach it to. Say "
+        "\"start a verification\" and we'll get one going."
+    )
+
+
+def document_choose_case(prompt: str) -> str:
+    """Several open cases — ask which before issuing a link scoped to exactly one."""
+    return f"Thanks for sending that.\n\n{prompt}"
 
 
 def case_not_found() -> str:

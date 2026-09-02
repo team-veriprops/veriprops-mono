@@ -114,6 +114,7 @@ class WhatsAppInboundService:
             self._body_for(message),
             source=MessageSource.WHATSAPP,
             external_message_id=message.wamid,
+            media_kind=self._media_kind_for(message),
         )
 
         # Setting these on the attached row rather than re-fetching: the record was
@@ -122,8 +123,30 @@ class WhatsAppInboundService:
         record.processed_at = Utils.datetime_now()
         self._whatsapp_inbound_message_repo._session.add(record)
 
+        await self._flush_queued_replies(conversation)
         await self._answer(message, conversation)
         return record
+
+    async def _flush_queued_replies(self, conversation: Conversation) -> None:
+        """Send anything an agent typed while Meta's window was shut (§7.7, WA-41).
+
+        This message just reopened the window, so the queue can go now. It runs **before**
+        the bot turn deliberately: the agent's answer was written first and should arrive
+        first, and a thread with a queued reply is sticky-`HUMAN` anyway (D57), so the bot
+        will not be adding to it.
+
+        Best-effort for the same reason ingestion's other side effects are — the inbound
+        message is already journalled, and a failure here must not make Meta redeliver it.
+        """
+        from main.app.domain.channel.whatsapp.console_sender import WhatsAppConsoleSender
+
+        try:
+            await di[WhatsAppConsoleSender].flush(conversation)
+        except Exception as exc:  # noqa: BLE001 — see the module docstring
+            # Identified by thread id rather than by number: this runs *inside* an except
+            # handler, so a log line that could itself raise would replace the real error
+            # with an AttributeError about the message we were trying to write.
+            logger.error(f"Could not flush queued replies on {conversation.id}: {exc}")
 
     async def _answer(
         self, message: InboundWhatsAppMessage, conversation: Conversation
@@ -140,6 +163,18 @@ class WhatsAppInboundService:
             await di[WhatsAppBotEngine].handle(message, conversation)
         except Exception as exc:  # noqa: BLE001 — see the module docstring
             logger.error(f"Bot failed to answer {message.from_phone}: {exc}")
+
+    @staticmethod
+    def _media_kind_for(message: InboundWhatsAppMessage) -> Optional[InboundKind]:
+        """What arrived, when it was not words (§7.6.3).
+
+        Null for text and for a menu selection, because neither is media — and the console
+        derives "unofficial, never evidence" from this field being set, so labelling a text
+        message would claim the evidence rule applies to it.
+        """
+        if message.kind in (InboundKind.TEXT, InboundKind.INTERACTIVE):
+            return None
+        return message.kind
 
     @staticmethod
     def _body_for(message: InboundWhatsAppMessage) -> str:

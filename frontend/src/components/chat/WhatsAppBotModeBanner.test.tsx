@@ -14,6 +14,7 @@ const state: {
   session: {
     phoneE164: string;
     mode: BotMode;
+    windowOpen?: boolean;
     lastEscalationReason?: EscalationReason | null;
   } | null;
   isLoading: boolean;
@@ -71,6 +72,30 @@ describe("WhatsAppBotModeBanner", () => {
     );
 
     expect(html).toContain("step aside as soon as you reply");
+  });
+
+  it("warns when Meta's reply window has closed", () => {
+    // Outside the 24-hour window a reply is queued behind a `window_reopen` template
+    // rather than delivered as written (§7.7). An agent needs that before they write a
+    // long answer, not after.
+    state.session = { phoneE164: "+2348012345678", mode: BotMode.HUMAN, windowOpen: false };
+
+    const html = renderToStaticMarkup(
+      <WhatsAppBotModeBanner phoneE164="+2348012345678" />,
+    );
+
+    expect(html).toContain("wa-window-closed");
+    expect(html).toContain("Reply window closed");
+  });
+
+  it("stays quiet while the window is open, which is the ordinary case", () => {
+    state.session = { phoneE164: "+2348012345678", mode: BotMode.HUMAN, windowOpen: true };
+
+    const html = renderToStaticMarkup(
+      <WhatsAppBotModeBanner phoneE164="+2348012345678" />,
+    );
+
+    expect(html).not.toContain("wa-window-closed");
   });
 
   it("renders nothing for a web thread, which has no bot behind it", () => {

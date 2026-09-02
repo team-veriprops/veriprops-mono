@@ -29,6 +29,7 @@ from main.app.domain.channel.whatsapp.bot.session.models import (
     WhatsAppBotSession,
 )
 from main.app.domain.channel.whatsapp.bot.session.repo import WhatsAppBotSessionRepo
+from main.app.domain.channel.whatsapp.window import WhatsAppWindowService
 from main.appodus_utils import Utils
 from main.appodus_utils.config.settings import SECRET_PLACEHOLDER, IntentProvider
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -41,8 +42,13 @@ from main.appodus_utils.integrations.messaging.providers.whatsapp.phone import t
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class WhatsAppBotSessionService:
-    def __init__(self, whatsapp_bot_session_repo: WhatsAppBotSessionRepo):
+    def __init__(
+        self,
+        whatsapp_bot_session_repo: WhatsAppBotSessionRepo,
+        whatsapp_window_service: WhatsAppWindowService,
+    ):
         self._whatsapp_bot_session_repo = whatsapp_bot_session_repo
+        self._whatsapp_window_service = whatsapp_window_service
 
     async def get_or_open(self, phone: str) -> WhatsAppBotSession:
         """The session for *phone*, creating it on first contact.
@@ -184,10 +190,13 @@ class WhatsAppBotSessionService:
         rather than refused: the console asks about whatever thread it is displaying,
         and "no row yet" is the same operational answer as "the bot is answering".
         """
+        window_open = await self._whatsapp_window_service.is_open(phone)
         session = await self.get(phone)
         if session is None:
-            return BotSessionDto(phone_e164=to_e164(phone), mode=BotMode.BOT)
-        return to_bot_session_dto(session)
+            return BotSessionDto(
+                phone_e164=to_e164(phone), mode=BotMode.BOT, window_open=window_open
+            )
+        return to_bot_session_dto(session, window_open=window_open)
 
     async def readiness(self) -> BotChannelReadinessDto:
         """§7.11 — whether the channel is configured for live traffic."""
@@ -207,7 +216,9 @@ class WhatsAppBotSessionService:
         )
 
 
-def to_bot_session_dto(session: WhatsAppBotSession) -> BotSessionDto:
+def to_bot_session_dto(
+    session: WhatsAppBotSession, *, window_open: bool = False
+) -> BotSessionDto:
     """Map a session row to what the console renders.
 
     A module-level function rather than a method: `decorate_all_methods` wraps *every*
@@ -221,6 +232,7 @@ def to_bot_session_dto(session: WhatsAppBotSession) -> BotSessionDto:
         mode_changed_at=session.mode_changed_at,
         current_flow=BotFlow(session.current_flow) if session.current_flow else None,
         last_inbound_at=session.last_inbound_at,
+        window_open=window_open,
         last_escalation_reason=(
             EscalationReason(session.last_escalation_reason)
             if session.last_escalation_reason

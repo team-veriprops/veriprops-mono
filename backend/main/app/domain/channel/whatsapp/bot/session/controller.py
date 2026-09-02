@@ -22,10 +22,7 @@ from main.app.domain.channel.whatsapp.bot.session.models import (
     BotChannelReadinessDto,
     BotSessionDto,
 )
-from main.app.domain.channel.whatsapp.bot.session.service import (
-    WhatsAppBotSessionService,
-    to_bot_session_dto,
-)
+from main.app.domain.channel.whatsapp.bot.session.service import WhatsAppBotSessionService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
 from main.appodus_utils.db.models import SuccessResponse
 
@@ -66,7 +63,9 @@ async def hand_back(
     _admin_id: str = Depends(require_permission(Permission.CONFIGURE_SYSTEM)),
 ):
     """Give the thread back to the bot — the explicit half of D57's sticky mode."""
-    session = await whatsapp_bot_session_service.hand_back(phone_e164)
+    await whatsapp_bot_session_service.hand_back(phone_e164)
+    # Described rather than mapped from the returned row: the console needs the §7.7
+    # window state alongside the mode, and `describe` is the one place that resolves it.
     return SuccessResponse[BotSessionDto](
-        data=to_bot_session_dto(session)
+        data=await whatsapp_bot_session_service.describe(phone_e164)
     )

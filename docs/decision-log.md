@@ -1970,3 +1970,84 @@ and a case, both present) stay exactly as strict as they were.
 ### Revisit
 If a second pre-identity flow appears, generalise the phone-scoped shape rather than adding
 a fourth intent.
+
+## Decision: D72 — a late console reply is queued, not dropped
+
+### Context
+Meta delivers only an approved template outside its 24-hour service window, and
+`window_reopen` carries no agent text — just "someone has replied, reply here". So an agent
+answering two days later cannot have their actual words delivered at that moment.
+
+### Chosen Option
+Send the nudge **and** keep the agent's words queued on the message row
+(`chat_messages.channel_delivered_at` null). The customer's next inbound reopens the window
+and flushes the queue in `date_created` order. One nudge per closed-window episode, not one
+per message the agent types.
+
+### Rationale
+Nudge-only would dead-end the thread. By the time an agent has replied it is sticky-`HUMAN`
+(D57), so the bot will not answer the customer's reply to the nudge either — they would get
+a nudge followed by silence, which is exactly the §7.6.5 failure the channel exists to
+avoid.
+
+`channel_delivered_at` is deliberately not a reuse of `delivered_at`, which already means
+"released past the §4.7 fraud hold": conflating them would make a held message look
+channel-delivered and a queued one look lost.
+
+The delivery seam is `ChatMessageService._deliver_effects` rather than
+`CommunicationService.post_message`, because both `send` and `approve` pass through it — so
+a fraud-held agent reply cannot reach the customer before an admin clears it, without that
+needing a guard of its own.
+
+### Revisit
+If agents routinely queue long sequences, consider collapsing a flush into one message
+rather than replaying each.
+
+## Decision: D73 — "unofficial media" is derived, never stored
+
+### Context
+§7.6.3 requires chat images to be flagged unofficial in the console, and §7.1.6 rule 6 says
+only portal uploads and structured intake are canonical.
+
+### Chosen Option
+Persist `chat_messages.media_kind` (what arrived) and derive `unofficial_media` from it. No
+boolean column.
+
+### Rationale
+Every chat-borne image, document and voice note is unofficial **by rule**, so a stored flag
+carries no information the rule does not already give — it can only drift from it. Deriving
+makes the rule the single source.
+
+"Never enters the verification file" is structural rather than enforced: no path links a
+chat message to evidence (chat attachments remain a `TODO(gap)`). Because that is WA-06's
+whole acceptance criterion, it gets an explicit guard test rather than resting on absence.
+
+### Revisit
+When chat attachments ship, this guard becomes load-bearing — the upload path must write to
+evidence only through the portal, never from a message row.
+
+## Decision: D74 — an `upload` link needs a linked number *and* a case
+
+### Context
+§7.6.3 says an image or document should be answered with an `upload` token link. But an
+action token names a customer and a case (D55, `ACTION_INTENTS`), and a photograph arrives
+with neither attached.
+
+### Chosen Option
+Split the row three ways: linked with one open case → issue the link; linked with several →
+ask which, reusing the status flow's numbered list and matcher (`status.choose_prompt` /
+`status.resolve_choice`) under a new `BotFlow.UPLOAD`; unlinked or nothing open → state the
+evidence rule and the next step, with no link.
+
+### Rationale
+Issuing a token to an unverified number would attach a stranger's file to somebody's
+verification — the §7.4.3 leak in its writeable form. Reusing the status flow's list means a
+customer answers both "which case?" questions the same way; a second matcher would be a
+second thing to get wrong.
+
+The token is minted from the case the **bot** resolved, never from a reference the customer
+typed: case references travel on receipts and reports.
+
+### Revisit
+If most documents arrive from unlinked numbers, consider offering linking and the upload in
+one flow rather than two turns.
