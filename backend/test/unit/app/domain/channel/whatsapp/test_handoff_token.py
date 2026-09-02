@@ -14,6 +14,7 @@ from jose import jwt
 
 from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
 from main.app.domain.channel.whatsapp.handoff.tokens import (
+    issue_intake_token,
     HANDOFF_ALGORITHM,
     HandoffTokenError,
     decode_handoff_token,
@@ -236,3 +237,63 @@ def _throwaway_private_key() -> str:
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode()
+
+
+class TestIntakeTokenShape:
+    """§5.1 chat-intake tokens (D71) — the second phone-scoped shape.
+
+    `intake` exists because a chat intake has neither a customer nor a case at the moment
+    the link is minted. It must therefore behave exactly like `link` at the boundary — a
+    number and nothing else — and must never be readable as authority over a case, nor
+    interchangeable with a linking token, which grants a different thing entirely.
+    """
+
+    def test_an_intake_token_names_a_phone_and_nothing_else(self):
+        claims = decode_handoff_token(issue_intake_token(PHONE))
+        assert claims.intent == HandoffIntent.INTAKE
+        assert claims.phone == PHONE
+        assert claims.sub is None and claims.case is None
+
+    def test_it_carries_no_case_claim_on_the_wire(self):
+        """D71 — the collected answers stay server-side, so a forwarded link leaks no
+        property details and the URL stays short enough for a chat message."""
+        payload = jwt.get_unverified_claims(issue_intake_token(PHONE))
+        assert set(payload) == {"phone", "intent", "jti", "exp", "iat"}
+
+    def test_it_cannot_be_read_as_authority_over_a_case(self):
+        claims = decode_handoff_token(issue_intake_token(PHONE))
+        with pytest.raises(HandoffTokenError):
+            claims.assert_scope(HandoffIntent.PAY, CASE_ID)
+
+    def test_it_is_not_a_linking_token(self):
+        """Both name a phone, but linking claims a number for an account and intake picks
+        up a conversation — swapping them would let one link do the other's job."""
+        claims = decode_handoff_token(issue_intake_token(PHONE))
+        with pytest.raises(HandoffTokenError):
+            claims.assert_link_scope(PHONE)
+
+    def test_a_linking_token_is_not_an_intake_token(self):
+        claims = decode_handoff_token(issue_link_token(PHONE))
+        with pytest.raises(HandoffTokenError):
+            claims.assert_phone_scope(HandoffIntent.INTAKE, PHONE)
+
+    def test_it_is_scoped_to_one_number(self):
+        claims = decode_handoff_token(issue_intake_token(PHONE))
+        claims.assert_phone_scope(HandoffIntent.INTAKE, PHONE)
+        with pytest.raises(HandoffTokenError):
+            claims.assert_phone_scope(HandoffIntent.INTAKE, "+2349990000000")
+
+    def test_an_action_token_never_satisfies_an_intake_scope(self):
+        with pytest.raises(HandoffTokenError):
+            decode_handoff_token(token()).assert_phone_scope(HandoffIntent.INTAKE, PHONE)
+
+    def test_it_expires_with_the_same_short_life_as_every_other_link(self):
+        claims = decode_handoff_token(issue_intake_token(PHONE))
+        assert claims.expires_at - claims.issued_at == timedelta(minutes=15)
+
+    def test_each_token_carries_a_distinct_nonce(self):
+        """Single-use is enforced by the `jti` ledger, so two links must never collide."""
+        assert (
+            decode_handoff_token(issue_intake_token(PHONE)).jti
+            != decode_handoff_token(issue_intake_token(PHONE)).jti
+        )

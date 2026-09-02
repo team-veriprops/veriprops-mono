@@ -28,6 +28,7 @@ from typing import List, Optional
 
 from kink import di, inject
 
+from main.app.config.settings import settings
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.status import AgentRole, TaskState, VerificationStatus
 from main.app.domain.channel.whatsapp.bot import content, guardrails
@@ -36,6 +37,7 @@ from main.app.domain.channel.whatsapp.bot.capabilities import (
     ChannelCapability,
     capability_for,
 )
+from main.app.domain.channel.whatsapp.bot.flows import intake as intake_flow
 from main.app.domain.channel.whatsapp.bot.flows import status as status_flow
 from main.app.domain.channel.whatsapp.bot.projection import channel_state
 from main.app.domain.channel.whatsapp.bot.reply import BotReply
@@ -48,6 +50,7 @@ from main.app.domain.channel.whatsapp.bot.session.models import (
 )
 from main.app.domain.channel.whatsapp.bot.session.service import WhatsAppBotSessionService
 from main.app.domain.channel.whatsapp.bot.support_hours import Coverage, SupportHoursService
+from main.app.domain.channel.whatsapp.handoff.service import HandoffTokenService
 from main.app.domain.channel.whatsapp.link.service import WhatsAppLinkService
 from main.app.domain.communication.conversation.models import Conversation
 from main.app.domain.property.service import PropertyService
@@ -99,6 +102,14 @@ _KEYWORD_INTENTS = {
     "resume": BotIntent.START_MESSAGES,
 }
 
+# What the closing message invites the customer to say when their 15-minute link has
+# expired. Literal phrases, not a classified intent: this is the payment path, and it must
+# answer identically every time.
+_RESEND_LINK_PHRASES = {
+    "pay", "link", "new link", "fresh link", "send the link", "send link",
+    "resend", "resend link", "another link", "expired",
+}
+
 # `VP-2026-0001` — the case reference a customer is handed on every receipt and report.
 _CASE_REFERENCE = re.compile(r"\bVP-\d{4}-\d{3,}\b", re.IGNORECASE)
 
@@ -136,6 +147,7 @@ class WhatsAppBotEngine:
         verification_task_repo: VerificationTaskRepo,
         property_service: PropertyService,
         user_repo: UserRepo,
+        handoff_token_service: HandoffTokenService,
     ):
         self._whatsapp_bot_session_service = whatsapp_bot_session_service
         self._whatsapp_bot_sender = whatsapp_bot_sender
@@ -147,6 +159,7 @@ class WhatsAppBotEngine:
         self._verification_task_repo = verification_task_repo
         self._property_service = property_service
         self._user_repo = user_repo
+        self._handoff_token_service = handoff_token_service
 
     async def handle(
         self, message: InboundWhatsAppMessage, conversation: Conversation
@@ -207,6 +220,12 @@ class WhatsAppBotEngine:
         if parked:
             return parked
 
+        # A finished intake whose link has probably expired. Matched on the customer's
+        # literal words rather than by classification: the closing message told them to
+        # say this, and a money path should answer the same way every time.
+        if self._wants_a_fresh_link(session, text):
+            return await self._resend_intake_link(session)
+
         intent = await self._classify(text)
         verdict = guardrails.check_intent(intent)
         if verdict:
@@ -263,14 +282,9 @@ class WhatsAppBotEngine:
             # a bot that replied "I didn't understand" to STOP could not.
             return await self._escalate(EscalationReason.CAPABILITY_NOT_OFFERED)
         if intent == BotIntent.CONTINUE_CASE:
-            # S6 resumes the case itself. Until then the reference is at least recognised
-            # and answered with what the bot *can* say about it.
-            return await self._status(session)
+            return await self._continue_case(session, text)
         if intent == BotIntent.START_VERIFICATION:
-            # Intake is a §7.3.4 `FULL` capability, but its flow lands in S6. Until then
-            # the honest answer is a person, counted as an unmatched-capability
-            # escalation rather than silently pretended away.
-            return await self._escalate(EscalationReason.CAPABILITY_NOT_OFFERED)
+            return await self._begin_intake(session)
 
         return await self._unmatched(session)
 
@@ -296,6 +310,8 @@ class WhatsAppBotEngine:
         self, session: WhatsAppBotSession, text: str
     ) -> Optional[BotReply]:
         """Let a parked flow answer, or hand the turn back to normal classification."""
+        if session.current_flow == BotFlow.INTAKE.value:
+            return await self._continue_intake(session, text)
         if session.current_flow != BotFlow.STATUS.value:
             return None
         user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
@@ -313,6 +329,139 @@ class WhatsAppBotEngine:
             return None
         await self._whatsapp_bot_session_service.clear_flow(session)
         return await self._understood(session, outcome.text)
+
+    # ─── Short-code continuation (§7.4.3, D58) ────────────────────
+
+    async def _continue_case(self, session: WhatsAppBotSession, text: str) -> BotReply:
+        """Pick a case up from its reference — "continue VP-2026-0001" (D58).
+
+        Identity first, as everywhere else that touches a case (§7.4.3): quoting a
+        reference is not proof of owning it, and the references appear on receipts and
+        reports that get forwarded. An unlinked number is offered linking instead, and a
+        reference that is not the customer's own is answered as *not found* rather than
+        "that is not yours" — confirming a case exists would make the reference space
+        probeable.
+        """
+        user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
+        if not user_id:
+            return await self._understood(session, content.unlinked_number())
+
+        quoted = _CASE_REFERENCE.search(text or "")
+        cases = await self._load_cases(user_id)
+        match = next(
+            (case for case in cases if quoted and case.vid.upper() == quoted.group(0).upper()),
+            None,
+        )
+        if match is None:
+            return await self._understood(session, content.case_not_found())
+
+        await self._whatsapp_bot_session_service.clear_flow(session)
+        return await self._understood(
+            session, status_flow.render([match]).text
+        )
+
+    # ─── Intake (§5.1, D69/D70) ───────────────────────────────────
+
+    async def _begin_intake(self, session: WhatsAppBotSession) -> BotReply:
+        """Open the four-question intake (§7.3.4 lists it as a full WhatsApp capability).
+
+        No account is required to start: the answers live on the session and identity is
+        established at the handoff landing (D69), so a stranger's first message can begin
+        a verification.
+        """
+        outcome = intake_flow.begin()
+        await self._park_intake(session, outcome)
+        return await self._understood(session, outcome.text)
+
+    async def _continue_intake(
+        self, session: WhatsAppBotSession, text: str
+    ) -> Optional[BotReply]:
+        """Apply one answer. Returns `None` if the customer has left the flow.
+
+        A guardrail hit or an explicit "talk to a human" is handled before this runs, so
+        anything reaching here is a genuine attempt at the current question — except a
+        message that reads like a different intent entirely, which the abandon check below
+        hands back to normal classification rather than forcing into a form.
+        """
+        if self._is_abandoning_intake(text):
+            await self._whatsapp_bot_session_service.clear_flow(session)
+            return None
+
+        collected = (session.context or {}).get("intake") or {}
+        step = intake_flow.IntakeStep(session.step or 0)
+        outcome = intake_flow.answer(step, text, collected, await self._pricing_config_service.view())
+
+        if not outcome.complete:
+            await self._park_intake(session, outcome)
+            # A re-ask is not a failure to understand the customer — it is the flow doing
+            # its job — so it must not count toward the §7.6.2 two-strikes escalation.
+            return await self._understood(session, outcome.text)
+
+        return await self._finish_intake(session, outcome)
+
+    async def _finish_intake(
+        self, session: WhatsAppBotSession, outcome: intake_flow.IntakeOutcome
+    ) -> BotReply:
+        """Store the answers and hand off to the website with a single-use link.
+
+        The flow ends here rather than parking at `DONE`: a finished intake left parked
+        would read the customer's next message — "thanks", "how long does it take" — as
+        another answer and send a second link.
+        """
+        await self._whatsapp_bot_session_service.retain_intake(session, outcome.collected)
+        return await self._understood(session, outcome.text.format(link=await self._intake_link(session)))
+
+    async def _intake_link(self, session: WhatsAppBotSession) -> str:
+        token = await self._handoff_token_service.issue_intake(session.phone_e164)
+        return f"{settings.PUBLIC_APP_BASE_URL.rstrip('/')}/wa/intake/{token}"
+
+    async def _resend_intake_link(self, session: WhatsAppBotSession) -> BotReply:
+        """Re-issue a link for answers the bot already has (§7.10).
+
+        Worth its own path: the link lasts 15 minutes, §7.10 makes intake→payment the
+        channel's headline number, and asking a customer to re-answer four questions
+        because they opened their phone late is the easiest conversion to lose.
+        """
+        link = await self._intake_link(session)
+        return await self._understood(
+            session,
+            "Here's a fresh link to confirm your details and pay:\n"
+            f"{link}\n\n"
+            f"⚠️ {content.PAYMENT_PLEDGE}",
+        )
+
+    async def _park_intake(
+        self, session: WhatsAppBotSession, outcome: intake_flow.IntakeOutcome
+    ) -> None:
+        await self._whatsapp_bot_session_service.enter_flow(
+            session, BotFlow.INTAKE, step=int(outcome.step),
+            context={"intake": outcome.collected},
+        )
+
+    @staticmethod
+    def _wants_a_fresh_link(session: WhatsAppBotSession, text: str) -> bool:
+        """Whether this is a request to re-send an intake link we can still fill.
+
+        Requires retained answers, so "pay" from someone who never ran an intake still
+        classifies normally rather than getting a link to nothing.
+        """
+        if not (session.context or {}).get("intake"):
+            return False
+        return (text or "").strip().lower() in _RESEND_LINK_PHRASES
+
+    @staticmethod
+    def _is_abandoning_intake(text: str) -> bool:
+        """Whether a mid-intake message is really about something else.
+
+        Deliberately narrow: almost anything can be a valid answer to "where is it?", so
+        only an unmistakable change of subject drops the flow. Getting this wrong in the
+        eager direction would throw away a half-finished intake because someone typed an
+        address containing the word "price".
+        """
+        message = (text or "").strip().lower()
+        return message in {
+            "menu", "cancel", "stop", "start over", "restart", "help", "pricing",
+        }
 
     async def _load_cases(self, user_id: str) -> List[status_flow.CaseSummary]:
         """The customer's cases, read through the same repo the dashboard list uses.

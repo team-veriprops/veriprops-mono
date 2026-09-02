@@ -8,104 +8,81 @@ status: in_progress
 phase: implementation
 
 current_slice: S5
-current_subtask: "S5 committed; S6 next"
+current_subtask: "S6 committed; S7 next"
 
 modified_files:
-  - docs/decision-log.md
-  - backend/.env.example
-  - backend/.env.prod
-  - backend/.env.test
-  - backend/requirements.txt
-  - backend/test-requirements.txt
+  - docs/decision-log.md            # D69, D70, D71
+  - docs/progress.md
   - backend/CLAUDE.md
-  - backend/main/app/config/settings.py
-  - backend/main/appodus_utils/config/settings.py
-  - backend/main/app/core/events/events.py
+  - backend/main/appodus_utils/decorators/decorate_all_methods.py   # records wrapped sync methods
+  - backend/main/app/domain/verification/service.py                 # seed_draft_payload
+  - backend/main/app/domain/channel/whatsapp/handoff/{models,tokens,service}.py
+  - backend/main/app/domain/channel/whatsapp/bot/{engine,content}.py
+  - backend/main/app/domain/channel/whatsapp/bot/session/models.py
   - backend/main/app/domain/__init__.py
-  - backend/main/app/domain/notification/rules.py
-  - backend/main/app/domain/notification/content.py
-  - backend/main/app/domain/system_config/models.py
-  - backend/main/app/domain/communication/service.py
-  - backend/main/app/domain/channel/whatsapp/__init__.py
-  - backend/main/app/domain/channel/whatsapp/inbound/service.py
-  - backend/main/app/domain/message/models.py
   - backend/scripts/e2e/stage_whatsapp.py
-  - backend/test/unit/app/config/test_env_hygiene.py
-  - backend/test/unit/app/domain/communication/test_communication_service.py
   - frontend/CLAUDE.md
-  - frontend/src/types/chat.ts
-  - frontend/src/app/admin/messages/page.tsx
-  - frontend/src/components/chat/HeldMessagesContainer.tsx
-  - frontend/src/components/chat/libs/chat-service.ts
-  - frontend/src/components/chat/libs/useChatQueries.ts
+  - frontend/src/lib/{routes,whatsapp}.ts
+  - frontend/src/proxy.ts
+  - frontend/src/types/handoff.ts
+  - frontend/src/components/website/handoff/libs/handoff-service.ts
+  - frontend/src/components/portal/verifications/TrackingContainer.tsx
 
 created_files:
-  - backend/main/appodus_utils/integrations/intent/  # models, interface, factory, service + 3 adapters
-  - backend/main/app/domain/channel/whatsapp/bot/    # engine, guardrails, capabilities, content,
-                                                     # projection, reply, sender, support_hours,
-                                                     # flows/, session/
-  - backend/main/alembic/versions/0006_whatsapp_bot_sessions.py
-  - backend/test/unit/appodus_utils/integrations/intent/
-  - backend/test/unit/app/domain/channel/whatsapp/bot/
-  - backend/test/unit/app/domain/message/test_upsert_from_request.py
-  - frontend/src/components/chat/AdminMessagesTabs.tsx
-  - frontend/src/components/chat/AdminWhatsAppInboxContainer.tsx
-  - frontend/src/components/chat/WhatsAppBotModeBanner.tsx
-  - frontend/src/components/chat/WhatsAppBotModeBanner.test.tsx
-  - frontend/src/components/chat/libs/whatsapp-bot-service.ts
-  - frontend/src/components/chat/libs/useWhatsAppBotQueries.ts
+  - backend/main/app/domain/channel/whatsapp/bot/flows/intake.py
+  - backend/main/app/domain/channel/whatsapp/bot/intake_handoff.py
+  - backend/main/app/domain/channel/whatsapp/bot/intake_controller.py
+  - backend/test/unit/app/domain/channel/whatsapp/bot/test_intake_flow.py
+  - backend/test/unit/app/domain/channel/whatsapp/bot/test_intake_handoff.py
+  - backend/test/unit/app/test_decorated_service_contract.py
+  - frontend/src/app/wa/intake/[token]/page.tsx
+  - frontend/src/components/website/handoff/WaIntakeLanding.tsx (+ .test.tsx)
+  - frontend/src/components/portal/WhatsAppContinueButton.tsx (+ .test.tsx)
 
 tests:
   written: true
   executed: true
   passing: true
-  detail: "backend 1617 unit passed; frontend 520 passed / 75 files; ruff + mypy + tsc + eslint
-           clean; frontend build clean; migration 0006 applied and rolled back against the live
-           test DB (table + 4 system_config rows created, both dropped on downgrade); live
-           drive-through green at 306 checks including the whole S5 section."
+  detail: "backend 1825 unit passed; frontend 529 passed / 77 files; ruff + mypy + tsc + eslint
+           clean; frontend build clean (new /wa/intake/[token] route present).
+           Live drive-through: reached 315 checks with the whole S6 section exercised end to end —
+           intake questions, the live-priced tier prompt, the handoff link, an anonymous caller
+           refused, an authenticated redemption returning a draft id, and the spent link dead.
+           Four payload assertions failed and were then proved to be a **test** bug, not a code
+           one: `psql` against the live row showed `draft_payload` written correctly with the
+           chat's exact answers, and the assertions were reading `/verifications/{id}` (whose DTO
+           deliberately carries `draftStep` but not the payload) instead of `/verifications/{id}/draft`,
+           the endpoint the wizard actually resumes from. The assertions now read `/draft`.
+           NOT re-run after that assertion fix: Docker Desktop on this machine keeps stopping
+           (it died twice mid-session, taking Postgres with it). CI's e2e gate covers it."
 
 self_audit:
   started: false
   completed: false
   findings:
-    - "Resumed 2026-09-01 to implement S5-S9 in one pass, one commit per slice (user-chosen
-       cadence). Gate decisions D62-D68 recorded before coding."
-    - "D62 (user): the /wa/pay landing carries VERIFICATION_TERMS + the two §7.4.6 opt-ins and
-       submits the case on the D51 grant - D56 read against the code leaves no other place for
-       consent that keeps a WhatsApp-only customer able to finish."
-    - "D63 (user): a WhatsAppConsent entity, not a notification_preferences column - §7.8 wants
-       timestamps and provenance, which the per-event preference model has neither of."
-    - "D64 (user): STOP revokes both consents; START restores utility only."
-    - "D65: NotificationRule gains whatsapp + a distinct whatsapp_template; the recipient is the
-       LINKED number, never user.phone; delegates are a separate audience."
-    - "D66: VERIFICATION_STARTED and INSPECTION_COMPLETE become real events rather than a
-       subscriber sniffing another event's data dict."
-    - "D67: CaseDelegate carries its own phone; resolution order is linked account, then delegate."
-    - "D68: G1 support hours are system_config ConfigKeys, seeded additively."
-    - "S5 amends D48's 'zero dependencies': the Claude adapter uses the official `anthropic` SDK
-       (version headers, typed errors, retries on a live customer path). The generic adapter stays
-       raw httpx. Recorded in the decision log under D53."
-    - "S5 drive-through found a latent bug outside the slice: `UpsertMessageDto.from_request`
-       rejected any `MessageRequest` built by direct construction rather than the builder, because
-       `model_dump` emits an explicit `extras=None` and pydantic applies a default only for an
-       absent key. It failed silently (logged, swallowed) - the bot's first reply was never
-       delivered. Fixed at the seam + regression-tested for both construction routes."
-    - "S5 drive-through found a second latent bug: `CommunicationService.post_message` was the
-       only chat path that did not grant admins the shared inbox, so a WhatsApp thread was
-       readable from the console and unanswerable - and D57's take-over, which fires on a human
-       reply, could never have run in production. `list_conversations`/`mark_read`/`list_messages`
-       already special-cased admins; the write path now does too."
-    - "S5 self-audit found a third: the stub classifier never emits the keyword-only intents, so a
-       customer texting STOP got 'sorry, I didn't quite get that'. STOP/START and quoted `VP-…`
-       references are now matched on literal words ahead of the classifier and routed to a person
-       until S6/S8 build the real flows."
-    - "`decorate_all_methods` wraps @staticmethod too - a pure mapper on a decorated service
-       returns a coroutine and 500s at runtime while every log line reads as success. Session DTO
-       mapping moved to a module-level function; regression-tested."
-    - "D57's sticky-HUMAN mode needed both halves shipped together: `CommunicationService.post_message`
-       flips a WhatsApp thread when an admin/agent posts, and the new `/admin/messages` WhatsApp tab
-       carries the hand-back control. Without the control the first agent reply would silence a
-       customer's thread permanently."
+    - "S5 shipped 2026-09-01 (ef59aca) — drive-through green at 306 checks."
+    - "D69 (user): chat intake collects into the bot session; identity happens at the pay landing.
+       Accepted cost: an abandoned chat intake leaves no row in `verifications`, so it is invisible
+       to the console and to the §17.1 recovery sweep. The conversation itself is still in the
+       console."
+    - "D70 (user): chat asks only what the web wizard gates on; §5.1's conditional facts stay on
+       the web. Handing into the existing wizard is what makes this cheap — no chat-specific
+       consent or payment surface exists to keep in sync."
+    - "D71: `intake` is a third handoff-token shape, phone-scoped like `link`. The collected
+       answers stay server-side; the token carries none of them."
+    - "**A third instance of the same bug class**: a synchronous public method on a
+       `decorate_all_methods` class returns an un-awaited coroutine and silently does nothing.
+       `seed_draft_payload` was `def`, so a customer's chat answers never reached their draft —
+       the drive-through caught it; the unit test had mocked the service and could not.
+       `decorate_all_methods` now records which methods it wrapped that were not already
+       coroutines, and `test_decorated_service_contract.py` fails on any of them. A census across
+       143 decorated services found **zero** remaining, so the guard starts clean."
+    - "The `AuthJWT` dependency declares a header parameter named `token`; a path param of the
+       same name makes FastAPI refuse to build the route. `/wa/intake/{handoff_token}/redeem`."
+    - "Reported, not fixed (outside scope): `appodus_utils/domain/webhook/google_drive/` is dead
+       and broken — its repo/service/validator import modules that do not exist, and only its
+       model imports cleanly, registering an orphan `g_drive_webhook_subscriptions` table with no
+       migration builder. Nothing in the app's import graph reaches it. Logged in progress.md."
 
 clarification_needed: []
 
@@ -113,7 +90,9 @@ git:
   branch: dev
   dirty: true
 
-next_action: "S6 - chat intake + payment handoff (D62) + short-code continuation (D58)"
+next_action: "re-run the drive-through, commit S6, then S7 (console adapter completion)"
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-01: S5 complete and committed - drive-through green at 306 checks"
+last_checkpoint: "2026-09-02: S6 built end to end (chat intake, intake token + landing, short-code
+                  continuation, portal continue button); re-running the drive-through after the
+                  seed_draft_payload fix"

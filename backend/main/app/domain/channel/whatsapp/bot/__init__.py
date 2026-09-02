@@ -11,6 +11,8 @@ from main.app.domain.channel.whatsapp.bot import content  # noqa: F401
 from main.app.domain.channel.whatsapp.bot import engine  # noqa: F401
 from main.app.domain.channel.whatsapp.bot import flows  # noqa: F401
 from main.app.domain.channel.whatsapp.bot import guardrails  # noqa: F401
+from main.app.domain.channel.whatsapp.bot import intake_controller  # noqa: F401
+from main.app.domain.channel.whatsapp.bot import intake_handoff  # noqa: F401
 from main.app.domain.channel.whatsapp.bot import projection  # noqa: F401
 from main.app.domain.channel.whatsapp.bot import reply  # noqa: F401
 from main.app.domain.channel.whatsapp.bot import sender  # noqa: F401

@@ -1,6 +1,6 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { SuccessResponse } from "@/types/models";
-import { HandoffContext, HandoffIntent, HandoffPayment } from "@/types/handoff";
+import { HandoffContext, HandoffIntent, HandoffPayment, SeededDraft } from "@/types/handoff";
 
 /**
  * WhatsApp handoff API (PRD §7.4.2, §7.5). Mirrors the backend controller at
@@ -18,6 +18,17 @@ export class HandoffService {
     return this.http.post(
       `/public/wa/handoff/${intent}/${encodeURIComponent(token)}/redeem`,
     );
+  }
+
+  /**
+   * Spend a chat-intake link and seed this customer's draft with the answers the bot
+   * collected (§5.1, D69).
+   *
+   * The odd one out: it is **authenticated**, because the token carries a conversation
+   * rather than an identity — the session is what says whose draft the answers become.
+   */
+  redeemIntake(token: string): Promise<SuccessResponse<SeededDraft>> {
+    return this.http.post(`/wa/intake/${encodeURIComponent(token)}/redeem`);
   }
 
   /** Start payment for the case the grant names — never a case id from the client. */

@@ -104,8 +104,13 @@ class WhatsAppBotSessionService:
         session.last_inbound_at = now
         if welcome_due:
             session.welcomed_at = now
-            session.current_flow = BotFlow.WELCOME.value
+            # The welcome is a one-shot answer, so it leaves no flow behind — and
+            # clearing wipes any flow the customer abandoned before the 30-day gap.
+            # Resuming a month-old half-finished intake would be worse than starting
+            # over: the property they were asking about has very likely moved on.
+            session.current_flow = None
             session.step = 0
+            session.context = None
         self._whatsapp_bot_session_repo.save(session)
         return welcome_due
 
@@ -133,6 +138,19 @@ class WhatsAppBotSessionService:
         session.current_flow = flow.value
         session.step = step
         session.context = dict(context or {})
+        self._whatsapp_bot_session_repo.save(session)
+
+    async def retain_intake(self, session: WhatsAppBotSession, collected: dict) -> None:
+        """End the intake flow but keep its answers (§5.1, D69).
+
+        The flow is over — the customer has been sent their link — so leaving it parked
+        would make the *next* message, whatever it was, look like another answer and
+        re-send the link. But the answers must survive: the landing reads them on
+        redemption, and a 15-minute link often needs re-issuing before anyone opens one.
+        """
+        session.current_flow = None
+        session.step = 0
+        session.context = {"intake": dict(collected)}
         self._whatsapp_bot_session_repo.save(session)
 
     async def clear_flow(self, session: WhatsAppBotSession) -> None:

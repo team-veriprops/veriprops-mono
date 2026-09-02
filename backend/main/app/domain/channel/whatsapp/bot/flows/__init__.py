@@ -9,4 +9,5 @@ The engine owns I/O and state; a flow owns wording and branching. That split is 
 keeps §7.3.1 honest — the data a flow renders came from the same services the website
 dashboard reads, because the flow had no other way to get it.
 """
+from main.app.domain.channel.whatsapp.bot.flows import intake  # noqa: F401
 from main.app.domain.channel.whatsapp.bot.flows import status  # noqa: F401

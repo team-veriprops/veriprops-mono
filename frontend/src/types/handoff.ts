@@ -35,3 +35,9 @@ export interface HandoffPayment {
   amountMinor: number;
   currency: TransactionCurrency;
 }
+
+
+/** Where a redeemed chat-intake link sends the customer (§5.1, D69). */
+export interface SeededDraft {
+  verificationId: string;
+}

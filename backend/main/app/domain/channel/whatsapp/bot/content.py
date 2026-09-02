@@ -160,7 +160,7 @@ def pricing(view: TierPricingViewDto) -> str:
             "confirm it for you."
         )
     lines = [
-        f"• {_tier_label(tier.tier)} — {_naira(tier.price_ngn_minor)}"
+        f"• {_tier_label(tier.tier)} — {naira(tier.price_ngn_minor)}"
         for tier in sorted(view.tiers, key=lambda t: t.price_ngn_minor)
     ]
     body = "\n".join(lines)
@@ -175,8 +175,12 @@ def _tier_label(tier: VerificationTier) -> str:
     return tier.value.capitalize()
 
 
-def _naira(minor: int) -> str:
-    """Kobo → a readable naira amount. Whole naira: we do not price in kobo."""
+def naira(minor: int) -> str:
+    """Kobo → a readable naira amount. Whole naira: we do not price in kobo.
+
+    Public because the intake flow quotes tiers too, and two renderings of the same price
+    is exactly the drift D54 exists to prevent.
+    """
     return f"₦{minor // 100:,}"
 
 
@@ -256,4 +260,17 @@ def no_cases() -> str:
     return (
         "I can't find a verification on your account yet. If you'd like to start one, "
         "just say \"start a verification\"."
+    )
+
+
+def case_not_found() -> str:
+    """A reference the customer quoted that is not one of theirs (§7.4.3, D58).
+
+    Deliberately reads as "we can't find it on your account" rather than "that isn't
+    yours": case references travel on receipts and reports, so confirming that one exists
+    would make the reference space probeable from any WhatsApp number.
+    """
+    return (
+        "I can't find that reference on your account. Double-check it and try again — "
+        "or say \"status\" and I'll show you what you do have."
     )

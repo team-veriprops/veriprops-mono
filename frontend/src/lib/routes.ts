@@ -132,6 +132,10 @@ export const ROUTES = {
     // it — so `WA_LINK_PREFIX` puts it inside `proxy.ts`'s protected set and the customer
     // is sent to sign in (or register) and returned here.
     LINK: (token: string) => `/wa/link/${token}`,
+    // §5.1 chat intake (D69). Like LINK, this one needs a session: the token says which
+    // conversation's answers to pick up, the login says whose draft they become — which
+    // is the whole point, since the chat could not establish who the customer is.
+    INTAKE: (token: string) => `/wa/intake/${token}`,
   },
 
   FORBIDDEN: '/forbidden',
@@ -183,6 +187,13 @@ export const PAYMENT_FLOW_PATH_PATTERNS: readonly RegExp[] = [
  * segments, not a specific token.
  */
 export const WA_LINK_PREFIX = '/wa/link';
+
+/**
+ * The chat-intake landing (§5.1, D69), protected for the same reason as `WA_LINK_PREFIX`:
+ * the token carries a conversation, not an identity, so the customer signs in (or
+ * registers) before their answers become a draft.
+ */
+export const WA_INTAKE_PREFIX = '/wa/intake';
 
 // export type AuthIntent = 'verify' | 'agent' | 'default';
 

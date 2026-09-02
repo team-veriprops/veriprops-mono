@@ -114,6 +114,9 @@ def run(ctx: Ctx) -> None:
     # ── S5: the bot actually answers, and refuses what it must ───────────────
     _run_bot_checks(ctx)
 
+    # ── S6: a chat intake becomes a real draft on the website ────────────────
+    _run_intake_checks(ctx)
+
 
 def _run_webhook_checks(ctx: Ctx) -> None:
     root = ctx.root
@@ -546,6 +549,86 @@ def _run_bot_checks(ctx: Ctx) -> None:
     check("readiness never carries a credential",
           not any("key" in k.lower() and "configured" not in k.lower() for k in readiness),
           f"keys={list(readiness)}")
+
+
+def _run_intake_checks(ctx: Ctx) -> None:
+    """Chat intake through to a seeded draft (§5.1, D69/D70/D71).
+
+    The property only a live stack can show: four answers given over the webhook come back
+    out of the website as a **real draft row**, filled with the wizard's own payload shape.
+    A renamed key or a lost answer is invisible to unit tests on either side of the seam —
+    each one passes happily against its own idea of the shape.
+    """
+    root, customer = ctx.root, ctx.customer
+    phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+
+    def say(text: str) -> str:
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        root.post("/dev/whatsapp/inbound", json={"fromPhone": phone, "text": text}).raise_for_status()
+        messages = root.get("/dev/whatsapp/outbox").json()["data"].get("messages", [])
+        mine = [m for m in messages if phone[-10:] in str(m.get("to", ""))]
+        return str(mine[0].get("text", "")) if mine else ""
+
+    say("Hi")  # §7.6.1 welcome, which answers the turn on its own
+    opening = say("I want to verify a property")
+    check("a stranger can start an intake with no account (§7.3.4, D69)",
+          "what are you verifying" in opening.lower(), opening[:120])
+
+    location_prompt = say("1")
+    check("the intake asks where the property is (§5.1)",
+          "where is the" in location_prompt.lower(), location_prompt[:120])
+
+    state_prompt = say("12 Ademola Street, Ikeja")
+    check("the intake asks for the state", "state" in state_prompt.lower(), state_prompt[:120])
+
+    tier_prompt = say("Lagos")
+    check("the tier prompt quotes live prices (D54)", "₦" in tier_prompt, tier_prompt[:160])
+
+    handoff = say("2")
+    check("completing the intake hands off with a single-use link (§7.5)",
+          "/wa/intake/" in handoff, handoff[:200])
+    check("the handoff repeats the payment pledge (§7.1.1)",
+          "veriprops.ng" in handoff and "address bar" in handoff, handoff[:200])
+
+    token = handoff.split("/wa/intake/")[1].split()[0].strip()
+
+    # The landing is authenticated (D69): the token carries a conversation, the session
+    # says whose draft it becomes.
+    unauthenticated = client()
+    refused = unauthenticated.post(f"/wa/intake/{token}/redeem")
+    check("the intake landing refuses an anonymous caller (D69)",
+          refused.status_code in (401, 403), f"http {refused.status_code}")
+
+    redeemed = customer.post(f"/wa/intake/{token}/redeem")
+    check("a signed-in customer redeems the intake link (§7.5)",
+          redeemed.status_code == 200, f"http {redeemed.status_code}: {redeemed.text[:160]}")
+    if redeemed.status_code != 200:
+        return
+
+    verification_id = redeemed.json()["data"]["verificationId"]
+    check("redemption returns the draft to open", bool(verification_id))
+
+    # The whole point of D69/D70: the answers are in the row the web wizard reads — and
+    # this is the exact endpoint it resumes from, `/draft`, not the detail DTO (which
+    # carries `draftStep` but deliberately not the payload).
+    draft = customer.get(f"/verifications/{verification_id}/draft").json()["data"]
+    payload = draft.get("payload") or {}
+    check("the seeded draft opens on the property step, with the chat's answers filled in",
+          draft.get("step") == 0, f"step={draft.get('step')}")
+    check("the chat's answers land in the draft the wizard reads (D69)",
+          payload.get("property", {}).get("address") == "12 Ademola Street, Ikeja",
+          f"payload={payload}")
+    check("the tier the customer chose in chat survives the handoff",
+          payload.get("tier") == "STANDARD", f"tier={payload.get('tier')}")
+    check("the state the customer gave in chat survives the handoff",
+          payload.get("property", {}).get("state") == "Lagos")
+    check("consent is never taken in chat (§5.3)",
+          payload.get("consentAccepted") is False)
+
+    # Single-use, like every other §7.5 link.
+    replay = customer.post(f"/wa/intake/{token}/redeem")
+    check("a spent intake link is dead (§7.5)",
+          replay.status_code == 404, f"http {replay.status_code}")
 
 
 def _create_payable_case(ctx: Ctx) -> str:

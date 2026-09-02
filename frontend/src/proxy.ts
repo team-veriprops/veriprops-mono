@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtDecode } from "jwt-decode";
-import { ROUTES, WA_LINK_PREFIX } from "./lib/routes";
+import { ROUTES, WA_INTAKE_PREFIX, WA_LINK_PREFIX } from "./lib/routes";
 import { EDGE_AUTH_HEADER, isEdgeAuthorized } from "./lib/edgeAuth";
 import { JwtPayload, UserPersona, UserType } from "./components/website/auth/models";
 
@@ -42,6 +42,7 @@ const PROTECTED_PREFIXES = [
   // claiming the number (PRD §7.4.4). Its siblings stay out — a handoff token is the
   // authorization there, and requiring a session would break the whole point.
   WA_LINK_PREFIX,
+  WA_INTAKE_PREFIX,
 ] as const;
 
 // Surfaces hidden from authenticated users.

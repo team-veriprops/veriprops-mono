@@ -30,6 +30,26 @@ status: in progress — S1–S5 complete (+ S4.1 template registry)
 ## Blockers
 - none (S11 live path awaits external Meta assets — tracked, not blocking S1–S10)
 
+## Known gap between S5/S6 and S7 — close this first in S7
+- **An agent's reply in the WhatsApp console is stored but never delivered.** S5 added the
+  `/admin/messages` WhatsApp tab (needed, because D57's hand-back had to ship with the rule
+  that makes a thread sticky), and it renders a composer. `CommunicationService.post_message`
+  writes the message into the thread and flips the session to `HUMAN`, but nothing fans it
+  back out over WhatsApp — the plan assigns that to S7, so between these commits an agent can
+  type a reply the customer never receives. S7's first task: fan an admin reply on a
+  `channel=WHATSAPP` thread out through the transport, gated by `WhatsAppWindowService.is_open`
+  (free text inside Meta's window, the `window_reopen` §7.7 template outside it).
+
+## Findings outside the WhatsApp scope (not fixed — awaiting a call)
+- `appodus_utils/domain/webhook/google_drive/` is **dead and broken**: its `repo.py`,
+  `service.py` and `validator.py` import `main.app.domain.webhook.google_drive.*` and
+  `main.app.db.repo`, neither of which exists, so only `model.py` imports cleanly — and it
+  registers a `g_drive_webhook_subscriptions` table that has no migration builder. Nothing
+  in the app's import graph reaches it, so it is inert rather than broken-in-production,
+  and the orphan guard never saw it. Surfaced while building the decorated-service guard.
+  It is vendored code outside the WhatsApp scope, so it is reported rather than deleted:
+  the choice is to remove the package or to wire it up and give it a migration.
+
 ## Open Questions
 - none (gate decisions D42–D48; run-time decisions D49–D58)
 

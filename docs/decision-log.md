@@ -1889,3 +1889,84 @@ redeploy between the founder and a changed rota.
 
 ### Revisit
 If coverage becomes per-day rather than weekday/Saturday, promote to a table.
+
+## Decision: D69 — chat intake collects into the session; identity happens on the web
+
+### Context
+`VerificationService.create_draft` needs a `customer_id`, and a WhatsApp number that has
+never linked an account has none. §7.3.4 lists intake as a **full** WhatsApp capability, so
+the flow has to work for a stranger's first message — which is the common case, since the
+widget and the official number are what bring people in.
+
+### Chosen Option (user)
+The bot collects its answers into `WhatsAppBotSession.context`. Nothing is written to
+`verifications` during the conversation. Completion mints a phone-scoped §7.5 `intake`
+token whose landing authenticates the customer (signup or login), then creates the draft,
+seeds it with the collected answers, and hands into the **existing** submission wizard.
+
+### Rationale
+Identity lands where signup already exists, is tested, and has its own recovery paths. The
+alternative — sending an unlinked number through OTP linking before the bot will take any
+details — puts "verify your number before I can help you" in front of every new customer,
+which is precisely the friction the channel exists to remove. §7.10 makes intake→payment
+the channel's headline number, and a gate at question one is the cheapest way to lose it.
+
+The cost is accepted knowingly: an abandoned chat intake leaves no row in `verifications`,
+so it is invisible to the admin console and to the §17.1 abandoned-draft recovery sweep.
+The conversation itself is still in the console (Decision K), which is where an
+unfinished WhatsApp intake is legible anyway.
+
+### Revisit
+If chat-intake abandonment turns out to be high and the conversation alone is too thin to
+act on, promote the session context to a real draft at completion rather than at
+redemption — the collected shape is already the wizard's, so only the timing changes.
+
+## Decision: D70 — chat asks only what the web wizard gates on
+
+### Context
+§5.1 defines conditional property facts (Land: size, use, survey status; Building: type,
+floors, year, occupancy). Asking them over WhatsApp is four to seven extra turns.
+
+### Chosen Option (user)
+Chat collects property type, address-or-landmark, state, and tier. The §5.1 conditional
+facts are left to the web, where the submission wizard already renders them.
+
+### Rationale
+`canAdvanceSubmissionStep` shows the web wizard's own bar is *type + address-or-landmark*,
+then a tier — the conditional facts are optional there too. So a four-question chat intake
+reaches parity with what the website actually requires, and the customer lands in the real
+wizard with those fields in front of them rather than never being asked.
+
+Handing into the existing wizard rather than building a chat-specific pay page is what
+makes this cheap: the §5.1 fields, the tier step, the consent control and the payment step
+are all already built and tested, and the intake landing reuses every one of them (D50's
+pattern — `upload`/`report` hand into the authenticated portal, and `intake` now does too).
+
+### Revisit
+If agents routinely open clarifications asking for the same fact, move that one fact into
+the chat rather than the whole set.
+
+## Decision: D71 — `intake` is a third handoff-token shape
+
+### Context
+D55 gives handoff tokens two mutually exclusive shapes: action tokens (`pay`/`upload`/
+`report`) name a customer and a case; `link` names a phone and nothing else. A chat intake
+has neither a customer nor a case at the moment the link is minted.
+
+### Chosen Option
+A third shape: `intake` names a phone, like `link` does. The collected answers stay
+**server-side** in the bot session and are read on redemption; the token carries none of
+them.
+
+### Rationale
+Putting the intake payload in the token would make a long URL for a WhatsApp message and
+would let a forwarded link carry someone's property details. A phone-scoped token keeps the
+existing single-use `jti` ledger, the pinned-algorithm decode and the 15-minute life
+untouched, and reuses `link`'s already-validated claim shape.
+
+`intake` joins `link` outside `ACTION_INTENTS`, so the action-token invariants (a customer
+and a case, both present) stay exactly as strict as they were.
+
+### Revisit
+If a second pre-identity flow appears, generalise the phone-scoped shape rather than adding
+a fourth intent.

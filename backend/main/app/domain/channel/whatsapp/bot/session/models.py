@@ -60,6 +60,7 @@ class BotFlow(str, enum.Enum):
 
     WELCOME = "WELCOME"
     STATUS = "STATUS"
+    INTAKE = "INTAKE"
 
 
 class EscalationReason(str, enum.Enum):

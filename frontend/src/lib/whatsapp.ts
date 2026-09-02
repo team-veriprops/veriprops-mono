@@ -73,3 +73,16 @@ export function isPaymentFlowPath(pathname: string): boolean {
   const path = normalizePath(pathname);
   return PAYMENT_FLOW_PATH_PATTERNS.some((pattern) => pattern.test(path));
 }
+
+/**
+ * A `wa.me` link that opens the chat already quoting a case (§7.4.3, D58).
+ *
+ * The bot recognises a `VP-…` reference in the customer's own words, so pre-filling it is
+ * what makes "continue on WhatsApp" land on the right case in one tap rather than asking
+ * the customer to type a reference they would have to go and find.
+ */
+export function waContinueUrl(numberDigits: string, vid: string, pageCode: string): string {
+  if (!numberDigits || !vid) return "";
+  const text = encodeURIComponent(`Continue ${vid} [ref: ${pageCode}]`);
+  return `https://wa.me/${numberDigits}?text=${text}`;
+}

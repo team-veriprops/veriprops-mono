@@ -54,14 +54,14 @@ class HandoffClaims(BaseModel):
     """The verified contents of a handoff token.
 
     Two shapes, held apart by the validator below (D55): an **action** token names a
-    customer and a case; a **link** token names a phone number that has no account yet.
-    Neither can wear the other's claims, so a token minted to identify a stranger can
-    never be replayed as authority over someone's case.
+    customer and a case; a **phone-scoped** token (`link`, `intake`) names a number that
+    has no account yet. Neither can wear the other's claims, so a token minted to identify
+    a stranger can never be replayed as authority over someone's case.
     """
 
     sub: Optional[str] = None      # customer id — action tokens only
     case: Optional[str] = None     # verification id — action tokens only
-    phone: Optional[str] = None    # E.164 number — link tokens only
+    phone: Optional[str] = None    # E.164 number — phone-scoped tokens only
     intent: HandoffIntent
     jti: str
     issued_at: datetime
@@ -73,7 +73,7 @@ class HandoffClaims(BaseModel):
             if not self.sub or not self.case or self.phone:
                 raise ValueError("action token must name a customer and a case, and no phone")
         elif not self.phone or self.sub or self.case:
-            raise ValueError("link token must name a phone, and no customer or case")
+            raise ValueError("phone-scoped token must name a phone, and no customer or case")
         return self
 
     def assert_scope(self, intent: HandoffIntent, case_id: str) -> None:
@@ -84,6 +84,16 @@ class HandoffClaims(BaseModel):
     def assert_link_scope(self, phone_e164: str) -> None:
         """Confirm this token was minted to identify *phone_e164* — and nothing else."""
         if self.intent != HandoffIntent.LINK or self.phone != phone_e164:
+            raise HandoffTokenError()
+
+    def assert_phone_scope(self, intent: HandoffIntent, phone_e164: str) -> None:
+        """Confirm this token carries *intent* for *phone_e164* — and nothing else.
+
+        The general form of `assert_link_scope`, for the second phone-scoped intent
+        (D71). Kept separate rather than widening the link check, because "this is a
+        linking token" is an assertion the linking flow should keep making explicitly.
+        """
+        if self.intent != intent or self.phone != phone_e164:
             raise HandoffTokenError()
 
 
@@ -176,6 +186,18 @@ def issue_link_token(phone_e164: str, ttl: timedelta = HANDOFF_TOKEN_TTL) -> str
     forwarded copy cannot start a second linking attempt.
     """
     return _encode({"phone": phone_e164, "intent": HandoffIntent.LINK.value}, ttl)
+
+
+def issue_intake_token(phone_e164: str, ttl: timedelta = HANDOFF_TOKEN_TTL) -> str:
+    """Mint a token carrying a chat intake across to the website (§5.1, D69/D71).
+
+    Names the number and nothing else: the answers the bot collected stay on the bot
+    session and are read at redemption. That keeps the URL short enough for a chat
+    message and means a forwarded link carries no one's property details — it can only
+    be spent, once, by whoever opens it first, and spending it still requires signing in
+    before anything is created.
+    """
+    return _encode({"phone": phone_e164, "intent": HandoffIntent.INTAKE.value}, ttl)
 
 
 def _encode(claims: dict, ttl: timedelta) -> str:

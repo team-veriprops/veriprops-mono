@@ -22,15 +22,19 @@ class HandoffIntent(str, enum.Enum):
     the system will honour it for anything else.
 
     The set has two shapes, and they are mutually exclusive by construction (D55). The
-    three **action** intents name a case and the customer who owns it. ``LINK`` names a
-    phone number and nothing else — it is minted for a WhatsApp number that has no
-    account yet, so there is no customer to name and no case to scope to.
+    three **action** intents name a case and the customer who owns it. ``LINK`` and
+    ``INTAKE`` name a phone number and nothing else — both are minted for a WhatsApp
+    number that has no account yet, so there is no customer to name and no case to scope
+    to. ``INTAKE``'s collected answers stay server-side on the bot session (D71); the
+    token carries none of them, so a forwarded link cannot leak someone's property details
+    and the URL stays short enough for a chat message.
     """
 
     PAY = "pay"
     UPLOAD = "upload"
     REPORT = "report"
     LINK = "link"
+    INTAKE = "intake"
 
 
 # The intents that act on a case. Membership is what the claim-shape validator keys on,
@@ -47,11 +51,12 @@ class HandoffTokenRedemption(BaseEntity):
     # not bookkeeping: two concurrent redemptions race here and exactly one wins.
     jti = Column(String(64), nullable=False)
     intent = Column(String(10), nullable=False)
-    # Null for a `link` token, which names a phone number rather than a case (D55).
+    # Null for a phone-scoped token (`link`/`intake`), which names a number rather than
+    # a case (D55, D71).
     case_id = Column(String(36), nullable=True)
     customer_id = Column(String(36), nullable=True)
-    # The number a `link` token was minted for — the other half of the pen-check trail
-    # when the redemption names no case.
+    # The number a phone-scoped token was minted for — the other half of the pen-check
+    # trail when the redemption names no case.
     phone_e164 = Column(String(32), nullable=True)
     redeemed_at = Column(UTCDateTime, nullable=False)
     # Kept for the §7.11 pen-check trail: which client actually burned the link.

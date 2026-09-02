@@ -14,6 +14,7 @@ import { VerificationTracking } from "@/types/tracking";
 import { VerificationStatusBadge } from "./VerificationStatusBadge";
 import { VerificationProgress } from "./VerificationProgress";
 import { EvidenceGallery } from "./EvidenceGallery";
+import WhatsAppContinueButton from "@components/portal/WhatsAppContinueButton";
 
 // State-specific reassurance copy (§9.3) — frames each phase in plain, calming language.
 const STATE_REASSURANCE: Partial<Record<VerificationStatus, string>> = {
@@ -156,9 +157,12 @@ function Header({ tracking: t }: { tracking: VerificationTracking }) {
         <VerificationStatusBadge status={t.status} label={t.statusLabel} />
         {t.tier && <span className="text-xs text-muted-foreground">{humanizeEnumLabel(t.tier)} tier</span>}
       </div>
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         <span>Verification ID</span>
         <CopyText text={t.vid} />
+        {/* §7.4.3 web→chat: the channel is only two-way if leaving for it is as easy as
+            arriving from it. The link pre-fills this reference, which the bot matches. */}
+        <WhatsAppContinueButton vid={t.vid} />
       </div>
       {t.address && <p className="text-sm font-medium">{t.address}</p>}
     </div>

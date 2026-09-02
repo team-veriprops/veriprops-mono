@@ -29,6 +29,7 @@ from main.app.domain.channel.whatsapp.handoff.models import (
 )
 from main.app.domain.channel.whatsapp.handoff.repo import HandoffTokenRedemptionRepo
 from main.app.domain.channel.whatsapp.handoff.tokens import (
+    issue_intake_token,
     HandoffClaims,
     HandoffTokenError,
     decode_handoff_token,
@@ -72,6 +73,16 @@ class HandoffTokenService:
         identity is still established by the OTP that follows.
         """
         return issue_link_token(phone_e164)
+
+    async def issue_intake(self, phone_e164: str) -> str:
+        """Mint a §5.1 intake link for a WhatsApp number (D69/D71).
+
+        No ownership check, for the same reason `issue_link` has none: this number has no
+        account yet — establishing one is what the landing is for. The token names the
+        number so the landing can find the answers the bot collected; it carries none of
+        them.
+        """
+        return issue_intake_token(phone_e164)
 
     async def redeem(
         self,
@@ -134,6 +145,15 @@ class HandoffTokenService:
     async def redeem_link(self, token: str, redeemed_ip: Optional[str] = None) -> HandoffClaims:
         """Spend a `link` token — one completed linking attempt per link the bot sent."""
         return await self.redeem(token, HandoffIntent.LINK, redeemed_ip=redeemed_ip)
+
+    async def redeem_intake(self, token: str, redeemed_ip: Optional[str] = None) -> HandoffClaims:
+        """Spend an `intake` token — one seeded draft per link the bot sent.
+
+        Spent on redemption rather than on submit: unlike linking (where a failed OTP must
+        not strand the customer), redemption itself is the whole action here, and the D51
+        grant is what lets the holder reload the page afterwards.
+        """
+        return await self.redeem(token, HandoffIntent.INTAKE, redeemed_ip=redeemed_ip)
 
     async def redemption_for(self, jti: str) -> Optional[HandoffTokenRedemption]:
         """The redemption record for a nonce, if it has been spent."""
