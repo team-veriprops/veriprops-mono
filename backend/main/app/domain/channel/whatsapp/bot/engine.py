@@ -31,6 +31,8 @@ from kink import di, inject
 from main.app.config.settings import settings
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.status import AgentRole, TaskState, VerificationStatus
+from main.app.domain.channel.whatsapp.analytics.models import WhatsAppChannelEventType
+from main.app.domain.channel.whatsapp.analytics.recorder import ChannelEventRecorder
 from main.app.domain.channel.whatsapp.bot import content, guardrails
 from main.app.domain.channel.whatsapp.bot.capabilities import (
     ChannelAction,
@@ -169,6 +171,7 @@ class WhatsAppBotEngine:
         property_service: PropertyService,
         user_repo: UserRepo,
         handoff_token_service: HandoffTokenService,
+        channel_event_recorder: ChannelEventRecorder,
     ):
         self._whatsapp_bot_session_service = whatsapp_bot_session_service
         self._whatsapp_bot_sender = whatsapp_bot_sender
@@ -183,6 +186,7 @@ class WhatsAppBotEngine:
         self._property_service = property_service
         self._user_repo = user_repo
         self._handoff_token_service = handoff_token_service
+        self._channel_events = channel_event_recorder
 
     async def handle(
         self, message: InboundWhatsAppMessage, conversation: Conversation
@@ -219,7 +223,9 @@ class WhatsAppBotEngine:
     async def _decide(
         self, message: InboundWhatsAppMessage, session: WhatsAppBotSession
     ) -> BotReply:
-        welcome_due = await self._whatsapp_bot_session_service.record_inbound(session)
+        welcome_due = await self._whatsapp_bot_session_service.record_inbound(
+            session, page_code=message.page_code
+        )
         if welcome_due:
             # The welcome answers the turn on its own. A customer's first message is
             # usually "hi", and a bot that greeted *and* answered would bury the
@@ -520,7 +526,10 @@ class WhatsAppBotEngine:
         if outcome.link_for_vid:
             await self._whatsapp_bot_session_service.clear_flow(session)
             return await self._understood(
-                session, await self._handoff_reply(action, user_id, cases, outcome.link_for_vid)
+                session,
+                await self._handoff_reply(
+                    action, user_id, session.phone_e164, cases, outcome.link_for_vid
+                ),
             )
 
         if outcome.awaits_choice:
@@ -535,6 +544,7 @@ class WhatsAppBotEngine:
         self,
         action: ChannelAction,
         user_id: str,
+        phone_e164: str,
         cases: List[status_flow.CaseSummary],
         vid: str,
     ) -> str:
@@ -560,6 +570,14 @@ class WhatsAppBotEngine:
         )
         link = f"{settings.PUBLIC_APP_BASE_URL.rstrip('/')}/wa/{intent.value}/{token}"
         if action == ChannelAction.PAY:
+            # §7.10 counts the pay handoff as a channel-produced case: this fact is what
+            # later lets `PAYMENT_CONFIRMED` be attributed here rather than to the web.
+            await self._channel_events.record(
+                WhatsAppChannelEventType.PAY_LINK_ISSUED,
+                phone_e164=phone_e164,
+                verification_id=Utils.uuid_to_hex(verification.id),
+                customer_id=user_id,
+            )
             return content.pay_with_link(link)
         return content.report_with_link(link)
 
@@ -590,7 +608,10 @@ class WhatsAppBotEngine:
             return None
         await self._whatsapp_bot_session_service.clear_flow(session)
         return await self._understood(
-            session, await self._handoff_reply(action, user_id, cases, selected.vid)
+            session,
+            await self._handoff_reply(
+                action, user_id, session.phone_e164, cases, selected.vid
+            ),
         )
 
     async def _resume_flow(
@@ -664,6 +685,9 @@ class WhatsAppBotEngine:
         """
         outcome = intake_flow.begin()
         await self._park_intake(session, outcome)
+        await self._channel_events.record(
+            WhatsAppChannelEventType.INTAKE_STARTED, phone_e164=session.phone_e164
+        )
         return await self._understood(session, outcome.text)
 
     async def _continue_intake(
@@ -702,6 +726,13 @@ class WhatsAppBotEngine:
         another answer and send a second link.
         """
         await self._whatsapp_bot_session_service.retain_intake(session, outcome.collected)
+        # §7.10's seam-conversion denominator: the customer has answered everything the
+        # chat can ask, and everything after this point happens on the website. Recorded
+        # here rather than in `_intake_link`, which a *resend* also calls — counting a
+        # re-issued link as a second completed intake would deflate the headline rate.
+        await self._channel_events.record(
+            WhatsAppChannelEventType.INTAKE_COMPLETED, phone_e164=session.phone_e164
+        )
         return await self._understood(session, outcome.text.format(link=await self._intake_link(session)))
 
     async def _intake_link(self, session: WhatsAppBotSession) -> str:

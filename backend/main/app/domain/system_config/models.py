@@ -41,6 +41,7 @@ class ConfigKey(str, enum.Enum):
     DISPUTE_MIN_DESCRIPTION_CHARS = "dispute_min_description_chars"  # minimum characters required to file a dispute
     SHARE_LINK_DEFAULT_EXPIRY_DAYS = "share_link_default_expiry_days"  # default lifetime of a report share link
     ANALYTICS_TREND_MONTHS = "analytics_trend_months"           # trailing months included in analytics trend series
+    CHANNEL_ANALYTICS_WINDOW_DAYS = "channel_analytics_window_days"  # §7.10 WhatsApp metrics window
     # §7 human coverage (Decision G / D68) — the hours the bot promises a person, in WAT.
     # Admin-tunable because a rota change must not need a redeploy.
     SUPPORT_HOURS_START = "support_hours_start"                 # first staffed hour, 24h WAT
@@ -72,6 +73,7 @@ CONFIG_DEFAULTS: dict[ConfigKey, Any] = {
     ConfigKey.DISPUTE_MIN_DESCRIPTION_CHARS: 100,
     ConfigKey.SHARE_LINK_DEFAULT_EXPIRY_DAYS: 30,
     ConfigKey.ANALYTICS_TREND_MONTHS: 6,
+    ConfigKey.CHANNEL_ANALYTICS_WINDOW_DAYS: 30,
     # Decision G: 8am–8pm WAT weekdays, Saturday morning to 1pm, no Sunday cover.
     ConfigKey.SUPPORT_HOURS_START: 8,
     ConfigKey.SUPPORT_HOURS_END: 20,
@@ -101,6 +103,10 @@ CONFIG_DESCRIPTIONS: dict[ConfigKey, str] = {
     ConfigKey.DISPUTE_MIN_DESCRIPTION_CHARS: "Minimum characters a customer must provide when filing a dispute.",
     ConfigKey.SHARE_LINK_DEFAULT_EXPIRY_DAYS: "Default number of days a report share link stays valid before expiring.",
     ConfigKey.ANALYTICS_TREND_MONTHS: "Number of trailing months included in analytics trend series.",
+    ConfigKey.CHANNEL_ANALYTICS_WINDOW_DAYS: (
+        "Trailing days covered by the WhatsApp channel analytics (PRD §7.10). Four of the "
+        "seven metrics are rates, and a rate with no period cannot show whether a change worked."
+    ),
     ConfigKey.SUPPORT_HOURS_START: "First staffed hour for human support, 24-hour clock, West Africa Time.",
     ConfigKey.SUPPORT_HOURS_END: "Last staffed hour on a weekday, 24-hour clock, West Africa Time.",
     ConfigKey.SUPPORT_SATURDAY_END: "Last staffed hour on Saturday (there is no Sunday cover).",

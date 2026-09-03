@@ -13,7 +13,7 @@ of answering the same question; none, or an unlinked number → say why, with no
 issuing one would mean guessing whose case — and whose money — is involved.
 
 **Eligibility is read off the §7.3.2 projection, never off a raw status.** A case is payable
-at `PAYMENT_PENDING` and readable at `DELIVERED`, and both are stage names `projection.py`
+while it is quoted and unpaid, and readable once delivered — stage names `projection.py`
 already owns. Deriving them from `VerificationStatus` here would put the same mapping in a
 second place, and the two would drift the day a status is added.
 
@@ -36,8 +36,13 @@ from main.app.domain.channel.whatsapp.bot.projection import ChannelState
 
 # Which §7.3.2 stages each handoff can act on.
 #
-# `PAY` is the single stage where money is owed: before it there is no quote to pay against,
-# and after it the case is paid.
+# `PAY` covers the two stages where money is owed and payable. `INTAKE_COMPLETE` is the
+# main one — it projects from `SUBMITTED`, which is a case that has been quoted and not yet
+# paid for, and is exactly the state the `/wa/pay/<token>` landing is built to take. Naming
+# only `PAYMENT_PENDING` looks right and is wrong: that is the narrower in-flight state, and
+# a customer asking "how do I pay?" is almost always sitting at `SUBMITTED`. Before these
+# two there is no quote to pay against; after them the case is paid. `media.py` draws the
+# same boundary from the other side, in `_PRE_PAYMENT_STATES`.
 #
 # `VIEW_REPORT` is **`DELIVERED` only**, and the stage it excludes is the trap. Despite its
 # name, `ChannelState.REPORT_READY` projects from `VerificationStatus.UNDER_REVIEW` — the
@@ -47,7 +52,9 @@ from main.app.domain.channel.whatsapp.bot.projection import ChannelState
 # also covers `DISPUTED`, and a customer in a dispute re-reading their own report is exactly
 # who §7.4.2's "get a new link" recovery is for.
 _ELIGIBLE_STATES: dict[ChannelAction, frozenset[ChannelState]] = {
-    ChannelAction.PAY: frozenset({ChannelState.PAYMENT_PENDING}),
+    ChannelAction.PAY: frozenset(
+        {ChannelState.INTAKE_COMPLETE, ChannelState.PAYMENT_PENDING}
+    ),
     ChannelAction.VIEW_REPORT: frozenset({ChannelState.DELIVERED}),
 }
 

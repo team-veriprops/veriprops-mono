@@ -180,3 +180,52 @@ class TestThreadSubject:
         assert svc._conversations.get_or_create_whatsapp_thread.await_args.kwargs[
             "subject"
         ] == "WhatsApp enquiry"
+
+
+class TestWidgetAttribution:
+    """§7.4.1's `[ref: …]` marker, lifted out at ingest (§7.10, D85).
+
+    It happens here rather than in the Meta normalizer for a determinism reason: `ingest`
+    is the single funnel both doors pass through — the signed webhook and
+    `POST /dev/whatsapp/inbound` — and extracting it upstream gave the two doors different
+    behaviour, so a page code arrived in production and never in an automated run.
+    """
+
+    async def test_the_page_code_is_lifted_off_the_message(self):
+        svc = _service()
+
+        await svc.ingest(inbound(text="Hi Veriprops! [ref: web-pricing]"))
+
+        written = svc._whatsapp_inbound_message_repo.create_return_model.await_args.args[0]
+        assert written.page_code == "web-pricing"
+
+    async def test_the_marker_never_reaches_the_console_or_the_classifier(self):
+        # The customer did not type it — their phone did. An agent reading the thread must
+        # see the message the customer believes they sent.
+        svc = _service()
+
+        await svc.ingest(inbound(text="Hi Veriprops! [ref: web-home]"))
+
+        _conversation, _sender, _kind, body = svc._chat.send.await_args.args
+        assert body == "Hi Veriprops!"
+
+    async def test_an_ordinary_message_is_untouched(self):
+        svc = _service()
+
+        await svc.ingest(inbound(text="How much for a Lagos land check?"))
+
+        written = svc._whatsapp_inbound_message_repo.create_return_model.await_args.args[0]
+        assert written.page_code is None
+        assert written.text == "How much for a Lagos land check?"
+
+    async def test_a_message_that_is_only_a_marker_still_opens_the_conversation(self):
+        # The widget's prefill is editable, and a customer who deletes the greeting and
+        # sends the bare marker is starting a conversation like anyone else.
+        svc = _service()
+
+        record = await svc.ingest(inbound(text="[ref: web-home]"))
+
+        assert record is not None
+        written = svc._whatsapp_inbound_message_repo.create_return_model.await_args.args[0]
+        assert written.page_code == "web-home"
+        assert written.text is None

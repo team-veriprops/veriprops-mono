@@ -65,6 +65,11 @@ class InboundWhatsAppMessage(Object):
     from_phone: str                              # E.164, the cross-channel identity key
     kind: InboundKind
     text: Optional[str] = None                   # body, caption, or reply title
+    page_code: Optional[str] = None              # §7.4.1 widget attribution, lifted out of
+                                                 # `text` by `ingest` (§7.10, D85) — not by
+                                                 # this normalizer, so the dev door gets it
+                                                 # too; None unless the customer arrived
+                                                 # through a wa.me deep link
     interactive_id: Optional[str] = None         # menu selection id, never display copy
     media_id: Optional[str] = None               # Meta media handle (fetched on demand)
     media_mime_type: Optional[str] = None

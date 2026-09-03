@@ -28,6 +28,8 @@ from main.app.domain.channel.whatsapp.bot.session.models import (
     EscalationReason,
     WhatsAppBotSession,
 )
+from main.app.domain.channel.whatsapp.analytics.models import WhatsAppChannelEventType
+from main.app.domain.channel.whatsapp.analytics.recorder import ChannelEventRecorder
 from main.app.domain.channel.whatsapp.bot.session.repo import WhatsAppBotSessionRepo
 from main.app.domain.channel.whatsapp.window import WhatsAppWindowService
 from main.appodus_utils import Utils
@@ -46,9 +48,11 @@ class WhatsAppBotSessionService:
         self,
         whatsapp_bot_session_repo: WhatsAppBotSessionRepo,
         whatsapp_window_service: WhatsAppWindowService,
+        channel_event_recorder: ChannelEventRecorder,
     ):
         self._whatsapp_bot_session_repo = whatsapp_bot_session_repo
         self._whatsapp_window_service = whatsapp_window_service
+        self._channel_events = channel_event_recorder
 
     async def get_or_open(self, phone: str) -> WhatsAppBotSession:
         """The session for *phone*, creating it on first contact.
@@ -99,11 +103,20 @@ class WhatsAppBotSessionService:
         self._whatsapp_bot_session_repo.save(session)
         return session
 
-    async def record_inbound(self, session: WhatsAppBotSession) -> bool:
+    async def record_inbound(
+        self, session: WhatsAppBotSession, page_code: Optional[str] = None
+    ) -> bool:
         """Stamp the arrival and answer whether this turn owes a welcome (§7.6.1).
 
         Read before the stamp: `last_inbound_at` is what the idle window is measured
         against, so stamping first would make every returning customer look active.
+
+        A due welcome is also §7.10's definition of an **enquiry** — first contact, or the
+        first message after the 30-day idle gap — so the fact is recorded here rather than
+        at a second place that would have to re-derive the same condition. `page_code` is
+        the §7.4.1 widget marker the normalizer lifted out of this message (D85); it is
+        only ever present on the message that starts the conversation, which is exactly
+        the one being counted.
         """
         now = Utils.datetime_now()
         welcome_due = session.is_welcome_due(now)
@@ -118,6 +131,12 @@ class WhatsAppBotSessionService:
             session.step = 0
             session.context = None
         self._whatsapp_bot_session_repo.save(session)
+        if welcome_due:
+            await self._channel_events.record(
+                WhatsAppChannelEventType.ENQUIRY,
+                phone_e164=session.phone_e164,
+                page_code=page_code,
+            )
         return welcome_due
 
     async def note_understood(self, session: WhatsAppBotSession) -> None:
@@ -182,6 +201,15 @@ class WhatsAppBotSessionService:
         session.step = 0
         session.unmatched_count = 0
         self._whatsapp_bot_session_repo.save(session)
+        # §7.10 wants the escalation *rate and its reasons*, which the row above cannot
+        # answer: it holds one mutated value per number, so the previous reason is gone.
+        # Every one of the nine `EscalationReason`s funnels through this method, so one
+        # fact here covers all of them — and a tenth reason is counted the day it is added.
+        await self._channel_events.record(
+            WhatsAppChannelEventType.ESCALATED,
+            phone_e164=session.phone_e164,
+            reason=reason,
+        )
 
     async def describe(self, phone: str) -> BotSessionDto:
         """What the console shows beside a thread.

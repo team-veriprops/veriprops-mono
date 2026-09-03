@@ -59,7 +59,7 @@ from e2e import (
     stage_tracking,
     stage_whatsapp,
 )
-from e2e.harness import Ctx, check, client, failures, login
+from e2e.harness import Ctx, check, checks_run, client, failures, login
 
 # Ordered pipeline — each stage consumes state the previous ones produced (Ctx).
 STAGES = [
@@ -138,7 +138,12 @@ def main() -> int:
         module.run(ctx)
 
     failed = failures()
-    print("\n" + ("ALL PASSED" if not failed else f"{len(failed)} FAILED: {failed}"))
+    # The total is counted rather than left to be grepped out of the [PASS] lines, which
+    # is how the figures quoted in docs/runtime-state.yaml used to be arrived at.
+    summary = f"{checks_run()} checks"
+    if failed:
+        summary += f", {len(failed)} FAILED: {failed}"
+    print("\n" + ("ALL PASSED — " if not failed else "") + summary)
     return 1 if failed else 0
 
 

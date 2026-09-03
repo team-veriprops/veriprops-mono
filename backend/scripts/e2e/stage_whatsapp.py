@@ -139,6 +139,12 @@ def run(ctx: Ctx) -> None:
     # ── S9: §7.4.5 — one delegate, status only, revocable ────────────────────
     _run_delegate_checks(ctx)
 
+    # ── S10.0: §7.3.4's other two handoffs, now reachable from a conversation ─
+    _run_pay_report_handoff_checks(ctx)
+
+    # ── S10: §7.10 — the metrics move when real traffic moves them ───────
+    _run_channel_analytics_checks(ctx)
+
 
 def _run_webhook_checks(ctx: Ctx) -> None:
     root = ctx.root
@@ -1266,3 +1272,171 @@ def _run_delegate_checks(ctx: Ctx) -> None:
     check("a revoked delegate does not block a replacement (§7.4.5)",
           replacement.status_code == 200,
           f"http {replacement.status_code}: {replacement.text[:200]}")
+
+
+def _run_pay_report_handoff_checks(ctx: Ctx) -> None:
+    """§7.3.4's pay and report handoffs, asked for in words (WA-17, §7.4.2).
+
+    Only a live stack proves this one, and the gap it closes was invisible to unit tests
+    precisely because every piece existed and passed on its own: the capability matrix
+    declared `PAY` and `VIEW_REPORT` as `HANDOFF`, `handoff_intent_for` returned the right
+    intent, the token service minted, and the landings rendered — but no intent reached any
+    of it, so both links were unreachable from an actual conversation. What is asserted
+    here is the whole path: a customer's words, through the classifier, to a link that opens.
+
+    The eligibility rule is the other thing worth driving for real. A report link is offered
+    only once the report has passed the §8 release gate, and the difference between
+    `UNDER_REVIEW` and `COMPLETED` is a projection detail no unit test of the bot can see.
+    """
+    root, customer = ctx.root, ctx.customer
+    phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+
+    def say(text: str) -> str:
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        root.post("/dev/whatsapp/inbound",
+                  json={"fromPhone": phone, "text": text}).raise_for_status()
+        replies = _outbound_to(ctx, phone)
+        return str(replies[0].get("text", "")) if replies else ""
+
+    # An unlinked number asking to pay gets no link — the §7.4.3 rule, on the surface
+    # where breaking it would cost someone money rather than privacy.
+    say("Hi")
+    unlinked = say("how do I pay?")
+    check("an unlinked number is never handed a payment link (§7.4.3)",
+          "/wa/pay/" not in unlinked, unlinked[:200])
+    check("...and is told how to link rather than left with nothing",
+          "link my account" in unlinked.lower(), unlinked[:200])
+
+    if not _link_number(ctx, phone):
+        return
+
+    case_id = _create_payable_case(ctx)
+    if not case_id:
+        return
+
+    pay_reply = say("I want to pay")
+    check("a linked customer with an unpaid case gets a pay link (§7.3.4, WA-17)",
+          "/wa/pay/" in pay_reply, pay_reply[:240])
+    # §7.1.1 — the pledge rides every payment handoff, and this is the message an
+    # impersonator would imitate most precisely.
+    check("the pay handoff carries the §7.1.1 payment pledge",
+          "veriprops.ng" in pay_reply, pay_reply[:240])
+
+    token = pay_reply.split("/wa/pay/")[1].split()[0].strip() if "/wa/pay/" in pay_reply else ""
+    redeemed = client().post(f"/public/wa/handoff/pay/{token}/redeem") if token else None
+    check("the pay link the bot minted actually opens its landing (§7.4.2)",
+          redeemed is not None and redeemed.status_code == 200,
+          f"http {redeemed.status_code if redeemed is not None else 'no token'}: "
+          f"{redeemed.text[:200] if redeemed is not None else pay_reply[:200]}")
+
+    # The report half. This customer already owns the stage's delivered case (released
+    # back in `stage_report`), so the interesting assertion is not "no link yet" — it is
+    # that the link goes to the *delivered* case and never to the unpaid one just created.
+    # A report token minted for a case with no released report is what the §8 gate exists
+    # to prevent, and it would be indistinguishable from a working link until it opened.
+    delivered = customer.get(f"/verifications/{ctx.vid_id}").json()["data"]
+    if delivered.get("status") != "COMPLETED":
+        warn("report handoff not exercised against a delivered case",
+             f"the stage's first case is {delivered.get('status')}, not COMPLETED")
+        return
+
+    report_reply = say("send me my report")
+    check("a delivered case earns a report link on request (§7.4.2)",
+          "/wa/report/" in report_reply, report_reply[:240])
+    # One link, not a "which one?" — the unpaid case has no report, so it must not be on
+    # the list. If eligibility leaked, the bot would ask the customer to choose between a
+    # delivered report and a case that has none.
+    check("the unpaid case is not offered as a report (§8 release gate)",
+          "Which one" not in report_reply and "which one" not in report_reply,
+          report_reply[:240])
+
+
+def _run_channel_analytics_checks(ctx: Ctx) -> None:
+    """§7.10's seven metrics, against traffic this stage actually generated (WA-43).
+
+    Why this belongs in the drive-through rather than only in unit tests: a metric is
+    worthless if it does not *move*. Every count here has a recorder call somewhere in the
+    conversation path, and each of those is a best-effort side write that fails silently by
+    design (D80) — so a broken call site produces a dashboard of zeros and no error
+    anywhere. Reading the numbers back after driving real conversations is the only thing
+    that catches it.
+    """
+    admin = ctx.admin
+
+    panel = admin.get("/admin/analytics/whatsapp")
+    check("the §7.10 channel analytics endpoint answers for an admin (WA-43)",
+          panel.status_code == 200, f"http {panel.status_code}: {panel.text[:200]}")
+    if panel.status_code != 200:
+        return
+    data = panel.json()["data"]
+
+    check("the window every figure covers is stated (§7.10)",
+          isinstance(data.get("windowDays"), int) and data["windowDays"] > 0,
+          f"windowDays={data.get('windowDays')}")
+
+    # Enquiries: every number this stage spoke to opened a conversation.
+    check("conversations this stage drove were counted as enquiries",
+          data.get("enquiries", 0) > 0, f"enquiries={data.get('enquiries')}")
+
+    # Escalations: the media checks sent a voice note, which §7.6.3 routes to a person
+    # under its own reason — so both the count and the breakdown must be non-empty.
+    reasons = {row["label"]: row["count"] for row in data.get("escalationsByReason", [])}
+    check("escalations were counted with their §7.10 reasons",
+          data.get("escalations", 0) > 0 and bool(reasons), f"reasons={reasons}")
+    check("a voice note is counted under its own reason, not lumped with other media",
+          "VOICE_NOTE" in reasons, f"reasons={reasons}")
+
+    # Voice-note volume comes off the inbound journal, not the escalation reason: a voice
+    # note arriving on a thread already in HUMAN mode never reaches the bot.
+    check("voice-note volume is counted (§7.10, v1.1 trigger data)",
+          data.get("voiceNotes", 0) > 0, f"voiceNotes={data.get('voiceNotes')}")
+
+    # The seam: `_run_intake_checks` ran a chat intake through to a seeded draft.
+    check("a completed chat intake was counted (§7.10 seam denominator)",
+          data.get("intakeStarted", 0) > 0 and data.get("intakeCompleted", 0) > 0,
+          f"started={data.get('intakeStarted')} completed={data.get('intakeCompleted')}")
+
+    # Consent: `_run_consent_checks` left one number opted into utility only.
+    check("linked numbers are the opt-in denominator (D84)",
+          data.get("linkedNumbers", 0) > 0, f"linked={data.get('linkedNumbers')}")
+    check("the utility opt-in rate is derived, not stored",
+          0.0 <= float(data.get("utilityOptInRate", -1)) <= 1.0,
+          f"rate={data.get('utilityOptInRate')}")
+
+    # Attribution: page codes appear only when a customer arrives through the widget, and
+    # nothing above does — so `direct` is the honest expectation, and its presence proves
+    # unattributed demand is counted rather than dropped.
+    codes = {row["label"] for row in data.get("enquiriesByPageCode", [])}
+    check("enquiries with no widget marker are still counted, under `direct` (§7.10)",
+          "direct" in codes, f"codes={sorted(codes)}")
+
+    # The §7.4.1 marker, read back out of a real inbound message (D85).
+    marked_phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+    ctx.root.post("/dev/whatsapp/inbound", json={
+        "fromPhone": marked_phone, "text": "Hi Veriprops! [ref: web-pricing]",
+    }).raise_for_status()
+    attributed = admin.get("/admin/analytics/whatsapp").json()["data"]
+    marked = {row["label"]: row["count"] for row in attributed.get("enquiriesByPageCode", [])}
+    check("a widget page code is read off the customer's first message (§7.4.1, D85)",
+          marked.get("web-pricing", 0) > 0, f"codes={marked}")
+    # ...and stripped, so the classifier and the console see what the customer wrote.
+    welcomed = _outbound_to(ctx, marked_phone)
+    check("the marker never appears in what the bot says back (D85)",
+          all("[ref:" not in str(m.get("text", "")) for m in welcomed),
+          f"replies={[str(m.get('text'))[:60] for m in welcomed]}")
+
+    # Meta's verdict on the number — synced through the stub, which never reaches Meta.
+    synced = admin.post("/admin/analytics/whatsapp/quality/sync")
+    check("the Meta quality rating syncs into the registry (§7.10, D81)",
+          synced.status_code == 200, f"http {synced.status_code}: {synced.text[:200]}")
+    if synced.status_code == 200:
+        health = synced.json()["data"].get("numberHealth") or {}
+        check("...and comes back with the timestamp that dates it",
+              health.get("qualityRating") in {"GREEN", "YELLOW", "RED", "UNKNOWN"}
+              and bool(health.get("syncedAt")),
+              f"health={health}")
+
+    # RBAC: analytics is VIEW_ANALYTICS-gated, so a customer must get nowhere near it.
+    forbidden = ctx.customer.get("/admin/analytics/whatsapp")
+    check("a customer cannot read the channel analytics",
+          forbidden.status_code in (401, 403), f"http {forbidden.status_code}")

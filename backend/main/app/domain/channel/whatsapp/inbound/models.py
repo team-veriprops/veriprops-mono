@@ -34,8 +34,13 @@ class WhatsAppInboundMessage(BaseEntity):
     wamid = Column(String(128), nullable=False)
     from_phone = Column(String(20), nullable=False)
     kind = Column(String(20), nullable=False)
-    # Body, caption, or interactive reply title. Null for a location pin or contact card.
+    # Body, caption, or interactive reply title, with the §7.4.1 `[ref: …]` marker
+    # already lifted out (D85). Null for a location pin or contact card.
     text = Column(Text, nullable=True)
+    # The widget page code the customer arrived through (§7.4.1, §7.10). Null when they
+    # messaged the number directly, which is real demand too — the analytics repo counts
+    # those under `direct` rather than dropping them.
+    page_code = Column(String(40), nullable=True)
     # Menu selection id — never the display copy, so flows don't depend on wording.
     interactive_id = Column(String(64), nullable=True)
     media_id = Column(String(128), nullable=True)
@@ -64,6 +69,7 @@ class CreateWhatsAppInboundMessageDto(Object):
     from_phone: str
     kind: InboundKind
     text: Optional[str] = None
+    page_code: Optional[str] = None
     interactive_id: Optional[str] = None
     media_id: Optional[str] = None
     media_mime_type: Optional[str] = None

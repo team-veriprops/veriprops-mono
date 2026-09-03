@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional, Type
 
 from kink import inject
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.channel.whatsapp.consent.models import (
@@ -65,3 +65,31 @@ class WhatsAppConsentRepo(
         setattr(consent, f"{prefix}_source", source.value)
         self._session.add(consent)
         return consent
+
+    async def count_granted(self) -> dict[str, int]:
+        """How many accounts currently hold each §7.4.6 consent (§7.10).
+
+        Granted-ness is derived here in SQL the same way `consent_granted` derives it in
+        Python — a later grant beats an earlier revoke. Two expressions of one rule is one
+        more than ideal, and the alternative is loading every consent row to count them;
+        `test_whatsapp_consent_service.py` pins the two against each other.
+        """
+        def _live(granted_at, revoked_at):
+            return and_(
+                granted_at.is_not(None),
+                or_(revoked_at.is_(None), revoked_at < granted_at),
+            )
+
+        stmt = select(
+            func.count().filter(
+                _live(WhatsAppConsent.utility_granted_at, WhatsAppConsent.utility_revoked_at)
+            ),
+            func.count().filter(
+                _live(WhatsAppConsent.marketing_granted_at, WhatsAppConsent.marketing_revoked_at)
+            ),
+        ).where(WhatsAppConsent.deleted.is_(False))
+        row = (await self._session.execute(stmt)).one()
+        return {
+            WhatsAppConsentKind.UTILITY.value: int(row[0] or 0),
+            WhatsAppConsentKind.MARKETING.value: int(row[1] or 0),
+        }

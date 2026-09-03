@@ -7,6 +7,8 @@ Three subscribers decide how each published event surfaces:
   table (`notification/rules.py`) and the user's preferences.
 - ``chat_counter_subscriber`` pushes the per-user Chat counter for chat events (§12.3) — a
   routine message bumps the counter only; the rule table keeps it out of Notifications.
+- ``channel_analytics_subscriber`` closes §7.10's seam-conversion metric: a confirmed
+  payment on a case the WhatsApp channel produced is that metric's numerator (D80).
 
 Handlers resolve their services from DI at call time and are registered on the bus at
 bootstrap. Each is best-effort by the bus contract (one failure never breaks another).
@@ -76,6 +78,30 @@ async def chat_autopost_subscriber(event: DomainEvent) -> None:
         pass
 
 
+async def channel_analytics_subscriber(event: DomainEvent) -> None:
+    """Record §7.10's seam-conversion numerator: a channel-produced case got paid (D80).
+
+    Subscribing to the bus rather than calling the recorder from the payment service is
+    the §4.8 rule — a domain event is published once and subscribers decide what to do
+    with it — and it also keeps the WhatsApp channel out of the payment path entirely,
+    which is where it belongs: payment does not care that a case began in a chat.
+
+    The recorder itself decides whether this case is the channel's (it checks for an
+    earlier fact about the same verification), so the platform's web payments pass through
+    here and are counted into nothing.
+    """
+    if event.type != EventType.PAYMENT_CONFIRMED or not event.verification_id:
+        return
+    try:
+        from main.app.domain.channel.whatsapp.analytics.recorder import ChannelEventRecorder
+
+        recorder = di[ChannelEventRecorder]
+        customer_id = event.recipient_user_ids[0] if event.recipient_user_ids else None
+        await recorder.record_payment_if_channel_case(event.verification_id, customer_id)
+    except Exception:  # noqa: BLE001 — a metric must never fail a confirmed payment
+        pass
+
+
 def register_subscribers(bus: EventBus) -> None:
     """Wire the standard subscribers onto the bus (idempotent — clears first)."""
     bus.clear()
@@ -83,3 +109,4 @@ def register_subscribers(bus: EventBus) -> None:
     bus.subscribe(notification_subscriber)
     bus.subscribe(chat_counter_subscriber)
     bus.subscribe(chat_autopost_subscriber)
+    bus.subscribe(channel_analytics_subscriber)

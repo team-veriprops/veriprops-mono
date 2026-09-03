@@ -26,9 +26,15 @@ CONSENT_VERSION = "1.0.0"
 QA_PASSWORD = "Test1234!"  # the dev-seed password for customer/agents
 
 _failures: list[str] = []
+# Every assertion the run made, passing or not. Counted rather than inferred: the totals
+# quoted in docs/runtime-state.yaml used to be hand-counted from [PASS] lines, which is
+# both tedious and quietly wrong the moment a stage warn-skips.
+_checks = 0
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
+    global _checks
+    _checks += 1
     print(f"[{'PASS' if ok else 'FAIL'}] {name}" + (f" — {detail}" if detail else ""))
     if not ok:
         _failures.append(name)
@@ -41,6 +47,11 @@ def warn(name: str, detail: str = "") -> None:
 
 def failures() -> list[str]:
     return _failures
+
+
+def checks_run() -> int:
+    """How many assertions this run actually made."""
+    return _checks
 
 
 def client() -> httpx.Client:

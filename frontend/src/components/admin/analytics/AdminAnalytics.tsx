@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { BarChart3, MessageSquare } from "lucide-react";
 import { Card } from "@3rdparty/ui/card";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import {
@@ -10,15 +12,71 @@ import {
   useTimeByTierQuery,
 } from "./libs/useAnalyticsQueries";
 import { Funnel, Revenue } from "@/types/analytics";
-import { formatMinor, humanizeEnumLabel } from "@lib/utils";
+import { cn, formatMinor, humanizeEnumLabel } from "@lib/utils";
+import WhatsAppChannelAnalytics from "./WhatsAppChannelAnalytics";
+
+type AnalyticsTab = "platform" | "whatsapp";
+
+const TABS: { id: AnalyticsTab; label: string; icon: typeof BarChart3 }[] = [
+  { id: "platform", label: "Platform", icon: BarChart3 },
+  { id: "whatsapp", label: "WhatsApp channel", icon: MessageSquare },
+];
 
 /**
- * Analytics dashboard (§18.1, D38) — conversion funnel, avg time by tier, revenue by tier
- * & location, per-state regional performance, and the 6-month agent-performance trend.
+ * Analytics dashboard (§18.1, D38) — one route, two tabs.
+ *
+ * **Platform** is the original surface: conversion funnel, avg time by tier, revenue by
+ * tier & location, per-state regional performance, and the 6-month agent trend.
+ * **WhatsApp channel** is §7.10's seven channel metrics (WA-43). One page rather than two
+ * routes, for the reason `AdminMessagesTabs` gives: these are the same question asked of
+ * two surfaces, and splitting them makes the channel look like a separate product.
+ *
  * Every figure is backend-derived; this only renders. Charts are lightweight, accessible,
- * theme-aware CSS bars (no external charting dependency).
+ * theme-aware CSS bars (no external charting dependency) — that holds for both tabs.
  */
 export default function AdminAnalytics() {
+  const [tab, setTab] = useState<AnalyticsTab>("platform");
+
+  return (
+    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6" data-testid="admin-analytics">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+        <p className="text-sm text-muted-foreground">
+          Conversion, turnaround, revenue, agent performance, and the WhatsApp channel — all
+          backend-derived.
+        </p>
+      </div>
+
+      <div
+        className="flex w-fit overflow-hidden rounded-lg border border-black/10 text-sm"
+        role="tablist"
+        aria-label="Analytics sections"
+      >
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            data-testid={`admin-analytics-tab-${id}`}
+            onClick={() => setTab(id)}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-1.5 cursor-pointer",
+              tab === id ? "bg-brand-viridian text-white" : "text-brand-navy hover:bg-black/3",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "platform" ? <PlatformAnalytics /> : <WhatsAppChannelAnalytics />}
+    </div>
+  );
+}
+
+function PlatformAnalytics() {
   const funnel = useFunnelQuery();
   const timeByTier = useTimeByTierQuery();
   const revenue = useRevenueQuery();
@@ -26,14 +84,7 @@ export default function AdminAnalytics() {
   const trends = useAgentTrendsQuery();
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6" data-testid="admin-analytics">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
-        <p className="text-sm text-muted-foreground">
-          Conversion, turnaround, revenue, and agent performance — all backend-derived.
-        </p>
-      </div>
-
+    <div className="space-y-6" data-testid="admin-analytics-platform">
       <Card className="space-y-3 p-5">
         <h2 className="text-sm font-semibold text-foreground">Conversion funnel</h2>
         <AsyncStateComponent<Funnel> isLoading={funnel.isLoading} isError={funnel.isError} data={funnel.data}>

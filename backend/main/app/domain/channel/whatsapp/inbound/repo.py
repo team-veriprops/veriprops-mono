@@ -61,12 +61,20 @@ class WhatsAppInboundMessageRepo(
         )
         return (await self._session.execute(stmt)).scalar()
 
-    async def count_by_kind(self, kind: InboundKind) -> int:
-        """How many messages of *kind* arrived — the §7.10 voice-note volume metric."""
-        stmt = select(func.count()).select_from(WhatsAppInboundMessage).where(
-            and_(
-                WhatsAppInboundMessage.deleted.is_(False),
-                WhatsAppInboundMessage.kind == kind.value,
-            )
-        )
+    async def count_by_kind(
+        self, kind: InboundKind, since: Optional[datetime] = None
+    ) -> int:
+        """How many messages of *kind* arrived — the §7.10 voice-note volume metric.
+
+        `since` windows it, because §7.10 reads voice-note volume as the trigger data for
+        v1.1 transcription-assist: what matters is whether it is *rising*, which an
+        all-time total can never say.
+        """
+        conditions = [
+            WhatsAppInboundMessage.deleted.is_(False),
+            WhatsAppInboundMessage.kind == kind.value,
+        ]
+        if since is not None:
+            conditions.append(WhatsAppInboundMessage.received_at >= since)
+        stmt = select(func.count()).select_from(WhatsAppInboundMessage).where(and_(*conditions))
         return int((await self._session.execute(stmt)).scalar() or 0)

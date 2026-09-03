@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional, Type
 
 from kink import inject
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.channel.whatsapp.link.models import (
@@ -110,3 +110,19 @@ class WhatsAppLinkRepo(
         link.linked_at = None
         self._session.add(link)
         return link
+
+    async def count_active(self) -> int:
+        """How many accounts have a live WhatsApp number (§7.10, D84).
+
+        The denominator for the opt-in rates: of the customers this channel can actually
+        reach, how many said yes. `ACTIVE` only — a `PENDING` row is an attempt, not a
+        link, and counting it would understate every opt-in rate by the number of people
+        who started linking and stopped.
+        """
+        stmt = select(func.count()).select_from(WhatsAppLink).where(
+            and_(
+                WhatsAppLink.deleted.is_(False),
+                WhatsAppLink.status == WhatsAppLinkStatus.ACTIVE.value,
+            )
+        )
+        return int((await self._session.execute(stmt)).scalar() or 0)

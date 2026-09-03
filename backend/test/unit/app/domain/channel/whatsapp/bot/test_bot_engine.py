@@ -67,6 +67,26 @@ def mock_db_session():
 
 # ─── Fakes ────────────────────────────────────────────────────────
 
+class _FakeChannelEventRecorder:
+    """Collects the §7.10 facts a turn produced (D80).
+
+    The real recorder swallows its own failures, so a fake that raised would test
+    something the production object cannot do.
+    """
+
+    def __init__(self):
+        self.recorded: list[tuple] = []
+
+    async def record(self, event_type, **kwargs):
+        self.recorded.append((event_type, kwargs))
+
+    async def record_payment_if_channel_case(self, verification_id, customer_id):
+        self.recorded.append((verification_id, customer_id))
+
+    def types(self):
+        return [event_type for event_type, _kwargs in self.recorded]
+
+
 class _FakeSessionRepo:
     """Just enough of the repo for the real session service to run against memory."""
 
@@ -125,6 +145,11 @@ def _engine(
 
     session_service = object.__new__(WhatsAppBotSessionService)
     session_service._whatsapp_bot_session_repo = _FakeSessionRepo(session)
+    # §7.10 facts are best-effort side writes (D80). Collected rather than discarded so a
+    # test can assert the channel counted what it claims to count.
+    recorder = _FakeChannelEventRecorder()
+    session_service._channel_events = recorder
+    engine._channel_events = recorder
     engine._whatsapp_bot_session_service = session_service
 
     sender = MagicMock()

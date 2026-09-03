@@ -18,6 +18,8 @@ from fastapi import APIRouter, Depends, Request
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
+from main.app.domain.channel.whatsapp.analytics.models import WhatsAppChannelEventType
+from main.app.domain.channel.whatsapp.analytics.recorder import ChannelEventRecorder
 from main.app.domain.channel.whatsapp.bot.intake_handoff import WhatsAppIntakeHandoffService
 from main.app.domain.channel.whatsapp.handoff.service import HandoffTokenService
 from main.app.domain.channel.whatsapp.handoff.tokens import (
@@ -32,6 +34,7 @@ from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 whatsapp_intake_router = APIRouter(prefix="/wa/intake", tags=["WhatsApp Intake"])
 handoff_service: HandoffTokenService = di[HandoffTokenService]
 intake_handoff_service: WhatsAppIntakeHandoffService = di[WhatsAppIntakeHandoffService]
+channel_event_recorder: ChannelEventRecorder = di[ChannelEventRecorder]
 
 # Same posture as the public redeem route: the token is a bearer credential, so the
 # endpoint is throttled even though a token is unguessable.
@@ -72,6 +75,16 @@ async def redeem_intake(
         raise ResourceNotFoundException(resource=TOKEN_REJECTED_MESSAGE)
 
     verification_id = await intake_handoff_service.seed_draft(claims.phone, customer_id)
+    # The seam is crossed (§7.10, D80). The redemption ledger row was written before the
+    # draft existed, and an `intake` token names a phone and nothing else (D71), so this is
+    # the only moment the channel can tie a conversation to the verification it produced —
+    # which is what later lets a payment be attributed to WhatsApp rather than to the web.
+    await channel_event_recorder.record(
+        WhatsAppChannelEventType.INTAKE_REDEEMED,
+        phone_e164=claims.phone,
+        verification_id=verification_id,
+        customer_id=customer_id,
+    )
     return SuccessResponse[SeededDraftDto](
         data=SeededDraftDto(verification_id=verification_id)
     )

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from kink import inject
 
@@ -18,13 +18,25 @@ from main.app.core.state.status import VerificationStatus, VerificationTier
 from main.app.domain.analytics.models import (
     AgentTrendPointDto,
     AgentTrendsDto,
+    ChannelCountDto,
     FunnelDto,
     LocationRevenueDto,
     RegionalRowDto,
     RevenueDto,
     TierRevenueDto,
     TierTimeDto,
+    WhatsAppChannelAnalyticsDto,
+    WhatsAppNumberHealthDto,
 )
+from main.app.domain.channel.whatsapp.analytics.health_service import (
+    WhatsAppNumberHealthService,
+)
+from main.app.domain.channel.whatsapp.analytics.models import WhatsAppChannelEventType
+from main.app.domain.channel.whatsapp.analytics.repo import WhatsAppChannelEventRepo
+from main.app.domain.channel.whatsapp.consent.models import WhatsAppConsentKind
+from main.app.domain.channel.whatsapp.consent.repo import WhatsAppConsentRepo
+from main.app.domain.channel.whatsapp.inbound.repo import WhatsAppInboundMessageRepo
+from main.app.domain.channel.whatsapp.link.repo import WhatsAppLinkRepo
 from main.app.domain.payment.repo import PaymentRepo
 from main.app.domain.verification.report.repo import ReportRepo
 from main.app.domain.system_config.models import ConfigKey
@@ -35,6 +47,7 @@ from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import InboundKind
 
 _COMPLETED = VerificationStatus.COMPLETED.value
 _PAID_STATES = {
@@ -64,12 +77,22 @@ class AnalyticsService:
         task_repo: VerificationTaskRepo,
         report_repo: ReportRepo,
         config_service: ConfigService,
+        whatsapp_channel_event_repo: WhatsAppChannelEventRepo,
+        whatsapp_link_repo: WhatsAppLinkRepo,
+        whatsapp_consent_repo: WhatsAppConsentRepo,
+        whatsapp_inbound_message_repo: WhatsAppInboundMessageRepo,
+        whatsapp_number_health_service: WhatsAppNumberHealthService,
     ):
         self._verifications = verification_repo
         self._payments = payment_repo
         self._tasks = task_repo
         self._reports = report_repo
         self._config = config_service
+        self._channel_events = whatsapp_channel_event_repo
+        self._whatsapp_links = whatsapp_link_repo
+        self._whatsapp_consents = whatsapp_consent_repo
+        self._whatsapp_inbound = whatsapp_inbound_message_repo
+        self._whatsapp_number_health = whatsapp_number_health_service
 
     async def funnel(self) -> FunnelDto:
         rows = await self._verifications.analytics_snapshot()
@@ -179,3 +202,90 @@ class AnalyticsService:
             for month in sorted(counts)
         ]
         return AgentTrendsDto(points=points)
+
+    async def whatsapp_channel(self, days: Optional[int] = None) -> WhatsAppChannelAnalyticsDto:
+        """§7.10's seven channel metrics over a trailing window (WA-43, D80/D84/D86).
+
+        Lives here rather than in the channel package because this is a **read** surface,
+        and the admin analytics API is deliberately one router behind one permission guard
+        (D86). The facts it reads are the channel's own (`whatsapp_channel_events`), which
+        is why every rate can be recomputed for any window rather than only forward from
+        the day a counter was added.
+
+        Windowed, unlike its all-time siblings on this service, because four of the seven
+        are rates and a rate with no period is not a number anyone can act on: an
+        escalation rate over all time cannot show that last week's flow change worked.
+        """
+        window_days = days if days and days > 0 else await self._config.get_int(
+            ConfigKey.CHANNEL_ANALYTICS_WINDOW_DAYS
+        )
+        since = Utils.datetime_now() - timedelta(days=window_days)
+
+        counts = await self._channel_events.count_by_type(
+            [
+                WhatsAppChannelEventType.ENQUIRY,
+                WhatsAppChannelEventType.INTAKE_STARTED,
+                WhatsAppChannelEventType.INTAKE_COMPLETED,
+                WhatsAppChannelEventType.PAYMENT_COMPLETED,
+                WhatsAppChannelEventType.ESCALATED,
+            ],
+            since,
+        )
+        enquiries = counts[WhatsAppChannelEventType.ENQUIRY.value]
+        intake_started = counts[WhatsAppChannelEventType.INTAKE_STARTED.value]
+        intake_completed = counts[WhatsAppChannelEventType.INTAKE_COMPLETED.value]
+        payment_completed = counts[WhatsAppChannelEventType.PAYMENT_COMPLETED.value]
+        escalations = counts[WhatsAppChannelEventType.ESCALATED.value]
+
+        granted = await self._whatsapp_consents.count_granted()
+        linked = await self._whatsapp_links.count_active()
+        utility = granted[WhatsAppConsentKind.UTILITY.value]
+        marketing = granted[WhatsAppConsentKind.MARKETING.value]
+
+        health = await self._whatsapp_number_health.current()
+
+        return WhatsAppChannelAnalyticsDto(
+            window_days=window_days,
+            intake_completed=intake_completed,
+            payment_completed=payment_completed,
+            seam_conversion_rate=_rate(payment_completed, intake_completed),
+            enquiries=enquiries,
+            enquiries_by_page_code=_as_counts(
+                await self._channel_events.count_by_page_code(since)
+            ),
+            intake_started=intake_started,
+            enquiry_to_intake_rate=_rate(intake_started, enquiries),
+            escalations=escalations,
+            escalation_rate=_rate(escalations, enquiries),
+            escalations_by_reason=_as_counts(
+                await self._channel_events.count_by_escalation_reason(since)
+            ),
+            linked_numbers=linked,
+            utility_opt_ins=utility,
+            marketing_opt_ins=marketing,
+            utility_opt_in_rate=_rate(utility, linked),
+            marketing_opt_in_rate=_rate(marketing, linked),
+            number_health=(
+                WhatsAppNumberHealthDto(
+                    quality_rating=health.quality_rating,
+                    messaging_limit_tier=health.messaging_limit_tier,
+                    synced_at=health.last_synced_at,
+                    sync_error=health.sync_error,
+                )
+                if health
+                else None
+            ),
+            # §7.6.3 gives voice notes their own escalation reason, but the volume is
+            # counted off the inbound journal instead: a voice note from a thread already
+            # in `HUMAN` mode never reaches the bot, and §7.10 wants how many arrived, not
+            # how many the bot happened to see.
+            voice_notes=await self._whatsapp_inbound.count_by_kind(InboundKind.AUDIO, since),
+        )
+
+
+def _as_counts(counted: Dict[str, int]) -> List[ChannelCountDto]:
+    """A grouped count as an ordered list — biggest first, which is reading order."""
+    return [
+        ChannelCountDto(label=label, count=count)
+        for label, count in sorted(counted.items(), key=lambda item: (-item[1], item[0]))
+    ]

@@ -41,6 +41,9 @@ from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.integrations.messaging.providers.whatsapp.attribution import (
+    extract_page_code,
+)
 from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
     InboundKind,
     InboundWhatsAppMessage,
@@ -87,12 +90,27 @@ class WhatsAppInboundService:
             # A Meta redelivery, not a new turn in the conversation.
             return None
 
+        # §7.4.1's widget marker is metadata the customer's phone typed for them, not words
+        # they wrote (D85). It is lifted out **here** rather than in the Meta normalizer
+        # because `ingest` is the single funnel every inbound passes through — Meta's
+        # webhook and the dev injection door both — and doing it upstream gave the two
+        # doors different behaviour, which is exactly what the automation-determinism
+        # contract exists to prevent. Everything downstream (the classifier, the
+        # guardrails, the console) then reads the message the customer believes they sent;
+        # `payload` keeps Meta's original untouched for the §7.8 record.
+        page_code, cleaned_text = extract_page_code(message.text)
+        if page_code is not None:
+            message = message.model_copy(
+                update={"text": cleaned_text, "page_code": page_code}
+            )
+
         record = await self._whatsapp_inbound_message_repo.create_return_model(
             CreateWhatsAppInboundMessageDto(
                 wamid=message.wamid,
                 from_phone=message.from_phone,
                 kind=message.kind,
                 text=message.text,
+                page_code=message.page_code,
                 interactive_id=message.interactive_id,
                 media_id=message.media_id,
                 media_mime_type=message.media_mime_type,

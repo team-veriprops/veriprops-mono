@@ -8,8 +8,8 @@ that", leaving the `/wa/pay/<token>` and `/wa/report/<token>` landings — built
 deployed — unreachable from a real conversation.
 
 The rule this flow exists to hold: **eligibility is read off the §7.3.2 projection, never
-off a raw status.** A case is payable at `PAYMENT_PENDING` and readable at `DELIVERED`, and
-both are stage names `projection.py` already owns. Re-deriving them from
+off a raw status.** A case is payable while quoted and unpaid, and readable at `DELIVERED`,
+and those are stage names `projection.py` already owns. Re-deriving them from
 `VerificationStatus` here would put the same mapping in a second place, and the two would
 drift the first time a status was added.
 
@@ -39,13 +39,24 @@ def _case(vid="VP-2026-0001", label="12 Admiralty Way, Lekki", state=ChannelStat
 
 
 class TestEligibilityComesFromTheProjection:
-    def test_only_payment_pending_is_payable(self):
+    def test_only_a_quoted_unpaid_case_is_payable(self):
         # Every other stage either has nothing to pay for yet or has already been paid.
+        payable = {ChannelState.INTAKE_COMPLETE, ChannelState.PAYMENT_PENDING}
         for state in ChannelState:
             eligible = handoff_flow.eligible_cases(
                 ChannelAction.PAY, [_case(state=state)]
             )
-            assert bool(eligible) is (state is ChannelState.PAYMENT_PENDING), state
+            assert bool(eligible) is (state in payable), state
+
+    def test_a_submitted_case_is_the_one_that_matters(self):
+        # `INTAKE_COMPLETE` projects from `SUBMITTED` — quoted, unpaid, and the state a
+        # customer asking "how do I pay?" is almost always sitting in. Naming only
+        # `PAYMENT_PENDING` reads right and offers nothing to almost everyone who asks.
+        eligible = handoff_flow.eligible_cases(
+            ChannelAction.PAY, [_case(state=ChannelState.INTAKE_COMPLETE)]
+        )
+
+        assert [case.vid for case in eligible] == ["VP-2026-0001"]
 
     def test_only_a_delivered_case_is_readable(self):
         for state in ChannelState:
