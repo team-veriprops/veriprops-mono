@@ -36,7 +36,9 @@ from main.app.domain.channel.whatsapp.bot.capabilities import (
     ChannelAction,
     ChannelCapability,
     capability_for,
+    handoff_intent_for,
 )
+from main.app.domain.channel.whatsapp.bot.flows import handoff as handoff_flow
 from main.app.domain.channel.whatsapp.bot.flows import intake as intake_flow
 from main.app.domain.channel.whatsapp.bot.flows import media as media_flow
 from main.app.domain.channel.whatsapp.bot.flows import status as status_flow
@@ -132,6 +134,19 @@ _INTENT_ACTIONS = {
     BotIntent.CHECK_STATUS: ChannelAction.CHECK_STATUS,
     BotIntent.TALK_TO_HUMAN: ChannelAction.TALK_TO_HUMAN,
     BotIntent.LINK_ACCOUNT: ChannelAction.CHECK_STATUS,
+    BotIntent.PAY: ChannelAction.PAY,
+    BotIntent.VIEW_REPORT: ChannelAction.VIEW_REPORT,
+}
+
+# The §7.3.4 handoff a parked "which case?" question is waiting on. Both directions are
+# needed: the action picks the flow when the question is asked, and the flow picks the
+# action back up when the customer answers a turn later.
+_HANDOFF_FLOWS: dict[ChannelAction, BotFlow] = {
+    ChannelAction.PAY: BotFlow.PAY,
+    ChannelAction.VIEW_REPORT: BotFlow.REPORT,
+}
+_HANDOFF_ACTIONS: dict[BotFlow, ChannelAction] = {
+    flow: action for action, flow in _HANDOFF_FLOWS.items()
 }
 
 
@@ -297,6 +312,8 @@ class WhatsAppBotEngine:
             return await self._continue_case(session, text)
         if intent == BotIntent.START_VERIFICATION:
             return await self._begin_intake(session)
+        if action in _HANDOFF_FLOWS:
+            return await self._handoff(session, action)
 
         return await self._unmatched(session)
 
@@ -485,6 +502,97 @@ class WhatsAppBotEngine:
             session, await self._upload_reply(user_id, cases, selected.vid)
         )
 
+    # ─── Pay and report handoffs (§7.3.4, §7.4.2) ─────────────────
+
+    async def _handoff(
+        self, session: WhatsAppBotSession, action: ChannelAction
+    ) -> BotReply:
+        """Answer "how do I pay?" or "send me my report" with a §7.5 link (WA-17).
+
+        Identity first, as everywhere that could touch a case (§7.4.3): a pay or report
+        token names a customer *and* a case, so it is only ever issued to a number we have
+        proved belongs to the person whose money — or whose report — is involved.
+        """
+        user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
+        cases = await self._load_cases(user_id) if user_id else []
+        outcome = handoff_flow.render(action, is_linked=bool(user_id), cases=cases)
+
+        if outcome.link_for_vid:
+            await self._whatsapp_bot_session_service.clear_flow(session)
+            return await self._understood(
+                session, await self._handoff_reply(action, user_id, cases, outcome.link_for_vid)
+            )
+
+        if outcome.awaits_choice:
+            await self._whatsapp_bot_session_service.enter_flow(
+                session, _HANDOFF_FLOWS[action], context={"vids": list(outcome.offered_vids)}
+            )
+        else:
+            await self._whatsapp_bot_session_service.clear_flow(session)
+        return await self._understood(session, outcome.text)
+
+    async def _handoff_reply(
+        self,
+        action: ChannelAction,
+        user_id: str,
+        cases: List[status_flow.CaseSummary],
+        vid: str,
+    ) -> str:
+        """Mint the link for exactly one case, and say the right words around it.
+
+        The token is minted from the *case the bot resolved*, never from a reference the
+        customer typed — the same rule as the §7.6.3 upload link, and for a sharper reason
+        here: a pay link accepted at face value would let a forwarded message send someone
+        to pay for a stranger's verification.
+        """
+        case = next((c for c in cases if c.vid == vid), None)
+        if case is None:
+            # The case list changed under us between render and issue. Say the honest
+            # thing rather than minting a token for a case we can no longer name.
+            return handoff_flow.render(action, is_linked=True, cases=[]).text
+        verification = await self._verification_repo.get_by_vid(case.vid)
+        if verification is None:
+            return handoff_flow.render(action, is_linked=True, cases=[]).text
+
+        intent = handoff_intent_for(action)
+        token = await self._handoff_token_service.issue(
+            user_id, Utils.uuid_to_hex(verification.id), intent
+        )
+        link = f"{settings.PUBLIC_APP_BASE_URL.rstrip('/')}/wa/{intent.value}/{token}"
+        if action == ChannelAction.PAY:
+            return content.pay_with_link(link)
+        return content.report_with_link(link)
+
+    async def _resume_handoff(
+        self, session: WhatsAppBotSession, flow: BotFlow, text: str
+    ) -> Optional[BotReply]:
+        """The customer picked which case they meant (§7.3.4)."""
+        action = _HANDOFF_ACTIONS[flow]
+        user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
+        if not user_id:
+            # The link was revoked between the question and the answer — re-run identity
+            # rather than issuing a token off a stale offer.
+            await self._whatsapp_bot_session_service.clear_flow(session)
+            return None
+        offered = (session.context or {}).get("vids") or []
+        # Re-filtered, not just re-read: a case that stopped being payable — or whose
+        # report was pulled — between the question and the answer must stop being
+        # selectable, or the token would be minted for a case the bot would no longer offer.
+        cases = [
+            case
+            for case in handoff_flow.eligible_cases(action, await self._load_cases(user_id))
+            if case.vid in offered
+        ]
+        selected = handoff_flow.resolve_choice(cases, text)
+        if selected is None:
+            # Not a choice — the customer moved on. Drop the flow and classify fresh.
+            await self._whatsapp_bot_session_service.clear_flow(session)
+            return None
+        await self._whatsapp_bot_session_service.clear_flow(session)
+        return await self._understood(
+            session, await self._handoff_reply(action, user_id, cases, selected.vid)
+        )
+
     async def _resume_flow(
         self, session: WhatsAppBotSession, text: str
     ) -> Optional[BotReply]:
@@ -493,6 +601,10 @@ class WhatsAppBotEngine:
             return await self._continue_intake(session, text)
         if session.current_flow == BotFlow.UPLOAD.value:
             return await self._resume_upload(session, text)
+        if session.current_flow in (BotFlow.PAY.value, BotFlow.REPORT.value):
+            return await self._resume_handoff(
+                session, BotFlow(session.current_flow), text
+            )
         if session.current_flow != BotFlow.STATUS.value:
             return None
         user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)

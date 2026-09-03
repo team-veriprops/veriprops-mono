@@ -85,6 +85,32 @@ _KEYWORD_TABLE: List[Tuple[BotIntent, List[str]]] = [
         BotIntent.PRICING,
         [r"pric(e|es|ing)", r"cost", r"how much", r"fee(s)?", r"charge(s)?", r"rate(s)?"],
     ),
+    # The two §7.3.4 handoff asks. Both sit *below* the question each could be mistaken
+    # for — "how much do I pay" is a pricing question and "where is my report" is a status
+    # question, and neither wants a link — so every pattern here names an action rather
+    # than just the noun.
+    (
+        BotIntent.PAY,
+        [
+            r"pay(ment)? link",
+            r"(how|where) (do|can) i pay",
+            r"(want|need|ready) to pay",
+            r"make (a )?payment",
+            r"pay now",
+            r"^pay$",
+            r"checkout",
+        ],
+    ),
+    (
+        BotIntent.VIEW_REPORT,
+        [
+            r"(send|share) (me )?(my |the )?report",
+            r"(view|open|read|download|get|see) (my |the )?report",
+            r"report link",
+            r"copy of (my |the )?report",
+            r"my report",
+        ],
+    ),
     (
         BotIntent.START_VERIFICATION,
         [

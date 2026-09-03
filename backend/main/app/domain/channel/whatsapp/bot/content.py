@@ -21,6 +21,7 @@ from typing import Optional
 
 from main.app.config.settings import settings
 from main.app.core.state.status import VerificationTier
+from main.app.domain.channel.whatsapp.bot.capabilities import ChannelAction
 from main.app.domain.channel.whatsapp.bot.session.models import EscalationReason
 from main.app.domain.channel.whatsapp.bot.support_hours import Coverage
 from main.app.domain.verification.pricing_config.models import TierPricingViewDto
@@ -376,6 +377,94 @@ def document_received_no_case() -> str:
 def document_choose_case(prompt: str) -> str:
     """Several open cases — ask which before issuing a link scoped to exactly one."""
     return f"Thanks for sending that.\n\n{prompt}"
+
+
+# ─── Pay and report handoffs (§7.3.4, §7.4.2) ─────────────────────
+
+
+def pay_with_link(link: str) -> str:
+    """§7.3.4 — the customer asked to pay, and we know which case they owe on.
+
+    The §7.1.1 pledge is not optional here. This is the one message in the channel that
+    sends a person to a payment page, so it is the exact message an impersonator would
+    imitate — and the pledge is what lets the customer tell the two apart.
+    """
+    return (
+        "Here's your secure payment link:\n"
+        f"{link}\n\n"
+        "It's good for 15 minutes and works once — just say \"pay\" if you need a fresh "
+        "one.\n\n"
+        f"⚠️ {PAYMENT_PLEDGE}"
+    )
+
+
+def pay_no_case() -> str:
+    """A linked customer with nothing waiting to be paid for."""
+    return (
+        "I can't see a verification waiting for payment on your account.\n\n"
+        "If you'd like to start one, just say \"start a verification\" and I'll take your "
+        "details."
+    )
+
+
+def pay_choose_case(prompt: str) -> str:
+    """Several unpaid cases — ask which before minting a link scoped to exactly one."""
+    return f"Happy to help you pay.\n\n{prompt}"
+
+
+def report_with_link(link: str) -> str:
+    """§7.4.2 — the report link, minted on request.
+
+    Carries no payment pledge: this link opens a report, and attaching a payment warning
+    to it would teach customers that the two messages look the same.
+    """
+    return (
+        "Here's a secure link to your report:\n"
+        f"{link}\n\n"
+        "It's good for 15 minutes and works once. You can also open it any time from your "
+        "account on veriprops.ng."
+    )
+
+
+def report_no_case() -> str:
+    """A linked customer whose report is not ready yet."""
+    return (
+        "You don't have a finished report waiting yet.\n\n"
+        "Say \"status\" and I'll tell you exactly where your verification has got to and "
+        "when to expect it."
+    )
+
+
+def report_choose_case(prompt: str) -> str:
+    """Several finished cases — ask which report before minting a link for one."""
+    return f"Happy to send that over.\n\n{prompt}"
+
+
+def handoff_unlinked(action: ChannelAction) -> str:
+    """A pay or report request from a number we cannot tie to an account (§7.4.3).
+
+    One function rather than two messages: the refusal and the way out are identical, and
+    only the opening clause differs. A handoff token names a customer *and* a case, so
+    issuing one from a phone number alone would mean guessing whose money or whose report
+    is being asked for — the same rule that governs the §7.6.3 document link.
+    """
+    opening = {
+        ChannelAction.PAY: (
+            "Before I can hand you a payment link, this number needs to be linked to "
+            "your Veriprops account — that's how I know which verification you're paying "
+            "for."
+        ),
+        ChannelAction.VIEW_REPORT: (
+            "Before I can send a report, this number needs to be linked to your Veriprops "
+            "account — reports only ever go to the person they belong to."
+        ),
+    }[action]
+    return (
+        f"{opening}\n\n"
+        "Say \"link my account\" and I'll send you a secure link to connect it. It only "
+        "takes a moment.\n\n"
+        f"⚠️ {PAYMENT_PLEDGE}"
+    )
 
 
 def case_not_found() -> str:

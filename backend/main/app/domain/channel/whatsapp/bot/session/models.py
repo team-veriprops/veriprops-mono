@@ -64,6 +64,12 @@ class BotFlow(str, enum.Enum):
     # §7.6.3 — the customer sent a document and owns more than one case, so the bot has
     # asked which one it belongs to before it will issue an `upload` link.
     UPLOAD = "UPLOAD"
+    # §7.3.4 — the same question for the other two handoffs: which case is being paid for,
+    # and which report is being asked for. Separate flows rather than one parameterised
+    # `HANDOFF`, because the answer mints a link that authorizes a *different* action, and
+    # a session that forgot which one it asked about could hand over the wrong one.
+    PAY = "PAY"
+    REPORT = "REPORT"
 
 
 class EscalationReason(str, enum.Enum):

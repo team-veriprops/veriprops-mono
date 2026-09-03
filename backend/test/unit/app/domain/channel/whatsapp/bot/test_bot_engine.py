@@ -806,3 +806,147 @@ async def test_asking_for_a_link_with_no_intake_behind_it_classifies_normally():
 
     assert "/wa/intake/" not in reply.text
     assert "₦5,000" in reply.text
+
+
+# ── Pay and report handoffs (§7.3.4, §7.4.2, WA-17) ──────────────
+#
+# §7.3.4 marks three actions HANDOFF. Only `upload` had a producer, so "how do I pay?"
+# and "send me my report" both fell through to "I didn't quite get that" — and the
+# `/wa/pay/<token>` and `/wa/report/<token>` landings, both fully built, were unreachable
+# from a real conversation.
+
+def _handoff_engine(session, **kwargs):
+    engine, sent = _engine(session, **kwargs)
+    engine._handoff_token_service = MagicMock()
+    engine._handoff_token_service.issue = AsyncMock(return_value="tok-abc")
+    engine._handoff_token_service.issue_intake = AsyncMock(return_value="tok-123")
+    engine._verification_repo.get_by_vid = AsyncMock(
+        side_effect=lambda vid: next(
+            (row for row in kwargs.get("cases", ()) if row.vid == vid), None
+        )
+    )
+    return engine, sent
+
+
+async def test_asking_to_pay_hands_over_a_pay_link_for_the_unpaid_case():
+    session = _session()
+    case = _FakeVerificationRow("VP-2026-0001", VerificationStatus.PAYMENT_PENDING)
+    engine, _sent = _handoff_engine(
+        session, intent=BotIntent.PAY, user_id=USER_ID, cases=[case]
+    )
+
+    reply = await engine.handle(_inbound("how do I pay?"), MagicMock())
+
+    assert "/wa/pay/tok-abc" in reply.text
+    # §7.1.1 — the pledge rides every payment handoff. This is the message an
+    # impersonator would imitate, so it is the one that most needs it.
+    assert "veriprops.ng" in reply.text
+    assert session.current_flow is None
+
+
+async def test_asking_for_a_report_hands_over_a_report_link():
+    session = _session()
+    case = _FakeVerificationRow("VP-2026-0001", VerificationStatus.COMPLETED)
+    engine, _sent = _handoff_engine(
+        session, intent=BotIntent.VIEW_REPORT, user_id=USER_ID, cases=[case]
+    )
+
+    reply = await engine.handle(_inbound("send me my report"), MagicMock())
+
+    assert "/wa/report/tok-abc" in reply.text
+
+
+async def test_the_pay_link_is_never_issued_to_an_unlinked_number():
+    """§7.4.3 — a pay token names a customer and a case, so issuing one from a phone
+    number alone would mean guessing whose money is being asked for."""
+    session = _session()
+    engine, _sent = _handoff_engine(session, intent=BotIntent.PAY, user_id=None)
+
+    reply = await engine.handle(_inbound("I want to pay"), MagicMock())
+
+    assert "/wa/pay/" not in reply.text
+    assert "link my account" in reply.text
+
+
+async def test_a_customer_with_nothing_to_pay_for_is_told_so_without_a_link():
+    session = _session()
+    case = _FakeVerificationRow("VP-2026-0001", VerificationStatus.IN_PROGRESS)
+    engine, _sent = _handoff_engine(
+        session, intent=BotIntent.PAY, user_id=USER_ID, cases=[case]
+    )
+
+    reply = await engine.handle(_inbound("I want to pay"), MagicMock())
+
+    assert "/wa/pay/" not in reply.text
+    assert "waiting for payment" in reply.text
+
+
+async def test_two_unpaid_cases_are_asked_about_then_resolved_to_one_link():
+    """The same numbered question the status and document flows ask, answered the same
+    way — and the link is minted only once the bot knows which case it is for."""
+    session = _session()
+    cases = [
+        _FakeVerificationRow("VP-2026-0001", VerificationStatus.PAYMENT_PENDING),
+        _FakeVerificationRow("VP-2026-0002", VerificationStatus.PAYMENT_PENDING, "prop-2"),
+    ]
+    engine, _sent = _handoff_engine(
+        session, intent=BotIntent.PAY, user_id=USER_ID, cases=cases
+    )
+    convo = MagicMock()
+
+    asked = await engine.handle(_inbound("how do I pay"), convo)
+    assert "/wa/pay/" not in asked.text
+    assert session.current_flow == BotFlow.PAY.value
+
+    chosen = await engine.handle(_inbound("2"), convo)
+    assert "/wa/pay/tok-abc" in chosen.text
+    assert session.current_flow is None
+
+
+async def test_changing_the_subject_mid_choice_classifies_fresh_rather_than_nagging():
+    session = _session()
+    cases = [
+        _FakeVerificationRow("VP-2026-0001", VerificationStatus.PAYMENT_PENDING),
+        _FakeVerificationRow("VP-2026-0002", VerificationStatus.PAYMENT_PENDING, "prop-2"),
+    ]
+    engine, _sent = _handoff_engine(
+        session, intent=BotIntent.PAY, user_id=USER_ID, cases=cases
+    )
+    convo = MagicMock()
+    await engine.handle(_inbound("how do I pay"), convo)
+
+    engine._intent_service.classify = AsyncMock(
+        return_value=IntentResult(
+            intent=BotIntent.PRICING, confidence=0.9, provider=IntentProvider.STUB
+        )
+    )
+    reply = await engine.handle(_inbound("actually, what does it cost?"), convo)
+
+    assert "₦5,000" in reply.text
+    assert session.current_flow is None
+
+
+async def test_a_report_request_does_not_hand_over_a_payment_link():
+    """The two links authorize different actions, so answering one with the other would
+    send a customer to pay when they asked to read."""
+    session = _session()
+    case = _FakeVerificationRow("VP-2026-0001", VerificationStatus.PAYMENT_PENDING)
+    engine, _sent = _handoff_engine(
+        session, intent=BotIntent.VIEW_REPORT, user_id=USER_ID, cases=[case]
+    )
+
+    reply = await engine.handle(_inbound("send me my report"), MagicMock())
+
+    assert "/wa/pay/" not in reply.text
+    assert "/wa/report/" not in reply.text
+
+
+async def test_a_retained_intake_still_wins_over_the_pay_intent():
+    """Precedence: someone mid-intake who types "pay" wants the link to the answers they
+    just gave, not a link to a case they have not created yet."""
+    session = _session(context={"intake": {"property": {"address": "12 Ademola Street"}}})
+    engine, _sent = _handoff_engine(session, intent=BotIntent.PAY, user_id=USER_ID)
+
+    reply = await engine.handle(_inbound("pay"), MagicMock())
+
+    assert "/wa/intake/tok-123" in reply.text

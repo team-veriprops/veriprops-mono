@@ -28,6 +28,11 @@ class BotIntent(str, enum.Enum):
     START_VERIFICATION = "START_VERIFICATION"    # begin intake
     CHECK_STATUS = "CHECK_STATUS"                # where is my verification
     CONTINUE_CASE = "CONTINUE_CASE"              # "Continue verification VP-…" (§7.4.3)
+    # The two §7.3.4 `HANDOFF` actions a customer *asks* for. Uploading is the third, but
+    # it is recognised by a document arriving (§7.6.3) rather than by words, so it needs no
+    # intent of its own.
+    PAY = "PAY"                                  # "how do I pay?" → a §7.5 pay link
+    VIEW_REPORT = "VIEW_REPORT"                  # "send me my report" → a §7.5 report link
     LINK_ACCOUNT = "LINK_ACCOUNT"                # connect this number to an account
     TALK_TO_HUMAN = "TALK_TO_HUMAN"              # explicit escalation request
     REFUND_OR_CANCELLATION = "REFUND_OR_CANCELLATION"  # always human (§7.6.2)
@@ -50,6 +55,11 @@ CLASSIFIABLE_INTENTS: frozenset[BotIntent] = frozenset(
         BotIntent.PRICING,
         BotIntent.START_VERIFICATION,
         BotIntent.CHECK_STATUS,
+        # Safe for a model to choose: neither revokes consent nor claims a case. Both are
+        # answered by a link the engine mints from a case *it* resolved for an account it
+        # verified, so the worst a misclassification costs is an unwanted offer to pay.
+        BotIntent.PAY,
+        BotIntent.VIEW_REPORT,
         BotIntent.LINK_ACCOUNT,
         BotIntent.TALK_TO_HUMAN,
         BotIntent.REFUND_OR_CANCELLATION,

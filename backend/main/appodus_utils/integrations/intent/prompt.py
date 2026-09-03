@@ -18,6 +18,14 @@ _INTENT_MEANINGS: dict[BotIntent, str] = {
     BotIntent.PRICING: "asking what a verification costs",
     BotIntent.START_VERIFICATION: "wanting to begin a new property verification",
     BotIntent.CHECK_STATUS: "asking about the progress of a verification they already have",
+    BotIntent.PAY: (
+        "wanting to pay for a verification they have already set up — asking for a "
+        "payment link, or how and where to pay. Not this if they are asking what it costs"
+    ),
+    BotIntent.VIEW_REPORT: (
+        "asking to see, open, download or be sent the finished report for a verification "
+        "of theirs. Not this if they are asking when it will be ready"
+    ),
     BotIntent.LINK_ACCOUNT: "wanting to connect this WhatsApp number to their Veriprops account",
     BotIntent.TALK_TO_HUMAN: "asking to speak to a person",
     BotIntent.REFUND_OR_CANCELLATION: "asking about a refund, a cancellation, or money back",
