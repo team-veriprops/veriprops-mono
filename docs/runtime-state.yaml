@@ -4,113 +4,118 @@
 session_id: null
 command: resume
 
-status: in_progress
-phase: implementation
+status: complete
+phase: done
 
-current_slice: S9
-current_subtask: "S8 + S9 complete — consent, milestones, report delivery, delegates"
+current_slice: null
+current_subtask: "S10.0 + S10 + S11 complete — the cycle's code-side scope is finished"
 
 modified_files:
   - docs/{progress.md,decision-log.md,requirements-matrix.md,execution-plan.md}
-  - CLAUDE.md                       # §7 bullet: router-enforced consent, delegates
-  - backend/CLAUDE.md               # consent ledger, the three milestone gates, D67 order
-  - frontend/CLAUDE.md              # the shared opt-in control, the delegate panel's place
-  - backend/main/app/core/events/events.py            # VERIFICATION_STARTED, INSPECTION_COMPLETE, DELEGATE_REVOKED
-  - backend/main/app/domain/notification/{rules,service,content}.py
-  - backend/main/app/domain/message/verification_messages.py   # the two direct-addressed senders
-  - backend/main/app/domain/channel/whatsapp/bot/{engine,content}.py
-  - backend/main/app/domain/channel/whatsapp/bot/flows/status.py  # render_for_delegate
-  - backend/main/app/domain/channel/whatsapp/handoff/controller.py  # grant-scoped consent (D76)
-  - backend/main/app/domain/channel/whatsapp/link/service.py   # resolve_phone_for_user
-  - backend/main/app/domain/verification/{review,task}/service.py  # D66/D78 publish sites
-  - backend/main/app/domain/{audit/models,dev/service}.py
-  - backend/main/app/domain/__init__.py
-  - backend/scripts/e2e/stage_whatsapp.py
-  - frontend/src/app/account/whatsapp/page.tsx
-  - frontend/src/components/portal/submission/PayContainer.tsx
-  - frontend/src/components/portal/verifications/TrackingContainer.tsx
-  - frontend/src/components/website/handoff/{WaHandoffLanding.tsx,libs/handoff-service.ts}
+  - CLAUDE.md                       # §7 bullet: the fact table, one analytics router
+  - backend/CLAUDE.md               # S10.0 handoffs, D80/D81/D85, erasure + audit pack, the drill
+  - frontend/CLAUDE.md              # the analytics tab and its three rendering requirements
+  - backend/main/app/core/events/subscribers.py       # PAYMENT_CONFIRMED → seam numerator
+  - backend/main/app/domain/analytics/{models,service,controller}.py
+  - backend/main/app/domain/audit/pack_service.py     # §7.4.6 consents in the §19.3 pack
+  - backend/main/app/domain/compliance/erasure/pseudonymiser.py  # five channel surfaces
+  - backend/main/app/domain/channel/whatsapp/bot/{engine,content,intake_controller}.py
+  - backend/main/app/domain/channel/whatsapp/bot/session/{models,service}.py
+  - backend/main/app/domain/channel/whatsapp/{consent,inbound,link}/repo.py
+  - backend/main/app/domain/channel/whatsapp/inbound/{models,service}.py
+  - backend/main/app/domain/dev/{controller,service}.py
+  - backend/main/app/domain/system_config/models.py
+  - backend/main/app/domain/user/auth/consent/content/__init__.py  # §7.8 clauses, v1.1.0
+  - backend/main/appodus_utils/integrations/intent/{models,prompt,stub/stub_intent}.py
+  - backend/main/appodus_utils/integrations/messaging/providers/whatsapp/{inbound,directory}.py
+  - backend/main/appodus_utils/domain/webhook/google_drive/model.py  # D83 TODO(gap)
+  - backend/scripts/e2e/{harness,stage_whatsapp}.py
+  - backend/scripts/e2e_drive_through.py             # prints a check total
+  - frontend/src/types/analytics.ts
+  - frontend/src/components/admin/analytics/AdminAnalytics.tsx  # → two tabs
+  - frontend/src/components/admin/analytics/libs/{analytics-service,useAnalyticsQueries}.ts
 
 created_files:
-  - backend/main/alembic/versions/0008_whatsapp_consent.py
-  - backend/main/alembic/versions/0009_case_delegates.py
-  - backend/main/app/domain/channel/whatsapp/consent/{__init__,models,repo,service,controller}.py
-  - backend/main/app/domain/channel/whatsapp/milestones.py
-  - backend/main/app/domain/verification/status_events.py
-  - backend/main/app/domain/verification/delegate/{__init__,models,repo,service,controller}.py
-  - backend/test/unit/app/domain/channel/whatsapp/{test_whatsapp_consent_service,test_milestones}.py
-  - backend/test/unit/app/domain/channel/whatsapp/bot/test_delegate_flow.py
-  - backend/test/unit/app/domain/verification/test_case_delegate_service.py
-  - frontend/src/types/{whatsappConsent,delegate}.ts
-  - frontend/src/components/shared/whatsapp/WhatsAppOptInControls.tsx (+ test)
-  - frontend/src/components/account/WhatsAppConsentSettings.tsx
-  - frontend/src/components/account/libs/{whatsapp-consent-service,useWhatsAppConsentQueries}.ts (+ test)
-  - frontend/src/components/portal/libs/{delegate-service,useDelegateQueries}.ts (+ test)
-  - frontend/src/components/portal/verifications/DelegatePanel.tsx (+ test)
+  - backend/main/alembic/versions/0010_whatsapp_channel_analytics.py
+  - backend/main/alembic/versions/0011_whatsapp_legal_copy.py
+  - backend/main/app/core/fault_injection.py
+  - backend/main/app/domain/channel/whatsapp/analytics/{__init__,models,repo,recorder,health_service}.py
+  - backend/main/app/domain/channel/whatsapp/bot/flows/handoff.py
+  - backend/main/appodus_utils/integrations/messaging/providers/whatsapp/attribution.py
+  - backend/test/unit/app/domain/channel/whatsapp/bot/test_handoff_flow.py
+  - backend/test/unit/app/domain/channel/whatsapp/test_channel_event_recorder.py
+  - backend/test/unit/appodus_utils/integrations/messaging/whatsapp/test_attribution.py
+  - frontend/src/components/admin/analytics/WhatsAppChannelAnalytics.tsx (+ test)
+  - docs/whatsapp-launch-runbook.md
 
 tests:
   written: true
   executed: true
   passing: true
-  detail: "backend 1969 unit passed; frontend 562 passed / 82 files; ruff + mypy + tsc + eslint
-           clean; frontend build clean. Migrations 0008 and 0009 applied against live Postgres.
-           Live drive-through re-run after each slice."
+  detail: "backend 2041 unit passed; frontend 573 passed / 83 files; ruff + mypy + tsc + eslint
+           clean; frontend build clean. Migrations 0010 and 0011 applied and rolled back against
+           live Postgres. Live drive-through: ALL PASSED, 445 checks (the runner now counts them
+           rather than leaving the total to be grepped from [PASS] lines)."
 
 self_audit:
-  started: false
-  completed: false
+  started: true
+  completed: true
   findings:
-    - "S7 shipped 2026-09-02 (3c53bd2) — drive-through green at 372 checks."
-    - "D75 (user): `report_ready` carries the portal deep link, not a §7.5 token. A token
-       lives 15 minutes and a milestone is read whenever the customer next opens WhatsApp,
-       so a token would make §7.4.2's expiry page the normal experience rather than an edge
-       case. WA-35's wording is amended in the matrix to match."
-    - "D76 (user): both payment surfaces capture the §7.4.6 consents. The handoff-landing
-       payer is the channel's own customer and would otherwise never be asked. The landing's
-       write is grant-scoped — customer id from the cookie, never the body — and consent is
-       written on toggle, so a failed card cannot discard it."
-    - "D77 (user): STOP from a delegate-only number revokes the delegation and notifies the
-       account holder. A delegate has no consent row, so it is the only lever a non-user has,
-       and the buyer's useful response is to authorize someone else."
-    - "**D78 — a defect only the live drive-through could catch.** `verification_started` went
-       out **three times** on a STANDARD case. `derive_status` is a memoryless projection: a
-       case drops back to PAID when its one active task is submitted and re-enters IN_PROGRESS
-       when the next agent is assigned, so a three-role tier crosses the transition three
-       times. Correct for a status feed, wrong for a milestone §7.6.2 promises 3–4 of. Fixed by
-       guarding on a task already SUBMITTED/APPROVED — the difference between work starting and
-       work continuing, needing no column. Both unit suites now pin it; the positive case had
-       to move to the task service, because a rejection requires a SUBMITTED task and so can
-       only ever be work continuing."
-    - "**D79 — a design tension the tests surfaced.** Two existing engine tests failed when the
-       delegate branch answered an unlinked status query with third-party copy. The signal was
-       real: §7.4.3 (offer linking) and §7.4.5 (name the delegate route) describe the *same*
-       inbound message, and the bot cannot tell a customer on a second handset from a stranger.
-       Guessing is wrong both ways. Resolved by one message naming both routes, and
-       `content.third_party_enquiry()` was deleted rather than left as a second answer."
-    - "The decorated-service guard earned its keep again: `status_label_for` shipped as a
-       synchronous public method on a `decorate_all_methods` class and was caught before it
-       could silently return an un-awaited coroutine. Moved to module level, where it belongs
-       anyway — it is pure."
-    - "Kink memoizes a resolved singleton, so `monkeypatch.setitem(di._services, T, mock)`
-       loses to an instance an earlier test already built. `test_milestones.py` patches the
-       **class** instead; the console-sender test's DI swap works only because nothing had
-       resolved that class yet, which is order-dependent."
-    - "Reported, not fixed (outside scope): `appodus_utils/domain/webhook/google_drive/` is dead
-       and broken — its repo/service/validator import modules that do not exist, and only its
-       model imports cleanly, registering an orphan `g_drive_webhook_subscriptions` table with
-       no migration builder. Nothing in the app's import graph reaches it. Logged in progress.md."
+    - "**S10.0 — a whole spec row with no producer.** §7.3.4 marks three actions `HANDOFF`;
+       only `upload` had one. `capabilities.handoff_intent_for` had **zero callers**, no
+       `BotIntent` reached `PAY` or `VIEW_REPORT`, and both fell through to the unmatched
+       counter — so `/wa/pay/<token>` and `/wa/report/<token>`, fully built on both ends, were
+       unreachable from a real conversation. backend/CLAUDE.md already claimed the bot minted
+       report tokens on request, and D75's rationale rested on it; the claim is now true."
+    - "**Four defects only the live drive-through could catch.** (1) Pay eligibility named
+       `PAYMENT_PENDING`, which reads right and is the narrow in-flight state — a customer
+       asking to pay is almost always at `SUBMITTED` → `INTAKE_COMPLETE`, so every unit test
+       passed while the bot offered nothing to anyone who asked. (2) Grouping by an expression
+       containing a literal made SQLAlchemy bind it once for the select list and again for the
+       GROUP BY; Postgres saw two expressions and rejected the query. (3) Page-code extraction
+       sat in the Meta normalizer, which `POST /dev/whatsapp/inbound` bypasses — attribution
+       worked in production and never in an automated run, the exact split the
+       automation-determinism contract exists to prevent. (4) A drive-through assertion assumed
+       the stage customer owned no delivered case, when they own the one `stage_report` released."
+    - "**The §7.3.2 projection has a trap in a name.** `ChannelState.REPORT_READY` projects from
+       `UNDER_REVIEW`, where the report exists but has not passed the §8 release gate. Reading
+       'a report exists' as 'the customer may have it' would have handed out the very draft the
+       gate holds back, so `VIEW_REPORT` offers `DELIVERED` only."
+    - "**NDPA erasure missed the entire channel.** `PiiPseudonymiser` covered eight surfaces and
+       none was a channel table: an approved erasure left the subject's number in
+       `whatsapp_links`, `whatsapp_bot_sessions`, `whatsapp_inbound_messages`, `case_delegates`
+       and `handoff_token_redemptions`, and their half-finished chat intake — addresses included
+       — in the session `context`. Found by reading §7.8 against the code rather than by a test."
+    - "**§7.8's 'consent records exportable' was unimplemented.** The §19.3 audit pack read
+       `user_consents` and not `whatsapp_consents`, so the one export a dispute or a regulator
+       asks for could not show whether the customer had agreed to be messaged, or when they
+       withdrew it."
+    - "**The requirements matrix had been wrong for two slices.** Sixteen rows delivered in S5
+       and S6 still read `pending`. Traceability that is not maintained is worse than none: it
+       reports work as missing and invites it to be redone. Now 42 of 44 complete, with the two
+       partials genuinely blocked on Meta."
+    - "**The failure-fallback gate was being claimed by unit tests.** §7.11 asks for the fallback
+       to be *tested* — kill the bot, observe the auto-reply and the alert. Mocks prove the
+       `except` branch behaves; they cannot prove a real failure reaches it rather than becoming
+       a 500 in the webhook, a Meta retry, and silence. `app/core/fault_injection.py` makes one
+       real turn fail, one-shot, and refuses to arm in production."
+    - "A drive-through assertion demanded an hour figure in the failure copy. Decision G gives
+       the promise two shapes — 'joining now' inside staffed hours, a stated window outside —
+       and the first is the stronger. The assertion was wrong, not the copy."
 
 clarification_needed: []
 
 git:
   branch: dev
-  dirty: true
+  dirty: false
 
-next_action: "S10 — channel analytics (§7.10). Its inputs now exist: the §7.3.2 projection,
-              escalation reasons, consent state, and the delegate audience."
+next_action: "None — cycle 2 is complete. Launch is gated on the external §7.11 items in
+              docs/whatsapp-launch-runbook.md. The MASTER-PRD §7 incorporation and the
+              'Known Gaps & Roadmap' row for D83's google_drive package remain as doc tasks."
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-03: S8 + S9 built end to end — the §7.4.6 consent ledger with
-                  router-enforced milestones, all four §7.6.2 milestone templates sending
-                  against real events, report delivery on an authenticated portal link, and
-                  §7.4.5's slim delegate with account-first identity resolution"
+last_checkpoint: "2026-09-03: S10.0 made §7.3.4's pay and report handoffs reachable; S10 built
+                  §7.10's seven metrics on an append-only fact table with page-code attribution
+                  and a synced Meta quality rating; S11 closed the compliance gap (§7.8 clauses,
+                  consent export, channel-wide erasure), drilled §7.6.5 on a live stack, and
+                  reconciled the traceability matrix"

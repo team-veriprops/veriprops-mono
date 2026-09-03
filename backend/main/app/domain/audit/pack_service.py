@@ -25,6 +25,8 @@ from main.app.domain.audit.service import AuditLogService
 from main.app.domain.commission.repo import CommissionRepo
 from main.app.domain.payment.chargeback.repo import ChargebackRepo
 from main.app.domain.payment.repo import PaymentRepo
+from main.app.domain.channel.whatsapp.consent.models import WhatsAppConsentKind
+from main.app.domain.channel.whatsapp.consent.repo import WhatsAppConsentRepo
 from main.app.domain.user.auth.consent.repo import UserConsentRepo
 from main.app.domain.verification.dispute.repo import DisputeRepo
 from main.app.domain.verification.recheck.repo import RecheckRepo
@@ -67,6 +69,7 @@ class VerificationAuditPackService:
         share_repo: VerificationShareRepo,
         evidence_repo: EvidenceRepo,
         consent_repo: UserConsentRepo,
+        whatsapp_consent_repo: WhatsAppConsentRepo,
         audit_service: AuditLogService,
     ):
         self._verifications = verification_repo
@@ -81,6 +84,7 @@ class VerificationAuditPackService:
         self._shares = share_repo
         self._evidence = evidence_repo
         self._consents = consent_repo
+        self._whatsapp_consents = whatsapp_consent_repo
         self._audit = audit_service
 
     async def build_pack_csv(self, verification_id: str) -> bytes:
@@ -113,6 +117,9 @@ class VerificationAuditPackService:
         transitions = await self._audit.list_pack_transitions(resource_ids)
         consents, _ = await self._consents.list_for_user(
             str(verification.customer_id), offset=0, limit=_CONSENT_PAGE
+        )
+        whatsapp_consent = await self._whatsapp_consents.get_by_user_id(
+            str(verification.customer_id)
         )
 
         buf = io.StringIO()
@@ -148,4 +155,46 @@ class VerificationAuditPackService:
                 f"version={c.consent_version}; fingerprint={c.device_fingerprint or ''}",
             ])
 
+        # §7.4.6 messaging consent, one row per opt-in (§7.8: "consent records timestamped
+        # and exportable"). Emitted from the grant/revoke timestamp pair rather than from
+        # the derived boolean, because the pair *is* the record — a pack that said only
+        # "marketing: false" could not show when it was given, when it was withdrawn, or
+        # which surface the customer used to do either.
+        for row in _whatsapp_consent_rows(whatsapp_consent):
+            writer.writerow(row)
+
         return buf.getvalue().encode("utf-8")
+
+
+def _whatsapp_consent_rows(consent) -> List[list]:
+    """The §7.4.6 opt-ins as pack rows — one per consent, or none if never asked.
+
+    Absence of a row means both consents are off (§7.4.6 requires unticked defaults), and
+    that is represented by emitting nothing rather than by two rows saying "false": a pack
+    that asserts a customer declined is making a claim about an event that never happened.
+    """
+    if consent is None:
+        return []
+
+    rows: List[list] = []
+    for kind, granted_at, revoked_at, source, granted in (
+        (WhatsAppConsentKind.UTILITY, consent.utility_granted_at,
+         consent.utility_revoked_at, consent.utility_source, consent.utility),
+        (WhatsAppConsentKind.MARKETING, consent.marketing_granted_at,
+         consent.marketing_revoked_at, consent.marketing_source, consent.marketing),
+    ):
+        if granted_at is None and revoked_at is None:
+            continue
+        # `occurred_at` is the most recent decision, so the pack sorts by when the
+        # customer last acted rather than by when they first did.
+        occurred = max(filter(None, (granted_at, revoked_at)))
+        rows.append([
+            "WHATSAPP_CONSENT",
+            occurred.isoformat(),
+            "GRANTED" if granted else "REVOKED",
+            "", "whatsapp_consent", kind.value, "", "", "",
+            f"granted_at={granted_at.isoformat() if granted_at else ''}; "
+            f"revoked_at={revoked_at.isoformat() if revoked_at else ''}; "
+            f"source={source or ''}",
+        ])
+    return rows

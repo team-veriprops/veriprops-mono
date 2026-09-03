@@ -203,7 +203,11 @@ evidence.
 ### Risk — Medium-High (access control) → small batch
 ### Commit — `feat(whatsapp): slim per-case delegates with status-only visibility (S9)`
 
-## Slice S10 — Channel analytics
+## Slice S10 — Channel analytics ✅
+
+> Preceded by **S10.0**, unplanned: §7.3.4 marks three actions `HANDOFF` and only `upload`
+> had a producer, so `/wa/pay/<token>` and `/wa/report/<token>` were built and unreachable
+> from a conversation — and seam conversion had no payment seam to measure.
 
 ### Objective
 §7.10 instrumented from day one of launch: seam conversion, widget-attributed enquiries,
@@ -214,14 +218,22 @@ voice-note volume; admin analytics surface.
 WA-43, WA-19 (attribution consumption)
 
 ### Dependencies — S5–S9 (events to count)
-### Files Impacted
-analytics domain extension (server-derived, backend source of truth); admin analytics page.
-### Tests Required
-metric derivation units; e2e smoke on dashboards.
-### Risk — Low
-### Commit — `feat(whatsapp): channel analytics (S10)`
+### Delivered
+`channel/whatsapp/analytics/` + migration `0010` — an append-only `whatsapp_channel_events`
+fact table (D80), because four of the seven metrics are rates the mutated session row cannot
+answer; `whatsapp_inbound_messages.page_code` with extraction at `ingest` (D85);
+`whatsapp_number_health` synced in the template registry's posture (D81); the read surface on
+the existing `AnalyticsService`/`analytics_router` (D86); opt-in rate over ACTIVE linked
+numbers (D84); one `/admin/analytics` route, two tabs.
+### Tests
+`test_handoff_flow.py`, `test_channel_event_recorder.py`, `test_attribution.py`, the seven
+derivations in `test_analytics_service.py`, the attribution cases in `test_inbound_service.py`,
+`WhatsAppChannelAnalytics.test.tsx`; drive-through `_run_pay_report_handoff_checks` +
+`_run_channel_analytics_checks`.
+### Risk — Low (realised: the live run found four defects unit tests could not — see the commit)
+### Commit — `feat(whatsapp): reachable pay and report handoffs (S10.0)` + `feat(whatsapp): channel analytics (S10)`
 
-## Slice S11 — Live hardening & launch-gate closeout
+## Slice S11 — Live hardening & launch-gate closeout ✅ (code-side; ⊘ live path)
 
 ### Objective
 Exercise the live Meta path (D43) once assets exist: live smoke on send/receive/template flows,
@@ -233,8 +245,18 @@ pattern notes.
 WA-02, WA-40 (live), WA-42, WA-44
 
 ### Dependencies — all prior; external Meta assets (⊘)
-### Tests Required
-pen-check list executed; live smoke script (manual/gated, never CI); e2e full-suite green on stub.
+### Delivered (D82 — everything not bound to Meta ships now)
+**WA-42:** §7.8 clauses in the Platform Terms, Privacy Policy and Communication Recording at
+consent version `1.1.0` (migration `0011`; existing accounts re-accept, which is the correct
+NDPA answer for a new cross-border transfer disclosure); `whatsapp_consents` in the §19.3 audit
+pack, emitted from the grant/revoke timestamp pair; `PiiPseudonymiser` extended to five channel
+surfaces that survived an approved erasure entirely. **WA-40:** `app/core/fault_injection.py`
++ `POST /dev/whatsapp/fail-next-turn` and a live drill slice. **WA-44:**
+`docs/whatsapp-launch-runbook.md`. Plus the requirements matrix reconciled — sixteen S5/S6 rows
+had read `pending` since they shipped — and the `google_drive` finding marked (D83).
+### Tests
+Erasure + audit-pack suites rewritten around the channel surfaces; the drill in
+`test_bot_engine.py`; drive-through `_run_failure_drill_checks`.
 ### Risk — Medium (external-dependency bound)
 ### Commit — `chore(whatsapp): live-path hardening and launch-gate closeout (S11)`
 

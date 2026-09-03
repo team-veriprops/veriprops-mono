@@ -137,3 +137,16 @@ async def rewind_whatsapp_window(phone: str, hours: int = 25):
     """
     _require_non_prod()
     return SuccessResponse[dict](data=await service.rewind_whatsapp_window(phone, hours))
+
+
+@dev_router.post("/whatsapp/fail-next-turn", response_model=SuccessResponse[dict])
+async def arm_whatsapp_bot_failure():
+    """Make the next bot turn fail, once — the §7.11 failure drill (§7.6.5, WA-40).
+
+    The launch gate asks for the fallback to be *tested*, not just implemented: kill the
+    bot, observe the auto-reply and the console alert. Unit tests prove the `except` branch
+    behaves; only a live turn proves a real failure reaches it rather than becoming a 500 in
+    the webhook and a Meta retry.
+    """
+    _require_non_prod()
+    return SuccessResponse[dict](data=await service.arm_whatsapp_bot_failure())

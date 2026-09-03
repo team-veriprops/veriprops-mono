@@ -2225,3 +2225,190 @@ help them.
 ### Revisit
 If the classifier ever reliably distinguishes "my verification" from "my brother's", split
 the copy — the two paragraphs are already separable.
+
+## Decision: D80 — an append-only fact table for §7.10, not the tables the channel already had
+
+### Context
+§7.10 asks for seven metrics "instrumented from day one", and four of them are **rates over
+a window**: seam conversion, enquiry→intake, escalation rate, opt-in rate.
+
+### Options Considered
+1. Derive everything from the existing tables.
+2. **A new append-only `whatsapp_channel_events` fact table.**
+3. Reuse `audit_logs`.
+
+### Chosen Option
+**Option 2.**
+
+### Rationale
+Option 1 cannot answer two of the four. `whatsapp_bot_sessions` holds **one mutated row per
+phone number**: `last_escalation_reason` is overwritten on every escalation, so the table can
+say why a particular person was last handed to a human and nothing about how often that
+happens. `current_flow` is cleared when a flow ends, so a completed intake is
+indistinguishable from one that never started. Shipping §7.10 on that basis would not have
+produced missing metrics — it would have produced wrong ones, which is worse.
+
+Option 3 is the wrong home rather than a wrong shape. `audit_logs` is the legal transition
+ledger the §19.3 pack exports; bot-turn telemetry inside it would put conversation noise in a
+legally defensible export and blur what "actor" and "resource" mean there.
+
+An append-only table also makes every metric the same query — count rows of a type in a
+window, optionally grouped by one column — and lets a rate be recomputed for **any** period
+after the fact, rather than only forward from the day someone added a counter.
+
+### Tradeoffs / Constraints
+Deliberate redundancy: several of these facts are implicit elsewhere. Seven write sites, each
+chosen to be the *single* place its fact can occur (`ESCALATED` sits in `note_escalation`,
+which all nine `EscalationReason`s already funnel through). Every write is best-effort and
+swallows its own failures, so a broken call site produces a dashboard of zeros and no error —
+which is exactly why the drive-through reads the numbers back after driving real traffic.
+
+### Revisit
+If the table outgrows per-window aggregation, roll it up nightly. The read surface is one
+service method, so nothing else would move.
+
+## Decision: D81 — Meta's quality rating is synced, in the template registry's posture
+
+### Context
+§7.10 lists the Meta quality rating as the channel's platform-dependency early warning, and
+§7.11 makes platform health a launch concern. It lives behind the Graph API, and CI never
+reaches Meta.
+
+### Chosen Option
+A read facade beside the §7.7 template directory: `WHATSAPP_PROVIDER` picks stub or live,
+the value is stored with a `last_synced_at` and any `sync_error`, and an admin refreshes it
+from the analytics page.
+
+### Rationale
+This is the same class of data as template approval status — Meta's verdict about us — so it
+gets the same treatment D59a settled: they own the value, we store what they last told us,
+and **nothing in the send path reads it**. Gating sends on a RED rating would take the
+channel down on a number we cannot verify; gating on a *stale* rating would take it down
+because a Graph call timed out. The rating is an early warning for a person, not a circuit
+breaker.
+
+A failed sync keeps the previous rating rather than downgrading it to `UNKNOWN`: a network
+blip is not Meta withdrawing its verdict, and rendering it as one would train people to
+ignore the tile. The sync age and the error are shown instead.
+
+### Tradeoffs / Constraints
+A second Graph surface to own. The stub reports GREEN so the channel stays demoable, and the
+admin tile labels the sync age so nobody mistakes a stub value for Meta's opinion.
+
+## Decision: D82 — S11 ships every code-side item; the live smoke becomes a runbook
+
+### Context
+S11 is "live hardening and launch-gate closeout", and the external Meta assets — business
+verification, template approval, number binding — do not exist yet.
+
+### Chosen Option
+Build everything that does not depend on Meta, and write the live smoke as a gated manual
+runbook marked ⊘.
+
+### Rationale
+Waiting would have left a real compliance gap open for an unbounded time (J2 puts no timebox
+on the launch gate). The §7.8 items — consent records exportable, the channel disclosed in the
+policy, an erasure that actually reaches the channel's tables — are ours alone and were
+genuinely missing, not merely untested.
+
+### Tradeoffs / Constraints
+The live smoke stays unexecuted until the assets land, and `docs/whatsapp-launch-runbook.md`
+is what will be executed then.
+
+## Decision: D83 — the dead `google_drive` webhook package stays, marked
+
+### Context
+`appodus_utils/domain/webhook/google_drive/` is unreachable and three of its four modules do
+not import. Surfaced during S9; carried as a finding rather than a fix.
+
+### Chosen Option
+Keep it, with a `TODO(gap):` marker and a PRD "Known Gaps & Roadmap" row (user's call).
+
+### Rationale
+It is vendored code outside the WhatsApp scope, and it is inert rather than broken in
+production — nothing in the app's import graph reaches it. Marking it makes it greppable and
+dated; deleting it would be a scope decision taken on the way past.
+
+### Tradeoffs / Constraints
+An orphan `g_drive_webhook_subscriptions` registration stays in SQLAlchemy metadata. The
+schema-parity guard does not see it (it reads `BaseEntity` tables, and this one is not one),
+so it stays inert rather than becoming a CI failure.
+
+## Decision: D84 — the opt-in denominator is reachable numbers, not consent rows
+
+### Context
+§7.10 wants "template opt-in rates (utility, marketing)" as a measure of consent-asset growth
+and the Marketplace launch audience. A rate needs a denominator, and nothing recorded that a
+customer had been *asked*.
+
+### Options Considered
+1. A "consent control was rendered" beacon, posted by the frontend on mount.
+2. **Granted consents over ACTIVE `whatsapp_links`.**
+
+### Chosen Option
+**Option 2.**
+
+### Rationale
+Option 1 needs the frontend to POST on render — a write triggered by a component mounting,
+which is both a new class of traffic and a number that would drift the moment a surface was
+re-laid-out. And it answers a less useful question. §7.10 says what the metric is *for*:
+consent asset growth, and the audience a Marketplace launch could reach. That audience is
+exactly the customers whose numbers we hold — so "of the people this channel can actually
+reach, how many said yes" is the number that answers the stated question.
+
+### Tradeoffs / Constraints
+It is not a conversion rate on the consent screen, and cannot diagnose that screen's copy. If
+that becomes the question, it needs its own event and should be named differently rather than
+overloading this one.
+
+## Decision: D85 — the widget page code is stripped before anything reads the message
+
+### Context
+§7.4.1's wa.me deep link prefills `"Hi Veriprops! [ref: web-home]"`, so the page code arrives
+as literal text inside the customer's first message.
+
+### Chosen Option
+Extract it at ingest, store it, and remove it from the text everything downstream reads.
+
+### Rationale
+The customer did not type the marker — their phone did, and most will not even see it. Left
+in, the intent classifier scores a fragment of markup, the guardrails match against it, and an
+agent opening the console reads a message their customer did not write. The raw Meta envelope
+is retained untouched on `whatsapp_inbound_messages.payload`, so the §7.8 record loses
+nothing.
+
+Only the **first** marker is honoured: a forwarded conversation can carry someone else's, and
+the page this customer arrived from is the one their own phone put there first.
+
+### Tradeoffs / Constraints
+The extraction lives in `WhatsAppInboundService.ingest`, **not** in the Meta normalizer where
+it started. The drive-through caught why: `POST /dev/whatsapp/inbound` builds its message
+directly and skips the normalizer, so attribution worked in production and never in an
+automated run — precisely the split the automation-determinism contract exists to prevent.
+`ingest` is the single funnel both doors pass through.
+
+## Decision: D86 — one analytics API and one analytics route, two tabs
+
+### Context
+§7.10's metrics needed a read surface, and the channel already owns its own domain package.
+
+### Chosen Option
+The facts and the recorder live in `channel/whatsapp/analytics/`; the aggregation extends
+`AnalyticsService` and the existing `/admin/analytics` router, and the frontend adds a tab to
+the existing page rather than a route.
+
+### Rationale
+Writing is channel work; reading is analytics work. `AnalyticsService` already reads across
+five domains and is documented as orchestration-only, so a sixth is not a new pattern — while
+a second admin metrics API would mean a second permission guard to keep in step with
+`VIEW_ANALYTICS` and a second place to look for a number. The frontend follows
+`AdminMessagesTabs` for the same reason Decision K gives about the console: these are the same
+question asked of two surfaces, and separate routes would make the channel look like a
+separate product.
+
+### Tradeoffs / Constraints
+`AnalyticsService`'s constructor grows by five collaborators. The alternative — a channel-owned
+read service — would have cost a router, a guard, and a second frontend service pair.
+
+### Revisit
+If a third analytics area appears, split the service by area behind the one router.

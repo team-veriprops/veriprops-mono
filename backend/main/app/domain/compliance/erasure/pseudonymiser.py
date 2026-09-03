@@ -20,10 +20,18 @@ import hashlib
 from typing import List
 
 from kink import inject
-from sqlalchemy import update
+from sqlalchemy import or_, select, update
 
 from main.app.config.settings import settings
 from main.app.domain.audit.models import AuditLog
+from main.app.domain.channel.whatsapp.bot.session.models import WhatsAppBotSession
+from main.app.domain.channel.whatsapp.handoff.models import HandoffTokenRedemption
+from main.app.domain.channel.whatsapp.inbound.models import WhatsAppInboundMessage
+from main.app.domain.channel.whatsapp.link.models import (
+    WhatsAppLink,
+    WhatsAppLinkStatus,
+)
+from main.app.domain.verification.delegate.models import CaseDelegate
 from main.app.domain.payout.bank_account.models import AgentBankAccount
 from main.app.domain.user.agent.kyc.models import KycRecord
 from main.app.domain.user.auth.oauth.models import OAuthIdentity
@@ -140,5 +148,113 @@ class PiiPseudonymiser:
             .values(bank_name=_REDACTED, account_number=_REDACTED, account_name=_REDACTED)
         )
         surfaces.append("agent_bank_accounts")
+
+        # 9-13) The WhatsApp channel (§7, §7.8).
+        surfaces += await self._pseudonymise_whatsapp(session, subject_user_id, token)
+
+        return surfaces
+
+    async def _pseudonymise_whatsapp(
+        self, session, subject_user_id: str, token: str
+    ) -> List[str]:
+        """Sever the subject's identity across the WhatsApp channel (§7.8, NDPA).
+
+        The channel keys almost everything on a **phone number** rather than a user id, so
+        this starts by reading the subject's linked numbers and then scrubs by number. It
+        has to run before the link rows are cleared, which is why it is one method rather
+        than five more blocks above.
+
+        The line drawn here is §7.8's own: **identity is severed, content is retained.**
+        Chat logs are retained business records covered by the same access controls as case
+        data, so what a customer said stays; the number that said it, the profile name Meta
+        supplied, and the raw envelope carrying both do not. That is the same split as
+        `audit_logs` above, where the actor is severed and the events stay intact.
+        """
+        surfaces: List[str] = []
+
+        # The subject's numbers, read before the link rows are cleared. Includes revoked
+        # links, whose rows keep no number — hence the null filter.
+        rows = await session.execute(
+            select(WhatsAppLink.phone_e164).where(
+                WhatsAppLink.user_id == subject_user_id,
+                WhatsAppLink.phone_e164.is_not(None),
+            )
+        )
+        phones = [phone for (phone,) in rows.all() if phone]
+
+        # 9) The link itself. The number is cleared to NULL rather than tokenised, because
+        # `phone_e164` is uniquely constrained and a retained value would hold that
+        # constraint forever — locking a real number out of every future account. This is
+        # the same reasoning as `WhatsAppLinkRepo.release_number`.
+        await session.execute(
+            update(WhatsAppLink)
+            .where(WhatsAppLink.user_id == subject_user_id)
+            .values(
+                phone_e164=None,
+                wa_id=None,
+                status=WhatsAppLinkStatus.REVOKED.value,
+                revoked_reason="erasure",
+            )
+        )
+        surfaces.append("whatsapp_links")
+
+        if not phones:
+            # Never linked a number: nothing downstream keys on this subject.
+            return surfaces
+
+        # 10) Bot session. `context` is dropped outright rather than tokenised — it holds
+        # the free-text answers of a half-finished chat intake (a property address, a
+        # landmark), which is personal data that never became a business record because the
+        # case was never created.
+        await session.execute(
+            update(WhatsAppBotSession)
+            .where(WhatsAppBotSession.phone_e164.in_(phones))
+            .values(phone_e164=token, context=None)
+        )
+        surfaces.append("whatsapp_bot_sessions")
+
+        # 11) The inbound journal. `from_phone` is 20 characters and the subject token is
+        # 23, so it takes the flat redaction; re-identification still works through
+        # `chat_message_id`, whose conversation carries the (stable) user id. `payload` is
+        # Meta's raw envelope — it duplicates the normalized columns and carries the number
+        # and profile name besides, so it goes rather than being picked apart.
+        await session.execute(
+            update(WhatsAppInboundMessage)
+            .where(WhatsAppInboundMessage.from_phone.in_(phones))
+            .values(from_phone=_REDACTED, sender_name=_REDACTED, payload=None)
+        )
+        surfaces.append("whatsapp_inbound_messages")
+
+        # 12) Delegations the subject holds on **other people's** cases (§7.4.5). Revoked
+        # as well as scrubbed: a grant addressed to a number nobody can reach any more is
+        # not a grant, and leaving it live would keep the case's delegate slot occupied.
+        # Delegates on the subject's *own* cases are other people, and their erasure is
+        # their own request to make.
+        await session.execute(
+            update(CaseDelegate)
+            .where(CaseDelegate.phone_e164.in_(phones))
+            .values(
+                name=_REDACTED,
+                phone_e164=token,
+                revoked_at=Utils.datetime_now(),
+                revoked_reason="erasure",
+            )
+        )
+        surfaces.append("case_delegates")
+
+        # 13) The §7.5 handoff ledger. The jti rows stay — they are what makes a token
+        # single-use, and dropping them would let a captured link be replayed — but the
+        # number and the redeeming IP are identity, not enforcement.
+        await session.execute(
+            update(HandoffTokenRedemption)
+            .where(
+                or_(
+                    HandoffTokenRedemption.customer_id == subject_user_id,
+                    HandoffTokenRedemption.phone_e164.in_(phones),
+                )
+            )
+            .values(phone_e164=token, redeemed_ip=None)
+        )
+        surfaces.append("handoff_token_redemptions")
 
         return surfaces

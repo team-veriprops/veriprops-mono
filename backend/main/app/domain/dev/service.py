@@ -13,6 +13,8 @@ from kink import di, inject
 from sqlalchemy import text
 
 from main.app.config.settings import settings
+from main.app.core import fault_injection
+from main.app.core.fault_injection import FaultPoint
 from main.app.core.state.dependencies import roles_for_tier
 from main.app.core.state.status import (
     AgentRole,
@@ -90,6 +92,12 @@ _RESET_TABLES = [
     # §7.4.5 delegations are per-verification, and `verifications` is cleared above — a
     # surviving row would point at a case that no longer exists.
     "case_delegates",
+    # §7.10 analytics facts are per-run scenario data. Cleared so a drive-through asserting
+    # "these counts moved" is reading its own traffic rather than the previous run's — a
+    # metric that only ever accumulates would pass on stale rows even if every recorder
+    # call site had been deleted. `whatsapp_number_health` is *not* cleared: it caches
+    # Meta's verdict on the number, which is reference-like and survives a scenario.
+    "whatsapp_channel_events",
 ]
 
 
@@ -105,6 +113,9 @@ class DevSeedService:
             text("DELETE FROM users WHERE email <> :admin"),
             {"admin": settings.SUPER_ADMIN_EMAIL},
         )
+        # An armed drill is process state, not table state, so it would otherwise survive
+        # the one call whose whole job is to hand back a known-clean environment.
+        fault_injection.disarm_all()
         return {"reset": True, "tables_cleared": len(_RESET_TABLES) + 1}
 
     async def seed(self) -> Dict[str, Any]:
@@ -482,6 +493,17 @@ class DevSeedService:
     async def clear_whatsapp_outbox(self) -> Dict[str, Any]:
         whatsapp_outbox.clear()
         return {"cleared": True}
+
+    async def arm_whatsapp_bot_failure(self) -> dict:
+        """Arm the §7.6.5 failure drill: the next bot turn raises (§7.11 launch gate).
+
+        The gate asks someone to "kill the bot and observe the auto-reply + alert", and
+        this is the smallest honest way to do that on a running stack — one real turn takes
+        the same `except` path a real outage would, rather than a mock proving the branch in
+        isolation. One-shot, so a forgotten arm cannot silence an environment.
+        """
+        fault_injection.arm(FaultPoint.WHATSAPP_BOT_TURN)
+        return {"armed": FaultPoint.WHATSAPP_BOT_TURN.value}
 
     async def rewind_whatsapp_window(self, phone: str, hours: int = 25) -> Dict[str, Any]:
         """Age a number's inbound journal so Meta's 24-hour window reads as closed (§7.7).

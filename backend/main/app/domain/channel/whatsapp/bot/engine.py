@@ -29,7 +29,9 @@ from typing import List, Optional
 from kink import di, inject
 
 from main.app.config.settings import settings
+from main.app.core import fault_injection
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
+from main.app.core.fault_injection import FaultPoint, InjectedFault
 from main.app.core.state.status import AgentRole, TaskState, VerificationStatus
 from main.app.domain.channel.whatsapp.analytics.models import WhatsAppChannelEventType
 from main.app.domain.channel.whatsapp.analytics.recorder import ChannelEventRecorder
@@ -202,6 +204,11 @@ class WhatsAppBotEngine:
             return None
 
         try:
+            # §7.11's failure drill, armed only from a non-production dev endpoint and
+            # consumed by the first turn that reaches it. Inside the try on purpose: the
+            # drill is worthless unless it exercises the same path a real outage takes.
+            if fault_injection.consume(FaultPoint.WHATSAPP_BOT_TURN):
+                raise InjectedFault("§7.6.5 failure drill")
             reply = await self._decide(message, session)
         except Exception as exc:  # noqa: BLE001 — §7.6.5: never go quiet
             logger.exception(f"Bot turn failed for {message.from_phone}: {exc}")

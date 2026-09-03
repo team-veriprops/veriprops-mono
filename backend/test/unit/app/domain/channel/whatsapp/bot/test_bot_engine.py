@@ -975,3 +975,41 @@ async def test_a_retained_intake_still_wins_over_the_pay_intent():
     reply = await engine.handle(_inbound("pay"), MagicMock())
 
     assert "/wa/intake/tok-123" in reply.text
+
+
+# ── The §7.6.5 failure drill (§7.11 launch gate, WA-40) ──────────
+
+async def test_an_armed_fault_becomes_a_warm_handover_like_any_other_crash():
+    """The drill has to take the real path, not a special one — otherwise it proves the
+    drill works rather than that the fallback does."""
+    from main.app.core import fault_injection
+    from main.app.core.fault_injection import FaultPoint
+
+    session = _session()
+    engine, sent = _engine(session, intent=BotIntent.PRICING)
+    fault_injection.arm(FaultPoint.WHATSAPP_BOT_TURN)
+    try:
+        reply = await engine.handle(_inbound("how much?"), MagicMock())
+    finally:
+        fault_injection.disarm_all()
+
+    assert reply.escalation_reason == EscalationReason.PIPELINE_FAILURE
+    # A bot that goes quiet is indistinguishable from a scam that stopped replying.
+    assert sent and "technical" in sent[0].lower()
+
+
+async def test_a_fault_is_one_shot_so_a_forgotten_arm_cannot_silence_a_number():
+    from main.app.core import fault_injection
+    from main.app.core.fault_injection import FaultPoint
+
+    session = _session()
+    engine, _sent = _engine(session, intent=BotIntent.PRICING)
+    fault_injection.arm(FaultPoint.WHATSAPP_BOT_TURN)
+    try:
+        await engine.handle(_inbound("how much?"), MagicMock())
+        recovered = await engine.handle(_inbound("how much?"), MagicMock())
+    finally:
+        fault_injection.disarm_all()
+
+    assert recovered.escalation_reason is None
+    assert "₦5,000" in recovered.text

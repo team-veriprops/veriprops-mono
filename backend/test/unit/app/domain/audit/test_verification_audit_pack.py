@@ -64,7 +64,21 @@ def _consent():
     return c
 
 
-def _make_svc(*, transitions, evidence, consents):
+def _whatsapp_consent(utility_granted=True, marketing=False):
+    """A §7.4.6 ledger row — the grant/revoke timestamp pairs, not a boolean."""
+    c = MagicMock()
+    c.utility_granted_at = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    c.utility_revoked_at = None if utility_granted else datetime(2026, 8, 5, tzinfo=timezone.utc)
+    c.utility_source = "PAY_SCREEN"
+    c.utility = utility_granted
+    c.marketing_granted_at = datetime(2026, 8, 1, tzinfo=timezone.utc) if marketing else None
+    c.marketing_revoked_at = None
+    c.marketing_source = "PAY_SCREEN" if marketing else None
+    c.marketing = marketing
+    return c
+
+
+def _make_svc(*, transitions, evidence, consents, whatsapp_consent=None):
     def _repo(list_result):
         r = MagicMock()
         r.list_for_verification = AsyncMock(return_value=list_result)
@@ -82,6 +96,9 @@ def _make_svc(*, transitions, evidence, consents):
     consent_repo = MagicMock()
     consent_repo.list_for_user = AsyncMock(return_value=(consents, len(consents)))
 
+    whatsapp_consent_repo = MagicMock()
+    whatsapp_consent_repo.get_by_user_id = AsyncMock(return_value=whatsapp_consent)
+
     audit = MagicMock()
     audit.list_pack_transitions = AsyncMock(return_value=transitions)
 
@@ -98,6 +115,7 @@ def _make_svc(*, transitions, evidence, consents):
         share_repo=_repo([]),
         evidence_repo=evidence_repo,
         consent_repo=consent_repo,
+        whatsapp_consent_repo=whatsapp_consent_repo,
         audit_service=audit,
     ), audit
 
@@ -124,3 +142,52 @@ class TestBuildPackCsv:
         # vid + one task id + one payment id were gathered into the id set.
         resource_ids = audit.list_pack_transitions.call_args.args[0]
         assert len(resource_ids) == 3
+
+
+class TestWhatsAppConsentExport:
+    """§7.8 — "consent records timestamped and exportable".
+
+    The §7.4.6 ledger was not in the pack before S11, so the one export a dispute or a
+    regulator actually asks for could not show whether the customer had agreed to be
+    messaged, or when they withdrew it.
+    """
+
+    async def test_a_live_opt_in_is_exported_with_its_timestamps_and_source(self):
+        svc, _audit = _make_svc(
+            transitions=[], evidence=[], consents=[],
+            whatsapp_consent=_whatsapp_consent(utility_granted=True),
+        )
+
+        rows = list(csv.reader(io.StringIO((await svc.build_pack_csv("vid-hex")).decode())))
+        consent_rows = [r for r in rows[1:] if r[0] == "WHATSAPP_CONSENT"]
+
+        assert len(consent_rows) == 1
+        assert consent_rows[0][2] == "GRANTED"
+        assert "UTILITY" in consent_rows[0]
+        # The pair is the record, so both halves and the capture point travel with it.
+        assert "granted_at=2026-08-01" in consent_rows[0][-1]
+        assert "source=PAY_SCREEN" in consent_rows[0][-1]
+
+    async def test_a_withdrawn_consent_is_exported_as_withdrawn(self):
+        # The state a complaint is actually about: they agreed, then they did not.
+        svc, _audit = _make_svc(
+            transitions=[], evidence=[], consents=[],
+            whatsapp_consent=_whatsapp_consent(utility_granted=False),
+        )
+
+        rows = list(csv.reader(io.StringIO((await svc.build_pack_csv("vid-hex")).decode())))
+        consent_rows = [r for r in rows[1:] if r[0] == "WHATSAPP_CONSENT"]
+
+        assert consent_rows[0][2] == "REVOKED"
+        assert "revoked_at=2026-08-05" in consent_rows[0][-1]
+
+    async def test_a_customer_who_was_never_asked_produces_no_row(self):
+        # Absence means both off (§7.4.6's unticked default). A row saying "declined"
+        # would assert an event that never happened.
+        svc, _audit = _make_svc(
+            transitions=[], evidence=[], consents=[], whatsapp_consent=None,
+        )
+
+        rows = list(csv.reader(io.StringIO((await svc.build_pack_csv("vid-hex")).decode())))
+
+        assert not [r for r in rows[1:] if r[0] == "WHATSAPP_CONSENT"]

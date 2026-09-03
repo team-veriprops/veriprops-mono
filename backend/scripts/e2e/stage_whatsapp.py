@@ -145,6 +145,9 @@ def run(ctx: Ctx) -> None:
     # ── S10: §7.10 — the metrics move when real traffic moves them ───────
     _run_channel_analytics_checks(ctx)
 
+    # ── S11: §7.6.5's fallback, drilled on a live stack ──────────────────
+    _run_failure_drill_checks(ctx)
+
 
 def _run_webhook_checks(ctx: Ctx) -> None:
     root = ctx.root
@@ -1440,3 +1443,68 @@ def _run_channel_analytics_checks(ctx: Ctx) -> None:
     forbidden = ctx.customer.get("/admin/analytics/whatsapp")
     check("a customer cannot read the channel analytics",
           forbidden.status_code in (401, 403), f"http {forbidden.status_code}")
+
+
+def _run_failure_drill_checks(ctx: Ctx) -> None:
+    """§7.6.5's fallback, drilled rather than asserted (§7.11 launch gate, WA-40).
+
+    The launch checklist says "failure fallback tested (kill the bot, observe the auto-reply
+    + alert)", and until now that line was carried by unit tests raising inside a mock. What
+    those cannot show is that a **real** failure in a running process reaches the warm
+    handover at all, rather than becoming a 500 in the webhook, a Meta retry, a throttle,
+    and a customer left with silence — which is the exact outcome §7.6.5 exists to rule out.
+
+    So one real turn is made to fail, through `POST /dev/whatsapp/fail-next-turn`, and both
+    halves of the promise are checked: the customer gets an apology and a person, and an
+    admin gets told. The fault is one-shot, so the turn after it must be answered normally —
+    a drill that left the number silenced would be worse than no drill.
+    """
+    root, admin = ctx.root, ctx.admin
+    phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+
+    def say(text: str) -> str:
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        root.post("/dev/whatsapp/inbound",
+                  json={"fromPhone": phone, "text": text}).raise_for_status()
+        replies = _outbound_to(ctx, phone)
+        return str(replies[0].get("text", "")) if replies else ""
+
+    # Get the §7.6.1 welcome out of the way, so the failing turn is an ordinary one.
+    say("Hi")
+
+    before = admin.get("/notifications?page=0&page_size=1").json()["data"]["meta"]["total"]
+
+    armed = root.post("/dev/whatsapp/fail-next-turn")
+    check("the failure drill can be armed outside production (§7.11)",
+          armed.status_code == 200, f"http {armed.status_code}: {armed.text[:160]}")
+
+    failed_turn = say("how much for a Lagos land check?")
+    check("a failing bot turn still answers the customer (§7.6.5, WA-40)",
+          bool(failed_turn), "the customer got nothing back")
+    check("...with an apology and a person, not an error",
+          "technical" in failed_turn.lower(), failed_turn[:200])
+    # The promise has to be concrete, and Decision G gives it two shapes: inside staffed
+    # hours a person is joining now, outside them a stated number of hours. Asserting only
+    # the window would fail every run made during business hours — and "joining now" is the
+    # stronger of the two promises, not a weaker one.
+    check("...and a concrete human promise, in whichever shape Decision G's coverage gives",
+          "team member" in failed_turn.lower(), failed_turn[:200])
+
+    after = admin.get("/notifications?page=0&page_size=1").json()["data"]["meta"]["total"]
+    check("an admin is alerted that the bot pipeline failed (§7.6.5)",
+          after > before, f"notifications {before} -> {after}")
+
+    # One-shot: the next message is answered normally. Without this the drill could leave
+    # an environment quietly broken, and nobody would run it twice.
+    recovered = say("how much for a Lagos land check?")
+    check("the fault is one-shot — the next turn is answered normally",
+          "technical" not in recovered.lower() and bool(recovered), recovered[:200])
+
+    # §7.10 counts it: a spike in PIPELINE_FAILURE is the operational signal that the
+    # channel is degraded, and it is the reason the escalation reasons are broken out.
+    reasons = {
+        row["label"]: row["count"]
+        for row in admin.get("/admin/analytics/whatsapp").json()["data"]["escalationsByReason"]
+    }
+    check("the failure is counted under PIPELINE_FAILURE (§7.10)",
+          reasons.get("PIPELINE_FAILURE", 0) > 0, f"reasons={reasons}")
