@@ -230,6 +230,37 @@ class TestProdEnvContract:
         assert env["INTENT_PROVIDER"] != "stub"
 
 
+class TestStagingEnvContract:
+    """`.env.staging` is the human-QA environment, and its value comes from being like
+    prod. Where it deliberately differs (Meta's test number rather than the official one),
+    the difference is in Doppler, not here — so these pins are what stops staging quietly
+    drifting back to stubs and leaving the live path to be discovered in production."""
+
+    @pytest.fixture(scope="class")
+    def env(self) -> Dict[str, str]:
+        return _parse_env(_env_path(".env.staging"))
+
+    def test_environment_and_otp(self, env):
+        assert env["ENVIRONMENT"] == "staging"
+        assert env["OTP_MODE"] == "random"
+
+    def test_live_providers_mirror_prod(self, env):
+        prod = _parse_env(_env_path(".env.prod"))
+        assert env["WHATSAPP_PROVIDER"] == "meta"
+        assert env["INTENT_PROVIDER"] == prod["INTENT_PROVIDER"]
+        # A different model is a different bot; staging would stop predicting prod.
+        assert env["INTENT_MODEL"] == prod["INTENT_MODEL"]
+
+    def test_meta_identifiers_are_not_committed_here(self, env):
+        """Staging must take its number from Doppler `stg`.
+
+        A value in this file would be reviewable, which is exactly the risk: the number is
+        what the channel *is*, and the wrong one sends QA traffic to real customers.
+        """
+        assert "WHATSAPP_PHONE_NUMBER_ID" not in env
+        assert "WHATSAPP_BUSINESS_ACCOUNT_ID" not in env
+
+
 class TestTemplateDriftGuard:
     def test_every_settable_field_is_documented_in_env_example(self):
         """`.env.example` is the discoverability surface for every knob — a new

@@ -1,4 +1,4 @@
-"""Handoff token service (PRD §7.5, WA-14/WA-28).
+"""Handoff token service (PRD §26.5, WA-14/WA-28).
 
 A bearer token that travels through WhatsApp, where forwarding a message is the norm.
 The threat model is explicit in the PRD: a forwarded or leaked message must expose at
@@ -54,7 +54,7 @@ class TestClaims:
 
 class TestSignature:
     def test_is_signed_asymmetrically(self):
-        # §7.5 pins RS256: only the backend can mint, and verification needs no secret.
+        # §26.5 pins RS256: only the backend can mint, and verification needs no secret.
         assert jwt.get_unverified_header(token())["alg"] == HANDOFF_ALGORITHM == "RS256"
 
     def test_rejects_a_tampered_payload(self):
@@ -109,7 +109,7 @@ class TestExpiry:
 
 class TestScope:
     def test_a_token_is_scoped_to_one_intent(self):
-        # §7.5: the token authorizes the named action on the named case, nothing else.
+        # §26.5: the token authorizes the named action on the named case, nothing else.
         claims = decode_handoff_token(token(intent=HandoffIntent.UPLOAD))
         assert claims.intent == HandoffIntent.UPLOAD
         with pytest.raises(HandoffTokenError):
@@ -140,7 +140,7 @@ class TestScope:
 
 
 class TestLinkTokenShape:
-    """§7.4.4 linking tokens (D55) — the same signer, a deliberately different shape.
+    """§26.4.4 linking tokens (D55) — the same signer, a deliberately different shape.
 
     The two shapes must never be readable as one another: an action token authorizes
     something on a case, a link token only says *which number* crossed to the website.

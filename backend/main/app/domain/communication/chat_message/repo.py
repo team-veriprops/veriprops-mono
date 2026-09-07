@@ -108,7 +108,7 @@ class ChatMessageRepo(
         )).scalar() or 0)
 
     async def list_pending_channel_delivery(self, conversation_id: str) -> List[ChatMessage]:
-        """Agent replies released into the thread but not yet sent over its channel (§7.7).
+        """Agent replies released into the thread but not yet sent over its channel (§26.7).
 
         These are the messages an agent typed outside Meta's 24-hour window. The customer's
         next inbound reopens the window, and this is the queue that flushes then — oldest

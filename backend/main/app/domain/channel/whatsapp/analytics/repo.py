@@ -1,6 +1,6 @@
-"""Channel-analytics data access (PRD §7.10, D80).
+"""Channel-analytics data access (PRD §26.10, D80).
 
-Two shapes only, because §7.10 asks two kinds of question: "how many of this happened in
+Two shapes only, because §26.10 asks two kinds of question: "how many of this happened in
 this window?" and "how many of each, broken down by one column?". Both are SQL-side
 aggregations rather than row pulls — a fact table grows with traffic rather than with
 customers, so the `analytics_snapshot()` habit of loading everything and counting in Python
@@ -60,7 +60,7 @@ class WhatsAppChannelEventRepo(
     ) -> dict[str, int]:
         """How many of each requested type occurred since *since*.
 
-        One grouped query rather than one per type: a §7.10 rate is always a pair of these
+        One grouped query rather than one per type: a §26.10 rate is always a pair of these
         counts, and issuing them separately would let the two halves be read at different
         moments and produce a ratio above 1.
         """
@@ -83,7 +83,7 @@ class WhatsAppChannelEventRepo(
         return {event_type.value: counted.get(event_type.value, 0) for event_type in event_types}
 
     async def count_by_page_code(self, since: datetime) -> dict[str, int]:
-        """§7.10's WhatsApp-attributed enquiries, by widget page code.
+        """§26.10's WhatsApp-attributed enquiries, by widget page code.
 
         Enquiries with no code are counted under `direct`: someone who saved the number or
         was given it by a friend is real channel demand, and dropping them would make the
@@ -113,7 +113,7 @@ class WhatsAppChannelEventRepo(
         return counted
 
     async def count_by_escalation_reason(self, since: datetime) -> dict[str, int]:
-        """§7.10's escalation reasons — the half of the metric that says what to build next."""
+        """§26.10's escalation reasons — the half of the metric that says what to build next."""
         stmt = (
             select(WhatsAppChannelEvent.reason, func.count())
             .where(

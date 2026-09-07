@@ -2,13 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 /**
- * The web→chat half of continuation (§7.4.3, D58).
+ * The web→chat half of continuation (§26.4.3, D58).
  *
  * Two properties matter. The link must **pre-fill the case reference**, because the bot
  * matches a `VP-…` on the customer's literal words — without it the customer has to go and
  * find a reference before the chat can help them, which is the friction the button exists
  * to remove. And it must render **nothing** without a configured number: the official
- * number is the §7.1.2 anti-impersonation anchor, so a hardcoded fallback would be worse
+ * number is the §26.1.2 anti-impersonation anchor, so a hardcoded fallback would be worse
  * than no button at all.
  */
 
@@ -33,7 +33,7 @@ describe("WhatsAppContinueButton", () => {
     expect(html).toContain(encodeURIComponent("Continue VP-2026-0001"));
   });
 
-  it("carries the page code so the §7.10 attribution still works", () => {
+  it("carries the page code so the §26.10 attribution still works", () => {
     config.whatsappNumber = "2349167624347";
 
     const html = renderToStaticMarkup(<WhatsAppContinueButton vid="VP-2026-0001" />);

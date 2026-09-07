@@ -17,7 +17,7 @@ import {
 } from "./libs/useWhatsAppLinkQueries";
 
 /**
- * Account → WhatsApp (PRD §7.4.4, WA-23/WA-25).
+ * Account → WhatsApp (PRD §26.4.4, WA-23/WA-25).
  *
  * Linking a number is what lets the bot say anything about a case at all, so this page
  * is deliberately explicit about the consequences rather than presenting a toggle:

@@ -68,7 +68,7 @@ class TestPseudonymise:
     async def test_the_whole_whatsapp_channel_is_scrubbed_for_a_linked_subject(
         self, mock_session
     ):
-        """§7.8 — none of these were covered before S11, so an approved erasure left the
+        """§26.8 — none of these were covered before S11, so an approved erasure left the
         subject's number in five places, and their half-finished chat intake in a sixth."""
         _linked(mock_session, ["+2348012345678"])
         surfaces = await PiiPseudonymiser().pseudonymise("user-9", "erased-xyz")

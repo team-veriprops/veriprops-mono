@@ -29,7 +29,7 @@ import {
   useUploadEvidenceMutation,
 } from "./libs/useAgentTaskQueries";
 
-/** Best-effort GPS hint; the backend stamps the authoritative capture location (§7.3a). */
+/** Best-effort GPS hint; the backend stamps the authoritative capture location (§12.3). */
 function useGeolocationHint() {
   return async (): Promise<{ latitude: number; longitude: number } | undefined> =>
     new Promise((resolve) => {
@@ -144,9 +144,10 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
               <CardTitle>Evidence ({evidenceCount})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {/* TODO(gap): plain file input — wire the offline retry queue (lib/offlineQueue.ts)
-                  and the compression-capable upload manager (components/ui/upload) into this
-                  flow for low-bandwidth field capture — PRD "Known Gaps & Roadmap". */}
+              {/* TODO(gap): evidence capture is a plain file input straight to the backend.
+                  Field agents work on patchy mobile networks, so this flow still needs an
+                  offline retry queue and client-side image compression before upload — neither
+                  is built — PRD "Known Gaps & Roadmap". */}
               <div className="flex flex-wrap items-end gap-2">
                 <div className="space-y-1">
                   <Label>Kind</Label>

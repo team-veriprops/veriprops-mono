@@ -15,9 +15,9 @@ import {
 } from "./libs/useWhatsAppTemplateQueries";
 
 /**
- * Admin → WhatsApp templates (PRD §7.7, WA-15/WA-41).
+ * Admin → WhatsApp templates (PRD §26.7, WA-15/WA-41).
  *
- * The §7.11 launch gate turns on "all §7.7 templates approved", and approval is Meta's to
+ * The §26.11 launch gate turns on "all §26.7 templates approved", and approval is Meta's to
  * give — asynchronously, sometimes as a rejection with a reason. This page is where that
  * answer becomes visible instead of living in somebody's inbox.
  *

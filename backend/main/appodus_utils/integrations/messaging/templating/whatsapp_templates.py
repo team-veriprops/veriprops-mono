@@ -1,4 +1,4 @@
-"""The §7.7 Meta template declarations.
+"""The §26.7 Meta template declarations.
 
 Meta will not deliver a business-initiated WhatsApp message as free text. Outside the
 24-hour service window — which is where every message in this table lives, because each
@@ -21,7 +21,7 @@ What lives here vs elsewhere:
   from Meta. That is Meta's answer about a template, not a fact about our code.
 * **In `templates/whatsapp/<slug>.jinja2`**: the body copy itself.
 
-§7.7 calls template approval "on the critical path", so all seven are declared now even
+§26.7 calls template approval "on the critical path", so all seven are declared now even
 though only `otp_auth` has a sender yet — declaring one is what lets it be submitted, and
 the admin registry is what tracks the answer coming back.
 """
@@ -66,7 +66,7 @@ class MetaTemplateButton(str, enum.Enum):
 
 
 class MetaTemplate:
-    """One §7.7 template: what Meta knows it as, and how we fill it."""
+    """One §26.7 template: what Meta knows it as, and how we fill it."""
 
     def __init__(
         self,
@@ -115,10 +115,10 @@ class MetaTemplate:
         return str(context.get(self.parameters[0], ""))
 
 
-# PRD §7.7. Marketing templates: none at v1, by decision — drafted only when a consented
+# PRD §26.7. Marketing templates: none at v1, by decision — drafted only when a consented
 # campaign is planned (P1 audience).
 _DECLARED: Sequence[MetaTemplate] = (
-    # E1 linking flows (§7.4.4). The only one with a live sender today, and the only
+    # E1 linking flows (§26.4.4). The only one with a live sender today, and the only
     # AUTHENTICATION template — hence the mandatory OTP button.
     MetaTemplate(
         AvailableTemplate.WHATSAPP_OTP_AUTH,
@@ -126,7 +126,7 @@ _DECLARED: Sequence[MetaTemplate] = (
         parameters=(MessageContext.OTP, MessageContext.VALIDITY),
         button=MetaTemplateButton.COPY_CODE,
     ),
-    # Milestone templates (§7.6.2) — opt-in, fired by state events. Senders land in S8.
+    # Milestone templates (§26.6.2) — opt-in, fired by state events. Senders land in S8.
     MetaTemplate(
         AvailableTemplate.WHATSAPP_PAYMENT_CONFIRMED,
         MetaTemplateCategory.UTILITY,
@@ -142,19 +142,19 @@ _DECLARED: Sequence[MetaTemplate] = (
         MetaTemplateCategory.UTILITY,
         parameters=(MessageContext.SHARE_VID,),
     ),
-    # Report delivery (§7.6.2, Decision B) — the link lands in the authenticated portal.
+    # Report delivery (§26.6.2, Decision B) — the link lands in the authenticated portal.
     MetaTemplate(
         AvailableTemplate.WHATSAPP_REPORT_READY,
         MetaTemplateCategory.UTILITY,
         parameters=(MessageContext.SHARE_VID, MessageContext.LINK),
     ),
-    # Agent reply outside Meta's 24-hour service window (§7.7, WA-41). Sender lands in S7.
+    # Agent reply outside Meta's 24-hour service window (§26.7, WA-41). Sender lands in S7.
     MetaTemplate(
         AvailableTemplate.WHATSAPP_WINDOW_REOPEN,
         MetaTemplateCategory.UTILITY,
         parameters=(MessageContext.FIRST_NAME,),
     ),
-    # Delegate milestone delivery (§7.4.5, O2). Sender lands in S9.
+    # Delegate milestone delivery (§26.4.5, O2). Sender lands in S9.
     MetaTemplate(
         AvailableTemplate.WHATSAPP_DELEGATE_STATUS,
         MetaTemplateCategory.UTILITY,
@@ -166,12 +166,12 @@ _BY_TEMPLATE: Dict[AvailableTemplate, MetaTemplate] = {d.template: d for d in _D
 
 
 def declared_templates() -> List[MetaTemplate]:
-    """Every §7.7 template, in declaration order (what the admin registry lists)."""
+    """Every §26.7 template, in declaration order (what the admin registry lists)."""
     return list(_DECLARED)
 
 
 def meta_template_for(template: AvailableTemplate) -> Optional[MetaTemplate]:
-    """The declaration for *template*, or ``None`` if it is not a §7.7 template.
+    """The declaration for *template*, or ``None`` if it is not a §26.7 template.
 
     ``None`` is the ordinary case for in-conversation copy: a bot reply is inside the
     service window by construction (the customer just messaged), so it goes as free text

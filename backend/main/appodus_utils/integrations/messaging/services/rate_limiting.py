@@ -50,10 +50,6 @@ class RateLimiter:
                 raise IntegrationRateLimitException(key, Utils.datetime_now() + reset_in)
 
             self.limits[key]["count"] += 1
-            # TODO: Fix
-            # metrics_manager.rate_limit_usage.labels(
-            #     key=key
-            # ).set(self.limits[key]["count"] / limit_config["limit"])
             return True
 
     def _get_limit_config(self, key: str, limit: Optional[int], window: Optional[int]):

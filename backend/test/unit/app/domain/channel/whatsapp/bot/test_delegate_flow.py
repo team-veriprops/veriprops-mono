@@ -1,6 +1,6 @@
-"""The bot's delegate branch (PRD §7.4.5, D67/D77; WA-26).
+"""The bot's delegate branch (PRD §26.4.5, D67/D77; WA-26).
 
-§7.4.5 exists to defeat one sentence — "my relative is handling it" — so these tests are
+§26.4.5 exists to defeat one sentence — "my relative is handling it" — so these tests are
 about who the bot answers and with what. Three outcomes, and the order between them *is*
 the access control (D67):
 
@@ -106,7 +106,7 @@ class TestDelegateStatus:
         assert "as a delegate" in reply.text
 
     async def test_the_delegate_is_named_by_role(self):
-        """§7.4.5 requires the bot to identify them as a delegate — partly so the next
+        """§26.4.5 requires the bot to identify them as a delegate — partly so the next
         answer, which routes their other questions away, is not a surprise."""
         engine = _engine(delegate=_delegate(name="Bola"), case=_case())
         reply = await engine._status(_session())
@@ -144,7 +144,7 @@ class TestThirdParties:
         assert "12 Admiralty Way" not in reply.text
 
     async def test_a_stranger_is_pointed_at_both_legitimate_routes(self):
-        """"My relative is handling it" is the script §7.4.5 exists to defeat, so the
+        """"My relative is handling it" is the script §26.4.5 exists to defeat, so the
         refusal has to be warm *and* actionable — otherwise the pressure just moves to
         an agent.
 

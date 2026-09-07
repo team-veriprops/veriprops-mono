@@ -7,7 +7,7 @@
 ## Slice S1 — Website chat widget + attribution
 
 ### Objective
-§7.4.1 live immediately against the concierge-phase number: floating WhatsApp button on all public
+§26.4.1 live immediately against the concierge-phase number: floating WhatsApp button on all public
 + authenticated pages except payment routes, wa.me deep link with page-code prefill.
 
 ### Requirements Covered
@@ -52,7 +52,7 @@ e2e: injected inbound appears in admin console via SSE.
 ## Slice S3 — Handoff token service + /wa/* landing pages
 
 ### Objective
-§7.5 token service (RS256, 15-min, jti single-use, intent+case scope) + the three token-gated
+§26.5 token service (RS256, 15-min, jti single-use, intent+case scope) + the three token-gated
 landing routes with origin acknowledgment and friendly expiry/recovery page.
 
 ### Requirements Covered
@@ -64,7 +64,7 @@ WA-14, WA-28, WA-20
 migration for redemptions; frontend `/wa/{pay,upload,report}/[token]` routes + expiry page.
 ### Tests Required
 unit: expiry, replay, wrong-intent, wrong-case, tampered signature; e2e: token → pay page with
-context banner; reused token → recovery page. Pen-check list drafted (launch gate §7.11).
+context banner; reused token → recovery page. Pen-check list drafted (launch gate §26.11).
 ### Risk — High → small batch
 ### Commit — `feat(whatsapp): RS256 single-use handoff tokens and /wa landing pages (S3)`
 
@@ -100,7 +100,7 @@ WA-03, WA-04, WA-07, WA-08, WA-11, WA-17, WA-22, WA-29, WA-30, WA-33, WA-36, WA-
 ### Dependencies — S2, S4
 ### Files Impacted
 `app/domain/channel/whatsapp/bot/` (sessions entity + migration, flows, guardrails);
-`appodus_utils/integrations/intent/`; content-set storage; §7.3.2 projection function (D45).
+`appodus_utils/integrations/intent/`; content-set storage; §26.3.2 projection function (D45).
 ### Tests Required
 per-flow units; adversarial guardrail suite (judgment requests, non-English, classifier failure);
 capability-matrix denial tests; e2e conversation scripts on stub; failure drill (kill bot →
@@ -132,7 +132,7 @@ short-code opacity unit test.
 
 ### Objective
 Agent console replies out through the facade; `window_reopen` template outside Meta's 24-hour
-window; §7.6.3 non-text handling (images → evidence rule + upload token, unofficial flag; voice →
+window; §26.6.3 non-text handling (images → evidence rule + upload token, unofficial flag; voice →
 flagged audio routing; pins/contacts → human).
 
 ### Requirements Covered
@@ -150,12 +150,12 @@ never links to evidence.
 
 ## Slice S8 — Consent capture, milestones, report delivery ✅
 
-> The §7.7 **registry** half of this slice shipped early, in S4.1: template approval lag is on
+> The §26.7 **registry** half of this slice shipped early, in S4.1: template approval lag is on
 > the critical path, so the registry went in as soon as the templates were declared rather than
 > waiting for the senders that read them.
 
 ### Objective
-§7.4.6 dual unticked consents at payment confirmation + settings + STOP keywords;
+§26.4.6 dual unticked consents at payment confirmation + settings + STOP keywords;
 router-enforced consent; milestone templates on domain events; report-ready delivery
 (WhatsApp opt-in + unconditional email).
 
@@ -205,12 +205,12 @@ evidence.
 
 ## Slice S10 — Channel analytics ✅
 
-> Preceded by **S10.0**, unplanned: §7.3.4 marks three actions `HANDOFF` and only `upload`
+> Preceded by **S10.0**, unplanned: §26.3.4 marks three actions `HANDOFF` and only `upload`
 > had a producer, so `/wa/pay/<token>` and `/wa/report/<token>` were built and unreachable
 > from a conversation — and seam conversion had no payment seam to measure.
 
 ### Objective
-§7.10 instrumented from day one of launch: seam conversion, widget-attributed enquiries,
+§26.10 instrumented from day one of launch: seam conversion, widget-attributed enquiries,
 enquiry→intake rate, escalation rate + reasons, opt-in rates, quality-rating placeholder,
 voice-note volume; admin analytics surface.
 
@@ -238,7 +238,7 @@ derivations in `test_analytics_service.py`, the attribution cases in `test_inbou
 ### Objective
 Exercise the live Meta path (D43) once assets exist: live smoke on send/receive/template flows,
 token pen-check execution, failure drill on live config, env hygiene + docs; compliance copy
-(§7.8) landed; launch checklist in progress.md updated; MASTER-PRD §7 incorporation + CLAUDE.md
+(§26.8) landed; launch checklist in progress.md updated; MASTER-PRD §26 incorporation + CLAUDE.md
 pattern notes.
 
 ### Requirements Covered
@@ -246,7 +246,7 @@ WA-02, WA-40 (live), WA-42, WA-44
 
 ### Dependencies — all prior; external Meta assets (⊘)
 ### Delivered (D82 — everything not bound to Meta ships now)
-**WA-42:** §7.8 clauses in the Platform Terms, Privacy Policy and Communication Recording at
+**WA-42:** §26.8 clauses in the Platform Terms, Privacy Policy and Communication Recording at
 consent version `1.1.0` (migration `0011`; existing accounts re-accept, which is the correct
 NDPA answer for a new cross-border transfer disclosure); `whatsapp_consents` in the §19.3 audit
 pack, emitted from the grant/revoke timestamp pair; `PiiPseudonymiser` extended to five channel
@@ -265,4 +265,4 @@ Erasure + audit-pack suites rewritten around the channel surfaces; the drill in
 ## External prerequisites (tracked, non-blocking for S1–S10)
 Meta Business verification + green tick · template approvals (draft early — S8 registry holds
 status) · number custody (+2349167624347) · Doppler secrets (WHATSAPP_*, RS256 keypair,
-intent-provider API key(s)) · counsel items (§7.8 retention, ToS copy).
+intent-provider API key(s)) · counsel items (§26.8 retention, ToS copy).

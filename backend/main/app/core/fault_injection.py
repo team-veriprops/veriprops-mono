@@ -1,7 +1,7 @@
 """Deliberate one-shot fault injection, for drills that must run against a live stack.
 
-PRD §7.11 makes "failure fallback tested (kill the bot, observe the auto-reply + alert)" a
-hard launch gate, and §7.6.5 is the behaviour it gates: an outage must answer with an
+PRD §26.11 makes "failure fallback tested (kill the bot, observe the auto-reply + alert)" a
+hard launch gate, and §26.6.5 is the behaviour it gates: an outage must answer with an
 apology and a person, never with silence, because a bot that goes quiet is indistinguishable
 from a scam that stopped replying.
 
@@ -31,7 +31,7 @@ from main.appodus_utils.config.settings import Environment
 class FaultPoint(str, enum.Enum):
     """Where a drill can make one operation fail."""
 
-    # §7.6.5 — one WhatsApp bot turn raises, so the warm handover and the
+    # §26.6.5 — one WhatsApp bot turn raises, so the warm handover and the
     # `BOT_PIPELINE_FAILED` admin alert are both exercised on a live stack.
     WHATSAPP_BOT_TURN = "WHATSAPP_BOT_TURN"
 

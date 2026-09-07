@@ -1,4 +1,4 @@
-"""The two tables the channel is held to: §7.3.2 stages and the §7.3.4 matrix.
+"""The two tables the channel is held to: §26.3.2 stages and the §26.3.4 matrix.
 
 Both are places where the PRD states something and the code has to keep agreeing with it
 as the rest of the system moves. A new `VerificationStatus` that nobody projects, or a
@@ -19,7 +19,7 @@ from main.app.domain.channel.whatsapp.bot.projection import ChannelState, channe
 from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
 
 
-# ─── §7.3.2 projection ────────────────────────────────────────────
+# ─── §26.3.2 projection ────────────────────────────────────────────
 
 def test_a_conversation_with_no_case_is_an_enquiry():
     """Where every WhatsApp customer starts, and the one stage with no row to read."""
@@ -83,7 +83,7 @@ def test_the_field_task_cannot_override_a_later_stage():
     )
 
 
-# ─── §7.3.4 capability matrix ─────────────────────────────────────
+# ─── §26.3.4 capability matrix ─────────────────────────────────────
 
 @pytest.mark.parametrize(
     "action, expected",
@@ -114,7 +114,7 @@ def test_every_action_has_a_verdict(action):
     ids=lambda a: a.value,
 )
 def test_every_handoff_action_has_a_link_to_hand_off_with(action):
-    """A `HANDOFF` row with no §7.5 intent would have the bot announce a link it cannot
+    """A `HANDOFF` row with no §26.5 intent would have the bot announce a link it cannot
     mint — the customer waits for a message that never comes."""
     assert handoff_intent_for(action) in set(HandoffIntent)
 

@@ -55,7 +55,7 @@ _CONTENT = {
     # §4.2 admin user management — the suspension reason is admin-internal and never surfaces here.
     EventType.ACCOUNT_SUSPENDED: ("Account suspended", "Your account has been suspended. Contact support for assistance.", lambda _v: None),
     EventType.ACCOUNT_REACTIVATED: ("Account reactivated", "Your account is active again. Welcome back.", lambda _v: None),
-    # §7.4.5 (D77) — the delegate's own name is in `event.data`, so the buyer knows who.
+    # §26.4.5 (D77) — the delegate's own name is in `event.data`, so the buyer knows who.
     EventType.DELEGATE_REVOKED: ("Delegate updates stopped", "{name} opted out of WhatsApp updates, so they are no longer a delegate on this verification.", _portal_link),
 }
 

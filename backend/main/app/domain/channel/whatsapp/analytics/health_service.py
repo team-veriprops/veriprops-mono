@@ -1,7 +1,7 @@
-"""Meta number-health sync (PRD §7.10, §7.11; D81).
+"""Meta number-health sync (PRD §26.10, §26.11; D81).
 
 Keeps the app's picture of what Meta thinks of our sending number, in exactly the posture
-the §7.7 template registry established (D59a): **Meta owns the value, we store what it last
+the §26.7 template registry established (D59a): **Meta owns the value, we store what it last
 told us alongside when it told us, and nothing in the send path ever reads it.**
 
 That last clause is the important one. A quality rating is an early warning for a person,
@@ -69,7 +69,7 @@ class WhatsAppNumberHealthService:
             remote = await whatsapp_number_directory().fetch_number_health()
         except Exception as failure:  # noqa: BLE001 — recorded, never raised
             logger.warning(
-                "WhatsApp number-health sync failed (§7.10) — keeping the last known "
+                "WhatsApp number-health sync failed (§26.10) — keeping the last known "
                 "rating and recording the failure: %s",
                 failure,
             )

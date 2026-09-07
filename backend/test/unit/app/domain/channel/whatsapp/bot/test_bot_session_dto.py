@@ -1,4 +1,4 @@
-"""The session → DTO mapper (PRD §7.6, D57).
+"""The session → DTO mapper (PRD §26.6, D57).
 
 Small, but it earned its own file. `WhatsAppBotSessionService` is wrapped by
 `decorate_all_methods`, which decorates **every** method on the class — a `@staticmethod`
@@ -81,7 +81,7 @@ def test_an_empty_optional_stays_none_rather_than_becoming_an_enum(field):
 
 
 def test_the_dto_carries_no_case_data():
-    """§7.3.4 — a bot session says where a *conversation* is, never what a case holds.
+    """§26.3.4 — a bot session says where a *conversation* is, never what a case holds.
     Anything more would put customer data on an admin console field nobody asked for."""
     fields = set(BotSessionDto.model_fields)
 

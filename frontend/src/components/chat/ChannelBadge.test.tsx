@@ -5,7 +5,7 @@ import ChannelBadge from "./ChannelBadge";
 
 describe("ChannelBadge", () => {
   it("labels a WhatsApp-sourced item so an agent knows where a reply goes", () => {
-    // §7.3.3: one console, two surfaces — the agent must never guess which.
+    // §26.3.3: one console, two surfaces — the agent must never guess which.
     const html = renderToStaticMarkup(<ChannelBadge source={MessageSource.WHATSAPP} />);
     expect(html).toContain("WhatsApp");
   });

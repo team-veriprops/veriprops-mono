@@ -3,10 +3,19 @@
 This single migration is a squash of the original 20-file chain
 (fdd959a2cfda … f3a4b5c6d7e8), later re-squashed to fold in
 0002_user_account_status (users.account_status/suspended_*) and
-0003_user_verify_started (users.has_started_verification). Every table is
-created once in its final shape: later add_column / alter_column steps are
-folded into the relevant CREATE TABLE, and JSON columns are declared with
-``JSONB_VARIANT`` so the former Postgres-only JSON→JSONB pass is unnecessary.
+0003_user_verify_started (users.has_started_verification), and re-squashed
+again to fold in the ten-file WhatsApp cycle (0002_whatsapp_channel …
+0011_whatsapp_legal_copy) once every environment had been migrated past it.
+Every table is created once in its final shape: later add_column /
+alter_column steps are folded into the relevant CREATE TABLE, and JSON
+columns are declared with ``JSONB_VARIANT`` so the former Postgres-only
+JSON→JSONB pass is unnecessary.
+
+A squash is only safe once every live database is stamped at the head being
+folded in, because ``revision`` below becomes that head: an already-migrated
+database matches it and does nothing, and a fresh one builds the same schema
+in one step. That is the invariant to re-establish before squashing again —
+not the file's name, which has never been its revision id.
 
 Each table lives in its own ``_create_<table>()`` helper (mirroring the
 original auto_generated migration) and reuses ``AlembicUtils`` helpers.
@@ -21,7 +30,7 @@ weights, D30), and pricing tiers + line items (``TIER_PRICE_NGN_KOBO``).
 Enum members are reduced to their raw ``.value`` strings at row-build time,
 keeping the emitted SQL decoupled from app enums.
 
-Revision ID: 0001_initial_schema
+Revision ID: 0011_whatsapp_legal_copy
 Revises:
 Create Date: 2026-06-26 00:00:00.000000
 """
@@ -42,11 +51,22 @@ from main.app.domain.verification.scoring.models import DEFAULT_TRUST_WEIGHTS
 from main.appodus_utils import Utils
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
-# revision identifiers, used by Alembic.
-revision: str = "0003_user_verify_started"
+# revision identifiers, used by Alembic. The id is the *last* revision folded in, not the
+# filename: a database already stamped at that revision is left alone by this squash, which
+# is what makes re-squashing safe on live environments (the previous squash kept
+# `0003_user_verify_started` for the same reason).
+revision: str = "0011_whatsapp_legal_copy"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+# Raw strings by design — migrations stay decoupled from app enums.
+_CHANNEL_WEB = "WEB"
+_SOURCE_WEB = "WEB"
+_MODE_BOT = "BOT"
+_STATUS_PENDING = "PENDING"
+_STATUS_NOT_FOUND = "NOT_FOUND"
+_QUALITY_UNKNOWN = "UNKNOWN"
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -497,7 +517,7 @@ def _create_verifications():
         sa.Column("sla_due_date", sa.Date(), nullable=True),
         # Abandoned-draft recovery marker (§17.1, S21) — one reminder ever.
         sa.Column("recovery_reminded_at", UTCDateTime, nullable=True),
-        # Admin operational hold (§7.5) — a flag, not a state (see Verification model).
+        # Admin operational hold (§26.5) — a flag, not a state (see Verification model).
         sa.Column("paused", sa.Boolean(), nullable=False, server_default="false"),
         # Public VID-lookup visibility (§13.1 "Public" sharing mode).
         sa.Column("public_lookup_enabled", sa.Boolean(), nullable=False, server_default="false"),
@@ -549,7 +569,7 @@ def _create_payments():
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Admin control panel, task execution & chargeback (PRD §6, §6a, §7)
+# Admin control panel, task execution & chargeback (PRD §6, §6a, §12)
 # ─────────────────────────────────────────────────────────────────────
 
 
@@ -571,7 +591,7 @@ def _create_verification_tasks():
         sa.Column("accepted_at", UTCDateTime, nullable=True),
         sa.Column("submitted_at", UTCDateTime, nullable=True),
         sa.Column("approved_at", UTCDateTime, nullable=True),
-        # Role-specific findings captured on submit (§7.3); rejection feedback on rework.
+        # Role-specific findings captured on submit (§12.2); rejection feedback on rework.
         sa.Column("submission_payload", JSONB_VARIANT, nullable=True),
         sa.Column("rejection_reason", sa.String(length=1000), nullable=True),
         # Admin review outcome + per-task quality for the composite trust score (§8.3).
@@ -660,7 +680,7 @@ def _create_task_evidence():
         sa.Column("storage_url", sa.String(length=1024), nullable=True),
         sa.Column("mime_type", sa.String(length=128), nullable=True),
         sa.Column("size_bytes", sa.BigInteger(), nullable=True),
-        # §4.5 content hash + §7.3a server-set proof-of-presence.
+        # §4.5 content hash + §12.3 server-set proof-of-presence.
         sa.Column("content_sha256", sa.String(length=64), nullable=False),
         sa.Column("gps_latitude", sa.Float(), nullable=True),
         sa.Column("gps_longitude", sa.Float(), nullable=True),
@@ -719,9 +739,18 @@ def _create_conversations():
         sa.Column("closed", sa.Boolean(), nullable=False, server_default="false"),
         # ``created_by`` (thread opener) comes from base_audit_columns.
         *AlembicUtils.base_audit_columns(),
+        # Folded columns trail the audit block so a freshly built database matches one
+        # migrated through the original chain column-for-column (ADD COLUMN appends).
+        # folded from 0002_whatsapp_channel — source labeling, so a WhatsApp thread is
+        # distinguishable in the admin console without becoming a separate pipeline.
+        sa.Column("channel", sa.String(length=10), nullable=False, server_default=_CHANNEL_WEB),
+        # The sender's E.164 number for a WhatsApp thread — how an inbound message finds its
+        # existing thread before the number is linked to an account.
+        sa.Column("external_ref", sa.String(length=20), nullable=True),
     )
     op.create_index("ix_conversations_id", "conversations", ["id"], unique=True)
     op.create_index("ix_conversations_verification", "conversations", ["verification_id"], unique=False)
+    op.create_index("ix_conversations_external_ref", "conversations", ["external_ref"], unique=False)
 
 
 def _create_conversation_participants():
@@ -760,11 +789,30 @@ def _create_chat_messages():
         sa.Column("reviewed_by", sa.String(length=36), nullable=True),
         sa.Column("reviewed_at", UTCDateTime, nullable=True),
         *AlembicUtils.base_audit_columns(),
+        # Folded columns trail the audit block — see `_create_conversations`.
+        # folded from 0002_whatsapp_channel — which surface the message came from.
+        sa.Column("source", sa.String(length=10), nullable=False, server_default=_SOURCE_WEB),
+        sa.Column("external_message_id", sa.String(length=128), nullable=True),
+        # folded from 0007_chat_channel_delivery. Deliberately **not** a reuse of
+        # ``delivered_at``, which means "released past the §4.7 fraud hold": conflating the
+        # two would make a held message look channel-delivered, and a message queued outside
+        # Meta's 24-hour window look lost. Null on an admin/agent message in a WhatsApp
+        # thread is what marks it as still waiting to go out.
+        sa.Column("channel_delivered_at", UTCDateTime, nullable=True),
+        # What a non-text inbound actually was (§26.6.3), so the console can flag an image as
+        # unofficial and a voice note as audio without joining back to
+        # ``whatsapp_inbound_messages`` for every row it renders.
+        sa.Column("media_kind", sa.String(length=16), nullable=True),
     )
     op.create_index("ix_chat_messages_id", "chat_messages", ["id"], unique=True)
     op.create_index("ix_chat_messages_conversation", "chat_messages", ["conversation_id"], unique=False)
     op.create_index("ix_chat_messages_task", "chat_messages", ["task_id"], unique=False)
     op.create_index("ix_chat_messages_state", "chat_messages", ["state"], unique=False)
+    # The queue read is "this thread's undelivered agent replies", so the index is on the
+    # pair rather than on the timestamp alone.
+    op.create_index(
+        "ix_chat_messages_channel_pending", "chat_messages", ["conversation_id", "channel_delivered_at"]
+    )
 
 
 def _create_notifications():
@@ -1051,6 +1099,257 @@ def _create_report_acknowledgements():
     op.create_index("ix_report_ack_id", "report_acknowledgements", ["id"], unique=True)
     op.create_index("ix_report_ack_verification", "report_acknowledgements", ["verification_id"], unique=False)
     op.create_index("ix_report_ack_customer", "report_acknowledgements", ["customer_id"], unique=False)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# WhatsApp channel (PRD §26; orig: 0002_whatsapp_channel … 0010_whatsapp_channel_analytics)
+#
+# A second thin surface over the same backend, not a second backend: no case
+# state lives here. The tables hold the channel's own bookkeeping — the inbound
+# journal, the identity seam, bot state, consent, delegates, and the §26.10
+# fact table.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _create_whatsapp_inbound_messages():
+    # The journal every Meta delivery lands in (§26.1).
+    op.create_table(
+        "whatsapp_inbound_messages",
+        sa.Column("wamid", sa.String(length=128), nullable=False),
+        sa.Column("from_phone", sa.String(length=20), nullable=False),
+        sa.Column("kind", sa.String(length=20), nullable=False),
+        sa.Column("text", sa.Text(), nullable=True),
+        sa.Column("interactive_id", sa.String(length=64), nullable=True),
+        sa.Column("media_id", sa.String(length=128), nullable=True),
+        sa.Column("media_mime_type", sa.String(length=100), nullable=True),
+        sa.Column("sender_name", sa.String(length=120), nullable=True),
+        sa.Column("payload", JSONB_VARIANT, nullable=True),
+        sa.Column("received_at", UTCDateTime, nullable=True),
+        sa.Column("processed_at", UTCDateTime, nullable=True),
+        sa.Column("chat_message_id", sa.String(length=36), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+        # Folded columns trail the audit block — see `_create_conversations`.
+        # folded from 0010_whatsapp_channel_analytics — the widget's `[ref: …]` marker (D85),
+        # lifted out of the message text at ingest.
+        sa.Column("page_code", sa.String(length=40), nullable=True),
+    )
+    op.create_index("ix_whatsapp_inbound_messages_id", "whatsapp_inbound_messages", ["id"], unique=True)
+    op.create_index("ix_whatsapp_inbound_from_phone", "whatsapp_inbound_messages", ["from_phone"], unique=False)
+    op.create_index(
+        "ix_whatsapp_inbound_messages_chat_message_id",
+        "whatsapp_inbound_messages", ["chat_message_id"], unique=False,
+    )
+    # §26.10's voice-note volume is counted over a window off this table.
+    op.create_index("ix_whatsapp_inbound_kind_received", "whatsapp_inbound_messages", ["kind", "received_at"])
+    # Exactly-once ingestion: a Meta redelivery collides here instead of producing a
+    # duplicate conversation turn.
+    op.create_unique_constraint("uq_whatsapp_inbound_wamid", "whatsapp_inbound_messages", ["wamid"])
+
+
+def _create_handoff_token_redemptions():
+    # The §26.5 handoff token is stateless (a signed RS256 JWT); this table is what makes it
+    # single-use — redemption claims the token's `jti` and the unique constraint is the
+    # enforcement, so two concurrent redemptions of a forwarded link race and one wins.
+    op.create_table(
+        "handoff_token_redemptions",
+        sa.Column("jti", sa.String(length=64), nullable=False),
+        sa.Column("intent", sa.String(length=10), nullable=False),
+        # Nullable (folded from 0004_whatsapp_linking): a `link` or `intake` token names a
+        # phone number instead of a case (D55/D71).
+        sa.Column("case_id", sa.String(length=36), nullable=True),
+        sa.Column("customer_id", sa.String(length=36), nullable=True),
+        sa.Column("redeemed_at", UTCDateTime, nullable=False),
+        # Which client actually burned the link — the §26.11 pen-check trail.
+        sa.Column("redeemed_ip", sa.String(length=45), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+        # Folded columns trail the audit block — see `_create_conversations`.
+        # folded from 0004_whatsapp_linking — the phone a phone-scoped token names.
+        sa.Column("phone_e164", sa.String(length=32), nullable=True),
+    )
+    op.create_index("ix_handoff_token_redemptions_id", "handoff_token_redemptions", ["id"], unique=True)
+    # Single-use enforcement: a replayed nonce collides here.
+    op.create_unique_constraint("uq_handoff_token_redemptions_jti", "handoff_token_redemptions", ["jti"])
+
+
+def _create_whatsapp_links():
+    # The channel's identity seam (§26.4.4): one row per account, one number per row.
+    op.create_table(
+        "whatsapp_links",
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        # Null once revoked, which is what releases the number for another account.
+        sa.Column("phone_e164", sa.String(length=32), nullable=True),
+        sa.Column("wa_id", sa.String(length=32), nullable=True),
+        sa.Column("status", sa.String(length=10), nullable=False, server_default=_STATUS_PENDING),
+        sa.Column("linked_at", UTCDateTime, nullable=True),
+        sa.Column("revoked_at", UTCDateTime, nullable=True),
+        sa.Column("revoked_reason", sa.String(length=120), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_whatsapp_links_id", "whatsapp_links", ["id"], unique=True)
+    # The §26.4.4 one-to-one rule, enforced in the database rather than by convention.
+    op.create_unique_constraint("uq_whatsapp_links_user_id", "whatsapp_links", ["user_id"])
+    op.create_unique_constraint("uq_whatsapp_links_phone_e164", "whatsapp_links", ["phone_e164"])
+
+
+def _create_whatsapp_templates():
+    # Only what Meta owns — review status, their id, a rejection reason. The §26.7 template
+    # *definitions* are code-owned (D59), because the code is what fills their parameters.
+    op.create_table(
+        "whatsapp_templates",
+        # Also the AvailableTemplate slug and the Jinja filename, which is what keeps the
+        # declaration, the body copy, this row, and the wire from drifting apart.
+        sa.Column("name", sa.String(length=120), nullable=False),
+        sa.Column("category", sa.String(length=20), nullable=False),
+        sa.Column("language", sa.String(length=10), nullable=False),
+        sa.Column("status", sa.String(length=20), nullable=False, server_default=_STATUS_NOT_FOUND),
+        sa.Column("remote_id", sa.String(length=64), nullable=True),
+        sa.Column("rejection_reason", sa.Text(), nullable=True),
+        sa.Column("last_synced_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_whatsapp_templates_id", "whatsapp_templates", ["id"], unique=True)
+    # One row per Meta template name — a second row would let two syncs disagree.
+    op.create_unique_constraint("uq_whatsapp_templates_name", "whatsapp_templates", ["name"])
+
+
+def _create_whatsapp_bot_sessions():
+    # One row per number: where the conversation is, whether a human has taken it over, and
+    # how many turns in a row the bot has failed to understand (§26.3.3, §26.6).
+    op.create_table(
+        "whatsapp_bot_sessions",
+        # E.164 with the leading '+', matching `whatsapp_links.phone_e164` and the
+        # conversation's `external_ref`.
+        sa.Column("phone_e164", sa.String(length=32), nullable=False),
+        sa.Column("mode", sa.String(length=10), nullable=False, server_default=_MODE_BOT),
+        sa.Column("mode_changed_at", UTCDateTime, nullable=True),
+        sa.Column("current_flow", sa.String(length=24), nullable=True),
+        sa.Column("step", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("context", JSONB_VARIANT, nullable=True),
+        sa.Column("last_inbound_at", UTCDateTime, nullable=True),
+        sa.Column("welcomed_at", UTCDateTime, nullable=True),
+        sa.Column("unmatched_count", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("last_escalation_reason", sa.String(length=32), nullable=True),
+        sa.Column("last_escalated_at", UTCDateTime, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_whatsapp_bot_sessions_id", "whatsapp_bot_sessions", ["id"], unique=True)
+    # One session per number: two rows would mean two half-remembered conversations
+    # with one person, and the sticky-HUMAN rule would hold on only one of them.
+    op.create_unique_constraint(
+        "uq_whatsapp_bot_sessions_phone_e164", "whatsapp_bot_sessions", ["phone_e164"]
+    )
+
+
+def _create_whatsapp_consents():
+    # The §26.4.6 opt-in ledger the notification router enforces (D63). Each consent keeps a
+    # grant *and* a revoke timestamp and no boolean: §26.8 wants the record timestamped and
+    # exportable, so the pair of stamps *is* the record and a flag beside them could only
+    # drift from the evidence justifying it.
+    op.create_table(
+        "whatsapp_consents",
+        sa.Column("user_id", sa.String(length=36), nullable=False),
+        # "Send me progress updates about this verification on WhatsApp" (§26.4.6 #1).
+        sa.Column("utility_granted_at", UTCDateTime, nullable=True),
+        sa.Column("utility_revoked_at", UTCDateTime, nullable=True),
+        sa.Column("utility_source", sa.String(length=24), nullable=True),
+        # "Send me occasional Veriprops news and offers on WhatsApp" (§26.4.6 #2).
+        sa.Column("marketing_granted_at", UTCDateTime, nullable=True),
+        sa.Column("marketing_revoked_at", UTCDateTime, nullable=True),
+        sa.Column("marketing_source", sa.String(length=24), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_whatsapp_consents_id", "whatsapp_consents", ["id"], unique=True)
+    # One consent state per account: two concurrent captures must not leave the router
+    # choosing between two answers to the same question.
+    op.create_unique_constraint("uq_whatsapp_consents_user_id", "whatsapp_consents", ["user_id"])
+
+
+def _create_case_delegates():
+    # The §26.4.5 per-case, status-only, revocable grant (D67). The number lives here rather
+    # than in `whatsapp_links`: a delegate has no account, so reusing the link table would
+    # break its one-account-one-number constraints or hand a delegate an account identity.
+    op.create_table(
+        "case_delegates",
+        sa.Column("verification_id", sa.String(length=36), nullable=False),
+        sa.Column("name", sa.String(length=120), nullable=False),
+        sa.Column("phone_e164", sa.String(length=32), nullable=False),
+        # Null until the OTP is confirmed — nothing is visible before that moment.
+        sa.Column("verified_at", UTCDateTime, nullable=True),
+        sa.Column("revoked_at", UTCDateTime, nullable=True),
+        sa.Column("revoked_reason", sa.String(length=120), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_case_delegates_id", "case_delegates", ["id"], unique=True)
+    # The two lookups: the buyer's case page, and the bot resolving an inbound number.
+    op.create_index("ix_case_delegates_verification", "case_delegates", ["verification_id"])
+    op.create_index("ix_case_delegates_phone", "case_delegates", ["phone_e164"])
+    # §26.4.5's one-delegate-per-case rule, enforced in the database over *live* rows only.
+    # A plain unique constraint would make the first revocation permanent.
+    op.create_index(
+        "uq_case_delegates_live_per_case",
+        "case_delegates",
+        ["verification_id"],
+        unique=True,
+        postgresql_where=sa.text("revoked_at IS NULL AND deleted = false"),
+    )
+
+
+def _create_whatsapp_channel_events():
+    # The §26.10 append-only fact table (D80). Four of the seven metrics are *rates over a
+    # window*, which the channel's operational tables cannot answer: they hold one mutated
+    # row per number, so a finished intake reads identically to one that never started.
+    op.create_table(
+        "whatsapp_channel_events",
+        # When the thing happened, which is not always when the row was written: a fact
+        # recorded from an event subscriber lags its cause. Every metric windows on this.
+        sa.Column("occurred_at", UTCDateTime, nullable=False),
+        sa.Column("event_type", sa.String(length=32), nullable=False),
+        sa.Column("phone_e164", sa.String(length=32), nullable=True),
+        # Free text, not an enum: the codes name frontend routes the backend does not
+        # model, and the widget derives one for any new page without a table edit.
+        sa.Column("page_code", sa.String(length=40), nullable=True),
+        sa.Column("reason", sa.String(length=32), nullable=True),
+        sa.Column("verification_id", sa.String(length=36), nullable=True),
+        sa.Column("customer_id", sa.String(length=36), nullable=True),
+        sa.Column("detail", JSONB_VARIANT, nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_whatsapp_channel_events_id", "whatsapp_channel_events", ["id"], unique=True)
+    # Every §26.10 metric is "rows of this type in this window", so the composite index is
+    # the access path rather than an optimisation.
+    op.create_index(
+        "ix_whatsapp_channel_events_type_time", "whatsapp_channel_events", ["event_type", "occurred_at"]
+    )
+    # Seam conversion asks "has this channel touched this case?" once per confirmed
+    # payment on the whole platform, so it must not be a scan.
+    op.create_index(
+        "ix_whatsapp_channel_events_verification", "whatsapp_channel_events", ["verification_id"]
+    )
+
+
+def _create_whatsapp_number_health():
+    # Meta's quality rating for our sending number (D81), cached in the same posture as the
+    # §26.7 template registry: their verdict, our timestamp, and nothing in the send path
+    # ever reads it.
+    op.create_table(
+        "whatsapp_number_health",
+        sa.Column("phone_number_id", sa.String(length=64), nullable=False),
+        # Defaults to UNKNOWN rather than GREEN: the state before a first successful sync
+        # must never read as a clean bill of health.
+        sa.Column("quality_rating", sa.String(length=16), nullable=False, server_default=_QUALITY_UNKNOWN),
+        # Meta's vocabulary, which they extend without notice — an enum here would turn a
+        # new tier into a sync failure.
+        sa.Column("messaging_limit_tier", sa.String(length=32), nullable=True),
+        sa.Column("last_synced_at", UTCDateTime, nullable=True),
+        # Kept rather than raised, so the admin surface can say "showing GREEN, but we
+        # have not been able to ask since Tuesday".
+        sa.Column("sync_error", sa.String(length=255), nullable=True),
+        *AlembicUtils.base_audit_columns(),
+    )
+    op.create_index("ix_whatsapp_number_health_id", "whatsapp_number_health", ["id"], unique=True)
+    op.create_index(
+        "ix_whatsapp_number_health_phone_number_id", "whatsapp_number_health", ["phone_number_id"]
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -1420,6 +1719,17 @@ _TABLE_BUILDERS = [
     ("pricing_line_items", _create_pricing_line_items),
     ("broadcasts", _create_broadcasts),
     ("data_erasure_requests", _create_data_erasure_requests),
+    # WhatsApp channel (§26). There are no foreign keys anywhere in this schema, so the
+    # position of these entries is presentational rather than a dependency order.
+    ("whatsapp_inbound_messages", _create_whatsapp_inbound_messages),
+    ("handoff_token_redemptions", _create_handoff_token_redemptions),
+    ("whatsapp_links", _create_whatsapp_links),
+    ("whatsapp_templates", _create_whatsapp_templates),
+    ("whatsapp_bot_sessions", _create_whatsapp_bot_sessions),
+    ("whatsapp_consents", _create_whatsapp_consents),
+    ("case_delegates", _create_case_delegates),
+    ("whatsapp_channel_events", _create_whatsapp_channel_events),
+    ("whatsapp_number_health", _create_whatsapp_number_health),
 ]
 
 

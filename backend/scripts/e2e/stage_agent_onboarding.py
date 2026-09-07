@@ -8,7 +8,7 @@ Also asserts the §3.3a credential requirement (SURVEYOR without a licence is re
 """
 from __future__ import annotations
 
-from .harness import CONSENT_VERSION, Ctx, check, signup_fresh_user
+from .harness import Ctx, check, consent_version_for, signup_fresh_user
 
 # Deterministic stub KYC sentinels (integrations/kyc/stub): anything else verifies.
 _KYC_FAILING_BVN = "00000000000"
@@ -30,7 +30,7 @@ def run(ctx: Ctx) -> None:
     # §3.3a: a credentialed role without its licence is refused outright.
     bad = applicant.post("/users/agents/application", json={
         "roles": ["SURVEYOR"], "kyc": {"method": "BVN", "bvn": "22233344455"},
-        "truthfulnessConfirmed": True, "agentTermsVersion": CONSENT_VERSION,
+        "truthfulnessConfirmed": True, "agentTermsVersion": consent_version_for("AGENT_TERMS"),
     })
     check("SURVEYOR application without a licence is refused (§3.3a)",
           bad.status_code >= 400, f"http {bad.status_code}")
@@ -42,7 +42,7 @@ def run(ctx: Ctx) -> None:
         "coverage": [{"state": "lagos", "lga": "eti-osa"}],
         "kyc": {"method": "BVN", "bvn": "22233344455"},  # non-sentinel → stub VERIFIED
         "bio": "Licensed surveyor, 6 years in Lagos.", "yearsExperience": 6,
-        "truthfulnessConfirmed": True, "agentTermsVersion": CONSENT_VERSION,
+        "truthfulnessConfirmed": True, "agentTermsVersion": consent_version_for("AGENT_TERMS"),
     }).json()["data"]
     check("agent application submitted → PENDING (§3.1)", submitted["status"] == "PENDING")
 
@@ -72,7 +72,7 @@ def run(ctx: Ctx) -> None:
         "roles": ["REGISTRY"],
         "coverage": [{"state": "lagos", "lga": "ikeja"}],
         "kyc": {"method": "BVN", "bvn": _KYC_FAILING_BVN},  # stub sentinel → FAILED
-        "truthfulnessConfirmed": True, "agentTermsVersion": CONSENT_VERSION,
+        "truthfulnessConfirmed": True, "agentTermsVersion": consent_version_for("AGENT_TERMS"),
     }).json()["data"]
     check("failed stub KYC still lodges a PENDING application for review (§3.1)",
           second["status"] == "PENDING")

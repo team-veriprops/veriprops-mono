@@ -1,10 +1,10 @@
-"""WhatsApp consent endpoints (PRD §7.4.6, WA-27).
+"""WhatsApp consent endpoints (PRD §26.4.6, WA-27).
 
 URL shape: /channel/whatsapp/consent/... — session-authenticated. Frontend service:
 frontend/src/components/account/libs/useWhatsAppConsentQueries.
 
 One pair of endpoints serves both authenticated capture points: the payment step, where
-§7.4.6 says the controls are first shown, and account settings, where they are revocable.
+§26.4.6 says the controls are first shown, and account settings, where they are revocable.
 The third capture point — the `/wa/pay/<token>` landing — has no session and writes
 through the grant-scoped route on the handoff router instead (D76).
 """
@@ -30,7 +30,7 @@ consent_service: WhatsAppConsentService = di[WhatsAppConsentService]
 
 @whatsapp_consent_router.get("/me", response_model=SuccessResponse[WhatsAppConsentDto])
 async def get_my_consents(authorize: AuthJWT = Depends()):
-    """This account's two §7.4.6 opt-ins. Absent means both off — never inherited."""
+    """This account's two §26.4.6 opt-ins. Absent means both off — never inherited."""
     await authorize.jwt_required()
     consents = await consent_service.describe(str(authorize.get_jwt_subject()))
     return SuccessResponse[WhatsAppConsentDto](data=consents)
@@ -51,7 +51,7 @@ async def set_my_consents(
     await authorize.jwt_required()
     if source in (WhatsAppConsentSource.STOP_KEYWORD, WhatsAppConsentSource.START_KEYWORD):
         # Those two are provenance the bot records about words the customer typed in
-        # WhatsApp. A browser asserting them would corrupt the §7.8 export.
+        # WhatsApp. A browser asserting them would corrupt the §26.8 export.
         source = WhatsAppConsentSource.ACCOUNT_SETTINGS
     consents = await consent_service.set_consents(
         str(authorize.get_jwt_subject()), req.utility, req.marketing, source

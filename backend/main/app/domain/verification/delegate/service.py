@@ -1,4 +1,4 @@
-"""Per-case delegates (PRD §7.4.5, Decision O, D67/D77; WA-26).
+"""Per-case delegates (PRD §26.4.5, Decision O, D67/D77; WA-26).
 
 Authorization, OTP verification, revocation, and the two lookups everything else depends
 on: *does this number hold a delegation?* (the bot) and *who should this milestone also
@@ -48,7 +48,7 @@ from main.appodus_utils.integrations.messaging.providers.whatsapp.phone import t
 
 logger: Logger = di["logger"]
 
-# One live delegate per case (§7.4.5). Refused here rather than left to a constraint so
+# One live delegate per case (§26.4.5). Refused here rather than left to a constraint so
 # the buyer is told what is in the way — and told it about the *case*, never about who
 # else might hold the number.
 ALREADY_DELEGATED_MESSAGE = (
@@ -83,7 +83,7 @@ class CaseDelegateService:
     # ── The buyer's surface ───────────────────────────────────────
 
     async def list_for_case(self, verification_id: str, customer_id: str) -> List[CaseDelegateDto]:
-        """The case's delegate, as the case page renders it. At most one (§7.4.5)."""
+        """The case's delegate, as the case page renders it. At most one (§26.4.5)."""
         await self._verification_service.get_owned(verification_id, customer_id)
         delegate = await self._case_delegate_repo.get_live_for_case(verification_id)
         return [self._to_dto(delegate)] if delegate else []
@@ -91,7 +91,7 @@ class CaseDelegateService:
     async def authorize(
         self, verification_id: str, customer_id: str, name: str, phone_e164: str
     ) -> CaseDelegateChallengeDto:
-        """Nominate a delegate and send them a code (§7.4.5).
+        """Nominate a delegate and send them a code (§26.4.5).
 
         Nothing is visible yet. The row exists so the one-per-case slot is taken, but
         `verified_at` stays null until they answer — an authorization the delegate never
@@ -130,7 +130,7 @@ class CaseDelegateService:
     ) -> CaseDelegateDto:
         """Prove the delegate controls the number, and start their visibility.
 
-        The buyer relays the code, which is the §7.4.5 "narrower grant" in practice: the
+        The buyer relays the code, which is the §26.4.5 "narrower grant" in practice: the
         delegate never touches the website, and the person who authorized them is the one
         who completes it.
         """
@@ -152,14 +152,14 @@ class CaseDelegateService:
         self, verification_id: str, customer_id: str, reason: str = "customer_request"
     ) -> None:
         """End the delegation. Effective on the next event, because the audience is
-        resolved at send time rather than stored anywhere (§7.4.5)."""
+        resolved at send time rather than stored anywhere (§26.4.5)."""
         await self._verification_service.get_owned(verification_id, customer_id)
         delegate = await self._case_delegate_repo.get_live_for_case(verification_id)
         if delegate is None:
             raise ResourceNotFoundException(resource="delegate")
         await self._revoke_row(delegate, reason, actor_id=customer_id)
 
-    # ── The bot's lookup (§7.4.3's second question) ───────────────
+    # ── The bot's lookup (§26.4.3's second question) ───────────────
 
     async def resolve_delegate_for_phone(self, phone_e164: str) -> Optional[CaseDelegate]:
         """The delegation this number holds, or ``None``.

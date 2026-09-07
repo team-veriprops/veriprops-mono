@@ -1,4 +1,4 @@
-"""WhatsAppLinkService (PRD §7.4.4, WA-23/WA-24/WA-25).
+"""WhatsAppLinkService (PRD §26.4.4, WA-23/WA-24/WA-25).
 
 The channel's identity seam, so these are written adversarially. Every flow that could
 leak case data to a stranger's phone asks `resolve_user_for_phone`, which means the tests
@@ -184,7 +184,7 @@ class TestStartLink:
 
 
 class TestNumberChange:
-    """§7.4.4: a number change is a re-verification, and the old thread goes cold."""
+    """§26.4.4: a number change is a re-verification, and the old thread goes cold."""
 
     async def test_releases_the_old_number_before_starting_the_new_attempt(self):
         active = link_row()
@@ -215,7 +215,7 @@ class TestConfirmLink:
         await svc.confirm_link(USER_ID, PHONE, "654123")
 
         assert pending.status == WhatsAppLinkStatus.ACTIVE.value
-        # §7.8 — one conversation object per person, not one per surface.
+        # §26.8 — one conversation object per person, not one per surface.
         svc._conversations.set_whatsapp_thread_owner.assert_awaited_once_with(PHONE, USER_ID)
 
     async def test_verifies_the_code_on_the_whatsapp_channel(self):
@@ -282,7 +282,7 @@ class TestUnlink:
 
 
 class TestWhatsAppToWebDirection:
-    """§7.4.4: the number crosses in a signed token, never in the request body."""
+    """§26.4.4: the number crosses in a signed token, never in the request body."""
 
     async def test_the_number_comes_from_the_token(self):
         svc = _service(own_link=None)

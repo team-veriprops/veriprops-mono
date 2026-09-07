@@ -50,7 +50,7 @@ class WhatsAppBotSessionRepo(
     async def count_in_human_mode(self) -> int:
         """How many threads the bot is currently silent on (D57).
 
-        The §7.11 readiness signal that matters operationally: a count that only grows
+        The §26.11 readiness signal that matters operationally: a count that only grows
         means agents are taking threads over and never handing them back, and every one
         of those customers is talking to nobody when the agent moves on.
         """

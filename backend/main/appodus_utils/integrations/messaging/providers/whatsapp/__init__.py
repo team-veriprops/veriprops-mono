@@ -1,4 +1,4 @@
-"""WhatsApp transport (PRD §7.3.3).
+"""WhatsApp transport (PRD §26.3.3).
 
 The webhook handler is imported here for the same reason every other integration package
 imports its own: `WebhookHandlerFactory` builds its routing table from

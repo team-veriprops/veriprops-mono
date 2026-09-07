@@ -31,7 +31,7 @@ class MessageRecipientBuilder:
             # The display name, not `settings.BRAND` — that one is a lowercase slug for
             # log lines and internal identifiers. Templates render this as prose ("Team
             # {{ BRAND }}", "{{ BRAND }}: 654123 is your code"), so the slug read as a
-            # typo on the messages the §7.1.2 anti-impersonation posture depends on.
+            # typo on the messages the §26.1.2 anti-impersonation posture depends on.
             MessageContext.BRAND: settings.BRAND_DISPLAY_NAME,
             MessageContext.BRAND_SUPPORT_EMAIL: settings.BRAND_SUPPORT_EMAIL,
             MessageContext.BRAND_SUPPORT_PHONE: settings.BRAND_SUPPORT_PHONE,

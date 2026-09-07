@@ -18,7 +18,7 @@ import { HandoffService } from "./libs/handoff-service";
 const service = new HandoffService(httpClient);
 
 /**
- * Landing page for a WhatsApp handoff link (PRD §7.4.2).
+ * Landing page for a WhatsApp handoff link (PRD §26.4.2).
  *
  * Someone arrives here mid-conversation, from a chat, usually on a phone. Two things
  * follow from that and drive the whole component:
@@ -30,10 +30,10 @@ const service = new HandoffService(httpClient);
  * **A dead link must not feel like a dead end.** Links expire in fifteen minutes and are
  * single-use, so hitting an expired one is normal, not exceptional. The recovery state
  * offers one tap back into the chat to ask for a new one — the bot resends **on request
- * only**, never automatically (§7.4.2).
+ * only**, never automatically (§26.4.2).
  *
  * Only `pay` completes here. `upload` and `report` continue into the authenticated
- * portal, because canonical evidence (§7.1.6) and the report link (Decision B) belong
+ * portal, because canonical evidence (§26.1.6) and the report link (Decision B) belong
  * behind a real login rather than a forwardable link.
  */
 export default function WaHandoffLanding({
@@ -48,7 +48,7 @@ export default function WaHandoffLanding({
   const [payment, setPayment] = useState<HandoffPayment | null>(null);
   const [failed, setFailed] = useState(false);
   const [paying, setPaying] = useState(false);
-  // Both unticked until the customer says otherwise — §7.4.6's required default. The
+  // Both unticked until the customer says otherwise — §26.4.6's required default. The
   // landing has no session, so there is no prior state to read: this is a fresh capture.
   const [consent, setConsent] = useState<WhatsAppConsent>(NO_WHATSAPP_CONSENT);
   // Redemption spends the link, so it must fire exactly once even under React's
@@ -65,7 +65,7 @@ export default function WaHandoffLanding({
   }, [intent, token]);
 
   /**
-   * §7.4.6's two opt-ins, at the only moment this customer is ever asked (D76). Written on
+   * §26.4.6's two opt-ins, at the only moment this customer is ever asked (D76). Written on
    * toggle rather than on payment: the tick is the consent act, and a failed card must not
    * lose it. Optimistic locally so the box responds immediately on a phone connection, and
    * best-effort on the wire — a consent that fails to save must never block the payment.
@@ -224,7 +224,7 @@ function PaySection({
 
       <PaymentPledge />
 
-      {/* §7.4.6, D76 — the customer who arrived from chat is asked here or nowhere. */}
+      {/* §26.4.6, D76 — the customer who arrived from chat is asked here or nowhere. */}
       <WhatsAppOptInControls consent={consent} onChange={onConsentChange} />
 
       {!payment ? (
@@ -252,7 +252,7 @@ function PaySection({
 }
 
 /**
- * The standing payment pledge (§7.1.1), repeated at every payment handoff. It is the
+ * The standing payment pledge (§26.1.1), repeated at every payment handoff. It is the
  * customer's defence against an impersonator sending a lookalike link, which is exactly
  * the moment they are most exposed — so it is stated here, not just in the chat.
  */

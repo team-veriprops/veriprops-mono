@@ -129,7 +129,7 @@ class ReviewService:
             verification_id=verification_id, sse_event=VerificationEventType.TASK_UPDATED.value,
         ))
         if role is AgentRole.FIELD:
-            # §7.6.2's "field inspection complete" milestone (D66). Approval of the FIELD
+            # §26.6.2's "field inspection complete" milestone (D66). Approval of the FIELD
             # task is the moment — the inspection is not complete when the agent submits,
             # only when an admin has accepted what they submitted. It gets its own event
             # rather than being inferred from the nudge above, so the WhatsApp rule row
@@ -416,7 +416,7 @@ class ReviewService:
             sse_event=VerificationEventType.STATUS_CHANGED.value,
             data={"status": new_status.value},
         ))
-        # §7.6.2's "verification started" milestone (D66), from the admin-decision half of
+        # §26.6.2's "verification started" milestone (D66), from the admin-decision half of
         # §4.1's derivation. The task states go with it: they are what tells a first start
         # apart from a rework re-activating a case that was already under review.
         await publish_verification_started(

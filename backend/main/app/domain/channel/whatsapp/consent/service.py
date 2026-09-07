@@ -1,8 +1,8 @@
-"""WhatsApp consent ledger (PRD §7.4.6, §7.8; D63/D64; WA-27).
+"""WhatsApp consent ledger (PRD §26.4.6, §26.8; D63/D64; WA-27).
 
-The store behind §7.4.6's two opt-ins. It answers one question for the notification router
+The store behind §26.4.6's two opt-ins. It answers one question for the notification router
 — *may we message this customer on WhatsApp?* — and records who asked and when, so the
-§7.8 consent export is a query rather than a reconstruction.
+§26.8 consent export is a query rather than a reconstruction.
 
 Nothing here sends anything. Consent is read at the router (WA-16), never at a send site,
 which is what makes "the customer never opted in" a single place to audit instead of a
@@ -53,13 +53,13 @@ class WhatsAppConsentService:
         return await self._whatsapp_consent_repo.get_by_user_id(user_id)
 
     async def describe(self, user_id: str) -> WhatsAppConsentDto:
-        """What a consent surface renders. No row means both unticked, which is §7.4.6's
+        """What a consent surface renders. No row means both unticked, which is §26.4.6's
         required default — consent is never inherited from silence."""
         consent = await self._whatsapp_consent_repo.get_by_user_id(user_id)
         return self._to_dto(consent)
 
     async def utility_granted(self, user_id: str) -> bool:
-        """**The milestone gate.** Read by the notification router before any §7.7 send."""
+        """**The milestone gate.** Read by the notification router before any §26.7 send."""
         consent = await self._whatsapp_consent_repo.get_by_user_id(user_id)
         return bool(consent and consent.utility)
 
@@ -79,7 +79,7 @@ class WhatsAppConsentService:
         marketing: bool,
         source: WhatsAppConsentSource,
     ) -> WhatsAppConsentDto:
-        """Record both §7.4.6 controls as the customer left them.
+        """Record both §26.4.6 controls as the customer left them.
 
         Both are written every time because both are always shown together: a surface that
         sent only what changed would make an untouched control indistinguishable from one
@@ -108,7 +108,7 @@ class WhatsAppConsentService:
     async def grant_utility(self, user_id: str, source: WhatsAppConsentSource) -> None:
         """START restores progress updates **only** (D64).
 
-        Marketing needs a deliberate opt-in on the web: it is the consent §7.10 counts as a
+        Marketing needs a deliberate opt-in on the web: it is the consent §26.10 counts as a
         growth asset, so its record has to be worth counting — a one-word chat message is
         not the evidence a campaign audience should rest on.
         """

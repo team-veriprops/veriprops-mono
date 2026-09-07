@@ -13,7 +13,7 @@ import { getErrorMessage } from "@lib/utils";
 import { waMeUrl } from "@lib/whatsapp";
 
 /**
- * WhatsApp→web account linking landing (PRD §7.4.4, WA-24).
+ * WhatsApp→web account linking landing (PRD §26.4.4, WA-24).
  *
  * The bot sends this link to a number it cannot yet attribute to anyone. Getting here
  * means the customer has signed in — `proxy.ts` guarantees that — so the only remaining

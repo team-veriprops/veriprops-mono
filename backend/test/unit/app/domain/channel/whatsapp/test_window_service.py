@@ -1,4 +1,4 @@
-"""WhatsAppWindowService (PRD §7.7, WA-41).
+"""WhatsAppWindowService (PRD §26.7, WA-41).
 
 Meta delivers free text only within 24 hours of the customer's last message; outside it,
 only an approved template. The safe failure direction is what these tests pin: when in

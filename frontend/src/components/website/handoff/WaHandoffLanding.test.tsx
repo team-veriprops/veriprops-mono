@@ -43,7 +43,7 @@ describe("WaHandoffLanding", () => {
   });
 
   it("acknowledges the customer's context while the link is still resolving", () => {
-    // §7.4.2: silent context loss is a spec violation — the page never shows a bare
+    // §26.4.2: silent context loss is a spec violation — the page never shows a bare
     // spinner with no explanation of what it is doing.
     redeemSpy.mockReturnValue(new Promise(() => {}));
     const html = renderToStaticMarkup(
@@ -71,7 +71,7 @@ describe("WaHandoffLanding · states", () => {
   });
 
   it("repeats the payment pledge at the moment of highest exposure", () => {
-    // §7.1.1: the pledge is stated at every payment handoff, not only in chat — this is
+    // §26.1.1: the pledge is stated at every payment handoff, not only in chat — this is
     // exactly when an impersonator's lookalike link would land.
     const html = renderToStaticMarkup(<PaymentPledge />);
     expect(html).toContain("veriprops.ng");

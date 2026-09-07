@@ -1,4 +1,4 @@
-"""WhatsApp account-linking endpoints (PRD §7.4.4).
+"""WhatsApp account-linking endpoints (PRD §26.4.4).
 
 URL shape: /channel/whatsapp/link/... — all session-authenticated. Frontend service:
 frontend/src/components/account/libs/useWhatsAppLinkQueries.
@@ -65,7 +65,7 @@ async def start_my_link(
     authorize: AuthJWT = Depends(),
     _: None = Depends(_start_rate_limit),
 ):
-    """Send a linking code to the number over WhatsApp (§7.4.4, D46)."""
+    """Send a linking code to the number over WhatsApp (§26.4.4, D46)."""
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
     challenge = await link_service.start_link(user_id, req.phone_e164)
@@ -83,7 +83,7 @@ async def confirm_my_link(req: ConfirmWhatsAppLinkDto, authorize: AuthJWT = Depe
 
 @whatsapp_link_router.delete("/me", response_model=SuccessResponse[dict])
 async def unlink_my_number(authorize: AuthJWT = Depends()):
-    """Drop the link. The old WhatsApp thread goes cold immediately (§7.4.4)."""
+    """Drop the link. The old WhatsApp thread goes cold immediately (§26.4.4)."""
     await authorize.jwt_required()
     await link_service.unlink(str(authorize.get_jwt_subject()))
     return SuccessResponse[dict](data={"unlinked": True})

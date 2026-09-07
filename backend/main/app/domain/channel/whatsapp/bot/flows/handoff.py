@@ -1,18 +1,18 @@
-"""The pay and report handoff flows (PRD §7.3.4, §7.4.2, WA-17).
+"""The pay and report handoff flows (PRD §26.3.4, §26.4.2, WA-17).
 
-§7.3.4 marks three WhatsApp actions `HANDOFF` — upload documents, pay, and view report.
-§7.6.3 built the first, because a document arriving is something that *happens to* the bot.
+§26.3.4 marks three WhatsApp actions `HANDOFF` — upload documents, pay, and view report.
+§26.6.3 built the first, because a document arriving is something that *happens to* the bot.
 The other two are things a customer **asks** for ("how do I pay?", "send me my report"), and
 this module is the flow behind those two turns.
 
-The shape is deliberately §7.6.3's shape. A handoff link names a customer **and** a case
+The shape is deliberately §26.6.3's shape. A handoff link names a customer **and** a case
 (`ACTION_INTENTS`), so each turn splits the same three ways: one eligible case → the link;
 several → ask which, using the **same** numbered list and matcher as the status flow
 (`status.choose_prompt` / `status.resolve_choice`), so a customer never has to learn two ways
 of answering the same question; none, or an unlinked number → say why, with no link, because
 issuing one would mean guessing whose case — and whose money — is involved.
 
-**Eligibility is read off the §7.3.2 projection, never off a raw status.** A case is payable
+**Eligibility is read off the §26.3.2 projection, never off a raw status.** A case is payable
 while it is quoted and unpaid, and readable once delivered — stage names `projection.py`
 already owns. Deriving them from `VerificationStatus` here would put the same mapping in a
 second place, and the two would drift the day a status is added.
@@ -34,7 +34,7 @@ from main.app.domain.channel.whatsapp.bot.flows import status as status_flow
 from main.app.domain.channel.whatsapp.bot.flows.status import CaseSummary
 from main.app.domain.channel.whatsapp.bot.projection import ChannelState
 
-# Which §7.3.2 stages each handoff can act on.
+# Which §26.3.2 stages each handoff can act on.
 #
 # `PAY` covers the two stages where money is owed and payable. `INTAKE_COMPLETE` is the
 # main one — it projects from `SUBMITTED`, which is a case that has been quoted and not yet
@@ -50,7 +50,7 @@ from main.app.domain.channel.whatsapp.bot.projection import ChannelState
 # published until `release()` has run. Offering a link there would hand the customer an
 # unreleased report, which is precisely what the release gate exists to prevent. `DELIVERED`
 # also covers `DISPUTED`, and a customer in a dispute re-reading their own report is exactly
-# who §7.4.2's "get a new link" recovery is for.
+# who §26.4.2's "get a new link" recovery is for.
 _ELIGIBLE_STATES: dict[ChannelAction, frozenset[ChannelState]] = {
     ChannelAction.PAY: frozenset(
         {ChannelState.INTAKE_COMPLETE, ChannelState.PAYMENT_PENDING}
@@ -91,7 +91,7 @@ def eligible_cases(
     list would hide it.
     """
     if capability_for(action) != ChannelCapability.HANDOFF:
-        raise ValueError(f"{action.value} is not a handoff action on WhatsApp (§7.3.4).")
+        raise ValueError(f"{action.value} is not a handoff action on WhatsApp (§26.3.4).")
     states = _ELIGIBLE_STATES[action]
     return [case for case in cases if case.channel_state in states]
 
@@ -102,7 +102,7 @@ def render(
     """Decide the answer for one pay-or-report request.
 
     ``is_linked`` is passed rather than inferred from ``cases`` being empty, exactly as in
-    §7.6.3: a linked customer with nothing eligible and an unlinked number both have no
+    §26.6.3: a linked customer with nothing eligible and an unlinked number both have no
     cases to offer, but they need different next steps.
     """
     from main.app.domain.channel.whatsapp.bot import content

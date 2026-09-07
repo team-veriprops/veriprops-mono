@@ -1,12 +1,12 @@
-"""WhatsAppMilestoneSender — the three gates on a §7.6.2 milestone (D65/D75, WA-16/34/35).
+"""WhatsAppMilestoneSender — the three gates on a §26.6.2 milestone (D65/D75, WA-16/34/35).
 
 Every assertion here is about something *not* happening, because that is where this module
 earns its keep. A milestone is a business-initiated message carrying case details, so the
 ways it can be wrong are all leaks:
 
-* sending to a customer who never opted in (§7.4.6),
+* sending to a customer who never opted in (§26.4.6),
 * sending to `users.phone` — a profile number nobody proved control of over WhatsApp,
-  which is §7.4.3's leak running outwards (D65), and
+  which is §26.4.3's leak running outwards (D65), and
 * sending a report link that will be dead by the time it is read (D75).
 
 The fourth property is that none of these are errors: a milestone is a courtesy on top of a
@@ -158,7 +158,7 @@ class TestTemplateContext:
         assert context[MessageContext.SHARE_VID] == VID
 
     async def test_report_ready_links_to_the_portal_not_a_handoff_token(self, messages):
-        """D75. A §7.5 token lives fifteen minutes; a milestone is read whenever the
+        """D75. A §26.5 token lives fifteen minutes; a milestone is read whenever the
         customer next opens WhatsApp, so a token here would send most readers to the
         expiry page from a message they never clicked."""
         svc = _sender(verification=_verification(VerificationStatus.COMPLETED))
@@ -210,7 +210,7 @@ class TestFailureIsAbsorbed:
 
 class TestStatusLabel:
     def test_the_delegate_reads_the_same_words_as_the_dashboard(self):
-        """The §7.3.2 projection's stage names are the channel's internal vocabulary. A
+        """The §26.3.2 projection's stage names are the channel's internal vocabulary. A
         delegate is a person, so they get `tracking/labels.py` — what the buyer sees."""
         label = status_label_for(_verification(VerificationStatus.IN_PROGRESS))
         assert label

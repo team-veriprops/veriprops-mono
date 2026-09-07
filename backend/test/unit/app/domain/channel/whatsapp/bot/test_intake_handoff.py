@@ -1,4 +1,4 @@
-"""The chat→web seam (PRD §5.1, §7.5, D69/D71).
+"""The chat→web seam (PRD §5.1, §26.5, D69/D71).
 
 This is where four WhatsApp answers become a real draft. Everything upstream of it is a
 conversation; everything downstream is the website's own, already-tested submission

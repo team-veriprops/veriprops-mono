@@ -13,7 +13,7 @@ function client() {
   };
 }
 
-describe("DelegateService (§7.4.5)", () => {
+describe("DelegateService (§26.4.5)", () => {
   it("scopes every call to one verification", async () => {
     const http = client();
     await new DelegateService(http).list("v-1");

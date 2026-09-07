@@ -1,4 +1,4 @@
-"""WhatsApp transport selection (PRD §7, D43).
+"""WhatsApp transport selection (PRD §26, D43).
 
 The rule table is the mechanism behind the determinism contract, so it is asserted
 directly: whichever provider the settings name is the one that receives the send, and

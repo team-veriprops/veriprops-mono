@@ -1,4 +1,4 @@
-"""WhatsAppConsoleSender — the outbound half of Decision K (PRD §7.3.3, §7.7, WA-12/WA-41).
+"""WhatsAppConsoleSender — the outbound half of Decision K (PRD §26.3.3, §26.7, WA-12/WA-41).
 
 The defect this module exists to close: an agent's reply was written into the WhatsApp
 thread and never sent anywhere. These tests pin the four properties that make the fix
@@ -176,7 +176,7 @@ class TestOutsideTheWindow:
         window_reopen.assert_not_awaited()
 
     async def test_an_unlinked_number_is_greeted_neutrally(self, window_reopen):
-        # A §7.8 enquiry thread usually has no account behind it yet, and the template
+        # A §26.8 enquiry thread usually has no account behind it yet, and the template
         # still has to render — a blank or a raw phone number reads as broken.
         svc = _sender(window_open=False, user_id=None)
 

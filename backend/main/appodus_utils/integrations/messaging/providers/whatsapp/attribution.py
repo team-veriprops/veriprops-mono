@@ -1,8 +1,8 @@
-"""Widget attribution markers (PRD §7.4.1, §7.10; D85).
+"""Widget attribution markers (PRD §26.4.1, §26.10; D85).
 
 The website's WhatsApp button deep-links to `wa.me/<number>?text=Hi Veriprops! [ref: web-home]`
 (`frontend/src/lib/whatsapp.ts`), so the page a customer came from arrives as **literal text
-inside their first message**. §7.10 counts those codes as the channel's demand signal, which
+inside their first message**. §26.10 counts those codes as the channel's demand signal, which
 means something has to read the marker back out.
 
 Two rules, and the second is the one worth stating:
@@ -16,7 +16,7 @@ Two rules, and the second is the one worth stating:
   `whatsapp_inbound_messages.payload`, so nothing is lost by cleaning the readable copy.
 
 A message that is *only* the marker normalizes to no text at all rather than to an empty
-string, so the bot treats it as the greeting it is and answers with the §7.6.1 welcome.
+string, so the bot treats it as the greeting it is and answers with the §26.6.1 welcome.
 """
 from __future__ import annotations
 

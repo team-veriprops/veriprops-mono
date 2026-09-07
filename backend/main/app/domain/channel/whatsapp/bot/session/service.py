@@ -1,4 +1,4 @@
-"""Bot session lifecycle (PRD §7.6.1, §7.6.2, D57).
+"""Bot session lifecycle (PRD §26.6.1, §26.6.2, D57).
 
 Everything that changes *where a conversation is* lives here, so the engine can stay a
 dispatcher. Four rules are enforced in this one place rather than at each call site:
@@ -6,10 +6,10 @@ dispatcher. Four rules are enforced in this one place rather than at each call s
 * A session is created on first contact and never duplicated (the number is unique).
 * An agent's reply makes the thread sticky-``HUMAN``; only an explicit hand-back releases
   it (D57).
-* The welcome fires on first contact and after 30 days idle (§7.6.1) — the same trigger
+* The welcome fires on first contact and after 30 days idle (§26.6.1) — the same trigger
   that re-states the bot disclosure and the payment pledge.
 * The unmatched counter escalates on the second consecutive miss and resets the moment
-  the bot understands something (§7.6.2).
+  the bot understands something (§26.6.2).
 """
 from __future__ import annotations
 
@@ -106,15 +106,15 @@ class WhatsAppBotSessionService:
     async def record_inbound(
         self, session: WhatsAppBotSession, page_code: Optional[str] = None
     ) -> bool:
-        """Stamp the arrival and answer whether this turn owes a welcome (§7.6.1).
+        """Stamp the arrival and answer whether this turn owes a welcome (§26.6.1).
 
         Read before the stamp: `last_inbound_at` is what the idle window is measured
         against, so stamping first would make every returning customer look active.
 
-        A due welcome is also §7.10's definition of an **enquiry** — first contact, or the
+        A due welcome is also §26.10's definition of an **enquiry** — first contact, or the
         first message after the 30-day idle gap — so the fact is recorded here rather than
         at a second place that would have to re-derive the same condition. `page_code` is
-        the §7.4.1 widget marker the normalizer lifted out of this message (D85); it is
+        the §26.4.1 widget marker the normalizer lifted out of this message (D85); it is
         only ever present on the message that starts the conversation, which is exactly
         the one being counted.
         """
@@ -148,7 +148,7 @@ class WhatsAppBotSessionService:
     async def note_unmatched(self, session: WhatsAppBotSession) -> bool:
         """A turn the bot did not understand. Answers whether that is now an escalation.
 
-        §7.6.2's rule is *consecutive* misses, which is why this counter and
+        §26.6.2's rule is *consecutive* misses, which is why this counter and
         ``note_understood`` are a pair — either one alone would drift into "two misses
         ever", and a customer who once mistyped would be escalated forever after.
         """
@@ -188,7 +188,7 @@ class WhatsAppBotSessionService:
     async def note_escalation(
         self, session: WhatsAppBotSession, reason: EscalationReason
     ) -> None:
-        """Record why this conversation went to a human (§7.10).
+        """Record why this conversation went to a human (§26.10).
 
         The mode is **not** flipped here. The bot handing off is a request for a person;
         the thread becomes `HUMAN` when one actually replies (D57), so a customer whose
@@ -201,7 +201,7 @@ class WhatsAppBotSessionService:
         session.step = 0
         session.unmatched_count = 0
         self._whatsapp_bot_session_repo.save(session)
-        # §7.10 wants the escalation *rate and its reasons*, which the row above cannot
+        # §26.10 wants the escalation *rate and its reasons*, which the row above cannot
         # answer: it holds one mutated value per number, so the previous reason is gone.
         # Every one of the nine `EscalationReason`s funnels through this method, so one
         # fact here covers all of them — and a tenth reason is counted the day it is added.
@@ -227,7 +227,7 @@ class WhatsAppBotSessionService:
         return to_bot_session_dto(session, window_open=window_open)
 
     async def readiness(self) -> BotChannelReadinessDto:
-        """§7.11 — whether the channel is configured for live traffic."""
+        """§26.11 — whether the channel is configured for live traffic."""
         return BotChannelReadinessDto(
             whatsapp_provider=settings.WHATSAPP_PROVIDER.value,
             intent_provider=settings.INTENT_PROVIDER.value,

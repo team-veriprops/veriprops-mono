@@ -69,7 +69,7 @@ class CaseDelegateRepo(
     async def get_active_for_case(self, verification_id: str) -> Optional[CaseDelegate]:
         """The case's delegate for milestone delivery — verified and un-revoked.
 
-        Resolved at send time, which is what makes §7.4.5's "revocation takes effect on
+        Resolved at send time, which is what makes §26.4.5's "revocation takes effect on
         the next event" fall out of the design rather than needing a sweep.
         """
         stmt = select(CaseDelegate).where(and_(

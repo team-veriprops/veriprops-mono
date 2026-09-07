@@ -1,13 +1,13 @@
-"""§7.3.4's pay and report handoffs (WA-17, §7.4.2).
+"""§26.3.4's pay and report handoffs (WA-17, §26.4.2).
 
-§7.3.4 marks three WhatsApp actions HANDOFF: upload, pay, and view report. Only the first
-had a producer — a document arriving is something that *happens to* the bot, so §7.6.3
+§26.3.4 marks three WhatsApp actions HANDOFF: upload, pay, and view report. Only the first
+had a producer — a document arriving is something that *happens to* the bot, so §26.6.3
 built it. The other two are things a customer **asks** for, and there was no intent for
 either: "how do I pay?" and "send me my report" both fell through to "I didn't quite get
 that", leaving the `/wa/pay/<token>` and `/wa/report/<token>` landings — built, tested, and
 deployed — unreachable from a real conversation.
 
-The rule this flow exists to hold: **eligibility is read off the §7.3.2 projection, never
+The rule this flow exists to hold: **eligibility is read off the §26.3.2 projection, never
 off a raw status.** A case is payable while quoted and unpaid, and readable at `DELIVERED`,
 and those are stage names `projection.py` already owns. Re-deriving them from
 `VerificationStatus` here would put the same mapping in a second place, and the two would
@@ -76,7 +76,7 @@ class TestEligibilityComesFromTheProjection:
         assert eligible == []
 
     def test_a_delivered_case_still_has_a_report_to_re_read(self):
-        # §7.4.2's recovery path: the report link is minted on request, and a customer
+        # §26.4.2's recovery path: the report link is minted on request, and a customer
         # coming back a month later is the ordinary case, not an edge one.
         eligible = handoff_flow.eligible_cases(
             ChannelAction.VIEW_REPORT, [_case(state=ChannelState.DELIVERED)]
@@ -182,7 +182,7 @@ class TestChoosing:
 
 class TestCopy:
     def test_the_payment_link_carries_the_pledge(self):
-        # §7.1.1 — the pledge rides *every* payment handoff. This is the message that
+        # §26.1.1 — the pledge rides *every* payment handoff. This is the message that
         # sends someone to a payment page, so it is the one that matters most.
         assert content.PAYMENT_PLEDGE in content.pay_with_link("https://example.test/wa/pay/t")
 

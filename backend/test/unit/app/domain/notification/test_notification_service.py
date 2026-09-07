@@ -90,9 +90,9 @@ async def test_pure_sse_nudge_creates_no_notification():
     svc._notification_repo.create_return_model.assert_not_called()
 
 
-# ─── WhatsApp milestones (§7.6.2, D65/D66; WA-16/WA-34/WA-35) ──────────
+# ─── WhatsApp milestones (§26.6.2, D65/D66; WA-16/WA-34/WA-35) ──────────
 #
-# The router is where §7.4.6 consent is enforced, so these tests are about the *routing*
+# The router is where §26.4.6 consent is enforced, so these tests are about the *routing*
 # decision — which events reach the WhatsApp branch at all — while the consent and
 # recipient gates themselves are pinned in
 # test/unit/app/domain/channel/whatsapp/test_milestones.py.
@@ -108,7 +108,7 @@ def _milestone_events():
 
 
 def test_the_four_milestones_declare_a_whatsapp_template():
-    """§7.7 names four milestone templates; a `whatsapp=True` row without one would
+    """§26.7 names four milestone templates; a `whatsapp=True` row without one would
     dispatch nothing and look like a delivery bug rather than a missing declaration."""
     for event_type in _milestone_events():
         rule = rule_for(event_type)
@@ -117,7 +117,7 @@ def test_the_four_milestones_declare_a_whatsapp_template():
 
 
 def test_the_whatsapp_template_is_never_the_email_template():
-    """D65: one field cannot be both. The §7.7 Meta template and the email template are
+    """D65: one field cannot be both. The §26.7 Meta template and the email template are
     different artefacts with different bodies and different approval authorities."""
     for event_type in _milestone_events():
         rule = rule_for(event_type)

@@ -11,7 +11,7 @@ export enum ConversationType {
 }
 
 /**
- * Which surface a thread originated on / a message arrived on (§7.3.3 source labeling).
+ * Which surface a thread originated on / a message arrived on (§26.3.3 source labeling).
  * Orthogonal to ConversationType and SenderKind: the same customer can speak from either
  * surface, and the console shows which one so a reply goes back the right way.
  */
@@ -26,7 +26,7 @@ export enum MessageSource {
 }
 
 /**
- * What a customer sent, when it was not text (§7.6.3). Set only on WhatsApp-sourced
+ * What a customer sent, when it was not text (§26.6.3). Set only on WhatsApp-sourced
  * messages; its presence is what makes a message "unofficial" under the evidence rule.
  */
 export enum InboundKind {
@@ -104,16 +104,16 @@ export interface ChatMessage {
   heldNotice?: string | null;
   dateCreated: string;
   deliveredAt?: string | null;
-  /** What arrived, when it was not text (§7.6.3). */
+  /** What arrived, when it was not text (§26.6.3). */
   mediaKind?: InboundKind | null;
   /**
-   * Chat-borne media, which the evidence rule (§7.1.6) keeps out of the verification
+   * Chat-borne media, which the evidence rule (§26.1.6) keeps out of the verification
    * file. Derived by the backend from `mediaKind` — never a second thing to keep in sync.
    */
   unofficialMedia?: boolean;
   /**
    * In the thread but not yet sent over WhatsApp, because it was typed outside Meta's
-   * 24-hour window (§7.7). It goes out on the customer's next message.
+   * 24-hour window (§26.7). It goes out on the customer's next message.
    */
   pendingChannelDelivery?: boolean;
 }
@@ -133,7 +133,7 @@ export interface HeldMessage {
   dateCreated: string;
 }
 
-// ── WhatsApp bot state (PRD §7.6, D57) ───────────────────────────────
+// ── WhatsApp bot state (PRD §26.6, D57) ───────────────────────────────
 
 /** Who is answering a WhatsApp thread. Sticky once a human joins (D57). */
 export enum BotMode {
@@ -149,7 +149,7 @@ export enum BotFlow {
   UPLOAD = "UPLOAD",
 }
 
-/** Why a conversation went to a person (§7.6.2, §7.10). */
+/** Why a conversation went to a person (§26.6.2, §26.10). */
 export enum EscalationReason {
   EXPLICIT_REQUEST = "EXPLICIT_REQUEST",
   GUARDRAIL_TOPIC = "GUARDRAIL_TOPIC",
@@ -170,7 +170,7 @@ export interface BotSession {
   currentFlow?: BotFlow | null;
   lastInboundAt?: string | null;
   /**
-   * Whether Meta's 24-hour service window is still open on this number (§7.7). Closed
+   * Whether Meta's 24-hour service window is still open on this number (§26.7). Closed
    * means a reply typed now is queued behind a `window_reopen` template rather than
    * delivered as written — which an agent needs to know *before* they write it.
    */
@@ -179,7 +179,7 @@ export interface BotSession {
   lastEscalatedAt?: string | null;
 }
 
-/** Whether the channel is wired for live traffic (§7.11). Never carries a credential. */
+/** Whether the channel is wired for live traffic (§26.11). Never carries a credential. */
 export interface BotChannelReadiness {
   whatsappProvider: string;
   intentProvider: string;

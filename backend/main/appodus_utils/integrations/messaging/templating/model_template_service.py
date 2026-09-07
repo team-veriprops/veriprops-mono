@@ -125,14 +125,14 @@ class ModelTemplateService:
         template in this repo is the plain message body a customer reads in the thread.
         Feeding one to a JSON parser fails on the first word.
 
-        **A §7.7 template gets both halves** (D59b). ``template_name`` plus positional
+        **A §26.7 template gets both halves** (D59b). ``template_name`` plus positional
         variables is what Meta will actually accept for a business-initiated message; the
         rendered body travels alongside in ``text`` so the admin console, the stub outbox
         and the drive-through can read what the customer will see. The live provider
         prefers the template when both are present, so the text is a faithful preview
         rather than a second delivery path.
 
-        Anything not declared in §7.7 is in-conversation copy — a bot reply, inside the
+        Anything not declared in §26.7 is in-conversation copy — a bot reply, inside the
         service window by construction — and goes out as plain text.
         """
         body = await self.template_service.render_message(

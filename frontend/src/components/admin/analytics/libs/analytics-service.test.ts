@@ -32,7 +32,7 @@ describe("AnalyticsService contract (mirrors app/domain/analytics/controller.py)
   });
 });
 
-describe("WhatsApp channel analytics (§7.10, WA-43)", () => {
+describe("WhatsApp channel analytics (§26.10, WA-43)", () => {
   it("reads the channel panel, letting the backend pick the window by default", async () => {
     // No `?days=` — the backend owns the default so the window is the same everywhere it
     // is quoted, rather than the frontend guessing one.

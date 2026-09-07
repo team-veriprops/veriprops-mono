@@ -65,7 +65,7 @@ def _consent():
 
 
 def _whatsapp_consent(utility_granted=True, marketing=False):
-    """A §7.4.6 ledger row — the grant/revoke timestamp pairs, not a boolean."""
+    """A §26.4.6 ledger row — the grant/revoke timestamp pairs, not a boolean."""
     c = MagicMock()
     c.utility_granted_at = datetime(2026, 8, 1, tzinfo=timezone.utc)
     c.utility_revoked_at = None if utility_granted else datetime(2026, 8, 5, tzinfo=timezone.utc)
@@ -145,9 +145,9 @@ class TestBuildPackCsv:
 
 
 class TestWhatsAppConsentExport:
-    """§7.8 — "consent records timestamped and exportable".
+    """§26.8 — "consent records timestamped and exportable".
 
-    The §7.4.6 ledger was not in the pack before S11, so the one export a dispute or a
+    The §26.4.6 ledger was not in the pack before S11, so the one export a dispute or a
     regulator actually asks for could not show whether the customer had agreed to be
     messaged, or when they withdrew it.
     """
@@ -182,7 +182,7 @@ class TestWhatsAppConsentExport:
         assert "revoked_at=2026-08-05" in consent_rows[0][-1]
 
     async def test_a_customer_who_was_never_asked_produces_no_row(self):
-        # Absence means both off (§7.4.6's unticked default). A row saying "declined"
+        # Absence means both off (§26.4.6's unticked default). A row saying "declined"
         # would assert an event that never happened.
         svc, _audit = _make_svc(
             transitions=[], evidence=[], consents=[], whatsapp_consent=None,

@@ -56,7 +56,7 @@ class WhatsAppConsentRepo(
         """Record one consent decision on the attached row.
 
         Stamps only the side that moved — a grant leaves the revocation timestamp in place
-        and vice versa — because the pair *is* the history §7.8 asks us to keep. Mutating
+        and vice versa — because the pair *is* the history §26.8 asks us to keep. Mutating
         the attached object rather than going through the update path is deliberate: that
         path stringifies datetimes, which a timestamp column will not take.
         """
@@ -67,7 +67,7 @@ class WhatsAppConsentRepo(
         return consent
 
     async def count_granted(self) -> dict[str, int]:
-        """How many accounts currently hold each §7.4.6 consent (§7.10).
+        """How many accounts currently hold each §26.4.6 consent (§26.10).
 
         Granted-ness is derived here in SQL the same way `consent_granted` derives it in
         Python — a later grant beats an earlier revoke. Two expressions of one rule is one

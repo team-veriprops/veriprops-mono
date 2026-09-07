@@ -1,9 +1,9 @@
-"""The confidence gate and the never-raises contract (PRD §7.6.4, D53).
+"""The confidence gate and the never-raises contract (PRD §26.6.4, D53).
 
 `IntentService` is the only place a classifier's answer becomes something the bot will act
 on, so it is the only place these two rules need to hold — and the only place a regression
 in them would be silent. A gate that let a 0.2-confidence guess through would have the bot
-answering a question it did not understand, which is the exact failure §7.6.4 names.
+answering a question it did not understand, which is the exact failure §26.6.4 names.
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ async def test_confident_answer_passes_through():
 
 
 async def test_low_confidence_answer_becomes_unknown():
-    """§7.6.4 — low confidence routes to a human; it is never acted on as a guess."""
+    """§26.6.4 — low confidence routes to a human; it is never acted on as a guess."""
     below_gate = max(0.0, settings.INTENT_MIN_CONFIDENCE - 0.1)
     service = _service_answering(
         IntentResult(intent=BotIntent.PRICING, confidence=below_gate, provider=IntentProvider.STUB)
@@ -60,7 +60,7 @@ async def test_low_confidence_answer_becomes_unknown():
     result = await service.classify("something ambiguous")
 
     assert result.intent == BotIntent.UNKNOWN
-    # The provider survives the downgrade so §7.10 can tell an unsure model from an
+    # The provider survives the downgrade so §26.10 can tell an unsure model from an
     # uncovered topic when the escalation rate is read.
     assert result.provider == IntentProvider.STUB
 

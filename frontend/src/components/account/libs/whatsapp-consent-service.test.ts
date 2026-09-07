@@ -14,7 +14,7 @@ function client() {
   };
 }
 
-describe("WhatsAppConsentService (§7.4.6)", () => {
+describe("WhatsAppConsentService (§26.4.6)", () => {
   it("reads this account's consents", async () => {
     const http = client();
     await new WhatsAppConsentService(http).get();
@@ -31,7 +31,7 @@ describe("WhatsAppConsentService (§7.4.6)", () => {
     expect(body).toEqual({ utility: true, marketing: false });
   });
 
-  it("carries the capture point so the §7.8 record says where consent was given", async () => {
+  it("carries the capture point so the §26.8 record says where consent was given", async () => {
     const http = client();
     await new WhatsAppConsentService(http).set(
       { utility: true, marketing: true },

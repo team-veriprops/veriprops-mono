@@ -1,4 +1,4 @@
-"""Everything the bot says (PRD §7.6, D54).
+"""Everything the bot says (PRD §26.6, D54).
 
 Code-owned on purpose. The alternative — a `whatsapp_content_entries` table with an admin
 editor — would create a second source of pricing truth, and a stale row would have the bot
@@ -7,11 +7,11 @@ like code, and **every number comes from the live config** rather than from the 
 
 Three pieces of copy are not decoration and must not be edited away:
 
-* the **bot disclosure** (§7.1.4) — the customer is told they are talking to automation;
-* the **payment pledge** (§7.1.1) — "payments only ever happen at veriprops.ng", repeated
+* the **bot disclosure** (§26.1.4) — the customer is told they are talking to automation;
+* the **payment pledge** (§26.1.1) — "payments only ever happen at veriprops.ng", repeated
   in the welcome and in every payment handoff, which is the whole anti-impersonation
   posture in one sentence;
-* the **content-set boundary** (§7.6.2) — the FAQ answers only what it covers. There is
+* the **content-set boundary** (§26.6.2) — the FAQ answers only what it covers. There is
   no fallback paragraph that improvises; an unanswered question routes to a person.
 """
 from __future__ import annotations
@@ -26,12 +26,12 @@ from main.app.domain.channel.whatsapp.bot.session.models import EscalationReason
 from main.app.domain.channel.whatsapp.bot.support_hours import Coverage
 from main.app.domain.verification.pricing_config.models import TierPricingViewDto
 
-# §7.1.1 — stated in the welcome, repeated in every payment handoff, published on the site.
+# §26.1.1 — stated in the welcome, repeated in every payment handoff, published on the site.
 PAYMENT_PLEDGE = (
     "Payments only ever happen at veriprops.ng — check the address bar before you pay."
 )
 
-# §7.1.4 — the bot says what it is, unprompted, on first contact.
+# §26.1.4 — the bot says what it is, unprompted, on first contact.
 BOT_DISCLOSURE = (
     "I'm {brand}' automated assistant — I can bring in a human anytime you want one."
 )
@@ -46,7 +46,7 @@ MENU_ITEMS = [
 
 
 class FaqTopic(str, enum.Enum):
-    """The maintained content set (§7.6.2). What is not here is not answered."""
+    """The maintained content set (§26.6.2). What is not here is not answered."""
 
     HOW_IT_WORKS = "HOW_IT_WORKS"
     WHAT_YOU_GET = "WHAT_YOU_GET"
@@ -110,7 +110,7 @@ def brand() -> str:
 
 
 def welcome() -> str:
-    """§7.6.1 — greeting, bot disclosure, payment pledge, and the five-item menu."""
+    """§26.6.1 — greeting, bot disclosure, payment pledge, and the five-item menu."""
     return (
         f"Hello 👋 Welcome to {brand()}.\n\n"
         f"{BOT_DISCLOSURE.format(brand=brand())}\n\n"
@@ -127,7 +127,7 @@ def menu() -> str:
 def faq_topic_for(text: str) -> Optional[FaqTopic]:
     """The content-set entry that answers *text*, or ``None``.
 
-    ``None`` means "outside the content set", which §7.6.2 says routes to a human. There
+    ``None`` means "outside the content set", which §26.6.2 says routes to a human. There
     is deliberately no nearest-match fallback: a confident answer to a question we do not
     actually cover is worse than a handover.
     """
@@ -150,7 +150,7 @@ def learn() -> str:
 
 
 def pricing(view: TierPricingViewDto) -> str:
-    """§7.6.2 pricing, rendered from the live admin config (D54).
+    """§26.6.2 pricing, rendered from the live admin config (D54).
 
     Never a hardcoded figure: the admin pricing screen is the single source of truth, and
     a bot quoting yesterday's price is a trust problem, not a copy problem.
@@ -188,7 +188,7 @@ def naira(minor: int) -> str:
 # ─── Escalation, refusal and failure copy ─────────────────────────
 
 def _coverage_line(coverage: Coverage) -> str:
-    """§7.6.2 — "a team member is joining" inside hours, a stated window outside."""
+    """§26.6.2 — "a team member is joining" inside hours, a stated window outside."""
     if coverage.is_open:
         return "A team member is joining this chat now."
     return (
@@ -231,17 +231,17 @@ _ESCALATION_OPENINGS: dict[EscalationReason, str] = {
 
 
 def escalation(reason: EscalationReason, coverage: Coverage) -> str:
-    """What the customer reads when a conversation goes to a person (§7.6.2)."""
+    """What the customer reads when a conversation goes to a person (§26.6.2)."""
     return f"{_ESCALATION_OPENINGS[reason]}\n\n{_coverage_line(coverage)}"
 
 
 def failure_fallback(coverage: Coverage) -> str:
-    """§7.6.5 — an outage must never look like a scam that stopped replying."""
+    """§26.6.5 — an outage must never look like a scam that stopped replying."""
     return escalation(EscalationReason.PIPELINE_FAILURE, coverage)
 
 
 def account_management_not_offered() -> str:
-    """§7.3.4 — account and settings are a website surface, not a chat one."""
+    """§26.3.4 — account and settings are a website surface, not a chat one."""
     return (
         "Account settings live on veriprops.ng — sign in there and you'll find everything "
         "under your profile. I can help with verifications, status and pricing here."
@@ -249,12 +249,12 @@ def account_management_not_offered() -> str:
 
 
 def unlinked_number() -> str:
-    """§7.4.3 + §7.4.5 — the bot never reads case data to an unverified number.
+    """§26.4.3 + §26.4.5 — the bot never reads case data to an unverified number.
 
     One message for both people who reach it, because the bot cannot tell them apart and
     must not guess: the customer on a second handset, and the third party asking about
     someone else's case ("my relative is handling it" — the social-engineering script
-    §7.4.5 exists to defeat). Guessing wrong in either direction is bad. Sending the
+    §26.4.5 exists to defeat). Guessing wrong in either direction is bad. Sending the
     stranger down the linking flow wastes an OTP on an account that does not have this
     case on it; sending the customer down the delegate route tells them to ask permission
     for their own verification.
@@ -282,7 +282,7 @@ def no_cases() -> str:
 
 
 
-# ─── Messaging consent (§7.4.6, D64) ──────────────────────────────
+# ─── Messaging consent (§26.4.6, D64) ──────────────────────────────
 
 
 def messages_stopped() -> str:
@@ -327,9 +327,9 @@ def messages_stopped_unknown_number() -> str:
     )
 
 
-# ─── Non-text inbound (§7.6.3) ────────────────────────────────────
+# ─── Non-text inbound (§26.6.3) ────────────────────────────────────
 
-# §7.1.6/§7.6.1's evidence rule, in the customer's words. Repeated verbatim wherever a
+# §26.1.6/§26.6.1's evidence rule, in the customer's words. Repeated verbatim wherever a
 # document arrives over chat, because the whole point is that it is the *same* promise
 # every time: what lands in WhatsApp is not what the verifiers work from.
 EVIDENCE_RULE = (
@@ -340,7 +340,7 @@ EVIDENCE_RULE = (
 
 
 def document_received_with_link(link: str) -> str:
-    """§7.6.3 — a document arrived and we know which case it belongs to."""
+    """§26.6.3 — a document arrived and we know which case it belongs to."""
     return (
         "Thanks for sending that.\n\n"
         f"{EVIDENCE_RULE}\n\n"
@@ -351,7 +351,7 @@ def document_received_with_link(link: str) -> str:
 
 
 def document_received_unlinked() -> str:
-    """§7.6.3 + §7.4.3 — a document from a number we cannot tie to an account.
+    """§26.6.3 + §26.4.3 — a document from a number we cannot tie to an account.
 
     No upload link: an `upload` link authorizes writing to one specific case, so issuing
     one here would mean guessing whose case it is from a phone number alone.
@@ -379,13 +379,13 @@ def document_choose_case(prompt: str) -> str:
     return f"Thanks for sending that.\n\n{prompt}"
 
 
-# ─── Pay and report handoffs (§7.3.4, §7.4.2) ─────────────────────
+# ─── Pay and report handoffs (§26.3.4, §26.4.2) ─────────────────────
 
 
 def pay_with_link(link: str) -> str:
-    """§7.3.4 — the customer asked to pay, and we know which case they owe on.
+    """§26.3.4 — the customer asked to pay, and we know which case they owe on.
 
-    The §7.1.1 pledge is not optional here. This is the one message in the channel that
+    The §26.1.1 pledge is not optional here. This is the one message in the channel that
     sends a person to a payment page, so it is the exact message an impersonator would
     imitate — and the pledge is what lets the customer tell the two apart.
     """
@@ -413,7 +413,7 @@ def pay_choose_case(prompt: str) -> str:
 
 
 def report_with_link(link: str) -> str:
-    """§7.4.2 — the report link, minted on request.
+    """§26.4.2 — the report link, minted on request.
 
     Carries no payment pledge: this link opens a report, and attaching a payment warning
     to it would teach customers that the two messages look the same.
@@ -441,12 +441,12 @@ def report_choose_case(prompt: str) -> str:
 
 
 def handoff_unlinked(action: ChannelAction) -> str:
-    """A pay or report request from a number we cannot tie to an account (§7.4.3).
+    """A pay or report request from a number we cannot tie to an account (§26.4.3).
 
     One function rather than two messages: the refusal and the way out are identical, and
     only the opening clause differs. A handoff token names a customer *and* a case, so
     issuing one from a phone number alone would mean guessing whose money or whose report
-    is being asked for — the same rule that governs the §7.6.3 document link.
+    is being asked for — the same rule that governs the §26.6.3 document link.
     """
     opening = {
         ChannelAction.PAY: (
@@ -468,7 +468,7 @@ def handoff_unlinked(action: ChannelAction) -> str:
 
 
 def case_not_found() -> str:
-    """A reference the customer quoted that is not one of theirs (§7.4.3, D58).
+    """A reference the customer quoted that is not one of theirs (§26.4.3, D58).
 
     Deliberately reads as "we can't find it on your account" rather than "that isn't
     yours": case references travel on receipts and reports, so confirming that one exists

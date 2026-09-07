@@ -31,7 +31,7 @@ _MATCH_CONFIDENCE = 0.9
 # Patterns are matched against the lowercased message with word boundaries, so "prices"
 # matches and "enterprises" does not.
 _KEYWORD_TABLE: List[Tuple[BotIntent, List[str]]] = [
-    # Guardrail topics first — §7.6.4 says these route to a human with no partial answer,
+    # Guardrail topics first — §26.6.4 says these route to a human with no partial answer,
     # so nothing further down the table may claim them.
     (
         BotIntent.JUDGMENT_REQUEST,
@@ -45,7 +45,7 @@ _KEYWORD_TABLE: List[Tuple[BotIntent, List[str]]] = [
             r"do you think",
             # The verdict vocabulary itself, wherever it appears. Deliberately broad: a
             # false positive costs a warm handover to a person, while a false negative
-            # is the bot answering "is this genuine?" — the one thing §7.1.3 forbids.
+            # is the bot answering "is this genuine?" — the one thing §26.1.3 forbids.
             r"(genuine|legit|authentic|fake|fraudulent|forged)",
             r"a scam",
         ],
@@ -85,7 +85,7 @@ _KEYWORD_TABLE: List[Tuple[BotIntent, List[str]]] = [
         BotIntent.PRICING,
         [r"pric(e|es|ing)", r"cost", r"how much", r"fee(s)?", r"charge(s)?", r"rate(s)?"],
     ),
-    # The two §7.3.4 handoff asks. Both sit *below* the question each could be mistaken
+    # The two §26.3.4 handoff asks. Both sit *below* the question each could be mistaken
     # for — "how much do I pay" is a pricing question and "where is my report" is a status
     # question, and neither wants a link — so every pattern here names an action rather
     # than just the noun.

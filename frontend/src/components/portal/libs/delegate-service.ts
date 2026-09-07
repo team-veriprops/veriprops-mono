@@ -7,7 +7,7 @@ import {
 } from "@/types/delegate";
 
 /**
- * Per-case delegate API (PRD §7.4.5). Mirrors the backend controller at
+ * Per-case delegate API (PRD §26.4.5). Mirrors the backend controller at
  * `app/domain/verification/delegate`.
  *
  * Every call is scoped by the verification in the path, and the backend proves the caller

@@ -312,11 +312,11 @@ export interface PublicConfig {
   chatMessageMaxLength?: number;
   // Live per-tier prices — backend `pricing_tier_config` is the source of truth.
   pricingTiers?: PublicPricingTier[];
-  // §7.1.2 official WhatsApp number: digits-only for wa.me deep links, plus the
+  // §26.1.2 official WhatsApp number: digits-only for wa.me deep links, plus the
   // human-readable form for on-page copy. Backend-owned so the widget, certified
   // reports, and bot copy can never drift apart — never hardcode a fallback.
   whatsappNumber?: string;
   whatsappDisplayNumber?: string;
-  // §7.4.1 floating chat widget kill switch.
+  // §26.4.1 floating chat widget kill switch.
   whatsappWidgetEnabled?: boolean;
 }

@@ -1,16 +1,16 @@
-"""§7.3.2's channel states, projected from the real machine (WA-08, D45).
+"""§26.3.2's channel states, projected from the real machine (WA-08, D45).
 
-§7.3.2 names ten stages — `enquiry → … → closed`. The backend already has the
-authoritative `VerificationStatus` machine, and §7.3.1 requires the bot to read case state
+§26.3.2 names ten stages — `enquiry → … → closed`. The backend already has the
+authoritative `VerificationStatus` machine, and §26.3.1 requires the bot to read case state
 "through the same API endpoints the website dashboard uses". So these ten names are a
 **projection**, not a second state machine: no row stores them, nothing transitions
 between them, and this module is their only owner. Two machines for one case is the exact
-"two surfaces show different statuses" failure §7.3.1 exists to prevent.
+"two surfaces show different statuses" failure §26.3.1 exists to prevent.
 
 Note what this module is *not* for. The words a customer reads come from
 `verification/tracking/labels.py`, which the dashboard already uses — the bot must not
 invent a second customer-facing vocabulary. These names are the channel's internal stage
-vocabulary: what §7.10 counts and what a milestone trigger is described against.
+vocabulary: what §26.10 counts and what a milestone trigger is described against.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from main.app.core.state.status import TaskState, VerificationStatus
 
 
 class ChannelState(str, enum.Enum):
-    """The §7.3.2 stage names, verbatim."""
+    """The §26.3.2 stage names, verbatim."""
 
     ENQUIRY = "enquiry"
     INTAKE_IN_PROGRESS = "intake_in_progress"
@@ -52,7 +52,7 @@ _BY_STATUS: dict[VerificationStatus, ChannelState] = {
     VerificationStatus.PAYMENT_PENDING: ChannelState.PAYMENT_PENDING,
     VerificationStatus.PAID: ChannelState.PAID,
     VerificationStatus.IN_PROGRESS: ChannelState.VERIFYING,
-    # Admin review is where the report exists but has not been released — §7.3.2's
+    # Admin review is where the report exists but has not been released — §26.3.2's
     # `report_ready`, which sits between the inspection and delivery for the same reason.
     VerificationStatus.UNDER_REVIEW: ChannelState.REPORT_READY,
     VerificationStatus.COMPLETED: ChannelState.DELIVERED,
@@ -66,7 +66,7 @@ _BY_STATUS: dict[VerificationStatus, ChannelState] = {
 def channel_state(
     status: Optional[VerificationStatus], field_task_state: Optional[TaskState] = None
 ) -> ChannelState:
-    """The §7.3.2 stage for a case.
+    """The §26.3.2 stage for a case.
 
     ``None`` status is `enquiry` — a conversation with no case behind it yet, which is
     where every WhatsApp customer starts and the one stage that has no row to read.

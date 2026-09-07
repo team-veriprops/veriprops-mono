@@ -1,6 +1,6 @@
-"""Channel analytics facts (PRD §7.10, WA-43; D80).
+"""Channel analytics facts (PRD §26.10, WA-43; D80).
 
-§7.10 wants seven numbers instrumented "from day one of launch", and four of them are
+§26.10 wants seven numbers instrumented "from day one of launch", and four of them are
 **rates over a window** — seam conversion, enquiry→intake, escalation rate, opt-in rate.
 None of those could be answered by the tables the channel already had:
 
@@ -14,12 +14,12 @@ None of those could be answered by the tables the channel already had:
   "actor" and a "resource" mean.
 
 So this is an **append-only fact table**: one row per countable occurrence, never updated,
-never deleted. That shape is what makes every §7.10 metric the same query — count rows of a
+never deleted. That shape is what makes every §26.10 metric the same query — count rows of a
 type in a window, optionally grouped by one column — and what lets a rate be recomputed for
 any period after the fact rather than only forward from the day someone added a counter.
 
 The rows are deliberately thin. A fact carries when it happened, what kind it was, and the
-few keys a §7.10 metric groups by; it is not a second copy of the conversation. Anything
+few keys a §26.10 metric groups by; it is not a second copy of the conversation. Anything
 richer belongs in the domain table that already owns it.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ from main.appodus_utils.db.models import UTCDateTime, jsonb_variant
 
 
 class WhatsAppChannelEventType(str, enum.Enum):
-    """The countable occurrences behind §7.10's seven metrics.
+    """The countable occurrences behind §26.10's seven metrics.
 
     Each member exists because a metric needs it, and the set is closed for the same reason
     `BotIntent` is: an unrecognised fact type would be counted into nothing.
@@ -43,14 +43,14 @@ class WhatsAppChannelEventType(str, enum.Enum):
 
     # A conversation began — a number's first inbound, or its first after the 30-day
     # welcome idle period. Carries the `[ref: …]` page code when the customer arrived
-    # through the widget, which is §7.10's attribution metric, and is the **denominator**
+    # through the widget, which is §26.10's attribution metric, and is the **denominator**
     # for both the enquiry→intake and escalation rates.
     ENQUIRY = "ENQUIRY"
 
-    # The four-question chat intake opened (§7.3.4's START_INTAKE).
+    # The four-question chat intake opened (§26.3.4's START_INTAKE).
     INTAKE_STARTED = "INTAKE_STARTED"
 
-    # The intake finished and an `intake` handoff link was minted. This is §7.10's seam
+    # The intake finished and an `intake` handoff link was minted. This is §26.10's seam
     # conversion **denominator** — the moment the customer has answered everything the
     # chat can ask and must cross to the website to go further.
     INTAKE_COMPLETED = "INTAKE_COMPLETED"
@@ -60,15 +60,15 @@ class WhatsAppChannelEventType(str, enum.Enum):
     # channel without putting an origin column on `verifications`.
     INTAKE_REDEEMED = "INTAKE_REDEEMED"
 
-    # A §7.5 `pay` link was handed over in chat (§7.3.4).
+    # A §26.5 `pay` link was handed over in chat (§26.3.4).
     PAY_LINK_ISSUED = "PAY_LINK_ISSUED"
 
-    # A verification this channel produced was paid for — §7.10's seam conversion
+    # A verification this channel produced was paid for — §26.10's seam conversion
     # **numerator**, and the PRD's "single most important number in this channel".
     PAYMENT_COMPLETED = "PAYMENT_COMPLETED"
 
     # The bot handed the conversation to a person, with the `EscalationReason` that sent it
-    # there. §7.10 asks for the rate *and its reasons*: escalating on guardrail topics is
+    # there. §26.10 asks for the rate *and its reasons*: escalating on guardrail topics is
     # the channel working as designed, while escalating on unmatched intents names the
     # flow to build next.
     ESCALATED = "ESCALATED"
@@ -77,7 +77,7 @@ class WhatsAppChannelEventType(str, enum.Enum):
 # ─── ORM ──────────────────────────────────────────────────────────
 
 class WhatsAppChannelEvent(BaseEntity):
-    """One §7.10 fact. Written once, never updated."""
+    """One §26.10 fact. Written once, never updated."""
 
     __tablename__ = "whatsapp_channel_events"
 
@@ -92,7 +92,7 @@ class WhatsAppChannelEvent(BaseEntity):
     # necessarily which handset the conversation happened on.
     phone_e164 = Column(String(32), nullable=True)
 
-    # The widget's `[ref: …]` marker (§7.4.1), set on ENQUIRY only. Free text rather than an
+    # The widget's `[ref: …]` marker (§26.4.1), set on ENQUIRY only. Free text rather than an
     # enum: the codes describe **frontend routes** the backend does not model, and
     # `lib/whatsapp.ts` derives one for any new page without a table edit — so an unknown
     # code here is a new page, not bad data.
@@ -105,11 +105,11 @@ class WhatsAppChannelEvent(BaseEntity):
     customer_id = Column(String(36), nullable=True)
 
     # Anything a future metric wants that does not deserve a column yet. Never read by a
-    # §7.10 metric — a number that matters earns a column and an index.
+    # §26.10 metric — a number that matters earns a column and an index.
     detail = Column(jsonb_variant(), nullable=True)
 
     __table_args__ = (
-        # Every §7.10 metric is "rows of this type in this window", so the composite index
+        # Every §26.10 metric is "rows of this type in this window", so the composite index
         # is the access path rather than an optimisation.
         Index("ix_whatsapp_channel_events_type_time", "event_type", "occurred_at"),
         Index("ix_whatsapp_channel_events_verification", "verification_id"),
@@ -144,12 +144,12 @@ class SearchWhatsAppChannelEventDto(InternalPageRequest, BaseQueryDto):
     event_type: Optional[str] = None
 
 
-# ─── Meta number health (§7.10, §7.11; D81) ───────────────────────
+# ─── Meta number health (§26.10, §26.11; D81) ───────────────────────
 
 class WhatsAppQualityRating(str, enum.Enum):
     """Meta's quality rating for the business number.
 
-    §7.10 counts it as the channel's platform-dependency early warning: property is a
+    §26.10 counts it as the channel's platform-dependency early warning: property is a
     scam-saturated category under aggressive automated enforcement, and the rating is the
     signal that arrives *before* Meta throttles or bans the number. `UNKNOWN` is ours, not
     Meta's — it is the state before a first successful sync, and it must not read as green.
@@ -164,7 +164,7 @@ class WhatsAppQualityRating(str, enum.Enum):
 class WhatsAppNumberHealth(BaseEntity):
     """Meta's verdict on our number, cached (D81).
 
-    The same posture as the §7.7 template registry (D59a): Meta owns the value, we store
+    The same posture as the §26.7 template registry (D59a): Meta owns the value, we store
     what it last told us alongside *when* it told us, and nothing in the send path ever
     reads this. A stale or failed sync must never be able to take the channel down — the
     admin surface shows the sync age and lets a person judge.

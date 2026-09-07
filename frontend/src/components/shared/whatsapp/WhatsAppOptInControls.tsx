@@ -4,13 +4,13 @@ import { Checkbox } from "@3rdparty/ui/checkbox";
 import { WhatsAppConsent } from "@/types/whatsappConsent";
 
 /**
- * The two §7.4.6 opt-ins, as a pair of separate unticked controls.
+ * The two §26.4.6 opt-ins, as a pair of separate unticked controls.
  *
  * Three things about this component are requirements rather than styling choices:
  *
  * **They are two controls, not one.** Progress updates about a verification the customer
  * paid for and marketing about everything else are different asks; bundling them would
- * make the marketing consent unevidenced, and marketing consent is exactly what §7.10
+ * make the marketing consent unevidenced, and marketing consent is exactly what §26.10
  * counts as the channel's growth asset.
  *
  * **They start unticked, always.** The component holds no default of its own — it renders

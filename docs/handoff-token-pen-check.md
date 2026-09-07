@@ -1,9 +1,9 @@
-# Handoff token pen-check list (PRD §7.11)
+# Handoff token pen-check list (PRD §26.11)
 
-The §7.11 launch gate reads "Token service pen-checked (replay, expiry, scope
+The §26.11 launch gate reads "Token service pen-checked (replay, expiry, scope
 containment)". This is the checklist that gate refers to.
 
-The threat model is the PRD's own (§7.5): handoff links travel through WhatsApp, where
+The threat model is the PRD's own (§26.5): handoff links travel through WhatsApp, where
 forwarding a message is ordinary behaviour, so **a leaked or forwarded link must expose at
 most one expired, single-use, single-action grant — never an account.** Every item below
 is an attempt to break that sentence.
@@ -56,7 +56,7 @@ gate.
 
 - A leaked `pay` link lets a stranger **pay someone else's bill** before it expires. That
   is the accepted trade (D50): no data is disclosed beyond a case reference and an amount,
-  card details never touch Veriprops, and payment friction is the cost §7.10 names as the
+  card details never touch Veriprops, and payment friction is the cost §26.10 names as the
   channel's most important metric. `upload` and `report` do **not** take this trade —
   they hand off to an authenticated portal instead.
 - Outside production, an unconfigured keypair is generated per process, so restarting the

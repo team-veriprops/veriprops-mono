@@ -1,14 +1,14 @@
-"""The status flow (PRD §7.3.1, §7.4.3, §7.6.2, WA-07).
+"""The status flow (PRD §26.3.1, §26.4.3, §26.6.2, WA-07).
 
 "Check my status" is the one bot flow that reads a customer's own case data, which makes
 it the flow with the most to get wrong. Three rules shape it:
 
 * **The data is the dashboard's data.** The engine fetches through the same verification
-  services the website uses (§7.3.1) and hands the result here; the wording comes from
+  services the website uses (§26.3.1) and hands the result here; the wording comes from
   `verification/tracking/labels.py`, which the dashboard already renders. A second status
   vocabulary is how two surfaces start disagreeing.
 * **The number must be linked.** Identity is resolved before this flow is reached
-  (§7.4.3); an unlinked number is answered with an offer to link, never with a case.
+  (§26.4.3); an unlinked number is answered with an offer to link, never with a case.
 * **More than one case means asking, not guessing.** A customer with three verifications
   who says "any update?" gets a numbered list and picks one — an answer about the wrong
   property is worse than a question.
@@ -28,7 +28,7 @@ class CaseSummary:
 
     Deliberately thin. A chat reply is not a dashboard: it says which property, where the
     case is, and when it is due — everything else belongs behind the customer's login,
-    which is exactly the boundary §7.3.4 draws.
+    which is exactly the boundary §26.3.4 draws.
     """
 
     vid: str
@@ -61,11 +61,11 @@ def render(cases: Sequence[CaseSummary]) -> StatusOutcome:
 
 
 def render_for_delegate(case: CaseSummary, delegate_name: str) -> StatusOutcome:
-    """The status reply for an authorized delegate (§7.4.5).
+    """The status reply for an authorized delegate (§26.4.5).
 
     Two things separate this from `_one_case`, and both are the grant showing through:
 
-    * **It names the role.** §7.4.5 requires the bot to identify a delegate as a delegate
+    * **It names the role.** §26.4.5 requires the bot to identify a delegate as a delegate
       — partly so they know what they are, and partly so they are not surprised when the
       next question they ask is treated as a new enquiry.
     * **It does not end with "sign in for the full details and your report".** A delegate
@@ -149,7 +149,7 @@ def _one_case(case: CaseSummary) -> str:
 
 
 def choose_prompt(cases: Sequence[CaseSummary]) -> str:
-    """The numbered "which one?" list. Public because §7.6.3's document flow asks the same
+    """The numbered "which one?" list. Public because §26.6.3's document flow asks the same
     question about the same cases, and the customer must be able to answer both the same
     way — one list format, one matcher (`resolve_choice`)."""
     listed: List[str] = [

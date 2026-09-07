@@ -1,4 +1,4 @@
-"""Verification-task timeout sweeps (PRD §7.2, decision-log D12).
+"""Verification-task timeout sweeps (PRD §11.4, decision-log D12).
 
 Two time-driven sweeps over the task pool: no-show reclaim (accepted tasks whose
 agent never showed up are returned to the pool) and broadcast-pool starvation

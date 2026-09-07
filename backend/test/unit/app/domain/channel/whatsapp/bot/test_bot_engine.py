@@ -1,14 +1,14 @@
-"""The engine's gauntlet, in order (PRD §7.6, WA-11/WA-14/WA-39).
+"""The engine's gauntlet, in order (PRD §26.6, WA-11/WA-14/WA-39).
 
 Dispatch order *is* the safety model, so these tests are mostly about **precedence**: what
 happens when two rules could both apply. Each case below is a rule beating another rule,
 and each of those wins was chosen deliberately:
 
 * a human on the thread beats everything (D57);
-* the welcome beats answering, so the disclosure is never buried (§7.6.1);
+* the welcome beats answering, so the disclosure is never buried (§26.6.1);
 * guardrails beat the classifier, so no model can talk the bot into a verdict (D44);
 * a crash beats nothing — it becomes a warm handover, because a silent bot is
-  indistinguishable from a scam that stopped replying (§7.6.5).
+  indistinguishable from a scam that stopped replying (§26.6.5).
 
 The collaborators are fakes rather than mocks with assertions on calls: what matters is
 the words the customer reads and the state the session lands in, not which method ran.
@@ -68,7 +68,7 @@ def mock_db_session():
 # ─── Fakes ────────────────────────────────────────────────────────
 
 class _FakeChannelEventRecorder:
-    """Collects the §7.10 facts a turn produced (D80).
+    """Collects the §26.10 facts a turn produced (D80).
 
     The real recorder swallows its own failures, so a fake that raised would test
     something the production object cannot do.
@@ -145,7 +145,7 @@ def _engine(
 
     session_service = object.__new__(WhatsAppBotSessionService)
     session_service._whatsapp_bot_session_repo = _FakeSessionRepo(session)
-    # §7.10 facts are best-effort side writes (D80). Collected rather than discarded so a
+    # §26.10 facts are best-effort side writes (D80). Collected rather than discarded so a
     # test can assert the channel counted what it claims to count.
     recorder = _FakeChannelEventRecorder()
     session_service._channel_events = recorder
@@ -235,7 +235,7 @@ async def test_the_bot_stays_silent_while_a_human_owns_the_thread():
 
 
 async def test_first_contact_gets_the_welcome_and_nothing_else():
-    """§7.6.1 — a bot that greeted *and* answered would bury the disclosure and the
+    """§26.6.1 — a bot that greeted *and* answered would bury the disclosure and the
     payment pledge under a wall of text."""
     session = _session(welcomed_at=None, last_inbound_at=None)
     engine, sent = _engine(session, intent=BotIntent.PRICING)
@@ -291,7 +291,7 @@ async def test_an_intent_guardrail_catches_what_phrasing_did_not():
 
 
 async def test_a_crash_becomes_a_warm_handover():
-    """§7.6.5 — an outage must never look like a scam that stopped replying."""
+    """§26.6.5 — an outage must never look like a scam that stopped replying."""
     session = _session()
     engine, sent = _engine(session, intent=BotIntent.PRICING)
     engine._pricing_config_service.view = AsyncMock(side_effect=RuntimeError("provider down"))
@@ -341,7 +341,7 @@ async def test_an_faq_question_is_answered_from_the_content_set():
 # ─── Status ───────────────────────────────────────────────────────
 
 async def test_status_refuses_an_unlinked_number():
-    """§7.4.3 — the bot never reads case data to a number that is not verified."""
+    """§26.4.3 — the bot never reads case data to a number that is not verified."""
     session = _session()
     engine, _sent = _engine(session, intent=BotIntent.CHECK_STATUS, user_id=None)
 
@@ -455,7 +455,7 @@ async def test_the_first_miss_re_offers_the_menu():
 
 
 async def test_the_second_consecutive_miss_escalates():
-    """§7.6.2 draws the line at two: guessing a third time is how a bot talks someone out
+    """§26.6.2 draws the line at two: guessing a third time is how a bot talks someone out
     of the product."""
     session = _session(unmatched_count=1)
     engine, _sent = _engine(session, intent=BotIntent.UNKNOWN)
@@ -480,8 +480,8 @@ async def test_a_understood_turn_resets_the_miss_counter():
 @pytest.mark.parametrize(
     "kind, reason",
     [
-        # A voice note is counted separately: §7.6.3 gives it its own copy ("a team member
-        # will listen") and §7.10 asks for voice-note volume by name.
+        # A voice note is counted separately: §26.6.3 gives it its own copy ("a team member
+        # will listen") and §26.10 asks for voice-note volume by name.
         (InboundKind.AUDIO, EscalationReason.VOICE_NOTE),
         (InboundKind.LOCATION, EscalationReason.UNSUPPORTED_MEDIA),
         (InboundKind.CONTACTS, EscalationReason.UNSUPPORTED_MEDIA),
@@ -490,7 +490,7 @@ async def test_a_understood_turn_resets_the_miss_counter():
     ids=lambda value: getattr(value, "value", value),
 )
 async def test_media_the_bot_cannot_read_goes_to_a_person(kind, reason):
-    """§7.6.3 — a voice note or a dropped pin is acknowledged and handed over, never
+    """§26.6.3 — a voice note or a dropped pin is acknowledged and handed over, never
     silently ignored."""
     session = _session()
     engine, _sent = _engine(session, intent=BotIntent.UNKNOWN)
@@ -501,7 +501,7 @@ async def test_media_the_bot_cannot_read_goes_to_a_person(kind, reason):
 
 
 async def test_a_photo_is_answered_with_the_evidence_rule_not_an_apology():
-    """§7.6.3/WA-06 — before this flow existed, a customer photographing their survey plan
+    """§26.6.3/WA-06 — before this flow existed, a customer photographing their survey plan
     got "Sorry, I didn't quite get that": the image kinds were left out of the unreadable
     set on the assumption an upload handoff would catch them, and it had not been built."""
     session = _session()
@@ -526,7 +526,7 @@ async def test_an_escalation_does_not_silence_the_bot():
     assert session.last_escalation_reason == EscalationReason.EXPLICIT_REQUEST.value
 
 
-# ── Keyword-only intents: consent and case references (D64, §7.4.3) ──
+# ── Keyword-only intents: consent and case references (D64, §26.4.3) ──
 
 @pytest.mark.parametrize(
     "word", ["STOP", "stop", "  Stop  ", "unsubscribe", "cancel", "end", "quit"]
@@ -534,7 +534,7 @@ async def test_an_escalation_does_not_silence_the_bot():
 async def test_stop_revokes_both_consents_in_one_turn(word):
     """D64's full STOP vocabulary. Two things must hold for every one of these words:
     the bot answers *itself* — an opt-out that waits for the next working day is not an
-    opt-out — and both §7.4.6 consents go, because the customer said "stop", not "stop
+    opt-out — and both §26.4.6 consents go, because the customer said "stop", not "stop
     some"."""
     session = _session()
     engine, _sent = _engine(session, intent=BotIntent.UNKNOWN, user_id="cust-1")
@@ -608,7 +608,7 @@ async def test_a_quoted_case_reference_outranks_the_classifier():
 
 
 async def test_a_case_reference_still_respects_the_identity_gate():
-    """§7.4.3 outranks recognition: quoting a reference does not prove you own it."""
+    """§26.4.3 outranks recognition: quoting a reference does not prove you own it."""
     session = _session()
     engine, _sent = _engine(session, intent=BotIntent.LEARN, user_id=None)
 
@@ -617,7 +617,7 @@ async def test_a_case_reference_still_respects_the_identity_gate():
     assert "isn't linked" in reply.text
 
 
-# ── Chat intake (§5.1, §7.3.4, D69/D70) ──────────────────────────
+# ── Chat intake (§5.1, §26.3.4, D69/D70) ──────────────────────────
 
 def _intake_engine(session, **kwargs):
     engine, sent = _engine(session, **kwargs)
@@ -627,7 +627,7 @@ def _intake_engine(session, **kwargs):
 
 
 async def test_a_stranger_can_start_a_verification_without_an_account():
-    """§7.3.4 lists intake as a full WhatsApp capability, and D69 puts identity at the
+    """§26.3.4 lists intake as a full WhatsApp capability, and D69 puts identity at the
     landing — so the very first message from an unknown number can begin one."""
     session = _session()
     engine, _sent = _intake_engine(
@@ -652,13 +652,13 @@ async def test_the_intake_runs_to_a_handoff_link():
     reply = await engine.handle(_inbound("2"), convo)               # standard
 
     assert "/wa/intake/tok-123" in reply.text
-    # §7.1.1 — the moment the customer is asked to leave WhatsApp and pay.
+    # §26.1.1 — the moment the customer is asked to leave WhatsApp and pay.
     assert "veriprops.ng" in reply.text
     assert session.context["intake"]["property"]["state"] == "Lagos"
 
 
 async def test_a_re_ask_does_not_count_as_a_failure_to_understand():
-    """§7.6.2's two-strikes rule is about the bot being lost, not about a customer
+    """§26.6.2's two-strikes rule is about the bot being lost, not about a customer
     mistyping inside a form the bot is running — otherwise a fumbled answer escalates a
     conversation that was going fine."""
     session = _session(unmatched_count=1)
@@ -721,7 +721,7 @@ async def test_an_address_containing_a_flow_word_is_still_an_address():
     assert session.context["intake"]["property"]["address"] == "12 Menu Close, Lekki"
 
 
-# ── Short-code continuation (§7.4.3, D58) ────────────────────────
+# ── Short-code continuation (§26.4.3, D58) ────────────────────────
 
 async def test_a_quoted_reference_picks_that_case_up():
     session = _session()
@@ -759,7 +759,7 @@ async def test_a_reference_that_is_not_yours_reads_as_not_found():
 
 
 async def test_continuation_refuses_an_unlinked_number():
-    """§7.4.3 again — quoting a reference is not proof of owning it."""
+    """§26.4.3 again — quoting a reference is not proof of owning it."""
     session = _session()
     engine, _sent = _engine(session, intent=BotIntent.LEARN, user_id=None)
 
@@ -770,7 +770,7 @@ async def test_continuation_refuses_an_unlinked_number():
 
 
 async def test_a_thirty_day_gap_drops_a_half_finished_intake():
-    """§7.6.1's welcome is also a reset. Resuming a month-old intake would answer a
+    """§26.6.1's welcome is also a reset. Resuming a month-old intake would answer a
     question about a property the customer has almost certainly moved on from, and would
     show a stale flow beside the thread in the console."""
     session = _session(
@@ -811,7 +811,7 @@ async def test_a_finished_intake_does_not_re_send_a_link_on_the_next_message():
 
 @pytest.mark.parametrize("phrase", ["pay", "new link", "resend", "expired", "  Link  "])
 async def test_a_customer_can_ask_for_a_fresh_link(phrase):
-    """A 15-minute link expires easily, and §7.10 makes intake→payment the headline
+    """A 15-minute link expires easily, and §26.10 makes intake→payment the headline
     number — re-asking four questions is the cheapest conversion to lose."""
     session = _session(context={"intake": {"property": {"address": "12 Ademola Street"}}})
     engine, _sent = _intake_engine(session, intent=BotIntent.UNKNOWN)
@@ -833,9 +833,9 @@ async def test_asking_for_a_link_with_no_intake_behind_it_classifies_normally():
     assert "₦5,000" in reply.text
 
 
-# ── Pay and report handoffs (§7.3.4, §7.4.2, WA-17) ──────────────
+# ── Pay and report handoffs (§26.3.4, §26.4.2, WA-17) ──────────────
 #
-# §7.3.4 marks three actions HANDOFF. Only `upload` had a producer, so "how do I pay?"
+# §26.3.4 marks three actions HANDOFF. Only `upload` had a producer, so "how do I pay?"
 # and "send me my report" both fell through to "I didn't quite get that" — and the
 # `/wa/pay/<token>` and `/wa/report/<token>` landings, both fully built, were unreachable
 # from a real conversation.
@@ -863,7 +863,7 @@ async def test_asking_to_pay_hands_over_a_pay_link_for_the_unpaid_case():
     reply = await engine.handle(_inbound("how do I pay?"), MagicMock())
 
     assert "/wa/pay/tok-abc" in reply.text
-    # §7.1.1 — the pledge rides every payment handoff. This is the message an
+    # §26.1.1 — the pledge rides every payment handoff. This is the message an
     # impersonator would imitate, so it is the one that most needs it.
     assert "veriprops.ng" in reply.text
     assert session.current_flow is None
@@ -882,7 +882,7 @@ async def test_asking_for_a_report_hands_over_a_report_link():
 
 
 async def test_the_pay_link_is_never_issued_to_an_unlinked_number():
-    """§7.4.3 — a pay token names a customer and a case, so issuing one from a phone
+    """§26.4.3 — a pay token names a customer and a case, so issuing one from a phone
     number alone would mean guessing whose money is being asked for."""
     session = _session()
     engine, _sent = _handoff_engine(session, intent=BotIntent.PAY, user_id=None)
@@ -977,7 +977,7 @@ async def test_a_retained_intake_still_wins_over_the_pay_intent():
     assert "/wa/intake/tok-123" in reply.text
 
 
-# ── The §7.6.5 failure drill (§7.11 launch gate, WA-40) ──────────
+# ── The §26.6.5 failure drill (§26.11 launch gate, WA-40) ──────────
 
 async def test_an_armed_fault_becomes_a_warm_handover_like_any_other_crash():
     """The drill has to take the real path, not a special one — otherwise it proves the

@@ -1,7 +1,7 @@
-"""Widget attribution markers (§7.4.1, §7.10, D85).
+"""Widget attribution markers (§26.4.1, §26.10, D85).
 
 The page code arrives as literal text the customer's phone typed for them. Two things have
-to be true at once: §7.10 gets its demand signal, and nothing that reads the message *as
+to be true at once: §26.10 gets its demand signal, and nothing that reads the message *as
 words* — the classifier, the guardrails, the agent console — ever sees the markup.
 """
 from main.appodus_utils.integrations.messaging.providers.whatsapp.attribution import (
@@ -17,7 +17,7 @@ class TestExtraction:
         assert cleaned == "Hi Veriprops!"
 
     def test_the_continue_button_marker_leaves_the_reference_behind(self):
-        # §7.4.3/D58 — the VID is what the bot matches on, so stripping the marker must
+        # §26.4.3/D58 — the VID is what the bot matches on, so stripping the marker must
         # not take the customer's case reference with it.
         code, cleaned = extract_page_code("Continue VP-2026-0001 [ref: web-portal]")
 
@@ -44,7 +44,7 @@ class TestExtraction:
 
 class TestWhatIsLeftBehind:
     def test_a_message_that_is_only_a_marker_has_no_words_left(self):
-        # None, not "". A message with no words is a greeting the §7.6.1 welcome answers;
+        # None, not "". A message with no words is a greeting the §26.6.1 welcome answers;
         # an empty string would look like a message that trailed off.
         code, cleaned = extract_page_code("[ref: web-home]")
 

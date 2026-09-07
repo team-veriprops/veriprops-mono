@@ -41,7 +41,7 @@ describe("WhatsAppTemplates", () => {
   });
 
   it("says a NOT_FOUND template still has to be submitted", () => {
-    // The state the §7.11 launch gate is really asking about, so it must not read as a
+    // The state the §26.11 launch gate is really asking about, so it must not read as a
     // generic failure the reader can ignore.
     const html = render([template()]);
     expect(html).toContain("not on the business account yet");

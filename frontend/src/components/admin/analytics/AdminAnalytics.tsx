@@ -27,7 +27,7 @@ const TABS: { id: AnalyticsTab; label: string; icon: typeof BarChart3 }[] = [
  *
  * **Platform** is the original surface: conversion funnel, avg time by tier, revenue by
  * tier & location, per-state regional performance, and the 6-month agent trend.
- * **WhatsApp channel** is §7.10's seven channel metrics (WA-43). One page rather than two
+ * **WhatsApp channel** is §26.10's seven channel metrics (WA-43). One page rather than two
  * routes, for the reason `AdminMessagesTabs` gives: these are the same question asked of
  * two surfaces, and splitting them makes the channel look like a separate product.
  *

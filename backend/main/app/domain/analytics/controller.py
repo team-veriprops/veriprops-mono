@@ -59,7 +59,7 @@ async def get_agent_trends(_admin_id: str = Depends(_guard)):
 @analytics_router.get(
     "/whatsapp",
     response_model=SuccessResponse[WhatsAppChannelAnalyticsDto],
-    summary="The seven §7.10 WhatsApp channel metrics over a trailing window",
+    summary="The seven §26.10 WhatsApp channel metrics over a trailing window",
 )
 async def get_whatsapp_channel(
     # A loose Query param rather than a DTO, matching the audit controller — the only
@@ -75,12 +75,12 @@ async def get_whatsapp_channel(
 @analytics_router.post(
     "/whatsapp/quality/sync",
     response_model=SuccessResponse[WhatsAppChannelAnalyticsDto],
-    summary="Re-read Meta's quality rating for the business number (§7.10, D81)",
+    summary="Re-read Meta's quality rating for the business number (§26.10, D81)",
 )
 async def sync_whatsapp_quality(
     days: Optional[int] = Query(default=None, ge=1, le=365),
     # A heavier permission than reading: this reaches an external API on demand, which is
-    # the same reason the §7.7 template sync is CONFIGURE_SYSTEM rather than VIEW_ANALYTICS.
+    # the same reason the §26.7 template sync is CONFIGURE_SYSTEM rather than VIEW_ANALYTICS.
     _admin_id: str = Depends(require_permission(Permission.CONFIGURE_SYSTEM)),
 ):
     """Sync, then return the whole panel so the page re-renders from one response.

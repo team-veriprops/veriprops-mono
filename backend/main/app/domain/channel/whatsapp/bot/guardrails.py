@@ -1,4 +1,4 @@
-"""Hard constraints on what the bot may answer (PRD §7.1.3, §7.6.4, WA-03/WA-39).
+"""Hard constraints on what the bot may answer (PRD §26.1.3, §26.6.4, WA-03/WA-39).
 
 These are **deterministic and sit outside the classifier** (D44). A model decides which
 flow a message belongs to; it does not decide whether a message is allowed to reach a
@@ -10,7 +10,7 @@ Three things are checked, in the order a message meets them:
 
 1. **Language** (Decision L) — English only at v1; anything else gets a polite English
    reply and a human.
-2. **Guarded topics** (§7.6.4) — verification judgments, legal opinions, Trust Score
+2. **Guarded topics** (§26.6.4) — verification judgments, legal opinions, Trust Score
    readings, property-specific assessments, pricing negotiation, refund decisions, and
    requests for promises about outcomes or timelines. No partial answers: the whole turn
    routes to a person.
@@ -18,7 +18,7 @@ Three things are checked, in the order a message meets them:
    answerable (`JUDGMENT_REQUEST`, `REFUND_OR_CANCELLATION`).
 
 A guardrail hit is not an error. It is the bot working: the customer gets a warm reply
-and a person, which §7.1.3 says is the only place judgments come from.
+and a person, which §26.1.3 says is the only place judgments come from.
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ class GuardrailVerdict(NamedTuple):
     reason: EscalationReason
 
 
-# §7.6.4 topic patterns. Deliberately broader than the intent classifier's: this list
+# §26.6.4 topic patterns. Deliberately broader than the intent classifier's: this list
 # exists to catch what the classifier missed, so overlap is the design, not duplication.
 # A false positive costs a handover to a person; a false negative is the bot giving a
 # verdict on someone's property, which is the failure the Trust Charter is built around.

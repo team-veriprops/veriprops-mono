@@ -1,4 +1,4 @@
-"""WhatsAppConsentService — the §7.4.6 opt-in ledger (D63/D64, WA-27).
+"""WhatsAppConsentService — the §26.4.6 opt-in ledger (D63/D64, WA-27).
 
 The property under test is that consent is a *history*, not a flag. Granted-ness is derived
 from a grant/revoke pair, so what these tests pin is that the derivation stays right across
@@ -92,7 +92,7 @@ class TestDerivedGrantedness:
 
     def test_a_later_grant_beats_an_earlier_revocation(self):
         """Re-consenting must work without erasing the revocation that preceded it —
-        §7.8 wants the history kept, so the newer stamp has to be what decides."""
+        §26.8 wants the history kept, so the newer stamp has to be what decides."""
         revoked = Utils.datetime_now()
         assert consent_granted(revoked + timedelta(seconds=1), revoked) is True
 
@@ -102,7 +102,7 @@ class TestDerivedGrantedness:
 
 class TestCapture:
     async def test_absent_row_reads_as_both_unticked(self):
-        """§7.4.6's controls are unticked by default, and silence is never consent."""
+        """§26.4.6's controls are unticked by default, and silence is never consent."""
         svc = _service()
         described = await svc.describe(USER)
         assert (described.utility, described.marketing) == (False, False)
@@ -172,7 +172,7 @@ class TestStopAndStart:
         assert row.utility_source == WhatsAppConsentSource.STOP_KEYWORD.value
 
     async def test_revocation_keeps_the_grant_that_preceded_it(self):
-        """The pair of stamps is the §7.8 record: clearing the grant would lose the fact
+        """The pair of stamps is the §26.8 record: clearing the grant would lose the fact
         that consent was ever given, which is the half a regulator asks about."""
         svc = _service(_row())
         await svc.set_consents(USER, True, True, WhatsAppConsentSource.PAY_SCREEN)

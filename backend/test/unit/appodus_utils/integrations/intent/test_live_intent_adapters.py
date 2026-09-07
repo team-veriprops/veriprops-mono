@@ -1,9 +1,9 @@
-"""The live adapters' failure behaviour (PRD §7.6.4/§7.6.5, D53).
+"""The live adapters' failure behaviour (PRD §26.6.4/§26.6.5, D53).
 
 These tests never call a model — `ENVIRONMENT=test` forbids it, and that is the point.
 What they pin down is what happens when the model is *unreachable or wrong*, because
 that is the path a customer actually feels: a classifier that raised would take the bot
-down and §7.6.5 says an outage must never look like a scam that stopped replying.
+down and §26.6.5 says an outage must never look like a scam that stopped replying.
 
 Every branch below has the same expected outcome — `UNKNOWN`, which routes to a human.
 The value is in proving there is no branch that escapes as an exception.

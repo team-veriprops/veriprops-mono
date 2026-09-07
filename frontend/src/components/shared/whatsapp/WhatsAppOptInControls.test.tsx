@@ -10,7 +10,7 @@ function render(consent: WhatsAppConsent = NO_WHATSAPP_CONSENT, disabled = false
   );
 }
 
-describe("WhatsAppOptInControls (§7.4.6)", () => {
+describe("WhatsAppOptInControls (§26.4.6)", () => {
   it("renders two separate controls, not one bundled opt-in", () => {
     const html = render();
     expect(html).toContain("wa-optin-utility");
@@ -29,7 +29,7 @@ describe("WhatsAppOptInControls (§7.4.6)", () => {
     expect(html).toContain('data-state="checked"');
   });
 
-  it("asks the two questions §7.4.6 specifies, separately", () => {
+  it("asks the two questions §26.4.6 specifies, separately", () => {
     const html = render();
     expect(html).toContain("progress updates about this verification");
     expect(html).toContain("news and offers");

@@ -1,13 +1,13 @@
 /**
- * WhatsApp messaging consent (PRD §7.4.6) — camelCase mirrors of the backend
+ * WhatsApp messaging consent (PRD §26.4.6) — camelCase mirrors of the backend
  * `app/domain/channel/whatsapp/consent` DTOs.
  *
  * The backend derives `utility` / `marketing` from a grant/revoke timestamp pair, so these
  * are read-only facts here: never recompute them on the client, and never treat "no record
- * yet" as anything but both off. §7.4.6 requires both controls to start unticked.
+ * yet" as anything but both off. §26.4.6 requires both controls to start unticked.
  */
 
-/** The two §7.4.6 opt-ins, as any consent surface renders them. */
+/** The two §26.4.6 opt-ins, as any consent surface renders them. */
 export interface WhatsAppConsent {
   /** "Send me progress updates about this verification on WhatsApp." */
   utility: boolean;

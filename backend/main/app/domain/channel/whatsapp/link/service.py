@@ -1,4 +1,4 @@
-"""WhatsApp account linking (PRD §7.4.4, WA-23/WA-24/WA-25).
+"""WhatsApp account linking (PRD §26.4.4, WA-23/WA-24/WA-25).
 
 Two directions, one destination. **Web→WhatsApp**: the customer types a number in account
 settings, we send a code to it over WhatsApp, they type the code back on the website.
@@ -16,7 +16,7 @@ The rules that make it worth trusting:
   the bot never messaged and have a code posted to it.
 * **A number change is a re-verification, not an edit.** The old number is released and
   its thread goes cold in the same transaction as the new attempt begins, so there is no
-  window where a stale number still resolves to the account (§7.4.4).
+  window where a stale number still resolves to the account (§26.4.4).
 * **Nothing here reads case data.** This module answers only "whose number is this?" —
   `resolve_user_for_phone` is the single lookup every flow downstream depends on, and it
   answers `None` for anything short of an ACTIVE link.
@@ -96,7 +96,7 @@ class WhatsAppLinkService:
 
         **The single identity lookup for the whole channel.** Every flow that could leak
         case data — status, short-code continuation, delegates — funnels through here, so
-        the "never read case data to an unverified number" rule (§7.4.3) is one function
+        the "never read case data to an unverified number" rule (§26.4.3) is one function
         to audit rather than a habit to maintain at a dozen call sites.
         """
         link = await self._whatsapp_link_repo.get_active_by_phone(to_e164(phone_e164))
@@ -109,7 +109,7 @@ class WhatsAppLinkService:
         business-initiated message may use (D65). `users.phone` is a profile field that
         nobody proved control of over WhatsApp; addressing a milestone to it would deliver
         case details to a number that was never OTP-verified as this customer's — the
-        §7.4.3 leak, running outwards.
+        §26.4.3 leak, running outwards.
 
         ACTIVE only, for the same reason the inbound direction is: a pending attempt is
         not a link.
@@ -119,7 +119,7 @@ class WhatsAppLinkService:
             return None
         return link.phone_e164
 
-    # ── Web → WhatsApp (§7.4.4) ───────────────────────────────────
+    # ── Web → WhatsApp (§26.4.4) ───────────────────────────────────
 
     async def start_link(self, user_id: str, phone_e164: str) -> WhatsAppLinkChallengeDto:
         """Begin linking *phone_e164* to *user_id*; returns where the code went and for how long.
@@ -172,7 +172,7 @@ class WhatsAppLinkService:
             OtpChannel.WHATSAPP, PhoneNumber.from_e164(normalized), code, user_id=user_id
         )
         self._whatsapp_link_repo.activate(link, Utils.datetime_now())
-        # §7.8: one conversation object per person. The thread this number has been
+        # §26.8: one conversation object per person. The thread this number has been
         # talking in gains an owner rather than a second thread being opened.
         await self._conversations.set_whatsapp_thread_owner(normalized, user_id)
         self._audit.schedule(
@@ -185,13 +185,13 @@ class WhatsAppLinkService:
         return link
 
     async def unlink(self, user_id: str, reason: str = "customer_request") -> None:
-        """Drop the link and let the old thread go cold (§7.4.4)."""
+        """Drop the link and let the old thread go cold (§26.4.4)."""
         link = await self._whatsapp_link_repo.get_by_user_id(user_id)
         if link is None or link.status == WhatsAppLinkStatus.REVOKED.value:
             raise ResourceNotFoundException(resource="WhatsApp link")
         await self._release(link, reason=reason)
 
-    # ── WhatsApp → web (§7.4.4) ───────────────────────────────────
+    # ── WhatsApp → web (§26.4.4) ───────────────────────────────────
 
     async def issue_link_invitation(self, phone_e164: str) -> str:
         """The signed link the bot sends an unlinked number. Carries the number, not a grant."""
@@ -225,7 +225,7 @@ class WhatsAppLinkService:
         self._whatsapp_link_repo.release_number(link, reason, Utils.datetime_now())
         if released:
             # The thread stays in the console for the agents; it just stops belonging to
-            # an account, so nothing will read case data into it again (§7.4.4).
+            # an account, so nothing will read case data into it again (§26.4.4).
             await self._conversations.set_whatsapp_thread_owner(released, None)
         self._audit.schedule(
             AuditActionType.WHATSAPP_NUMBER_UNLINKED,

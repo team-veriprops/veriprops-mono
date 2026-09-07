@@ -158,7 +158,7 @@ class TestApproveReject:
 
 
 class TestMilestoneEvents:
-    """§7.6.2's two new milestone triggers (D66).
+    """§26.6.2's two new milestone triggers (D66).
 
     Both exist so the WhatsApp rule table has a real event to hang off, rather than a
     subscriber inspecting another event's payload — which is the coupling the declarative
@@ -218,7 +218,7 @@ class TestMilestoneEvents:
         customer was told "we've started" again.
 
         A rejection is only possible on a SUBMITTED task, so work has provably begun by
-        definition here; the guard is exactly that. §7.6.2 promises three or four
+        definition here; the guard is exactly that. §26.6.2 promises three or four
         milestones per verification, not one per agent.
         """
         from main.app.core.events.events import EventType

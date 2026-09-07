@@ -1,4 +1,4 @@
-"""Meta webhook receiver (PRD §7.3.3, WA-09) — the channel's public front door.
+"""Meta webhook receiver (PRD §26.3.3, WA-09) — the channel's public front door.
 
 This endpoint is unauthenticated by design: the HMAC signature over the raw body *is*
 the authentication, so the tests below are the access-control tests for the whole

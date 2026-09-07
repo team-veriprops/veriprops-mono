@@ -1,4 +1,4 @@
-"""Unit tests for the official WhatsApp number projection (PRD §7.1.2, §7.4.1, S1).
+"""Unit tests for the official WhatsApp number projection (PRD §26.1.2, §26.4.1, S1).
 
 The number is published in three places (site widget, certified reports, investor
 materials), so it is derived from one setting and formatted in one place — these tests pin
@@ -21,7 +21,7 @@ class TestOfficialNumberDigits:
         assert official_number_digits() == "2349167624347"
 
     def test_configured_default_is_the_published_number(self):
-        # PRD §7.1.2 names +234 916 762 4347 as the one official number.
+        # PRD §26.1.2 names +234 916 762 4347 as the one official number.
         assert official_number_digits() == "2349167624347"
 
 

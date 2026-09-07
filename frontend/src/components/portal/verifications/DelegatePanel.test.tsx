@@ -30,7 +30,7 @@ const VERIFIED: CaseDelegate = {
 
 const AWAITING: CaseDelegate = { ...VERIFIED, verified: false };
 
-describe("DelegatePanel (§7.4.5)", () => {
+describe("DelegatePanel (§26.4.5)", () => {
   it("offers the nomination form when no one is authorized", () => {
     const html = render();
     expect(html).toContain("delegate-name");

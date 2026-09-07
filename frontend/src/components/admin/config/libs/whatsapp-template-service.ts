@@ -3,7 +3,7 @@ import { SuccessResponse } from "@/types/models";
 import { WhatsAppTemplate, WhatsAppTemplateSyncResult } from "@/types/whatsappTemplate";
 
 /**
- * Meta template registry API (PRD §7.7, WA-15/WA-41). Mirrors the backend controller at
+ * Meta template registry API (PRD §26.7, WA-15/WA-41). Mirrors the backend controller at
  * `app/domain/channel/whatsapp/template`.
  *
  * Read plus a sync action, and no write: the template definitions are code-owned and the
@@ -13,7 +13,7 @@ import { WhatsAppTemplate, WhatsAppTemplateSyncResult } from "@/types/whatsappTe
 export class WhatsAppTemplateService {
   constructor(private readonly http: HttpClient) {}
 
-  /** The §7.7 set with Meta's latest verdict on each. */
+  /** The §26.7 set with Meta's latest verdict on each. */
   list(): Promise<SuccessResponse<WhatsAppTemplate[]>> {
     return this.http.get(`/admin/config/whatsapp-templates`);
   }

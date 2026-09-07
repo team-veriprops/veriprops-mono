@@ -1,4 +1,4 @@
-"""Meta Cloud API inbound normalization (PRD §7.3.3, WA-09).
+"""Meta Cloud API inbound normalization (PRD §26.3.3, WA-09).
 
 Meta's webhook envelope is deeply nested and carries several payload shapes on one
 endpoint. Everything downstream — the bot engine, the console adapter, the fraud scan —
@@ -94,8 +94,8 @@ class TestNonTextMessages:
         assert msg.text == "my survey plan"
 
     def test_voice_notes_are_distinguishable_for_the_audio_routing_rule(self):
-        # §7.6.3: voice notes are acknowledged and routed to a human, never dropped —
-        # and §7.10 counts their volume as the v1.1 transcription trigger.
+        # §26.6.3: voice notes are acknowledged and routed to a human, never dropped —
+        # and §26.10 counts their volume as the v1.1 transcription trigger.
         message = {
             "from": "2348012345678", "id": "wamid.AUD", "timestamp": "1756600000",
             "type": "audio", "audio": {"id": "AUD1", "mime_type": "audio/ogg", "voice": True},

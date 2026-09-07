@@ -14,7 +14,7 @@ import { waMeUrl } from "@lib/whatsapp";
 const service = new HandoffService(httpClient);
 
 /**
- * Chat-intake landing (PRD §5.1, §7.5, D69).
+ * Chat-intake landing (PRD §5.1, §26.5, D69).
  *
  * The bot collected four answers over WhatsApp and sent this link. Getting here means the
  * customer has signed in — `proxy.ts` guarantees it — which is the thing the chat could
@@ -75,7 +75,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 function Loading() {
   return (
     <Shell>
-      {/* §7.4.2 — the landing must acknowledge the context it picked up. Silently
+      {/* §26.4.2 — the landing must acknowledge the context it picked up. Silently
           dropping the customer into a form would be the spec violation, not a rough edge. */}
       <p
         className="flex items-center gap-2 text-sm text-brand-on-surface-variant"

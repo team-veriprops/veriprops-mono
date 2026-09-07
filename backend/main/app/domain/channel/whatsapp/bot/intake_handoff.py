@@ -1,4 +1,4 @@
-"""Turning a chat intake into a real draft (PRD §5.1, §7.5, D69/D71).
+"""Turning a chat intake into a real draft (PRD §5.1, §26.5, D69/D71).
 
 The seam between the conversation and the website. The bot collected four answers into its
 session and sent a single-use link; this is what happens when the customer opens it —

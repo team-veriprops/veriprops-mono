@@ -1,5 +1,5 @@
 /**
- * WhatsApp account-linking types (PRD §7.4.4) — camelCase mirrors of the backend
+ * WhatsApp account-linking types (PRD §26.4.4) — camelCase mirrors of the backend
  * `app/domain/channel/whatsapp/link` DTOs.
  *
  * Backend owns every fact here. The page renders the status it is given; it never infers

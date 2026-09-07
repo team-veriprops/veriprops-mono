@@ -1,12 +1,12 @@
 # Architecture Specification — WhatsApp Channel (cycle 2)
 
 > Extends the as-built architecture in [MASTER-PRD.md](../MASTER-PRD.md) §4; cycle-1 spec archived
-> at `docs.back/architecture-spec.md`. Governing PRD: [PRD.md](../PRD.md) §7. All placements below
+> at `docs.back/architecture-spec.md`. Governing PRD: [MASTER-PRD.md](../MASTER-PRD.md) §26. All placements below
 > reuse existing patterns; final file paths confirmed at slice design, structure is binding.
 
 ## System Overview
 
-One canonical backend, two thin surfaces (§7.3). WhatsApp traffic terminates at a signature-
+One canonical backend, two thin surfaces (§26.3). WhatsApp traffic terminates at a signature-
 verified webhook, is normalized by the facade, and flows into the **existing** communication
 domain, event bus, and notification router. Outbound goes back through the facade to the existing
 Cloud API provider (live) or a new deterministic stub (CI/e2e, D43). The bot engine is a
@@ -22,12 +22,12 @@ Meta Cloud API ◀── facade.send ◀───┴── bot replies / agent r
 
 ## Bounded Contexts & Placement
 
-| Component (§7.3.3) | Placement | Reuses |
+| Component (§26.3.3) | Placement | Reuses |
 |---|---|---|
 | Webhook receiver | `app/domain/channel/whatsapp/webhook/` (controller + signature verifier) | raw-body HMAC pattern; Cloudflare/edge-auth exemption handled like other public webhooks |
 | WhatsApp facade | `appodus_utils/integrations/messaging/providers/whatsapp/` — **existing** `whatsapp_business.py` (live send) + new `stub.py` (deterministic) + inbound normalization models | existing `MessageRouter`, WhatsApp payload models (templates, interactive) in `messaging/models.py` |
-| Bot engine | `app/domain/channel/whatsapp/bot/` — session store, flow FSMs, guardrails, escalation | verification/service + submission-draft services via the same service layer the dashboard uses (§7.3.1, D45) |
-| Intent classifier | `appodus_utils/integrations/intent/` facade (provider-agnostic, D48): `STUB` (keyword table) \| `ANTHROPIC` \| `OPENAI_COMPATIBLE` (base URL + model + key — covers OpenAI, DeepSeek, Groq, Ollama, …) | §4.13 facade pattern (`KYC_PROVIDER=STUB` shape); messaging provider-registry shape; provider API key via Doppler |
+| Bot engine | `app/domain/channel/whatsapp/bot/` — session store, flow FSMs, guardrails, escalation | verification/service + submission-draft services via the same service layer the dashboard uses (§26.3.1, D45) |
+| Intent classifier | `appodus_utils/integrations/intent/` facade (provider-agnostic, D48): `STUB` (keyword table) \| `ANTHROPIC` \| `OPENAI_COMPATIBLE` (base URL + model + key — covers OpenAI, DeepSeek, Groq, Ollama, …). **Live: `OPENAI_COMPATIBLE` → DeepSeek `deepseek-chat` (D87)** | §4.13 facade pattern (`KYC_PROVIDER=STUB` shape); messaging provider-registry shape; provider API key via Doppler |
 | Console adapter | extension of `app/domain/communication/` — WhatsApp-sourced messages join the existing conversation pipeline with source labeling; replies fan back through the facade | `ChatMessageState` machine, fraud scan (`fraud_scan.py`), SSE emitters |
 | Fraud-scan pipeline | unchanged — WhatsApp text enters the same scan as web chat (WA-13) | `communication/service.py` |
 | Token service | `app/domain/channel/whatsapp/handoff/` — RS256 issue/validate, jti single-use | `secrets` for nonces; idempotency-key storage pattern (§4.6) for redemptions |
@@ -45,11 +45,11 @@ existing rewrite; service files kept in sync with controllers per repo contract.
 |---|---|---|
 | `WhatsAppLink` | 1:1 OTP-verified phone↔account join (E1) | user_id (uq), phone (uq), verified_at, status |
 | `WhatsAppBotSession` | per-conversation flow state | phone, current_flow, step, context JSON (text), last_inbound_at (30-day idle), unmatched_count |
-| `WhatsAppTemplate` | §7.7 registry | name (enum-backed), category, version, meta_status, submitted_at |
+| `WhatsAppTemplate` | §26.7 registry | name (enum-backed), category, version, meta_status, submitted_at |
 | `CaseDelegate` | O2 slim delegate | verification_id (uq — one per case), name, phone, verified_at, revoked_at |
 | `HandoffTokenRedemption` | jti single-use record | jti (uq), intent, case_id, redeemed_at |
-| Consent additions | utility + marketing WhatsApp opt-ins | existing consent/preference models; timestamped, exportable (§7.8) |
-| Message source labeling | one conversation object across surfaces (§7.8) | source/channel column on chat messages; `unofficial` flag for chat media |
+| Consent additions | utility + marketing WhatsApp opt-ins | existing consent/preference models; timestamped, exportable (§26.8) |
+| Message source labeling | one conversation object across surfaces (§26.8) | source/channel column on chat messages; `unofficial` flag for chat media |
 
 All enums get real Python enums (repo rule); migrations keep raw strings.
 
@@ -67,12 +67,12 @@ All enums get real Python enums (repo rule); migrations keep raw strings.
 
 - **Webhook:** HMAC-SHA256 signature over raw body with `WHATSAPP_APP_SECRET_KEY`; verify token
   for the GET handshake. No session, no cookies.
-- **Handoff tokens (§7.5):** RS256 JWT — claims `sub`, `case`, `intent ∈ {pay,upload,report}`,
+- **Handoff tokens (§26.5):** RS256 JWT — claims `sub`, `case`, `intent ∈ {pay,upload,report}`,
   `exp = iat+15m`, `jti`. Redemption records jti; replays rejected. Token ≠ session: the landing
   flow authorizes exactly one action on one case; keypair via Doppler (`SECRET_ENV_KEYS`).
 - **Bot identity:** sender phone → `WhatsAppLink` lookup server-side; unlinked numbers receive
   zero case data (WA-22) — enforced in the service layer, not flow copy.
-- **Capability matrix (§7.3.4):** service-layer enforcement; bot cannot reach pay/report/account
+- **Capability matrix (§26.3.4):** service-layer enforcement; bot cannot reach pay/report/account
   actions even if a flow bug asks.
 
 ## Determinism & Config

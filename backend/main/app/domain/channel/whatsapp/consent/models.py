@@ -1,6 +1,6 @@
-"""WhatsApp messaging consent (PRD §7.4.6, Decisions F/P, D63; WA-27).
+"""WhatsApp messaging consent (PRD §26.4.6, Decisions F/P, D63; WA-27).
 
-§7.4.6 asks for two **separate, unticked** opt-ins at payment confirmation — progress
+§26.4.6 asks for two **separate, unticked** opt-ins at payment confirmation — progress
 updates (utility) and news/offers (marketing) — revocable from account settings and by
 STOP-style keywords in chat. This is where that state lives, and the notification router
 is the only thing that reads it (WA-16: enforcement is never left to a send site).
@@ -10,7 +10,7 @@ Three properties are deliberate:
 * **One row per account.** The two consents are captured together, on one screen, and
   revoked together by STOP (D64), so they share a row rather than each owning one.
 * **Granted-ness is derived, never stored.** A row keeps `granted_at` *and* `revoked_at`
-  for each consent, and `granted` is computed from the pair. §7.8 wants consent records
+  for each consent, and `granted` is computed from the pair. §26.8 wants consent records
   timestamped and exportable, which means the history *is* the record — a boolean beside
   it could only ever drift from the timestamps that justify it (the D73 argument, applied
   to a second place it holds).
@@ -31,7 +31,7 @@ from main.appodus_utils.db.models import UTCDateTime
 
 
 class WhatsAppConsentKind(str, enum.Enum):
-    """The two §7.4.6 consents. There is no third at v1 — marketing templates are drafted
+    """The two §26.4.6 consents. There is no third at v1 — marketing templates are drafted
     only when a consented campaign is planned (P1)."""
 
     UTILITY = "UTILITY"
@@ -41,7 +41,7 @@ class WhatsAppConsentKind(str, enum.Enum):
 class WhatsAppConsentSource(str, enum.Enum):
     """Where a consent decision was made.
 
-    The four capture points §7.4.6 and D64 name, plus the handoff landing D76 added: a
+    The four capture points §26.4.6 and D64 name, plus the handoff landing D76 added: a
     customer who arrived from chat pays there and would otherwise never be asked.
     """
 
@@ -73,7 +73,7 @@ class WhatsAppConsent(BaseEntity):
     # between.
     user_id = Column(String(36), nullable=False)
 
-    # "Send me progress updates about this verification on WhatsApp" — gates the §7.7
+    # "Send me progress updates about this verification on WhatsApp" — gates the §26.7
     # milestone templates.
     utility_granted_at = Column(UTCDateTime, nullable=True)
     utility_revoked_at = Column(UTCDateTime, nullable=True)

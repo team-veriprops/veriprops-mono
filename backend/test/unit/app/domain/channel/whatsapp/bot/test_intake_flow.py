@@ -1,4 +1,4 @@
-"""The chat intake flow (PRD §5.1, §7.3.4, D69/D70).
+"""The chat intake flow (PRD §5.1, §26.3.4, D69/D70).
 
 Four questions, and the bar for them is set by the **website**, not by this file:
 `canAdvanceSubmissionStep` lets a web customer past the property step with a type and
@@ -202,7 +202,7 @@ def test_answers_already_given_survive_a_reprompt():
 
 
 def test_the_closing_message_carries_the_payment_pledge():
-    """§7.1.1 — the handoff to the website is the single most impersonation-prone moment in
+    """§26.1.1 — the handoff to the website is the single most impersonation-prone moment in
     the whole channel, so the pledge is repeated exactly there."""
     outcome = _run(["1", "12 Ademola Street", "Lagos", "2"])
 

@@ -8,16 +8,16 @@ import { cn } from "@lib/utils";
 import { isPaymentFlowPath, pageCodeFor, waMeUrl } from "@lib/whatsapp";
 
 /**
- * Floating WhatsApp entry point (PRD §7.4.1).
+ * Floating WhatsApp entry point (PRD §26.4.1).
  *
  * WhatsApp is the conversational front door; this button is the door handle. It rides on
  * every public and authenticated page **except inside the payment flow**, where a way out
  * costs conversion at the highest-value moment. The button only deep-links — there is no
  * in-page chat UI at v1 — and the prefilled message carries a page code so an enquiry can
- * be attributed to where it started (§7.10).
+ * be attributed to where it started (§26.10).
  *
  * The number comes from `/config/public` and is never hardcoded here: it is the customer's
- * anti-impersonation anchor (§7.1.2), so one backend value feeds the widget, certified
+ * anti-impersonation anchor (§26.1.2), so one backend value feeds the widget, certified
  * reports, and bot copy alike. Until it resolves, the button simply does not render.
  */
 export default function WhatsAppWidget() {

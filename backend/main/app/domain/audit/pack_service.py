@@ -155,7 +155,7 @@ class VerificationAuditPackService:
                 f"version={c.consent_version}; fingerprint={c.device_fingerprint or ''}",
             ])
 
-        # §7.4.6 messaging consent, one row per opt-in (§7.8: "consent records timestamped
+        # §26.4.6 messaging consent, one row per opt-in (§26.8: "consent records timestamped
         # and exportable"). Emitted from the grant/revoke timestamp pair rather than from
         # the derived boolean, because the pair *is* the record — a pack that said only
         # "marketing: false" could not show when it was given, when it was withdrawn, or
@@ -167,9 +167,9 @@ class VerificationAuditPackService:
 
 
 def _whatsapp_consent_rows(consent) -> List[list]:
-    """The §7.4.6 opt-ins as pack rows — one per consent, or none if never asked.
+    """The §26.4.6 opt-ins as pack rows — one per consent, or none if never asked.
 
-    Absence of a row means both consents are off (§7.4.6 requires unticked defaults), and
+    Absence of a row means both consents are off (§26.4.6 requires unticked defaults), and
     that is represented by emitting nothing rather than by two rows saying "false": a pack
     that asserts a customer declined is making a claim about an event that never happened.
     """

@@ -1,6 +1,6 @@
 """The one official WhatsApp number, projected for the surfaces that publish it.
 
-PRD §7.1.2 (anti-impersonation) makes a single number the customer's way to tell the real
+PRD §26.1.2 (anti-impersonation) makes a single number the customer's way to tell the real
 Veriprops from an impersonator — it appears on the website widget, on every certified
 report, and in investor materials. Those surfaces must never drift, so all of them read
 this module rather than carrying their own copy: ``official_number_digits()`` is the

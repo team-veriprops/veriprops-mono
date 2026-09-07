@@ -161,7 +161,7 @@ function MessageBubble({ message, mine }: { message: ChatMessage; mine: boolean 
                 className="inline-flex items-center gap-1 rounded-full bg-amber-500/12 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
                 title={
                   "Sent over WhatsApp. Only uploads made on veriprops.ng enter the " +
-                  "verification file (§7.1.6)."
+                  "verification file (§26.1.6)."
                 }
               >
                 {message.mediaKind === InboundKind.AUDIO ? (
@@ -186,7 +186,7 @@ function MessageBubble({ message, mine }: { message: ChatMessage; mine: boolean 
           <span className="text-[11px] text-amber-600 mt-0.5 px-1">{message.heldNotice}</span>
         )}
         {/*
-          §7.7 — written here, not yet delivered. Meta only carries free text within 24
+          §26.7 — written here, not yet delivered. Meta only carries free text within 24
           hours of the customer's last message, so this reply waits for their next one.
           Without the marker an agent has no way to tell it apart from a sent message.
         */}

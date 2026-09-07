@@ -1,4 +1,4 @@
-"""Stage 13 — pool mechanics, admin lifecycle, fail+refund, chargeback (S10 §6, §7.2, §8.5).
+"""Stage 13 — pool mechanics, admin lifecycle, fail+refund, chargeback (S10 §6, §11.3, §8.5).
 
 All destructive work happens on the seeded "ops" verification (crafted task deadlines) and
 the seed payment — never on the primary scenario — so the SLA-sweep, analytics, and payout
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 
-from .harness import CONSENT_VERSION, Ctx, check
+from .harness import Ctx, check, consent_version_for
 
 
 def _ops_task(ctx: Ctx, role: str) -> dict:
@@ -21,7 +21,7 @@ def run(ctx: Ctx) -> None:
     admin, ops = ctx.admin, ctx.seed["ops"]
     ops_id = ops["id"]
 
-    # 1. No-show sweep (§7.2): the seeded REGISTRY assignment blew its accept deadline.
+    # 1. No-show sweep (§11.4): the seeded REGISTRY assignment blew its accept deadline.
     #
     # The assertions are on the **outcome**, not on this call's reclaim count. The same
     # sweep also runs on a 15-minute APScheduler interval, so on a long-lived server the
@@ -29,34 +29,34 @@ def run(ctx: Ctx) -> None:
     # leaving a correct system reporting `reclaimed=0`. The property under test is that an
     # unaccepted assignment gets reclaimed, not that this particular caller did it.
     swept = admin.post("/admin/verifications/sweeps/no-show").json()["data"]
-    check("no-show sweep endpoint responds (§7.2)", "reclaimed" in swept, f"body={swept}")
+    check("no-show sweep endpoint responds (§11.4)", "reclaimed" in swept, f"body={swept}")
     reg = _ops_task(ctx, "REGISTRY")
-    check("an unaccepted assignment is reclaimed to PENDING with a decline strike (§7.2)",
+    check("an unaccepted assignment is reclaimed to PENDING with a decline strike (§11.4)",
           reg["state"] == "PENDING" and reg["declineCount"] >= 1,
           f"state={reg['state']} declines={reg['declineCount']} sweep={swept}")
 
-    # 2. Pool-starvation sweep (§7.2): the seeded FIELD pool window expired unclaimed.
+    # 2. Pool-starvation sweep (§11.4): the seeded FIELD pool window expired unclaimed.
     # Same reasoning — assert the task left the pool, not who pushed it out.
     starved = admin.post("/admin/verifications/sweeps/pool-starvation").json()["data"]
-    check("pool-starvation sweep endpoint responds (§7.2)", "escalated" in starved,
+    check("pool-starvation sweep endpoint responds (§11.4)", "escalated" in starved,
           f"body={starved}")
     fld = _ops_task(ctx, "FIELD")
-    check("an expired pool task leaves the pool for targeted assignment (§7.2)",
+    check("an expired pool task leaves the pool for targeted assignment (§11.3)",
           fld["inPool"] is False, f"in_pool={fld['inPool']} sweep={starved}")
 
-    # 3. Decline → back to pool → first-accept-wins re-claim (§7.1).
+    # 3. Decline → back to pool → first-accept-wins re-claim (§12.1).
     surveyor = ctx.agent("SURVEYOR")
     s_id = ops["tasks"]["SURVEYOR"]
     declined = surveyor.post(f"/agents/tasks/{s_id}/decline",
                              json={"reason": "Out of coverage this week."}).json()["data"]
-    check("agent decline returns the task to the open pool (§7.1)",
+    check("agent decline returns the task to the open pool (§12.1)",
           declined["state"] == "PENDING" and declined["inPool"] is True,
           f"state={declined['state']}")
     srv = _ops_task(ctx, "SURVEYOR")
-    check("decline registers a strike on the task (§7.1)", srv["declineCount"] >= 1,
+    check("decline registers a strike on the task (§12.1)", srv["declineCount"] >= 1,
           f"declines={srv['declineCount']}")
     reclaimed = surveyor.post(f"/agents/tasks/{s_id}/accept").json()["data"]
-    check("pooled task is claimed first-accept-wins (§7.1)",
+    check("pooled task is claimed first-accept-wins (§12.1)",
           reclaimed["state"] == "ACCEPTED" and reclaimed["inPool"] is False)
 
     # 4. Admin lifecycle (§6.1): pause/resume flag, SLA delay. Responses are
@@ -79,7 +79,8 @@ def run(ctx: Ctx) -> None:
     ctx.seed_customer.post(f"/verifications/{throwaway['id']}/submit", json={
         "property": {"property_type": "LAND", "address": "1 Cancel Close, Ajah",
                      "state": "Lagos", "lga": "Eti-Osa", "landmark": "Test"},
-        "tier": "BASIC", "currency": "NGN", "consent": {"consent_version": CONSENT_VERSION},
+        "tier": "BASIC", "currency": "NGN",
+        "consent": {"consent_version": consent_version_for("VERIFICATION_TERMS")},
     }).raise_for_status()
     cancelled = admin.post(f"/admin/verifications/{throwaway['id']}/cancel",
                            json={"reason": "Customer requested withdrawal."}).json()["data"]["summary"]

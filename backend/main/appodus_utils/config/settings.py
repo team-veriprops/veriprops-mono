@@ -52,7 +52,7 @@ class TemplatingEngine(str, enum.Enum):
 
 
 class WhatsAppProvider(str, enum.Enum):
-    """WhatsApp transport selection (PRD §7, D43).
+    """WhatsApp transport selection (PRD §26, D43).
 
     ``stub`` records outbound messages and accepts injected inbound ones, so the whole
     channel is exercisable without touching Meta — the contract CI and the e2e suite run
@@ -74,13 +74,15 @@ class OtpMode(str, enum.Enum):
 
 
 class IntentProvider(str, enum.Enum):
-    """Free-text intent classification backend (PRD §7.6, D44/D48/D53).
+    """Free-text intent classification backend (PRD §26.6, D44/D48/D53/D87).
 
     ``stub`` is a deterministic keyword table — the contract CI and the e2e suite run on,
-    so no automated run ever calls a model. ``anthropic`` is the live default; ``openai
-    compatible`` covers every other provider through one base-URL + model + key adapter,
-    which is what keeps the choice a config change rather than a code change. Enforced by
-    ``_enforce_intent_provider_policy``: test may never reach a live model.
+    so no automated run ever calls a model. ``openai_compatible`` is the live default,
+    pointed at DeepSeek (D87), and reaches every other ``/chat/completions`` provider
+    through the same base-URL + model + key adapter; ``anthropic`` is the native SDK path,
+    kept so the default is a config change away from being reversed. That interchangeability
+    is the point of the facade. Enforced by ``_enforce_intent_provider_policy``: test may
+    never reach a live model.
 
     Only the classifier is LLM-assisted. Flows and guardrails stay deterministic and sit
     outside it (D44), so a provider outage degrades to human routing, never to a guess.
@@ -335,7 +337,7 @@ class AppodusBaseSettings(BaseSettings):
 
         Unlike the WhatsApp contract there is no production floor: the channel stays
         useful with the keyword table if a provider is unavailable, because every
-        unmatched intent routes to a human by design (§7.6.4). Test, though, must be
+        unmatched intent routes to a human by design (§26.6.4). Test, though, must be
         deterministic — a classifier that occasionally disagrees with itself would make
         the guardrail suite flaky in exactly the place flakiness is unacceptable.
         """

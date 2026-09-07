@@ -1,4 +1,4 @@
-"""Inbound WhatsApp normalization (PRD §7.3.3).
+"""Inbound WhatsApp normalization (PRD §26.3.3).
 
 Meta posts every kind of event to one webhook: customer messages, delivery receipts, and
 account notices, all wrapped in a deeply nested envelope whose shape varies per message
@@ -28,7 +28,7 @@ class InboundKind(str, enum.Enum):
     IMAGE = "IMAGE"
     DOCUMENT = "DOCUMENT"
     VIDEO = "VIDEO"
-    AUDIO = "AUDIO"               # includes voice notes (§7.6.3, §7.10)
+    AUDIO = "AUDIO"               # includes voice notes (§26.6.3, §26.10)
     STICKER = "STICKER"
     LOCATION = "LOCATION"
     CONTACTS = "CONTACTS"
@@ -65,8 +65,8 @@ class InboundWhatsAppMessage(Object):
     from_phone: str                              # E.164, the cross-channel identity key
     kind: InboundKind
     text: Optional[str] = None                   # body, caption, or reply title
-    page_code: Optional[str] = None              # §7.4.1 widget attribution, lifted out of
-                                                 # `text` by `ingest` (§7.10, D85) — not by
+    page_code: Optional[str] = None              # §26.4.1 widget attribution, lifted out of
+                                                 # `text` by `ingest` (§26.10, D85) — not by
                                                  # this normalizer, so the dev door gets it
                                                  # too; None unless the customer arrived
                                                  # through a wa.me deep link
@@ -76,7 +76,7 @@ class InboundWhatsAppMessage(Object):
     sender_name: Optional[str] = None            # WhatsApp profile name, when supplied
     received_at: Optional[datetime] = None
     raw: Dict[str, Any] = {}                     # the original message object, retained
-                                                 # for the §7.8 record and later replay
+                                                 # for the §26.8 record and later replay
 
 
 def _as_list(value: Any) -> List[Any]:

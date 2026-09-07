@@ -85,7 +85,7 @@ describe("WhatsApp handoff routes", () => {
   });
 
   it("keeps the landings outside every protected surface", () => {
-    // The handoff token is the authorization (§7.5) — a customer arriving from WhatsApp
+    // The handoff token is the authorization (§26.5) — a customer arriving from WhatsApp
     // must not be bounced to a login page before the landing can even acknowledge their
     // case. proxy.ts derives its protected prefixes from these constants.
     const protectedPrefixes = [

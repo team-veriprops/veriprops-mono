@@ -1,4 +1,4 @@
-"""The §7.10 fact writer (WA-43, D80).
+"""The §26.10 fact writer (WA-43, D80).
 
 One method, called from the handful of seams where a countable thing happens. Two
 properties make it safe to sprinkle through the conversation path:
@@ -39,7 +39,7 @@ logger: Logger = di["logger"]
 @inject
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class ChannelEventRecorder:
-    """Writes one §7.10 fact, and swallows anything that goes wrong doing it.
+    """Writes one §26.10 fact, and swallows anything that goes wrong doing it.
 
     Deliberately **not** `@transactional`: it is called from inside a transaction that
     belongs to the thing being counted, and opening its own would either nest pointlessly
@@ -76,7 +76,7 @@ class ChannelEventRecorder:
             )
         except Exception:  # pragma: no cover - defensive, exercised by its own unit test
             logger.exception(
-                "Failed to record WhatsApp channel event %s (§7.10) — dropping it rather "
+                "Failed to record WhatsApp channel event %s (§26.10) — dropping it rather "
                 "than failing the turn that caused it.",
                 event_type.value,
             )
@@ -84,7 +84,7 @@ class ChannelEventRecorder:
     async def record_payment_if_channel_case(
         self, verification_id: str, customer_id: Optional[str]
     ) -> None:
-        """§7.10's seam-conversion numerator, recorded only for cases this channel produced.
+        """§26.10's seam-conversion numerator, recorded only for cases this channel produced.
 
         The check is what keeps the metric honest: `PAYMENT_CONFIRMED` fires for every
         payment on the platform, and counting all of them against a WhatsApp intake
@@ -97,7 +97,7 @@ class ChannelEventRecorder:
                 return
         except Exception:  # pragma: no cover - defensive
             logger.exception(
-                "Failed to check WhatsApp channel origin for verification %s (§7.10).",
+                "Failed to check WhatsApp channel origin for verification %s (§26.10).",
                 verification_id,
             )
             return

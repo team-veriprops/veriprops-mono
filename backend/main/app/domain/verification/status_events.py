@@ -1,4 +1,4 @@
-"""The §7.6.2 "verification started" milestone trigger (D66).
+"""The §26.6.2 "verification started" milestone trigger (D66).
 
 Status derivation lives in two places — `VerificationTaskService._derive_and_persist` (a
 task moved) and `ReviewService._derive_and_persist` (an admin decided) — because the two
@@ -22,7 +22,7 @@ from main.app.domain.verification.models import Verification
 # has no memory, so a verification passes through IN_PROGRESS once per role — assigning
 # the next agent re-activates it after the previous one submitted — and the raw
 # transition therefore happens several times per case. Which is right for a status feed
-# and wrong for a milestone: §7.6.2 promises the customer three or four messages per
+# and wrong for a milestone: §26.6.2 promises the customer three or four messages per
 # verification, not one per agent. The presence of a settled task is what distinguishes
 # "work has started" from "work is continuing", and it needs no column to record.
 _WORK_ALREADY_BEGUN: frozenset[str] = frozenset({

@@ -1,11 +1,11 @@
-"""Meta's 24-hour customer service window (PRD §7.7, WA-41).
+"""Meta's 24-hour customer service window (PRD §26.7, WA-41).
 
 Meta lets a business send free-form text only within 24 hours of the customer's last
 message. Outside it, the only thing that will be delivered is an approved template — which
-is why §7.7 carries `window_reopen` at all.
+is why §26.7 carries `window_reopen` at all.
 
 Most of the channel never has to ask: a bot reply is answering a message that just
-arrived, so it is inside the window by construction, and every §7.7 template is
+arrived, so it is inside the window by construction, and every §26.7 template is
 business-initiated, so it is outside. The one place the question is genuinely open is an
 **agent** replying from the console, possibly hours later — S7's adapter, which is this
 module's consumer.

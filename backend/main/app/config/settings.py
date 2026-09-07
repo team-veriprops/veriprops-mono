@@ -1,10 +1,13 @@
 import enum
 from typing import ClassVar, Optional, Dict
 
+from pydantic import model_validator
+
 from main.appodus_utils.config.settings import (
     AppodusBaseSettings,
     BASE_SECRET_ENV_KEYS,
     SECRET_PLACEHOLDER,
+    WhatsAppProvider,
     get_absolute_path,
     FileStorage,
 )
@@ -158,7 +161,7 @@ class Settings(AppodusBaseSettings):
     AWS_S3_PRESIGNED_URL_EXPIRES: int = 60 * 15 # 15 mins
     # Deterministic document storage for tests/local (no external calls), like
     # PAYMENT_STUB_MODE. When true, evidence upload uses the stub provider; the
-    # content hash + server-stamped GPS/timestamp are computed regardless (§4.5, §7.3a).
+    # content hash + server-stamped GPS/timestamp are computed regardless (§4.5, §12.3).
     DOCUMENT_STORAGE_STUB_MODE: bool = True
 
     # Report PDF (S14, §10). The real pure-Python fpdf2 renderer is the default (no
@@ -169,7 +172,7 @@ class Settings(AppodusBaseSettings):
     PUBLIC_APP_BASE_URL: str = "https://veriprops.ng"
     # The customer-facing brand name, as written. Distinct from `BRAND`, which is a
     # lowercase *slug* used in log lines and internal identifiers — that slug leaking into
-    # a message read "veriprops: 654123 is your code", on precisely the message §7.1.2's
+    # a message read "veriprops: 654123 is your code", on precisely the message §26.1.2's
     # anti-impersonation posture depends on. One display name, every customer surface:
     # the report cover + PDF (§10.1) and every message template's brand variable.
     BRAND_DISPLAY_NAME: str = "Veriprops"
@@ -217,14 +220,20 @@ class Settings(AppodusBaseSettings):
     WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN: Optional[str] = SECRET_PLACEHOLDER
     # WHATSAPP BUSINESS
     WHATSAPP_API_URL: Optional[str] = "https://graph.facebook.com/v22.0"
-    WHATSAPP_PHONE_NUMBER_ID: Optional[str] = "766140453239478"
-    WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = "1412930669928110"
+    # Which number and which WABA this deployment *is*. Deliberately undefaulted: these
+    # once carried production's identifiers in code, which was safe only while every
+    # non-prod environment ran the stub. Staging now runs `meta` against Meta's developer
+    # test number, so a committed default would mean a forgotten Doppler value silently
+    # sends QA traffic from the production number. `_enforce_whatsapp_identity_policy`
+    # turns that into a boot failure instead.
+    WHATSAPP_PHONE_NUMBER_ID: Optional[str] = None
+    WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = None
     WHATSAPP_BUSINESS_ACCESS_TOKEN: Optional[str] = SECRET_PLACEHOLDER
-    # The one official customer-facing number (PRD §7.1.2 anti-impersonation). Digits only,
+    # The one official customer-facing number (PRD §26.1.2 anti-impersonation). Digits only,
     # E.164 without the leading '+', so it drops straight into a wa.me link. Backend is the
     # single source: the site widget, report footers, and bot copy all read it from here.
     WHATSAPP_OFFICIAL_NUMBER: str = "2349167624347"
-    # §7.4.1 concierge phase — the widget is live now against the WhatsApp Business app,
+    # §26.4.1 concierge phase — the widget is live now against the WhatsApp Business app,
     # ahead of the Cloud API cutover. Kill switch if the number ever goes dark.
     WHATSAPP_WIDGET_ENABLED: bool = True
     # PRD 7.5 handoff-token keypair (RS256, PEM). Prod/staging refuse to sign without
@@ -262,17 +271,20 @@ class Settings(AppodusBaseSettings):
     # Selfie scores below this threshold route to admin UNDER_REVIEW queue (D18)
     KYC_SELFIE_REVIEW_THRESHOLD: int = 80
 
-    # Bot intent classification (PRD §7.6, D53). INTENT_PROVIDER itself is enum-typed on
-    # the base settings so a startup validator can pin test to the stub; the knobs below
-    # select the live target. Haiku-class is the deliberate choice: this is a single
-    # closed-set classification, the cheapest and fastest tier that does it well.
-    INTENT_MODEL: str = "claude-haiku-4-5"
+    # Bot intent classification (PRD §26.6, D53 as amended by D87). INTENT_PROVIDER itself
+    # is enum-typed on the base settings so a startup validator can pin test to the stub;
+    # the knobs below select the live target, which is DeepSeek through the generic
+    # OpenAI-compatible adapter. `deepseek-chat` and not `deepseek-reasoner`: this is one
+    # closed-set label on a live customer path under INTENT_TIMEOUT_SECONDS, so a model
+    # that spends its budget thinking buys nothing a customer ever reads.
+    INTENT_MODEL: str = "deepseek-chat"
     INTENT_API_KEY: str = SECRET_PLACEHOLDER
-    # OPENAI_COMPATIBLE only — the provider's chat-completions base URL (OpenAI, DeepSeek,
-    # Groq, Ollama, …). Unused by the anthropic adapter, which knows its own endpoint.
-    INTENT_API_BASE_URL: str = ""
+    # OPENAI_COMPATIBLE only — the provider's chat-completions base URL (DeepSeek, OpenAI,
+    # Groq, Ollama, …); the adapter appends `/chat/completions`, so DeepSeek's base needs
+    # no `/v1`. Unused by the anthropic adapter, which knows its own endpoint.
+    INTENT_API_BASE_URL: str = "https://api.deepseek.com"
     # Below this the classifier's answer is discarded and the turn routes to a human
-    # (§7.6.4: low confidence is never a guess).
+    # (§26.6.4: low confidence is never a guess).
     INTENT_MIN_CONFIDENCE: float = 0.6
     # A classifier that is slow is a bot that looks broken; past this the turn routes to
     # a human, which is the same outcome as an error.
@@ -287,7 +299,7 @@ class Settings(AppodusBaseSettings):
     # Admin invitations
     ADMIN_INVITE_TTL_HOURS: int = 72
 
-    # Task assignment, capacity & timeout sweeps (PRD §6.2, §6.5, §7.2)
+    # Task assignment, capacity & timeout sweeps (PRD §6.2, §6.5, §11.4)
     AUTO_ASSIGNMENT_ENABLED: bool = False       # broadcast tasks to the open pool at PAID
     AGENT_MAX_ACTIVE_TASKS: int = 5             # capacity cap enforced on assign/accept
     TASK_NO_SHOW_TIMEOUT_HOURS: int = 12        # manual-assign accept deadline
@@ -298,7 +310,7 @@ class Settings(AppodusBaseSettings):
     # to agents, split across roles by the Trust Score Weights; accrued at release.
     AGENT_COMMISSION_SHARE: float = 0.40
 
-    # Background scheduler (PRD §6.4/§7.2) — disabled in test; sweeps invoked directly.
+    # Background scheduler (PRD §6.4/§11.4) — disabled in test; sweeps invoked directly.
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_SWEEP_INTERVAL_SECONDS: int = 15 * 60
 
@@ -321,6 +333,33 @@ class Settings(AppodusBaseSettings):
     # Compliance/evidence pack pagination (internal batch reads)
     AUDIT_PACK_CONSENT_PAGE_SIZE: int = 1000     # consent rows pulled per page when building an audit pack
     CHARGEBACK_PACK_PAGE_SIZE: int = 500         # evidence rows pulled per page when building a chargeback pack
+
+    @model_validator(mode="after")
+    def _enforce_whatsapp_identity_policy(self) -> "Settings":
+        """The live transport must name its own number and WABA (D88).
+
+        Sits here rather than beside `_enforce_whatsapp_provider_policy` on the base
+        settings because these two fields are app-layer, and the base is vendored library
+        code we extend rather than edit.
+
+        Fails closed for the reason the fields carry no defaults: every other outcome of a
+        missing id is a message sent from *some* number, and the only number available to
+        fall back on is production's.
+        """
+        if self.WHATSAPP_PROVIDER != WhatsAppProvider.META:
+            return self
+        missing = [
+            name
+            for name in ("WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_BUSINESS_ACCOUNT_ID")
+            if not (getattr(self, name) or "").strip()
+        ]
+        if missing:
+            raise ValueError(
+                f"WHATSAPP_PROVIDER={WhatsAppProvider.META.value} requires {', '.join(missing)}. "
+                "Set the identifiers for this deployment's own number (Doppler); there is "
+                "deliberately no default, because the only one available would be production's."
+            )
+        return self
 
 
 settings = Settings()

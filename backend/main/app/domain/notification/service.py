@@ -92,12 +92,12 @@ class NotificationService:
         except Exception:  # noqa: BLE001 — external send is best-effort, never fatal
             pass
 
-    # ── WhatsApp milestones (§7.6.2, D65) ─────────────────────────────
+    # ── WhatsApp milestones (§26.6.2, D65) ─────────────────────────────
     #
     # A separate branch rather than a third entry in the channel list above, because the
     # WhatsApp recipient is resolved somewhere else entirely: `email`/`sms` address the
-    # user's profile, while a §7.7 template may only go to the number that account
-    # OTP-verified (§7.4.3). That asymmetry is the price of the link being the join key,
+    # user's profile, while a §26.7 template may only go to the number that account
+    # OTP-verified (§26.4.3). That asymmetry is the price of the link being the join key,
     # and D65 names it rather than hiding it. What stays identical is the important part —
     # the consent check happens **here**, in the router, never at a send site.
 
@@ -112,7 +112,7 @@ class NotificationService:
             pass
 
     async def _dispatch_delegates(self, event: DomainEvent, rule) -> None:
-        """The §7.4.5 audience: a case's authorized delegate hears the same four moments.
+        """The §26.4.5 audience: a case's authorized delegate hears the same four moments.
 
         Always as `delegate_status`, never as the customer's template — which is what
         makes "status milestones only, never documents or reports" structural rather than

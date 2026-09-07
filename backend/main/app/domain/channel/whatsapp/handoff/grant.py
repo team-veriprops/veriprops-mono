@@ -1,6 +1,6 @@
-"""The short-lived action grant a redeemed handoff link leaves behind (PRD §7.5, D51).
+"""The short-lived action grant a redeemed handoff link leaves behind (PRD §26.5, D51).
 
-§7.5 says the nonce is recorded on redemption and replays are rejected. Taken literally
+§26.5 says the nonce is recorded on redemption and replays are rejected. Taken literally
 that burns the link on the first page load — a refresh, a back-navigation, or WhatsApp's
 own link-preview fetch would be enough. So the token is spent exactly once and hands the
 browser a grant: the page works on the grant, the customer can reload, and a forwarded

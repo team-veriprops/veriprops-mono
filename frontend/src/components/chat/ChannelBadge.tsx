@@ -2,7 +2,7 @@ import { MessageSource } from "@/types/chat";
 import { cn } from "@lib/utils";
 
 /**
- * Source label for a conversation or message (PRD §7.3.3).
+ * Source label for a conversation or message (PRD §26.3.3).
  *
  * WhatsApp and the website feed one admin console (Decision K), so an agent has to be
  * able to tell at a glance which surface a message arrived on — a reply goes back the

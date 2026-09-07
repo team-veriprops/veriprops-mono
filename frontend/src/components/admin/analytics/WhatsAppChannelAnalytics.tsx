@@ -21,10 +21,10 @@ import {
 } from "./libs/useAnalyticsQueries";
 
 /**
- * The WhatsApp channel analytics tab (PRD §7.10, WA-43).
+ * The WhatsApp channel analytics tab (PRD §26.10, WA-43).
  *
  * All seven metrics the PRD asks to have "instrumented from day one", led by seam
- * conversion — §7.10 calls it "the cost of the A1 trust boundary, measured" and "the
+ * conversion — §26.10 calls it "the cost of the A1 trust boundary, measured" and "the
  * single most important number in this channel".
  *
  * Two rendering rules earn their place:
@@ -206,7 +206,7 @@ function qualityTone(rating?: string): StatCardTone {
   if (rating === "YELLOW") return "warning";
   if (rating === "RED") return "danger";
   // UNKNOWN, or never synced. Deliberately not "success" — the absence of Meta's verdict
-  // must never read as a clean bill of health (§7.11 treats this as a launch gate).
+  // must never read as a clean bill of health (§26.11 treats this as a launch gate).
   return "warning";
 }
 

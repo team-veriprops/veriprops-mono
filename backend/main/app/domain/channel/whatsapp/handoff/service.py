@@ -1,4 +1,4 @@
-"""Handoff redemption (PRD §7.4.2, §7.5, D50/D51).
+"""Handoff redemption (PRD §26.4.2, §26.5, D50/D51).
 
 Turns a signed token into a short-lived, single-action grant.
 
@@ -9,11 +9,11 @@ scoped to that one intent and case, valid only until the token's own expiry (D51
 customer can reload the page; a forwarded copy of the token is already dead.
 
 **A grant is not a session.** It authorizes one action on one case and carries no account
-access — completing a payment does not log anyone in (§7.5). The three intents are also
+access — completing a payment does not log anyone in (§26.5). The three intents are also
 deliberately unequal (D50): `pay` is the only one that acts on the token alone, because
 the worst case for a leaked pay link is a stranger paying someone else's bill. `upload`
 and `report` hand off to the authenticated portal instead: portal uploads are canonical
-evidence (§7.1.6) and Decision B specifies an authenticated portal link for reports, so
+evidence (§26.1.6) and Decision B specifies an authenticated portal link for reports, so
 neither may rest on a link that can be forwarded.
 """
 from __future__ import annotations
@@ -66,7 +66,7 @@ class HandoffTokenService:
         return issue_handoff_token(customer_id=customer_id, case_id=case_id, intent=intent)
 
     async def issue_link(self, phone_e164: str) -> str:
-        """Mint a §7.4.4 linking link for a WhatsApp number.
+        """Mint a §26.4.4 linking link for a WhatsApp number.
 
         There is deliberately no ownership check: the whole point is that this number has
         no account yet. The token proves only *which* number crossed to the website —

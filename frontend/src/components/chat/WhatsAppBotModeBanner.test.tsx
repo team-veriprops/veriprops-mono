@@ -76,7 +76,7 @@ describe("WhatsAppBotModeBanner", () => {
 
   it("warns when Meta's reply window has closed", () => {
     // Outside the 24-hour window a reply is queued behind a `window_reopen` template
-    // rather than delivered as written (§7.7). An agent needs that before they write a
+    // rather than delivered as written (§26.7). An agent needs that before they write a
     // long answer, not after.
     state.session = { phoneE164: "+2348012345678", mode: BotMode.HUMAN, windowOpen: false };
 

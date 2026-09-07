@@ -1,6 +1,6 @@
-"""Human coverage hours (PRD Decision G, §7.6.2, D68).
+"""Human coverage hours (PRD Decision G, §26.6.2, D68).
 
-Decision G buys 8am–8pm WAT on weekdays plus Saturday morning. §7.6.2 makes that a
+Decision G buys 8am–8pm WAT on weekdays plus Saturday morning. §26.6.2 makes that a
 promise the bot has to keep in words: inside the window an escalation says "a team member
 is joining"; outside it states a response time. Getting that wrong in either direction is
 a trust cost — an unstaffed "joining now" reads as a lie, and a needless "we'll reply

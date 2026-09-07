@@ -80,7 +80,7 @@ def _service():
 
 
 def _conversation(channel=ConversationChannel.WEB, external_ref=None):
-    # `channel` is what decides whether delivery also has to leave over a transport (§7.7);
+    # `channel` is what decides whether delivery also has to leave over a transport (§26.7);
     # a web thread has none, which is the default here.
     return SimpleNamespace(
         id="conv-1", type="CUSTOMER_ADMIN", verification_id="v-1",
@@ -181,7 +181,7 @@ async def test_clarification_request_carries_open_status():
     assert msg.clarification_status == "OPEN"
 
 
-# ── Source labeling + the platform-authored scan exemption (§7.3.3, §7.6) ──
+# ── Source labeling + the platform-authored scan exemption (§26.3.3, §26.6) ──
 
 
 async def test_whatsapp_text_runs_the_same_fraud_scan_as_web_chat():
@@ -213,7 +213,7 @@ async def test_messages_default_to_the_web_surface():
 
 async def test_platform_authored_copy_is_never_held():
     # Bot replies and status auto-posts carry veriprops.ng links and the official
-    # WhatsApp number by design (the payment pledge, §7.1.1). Scanning them would hold
+    # WhatsApp number by design (the payment pledge, §26.1.1). Scanning them would hold
     # the very messages that keep a customer oriented.
     svc = _service()
     pledge = "Payments only ever happen at veriprops.ng — check the address bar before you pay."
@@ -250,7 +250,7 @@ async def test_a_brand_new_thread_is_bumped_by_its_first_message():
 
 
 class TestChannelDelivery:
-    """§7.7/WA-12 — a reply on a WhatsApp thread has to leave the building.
+    """§26.7/WA-12 — a reply on a WhatsApp thread has to leave the building.
 
     `_deliver_effects` is the seam, and that choice is the substance of these tests: it is
     the *one* place both a clean send and an approved-after-hold release pass through, so
@@ -328,7 +328,7 @@ class TestChannelDelivery:
 
 
 class TestMediaLabelling:
-    """§7.6.3/WA-06 — chat media is flagged unofficial and never becomes evidence."""
+    """§26.6.3/WA-06 — chat media is flagged unofficial and never becomes evidence."""
 
     async def test_an_image_is_flagged_unofficial_in_the_console(self):
         from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
@@ -346,7 +346,7 @@ class TestMediaLabelling:
         dto = await svc._to_dto(msg, None, ConversationChannel.WHATSAPP.value)
 
         assert dto.media_kind == InboundKind.IMAGE
-        # Derived from `media_kind`, never stored: the evidence rule (§7.1.6) says chat
+        # Derived from `media_kind`, never stored: the evidence rule (§26.1.6) says chat
         # media is never canonical, so a persisted flag could only ever drift from it.
         assert dto.unofficial_media is True
 

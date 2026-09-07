@@ -1,4 +1,4 @@
-"""Chat-intake handoff endpoint (PRD §5.1, §7.5, D69/D71).
+"""Chat-intake handoff endpoint (PRD §5.1, §26.5, D69/D71).
 
 URL shape: /wa/intake — **authenticated**, unlike the other `/wa/*` landings. That is the
 whole design: the chat could not establish who the customer is, so the landing does, and
@@ -75,7 +75,7 @@ async def redeem_intake(
         raise ResourceNotFoundException(resource=TOKEN_REJECTED_MESSAGE)
 
     verification_id = await intake_handoff_service.seed_draft(claims.phone, customer_id)
-    # The seam is crossed (§7.10, D80). The redemption ledger row was written before the
+    # The seam is crossed (§26.10, D80). The redemption ledger row was written before the
     # draft existed, and an `intake` token names a phone and nothing else (D71), so this is
     # the only moment the channel can tie a conversation to the verification it produced —
     # which is what later lets a payment be attributed to WhatsApp rather than to the web.

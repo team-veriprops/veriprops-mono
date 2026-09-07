@@ -1,9 +1,9 @@
-"""The non-text inbound flow (PRD §7.6.3, §7.1.6 rule 6, WA-06/WA-38).
+"""The non-text inbound flow (PRD §26.6.3, §26.1.6 rule 6, WA-06/WA-38).
 
 What happens when a customer sends something other than words — a photo of their survey
 plan, a voice note, a location pin.
 
-§7.6.3 gives three answers, and this module is the single place that decides which:
+§26.6.3 gives three answers, and this module is the single place that decides which:
 
 * **Images and documents** — thank them, state the **evidence rule**, and hand over an
   `upload` link. The rule is the point: only portal uploads and structured intake are
@@ -23,7 +23,7 @@ ways of answering the same question; none, or unlinked → the rule and the next
 link, because issuing one would attach a stranger's photograph to somebody's verification.
 
 Pure functions over cases the engine already fetched, like every module in `flows/`: the
-§7.6.4 adversarial suite exercises this without a database. Minting the token is the
+§26.6.4 adversarial suite exercises this without a database. Minting the token is the
 engine's job — a flow module never reaches for a service of its own.
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ _DOCUMENT_KINDS = frozenset({InboundKind.IMAGE, InboundKind.DOCUMENT})
 # Stages *before* a case has been paid for. There is no verification file to upload into
 # yet — the case has not been quoted, so it has no tier — and the upload landing needs both
 # to render. Everything from PAID onward is a legitimate target, including a delivered case:
-# a customer sending a document during a dispute or a re-check is doing exactly what §7.6.3
+# a customer sending a document during a dispute or a re-check is doing exactly what §26.6.3
 # is for, and refusing them would be the same silence the flow exists to prevent.
 _PRE_PAYMENT_STATES = frozenset({
     ChannelState.ENQUIRY,
@@ -52,7 +52,7 @@ _PRE_PAYMENT_STATES = frozenset({
     ChannelState.PAYMENT_PENDING,
 })
 
-# Non-text kinds that route to a human, and the reason each is recorded under (§7.10 asks
+# Non-text kinds that route to a human, and the reason each is recorded under (§26.10 asks
 # for voice-note volume by name, so it is counted apart from media the bot merely cannot
 # open). A caption on any of these is not what is being answered — the thing that arrived is.
 _ESCALATING_KINDS: dict[InboundKind, EscalationReason] = {
@@ -66,7 +66,7 @@ _ESCALATING_KINDS: dict[InboundKind, EscalationReason] = {
 
 
 def is_media(kind: InboundKind) -> bool:
-    """Whether §7.6.3 owns this turn rather than the ordinary text path.
+    """Whether §26.6.3 owns this turn rather than the ordinary text path.
 
     TEXT and INTERACTIVE are the only kinds that carry an intent to classify; a menu
     selection is a tap on a button the bot itself offered, not media.
@@ -101,7 +101,7 @@ class MediaOutcome:
 def render(
     kind: InboundKind, is_linked: bool, cases: Sequence[CaseSummary]
 ) -> MediaOutcome:
-    """Decide §7.6.3's answer for one non-text message.
+    """Decide §26.6.3's answer for one non-text message.
 
     ``is_linked`` is passed rather than inferred from ``cases`` being empty: a linked
     customer with nothing open and an unlinked number both have no cases, but they need

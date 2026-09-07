@@ -1,5 +1,5 @@
 /**
- * WhatsApp handoff types (PRD §7.4.2, §7.5) — camelCase mirrors of the backend
+ * WhatsApp handoff types (PRD §26.4.2, §26.5) — camelCase mirrors of the backend
  * `app/domain/channel/whatsapp/handoff` DTOs.
  *
  * A handoff link authorizes exactly one action on one case for fifteen minutes. Backend
@@ -15,11 +15,11 @@ export enum HandoffIntent {
   REPORT = "report",
 }
 
-/** What a landing page acknowledges: "picking up where you left off" (§7.4.2). */
+/** What a landing page acknowledges: "picking up where you left off" (§26.4.2). */
 export interface HandoffContext {
   intent: HandoffIntent;
   caseId: string;
-  /** The opaque short code (VP-1042) — never the address or customer name (§7.4.3). */
+  /** The opaque short code (VP-1042) — never the address or customer name (§26.4.3). */
   vid: string;
   tier: VerificationTier;
   status: VerificationStatus;

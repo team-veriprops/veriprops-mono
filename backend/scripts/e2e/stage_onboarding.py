@@ -12,7 +12,7 @@ POST /users/auth/phone/otp/send + /users/auth/phone/verify endpoints (satisfying
 """
 from __future__ import annotations
 
-from .harness import CONSENT_VERSION, TEST_OTP, Ctx, check, idem_key, signup_fresh_user
+from .harness import TEST_OTP, Ctx, check, consent_version_for, idem_key, signup_fresh_user
 
 
 def run(ctx: Ctx) -> None:
@@ -88,7 +88,7 @@ def run(ctx: Ctx) -> None:
             "state": "Lagos", "lga": "Eti-Osa", "landmark": "Opposite the roundabout",
         },
         "tier": "STANDARD", "currency": "NGN",
-        "consent": {"consent_version": CONSENT_VERSION},
+        "consent": {"consent_version": consent_version_for("VERIFICATION_TERMS")},
     })
     check("submit finalised the verification (§5.6)", r.status_code == 200,
           f"http {r.status_code}: {r.text[:220]}")

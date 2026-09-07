@@ -53,9 +53,9 @@ export interface AgentTrends {
   points: AgentTrendPoint[];
 }
 
-// ─── WhatsApp channel (PRD §7.10, WA-43) ───────────────────────────
+// ─── WhatsApp channel (PRD §26.10, WA-43) ───────────────────────────
 
-/** One bar in a §7.10 breakdown — a widget page code, or an escalation reason. */
+/** One bar in a §26.10 breakdown — a widget page code, or an escalation reason. */
 export interface ChannelCount {
   label: string;
   count: number;
@@ -74,7 +74,7 @@ export interface WhatsAppNumberHealth {
 }
 
 /**
- * §7.10's seven channel metrics over one window.
+ * §26.10's seven channel metrics over one window.
  *
  * Rates arrive alongside the counts behind them, and both are rendered: "60%" over three
  * conversations is a very different thing from the same figure over three hundred, and an

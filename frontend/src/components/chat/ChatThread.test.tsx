@@ -10,13 +10,13 @@ import {
 } from "@/types/chat";
 
 /**
- * The two §7 facts a WhatsApp thread carries that a website thread does not, and that are
+ * The two §26 facts a WhatsApp thread carries that a website thread does not, and that are
  * otherwise **invisible in a message list**:
  *
- * * A photo or voice note the customer sent is *not* evidence (§7.1.6). Without the badge
+ * * A photo or voice note the customer sent is *not* evidence (§26.1.6). Without the badge
  *   an agent reading the console has no way to know the survey plan in front of them never
  *   entered the verification file.
- * * A reply typed outside Meta's 24-hour window has not been delivered yet (§7.7). It looks
+ * * A reply typed outside Meta's 24-hour window has not been delivered yet (§26.7). It looks
  *   exactly like a sent message until it is labelled.
  *
  * Both fields are backend-derived and only ever set on a WhatsApp thread, so the shared
@@ -65,7 +65,7 @@ beforeEach(() => {
   state.messages = [];
 });
 
-describe("ChatThread — §7.6.3 media labelling", () => {
+describe("ChatThread — §26.6.3 media labelling", () => {
   it("marks a customer's photo as unofficial, never evidence", () => {
     state.messages = [message({ mediaKind: InboundKind.IMAGE, unofficialMedia: true })];
 
@@ -94,7 +94,7 @@ describe("ChatThread — §7.6.3 media labelling", () => {
   });
 });
 
-describe("ChatThread — §7.7 queued replies", () => {
+describe("ChatThread — §26.7 queued replies", () => {
   it("says a reply is waiting on the customer, not sent", () => {
     state.messages = [
       message({

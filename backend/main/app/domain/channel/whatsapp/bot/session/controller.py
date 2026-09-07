@@ -1,4 +1,4 @@
-"""Bot session admin controller (PRD §7.6, §7.11, D57).
+"""Bot session admin controller (PRD §26.6, §26.11, D57).
 
 URL shape: /admin/whatsapp/bot — RBAC-gated (CONFIGURE_SYSTEM). Frontend service:
 frontend/src/components/admin/chat/libs/whatsapp-bot-service.
@@ -10,7 +10,7 @@ Two things an agent working the console needs, and one an operator does:
 * **Hand it back.** The only way out of `HUMAN`. Without this control the first agent
   reply would silence a conversation permanently, which is a worse failure than the one
   stickiness prevents.
-* **Ask whether the channel is ready** (§7.11) — which transport and classifier are live,
+* **Ask whether the channel is ready** (§26.11) — which transport and classifier are live,
   and whether the classifier is actually configured. The answer never includes a key.
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ whatsapp_bot_session_service: WhatsAppBotSessionService = di[WhatsAppBotSessionS
 async def channel_readiness(
     _admin_id: str = Depends(require_permission(Permission.CONFIGURE_SYSTEM)),
 ):
-    """Whether the channel is wired for live traffic (§7.11 launch gate).
+    """Whether the channel is wired for live traffic (§26.11 launch gate).
 
     Reports configuration, never credentials: "a key is set" is the operational fact, and
     the key itself is not something an endpoint should be able to say.
@@ -64,7 +64,7 @@ async def hand_back(
 ):
     """Give the thread back to the bot — the explicit half of D57's sticky mode."""
     await whatsapp_bot_session_service.hand_back(phone_e164)
-    # Described rather than mapped from the returned row: the console needs the §7.7
+    # Described rather than mapped from the returned row: the console needs the §26.7
     # window state alongside the mode, and `describe` is the one place that resolves it.
     return SuccessResponse[BotSessionDto](
         data=await whatsapp_bot_session_service.describe(phone_e164)

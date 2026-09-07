@@ -17,7 +17,7 @@ modified_files:
   - frontend/CLAUDE.md              # the analytics tab and its three rendering requirements
   - backend/main/app/core/events/subscribers.py       # PAYMENT_CONFIRMED → seam numerator
   - backend/main/app/domain/analytics/{models,service,controller}.py
-  - backend/main/app/domain/audit/pack_service.py     # §7.4.6 consents in the §19.3 pack
+  - backend/main/app/domain/audit/pack_service.py     # §26.4.6 consents in the §19.3 pack
   - backend/main/app/domain/compliance/erasure/pseudonymiser.py  # five channel surfaces
   - backend/main/app/domain/channel/whatsapp/bot/{engine,content,intake_controller}.py
   - backend/main/app/domain/channel/whatsapp/bot/session/{models,service}.py
@@ -25,7 +25,7 @@ modified_files:
   - backend/main/app/domain/channel/whatsapp/inbound/{models,service}.py
   - backend/main/app/domain/dev/{controller,service}.py
   - backend/main/app/domain/system_config/models.py
-  - backend/main/app/domain/user/auth/consent/content/__init__.py  # §7.8 clauses, v1.1.0
+  - backend/main/app/domain/user/auth/consent/content/__init__.py  # §26.8 clauses, v1.1.0
   - backend/main/appodus_utils/integrations/intent/{models,prompt,stub/stub_intent}.py
   - backend/main/appodus_utils/integrations/messaging/providers/whatsapp/{inbound,directory}.py
   - backend/main/appodus_utils/domain/webhook/google_drive/model.py  # D83 TODO(gap)
@@ -52,16 +52,20 @@ tests:
   written: true
   executed: true
   passing: true
-  detail: "backend 2041 unit passed; frontend 573 passed / 83 files; ruff + mypy + tsc + eslint
-           clean; frontend build clean. Migrations 0010 and 0011 applied and rolled back against
-           live Postgres. Live drive-through: ALL PASSED, 445 checks (the runner now counts them
-           rather than leaving the total to be grepped from [PASS] lines)."
+  detail: "backend 2043 unit passed; frontend 573 passed / 83 files; ruff + mypy + tsc + eslint
+           clean; frontend build clean. Migrations round-tripped base->head against live Postgres.
+           Live drive-through: ALL PASSED, 470 checks (the runner counts them rather than leaving
+           the total to be grepped from [PASS] lines). The +25 over S11's 445 are the §26.8
+           compliance group the drive-through never had — the consent ledger exporting in the
+           §19.3 pack, erasure reaching the five channel tables, and the erased number reading
+           as a stranger to the bot on its next message — plus a per-signup assertion that a
+           fresh account owes no consent, which is what caught the stale version literal. Playwright UAT: 144/144 across all six engines (2 retried — Mailpit timing)."
 
 self_audit:
   started: true
   completed: true
   findings:
-    - "**S10.0 — a whole spec row with no producer.** §7.3.4 marks three actions `HANDOFF`;
+    - "**S10.0 — a whole spec row with no producer.** §26.3.4 marks three actions `HANDOFF`;
        only `upload` had one. `capabilities.handoff_intent_for` had **zero callers**, no
        `BotIntent` reached `PAY` or `VIEW_REPORT`, and both fell through to the unmatched
        counter — so `/wa/pay/<token>` and `/wa/report/<token>`, fully built on both ends, were
@@ -77,7 +81,7 @@ self_audit:
        worked in production and never in an automated run, the exact split the
        automation-determinism contract exists to prevent. (4) A drive-through assertion assumed
        the stage customer owned no delivered case, when they own the one `stage_report` released."
-    - "**The §7.3.2 projection has a trap in a name.** `ChannelState.REPORT_READY` projects from
+    - "**The §26.3.2 projection has a trap in a name.** `ChannelState.REPORT_READY` projects from
        `UNDER_REVIEW`, where the report exists but has not passed the §8 release gate. Reading
        'a report exists' as 'the customer may have it' would have handed out the very draft the
        gate holds back, so `VIEW_REPORT` offers `DELIVERED` only."
@@ -85,8 +89,8 @@ self_audit:
        none was a channel table: an approved erasure left the subject's number in
        `whatsapp_links`, `whatsapp_bot_sessions`, `whatsapp_inbound_messages`, `case_delegates`
        and `handoff_token_redemptions`, and their half-finished chat intake — addresses included
-       — in the session `context`. Found by reading §7.8 against the code rather than by a test."
-    - "**§7.8's 'consent records exportable' was unimplemented.** The §19.3 audit pack read
+       — in the session `context`. Found by reading §26.8 against the code rather than by a test."
+    - "**§26.8's 'consent records exportable' was unimplemented.** The §19.3 audit pack read
        `user_consents` and not `whatsapp_consents`, so the one export a dispute or a regulator
        asks for could not show whether the customer had agreed to be messaged, or when they
        withdrew it."
@@ -94,7 +98,7 @@ self_audit:
        and S6 still read `pending`. Traceability that is not maintained is worse than none: it
        reports work as missing and invites it to be redone. Now 42 of 44 complete, with the two
        partials genuinely blocked on Meta."
-    - "**The failure-fallback gate was being claimed by unit tests.** §7.11 asks for the fallback
+    - "**The failure-fallback gate was being claimed by unit tests.** §26.11 asks for the fallback
        to be *tested* — kill the bot, observe the auto-reply and the alert. Mocks prove the
        `except` branch behaves; they cannot prove a real failure reaches it rather than becoming
        a 500 in the webhook, a Meta retry, and silence. `app/core/fault_injection.py` makes one
@@ -109,13 +113,13 @@ git:
   branch: dev
   dirty: false
 
-next_action: "None — cycle 2 is complete. Launch is gated on the external §7.11 items in
+next_action: "None — cycle 2 is complete. Launch is gated on the external §26.11 items in
               docs/whatsapp-launch-runbook.md. The MASTER-PRD §7 incorporation and the
               'Known Gaps & Roadmap' row for D83's google_drive package remain as doc tasks."
 
 started_at: "2026-08-31"
-last_checkpoint: "2026-09-03: S10.0 made §7.3.4's pay and report handoffs reachable; S10 built
-                  §7.10's seven metrics on an append-only fact table with page-code attribution
-                  and a synced Meta quality rating; S11 closed the compliance gap (§7.8 clauses,
-                  consent export, channel-wide erasure), drilled §7.6.5 on a live stack, and
+last_checkpoint: "2026-09-03: S10.0 made §26.3.4's pay and report handoffs reachable; S10 built
+                  §26.10's seven metrics on an append-only fact table with page-code attribution
+                  and a synced Meta quality rating; S11 closed the compliance gap (§26.8 clauses,
+                  consent export, channel-wide erasure), drilled §26.6.5 on a live stack, and
                   reconciled the traceability matrix"

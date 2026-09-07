@@ -1,4 +1,4 @@
-"""The §7.10 fact recorder (WA-43, D80).
+"""The §26.10 fact recorder (WA-43, D80).
 
 The recorder is sprinkled through the conversation path, so its single most important
 property is the one that is easiest to regress: **it never raises**. A metric write that

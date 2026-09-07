@@ -1,4 +1,4 @@
-"""Inbound WhatsApp ingestion (PRD §7.3.3, §7.8, WA-09/WA-12/WA-13).
+"""Inbound WhatsApp ingestion (PRD §26.3.3, §26.8, WA-09/WA-12/WA-13).
 
 Where a Meta delivery becomes an ordinary Veriprops conversation. Two properties matter
 more than anything else here:
@@ -12,12 +12,12 @@ more than anything else here:
   policed or who mediates it.
 
 Non-text inbound is journalled and surfaced as a labelled placeholder so nothing is
-silently dropped (§7.6.3); the policy replies that go back out are the bot engine's job,
+silently dropped (§26.6.3); the policy replies that go back out are the bot engine's job,
 which this service hands the turn to once the message is safely recorded.
 
 **Recording comes first, answering second.** The journal row and the console message are
 what make the turn idempotent and visible; a bot failure after that point costs a reply,
-not the message. The engine has its own §7.6.5 fallback, and anything that still escapes
+not the message. The engine has its own §26.6.5 fallback, and anything that still escapes
 is logged rather than raised — the webhook must keep acknowledging, or Meta throttles and
 eventually disables the subscription.
 """
@@ -90,14 +90,14 @@ class WhatsAppInboundService:
             # A Meta redelivery, not a new turn in the conversation.
             return None
 
-        # §7.4.1's widget marker is metadata the customer's phone typed for them, not words
+        # §26.4.1's widget marker is metadata the customer's phone typed for them, not words
         # they wrote (D85). It is lifted out **here** rather than in the Meta normalizer
         # because `ingest` is the single funnel every inbound passes through — Meta's
         # webhook and the dev injection door both — and doing it upstream gave the two
         # doors different behaviour, which is exactly what the automation-determinism
         # contract exists to prevent. Everything downstream (the classifier, the
         # guardrails, the console) then reads the message the customer believes they sent;
-        # `payload` keeps Meta's original untouched for the §7.8 record.
+        # `payload` keeps Meta's original untouched for the §26.8 record.
         page_code, cleaned_text = extract_page_code(message.text)
         if page_code is not None:
             message = message.model_copy(
@@ -126,7 +126,7 @@ class WhatsAppInboundService:
         chat_message = await self._chat.send(
             conversation,
             # The sender is a phone number, not yet an account. Identity is resolved
-            # server-side by the linking flow (§7.4.4) — never claimed by the message.
+            # server-side by the linking flow (§26.4.4) — never claimed by the message.
             None,
             SenderKind.CUSTOMER,
             self._body_for(message),
@@ -146,7 +146,7 @@ class WhatsAppInboundService:
         return record
 
     async def _flush_queued_replies(self, conversation: Conversation) -> None:
-        """Send anything an agent typed while Meta's window was shut (§7.7, WA-41).
+        """Send anything an agent typed while Meta's window was shut (§26.7, WA-41).
 
         This message just reopened the window, so the queue can go now. It runs **before**
         the bot turn deliberately: the agent's answer was written first and should arrive
@@ -184,7 +184,7 @@ class WhatsAppInboundService:
 
     @staticmethod
     def _media_kind_for(message: InboundWhatsAppMessage) -> Optional[InboundKind]:
-        """What arrived, when it was not words (§7.6.3).
+        """What arrived, when it was not words (§26.6.3).
 
         Null for text and for a menu selection, because neither is media — and the console
         derives "unofficial, never evidence" from this field being set, so labelling a text

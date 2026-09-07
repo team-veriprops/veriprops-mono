@@ -1,8 +1,8 @@
-"""Intent-classification vocabulary (PRD §7.6, D44/D48/D53).
+"""Intent-classification vocabulary (PRD §26.6, D44/D48/D53).
 
 The intent set is **closed**. A classifier may only answer with a member of ``BotIntent``,
 and anything it returns that is not one becomes ``UNKNOWN`` — which routes to a human.
-That is the guarantee §7.6.4 rests on: the bot never guesses, so the worst a confused or
+That is the guarantee §26.6.4 rests on: the bot never guesses, so the worst a confused or
 compromised model can do is hand the conversation to a person.
 
 The enum covers more than the classifier produces. ``STOP_MESSAGES``/``START_MESSAGES``
@@ -20,25 +20,25 @@ from main.appodus_utils.config.settings import IntentProvider
 
 
 class BotIntent(str, enum.Enum):
-    """What a customer's message is asking for (§7.6.2 flows + §7.6.4 guardrails)."""
+    """What a customer's message is asking for (§26.6.2 flows + §26.6.4 guardrails)."""
 
     MENU = "MENU"                                # greeting / "help" / "options"
     LEARN = "LEARN"                              # how Verify works
     PRICING = "PRICING"                          # what it costs
     START_VERIFICATION = "START_VERIFICATION"    # begin intake
     CHECK_STATUS = "CHECK_STATUS"                # where is my verification
-    CONTINUE_CASE = "CONTINUE_CASE"              # "Continue verification VP-…" (§7.4.3)
-    # The two §7.3.4 `HANDOFF` actions a customer *asks* for. Uploading is the third, but
-    # it is recognised by a document arriving (§7.6.3) rather than by words, so it needs no
+    CONTINUE_CASE = "CONTINUE_CASE"              # "Continue verification VP-…" (§26.4.3)
+    # The two §26.3.4 `HANDOFF` actions a customer *asks* for. Uploading is the third, but
+    # it is recognised by a document arriving (§26.6.3) rather than by words, so it needs no
     # intent of its own.
-    PAY = "PAY"                                  # "how do I pay?" → a §7.5 pay link
-    VIEW_REPORT = "VIEW_REPORT"                  # "send me my report" → a §7.5 report link
+    PAY = "PAY"                                  # "how do I pay?" → a §26.5 pay link
+    VIEW_REPORT = "VIEW_REPORT"                  # "send me my report" → a §26.5 report link
     LINK_ACCOUNT = "LINK_ACCOUNT"                # connect this number to an account
     TALK_TO_HUMAN = "TALK_TO_HUMAN"              # explicit escalation request
-    REFUND_OR_CANCELLATION = "REFUND_OR_CANCELLATION"  # always human (§7.6.2)
+    REFUND_OR_CANCELLATION = "REFUND_OR_CANCELLATION"  # always human (§26.6.2)
     STOP_MESSAGES = "STOP_MESSAGES"              # opt out of everything (D64)
     START_MESSAGES = "START_MESSAGES"            # opt back into utility updates (D64)
-    # §7.6.4 — a request for a verification judgment, legal opinion, Trust Score reading,
+    # §26.6.4 — a request for a verification judgment, legal opinion, Trust Score reading,
     # or property-specific assessment. Recognised so it can be *refused*, never answered.
     JUDGMENT_REQUEST = "JUDGMENT_REQUEST"
     # Out of scope, or recognised with too little confidence to act on. Routes to a human.
@@ -74,7 +74,7 @@ class IntentResult(Object):
 
     ``confidence`` is the classifier's own 0–1 self-report, compared against
     ``INTENT_MIN_CONFIDENCE`` by the caller. ``provider`` records which backend answered,
-    so the §7.10 escalation-rate metric can tell a coverage gap from an outage.
+    so the §26.10 escalation-rate metric can tell a coverage gap from an outage.
     """
 
     intent: BotIntent

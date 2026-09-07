@@ -18,7 +18,7 @@ export const whatsappConsentKeys = {
 export function useWhatsAppConsentQuery() {
   return useQuery({
     queryKey: whatsappConsentKeys.me,
-    // A customer with no record has consented to nothing (§7.4.6), so the empty case is a
+    // A customer with no record has consented to nothing (§26.4.6), so the empty case is a
     // real answer rather than a missing one — the controls render unticked either way.
     queryFn: async () => (await service.get()).data ?? NO_WHATSAPP_CONSENT,
   });

@@ -4,7 +4,7 @@ import { HandoffContext, HandoffIntent, HandoffPayment, SeededDraft } from "@/ty
 import { SetWhatsAppConsent, WhatsAppConsent } from "@/types/whatsappConsent";
 
 /**
- * WhatsApp handoff API (PRD §7.4.2, §7.5). Mirrors the backend controller at
+ * WhatsApp handoff API (PRD §26.4.2, §26.5). Mirrors the backend controller at
  * `app/domain/channel/whatsapp/handoff`.
  *
  * These endpoints are public — the handoff link is the authorization, not a session.
@@ -38,7 +38,7 @@ export class HandoffService {
   }
 
   /**
-   * Record the §7.4.6 opt-ins from the payment landing (D76).
+   * Record the §26.4.6 opt-ins from the payment landing (D76).
    *
    * This is the one moment a WhatsApp-native customer is asked — they arrived from a chat
    * link and may never open account settings. Grant-scoped like `initiatePayment`: the

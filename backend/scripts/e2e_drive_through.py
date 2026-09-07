@@ -76,9 +76,9 @@ STAGES = [
     ("premium_release", stage_premium_release),      # §14 finish — LAWYER, v2/v3, declined recheck
     ("growth", stage_growth),                        # S21 — referral earn + spend, abandonment
     ("admin_ops", stage_admin_ops),                  # S22 — pricing, analytics, broadcast hardening
-    ("ops_unhappy", stage_ops_unhappy),              # §6/§7.2/§8.5/§6a — pool, lifecycle, chargeback
+    ("ops_unhappy", stage_ops_unhappy),              # §6/§11.3/§8.5/§6a — pool, lifecycle, chargeback
     ("compliance", stage_compliance),                # S23 — audit pack, erasure reject + execute
-    ("whatsapp", stage_whatsapp),                    # §7 S1–S3 — signed webhook, console inbound, handoff
+    ("whatsapp", stage_whatsapp),                    # §26 S1–S11 — the channel end to end
     ("email", stage_email),                          # Mailpit delivery + password reset (warn-skips)
     ("messaging_retry", stage_messaging_retry),      # failure→retry→threshold→expiry (warn-skips)
 ]

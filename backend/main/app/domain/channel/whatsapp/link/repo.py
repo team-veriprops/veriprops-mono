@@ -112,7 +112,7 @@ class WhatsAppLinkRepo(
         return link
 
     async def count_active(self) -> int:
-        """How many accounts have a live WhatsApp number (§7.10, D84).
+        """How many accounts have a live WhatsApp number (§26.10, D84).
 
         The denominator for the opt-in rates: of the customers this channel can actually
         reach, how many said yes. `ACTIVE` only — a `PENDING` row is an attempt, not a

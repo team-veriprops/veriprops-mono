@@ -149,7 +149,7 @@ class PiiPseudonymiser:
         )
         surfaces.append("agent_bank_accounts")
 
-        # 9-13) The WhatsApp channel (§7, §7.8).
+        # 9-13) The WhatsApp channel (§26.8).
         surfaces += await self._pseudonymise_whatsapp(session, subject_user_id, token)
 
         return surfaces
@@ -157,14 +157,14 @@ class PiiPseudonymiser:
     async def _pseudonymise_whatsapp(
         self, session, subject_user_id: str, token: str
     ) -> List[str]:
-        """Sever the subject's identity across the WhatsApp channel (§7.8, NDPA).
+        """Sever the subject's identity across the WhatsApp channel (§26.8, NDPA).
 
         The channel keys almost everything on a **phone number** rather than a user id, so
         this starts by reading the subject's linked numbers and then scrubs by number. It
         has to run before the link rows are cleared, which is why it is one method rather
         than five more blocks above.
 
-        The line drawn here is §7.8's own: **identity is severed, content is retained.**
+        The line drawn here is §26.8's own: **identity is severed, content is retained.**
         Chat logs are retained business records covered by the same access controls as case
         data, so what a customer said stays; the number that said it, the profile name Meta
         supplied, and the raw envelope carrying both do not. That is the same split as
@@ -225,7 +225,7 @@ class PiiPseudonymiser:
         )
         surfaces.append("whatsapp_inbound_messages")
 
-        # 12) Delegations the subject holds on **other people's** cases (§7.4.5). Revoked
+        # 12) Delegations the subject holds on **other people's** cases (§26.4.5). Revoked
         # as well as scrubbed: a grant addressed to a number nobody can reach any more is
         # not a grant, and leaving it live would keep the case's delegate slot occupied.
         # Delegates on the subject's *own* cases are other people, and their erasure is
@@ -242,7 +242,7 @@ class PiiPseudonymiser:
         )
         surfaces.append("case_delegates")
 
-        # 13) The §7.5 handoff ledger. The jti rows stay — they are what makes a token
+        # 13) The §26.5 handoff ledger. The jti rows stay — they are what makes a token
         # single-use, and dropping them would let a captured link be replayed — but the
         # number and the redeeming IP are identity, not enforcement.
         await session.execute(

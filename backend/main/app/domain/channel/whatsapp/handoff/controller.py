@@ -1,4 +1,4 @@
-"""Public handoff endpoints (PRD §7.4.2, §7.5). URL shape: /public/wa/handoff/...
+"""Public handoff endpoints (PRD §26.4.2, §26.5). URL shape: /public/wa/handoff/...
 
 **No JWT here** — the handoff token is the authorization, exactly as the share token is on
 `public_share_router`. Every response is scoped to one action on one case.
@@ -10,7 +10,7 @@ dead. The grant is **not a session**: it is path-scoped, expires with the token 
 from, and authorizes one intent on one case.
 
 Only `pay` acts on the grant alone (D50). `upload` and `report` return a portal
-destination instead, because canonical evidence (§7.1.6) and the report link (Decision B)
+destination instead, because canonical evidence (§26.1.6) and the report link (Decision B)
 must sit behind a real login rather than a forwardable link.
 """
 from __future__ import annotations
@@ -76,7 +76,7 @@ async def redeem(
 ):
     """Spend a handoff link and return the context its landing page must acknowledge.
 
-    "Picking up where you left off" is a spec requirement (§7.4.2): silently losing the
+    "Picking up where you left off" is a spec requirement (§26.4.2): silently losing the
     customer's context is a violation, not a cosmetic gap.
     """
     if intent not in ACTION_INTENTS:
@@ -120,7 +120,7 @@ async def redeem(
 
 @handoff_router.post("/pay/initiate", response_model=SuccessResponse[HandoffPaymentDto])
 async def initiate_payment(request: Request):
-    """Start payment for the case the caller's grant names (§7.4.2, Decision A).
+    """Start payment for the case the caller's grant names (§26.4.2, Decision A).
 
     The grant is the authorization; the case comes from it, never from the request body,
     so a holder of one link cannot pay against a different case.
@@ -145,11 +145,11 @@ async def initiate_payment(request: Request):
 
 @handoff_router.put("/pay/consent", response_model=SuccessResponse[WhatsAppConsentDto])
 async def set_consents(req: SetWhatsAppConsentDto, request: Request):
-    """Record the §7.4.6 opt-ins from the payment landing (D76).
+    """Record the §26.4.6 opt-ins from the payment landing (D76).
 
     This is the one moment a WhatsApp-native customer is asked. Without it they could opt
     in only by finding account settings on a site they arrived at from a chat link — and
-    §7.10 counts the opt-in rate as the channel's consent asset.
+    §26.10 counts the opt-in rate as the channel's consent asset.
 
     Grant-scoped exactly like `pay/initiate`: the customer id comes from the grant cookie,
     never from the request body, so a holder of one link cannot consent on someone else's

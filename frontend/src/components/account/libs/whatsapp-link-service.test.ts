@@ -44,7 +44,7 @@ describe("WhatsAppLinkService", () => {
   });
 
   describe("the WhatsApp→web direction", () => {
-    // §7.4.4: the number is named by the bot's signed token. If the browser could send
+    // §26.4.4: the number is named by the bot's signed token. If the browser could send
     // a number here, a signed-in attacker could have a code posted to any number they
     // liked — which is exactly the attack the token shape exists to prevent.
     it("starts with the token alone — never a number", async () => {

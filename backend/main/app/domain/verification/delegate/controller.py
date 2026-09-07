@@ -1,4 +1,4 @@
-"""Per-case delegate endpoints (PRD §7.4.5, WA-26).
+"""Per-case delegate endpoints (PRD §26.4.5, WA-26).
 
 URL shape: /verifications/{verification_id}/delegates — session-authenticated, and every
 handler proves ownership of the case through `CaseDelegateService`, which gates on
@@ -37,7 +37,7 @@ _authorize_rate_limit = RateLimiter(scope="case_delegate_authorize", limit=10, w
     "/{verification_id}/delegates", response_model=SuccessResponse[List[CaseDelegateDto]]
 )
 async def list_delegates(verification_id: str, authorize: AuthJWT = Depends()):
-    """This case's delegate — a list of at most one, so the shape survives §7.9's
+    """This case's delegate — a list of at most one, so the shape survives §26.9's
     multiple-delegate enhancement without a contract change."""
     await authorize.jwt_required()
     delegates = await delegate_service.list_for_case(
@@ -81,7 +81,7 @@ async def confirm_delegate(
     "/{verification_id}/delegates/revoke", response_model=SuccessResponse[dict]
 )
 async def revoke_delegate(verification_id: str, authorize: AuthJWT = Depends()):
-    """End the delegation. Effective on the next event (§7.4.5)."""
+    """End the delegation. Effective on the next event (§26.4.5)."""
     await authorize.jwt_required()
     await delegate_service.revoke(verification_id, str(authorize.get_jwt_subject()))
     return SuccessResponse[dict](data={"revoked": True})

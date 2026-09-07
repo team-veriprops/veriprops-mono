@@ -1,4 +1,4 @@
-"""WhatsApp transport determinism contract (PRD §7, D43).
+"""WhatsApp transport determinism contract (PRD §26, D43).
 
 Mirrors the OTP_MODE contract: CI and e2e must never reach Meta, and production must
 never run on the stub. Both are startup failures rather than runtime surprises.

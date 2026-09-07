@@ -1,6 +1,6 @@
-"""Stage — WhatsApp channel (S1–S7, PRD §7).
+"""Stage — WhatsApp channel (S1–S11, PRD §26).
 
-Drives the channel over HTTP the way the outside world does. Five things here cannot be
+Drives the channel over HTTP the way the outside world does. Six things here cannot be
 proved by unit tests, and all of them are load-bearing:
 
 * **The webhook is the real entry point.** It is signed with a real HMAC over the raw
@@ -9,15 +9,19 @@ proved by unit tests, and all of them are load-bearing:
 * **Redelivery is safe in the database, not just in a mock.** Meta retries until it gets a
   2xx; the unique ``wamid`` index is what turns a retry into a no-op, and only a live
   Postgres can demonstrate that.
-* **A handoff link really pays.** §7.10 calls intake→payment the channel's most important
+* **A handoff link really pays.** §26.10 calls intake→payment the channel's most important
   number, so the stage carries a `pay` token all the way to a PAID verification.
 * **An agent's console reply really leaves the building.** For two commits it did not: the
   message was written into the thread and delivered nowhere, and this stage asserted only
   that the thread flipped to `HUMAN` — which passed the whole time. The outbox assertion
   is the one that would have caught it.
-* **The customer is answered whatever they send.** §7.6.3's three rows are exercised
+* **The customer is answered whatever they send.** §26.6.3's three rows are exercised
   against the real ingestion path, including the photo case that used to be answered
   with "Sorry, I didn't quite get that".
+* **Erasure actually reaches the channel.** The channel keys on a phone number rather than a
+  user id, so "the account is erased" and "the number still resolves to a customer" can both
+  be true at once. A mock proves the UPDATEs are issued; only a live stack proves they reach
+  the rows the bot reads on the *next* message (§26.8, WA-42).
 
 Runs late: it needs a customer who can own a case, and it creates its own payable
 verification rather than disturbing the one earlier stages built.
@@ -32,14 +36,17 @@ import time
 import uuid
 
 from .harness import (
-    CONSENT_VERSION,
     MINIMAL_PNG,
+    QA_PASSWORD,
     TEST_OTP,
     Ctx,
     check,
     client,
+    consent_version_for,
     idem_key,
+    login_status,
     pin_cookie_header,
+    signup_fresh_user,
     stub_pay,
     warn,
 )
@@ -84,15 +91,15 @@ def _sign(body: bytes, secret: str = "") -> str:
 def run(ctx: Ctx) -> None:
     root = ctx.root
 
-    # ── S1: one config source for the official number (§7.1.2, WA-02) ──────────
+    # ── S1: one config source for the official number (§26.1.2, WA-02) ──────────
     cfg = root.get("/config/public").json()["data"]
-    check("public config serves the official WhatsApp number (§7.1.2)",
+    check("public config serves the official WhatsApp number (§26.1.2)",
           cfg.get("whatsappNumber", "").isdigit() and len(cfg["whatsappNumber"]) > 10,
           f"number={cfg.get('whatsappNumber')}")
     check("the number is also served in its human-readable form",
           cfg.get("whatsappDisplayNumber", "").startswith("+"),
           f"display={cfg.get('whatsappDisplayNumber')}")
-    check("the widget kill switch is exposed to the frontend (§7.4.1)",
+    check("the widget kill switch is exposed to the frontend (§26.4.1)",
           isinstance(cfg.get("whatsappWidgetEnabled"), bool))
 
     # ── S2: the webhook is the front door, and the signature is the auth ───────
@@ -118,7 +125,7 @@ def run(ctx: Ctx) -> None:
     # ── S4: the number becomes an identity, and stops being one on unlink ─────
     _run_linking_checks(ctx)
 
-    # ── §7.7: the template registry the launch gate reads ────────────────────
+    # ── §26.7: the template registry the launch gate reads ────────────────────
     _run_template_registry_checks(ctx)
 
     # ── S5: the bot actually answers, and refuses what it must ───────────────
@@ -127,26 +134,30 @@ def run(ctx: Ctx) -> None:
     # ── S6: a chat intake becomes a real draft on the website ────────────────
     _run_intake_checks(ctx)
 
-    # ── S7: §7.6.3 — every non-text type answered per the table ──────────────
+    # ── S7: §26.6.3 — every non-text type answered per the table ──────────────
     _run_media_checks(ctx)
 
-    # ── S8: §7.4.6 consent, and the milestones it gates ──────────────────────
+    # ── S8: §26.4.6 consent, and the milestones it gates ──────────────────────
     # `_run_media_checks` leaves the customer unlinked (the 1:1 rule), so these two
     # re-link on their own number before touching anything case-scoped.
     consent_phone = _run_consent_checks(ctx)
     _run_milestone_checks(ctx, consent_phone)
 
-    # ── S9: §7.4.5 — one delegate, status only, revocable ────────────────────
+    # ── S9: §26.4.5 — one delegate, status only, revocable ────────────────────
     _run_delegate_checks(ctx)
 
-    # ── S10.0: §7.3.4's other two handoffs, now reachable from a conversation ─
+    # ── S10.0: §26.3.4's other two handoffs, now reachable from a conversation ─
     _run_pay_report_handoff_checks(ctx)
 
-    # ── S10: §7.10 — the metrics move when real traffic moves them ───────
+    # ── S10: §26.10 — the metrics move when real traffic moves them ───────
     _run_channel_analytics_checks(ctx)
 
-    # ── S11: §7.6.5's fallback, drilled on a live stack ──────────────────
+    # ── S11: §26.6.5's fallback, drilled on a live stack ──────────────────
     _run_failure_drill_checks(ctx)
+
+    # ── S11: §26.8 — the consent ledger exports, and erasure reaches the channel.
+    # Last, because it revokes a link and drops a session the analytics above count.
+    _run_channel_erasure_checks(ctx)
 
 
 def _run_webhook_checks(ctx: Ctx) -> None:
@@ -157,7 +168,7 @@ def _run_webhook_checks(ctx: Ctx) -> None:
     r = root.get("/webhooks/whatsapp", params={
         "hub.mode": "subscribe", "hub.verify_token": _VERIFY_TOKEN, "hub.challenge": challenge,
     })
-    check("webhook echoes Meta's subscription challenge (§7.3.3)",
+    check("webhook echoes Meta's subscription challenge (§26.3.3)",
           r.status_code == 200 and challenge in r.text, f"http {r.status_code}: {r.text[:120]}")
 
     r = root.get("/webhooks/whatsapp", params={
@@ -171,7 +182,7 @@ def _run_webhook_checks(ctx: Ctx) -> None:
     body = _envelope(wamid, "How much for a Lagos land check?")
     r = root.post("/webhooks/whatsapp", content=body,
                   headers={"Content-Type": "application/json", "X-Hub-Signature-256": _sign(body)})
-    check("signed Meta delivery accepted (§7.3.3, WA-09)", r.status_code == 200,
+    check("signed Meta delivery accepted (§26.3.3, WA-09)", r.status_code == 200,
           f"http {r.status_code}: {r.text[:160]}")
     ctx.wa_wamid = wamid
 
@@ -223,12 +234,12 @@ def _run_console_checks(ctx: Ctx) -> None:
     if not wa_threads:
         return
     thread = wa_threads[0]
-    check("the thread is keyed on the sender's number, not an account (§7.4.4)",
+    check("the thread is keyed on the sender's number, not an account (§26.4.4)",
           str(thread.get("externalRef", "")).endswith(_CUSTOMER_PHONE[-10:]),
           f"externalRef={thread.get('externalRef')}")
 
     msgs = admin.get(f"/chat/conversations/{thread['id']}/messages").json()["data"]["items"]
-    check("console messages are labelled with the surface they arrived on (§7.3.3)",
+    check("console messages are labelled with the surface they arrived on (§26.3.3)",
           all(m.get("source") == "WHATSAPP" for m in msgs), f"sources={[m.get('source') for m in msgs]}")
 
     if getattr(ctx, "wa_wamid", ""):
@@ -245,10 +256,10 @@ def _run_console_checks(ctx: Ctx) -> None:
     check("WhatsApp text is held by the same fraud scan as web chat (WA-13)",
           any("08031234567" in m["body"] for m in wa_held), f"held={len(wa_held)}")
 
-    # §7.6.3: non-text is journalled and labelled, never silently dropped.
+    # §26.6.3: non-text is journalled and labelled, never silently dropped.
     root.post("/dev/whatsapp/inbound", json={"fromPhone": _CUSTOMER_PHONE, "kind": "AUDIO"}).raise_for_status()
     msgs = admin.get(f"/chat/conversations/{thread['id']}/messages").json()["data"]["items"]
-    check("a voice note reaches the console labelled, never dropped (§7.6.3)",
+    check("a voice note reaches the console labelled, never dropped (§26.6.3)",
           any("voice note" in m["body"] for m in msgs))
 
     # The stub transport is what CI sends through; the outbox is its assertion surface.
@@ -271,22 +282,22 @@ def _run_handoff_checks(ctx: Ctx) -> None:
             "caseId": case_id, "customerId": customer_id, "intent": intent,
         }).json()["data"]["token"]
 
-    # 1. Redeeming lands the customer on their case, with context (§7.4.2).
+    # 1. Redeeming lands the customer on their case, with context (§26.4.2).
     token = mint("pay")
     holder = client()
     r = holder.post(f"/public/wa/handoff/pay/{token}/redeem")
-    check("a pay link redeems without a session (§7.5 — the token is the authorization)",
+    check("a pay link redeems without a session (§26.5 — the token is the authorization)",
           r.status_code == 200, f"http {r.status_code}: {r.text[:160]}")
     # The grant is a Secure cookie and this runs over plain http (see the harness).
     pin_cookie_header(holder)
     context = r.json()["data"]
-    check("the landing is told which case it is picking up (§7.4.2)",
+    check("the landing is told which case it is picking up (§26.4.2)",
           context.get("vid", "").startswith("VP-"), f"context={context}")
     check("the landing is told what is owed", (context.get("amountDueMinor") or 0) > 0)
 
     # 2. A forwarded copy is dead — a different client, same link.
     r = client().post(f"/public/wa/handoff/pay/{token}/redeem")
-    check("a forwarded copy of a spent link is refused (§7.5 single-use)",
+    check("a forwarded copy of a spent link is refused (§26.5 single-use)",
           r.status_code == 404, f"http {r.status_code}")
 
     # 3. …but the customer who redeemed it may reload their own page (D51).
@@ -296,7 +307,7 @@ def _run_handoff_checks(ctx: Ctx) -> None:
 
     # 4. A link is scoped to one action: a report link is not a payment authorization.
     r = client().post(f"/public/wa/handoff/pay/{mint('report')}/redeem")
-    check("a report link presented at the pay landing is refused (§7.5 scope)",
+    check("a report link presented at the pay landing is refused (§26.5 scope)",
           r.status_code == 404, f"http {r.status_code}")
 
     # 5. Garbage and a spent link are indistinguishable from outside.
@@ -304,9 +315,9 @@ def _run_handoff_checks(ctx: Ctx) -> None:
     check("an invalid link fails exactly like a spent one (no oracle)",
           r.status_code == 404, f"http {r.status_code}")
 
-    # 6. The seam that matters: the handoff actually pays (§7.10).
+    # 6. The seam that matters: the handoff actually pays (§26.10).
     r = holder.post("/public/wa/handoff/pay/initiate")
-    check("the grant starts a real payment for the case it names (§7.4.2, Decision A)",
+    check("the grant starts a real payment for the case it names (§26.4.2, Decision A)",
           r.status_code == 200, f"http {r.status_code}: {r.text[:200]}")
     if r.status_code != 200:
         return
@@ -315,7 +326,7 @@ def _run_handoff_checks(ctx: Ctx) -> None:
 
     r = customer.post("/payments/stub/confirm",
                       json={"txRef": payment["txRef"], "succeeded": True})
-    check("a WhatsApp-originated payment completes (§7.10 seam conversion)",
+    check("a WhatsApp-originated payment completes (§26.10 seam conversion)",
           r.status_code == 200 and r.json()["data"].get("processed") is True,
           f"http {r.status_code}: {r.text[:160]}")
     status = customer.get(f"/verifications/{case_id}").json()["data"]["status"]
@@ -329,7 +340,7 @@ def _run_handoff_checks(ctx: Ctx) -> None:
 
 
 def _run_linking_checks(ctx: Ctx) -> None:
-    """§7.4.4 account linking, end to end on the stub transport (WA-23/WA-24/WA-25).
+    """§26.4.4 account linking, end to end on the stub transport (WA-23/WA-24/WA-25).
 
     Three things cannot be proved without a live stack, and all three are the point of
     the slice: the code really goes out over **WhatsApp** (the stub outbox is the
@@ -340,13 +351,13 @@ def _run_linking_checks(ctx: Ctx) -> None:
     root, customer, admin = ctx.root, ctx.customer, ctx.admin
 
     link = customer.get("/channel/whatsapp/link/me").json()["data"]
-    check("a fresh account starts with no WhatsApp link (§7.4.4)",
+    check("a fresh account starts with no WhatsApp link (§26.4.4)",
           link.get("status") != "ACTIVE" and not link.get("phoneE164"), f"link={link}")
 
     root.delete("/dev/whatsapp/outbox")
     r = customer.post("/channel/whatsapp/link/me/start",
                       json={"phoneE164": f"+{_CUSTOMER_PHONE}"})
-    check("starting a link is accepted (§7.4.4, WA-23)", r.status_code == 200,
+    check("starting a link is accepted (§26.4.4, WA-23)", r.status_code == 200,
           f"http {r.status_code}: {r.text[:200]}")
     if r.status_code != 200:
         return
@@ -361,11 +372,11 @@ def _run_linking_checks(ctx: Ctx) -> None:
           any(TEST_OTP in (m.get("text") or "") for m in messages),
           f"bodies={[(m.get('text') or '')[:60] for m in messages]}")
 
-    # §7.7/D59b: an OTP to a number that has never messaged us is outside Meta's 24-hour
+    # §26.7/D59b: an OTP to a number that has never messaged us is outside Meta's 24-hour
     # window, so it must go as the approved **template** — free text would be rejected
     # live. The stub records both halves, which is the only place this is observable.
     templated = [m for m in messages if m.get("templateName") == "otp_auth"]
-    check("the linking OTP is sent as the §7.7 `otp_auth` template, not free text",
+    check("the linking OTP is sent as the §26.7 `otp_auth` template, not free text",
           bool(templated), f"templates={[m.get('templateName') for m in messages]}")
     if templated:
         sent_template = templated[-1]
@@ -384,7 +395,7 @@ def _run_linking_checks(ctx: Ctx) -> None:
 
     # A number mid-attempt is not a link: nothing may resolve to the account yet.
     pending = customer.get("/channel/whatsapp/link/me").json()["data"]
-    check("a pending attempt is not yet a link (§7.4.4)", pending.get("status") == "PENDING",
+    check("a pending attempt is not yet a link (§26.4.4)", pending.get("status") == "PENDING",
           f"status={pending.get('status')}")
 
     r = customer.post("/channel/whatsapp/link/me/confirm",
@@ -400,11 +411,11 @@ def _run_linking_checks(ctx: Ctx) -> None:
           linked.get("status") == "ACTIVE" and linked.get("phoneE164", "").endswith(
               _CUSTOMER_PHONE[-10:]), f"link={linked}")
 
-    # §7.8: one conversation object per person — the *existing* thread gains an owner.
+    # §26.8: one conversation object per person — the *existing* thread gains an owner.
     threads = admin.get("/chat/conversations").json()["data"]
     wa_threads = [t for t in threads if t.get("channel") == "WHATSAPP"
                   and str(t.get("externalRef", "")).endswith(_CUSTOMER_PHONE[-10:])]
-    check("linking adopts the existing thread instead of opening a second one (§7.8)",
+    check("linking adopts the existing thread instead of opening a second one (§26.8)",
           len(wa_threads) == 1, f"threads={len(wa_threads)}")
 
     # WA-25: unlinking releases the number and the thread goes cold.
@@ -434,9 +445,9 @@ _PRD_TEMPLATES = {
 
 
 def _run_template_registry_checks(ctx: Ctx) -> None:
-    """§7.7 template registry (WA-15/WA-41).
+    """§26.7 template registry (WA-15/WA-41).
 
-    The §7.11 launch gate turns on "all §7.7 templates approved", so the operational
+    The §26.11 launch gate turns on "all §26.7 templates approved", so the operational
     question is whether an admin can actually see that answer. Under the stub the
     directory reports the declared set as approved, which is what makes the whole channel
     demoable without Meta — the live directory is the same interface behind a different
@@ -445,7 +456,7 @@ def _run_template_registry_checks(ctx: Ctx) -> None:
     admin, customer = ctx.admin, ctx.customer
 
     registry = admin.get("/admin/config/whatsapp-templates").json()["data"]
-    check("the admin registry lists all seven §7.7 templates (WA-15)",
+    check("the admin registry lists all seven §26.7 templates (WA-15)",
           {t["name"] for t in registry} == _PRD_TEMPLATES,
           f"names={sorted(t['name'] for t in registry)}")
     otp = next((t for t in registry if t["name"] == "otp_auth"), {})
@@ -471,7 +482,7 @@ def _run_template_registry_checks(ctx: Ctx) -> None:
 
 
 def _run_bot_checks(ctx: Ctx) -> None:
-    """The bot engine over the wire (§7.6, WA-11/WA-39).
+    """The bot engine over the wire (§26.6, WA-11/WA-39).
 
     Unit tests already pin the gauntlet's branching. What only a live stack proves is that
     a message posted at the webhook comes back out of the **stub transport** as a real
@@ -479,7 +490,7 @@ def _run_bot_checks(ctx: Ctx) -> None:
     facade, the conversation mirror and the provider. Three of the four faults that killed
     the outbound path before were invisible to unit tests for exactly that reason.
 
-    A fresh number, so the welcome is genuinely a first contact: §7.6.1 short-circuits
+    A fresh number, so the welcome is genuinely a first contact: §26.6.1 short-circuits
     every other rule, and asserting an answer on a number this stage already used would
     silently test nothing.
     """
@@ -497,48 +508,48 @@ def _run_bot_checks(ctx: Ctx) -> None:
         # The stub records the Meta `wa_id` form (digits, no '+') under `to`.
         return [m for m in messages if phone[-10:] in str(m.get("to", ""))]
 
-    # §7.6.1 — first contact opens with the disclosure and the payment pledge.
+    # §26.6.1 — first contact opens with the disclosure and the payment pledge.
     replies = say("Hi")
-    check("the bot answers a first message over the real transport (§7.6.1)",
+    check("the bot answers a first message over the real transport (§26.6.1)",
           len(replies) == 1, f"outbound={len(replies)}")
     if not replies:
         warn("bot drive-through stopped", "no outbound reply to assert against")
         return
     welcome = str(replies[0].get("text", ""))
-    check("the welcome discloses that it is a bot (§7.1.4)",
+    check("the welcome discloses that it is a bot (§26.1.4)",
           "automated assistant" in welcome, welcome[:120])
-    check("the welcome carries the payment pledge (§7.1.1)",
+    check("the welcome carries the payment pledge (§26.1.1)",
           "veriprops.ng" in welcome and "address bar" in welcome, welcome[:160])
 
     # The menu it just offered has to work — a number is the one input it invited.
     replies = say("5")
     pricing = str(replies[0].get("text", "")) if replies else ""
-    check("a menu number is answered deterministically (§7.6.1)",
+    check("a menu number is answered deterministically (§26.6.1)",
           "₦" in pricing, pricing[:120])
     check("pricing is quoted from the live admin config, not from copy (D54)",
           "per property" in pricing, pricing[:160])
 
-    # §7.6.4 — the guardrail that matters most, over the wire rather than in a unit test.
+    # §26.6.4 — the guardrail that matters most, over the wire rather than in a unit test.
     replies = say("Is this land genuine? Should I buy it?")
     verdict = str(replies[0].get("text", "")) if replies else ""
-    check("the bot refuses to judge a property and routes to a person (§7.6.4)",
+    check("the bot refuses to judge a property and routes to a person (§26.6.4)",
           "our verifiers" in verdict or "team" in verdict, verdict[:160])
-    check("the refusal renders no verdict of its own (§7.1.3)",
+    check("the refusal renders no verdict of its own (§26.1.3)",
           not any(word in verdict.lower() for word in ("looks genuine", "seems fine", "is safe")),
           verdict[:160])
 
-    # §7.4.3 — an unlinked number is never read case data.
+    # §26.4.3 — an unlinked number is never read case data.
     replies = say("What is the status of my verification?")
     status = str(replies[0].get("text", "")) if replies else ""
-    check("an unlinked number is refused case data and offered linking (§7.4.3)",
+    check("an unlinked number is refused case data and offered linking (§26.4.3)",
           "isn't linked" in status, status[:160])
 
-    # §7.6.3 — a voice note is acknowledged and handed over, never ignored. Its own copy
+    # §26.6.3 — a voice note is acknowledged and handed over, never ignored. Its own copy
     # since S7: "a team member will listen" is the row's promise, and pooling it with the
-    # media the bot merely cannot open lost both the wording and the §7.10 count.
+    # media the bot merely cannot open lost both the wording and the §26.10 count.
     replies = say("", kind="AUDIO")
     audio = str(replies[0].get("text", "")) if replies else ""
-    check("a voice note is acknowledged and handed to a person (§7.6.3)",
+    check("a voice note is acknowledged and handed to a person (§26.6.3)",
           "listen" in audio, audio[:160])
 
     # D57 — the console is what silences the bot, and the only way back.
@@ -569,7 +580,7 @@ def _run_bot_checks(ctx: Ctx) -> None:
         session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
         check("an agent's reply takes the thread off the bot (D57)",
               session.get("mode") == "HUMAN", f"mode={session.get('mode')}")
-        check("the console can see that Meta's reply window is open (§7.7)",
+        check("the console can see that Meta's reply window is open (§26.7)",
               session.get("windowOpen") is True, f"windowOpen={session.get('windowOpen')}")
 
         _run_window_checks(ctx, phone, thread["id"])
@@ -588,7 +599,7 @@ def _run_bot_checks(ctx: Ctx) -> None:
               len(replies) == 1, f"outbound={len(replies)}")
 
     readiness = admin.get("/admin/whatsapp/bot/readiness").json()["data"]
-    check("the launch gate can read the channel's configuration (§7.11)",
+    check("the launch gate can read the channel's configuration (§26.11)",
           readiness.get("whatsappProvider") == "stub"
           and readiness.get("intentProvider") == "stub",
           f"readiness={readiness}")
@@ -607,7 +618,7 @@ def _outbound_to(ctx: Ctx, phone: str) -> list[dict]:
 
 
 def _run_window_checks(ctx: Ctx, phone: str, conversation_id: str) -> None:
-    """Meta's 24-hour service window on a late agent reply (§7.7, WA-41).
+    """Meta's 24-hour service window on a late agent reply (§26.7, WA-41).
 
     Outside the window Meta delivers only an approved template, so the agent's own words
     are **queued** and the `window_reopen` nudge goes instead. Queueing rather than
@@ -626,7 +637,7 @@ def _run_window_checks(ctx: Ctx, phone: str, conversation_id: str) -> None:
              f"/dev/whatsapp/rewind-window answered http {rewound.status_code}")
         return
     session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
-    check("an aged conversation reads as outside Meta's window (§7.7)",
+    check("an aged conversation reads as outside Meta's window (§26.7)",
           session.get("windowOpen") is False, f"windowOpen={session.get('windowOpen')}")
 
     root.delete("/dev/whatsapp/outbox").raise_for_status()
@@ -643,7 +654,7 @@ def _run_window_checks(ctx: Ctx, phone: str, conversation_id: str) -> None:
     # The console has to say so, or the agent believes their message went.
     msgs = admin.get(f"/chat/conversations/{conversation_id}/messages").json()["data"]["items"]
     queued = [m for m in msgs if m.get("pendingChannelDelivery")]
-    check("the queued reply is marked as undelivered in the console (§7.7)",
+    check("the queued reply is marked as undelivered in the console (§26.7)",
           any("survey came back clean" in m["body"] for m in queued),
           f"queued={[m['body'][:40] for m in queued]}")
 
@@ -652,7 +663,7 @@ def _run_window_checks(ctx: Ctx, phone: str, conversation_id: str) -> None:
     admin.post(f"/chat/conversations/{conversation_id}/messages",
                json={"body": "Let me know when you're free to talk."}).raise_for_status()
     outbound = _outbound_to(ctx, phone)
-    check("a second late reply joins the queue without a second nudge (§7.7)",
+    check("a second late reply joins the queue without a second nudge (§26.7)",
           not any("replied to your enquiry" in str(m.get("text", "")) for m in outbound),
           f"outbound={[str(m.get('text'))[:60] for m in outbound]}")
 
@@ -662,7 +673,7 @@ def _run_window_checks(ctx: Ctx, phone: str, conversation_id: str) -> None:
         "fromPhone": phone, "text": "Sorry, just seeing this now",
     }).raise_for_status()
     delivered = [str(m.get("text", "")) for m in _outbound_to(ctx, phone)]
-    check("the customer's reply flushes everything the agent queued (§7.7)",
+    check("the customer's reply flushes everything the agent queued (§26.7)",
           any("survey came back clean" in t for t in delivered)
           and any("free to talk" in t for t in delivered),
           f"outbound={[t[:50] for t in delivered]}")
@@ -677,14 +688,14 @@ def _run_window_checks(ctx: Ctx, phone: str, conversation_id: str) -> None:
 
 
 def _run_media_checks(ctx: Ctx) -> None:
-    """§7.6.3 non-text inbound, end to end (WA-06, WA-38).
+    """§26.6.3 non-text inbound, end to end (WA-06, WA-38).
 
     The regression this pins is small and embarrassing: image kinds were left out of the
     bot's unreadable set on the assumption the upload handoff would catch them, and the
     handoff had not been built — so a customer photographing their survey plan was
     answered with "Sorry, I didn't quite get that".
 
-    The evidence rule (§7.1.6) is the other half. A document sent here is redirected to
+    The evidence rule (§26.1.6) is the other half. A document sent here is redirected to
     the upload page rather than accepted, and the console has to say that what arrived is
     not evidence — which only a live stack, reading the real DTO, can show.
     """
@@ -703,29 +714,29 @@ def _run_media_checks(ctx: Ctx) -> None:
         replies = _outbound_to(ctx, phone)
         return str(replies[0].get("text", "")) if replies else ""
 
-    # A fresh number, so §7.6.1's welcome does not answer the turn we are testing.
+    # A fresh number, so §26.6.1's welcome does not answer the turn we are testing.
     root.post("/dev/whatsapp/inbound", json={"fromPhone": phone, "text": "Hi"}).raise_for_status()
 
     # An unlinked number: the evidence rule still applies, but no upload link — a token
-    # names a customer *and* a case, and a phone number alone identifies neither (§7.4.3).
+    # names a customer *and* a case, and a phone number alone identifies neither (§26.4.3).
     unlinked = send("IMAGE")
-    check("a photo from an unlinked number is answered with the evidence rule (§7.1.6)",
+    check("a photo from an unlinked number is answered with the evidence rule (§26.1.6)",
           "verification file" in unlinked, unlinked[:200])
-    check("an unlinked number is never handed an upload link (§7.4.3)",
+    check("an unlinked number is never handed an upload link (§26.4.3)",
           "/wa/upload/" not in unlinked, unlinked[:200])
 
-    # §7.6.3 row two — a voice note is acknowledged with its own copy, never dropped.
+    # §26.6.3 row two — a voice note is acknowledged with its own copy, never dropped.
     voice = send("AUDIO")
-    check("a voice note is promised a person who will listen (§7.6.3)",
+    check("a voice note is promised a person who will listen (§26.6.3)",
           "listen" in voice, voice[:200])
     session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
-    check("a voice note is counted under its own escalation reason (§7.10)",
+    check("a voice note is counted under its own escalation reason (§26.10)",
           session.get("lastEscalationReason") == "VOICE_NOTE",
           f"reason={session.get('lastEscalationReason')}")
 
-    # §7.6.3 row three — a pin goes to a person.
+    # §26.6.3 row three — a pin goes to a person.
     pin = send("LOCATION")
-    check("a location pin is acknowledged and routed to a person (§7.6.3)",
+    check("a location pin is acknowledged and routed to a person (§26.6.3)",
           bool(pin) and "team member" in pin, pin[:200])
 
     # The console's own view: labelled, and labelled as not-evidence.
@@ -735,7 +746,7 @@ def _run_media_checks(ctx: Ctx) -> None:
     if thread:
         msgs = admin.get(f"/chat/conversations/{thread['id']}/messages").json()["data"]["items"]
         media = [m for m in msgs if m.get("mediaKind")]
-        check("non-text inbound carries what it was, for the console to flag (§7.6.3)",
+        check("non-text inbound carries what it was, for the console to flag (§26.6.3)",
               {m.get("mediaKind") for m in media} >= {"IMAGE", "AUDIO", "LOCATION"},
               f"kinds={[m.get('mediaKind') for m in media]}")
         check("chat media is flagged unofficial — it never enters the file (WA-06)",
@@ -753,13 +764,13 @@ def _run_media_checks(ctx: Ctx) -> None:
     # This customer has several cases by now, so the bot must ask which one rather than
     # guess: an `upload` token authorizes writing to exactly one verification, and
     # attaching a document to the wrong file is worse than a question.
-    check("a document with several open cases is asked about, never guessed (§7.6.3)",
+    check("a document with several open cases is asked about, never guessed (§26.6.3)",
           "which one" in linked.lower(), linked[:240])
     check("the choice lists the customer's own references",
           "VP-" in linked, linked[:240])
 
     linked = say("1")
-    check("a linked customer's photo earns an upload link (§7.6.3, WA-38)",
+    check("a linked customer's photo earns an upload link (§26.6.3, WA-38)",
           "/wa/upload/" in linked, linked[:240])
     check("the upload answer still states the evidence rule",
           "verification file" in linked, linked[:240])
@@ -768,10 +779,10 @@ def _run_media_checks(ctx: Ctx) -> None:
         token = linked.split("/wa/upload/")[1].split()[0].strip()
         holder = client()
         redeemed = holder.post(f"/public/wa/handoff/upload/{token}/redeem")
-        check("the upload link opens the customer's own case (§7.5)",
+        check("the upload link opens the customer's own case (§26.5)",
               redeemed.status_code == 200, f"http {redeemed.status_code}: {redeemed.text[:160]}")
         replay = client().post(f"/public/wa/handoff/upload/{token}/redeem")
-        check("a spent upload link is dead, like every other handoff link (§7.5)",
+        check("a spent upload link is dead, like every other handoff link (§26.5)",
               replay.status_code == 404, f"http {replay.status_code}")
 
     # Leave the customer unlinked, as `_run_linking_checks` does: the 1:1 rule means a
@@ -779,9 +790,9 @@ def _run_media_checks(ctx: Ctx) -> None:
     customer.delete("/channel/whatsapp/link/me")
 
 
-def _link_number(ctx: Ctx, phone: str) -> bool:
-    """Link *phone* to the stage's customer so case-scoped flows can be exercised."""
-    customer = ctx.customer
+def _link_number(ctx: Ctx, phone: str, customer=None) -> bool:
+    """Link *phone* to a customer (the stage's own by default) so case-scoped flows run."""
+    customer = customer if customer is not None else ctx.customer
     started = customer.post("/channel/whatsapp/link/me/start", json={"phoneE164": f"+{phone}"})
     if started.status_code != 200:
         warn("could not link the media number",
@@ -814,9 +825,9 @@ def _run_intake_checks(ctx: Ctx) -> None:
         mine = [m for m in messages if phone[-10:] in str(m.get("to", ""))]
         return str(mine[0].get("text", "")) if mine else ""
 
-    say("Hi")  # §7.6.1 welcome, which answers the turn on its own
+    say("Hi")  # §26.6.1 welcome, which answers the turn on its own
     opening = say("I want to verify a property")
-    check("a stranger can start an intake with no account (§7.3.4, D69)",
+    check("a stranger can start an intake with no account (§26.3.4, D69)",
           "what are you verifying" in opening.lower(), opening[:120])
 
     location_prompt = say("1")
@@ -830,9 +841,9 @@ def _run_intake_checks(ctx: Ctx) -> None:
     check("the tier prompt quotes live prices (D54)", "₦" in tier_prompt, tier_prompt[:160])
 
     handoff = say("2")
-    check("completing the intake hands off with a single-use link (§7.5)",
+    check("completing the intake hands off with a single-use link (§26.5)",
           "/wa/intake/" in handoff, handoff[:200])
-    check("the handoff repeats the payment pledge (§7.1.1)",
+    check("the handoff repeats the payment pledge (§26.1.1)",
           "veriprops.ng" in handoff and "address bar" in handoff, handoff[:200])
 
     token = handoff.split("/wa/intake/")[1].split()[0].strip()
@@ -845,7 +856,7 @@ def _run_intake_checks(ctx: Ctx) -> None:
           refused.status_code in (401, 403), f"http {refused.status_code}")
 
     redeemed = customer.post(f"/wa/intake/{token}/redeem")
-    check("a signed-in customer redeems the intake link (§7.5)",
+    check("a signed-in customer redeems the intake link (§26.5)",
           redeemed.status_code == 200, f"http {redeemed.status_code}: {redeemed.text[:160]}")
     if redeemed.status_code != 200:
         return
@@ -870,15 +881,15 @@ def _run_intake_checks(ctx: Ctx) -> None:
     check("consent is never taken in chat (§5.3)",
           payload.get("consentAccepted") is False)
 
-    # Single-use, like every other §7.5 link.
+    # Single-use, like every other §26.5 link.
     replay = customer.post(f"/wa/intake/{token}/redeem")
-    check("a spent intake link is dead (§7.5)",
+    check("a spent intake link is dead (§26.5)",
           replay.status_code == 404, f"http {replay.status_code}")
 
 
-def _create_payable_case(ctx: Ctx) -> str:
-    """A SUBMITTED verification for the fresh customer — the state a pay link targets."""
-    customer = ctx.customer
+def _create_payable_case(ctx: Ctx, customer=None) -> str:
+    """A SUBMITTED verification for a customer — the state a pay link targets."""
+    customer = customer if customer is not None else ctx.customer
     r = customer.post("/verifications/draft", headers={"Idempotency-Key": idem_key()})
     if r.status_code != 200:
         check("created a payable case for the WhatsApp handoff", False,
@@ -892,7 +903,7 @@ def _create_payable_case(ctx: Ctx) -> str:
             "state": "Lagos", "lga": "Eti-Osa", "landmark": "Near the toll gate",
         },
         "tier": "BASIC", "currency": "NGN",
-        "consent": {"consent_version": CONSENT_VERSION},
+        "consent": {"consent_version": consent_version_for("VERIFICATION_TERMS")},
     })
     check("created a payable case for the WhatsApp handoff", r.status_code == 200,
           f"submit http {r.status_code}: {r.text[:200]}")
@@ -900,7 +911,7 @@ def _create_payable_case(ctx: Ctx) -> str:
 
 
 def _run_consent_checks(ctx: Ctx) -> str:
-    """§7.4.6's two opt-ins and D64's keywords, over the real surfaces (WA-27).
+    """§26.4.6's two opt-ins and D64's keywords, over the real surfaces (WA-27).
 
     Returns the linked number, so the milestone stage can keep using it.
 
@@ -922,22 +933,22 @@ def _run_consent_checks(ctx: Ctx) -> str:
     def consents() -> dict:
         return customer.get("/channel/whatsapp/consent/me").json()["data"]
 
-    # Both unticked before anyone is asked — §7.4.6's required default, and the one place
+    # Both unticked before anyone is asked — §26.4.6's required default, and the one place
     # where "no record" must not be read as anything else.
     initial = consents()
-    check("a customer who has never been asked has consented to nothing (§7.4.6)",
+    check("a customer who has never been asked has consented to nothing (§26.4.6)",
           initial.get("utility") is False and initial.get("marketing") is False,
           f"consents={initial}")
 
     # The pay screen's capture point.
     saved = customer.put("/channel/whatsapp/consent/me?source=PAY_SCREEN",
                          json={"utility": True, "marketing": True})
-    check("the payment step records both opt-ins (§7.4.6)",
+    check("the payment step records both opt-ins (§26.4.6)",
           saved.status_code == 200 and saved.json()["data"]["utility"] is True,
           f"http {saved.status_code}: {saved.text[:160]}")
 
     # The landing's grant-scoped twin refuses a caller holding no grant — the same
-    # not-found posture as every other handoff endpoint (D76, §7.5).
+    # not-found posture as every other handoff endpoint (D76, §26.5).
     ungranted = client().put("/public/wa/handoff/pay/consent",
                              json={"utility": True, "marketing": True})
     check("the landing's consent endpoint refuses a caller with no grant (D76)",
@@ -946,7 +957,7 @@ def _run_consent_checks(ctx: Ctx) -> str:
     if not _link_number(ctx, phone):
         return ""
 
-    # A fresh number: let §7.6.1's welcome have its turn before the keywords are tested.
+    # A fresh number: let §26.6.1's welcome have its turn before the keywords are tested.
     say("Hi")
 
     stopped = say("STOP")
@@ -970,7 +981,7 @@ def _run_consent_checks(ctx: Ctx) -> str:
 
 
 def _run_milestone_checks(ctx: Ctx, phone: str) -> None:
-    """§7.6.2 milestones and §7.7 report delivery, driven by real state (WA-34/WA-35).
+    """§26.6.2 milestones and §26.7 report delivery, driven by real state (WA-34/WA-35).
 
     Every assertion here needs the whole stack standing up at once — a domain event, the
     rule table, the D63 consent ledger, the linked-number lookup and Meta's template shape
@@ -1008,7 +1019,7 @@ def _run_milestone_checks(ctx: Ctx, phone: str) -> None:
     stub_pay(customer, payment["checkoutUrl"])
 
     confirmed = templates_to("payment_confirmed")
-    check("payment confirmation reaches the consented customer as a §7.7 template (WA-34)",
+    check("payment confirmation reaches the consented customer as a §26.7 template (WA-34)",
           bool(confirmed), f"templates={outbound_names()}")
     if confirmed:
         check("the case reference is Meta's first positional body parameter",
@@ -1035,7 +1046,7 @@ def _run_milestone_checks(ctx: Ctx, phone: str) -> None:
     check("approving another role announces no inspection — only FIELD is the inspection",
           not templates_to("inspection_complete"), f"templates={outbound_names()}")
 
-    # ── report_ready (§7.7, D75) ─────────────────────────────────────────────
+    # ── report_ready (§26.7, D75) ─────────────────────────────────────────────
     for role in roles:
         if role not in ("FIELD", "REGISTRY"):
             admin.post(f"/admin/review/{case_id}/tasks/{role}/approve",
@@ -1095,7 +1106,7 @@ def _create_standard_case(ctx: Ctx) -> str:
             "state": "Lagos", "lga": "Eti-Osa", "landmark": "Near the roundabout",
         },
         "tier": "STANDARD", "currency": "NGN",
-        "consent": {"consent_version": CONSENT_VERSION},
+        "consent": {"consent_version": consent_version_for("VERIFICATION_TERMS")},
     })
     check("created a case for the milestone checks", r.status_code == 200,
           f"submit http {r.status_code}: {r.text[:200]}")
@@ -1131,7 +1142,7 @@ def _drive_tasks_to_submitted(ctx: Ctx, case_id: str, roles: list) -> None:
 
 
 def _run_delegate_checks(ctx: Ctx) -> None:
-    """§7.4.5's slim delegate, end to end (Decision O, D67/D77; WA-26).
+    """§26.4.5's slim delegate, end to end (Decision O, D67/D77; WA-26).
 
     The properties that only a live stack can show, and that matter most because this is
     access control:
@@ -1165,13 +1176,13 @@ def _run_delegate_checks(ctx: Ctx) -> None:
 
     # Nobody is authorized yet.
     listed = customer.get(f"/verifications/{case_id}/delegates").json()["data"]
-    check("a case starts with no delegate (§7.4.5)", listed == [], f"delegates={listed}")
+    check("a case starts with no delegate (§26.4.5)", listed == [], f"delegates={listed}")
 
     # The buyer nominates someone. Nothing is visible yet — the row exists to hold the
     # one-per-case slot, and the OTP is what turns it into a grant.
     authorized = customer.post(f"/verifications/{case_id}/delegates",
                                json={"name": "Tunde", "phoneE164": f"+{delegate_phone}"})
-    check("the buyer can authorize a delegate from their own case (§7.4.5)",
+    check("the buyer can authorize a delegate from their own case (§26.4.5)",
           authorized.status_code == 200,
           f"http {authorized.status_code}: {authorized.text[:200]}")
 
@@ -1179,7 +1190,7 @@ def _run_delegate_checks(ctx: Ctx) -> None:
     check("an unconfirmed delegate is listed but not yet verified",
           len(pending) == 1 and pending[0]["verified"] is False, f"delegates={pending}")
 
-    # The welcome answers a fresh number's first turn (§7.6.1), so get it out of the way —
+    # The welcome answers a fresh number's first turn (§26.6.1), so get it out of the way —
     # otherwise this assertion passes on a greeting rather than on the refusal it means to
     # test.
     say(delegate_phone, "Hi")
@@ -1187,7 +1198,7 @@ def _run_delegate_checks(ctx: Ctx) -> None:
     # The refusal (D79) names the delegate route as one of two ways forward, so its *words*
     # legitimately contain "as a delegate". What must be absent is the case and the
     # delegate greeting — the two things that would mean the grant had taken effect early.
-    check("an unverified delegate is told nothing about the case (§7.4.3)",
+    check("an unverified delegate is told nothing about the case (§26.4.3)",
           vid not in unverified_reply
           and "you're receiving updates on" not in unverified_reply,
           unverified_reply[:200])
@@ -1196,12 +1207,12 @@ def _run_delegate_checks(ctx: Ctx) -> None:
     # numbers is worse than a clear answer.
     second = customer.post(f"/verifications/{case_id}/delegates",
                            json={"name": "Bola", "phoneE164": f"+{stranger_phone}"})
-    check("a case takes only one delegate at a time (§7.4.5)",
+    check("a case takes only one delegate at a time (§26.4.5)",
           second.status_code >= 400, f"http {second.status_code}")
 
     confirmed = customer.post(f"/verifications/{case_id}/delegates/confirm",
                               json={"code": TEST_OTP})
-    check("the delegate's number is OTP-verified before anything is shared (§7.4.5)",
+    check("the delegate's number is OTP-verified before anything is shared (§26.4.5)",
           confirmed.status_code == 200,
           f"http {confirmed.status_code}: {confirmed.text[:200]}")
 
@@ -1210,19 +1221,19 @@ def _run_delegate_checks(ctx: Ctx) -> None:
     delegate_reply = say(delegate_phone, "what's the status")
     check("a verified delegate is answered about their case (WA-26)",
           vid in delegate_reply, delegate_reply[:240])
-    check("the bot names their role, so they know what they are (§7.4.5)",
+    check("the bot names their role, so they know what they are (§26.4.5)",
           "delegate" in delegate_reply.lower(), delegate_reply[:240])
-    check("a delegate is never handed a report or upload link (§7.4.5)",
+    check("a delegate is never handed a report or upload link (§26.4.5)",
           "/wa/" not in delegate_reply and "http" not in delegate_reply,
           delegate_reply[:240])
     check("a delegate is not invited to sign in — they have no account to sign into",
           "sign in" not in delegate_reply.lower(), delegate_reply[:240])
 
-    # The social-engineering script §7.4.5 exists to defeat. A fresh number, so §7.6.1's
+    # The social-engineering script §26.4.5 exists to defeat. A fresh number, so §26.6.1's
     # welcome has to have its turn before the question being tested gets answered.
     say(stranger_phone, "Hi")
     stranger_reply = say(stranger_phone, "what's the status of my brother's verification")
-    check("a stranger asking about a case is told nothing about it (§7.4.5)",
+    check("a stranger asking about a case is told nothing about it (§26.4.5)",
           vid not in stranger_reply, stranger_reply[:240])
     check("and is pointed at the legitimate routes rather than stonewalled",
           "delegate" in stranger_reply.lower(), stranger_reply[:240])
@@ -1235,7 +1246,7 @@ def _run_delegate_checks(ctx: Ctx) -> None:
     stub_pay(customer, payment["checkoutUrl"])
 
     delegate_templates = templates_to(delegate_phone, "delegate_status")
-    check("a milestone reaches the delegate as the §7.7 delegate template (WA-26)",
+    check("a milestone reaches the delegate as the §26.7 delegate template (WA-26)",
           bool(delegate_templates),
           f"templates={[m.get('templateName') for m in _outbound_to(ctx, delegate_phone)]}")
     if delegate_templates:
@@ -1264,7 +1275,7 @@ def _run_delegate_checks(ctx: Ctx) -> None:
     # resolved at lookup time rather than stored on anything: the number that was a
     # delegate a moment ago now gets the stranger's answer.
     revoked_reply = say(delegate_phone, "what's the status")
-    check("a revoked delegate immediately stops resolving as one (§7.4.5)",
+    check("a revoked delegate immediately stops resolving as one (§26.4.5)",
           vid not in revoked_reply
           and "you're receiving updates on" not in revoked_reply,
           revoked_reply[:200])
@@ -1272,13 +1283,13 @@ def _run_delegate_checks(ctx: Ctx) -> None:
     # And the slot is free again, which a plain unique constraint would have prevented.
     replacement = customer.post(f"/verifications/{case_id}/delegates",
                                 json={"name": "Bola", "phoneE164": f"+{stranger_phone}"})
-    check("a revoked delegate does not block a replacement (§7.4.5)",
+    check("a revoked delegate does not block a replacement (§26.4.5)",
           replacement.status_code == 200,
           f"http {replacement.status_code}: {replacement.text[:200]}")
 
 
 def _run_pay_report_handoff_checks(ctx: Ctx) -> None:
-    """§7.3.4's pay and report handoffs, asked for in words (WA-17, §7.4.2).
+    """§26.3.4's pay and report handoffs, asked for in words (WA-17, §26.4.2).
 
     Only a live stack proves this one, and the gap it closes was invisible to unit tests
     precisely because every piece existed and passed on its own: the capability matrix
@@ -1301,11 +1312,11 @@ def _run_pay_report_handoff_checks(ctx: Ctx) -> None:
         replies = _outbound_to(ctx, phone)
         return str(replies[0].get("text", "")) if replies else ""
 
-    # An unlinked number asking to pay gets no link — the §7.4.3 rule, on the surface
+    # An unlinked number asking to pay gets no link — the §26.4.3 rule, on the surface
     # where breaking it would cost someone money rather than privacy.
     say("Hi")
     unlinked = say("how do I pay?")
-    check("an unlinked number is never handed a payment link (§7.4.3)",
+    check("an unlinked number is never handed a payment link (§26.4.3)",
           "/wa/pay/" not in unlinked, unlinked[:200])
     check("...and is told how to link rather than left with nothing",
           "link my account" in unlinked.lower(), unlinked[:200])
@@ -1318,16 +1329,16 @@ def _run_pay_report_handoff_checks(ctx: Ctx) -> None:
         return
 
     pay_reply = say("I want to pay")
-    check("a linked customer with an unpaid case gets a pay link (§7.3.4, WA-17)",
+    check("a linked customer with an unpaid case gets a pay link (§26.3.4, WA-17)",
           "/wa/pay/" in pay_reply, pay_reply[:240])
-    # §7.1.1 — the pledge rides every payment handoff, and this is the message an
+    # §26.1.1 — the pledge rides every payment handoff, and this is the message an
     # impersonator would imitate most precisely.
-    check("the pay handoff carries the §7.1.1 payment pledge",
+    check("the pay handoff carries the §26.1.1 payment pledge",
           "veriprops.ng" in pay_reply, pay_reply[:240])
 
     token = pay_reply.split("/wa/pay/")[1].split()[0].strip() if "/wa/pay/" in pay_reply else ""
     redeemed = client().post(f"/public/wa/handoff/pay/{token}/redeem") if token else None
-    check("the pay link the bot minted actually opens its landing (§7.4.2)",
+    check("the pay link the bot minted actually opens its landing (§26.4.2)",
           redeemed is not None and redeemed.status_code == 200,
           f"http {redeemed.status_code if redeemed is not None else 'no token'}: "
           f"{redeemed.text[:200] if redeemed is not None else pay_reply[:200]}")
@@ -1344,7 +1355,7 @@ def _run_pay_report_handoff_checks(ctx: Ctx) -> None:
         return
 
     report_reply = say("send me my report")
-    check("a delivered case earns a report link on request (§7.4.2)",
+    check("a delivered case earns a report link on request (§26.4.2)",
           "/wa/report/" in report_reply, report_reply[:240])
     # One link, not a "which one?" — the unpaid case has no report, so it must not be on
     # the list. If eligibility leaked, the bot would ask the customer to choose between a
@@ -1355,7 +1366,7 @@ def _run_pay_report_handoff_checks(ctx: Ctx) -> None:
 
 
 def _run_channel_analytics_checks(ctx: Ctx) -> None:
-    """§7.10's seven metrics, against traffic this stage actually generated (WA-43).
+    """§26.10's seven metrics, against traffic this stage actually generated (WA-43).
 
     Why this belongs in the drive-through rather than only in unit tests: a metric is
     worthless if it does not *move*. Every count here has a recorder call somewhere in the
@@ -1367,13 +1378,13 @@ def _run_channel_analytics_checks(ctx: Ctx) -> None:
     admin = ctx.admin
 
     panel = admin.get("/admin/analytics/whatsapp")
-    check("the §7.10 channel analytics endpoint answers for an admin (WA-43)",
+    check("the §26.10 channel analytics endpoint answers for an admin (WA-43)",
           panel.status_code == 200, f"http {panel.status_code}: {panel.text[:200]}")
     if panel.status_code != 200:
         return
     data = panel.json()["data"]
 
-    check("the window every figure covers is stated (§7.10)",
+    check("the window every figure covers is stated (§26.10)",
           isinstance(data.get("windowDays"), int) and data["windowDays"] > 0,
           f"windowDays={data.get('windowDays')}")
 
@@ -1381,21 +1392,21 @@ def _run_channel_analytics_checks(ctx: Ctx) -> None:
     check("conversations this stage drove were counted as enquiries",
           data.get("enquiries", 0) > 0, f"enquiries={data.get('enquiries')}")
 
-    # Escalations: the media checks sent a voice note, which §7.6.3 routes to a person
+    # Escalations: the media checks sent a voice note, which §26.6.3 routes to a person
     # under its own reason — so both the count and the breakdown must be non-empty.
     reasons = {row["label"]: row["count"] for row in data.get("escalationsByReason", [])}
-    check("escalations were counted with their §7.10 reasons",
+    check("escalations were counted with their §26.10 reasons",
           data.get("escalations", 0) > 0 and bool(reasons), f"reasons={reasons}")
     check("a voice note is counted under its own reason, not lumped with other media",
           "VOICE_NOTE" in reasons, f"reasons={reasons}")
 
     # Voice-note volume comes off the inbound journal, not the escalation reason: a voice
     # note arriving on a thread already in HUMAN mode never reaches the bot.
-    check("voice-note volume is counted (§7.10, v1.1 trigger data)",
+    check("voice-note volume is counted (§26.10, v1.1 trigger data)",
           data.get("voiceNotes", 0) > 0, f"voiceNotes={data.get('voiceNotes')}")
 
     # The seam: `_run_intake_checks` ran a chat intake through to a seeded draft.
-    check("a completed chat intake was counted (§7.10 seam denominator)",
+    check("a completed chat intake was counted (§26.10 seam denominator)",
           data.get("intakeStarted", 0) > 0 and data.get("intakeCompleted", 0) > 0,
           f"started={data.get('intakeStarted')} completed={data.get('intakeCompleted')}")
 
@@ -1410,17 +1421,17 @@ def _run_channel_analytics_checks(ctx: Ctx) -> None:
     # nothing above does — so `direct` is the honest expectation, and its presence proves
     # unattributed demand is counted rather than dropped.
     codes = {row["label"] for row in data.get("enquiriesByPageCode", [])}
-    check("enquiries with no widget marker are still counted, under `direct` (§7.10)",
+    check("enquiries with no widget marker are still counted, under `direct` (§26.10)",
           "direct" in codes, f"codes={sorted(codes)}")
 
-    # The §7.4.1 marker, read back out of a real inbound message (D85).
+    # The §26.4.1 marker, read back out of a real inbound message (D85).
     marked_phone = f"23480{uuid.uuid4().int % 10**8:08d}"
     ctx.root.post("/dev/whatsapp/inbound", json={
         "fromPhone": marked_phone, "text": "Hi Veriprops! [ref: web-pricing]",
     }).raise_for_status()
     attributed = admin.get("/admin/analytics/whatsapp").json()["data"]
     marked = {row["label"]: row["count"] for row in attributed.get("enquiriesByPageCode", [])}
-    check("a widget page code is read off the customer's first message (§7.4.1, D85)",
+    check("a widget page code is read off the customer's first message (§26.4.1, D85)",
           marked.get("web-pricing", 0) > 0, f"codes={marked}")
     # ...and stripped, so the classifier and the console see what the customer wrote.
     welcomed = _outbound_to(ctx, marked_phone)
@@ -1430,7 +1441,7 @@ def _run_channel_analytics_checks(ctx: Ctx) -> None:
 
     # Meta's verdict on the number — synced through the stub, which never reaches Meta.
     synced = admin.post("/admin/analytics/whatsapp/quality/sync")
-    check("the Meta quality rating syncs into the registry (§7.10, D81)",
+    check("the Meta quality rating syncs into the registry (§26.10, D81)",
           synced.status_code == 200, f"http {synced.status_code}: {synced.text[:200]}")
     if synced.status_code == 200:
         health = synced.json()["data"].get("numberHealth") or {}
@@ -1446,13 +1457,13 @@ def _run_channel_analytics_checks(ctx: Ctx) -> None:
 
 
 def _run_failure_drill_checks(ctx: Ctx) -> None:
-    """§7.6.5's fallback, drilled rather than asserted (§7.11 launch gate, WA-40).
+    """§26.6.5's fallback, drilled rather than asserted (§26.11 launch gate, WA-40).
 
     The launch checklist says "failure fallback tested (kill the bot, observe the auto-reply
     + alert)", and until now that line was carried by unit tests raising inside a mock. What
     those cannot show is that a **real** failure in a running process reaches the warm
     handover at all, rather than becoming a 500 in the webhook, a Meta retry, a throttle,
-    and a customer left with silence — which is the exact outcome §7.6.5 exists to rule out.
+    and a customer left with silence — which is the exact outcome §26.6.5 exists to rule out.
 
     So one real turn is made to fail, through `POST /dev/whatsapp/fail-next-turn`, and both
     halves of the promise are checked: the customer gets an apology and a person, and an
@@ -1469,17 +1480,17 @@ def _run_failure_drill_checks(ctx: Ctx) -> None:
         replies = _outbound_to(ctx, phone)
         return str(replies[0].get("text", "")) if replies else ""
 
-    # Get the §7.6.1 welcome out of the way, so the failing turn is an ordinary one.
+    # Get the §26.6.1 welcome out of the way, so the failing turn is an ordinary one.
     say("Hi")
 
     before = admin.get("/notifications?page=0&page_size=1").json()["data"]["meta"]["total"]
 
     armed = root.post("/dev/whatsapp/fail-next-turn")
-    check("the failure drill can be armed outside production (§7.11)",
+    check("the failure drill can be armed outside production (§26.11)",
           armed.status_code == 200, f"http {armed.status_code}: {armed.text[:160]}")
 
     failed_turn = say("how much for a Lagos land check?")
-    check("a failing bot turn still answers the customer (§7.6.5, WA-40)",
+    check("a failing bot turn still answers the customer (§26.6.5, WA-40)",
           bool(failed_turn), "the customer got nothing back")
     check("...with an apology and a person, not an error",
           "technical" in failed_turn.lower(), failed_turn[:200])
@@ -1491,7 +1502,7 @@ def _run_failure_drill_checks(ctx: Ctx) -> None:
           "team member" in failed_turn.lower(), failed_turn[:200])
 
     after = admin.get("/notifications?page=0&page_size=1").json()["data"]["meta"]["total"]
-    check("an admin is alerted that the bot pipeline failed (§7.6.5)",
+    check("an admin is alerted that the bot pipeline failed (§26.6.5)",
           after > before, f"notifications {before} -> {after}")
 
     # One-shot: the next message is answered normally. Without this the drill could leave
@@ -1500,11 +1511,137 @@ def _run_failure_drill_checks(ctx: Ctx) -> None:
     check("the fault is one-shot — the next turn is answered normally",
           "technical" not in recovered.lower() and bool(recovered), recovered[:200])
 
-    # §7.10 counts it: a spike in PIPELINE_FAILURE is the operational signal that the
+    # §26.10 counts it: a spike in PIPELINE_FAILURE is the operational signal that the
     # channel is degraded, and it is the reason the escalation reasons are broken out.
     reasons = {
         row["label"]: row["count"]
         for row in admin.get("/admin/analytics/whatsapp").json()["data"]["escalationsByReason"]
     }
-    check("the failure is counted under PIPELINE_FAILURE (§7.10)",
+    check("the failure is counted under PIPELINE_FAILURE (§26.10)",
           reasons.get("PIPELINE_FAILURE", 0) > 0, f"reasons={reasons}")
+
+
+def _run_channel_erasure_checks(ctx: Ctx) -> None:
+    """§26.8 compliance on a live stack: the consent ledger exports, and erasure reaches
+    the channel (WA-42).
+
+    Both halves shipped with unit tests and neither had ever been driven end to end, which
+    is the wrong way round for the two claims a regulator actually asks us to demonstrate.
+    A mock proves `PiiPseudonymiser` issues the UPDATEs; it cannot prove those UPDATEs reach
+    the rows the *bot* reads on the next message — and the channel keys on a phone number
+    rather than a user id, so "erased" and "still answers as a linked customer" are entirely
+    capable of being true at the same time.
+
+    Runs last in the stage, after `_run_channel_analytics_checks`: erasure revokes a link
+    and drops a bot session, which would move §26.10's numbers out from under the assertions
+    that read them.
+
+    The subject is a purpose-made account rather than the stage's customer, whose case,
+    delegate and linked number the checks above still depend on.
+    """
+    root, admin = ctx.root, ctx.admin
+    phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+
+    subject, subject_email = signup_fresh_user("wa-erasable", first_name="Nkem", last_name="Obi")
+
+    def say(text: str) -> str:
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        root.post("/dev/whatsapp/inbound",
+                  json={"fromPhone": phone, "text": text}).raise_for_status()
+        replies = _outbound_to(ctx, phone)
+        return str(replies[0].get("text", "")) if replies else ""
+
+    def pack_for(case_id: str) -> str:
+        return admin.get(f"/admin/audit/verifications/{case_id}/export").text
+
+    case_id = _create_payable_case(ctx, customer=subject)
+    if not case_id:
+        return
+
+    # ── §19.3: the consent ledger, before anyone is asked ─────────────────────────
+    # Absence must read as absence. A pack that emitted "utility: false" for a customer
+    # nobody ever asked would be asserting an event that never happened — which is exactly
+    # the claim a dispute would turn on.
+    check("a customer never asked contributes no consent row to the pack (§26.8)",
+          "WHATSAPP_CONSENT" not in pack_for(case_id))
+
+    granted = subject.put("/channel/whatsapp/consent/me?source=PAY_SCREEN",
+                          json={"utility": True, "marketing": False})
+    check("the erasure subject's utility opt-in is recorded (§26.4.6)",
+          granted.status_code == 200, f"http {granted.status_code}: {granted.text[:160]}")
+
+    # Both controls are written on every save (they are always shown together, so an
+    # untouched one must not be indistinguishable from one that was never rendered), which
+    # is why declining marketing produces a REVOKED row rather than no row: the customer
+    # was asked and said no, and §26.8 wants that answer timestamped too.
+    pack = pack_for(case_id)
+    consent_lines = [ln for ln in pack.splitlines() if ln.startswith("WHATSAPP_CONSENT")]
+    check("the §26.4.6 consent ledger exports in the §19.3 audit pack (WA-42)",
+          len(consent_lines) == 2, f"rows={len(consent_lines)}")
+    utility = next((ln for ln in consent_lines if "UTILITY" in ln), "")
+    marketing = next((ln for ln in consent_lines if "MARKETING" in ln), "")
+    check("...the opt-in that was given reads GRANTED", "GRANTED" in utility, utility[:200])
+    check("...the one that was declined reads REVOKED, not absent",
+          "REVOKED" in marketing, marketing[:200])
+    check("...each carrying the timestamp pair that *is* the record, and its capture point",
+          "granted_at=" in utility and "PAY_SCREEN" in utility, utility[:200])
+
+    # ── Give the erasure something to find across the channel ─────────────────────
+    if not _link_number(ctx, phone, customer=subject):
+        return
+
+    say("Hi")                              # opens the conversation + bot session
+    say("I want to verify a property")     # a flow, so the session holds context
+    say("1")
+    intake_prompt = say("7 Bourdillon Road, Ikoyi")
+    check("the erasure subject leaves a half-finished intake behind (§26.8)",
+          bool(intake_prompt), intake_prompt[:120])
+
+    # A status question, phrased so it reaches CHECK_STATUS rather than falling through to
+    # the unmatched counter — the same question is asked again after the erasure, and the
+    # comparison is only worth anything if both turns reach the same flow.
+    linked_reply = say("what is the status of my case?")
+    check("the number answers as a linked customer before erasure",
+          "link my account" not in linked_reply.lower(), linked_reply[:200])
+
+    # ── §4.11 erasure, executed ───────────────────────────────────────────────────
+    req = subject.post("/users/me/erasure-requests",
+                       json={"reason": "Erase my WhatsApp history too"}).json()["data"]
+    admin.post(f"/admin/erasure-requests/{req['id']}/approve").raise_for_status()
+    executed = admin.post(f"/admin/erasure-requests/{req['id']}/execute")
+    check("the WhatsApp-linked subject's erasure executes (§4.11)",
+          executed.status_code == 200
+          and executed.json()["data"]["status"] == "EXECUTED",
+          f"http {executed.status_code}: {executed.text[:200]}")
+    if executed.status_code != 200:
+        return
+
+    # The audit row is keyed on the erasure request, which is the only id that tells this
+    # subject's erasure apart from the one `stage_compliance` executed earlier in the run.
+    actions = admin.get("/admin/audit/actions",
+                        params={"action_types": ["DATA_ERASURE_EXECUTED"]}).json()["data"]
+    audit_row = next((a for a in actions["items"] if a.get("resourceId") == req["id"]), None)
+    surfaces = (audit_row or {}).get("details", {}).get("surfaces", [])
+    # Named individually because a partial scrub is the failure mode that looks like
+    # success: the account is gone, and the number is still readable.
+    for table in ("whatsapp_links", "whatsapp_bot_sessions", "whatsapp_inbound_messages"):
+        check(f"erasure reaches {table} (§26.8, WA-42)", table in surfaces, f"surfaces={surfaces}")
+
+    # ── The proof that matters: what the bot does on the next message ─────────────
+    # `whatsapp_links.phone_e164` going to NULL is not an implementation detail here — it
+    # is the difference between a severed identity and one the channel can still resolve.
+    # The erasure dropped the bot session too, so this number is new again and §26.6.1's
+    # welcome answers the first turn on its own — the question has to be asked after it.
+    greeting = say("Hello")
+    check("an erased number starts a fresh conversation, not a resumed one (§26.8)",
+          "welcome" in greeting.lower(), greeting[:200])
+    after = say("what is the status of my case?")
+    check("the erased number is a stranger to the bot again (§26.8)",
+          "link my account" in after.lower(), after[:240])
+
+    # Identity severed, content retained — the other half of §26.8's line, and the half an
+    # over-eager scrub would break by deleting the case trail with the person.
+    check("the case's audit trail survives the erasure — content is retained (§26.8)",
+          "TRANSITION" in pack_for(case_id))
+    check("the erased subject can no longer authenticate (§4.11)",
+          login_status(subject_email, QA_PASSWORD) != 200)

@@ -76,7 +76,7 @@ class ConversationRepo(
         """The thread for a WhatsApp number, whether or not it belongs to an account yet.
 
         Keyed on the number rather than a user because an enquiry usually arrives before
-        we know who is sending it (§7.4.3/§7.4.4).
+        we know who is sending it (§26.4.3/§26.4.4).
         """
         stmt = select(Conversation).where(
             and_(
@@ -88,7 +88,7 @@ class ConversationRepo(
         return (await self._session.execute(stmt)).scalars().first()
 
     async def list_admin_inbox_threads(self) -> List[Conversation]:
-        """Every thread the admin console is responsible for (§N.3, §7.3.3).
+        """Every thread the admin console is responsible for (§N.3, §26.3.3).
 
         Two groups: verification-scoped threads (customer↔admin, admin↔agent) and every
         WhatsApp thread, which is mediated by an admin by definition (Decision K) even

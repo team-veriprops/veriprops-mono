@@ -40,7 +40,7 @@ const STATUS_TONE: Record<string, StatusTone> = {
   ON_HOLD: "warning",
   FROZEN: "warning",
   FLAGGED: "warning",
-  // Meta template review states (PRD §7.7). NOT_FOUND is ours, not Meta's: declared here
+  // Meta template review states (PRD §26.7). NOT_FOUND is ours, not Meta's: declared here
   // and never submitted — the state the launch gate is really asking about, so it reads
   // as needing attention rather than as a failure.
   NOT_FOUND: "warning",

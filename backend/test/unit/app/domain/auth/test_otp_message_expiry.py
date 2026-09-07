@@ -69,7 +69,7 @@ class TestOtpExpiresAt:
 
 
 class TestOtpChannelRouting:
-    """§7.4.4: the linking code goes over WhatsApp first.
+    """§26.4.4: the linking code goes over WhatsApp first.
 
     WhatsApp is the primary transport because the number being linked *is* a WhatsApp
     number, so a code arriving there is the most direct proof of control. SMS is the
@@ -97,7 +97,7 @@ class TestOtpChannelRouting:
 
 
 class TestWhatsAppSmsFallback:
-    """§7.4.4 / D60 — WhatsApp first, SMS to the same number if that fails.
+    """§26.4.4 / D60 — WhatsApp first, SMS to the same number if that fails.
 
     A WhatsApp send can fail for reasons that have nothing to do with the customer: an
     unapproved template, a Meta outage, a number with no WhatsApp account. Without the

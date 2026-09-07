@@ -4,7 +4,7 @@ import WaHandoffLanding from "@components/website/handoff/WaHandoffLanding";
 import { HandoffIntent } from "@/types/handoff";
 import { buildMetadata } from "@lib/seo";
 
-// A single-use capability link from a WhatsApp conversation (§7.4.2) — never indexable.
+// A single-use capability link from a WhatsApp conversation (§26.4.2) — never indexable.
 export const metadata: Metadata = buildMetadata({
   title: "Upload Your Documents",
   description: "Add documents to your Veriprops verification.",

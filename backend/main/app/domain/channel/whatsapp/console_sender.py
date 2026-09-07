@@ -1,4 +1,4 @@
-"""How an agent's console reply leaves the building (PRD §7.3.3, §7.7, WA-12/WA-41).
+"""How an agent's console reply leaves the building (PRD §26.3.3, §26.7, WA-12/WA-41).
 
 The outbound half of Decision K. Inbound WhatsApp already joins the ordinary conversation
 pipeline and lands in the admin console; this is what carries a reply typed there back to
@@ -17,7 +17,7 @@ replying two days later gets:
 
 Queueing rather than dropping matters because the thread is sticky-`HUMAN` by then (D57):
 the bot will not answer the customer's "hi" either, so a dropped reply leaves them with a
-nudge followed by silence — the §7.6.5 failure this channel exists to avoid.
+nudge followed by silence — the §26.6.5 failure this channel exists to avoid.
 
 **One nudge per closed-window episode.** An agent typing three messages must not send three
 templates; the second and third simply join the queue behind the first.
@@ -58,7 +58,7 @@ from main.appodus_utils.integrations.messaging.service import MessagingService
 logger: Logger = di["logger"]
 
 # What `window_reopen` calls a customer we cannot name. A number with no linked account is
-# the ordinary case for a §7.8 enquiry thread, and "Hello there" reads as intended where a
+# the ordinary case for a §26.8 enquiry thread, and "Hello there" reads as intended where a
 # blank or a raw phone number would read as broken.
 ANONYMOUS_FIRST_NAME = "there"
 
@@ -103,7 +103,7 @@ class WhatsAppConsoleSender:
             await self._send_window_reopen(phone_e164)
 
     async def flush(self, conversation: Conversation) -> None:
-        """Send everything queued on this thread, oldest first (§7.7).
+        """Send everything queued on this thread, oldest first (§26.7).
 
         Called when the customer's own message reopens the window. Order is preserved
         because the agent wrote these as a sequence; delivering them out of order would
@@ -163,7 +163,7 @@ class WhatsAppConsoleSender:
             return False
 
     async def _send_window_reopen(self, phone_e164: str) -> None:
-        """The §7.7 nudge that invites the customer back so the window reopens."""
+        """The §26.7 nudge that invites the customer back so the window reopens."""
         if not settings.ENABLE_OUT_MESSAGING:
             logger.warning(
                 "window_reopen not dispatched (ENABLE_OUT_MESSAGING=False): "
@@ -186,7 +186,7 @@ class WhatsAppConsoleSender:
         """Who the template greets.
 
         Identity comes through `WhatsAppLinkService.resolve_user_for_phone` — the channel's
-        single identity lookup (§7.4.3), never a direct read of `whatsapp_links` — and an
+        single identity lookup (§26.4.3), never a direct read of `whatsapp_links` — and an
         unlinked number is greeted neutrally rather than not at all.
         """
         user_id: Optional[str] = await self._whatsapp_link_service.resolve_user_for_phone(

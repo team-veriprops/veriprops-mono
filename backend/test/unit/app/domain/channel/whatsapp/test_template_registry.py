@@ -1,7 +1,7 @@
-"""WhatsAppTemplateService (PRD §7.7, WA-15/WA-41).
+"""WhatsAppTemplateService (PRD §26.7, WA-15/WA-41).
 
 The registry exists to answer one operational question honestly: can we actually send
-this yet? §7.11 gates launch on it, so the tests that matter are the ones about *not*
+this yet? §26.11 gates launch on it, so the tests that matter are the ones about *not*
 being optimistic — a template Meta has never seen, or one whose status we cannot read,
 must never read as approved.
 
@@ -134,7 +134,7 @@ class TestSync(object):
         assert all(r.status == WhatsAppTemplateStatus.NOT_FOUND.value for r in rows.values())
 
     async def test_an_unreadable_status_is_never_read_as_approved(self, monkeypatch):
-        # Optimism here would let the §7.11 gate pass on a template that cannot be sent.
+        # Optimism here would let the §26.11 gate pass on a template that cannot be sent.
         svc, rows = _service()
         monkeypatch.setattr(
             template_service_module, "whatsapp_template_directory",

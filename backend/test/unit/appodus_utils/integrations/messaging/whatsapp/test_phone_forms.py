@@ -1,4 +1,4 @@
-"""Phone-number forms on the WhatsApp seam (PRD §7.3.1).
+"""Phone-number forms on the WhatsApp seam (PRD §26.3.1).
 
 Meta identifies a participant by digits-only `wa_id`; the rest of the app keys identity
 on E.164. The two are one character apart, so the conversion is pinned rather than

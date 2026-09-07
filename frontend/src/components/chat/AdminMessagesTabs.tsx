@@ -15,7 +15,7 @@ const TABS: { id: MessagesTab; label: string; icon: typeof ShieldAlert }[] = [
 ];
 
 /**
- * The admin messaging console (PRD §11.2, §7.3.3).
+ * The admin messaging console (PRD §11.2, §26.3.3).
  *
  * Two jobs on one page because they are the same job seen from two ends: the review queue
  * holds messages the fraud scan stopped, and the WhatsApp inbox is where the conversations

@@ -84,15 +84,15 @@ _RESET_TABLES = [
     # consent_documents they point at are preserved). Cleared so seed() can re-record them
     # for the fresh users and the surviving super-admin without stacking duplicates.
     "user_consents",
-    # WhatsApp messaging consent (§7.4.6) — keyed on the user, so a row outliving its
+    # WhatsApp messaging consent (§26.4.6) — keyed on the user, so a row outliving its
     # account is dead data. The rest of the channel's tables are deliberately left alone:
     # `whatsapp_links` holds a unique number per row, and the drive-through takes a fresh
     # number per scenario rather than depending on a reset to release one.
     "whatsapp_consents",
-    # §7.4.5 delegations are per-verification, and `verifications` is cleared above — a
+    # §26.4.5 delegations are per-verification, and `verifications` is cleared above — a
     # surviving row would point at a case that no longer exists.
     "case_delegates",
-    # §7.10 analytics facts are per-run scenario data. Cleared so a drive-through asserting
+    # §26.10 analytics facts are per-run scenario data. Cleared so a drive-through asserting
     # "these counts moved" is reading its own traffic rather than the previous run's — a
     # metric that only ever accumulates would pass on stale rows even if every recorder
     # call site had been deleted. `whatsapp_number_health` is *not* cleared: it caches
@@ -418,7 +418,7 @@ class DevSeedService:
         )).first()
         return {"rewound": row is not None, "id": row.id.hex if row else None}
 
-    # ── WhatsApp channel (PRD §7, D43) ────────────────────────────
+    # ── WhatsApp channel (PRD §26, D43) ────────────────────────────
 
     async def inject_whatsapp_inbound(
         self,
@@ -461,7 +461,7 @@ class DevSeedService:
     async def issue_handoff_token(
         self, case_id: str, customer_id: str, intent: str
     ) -> Dict[str, Any]:
-        """Mint a §7.5 handoff link without going through a bot conversation.
+        """Mint a §26.5 handoff link without going through a bot conversation.
 
         The bot flows that normally issue these land in later slices, so this is how an
         automated run reaches the landing pages. It calls the real service, so ownership
@@ -495,7 +495,7 @@ class DevSeedService:
         return {"cleared": True}
 
     async def arm_whatsapp_bot_failure(self) -> dict:
-        """Arm the §7.6.5 failure drill: the next bot turn raises (§7.11 launch gate).
+        """Arm the §26.6.5 failure drill: the next bot turn raises (§26.11 launch gate).
 
         The gate asks someone to "kill the bot and observe the auto-reply + alert", and
         this is the smallest honest way to do that on a running stack — one real turn takes
@@ -506,7 +506,7 @@ class DevSeedService:
         return {"armed": FaultPoint.WHATSAPP_BOT_TURN.value}
 
     async def rewind_whatsapp_window(self, phone: str, hours: int = 25) -> Dict[str, Any]:
-        """Age a number's inbound journal so Meta's 24-hour window reads as closed (§7.7).
+        """Age a number's inbound journal so Meta's 24-hour window reads as closed (§26.7).
 
         The closed-window path — `window_reopen` instead of free text, and the reply queue
         behind it — is otherwise unreachable from a test that runs in a few seconds, since

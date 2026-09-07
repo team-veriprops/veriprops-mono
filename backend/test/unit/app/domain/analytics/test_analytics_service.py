@@ -127,9 +127,9 @@ class TestAgentTrends:
         assert trends.points[0].avg_quality == 90.0
 
 
-# ─── WhatsApp channel (§7.10, WA-43) ──────────────────────────────
+# ─── WhatsApp channel (§26.10, WA-43) ──────────────────────────────
 #
-# Seven metrics, four of them rates. The tests below are mostly about denominators: §7.10's
+# Seven metrics, four of them rates. The tests below are mostly about denominators: §26.10's
 # headline number is a ratio, and every way of getting a ratio wrong is a way of reporting
 # that the channel is working when it is not.
 
@@ -209,7 +209,7 @@ class TestDemandAndFlow:
 
 class TestEscalation:
     async def test_the_rate_and_the_reasons_are_both_reported(self):
-        # §7.10 asks for both: a channel escalating on guardrail topics is working as
+        # §26.10 asks for both: a channel escalating on guardrail topics is working as
         # designed, while one escalating on unmatched intents names the flow to build.
         svc = _channel_service(
             counts={
@@ -268,7 +268,7 @@ class TestPlatformSignals:
 
     async def test_voice_note_volume_is_counted_off_the_inbound_journal(self):
         # Not off the escalation reason: a voice note arriving on a thread already in
-        # HUMAN mode never reaches the bot, and §7.10 wants how many arrived.
+        # HUMAN mode never reaches the bot, and §26.10 wants how many arrived.
         svc = _channel_service(audio=7)
 
         result = await svc.whatsapp_channel(None)

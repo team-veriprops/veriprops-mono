@@ -1,4 +1,4 @@
-"""Handoff token domain (PRD §7.5, §7.4.2).
+"""Handoff token domain (PRD §26.5, §26.4.2).
 
 A `jti` ledger. The token itself is stateless (a signed JWT); this table is what makes it
 **single-use** — a redemption claims its nonce here, and a second attempt collides.
@@ -16,7 +16,7 @@ from main.appodus_utils.db.models import UTCDateTime
 
 
 class HandoffIntent(str, enum.Enum):
-    """The one action a token authorizes (PRD §7.4.2, §7.4.4).
+    """The one action a token authorizes (PRD §26.4.2, §26.4.4).
 
     Deliberately closed and small: a token names an intent and a subject, and nothing in
     the system will honour it for anything else.
@@ -59,7 +59,7 @@ class HandoffTokenRedemption(BaseEntity):
     # trail when the redemption names no case.
     phone_e164 = Column(String(32), nullable=True)
     redeemed_at = Column(UTCDateTime, nullable=False)
-    # Kept for the §7.11 pen-check trail: which client actually burned the link.
+    # Kept for the §26.11 pen-check trail: which client actually burned the link.
     redeemed_ip = Column(String(45), nullable=True)
 
     __table_args__ = (

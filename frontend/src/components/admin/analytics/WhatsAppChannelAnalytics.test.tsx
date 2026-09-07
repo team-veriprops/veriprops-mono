@@ -43,7 +43,7 @@ function render(data: ChannelAnalytics, overrides = {}) {
   return renderToStaticMarkup(<WhatsAppChannelAnalytics />);
 }
 
-describe("WhatsAppChannelAnalytics (§7.10, WA-43)", () => {
+describe("WhatsAppChannelAnalytics (§26.10, WA-43)", () => {
   it("names the window every figure covers", () => {
     // Four of the seven metrics are rates, and a rate whose period is not stated invites
     // the reader to assume it is all-time.
@@ -52,7 +52,7 @@ describe("WhatsAppChannelAnalytics (§7.10, WA-43)", () => {
   });
 
   it("shows the counts behind the seam conversion rate", () => {
-    // §7.10's headline. 60% over three intakes and 60% over three hundred call for
+    // §26.10's headline. 60% over three intakes and 60% over three hundred call for
     // opposite decisions, so the percentage alone is not a usable figure.
     const html = render(
       analytics({ intakeCompleted: 10, paymentCompleted: 6, seamConversionRate: 0.6 }),
@@ -78,7 +78,7 @@ describe("WhatsAppChannelAnalytics (§7.10, WA-43)", () => {
   });
 
   it("names why conversations reached a person", () => {
-    // The half of §7.10's escalation metric that says what to build next.
+    // The half of §26.10's escalation metric that says what to build next.
     const html = render(
       analytics({
         escalations: 4,
@@ -101,7 +101,7 @@ describe("WhatsAppChannelAnalytics (§7.10, WA-43)", () => {
   });
 
   it("does not present a never-synced quality rating as healthy", () => {
-    // §7.11 treats the rating as a launch gate, so the absence of Meta's verdict must not
+    // §26.11 treats the rating as a launch gate, so the absence of Meta's verdict must not
     // read as a clean bill of health.
     const html = render(analytics({ numberHealth: undefined }));
     expect(html).toContain("Never synced");

@@ -38,7 +38,7 @@ export class AnalyticsService {
   }
 
   /**
-   * §7.10's WhatsApp channel metrics over a trailing window (WA-43). `days` is optional —
+   * §26.10's WhatsApp channel metrics over a trailing window (WA-43). `days` is optional —
    * omitted, the backend applies its configured default rather than the frontend guessing
    * one, so the window is the same everywhere it is quoted.
    */

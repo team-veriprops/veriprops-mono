@@ -15,9 +15,9 @@ import {
 } from "./libs/useWhatsAppConsentQueries";
 
 /**
- * Account → WhatsApp, the revocation half of §7.4.6.
+ * Account → WhatsApp, the revocation half of §26.4.6.
  *
- * §7.4.6 requires both opt-ins to be revocable here as well as by a STOP keyword in chat.
+ * §26.4.6 requires both opt-ins to be revocable here as well as by a STOP keyword in chat.
  * The two routes are deliberately not symmetrical (D64): STOP revokes both and START
  * restores only progress updates, so **this page is the only place marketing consent can
  * be given back**. That is the reason it exists as its own card rather than as a line on

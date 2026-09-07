@@ -1,4 +1,4 @@
-"""WhatsApp template rendering (PRD §7, D46).
+"""WhatsApp template rendering (PRD §26, D46).
 
 This path was unreachable until account linking needed it, and it was broken in three
 independent ways when it was first exercised: the render call was never awaited, it
@@ -85,7 +85,7 @@ async def test_no_whatsapp_template_carries_an_email_subject_line(template: Avai
 
 
 class TestOtpAuthTemplate:
-    """The §7.4.4 linking code — the one template an account depends on."""
+    """The §26.4.4 linking code — the one template an account depends on."""
 
     async def test_carries_the_code_and_its_validity(self):
         payload = await di[ModelTemplateService].render_whatsapp_payload(
@@ -95,7 +95,7 @@ class TestOtpAuthTemplate:
         assert "10 minutes" in payload.text
 
     async def test_warns_that_veriprops_will_never_ask_for_it(self):
-        # §7.1.2 anti-impersonation: the standing defence against someone phoning a
+        # §26.1.2 anti-impersonation: the standing defence against someone phoning a
         # customer to ask for the code they just received.
         payload = await di[ModelTemplateService].render_whatsapp_payload(
             AvailableTemplate.WHATSAPP_OTP_AUTH, _CONTEXT
@@ -166,7 +166,7 @@ class TestWhatsAppRequestBuilder:
 
 
 class TestMetaTemplatePayloads:
-    """§7.7 template sends (D59a/D59b).
+    """§26.7 template sends (D59a/D59b).
 
     Meta will not deliver a business-initiated message as free text, so every declared
     template has to produce a `template_name` plus **positionally ordered** variables. The
@@ -240,7 +240,7 @@ class TestMetaTemplatePayloads:
 
 
 class TestAuthenticationButton:
-    """Meta mandates an OTP button on authentication templates (§7.7).
+    """Meta mandates an OTP button on authentication templates (§26.7).
 
     The send must carry a matching `button` component or the message is rejected — so
     this is not decoration, it is a delivery requirement. Copy-code and one-tap buttons

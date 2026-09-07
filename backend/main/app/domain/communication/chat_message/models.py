@@ -41,7 +41,7 @@ class ClarificationStatus(str, enum.Enum):
 
 
 class MessageSource(str, enum.Enum):
-    """Which surface a message arrived on (PRD §7.3.3 source labeling, §7.8).
+    """Which surface a message arrived on (PRD §26.3.3 source labeling, §26.8).
 
     Orthogonal to ``SenderKind``: the same customer can speak from either surface, and
     the admin console shows which one so a reply goes back the right way.
@@ -85,12 +85,12 @@ class ChatMessage(BaseEntity):
     # PRD "Known Gaps & Roadmap".
     attachments = Column(JSONB_VARIANT, nullable=True)
     delivered_at = Column(UTCDateTime, nullable=True)
-    # When the message actually left over the conversation's own channel (§7.7). Distinct
+    # When the message actually left over the conversation's own channel (§26.7). Distinct
     # from `delivered_at`, which means "released past the fraud hold": an agent's reply
     # typed outside Meta's 24-hour window is DELIVERED in the thread and still queued
     # here, and that is exactly the state the console has to be able to show.
     channel_delivered_at = Column(UTCDateTime, nullable=True)
-    # What a non-text WhatsApp inbound actually was (§7.6.3) — the console reads it to
+    # What a non-text WhatsApp inbound actually was (§26.6.3) — the console reads it to
     # flag an image as unofficial and a voice note as audio.
     media_kind = Column(String(16), nullable=True)
     held_at = Column(UTCDateTime, nullable=True)
@@ -100,7 +100,7 @@ class ChatMessage(BaseEntity):
     __table_args__ = (
         Index("ix_chat_messages_conversation", "conversation_id"),
         Index("ix_chat_messages_state", "state"),
-        # The queue read is "this thread's undelivered agent replies" (§7.7 flush).
+        # The queue read is "this thread's undelivered agent replies" (§26.7 flush).
         Index("ix_chat_messages_channel_pending", "conversation_id", "channel_delivered_at"),
     )
 
@@ -176,13 +176,13 @@ class ChatMessageDto(Object):
     held_notice: Optional[str] = None  # sender-facing "being checked" copy while HELD (§11.2)
     date_created: datetime
     delivered_at: Optional[datetime] = None
-    # §7.6.3 — what arrived, when it was not text. `unofficial_media` is *derived* from it
-    # rather than stored: the evidence rule (§7.1.6) says chat media is never canonical, so
+    # §26.6.3 — what arrived, when it was not text. `unofficial_media` is *derived* from it
+    # rather than stored: the evidence rule (§26.1.6) says chat media is never canonical, so
     # a persisted boolean could only ever disagree with the rule it is meant to express.
     media_kind: Optional[InboundKind] = None
     unofficial_media: bool = False
     # An agent reply that is in the thread but has not left over WhatsApp yet, because it
-    # was typed outside Meta's 24-hour window (§7.7). It goes out on the customer's next
+    # was typed outside Meta's 24-hour window (§26.7). It goes out on the customer's next
     # message; until then the console has to say so, or the agent believes it sent.
     pending_channel_delivery: bool = False
 

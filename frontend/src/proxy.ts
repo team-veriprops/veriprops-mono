@@ -39,7 +39,7 @@ const PROTECTED_PREFIXES = [
   ROUTES.ACCOUNT.ROOT,
   ROUTES.AUTH.LOGIN_SUCCESS_REDIRECT,
   // The one `/wa/*` landing that is not public: linking has to know which account is
-  // claiming the number (PRD §7.4.4). Its siblings stay out — a handoff token is the
+  // claiming the number (PRD §26.4.4). Its siblings stay out — a handoff token is the
   // authorization there, and requiring a session would break the whole point.
   WA_LINK_PREFIX,
   WA_INTAKE_PREFIX,

@@ -1,4 +1,4 @@
-"""Task service (PRD §2.2, §4.1, §4.2, §6, §7.2).
+"""Task service (PRD §2.2, §4.1, §4.2, §6, §11.3).
 
 Owns task instantiation at PAID (respecting §4.2 dependency locks), admin
 assignment/reassignment, the broadcast pool, and the derivation-owner integration:
@@ -98,7 +98,7 @@ class VerificationTaskService:
         """Put every un-owned PENDING task into the open pool (§6.2 auto-assignment).
 
         First-accept-wins is enforced on the agent accept path (S11); here we only
-        open the pool and set the starvation timeout (§7.2).
+        open the pool and set the starvation timeout (§11.4).
         """
         pool_expires = Utils.datetime_now() + timedelta(hours=settings.TASK_POOL_TIMEOUT_HOURS)
         broadcast: List[VerificationTask] = []
@@ -193,7 +193,7 @@ class VerificationTaskService:
         # may not be re-fetchable by id inside the same transaction (get-after-create).
         return await self._task_repo.get_model(task.id) or task
 
-    # ── Agent task execution (§7.1, §7.3) ─────────────────────────
+    # ── Agent task execution (§12.1, §12.2) ─────────────────────────
 
     async def list_for_agent(
         self, agent_id: str, states: Optional[List[str]], page: int, page_size: int
@@ -208,7 +208,7 @@ class VerificationTaskService:
         return await self._task_repo.count_pool_pending()
 
     async def agent_summary(self, agent_id: str) -> AgentDashboardDto:
-        """Agent home rollups (§7): the agent's own tasks counted by state, server-side."""
+        """Agent home rollups (§12): the agent's own tasks counted by state, server-side."""
         raw = await self._task_repo.count_by_state_for_agent(agent_id)
         state_counts = {TaskState(s): c for s, c in raw.items()}
         active = sum(raw.get(s, 0) for s in (
@@ -224,7 +224,7 @@ class VerificationTaskService:
         )
 
     async def accept(self, task_id: str, agent_id: str) -> VerificationTask:
-        """Agent accepts a task (§7.1). Broadcast pool = first-accept-wins (the task
+        """Agent accepts a task (§12.1). Broadcast pool = first-accept-wins (the task
         must still be unclaimed PENDING); manual = only the assigned agent may accept.
         Enforces capacity (§6.5) and moves the task to ACCEPTED."""
         task = await self._get_task(task_id)
@@ -259,8 +259,8 @@ class VerificationTaskService:
         return await self._task_repo.get_model(task.id)
 
     async def decline(self, task_id: str, agent_id: str, reason: Optional[str]) -> VerificationTask:
-        """Agent declines a task they own (§7.1). Returns it to the open pool for the
-        next agent and records the decline (feeds ranking / reliability, §7.2)."""
+        """Agent declines a task they own (§12.1). Returns it to the open pool for the
+        next agent and records the decline (feeds ranking / reliability, §11.3)."""
         task = await self._get_owned_task(task_id, agent_id)
         if task.state not in (TaskState.ASSIGNED.value, TaskState.ACCEPTED.value):
             raise InvalidResourceStateException(
@@ -285,7 +285,7 @@ class VerificationTaskService:
         return await self._task_repo.get_model(task.id)
 
     async def start(self, task_id: str, agent_id: str) -> VerificationTask:
-        """Agent begins work (§7.3): ACCEPTED → IN_PROGRESS."""
+        """Agent begins work (§12.2): ACCEPTED → IN_PROGRESS."""
         task = await self._get_owned_task(task_id, agent_id)
         self._assert_task_transition(task.state, TaskState.IN_PROGRESS)
         await self._task_repo.update(task.id, UpdateTaskDto(state=TaskState.IN_PROGRESS.value))
@@ -302,7 +302,7 @@ class VerificationTaskService:
         self, task_id: str, agent_id: str, *, file_bytes: bytes, kind, mime_type=None,
         gps_latitude=None, gps_longitude=None,
     ):
-        """Capture a piece of proof-of-work for an in-progress task (§4.5, §7.3a).
+        """Capture a piece of proof-of-work for an in-progress task (§4.5, §12.3).
         Ownership + IN_PROGRESS enforced; the evidence service stamps hash/GPS/timestamp."""
         task = await self._get_owned_task(task_id, agent_id)
         if task.state != TaskState.IN_PROGRESS.value:
@@ -330,7 +330,7 @@ class VerificationTaskService:
         return item
 
     async def submit(self, task_id: str, agent_id: str, payload: dict) -> VerificationTask:
-        """Agent submits role findings (§7.3): IN_PROGRESS → SUBMITTED. Requires at least
+        """Agent submits role findings (§12.2): IN_PROGRESS → SUBMITTED. Requires at least
         one evidence item (proof-of-work). First successful submission upgrades the agent
         to trusted (§3.3). The derive owner promotes the verification to UNDER_REVIEW once
         every required task is SUBMITTED (§2.5)."""
@@ -356,7 +356,7 @@ class VerificationTaskService:
         await self._derive_and_persist(task.verification_id, actor_id=agent_id)
         return await self._task_repo.get_model(task.id)
 
-    # ── Timeout sweeps (§7.2) ─────────────────────────────────────
+    # ── Timeout sweeps (§11.4) ─────────────────────────────────────
 
     async def sweep_no_show(self) -> int:
         """Return manually-assigned tasks the agent never accepted in time to PENDING."""
@@ -369,7 +369,7 @@ class VerificationTaskService:
 
     async def sweep_pool_starvation(self) -> int:
         """Aging broadcast tasks unclaimed past the pool timeout escalate off the open
-        pool to await targeted assignment by admin/ranking (§7.2 starvation backstop)."""
+        pool to await targeted assignment by admin/ranking (§11.4 starvation backstop)."""
         now = Utils.datetime_now()
         count = 0
         for task in await self._task_repo.list_pool_expired(now):
@@ -503,7 +503,7 @@ class VerificationTaskService:
             sse_event=VerificationEventType.STATUS_CHANGED.value,
             data={"status": new_status.value},
         ))
-        # §7.6.2's "verification started" milestone (D66), from the task-movement half of
+        # §26.6.2's "verification started" milestone (D66), from the task-movement half of
         # §4.1's derivation. The task states go with it: they are what tells a first start
         # apart from the next agent picking up a case already under way.
         await publish_verification_started(

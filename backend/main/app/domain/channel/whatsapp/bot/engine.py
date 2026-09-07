@@ -1,22 +1,22 @@
-"""The bot engine — one inbound message in, one reply out (PRD §7.6, WA-11/WA-14/WA-39).
+"""The bot engine — one inbound message in, one reply out (PRD §26.6, WA-11/WA-14/WA-39).
 
 This is the dispatcher, and dispatch order *is* the safety model. Every turn runs the same
 gauntlet, and each gate exists because skipping it produces a specific failure:
 
 1. **Is a human already on this thread?** (D57) The bot stays silent. Talking over an
    agent is the failure customers notice most.
-2. **Does this turn owe a welcome?** (§7.6.1) First contact, or 30 days idle — the bot
+2. **Does this turn owe a welcome?** (§26.6.1) First contact, or 30 days idle — the bot
    discloses what it is and repeats the payment pledge before anything else.
-3. **Do the customer's own words hit a guardrail?** (§7.6.4) Checked *before* any
+3. **Do the customer's own words hit a guardrail?** (§26.6.4) Checked *before* any
    classification, deterministically, so no model — wrong, slow, or jailbroken — can talk
    the bot into rendering a verdict.
 4. **What did they mean?** Only now is the classifier consulted, and only to pick a flow.
-5. **Does the intent itself escalate?** (§7.6.2) Judgments, refunds, and asking for a
+5. **Does the intent itself escalate?** (§26.6.2) Judgments, refunds, and asking for a
    person are recognisable but never answerable.
-6. **Is this a WhatsApp capability at all?** (§7.3.4) Otherwise: handoff, or a redirect.
+6. **Is this a WhatsApp capability at all?** (§26.3.4) Otherwise: handoff, or a redirect.
 7. **Did we understand?** Two consecutive misses route to a human rather than guess again.
 
-And wrapping all of it: **anything that raises becomes a warm handover** (§7.6.5). A bot
+And wrapping all of it: **anything that raises becomes a warm handover** (§26.6.5). A bot
 that goes quiet is indistinguishable from a scam that stopped replying, so an outage
 answers with an apology and a person — never with silence.
 """
@@ -87,7 +87,7 @@ logger: Logger = di["logger"]
 # listing fifteen properties is unreadable; someone with more than this has a dashboard.
 _MAX_CASES_OFFERED = 5
 
-# Menu positions (§7.6.1). The welcome offers numbers, so the numbers have to mean
+# Menu positions (§26.6.1). The welcome offers numbers, so the numbers have to mean
 # something on the next turn — a customer replying "3" to a numbered menu and being told
 # the bot did not understand is the most avoidable miss in the whole channel.
 _MENU_CHOICES = {
@@ -98,14 +98,14 @@ _MENU_CHOICES = {
     "5": BotIntent.PRICING,
 }
 
-# The keyword-only intents (D64, §7.4.3), matched on the customer's literal words before
+# The keyword-only intents (D64, §26.4.3), matched on the customer's literal words before
 # the classifier runs. They are deliberately outside the classifier's vocabulary: a model
 # must not revoke someone's consent or claim a case by inference.
 #
 # Meta and the customer both treat STOP as binding, so it must never be answered with
 # "I didn't understand" — and never with "a person will get back to you" either, because
 # an opt-out that waits for the next working day is not an opt-out. D64 fixes the two
-# vocabularies: the STOP set revokes **both** §7.4.6 consents, the START set restores
+# vocabularies: the STOP set revokes **both** §26.4.6 consents, the START set restores
 # progress updates **only**.
 _KEYWORD_INTENTS = {
     "stop": BotIntent.STOP_MESSAGES,
@@ -129,7 +129,7 @@ _RESEND_LINK_PHRASES = {
 # `VP-2026-0001` — the case reference a customer is handed on every receipt and report.
 _CASE_REFERENCE = re.compile(r"\bVP-\d{4}-\d{3,}\b", re.IGNORECASE)
 
-# Which action each intent is asking for, so §7.3.4 is consulted once per turn rather
+# Which action each intent is asking for, so §26.3.4 is consulted once per turn rather
 # than remembered per flow.
 _INTENT_ACTIONS = {
     BotIntent.LEARN: ChannelAction.LEARN,
@@ -142,7 +142,7 @@ _INTENT_ACTIONS = {
     BotIntent.VIEW_REPORT: ChannelAction.VIEW_REPORT,
 }
 
-# The §7.3.4 handoff a parked "which case?" question is waiting on. Both directions are
+# The §26.3.4 handoff a parked "which case?" question is waiting on. Both directions are
 # needed: the action picks the flow when the question is asked, and the flow picks the
 # action back up when the customer answers a turn later.
 _HANDOFF_FLOWS: dict[ChannelAction, BotFlow] = {
@@ -195,7 +195,7 @@ class WhatsAppBotEngine:
     ) -> Optional[BotReply]:
         """Answer one inbound message, or stay silent when a human owns the thread.
 
-        Returns the reply that was sent, which is what the drive-through and the §7.6.4
+        Returns the reply that was sent, which is what the drive-through and the §26.6.4
         suite assert on. `None` means the bot deliberately said nothing.
         """
         session = await self._whatsapp_bot_session_service.get_or_open(message.from_phone)
@@ -204,13 +204,13 @@ class WhatsAppBotEngine:
             return None
 
         try:
-            # §7.11's failure drill, armed only from a non-production dev endpoint and
+            # §26.11's failure drill, armed only from a non-production dev endpoint and
             # consumed by the first turn that reaches it. Inside the try on purpose: the
             # drill is worthless unless it exercises the same path a real outage takes.
             if fault_injection.consume(FaultPoint.WHATSAPP_BOT_TURN):
-                raise InjectedFault("§7.6.5 failure drill")
+                raise InjectedFault("§26.6.5 failure drill")
             reply = await self._decide(message, session)
-        except Exception as exc:  # noqa: BLE001 — §7.6.5: never go quiet
+        except Exception as exc:  # noqa: BLE001 — §26.6.5: never go quiet
             logger.exception(f"Bot turn failed for {message.from_phone}: {exc}")
             reply = BotReply(
                 content.failure_fallback(await self._coverage()),
@@ -239,9 +239,9 @@ class WhatsAppBotEngine:
             # disclosure and the payment pledge under a wall of text.
             return BotReply(content.welcome())
 
-        # §7.6.3 owns any non-text turn, caption or not. It runs before the guardrails
+        # §26.6.3 owns any non-text turn, caption or not. It runs before the guardrails
         # because a caption is not what is being answered — the *thing that arrived* is,
-        # and the three answers §7.6.3 gives are all safe ones (an acknowledgment, a
+        # and the three answers §26.6.3 gives are all safe ones (an acknowledgment, a
         # handover, or a link to the customer's own upload page).
         if media_flow.is_media(message.kind):
             return await self._media(session, message.kind)
@@ -330,14 +330,14 @@ class WhatsAppBotEngine:
 
         return await self._unmatched(session)
 
-    # ─── Messaging consent (§7.4.6, D64) ──────────────────────────
+    # ─── Messaging consent (§26.4.6, D64) ──────────────────────────
     #
     # Handled by the bot, in one turn, always. These two intents are keyword-only —
     # excluded from `CLASSIFIABLE_INTENTS` — so a model can never revoke someone's consent
     # by inference; the customer's literal word is the only thing that reaches here.
 
     async def _stop_messages(self, session: WhatsAppBotSession) -> BotReply:
-        """STOP and its synonyms end **both** §7.4.6 consents (D64)."""
+        """STOP and its synonyms end **both** §26.4.6 consents (D64)."""
         user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
         if not user_id:
             # D77: a delegate has no consent row, so their opt-out has to end the
@@ -365,7 +365,7 @@ class WhatsAppBotEngine:
         )
         return await self._understood(session, content.messages_restarted())
 
-    # ─── Delegates (§7.4.5, D67) ──────────────────────────────────
+    # ─── Delegates (§26.4.5, D67) ──────────────────────────────────
 
     async def _delegate_status(self, session: WhatsAppBotSession) -> Optional[BotReply]:
         """The status reply for an authorized delegate, or ``None`` if this is not one.
@@ -405,7 +405,7 @@ class WhatsAppBotEngine:
     # ─── Status ───────────────────────────────────────────────────
 
     async def _status(self, session: WhatsAppBotSession) -> BotReply:
-        """§7.4.3 — identity first, then the same data the dashboard reads.
+        """§26.4.3 — identity first, then the same data the dashboard reads.
 
         Identity is two questions asked in a fixed order (D67): *whose account is this
         number?*, then *does it hold a delegation?*. The order is the access control — a
@@ -419,7 +419,7 @@ class WhatsAppBotEngine:
                 return delegate_reply
             # One message serves the customer on a second handset and the third party
             # asking about someone else's case: the bot cannot tell them apart, so it
-            # names both routes rather than guessing (§7.4.3 + §7.4.5).
+            # names both routes rather than guessing (§26.4.3 + §26.4.5).
             return await self._understood(session, content.unlinked_number())
 
         cases = await self._load_cases(user_id)
@@ -432,12 +432,12 @@ class WhatsAppBotEngine:
             await self._whatsapp_bot_session_service.clear_flow(session)
         return await self._understood(session, outcome.text)
 
-    # ─── Non-text inbound (§7.6.3) ────────────────────────────────
+    # ─── Non-text inbound (§26.6.3) ────────────────────────────────
 
     async def _media(self, session: WhatsAppBotSession, kind: InboundKind) -> BotReply:
-        """Answer a photo, a document, a voice note or a pin (§7.6.3, WA-06/WA-38).
+        """Answer a photo, a document, a voice note or a pin (§26.6.3, WA-06/WA-38).
 
-        Identity first, as everywhere that could touch a case (§7.4.3): an `upload` link
+        Identity first, as everywhere that could touch a case (§26.4.3): an `upload` link
         authorizes writing to one specific verification, so it is only ever issued to a
         number we have proved belongs to the customer who owns that case.
         """
@@ -489,7 +489,7 @@ class WhatsAppBotEngine:
     async def _resume_upload(
         self, session: WhatsAppBotSession, text: str
     ) -> Optional[BotReply]:
-        """The customer picked which case their document belongs to (§7.6.3)."""
+        """The customer picked which case their document belongs to (§26.6.3)."""
         user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
         if not user_id:
             # The link was revoked between the question and the answer — re-run identity
@@ -515,14 +515,14 @@ class WhatsAppBotEngine:
             session, await self._upload_reply(user_id, cases, selected.vid)
         )
 
-    # ─── Pay and report handoffs (§7.3.4, §7.4.2) ─────────────────
+    # ─── Pay and report handoffs (§26.3.4, §26.4.2) ─────────────────
 
     async def _handoff(
         self, session: WhatsAppBotSession, action: ChannelAction
     ) -> BotReply:
-        """Answer "how do I pay?" or "send me my report" with a §7.5 link (WA-17).
+        """Answer "how do I pay?" or "send me my report" with a §26.5 link (WA-17).
 
-        Identity first, as everywhere that could touch a case (§7.4.3): a pay or report
+        Identity first, as everywhere that could touch a case (§26.4.3): a pay or report
         token names a customer *and* a case, so it is only ever issued to a number we have
         proved belongs to the person whose money — or whose report — is involved.
         """
@@ -558,7 +558,7 @@ class WhatsAppBotEngine:
         """Mint the link for exactly one case, and say the right words around it.
 
         The token is minted from the *case the bot resolved*, never from a reference the
-        customer typed — the same rule as the §7.6.3 upload link, and for a sharper reason
+        customer typed — the same rule as the §26.6.3 upload link, and for a sharper reason
         here: a pay link accepted at face value would let a forwarded message send someone
         to pay for a stranger's verification.
         """
@@ -577,7 +577,7 @@ class WhatsAppBotEngine:
         )
         link = f"{settings.PUBLIC_APP_BASE_URL.rstrip('/')}/wa/{intent.value}/{token}"
         if action == ChannelAction.PAY:
-            # §7.10 counts the pay handoff as a channel-produced case: this fact is what
+            # §26.10 counts the pay handoff as a channel-produced case: this fact is what
             # later lets `PAYMENT_CONFIRMED` be attributed here rather than to the web.
             await self._channel_events.record(
                 WhatsAppChannelEventType.PAY_LINK_ISSUED,
@@ -591,7 +591,7 @@ class WhatsAppBotEngine:
     async def _resume_handoff(
         self, session: WhatsAppBotSession, flow: BotFlow, text: str
     ) -> Optional[BotReply]:
-        """The customer picked which case they meant (§7.3.4)."""
+        """The customer picked which case they meant (§26.3.4)."""
         action = _HANDOFF_ACTIONS[flow]
         user_id = await self._whatsapp_link_service.resolve_user_for_phone(session.phone_e164)
         if not user_id:
@@ -651,12 +651,12 @@ class WhatsAppBotEngine:
         await self._whatsapp_bot_session_service.clear_flow(session)
         return await self._understood(session, outcome.text)
 
-    # ─── Short-code continuation (§7.4.3, D58) ────────────────────
+    # ─── Short-code continuation (§26.4.3, D58) ────────────────────
 
     async def _continue_case(self, session: WhatsAppBotSession, text: str) -> BotReply:
         """Pick a case up from its reference — "continue VP-2026-0001" (D58).
 
-        Identity first, as everywhere else that touches a case (§7.4.3): quoting a
+        Identity first, as everywhere else that touches a case (§26.4.3): quoting a
         reference is not proof of owning it, and the references appear on receipts and
         reports that get forwarded. An unlinked number is offered linking instead, and a
         reference that is not the customer's own is answered as *not found* rather than
@@ -684,7 +684,7 @@ class WhatsAppBotEngine:
     # ─── Intake (§5.1, D69/D70) ───────────────────────────────────
 
     async def _begin_intake(self, session: WhatsAppBotSession) -> BotReply:
-        """Open the four-question intake (§7.3.4 lists it as a full WhatsApp capability).
+        """Open the four-question intake (§26.3.4 lists it as a full WhatsApp capability).
 
         No account is required to start: the answers live on the session and identity is
         established at the handoff landing (D69), so a stranger's first message can begin
@@ -718,7 +718,7 @@ class WhatsAppBotEngine:
         if not outcome.complete:
             await self._park_intake(session, outcome)
             # A re-ask is not a failure to understand the customer — it is the flow doing
-            # its job — so it must not count toward the §7.6.2 two-strikes escalation.
+            # its job — so it must not count toward the §26.6.2 two-strikes escalation.
             return await self._understood(session, outcome.text)
 
         return await self._finish_intake(session, outcome)
@@ -733,7 +733,7 @@ class WhatsAppBotEngine:
         another answer and send a second link.
         """
         await self._whatsapp_bot_session_service.retain_intake(session, outcome.collected)
-        # §7.10's seam-conversion denominator: the customer has answered everything the
+        # §26.10's seam-conversion denominator: the customer has answered everything the
         # chat can ask, and everything after this point happens on the website. Recorded
         # here rather than in `_intake_link`, which a *resend* also calls — counting a
         # re-issued link as a second completed intake would deflate the headline rate.
@@ -747,9 +747,9 @@ class WhatsAppBotEngine:
         return f"{settings.PUBLIC_APP_BASE_URL.rstrip('/')}/wa/intake/{token}"
 
     async def _resend_intake_link(self, session: WhatsAppBotSession) -> BotReply:
-        """Re-issue a link for answers the bot already has (§7.10).
+        """Re-issue a link for answers the bot already has (§26.10).
 
-        Worth its own path: the link lasts 15 minutes, §7.10 makes intake→payment the
+        Worth its own path: the link lasts 15 minutes, §26.10 makes intake→payment the
         channel's headline number, and asking a customer to re-answer four questions
         because they opened their phone late is the easiest conversion to lose.
         """
@@ -797,7 +797,7 @@ class WhatsAppBotEngine:
     async def _load_cases(self, user_id: str) -> List[status_flow.CaseSummary]:
         """The customer's cases, read through the same repo the dashboard list uses.
 
-        §7.3.1's "same API endpoints the website dashboard uses" in practice: the status
+        §26.3.1's "same API endpoints the website dashboard uses" in practice: the status
         strings come from `tracking/labels.py`, so the two surfaces cannot describe one
         case differently.
         """
@@ -862,7 +862,7 @@ class WhatsAppBotEngine:
 
     async def _field_task_state(self, verification_id: str) -> Optional[TaskState]:
         """The FIELD task's state, which is what separates `verifying` from
-        `field_inspection` in the §7.3.2 projection."""
+        `field_inspection` in the §26.3.2 projection."""
         task = await self._verification_task_repo.get_by_role(
             verification_id, AgentRole.FIELD.value
         )
@@ -871,7 +871,7 @@ class WhatsAppBotEngine:
     # ─── Outcomes ─────────────────────────────────────────────────
 
     async def _understood(self, session: WhatsAppBotSession, text: str) -> BotReply:
-        """A turn the bot handled — resets the §7.6.2 consecutive-miss counter."""
+        """A turn the bot handled — resets the §26.6.2 consecutive-miss counter."""
         await self._whatsapp_bot_session_service.note_understood(session)
         return BotReply(text)
 
@@ -879,7 +879,7 @@ class WhatsAppBotEngine:
         """A turn the bot did not understand.
 
         The first miss re-offers the menu, which is usually all a confused customer
-        needs. The second escalates: §7.6.2 draws the line at two, and guessing a third
+        needs. The second escalates: §26.6.2 draws the line at two, and guessing a third
         time is how a bot talks someone out of the product.
         """
         should_escalate = await self._whatsapp_bot_session_service.note_unmatched(session)
@@ -896,7 +896,7 @@ class WhatsAppBotEngine:
         return await self._support_hours_service.coverage()
 
     async def _alert_admins(self, session: WhatsAppBotSession) -> None:
-        """Tell the console a conversation now needs a person (§7.6.5).
+        """Tell the console a conversation now needs a person (§26.6.5).
 
         The customer has already been answered, so this is operational rather than
         urgent — in-app only, per the notification rule. Best-effort by construction:

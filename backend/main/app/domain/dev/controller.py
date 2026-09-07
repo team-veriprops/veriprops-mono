@@ -59,7 +59,7 @@ async def rewind_message(recipient: str, rewind_expiry: bool = False):
     return SuccessResponse[dict](data=await service.rewind_message(recipient, rewind_expiry))
 
 
-# ── WhatsApp channel (PRD §7, D43) ────────────────────────────────
+# ── WhatsApp channel (PRD §26, D43) ────────────────────────────────
 # The stub transport has no external counterpart to drive it, so these two endpoints are
 # how an automated run plays both sides of a conversation: inject what a customer
 # "sent", then read back what Veriprops would have replied. Same double prod gate as the
@@ -129,7 +129,7 @@ async def clear_whatsapp_outbox():
 
 @dev_router.post("/whatsapp/rewind-window", response_model=SuccessResponse[dict])
 async def rewind_whatsapp_window(phone: str, hours: int = 25):
-    """Age a number's inbound journal so Meta's 24-hour window reads as closed (§7.7).
+    """Age a number's inbound journal so Meta's 24-hour window reads as closed (§26.7).
 
     Without it the drive-through cannot reach the `window_reopen` path or the reply queue
     behind it — the window is derived from when the customer last wrote, and a test does
@@ -141,7 +141,7 @@ async def rewind_whatsapp_window(phone: str, hours: int = 25):
 
 @dev_router.post("/whatsapp/fail-next-turn", response_model=SuccessResponse[dict])
 async def arm_whatsapp_bot_failure():
-    """Make the next bot turn fail, once — the §7.11 failure drill (§7.6.5, WA-40).
+    """Make the next bot turn fail, once — the §26.11 failure drill (§26.6.5, WA-40).
 
     The launch gate asks for the fallback to be *tested*, not just implemented: kill the
     bot, observe the auto-reply and the console alert. Unit tests prove the `except` branch

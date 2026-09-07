@@ -7,11 +7,11 @@ import {
 } from "@/types/whatsappConsent";
 
 /**
- * WhatsApp messaging consent API (PRD §7.4.6). Mirrors the backend controller at
+ * WhatsApp messaging consent API (PRD §26.4.6). Mirrors the backend controller at
  * `app/domain/channel/whatsapp/consent`.
  *
  * One endpoint pair serves both authenticated capture points — the payment step, where
- * §7.4.6 says the controls are first shown, and account settings, where they are
+ * §26.4.6 says the controls are first shown, and account settings, where they are
  * revocable. `source` rides as a query parameter rather than a body field so the record of
  * *where* a customer consented is a property of the call, not something a body could
  * misstate; the backend rejects the two chat-keyword sources outright.

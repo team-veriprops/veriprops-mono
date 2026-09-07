@@ -8,14 +8,14 @@ import { cn } from "@lib/utils";
 import { usePathname } from "next/navigation";
 
 /**
- * "Continue this on WhatsApp" (PRD §7.4.3, D58) — the web→chat half of continuation.
+ * "Continue this on WhatsApp" (PRD §26.4.3, D58) — the web→chat half of continuation.
  *
  * The channel is only genuinely two-way if a customer can move *to* it as easily as they
  * arrived from it. The link pre-fills the case reference, which the bot matches on the
  * customer's literal words, so this lands on the right case in one tap.
  *
  * Renders **nothing** without a configured number: the official number is the customer's
- * anti-impersonation anchor (§7.1.2), so there is deliberately no hardcoded fallback here
+ * anti-impersonation anchor (§26.1.2), so there is deliberately no hardcoded fallback here
  * or anywhere else.
  */
 export default function WhatsAppContinueButton({

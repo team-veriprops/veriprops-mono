@@ -38,7 +38,7 @@ export class ChatService {
 
   /**
    * Post into a thread by id — the member-gated path, used where the caller holds a
-   * conversation rather than a verification (the admin WhatsApp inbox: a §7.8 enquiry
+   * conversation rather than a verification (the admin WhatsApp inbox: a §26.8 enquiry
    * thread has no case behind it yet). `senderKind` is derived server-side from the
    * caller's role, never sent.
    */

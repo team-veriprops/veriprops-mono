@@ -1,4 +1,4 @@
-"""Deterministic WhatsApp transport (PRD §7, D43, WA-05, WA-10).
+"""Deterministic WhatsApp transport (PRD §26, D43, WA-05, WA-10).
 
 The stub is what CI and the e2e suite run on, so it has to be a faithful stand-in: it
 records what would have gone out (so assertions can read it back) and it enforces the
@@ -81,7 +81,7 @@ class TestStubSend:
 
 class TestOutboundVoiceBan:
     async def test_refuses_to_send_audio(self):
-        # PRD §7.1.5: Veriprops never sends voice notes. Enforced at the transport so no
+        # PRD §26.1.5: Veriprops never sends voice notes. Enforced at the transport so no
         # future flow can bypass it.
         provider = WhatsAppStubProvider()
         with pytest.raises(ValueError, match="voice"):

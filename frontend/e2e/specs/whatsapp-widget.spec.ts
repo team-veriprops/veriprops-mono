@@ -1,10 +1,10 @@
 /**
- * UAT-WA — WhatsApp channel front door (PRD §7.4.1, §7.10, S1).
+ * UAT-WA — WhatsApp channel front door (PRD §26.4.1, §26.10, S1).
  *
  * The widget is the channel's only customer-visible surface until the bot lands, and its
  * two acceptance properties are opposites: it must be reachable from everywhere, and it
  * must be absent from the payment flow. Both are asserted here against the real rendered
- * page, with the attribution code checked on the live href so the §7.10
+ * page, with the attribution code checked on the live href so the §26.10
  * "WhatsApp-attributed enquiries" metric cannot silently lose its input.
  */
 import { expect, test } from "@playwright/test";
@@ -62,7 +62,7 @@ test.describe("UAT-WA — payment-flow suppression @P1", () => {
     await goto(page, ROUTES.PORTAL.DASHBOARD);
     await expect(page.locator(WIDGET)).toBeVisible();
 
-    // … and gone once the customer is actually paying (PRD §7.4.1).
+    // … and gone once the customer is actually paying (PRD §26.4.1).
     await goto(page, ROUTES.PORTAL.VERIFICATION_PAY(seed.verification.id));
     await expect(page.locator(WIDGET)).toHaveCount(0);
 

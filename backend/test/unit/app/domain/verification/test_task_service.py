@@ -1,5 +1,5 @@
 """VerificationTaskService — instantiation (§4.2 locks), assignment (§6), derivation
-owner integration (§4.1), and timeout sweeps (§7.2). Repos mocked, no DB."""
+owner integration (§4.1), and timeout sweeps (§11.4). Repos mocked, no DB."""
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -169,7 +169,7 @@ class TestAssign:
         assert derived.status == VerificationStatus.IN_PROGRESS.value
 
     async def test_first_assignment_announces_the_start_milestone(self, monkeypatch):
-        """§7.6.2's "verification started" (D66): the first agent picking the case up is
+        """§26.6.2's "verification started" (D66): the first agent picking the case up is
         the moment, and this is the only site that produces it — a rejection needs a
         SUBMITTED task, so the review half can only ever be work *continuing*."""
         from main.app.core.events.events import EventType

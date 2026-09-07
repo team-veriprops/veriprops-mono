@@ -204,7 +204,7 @@ class AnalyticsService:
         return AgentTrendsDto(points=points)
 
     async def whatsapp_channel(self, days: Optional[int] = None) -> WhatsAppChannelAnalyticsDto:
-        """§7.10's seven channel metrics over a trailing window (WA-43, D80/D84/D86).
+        """§26.10's seven channel metrics over a trailing window (WA-43, D80/D84/D86).
 
         Lives here rather than in the channel package because this is a **read** surface,
         and the admin analytics API is deliberately one router behind one permission guard
@@ -275,9 +275,9 @@ class AnalyticsService:
                 if health
                 else None
             ),
-            # §7.6.3 gives voice notes their own escalation reason, but the volume is
+            # §26.6.3 gives voice notes their own escalation reason, but the volume is
             # counted off the inbound journal instead: a voice note from a thread already
-            # in `HUMAN` mode never reaches the bot, and §7.10 wants how many arrived, not
+            # in `HUMAN` mode never reaches the bot, and §26.10 wants how many arrived, not
             # how many the bot happened to see.
             voice_notes=await self._whatsapp_inbound.count_by_kind(InboundKind.AUDIO, since),
         )

@@ -108,7 +108,7 @@ class AvailableTemplate(str, Enum):
     # ============ ADMIN BROADCAST ============
     ADMIN_BROADCAST = "admin_broadcast"  # Email, Push
 
-    # ============ WHATSAPP CHANNEL (PRD §7.7) ============
+    # ============ WHATSAPP CHANNEL (PRD §26.7) ============
     # The seven Meta templates. Each slug **is** the Meta template name, so the
     # declaration in providers/whatsapp/templates.py, the Jinja body, and the wire cannot
     # drift apart. Category, language and the ordered parameter list live in that

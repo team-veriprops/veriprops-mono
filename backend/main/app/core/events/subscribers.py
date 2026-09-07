@@ -7,7 +7,7 @@ Three subscribers decide how each published event surfaces:
   table (`notification/rules.py`) and the user's preferences.
 - ``chat_counter_subscriber`` pushes the per-user Chat counter for chat events (§12.3) — a
   routine message bumps the counter only; the rule table keeps it out of Notifications.
-- ``channel_analytics_subscriber`` closes §7.10's seam-conversion metric: a confirmed
+- ``channel_analytics_subscriber`` closes §26.10's seam-conversion metric: a confirmed
   payment on a case the WhatsApp channel produced is that metric's numerator (D80).
 
 Handlers resolve their services from DI at call time and are registered on the bus at
@@ -79,7 +79,7 @@ async def chat_autopost_subscriber(event: DomainEvent) -> None:
 
 
 async def channel_analytics_subscriber(event: DomainEvent) -> None:
-    """Record §7.10's seam-conversion numerator: a channel-produced case got paid (D80).
+    """Record §26.10's seam-conversion numerator: a channel-produced case got paid (D80).
 
     Subscribing to the bus rather than calling the recorder from the payment service is
     the §4.8 rule — a domain event is published once and subscribers decide what to do

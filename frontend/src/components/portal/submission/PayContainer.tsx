@@ -46,7 +46,7 @@ export default function PayContainer({ verificationId }: { verificationId: strin
   const initiate = useInitiatePaymentMutation();
   const stubConfirm = useStubConfirmMutation();
   const refreshLock = useRefreshLockMutation();
-  // §7.4.6's two opt-ins, at the moment the spec names for capturing them.
+  // §26.4.6's two opt-ins, at the moment the spec names for capturing them.
   const { data: waConsent } = useWhatsAppConsentQuery();
   const setWaConsent = useSetWhatsAppConsentMutation(WhatsAppConsentSource.PAY_SCREEN);
 
@@ -177,7 +177,7 @@ export default function PayContainer({ verificationId }: { verificationId: strin
         )}
 
         {/*
-          §7.4.6: the two WhatsApp opt-ins are captured **at payment confirmation**. They
+          §26.4.6: the two WhatsApp opt-ins are captured **at payment confirmation**. They
           are written the moment a box is ticked rather than on a successful charge — the
           tick is the consent act, and tying it to a gateway outcome would lose it every
           time a card fails.

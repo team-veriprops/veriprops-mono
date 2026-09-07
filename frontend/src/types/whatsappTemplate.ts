@@ -1,5 +1,5 @@
 /**
- * Meta template registry types (PRD §7.7) — camelCase mirrors of the backend
+ * Meta template registry types (PRD §26.7) — camelCase mirrors of the backend
  * `app/domain/channel/whatsapp/template` DTOs.
  *
  * Backend owns every fact here, including what the seven templates *are*: the definitions

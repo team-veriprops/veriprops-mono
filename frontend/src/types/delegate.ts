@@ -1,5 +1,5 @@
 /**
- * Per-case delegate (PRD §7.4.5) — camelCase mirrors of the backend
+ * Per-case delegate (PRD §26.4.5) — camelCase mirrors of the backend
  * `app/domain/verification/delegate` DTOs.
  *
  * The backend decides everything here. In particular `verified` is derived from a
@@ -7,7 +7,7 @@
  * present, because an authorization awaiting its OTP carries a number and grants nothing.
  */
 
-/** The case's delegate, as the case page renders it. At most one (§7.4.5). */
+/** The case's delegate, as the case page renders it. At most one (§26.4.5). */
 export interface CaseDelegate {
   id?: string | null;
   name: string;

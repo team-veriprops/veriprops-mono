@@ -117,7 +117,7 @@ export default function TrackingContainer({ verificationId }: { verificationId: 
             )}
 
             {/*
-              §7.4.5 — placed with the people on the case and ahead of the evidence a
+              §26.4.5 — placed with the people on the case and ahead of the evidence a
               delegate must never see. The order is the grant, rendered.
             */}
             <DelegatePanel verificationId={verificationId} />
@@ -167,7 +167,7 @@ function Header({ tracking: t }: { tracking: VerificationTracking }) {
       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         <span>Verification ID</span>
         <CopyText text={t.vid} />
-        {/* §7.4.3 web→chat: the channel is only two-way if leaving for it is as easy as
+        {/* §26.4.3 web→chat: the channel is only two-way if leaving for it is as easy as
             arriving from it. The link pre-fills this reference, which the bot matches. */}
         <WhatsAppContinueButton vid={t.vid} />
       </div>

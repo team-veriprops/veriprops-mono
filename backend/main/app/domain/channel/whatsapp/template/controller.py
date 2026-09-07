@@ -1,4 +1,4 @@
-"""Meta template registry admin controller (PRD §7.7, WA-15/WA-41).
+"""Meta template registry admin controller (PRD §26.7, WA-15/WA-41).
 
 URL shape: /admin/config/whatsapp-templates — RBAC-gated (CONFIGURE_SYSTEM). Frontend
 service: frontend/src/components/admin/config/libs/whatsapp-template-service.
@@ -32,7 +32,7 @@ whatsapp_template_service: WhatsAppTemplateService = di[WhatsAppTemplateService]
 async def list_templates(
     _admin_id: str = Depends(require_permission(Permission.CONFIGURE_SYSTEM)),
 ):
-    """The §7.7 set with Meta's latest verdict on each — the §7.11 launch-gate view."""
+    """The §26.7 set with Meta's latest verdict on each — the §26.11 launch-gate view."""
     return SuccessResponse[List[WhatsAppTemplateDto]](
         data=await whatsapp_template_service.list_all()
     )

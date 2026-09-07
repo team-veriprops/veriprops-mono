@@ -32,8 +32,13 @@ export const TEST_OTP = "654123";
 /** The password `/dev/seed` assigns to every seeded account. */
 export const QA_PASSWORD = "Test1234!";
 
-/** Consent version the seeded legal documents carry (migration 0001). */
-export const CONSENT_VERSION = "1.0.0";
+/* Consent versions are deliberately NOT pinned here. They differ per document type and move
+ * independently — migration 0011 took PLATFORM_TERMS, PRIVACY_POLICY and
+ * COMMUNICATION_RECORDING to 1.1.0 while the rest stayed at 1.0.0 — so any literal is wrong
+ * for some document the day it is written. `/dev/seed` accepts the current version of every
+ * required consent on each persona's behalf, which is why no spec needs one. A spec that
+ * genuinely does must read it from `GET /users/auth/consents/documents` (public, returns
+ * `type` + `consentVersion` per document), never restate it. */
 
 /* Super-admin credentials are NOT configured here: `/dev/seed` echoes the backend's own
  * `SUPER_ADMIN_EMAIL`/`_PASSWORD` in its response payload, so the suite reads them from the

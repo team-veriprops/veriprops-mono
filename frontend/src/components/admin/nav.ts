@@ -19,7 +19,7 @@ export const adminNavItems: NavItem[] = [
   { title: "Pricing", href: ROUTES.ADMIN.PRICING, icon: "tag" },
   { title: "Trust Score Weights", href: ROUTES.ADMIN.TRUST_SCORE_WEIGHTS, icon: "settings", section: "Settings" },
   { title: "System Config", href: ROUTES.ADMIN.SYSTEM_CONFIG, icon: "settings" },
-  // §7.7 launch gate — which templates Meta has approved.
+  // §26.7 launch gate — which templates Meta has approved.
   { title: "WhatsApp Templates", href: ROUTES.ADMIN.WHATSAPP_TEMPLATES, icon: "messageSquare" },
   // §19 audit & compliance maturity
   { title: "Audit Log", href: ROUTES.ADMIN.AUDIT_ACTIONS, icon: "clipboardList", section: "Compliance" },

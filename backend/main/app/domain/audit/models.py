@@ -106,15 +106,15 @@ class AuditActionType(str, enum.Enum):
     MESSAGE_HELD = "MESSAGE_HELD"
     MESSAGE_APPROVED = "MESSAGE_APPROVED"
     MESSAGE_REJECTED = "MESSAGE_REJECTED"
-    # ── Conversational channels (§7.4.4) ───────────────────────────
+    # ── Conversational channels (§26.4.4) ───────────────────────────
     # The number a link named is recorded in `details`, so a released number is still
     # traceable after the link row has stopped holding it.
     WHATSAPP_NUMBER_LINKED = "WHATSAPP_NUMBER_LINKED"
     WHATSAPP_NUMBER_UNLINKED = "WHATSAPP_NUMBER_UNLINKED"
-    # §7.4.6/§7.8 — a messaging opt-in moved. `details` carries both consents and the
+    # §26.4.6/§26.8 — a messaging opt-in moved. `details` carries both consents and the
     # capture point, so the exportable consent record reads without joining anything.
     WHATSAPP_CONSENT_CHANGED = "WHATSAPP_CONSENT_CHANGED"
-    # §7.4.5 — someone other than the buyer was granted sight of a case. Both sides are
+    # §26.4.5 — someone other than the buyer was granted sight of a case. Both sides are
     # recorded because "who could see this, and when" is the question a disputed
     # verification eventually asks.
     CASE_DELEGATE_AUTHORIZED = "CASE_DELEGATE_AUTHORIZED"

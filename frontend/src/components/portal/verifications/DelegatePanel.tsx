@@ -19,7 +19,7 @@ import {
 } from "@components/portal/libs/useDelegateQueries";
 
 /**
- * Authorize one person to follow this verification (PRD §7.4.5, Decision O).
+ * Authorize one person to follow this verification (PRD §26.4.5, Decision O).
  *
  * This panel exists so the bot can say *no* to everyone else without being useless. "My
  * relative is handling it" is a social-engineering script, and the only safe answer to it

@@ -1,7 +1,7 @@
-"""How a bot reply leaves the building (PRD §7.6, §7.8, Decision K).
+"""How a bot reply leaves the building (PRD §26.6, §26.8, Decision K).
 
 A bot reply is free text answering a message that just arrived, so it is inside Meta's
-24-hour window by construction and needs no template — the §7.7 registry is for
+24-hour window by construction and needs no template — the §26.7 registry is for
 business-initiated sends, which is the opposite case.
 
 Every reply goes out **twice, deliberately**: once over WhatsApp to the customer, and once

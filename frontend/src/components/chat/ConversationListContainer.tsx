@@ -87,7 +87,7 @@ function titleFor(c: Conversation): string {
 
 function subtitleFor(c: Conversation): string {
   // A WhatsApp enquiry often arrives before we know who is sending it, so the number is
-  // the only identity there is until the linking flow resolves one (§7.4.4).
+  // the only identity there is until the linking flow resolves one (§26.4.4).
   if (c.channel === ConversationChannel.WHATSAPP) return c.externalRef ?? "WhatsApp enquiry";
   if (c.type === ConversationType.CUSTOMER_ADMIN) return "You and the Veriprops team";
   if (c.type === ConversationType.GENERAL_SUPPORT) return "Account & billing help";

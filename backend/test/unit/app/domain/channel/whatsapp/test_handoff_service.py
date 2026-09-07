@@ -1,4 +1,4 @@
-"""HandoffTokenService (PRD §7.4.2, §7.5, D51).
+"""HandoffTokenService (PRD §26.4.2, §26.5, D51).
 
 Single-use is the property the whole handoff design rests on, so it is tested from the
 attacker's side: the same link presented twice, the wrong link at the right landing, and
@@ -163,7 +163,7 @@ class TestRedeem:
         assert len(messages) == 1
 
     async def test_records_the_client_that_burned_the_link(self):
-        # Pen-check trail (§7.11): which client actually spent a given nonce.
+        # Pen-check trail (§26.11): which client actually spent a given nonce.
         svc = _service()
         claims = await svc.redeem(_token(), HandoffIntent.PAY, redeemed_ip="102.89.1.1")
         record = await svc.redemption_for(claims.jti)

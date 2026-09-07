@@ -1,4 +1,4 @@
-"""Meta template approval status (PRD §7.7, WA-15/WA-41).
+"""Meta template approval status (PRD §26.7, WA-15/WA-41).
 
 What this table is **not**: the definition of a template. Names, categories and parameter
 order are code-owned (`providers/whatsapp/templates.py`, D59a), because the code is what
@@ -8,7 +8,7 @@ something the app does not do.
 What it **is**: Meta's answer about each declared template, synced from
 `GET /{waba_id}/message_templates`. A template can be approved, still under review,
 rejected with a reason, or paused for quality — and none of that is knowable from our
-side. §7.11 gates launch on "all §7.7 templates approved", so somebody has to be able to
+side. §26.11 gates launch on "all §26.7 templates approved", so somebody has to be able to
 look.
 
 Every row starts `NOT_FOUND`: declared by us, unknown to Meta. That is the honest state

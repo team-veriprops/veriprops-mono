@@ -1,7 +1,7 @@
-"""CaseDelegateService — §7.4.5's slim delegate (Decision O, D67/D77; WA-26).
+"""CaseDelegateService — §26.4.5's slim delegate (Decision O, D67/D77; WA-26).
 
 This is access control, so the tests are mostly about what a delegate *cannot* reach and
-who *cannot* create one. The four properties §7.4.5 names, each pinned here:
+who *cannot* create one. The four properties §26.4.5 names, each pinned here:
 
 * one delegate per case, and a revoked one does not block a replacement;
 * nothing is visible until the OTP is confirmed;
@@ -209,7 +209,7 @@ class TestVerification:
 
 class TestRevocation:
     async def test_revocation_is_effective_immediately_on_the_next_lookup(self):
-        """§7.4.5's "takes effect on the next event": the audience is resolved at send
+        """§26.4.5's "takes effect on the next event": the audience is resolved at send
         time, so there is nothing to sweep and no window to get wrong."""
         svc = _service([_verified_row()])
         assert await svc.resolve_delegate_for_phone(PHONE) is not None

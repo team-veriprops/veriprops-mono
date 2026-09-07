@@ -1,4 +1,4 @@
-"""Deterministic WhatsApp transport (PRD §7, D43).
+"""Deterministic WhatsApp transport (PRD §26, D43).
 
 The live Cloud API provider needs Meta Business verification, an approved template set,
 and a bound phone number — none of which an automated run can have. This provider stands

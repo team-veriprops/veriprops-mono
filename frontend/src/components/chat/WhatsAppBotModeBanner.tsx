@@ -7,7 +7,7 @@ import { cn } from "@lib/utils";
 import { useBotSessionQuery, useHandBackMutation } from "./libs/useWhatsAppBotQueries";
 
 /**
- * Who is answering this WhatsApp thread, and the way back (PRD §7.6, D57).
+ * Who is answering this WhatsApp thread, and the way back (PRD §26.6, D57).
  *
  * A thread goes sticky-`HUMAN` the moment an agent replies, and stays there until someone
  * hands it back. That is deliberate — a bot talking over an agent mid-conversation is the
@@ -16,7 +16,7 @@ import { useBotSessionQuery, useHandBackMutation } from "./libs/useWhatsAppBotQu
  * and reversible, so an agent who answered one question doesn't accidentally take a
  * customer off the bot forever.
  *
- * It carries the second invisible fact too: Meta's 24-hour service window (§7.7). Outside
+ * It carries the second invisible fact too: Meta's 24-hour service window (§26.7). Outside
  * it, a reply typed here is queued behind a `window_reopen` template rather than delivered
  * as written — which an agent needs to know *before* writing a long answer, not after.
  *

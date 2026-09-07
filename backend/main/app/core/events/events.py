@@ -19,7 +19,7 @@ class EventType(str, enum.Enum):
     STATUS_CHANGED = "STATUS_CHANGED"
     AGENTS_ASSIGNED = "AGENTS_ASSIGNED"
     EVIDENCE_ADDED = "EVIDENCE_ADDED"
-    # §7.6.2 milestones (D66). Four milestones are four triggers: `payment_confirmed` and
+    # §26.6.2 milestones (D66). Four milestones are four triggers: `payment_confirmed` and
     # `report_ready` already had events, so these two give "verification started" and
     # "field inspection complete" theirs. The alternative — a subscriber sniffing
     # `STATUS_CHANGED.data["status"]` and the task role behind a `TASK_UPDATED` nudge —
@@ -48,7 +48,7 @@ class EventType(str, enum.Enum):
     CONFLICT_FLAGGED = "CONFLICT_FLAGGED"
     AGENT_NO_SHOW = "AGENT_NO_SHOW"
     FRAUD_FLAGGED_MESSAGE = "FRAUD_FLAGGED_MESSAGE"
-    # §7.6.5 — the bot failed to answer a customer. The customer already got the warm
+    # §26.6.5 — the bot failed to answer a customer. The customer already got the warm
     # handover copy; this is what tells an admin a person now has to finish that
     # conversation, and that the channel may be degraded.
     BOT_PIPELINE_FAILED = "BOT_PIPELINE_FAILED"
@@ -62,7 +62,7 @@ class EventType(str, enum.Enum):
     # Account lifecycle (§4.2) — admin suspended/reactivated a user account
     ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED"
     ACCOUNT_REACTIVATED = "ACCOUNT_REACTIVATED"
-    # §7.4.5 (D77) — a delegate typed STOP, which ends their delegation. The account
+    # §26.4.5 (D77) — a delegate typed STOP, which ends their delegation. The account
     # holder is told because the alternative is discovering it only by opening the case
     # page, and the useful response is to authorize someone else.
     DELEGATE_REVOKED = "DELEGATE_REVOKED"

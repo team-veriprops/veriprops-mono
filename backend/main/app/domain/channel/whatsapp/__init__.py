@@ -1,4 +1,4 @@
-"""WhatsApp channel (PRD §7)."""
+"""WhatsApp channel (PRD §26)."""
 from main.app.domain.channel.whatsapp import analytics  # noqa: F401
 from main.app.domain.channel.whatsapp import bot  # noqa: F401
 from main.app.domain.channel.whatsapp import consent  # noqa: F401

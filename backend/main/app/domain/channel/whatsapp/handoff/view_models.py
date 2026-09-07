@@ -1,4 +1,4 @@
-"""Wire DTOs for the handoff landings (PRD §7.4.2).
+"""Wire DTOs for the handoff landings (PRD §26.4.2).
 
 Deliberately thin. A landing page must acknowledge where the customer left off — silent
 context loss is a spec violation — but it is still an unauthenticated surface reached by
@@ -17,12 +17,12 @@ from main.appodus_utils.db.types.money import TransactionCurrency
 
 
 class HandoffContextDto(Object):
-    """What the landing page shows: "picking up where you left off" (§7.4.2)."""
+    """What the landing page shows: "picking up where you left off" (§26.4.2)."""
 
     intent: HandoffIntent
     case_id: str
     # The opaque short code (VP-1042) — never the address or customer name, which would
-    # leak through a WhatsApp message preview (§7.4.3).
+    # leak through a WhatsApp message preview (§26.4.3).
     vid: str
     tier: VerificationTier
     status: VerificationStatus

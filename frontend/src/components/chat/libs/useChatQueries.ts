@@ -145,7 +145,7 @@ export function useSendMessageMutation(role: "customer" | "agent" | "admin" | "s
 /**
  * Send into a thread the caller is a member of, addressed by conversation id.
  *
- * The admin WhatsApp inbox needs this rather than `useSendMessageMutation`: a §7.8
+ * The admin WhatsApp inbox needs this rather than `useSendMessageMutation`: a §26.8
  * enquiry thread often has no verification behind it yet, so there is no id to send by.
  */
 export function useConversationSendMutation() {

@@ -1,10 +1,10 @@
-"""The deterministic keyword classifier (PRD §7.6, D53).
+"""The deterministic keyword classifier (PRD §26.6, D53).
 
 Two properties are being defended. The first is determinism: `ENVIRONMENT=test` pins the
 provider here precisely so the guardrail suite cannot flake, and a table that answered
 differently on a second run would make every downstream assertion advisory.
 
-The second is the ordering rule. §7.6.4 says a judgment request routes to a human "with
+The second is the ordering rule. §26.6.4 says a judgment request routes to a human "with
 no partial answers", so a message that *also* looks like a pricing or status question must
 still read as a judgment request — the table is ordered most-specific-first for that
 reason, and the mixed-signal cases below are what hold the order in place.
@@ -65,7 +65,7 @@ async def test_recognises_each_flow_intent(classifier, message, expected):
     ],
 )
 async def test_judgment_requests_are_recognised_so_they_can_be_refused(classifier, message):
-    """§7.1.3/§7.6.4 — the bot never renders a verdict; it recognises the ask and routes it."""
+    """§26.1.3/§26.6.4 — the bot never renders a verdict; it recognises the ask and routes it."""
     result = await classifier.classify(message)
 
     assert result.intent == BotIntent.JUDGMENT_REQUEST

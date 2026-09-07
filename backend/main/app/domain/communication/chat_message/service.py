@@ -64,7 +64,7 @@ def _is_platform_authored(sender_kind: SenderKind, kind: MessageKind) -> bool:
 
 
 def _is_unofficial_media(message: ChatMessage) -> bool:
-    """§7.1.6/§7.6.3 — media that arrived over chat is never canonical evidence.
+    """§26.1.6/§26.6.3 — media that arrived over chat is never canonical evidence.
 
     Derived from ``media_kind`` rather than stored: only portal uploads and structured
     intake enter the verification file, so *every* chat-borne image, document or voice
@@ -74,7 +74,7 @@ def _is_unofficial_media(message: ChatMessage) -> bool:
 
 
 def _is_pending_channel_delivery(message: ChatMessage, channel: Optional[str]) -> bool:
-    """An agent reply sitting in the thread that has not left over WhatsApp yet (§7.7).
+    """An agent reply sitting in the thread that has not left over WhatsApp yet (§26.7).
 
     Three conditions, and the *channel* one is what keeps this off the website: a web
     thread has no outbound transport, so its messages are never pending — they are simply
@@ -128,8 +128,8 @@ class ChatMessageService:
         flagged messages are held for admin review (§4.7).
 
         ``source`` records which surface the message came from — WhatsApp text runs the
-        same scan as web chat (§7.3.3), so the hold behaviour is identical on both.
-        ``media_kind`` records what arrived when it was not text (§7.6.3), which is what
+        same scan as web chat (§26.3.3), so the hold behaviour is identical on both.
+        ``media_kind`` records what arrived when it was not text (§26.6.3), which is what
         lets the console flag it as unofficial rather than showing a bare placeholder.
         """
         body = (body or "").strip()
@@ -254,7 +254,7 @@ class ChatMessageService:
     ) -> Page[ChatMessageDto]:
         rows, total = await self._chat_message_repo.list_delivered_page(conversation_id, viewer_id, page, page_size)
         # Fetched once for the page rather than per row: the thread's channel decides
-        # whether a message can even be pending outbound delivery (§7.7).
+        # whether a message can even be pending outbound delivery (§26.7).
         conversation = await self._conversations._conversation_repo.get_model(conversation_id)
         channel = conversation.channel if conversation else None
         dtos = [await self._to_dto(m, viewer_id, channel) for m in rows]
@@ -298,7 +298,7 @@ class ChatMessageService:
     async def _deliver_over_channel(
         self, conversation: Conversation, message: ChatMessage
     ) -> None:
-        """Hand a console reply to the conversation's channel adapter (§7.3.3, WA-12).
+        """Hand a console reply to the conversation's channel adapter (§26.3.3, WA-12).
 
         The adapter is resolved here rather than injected: the WhatsApp package imports
         this service (its bot mirrors replies into the console), so an import-time

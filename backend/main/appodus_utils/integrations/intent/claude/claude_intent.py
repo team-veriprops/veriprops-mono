@@ -2,7 +2,7 @@
 
 Classification is forced through a **tool call** rather than free text: the tool's schema
 declares `intent` as an enum, which is the most reliable way to get an answer from the
-closed set §7.6.4 depends on. The answer is still run through ``coerce_intent`` on the way
+closed set §26.6.4 depends on. The answer is still run through ``coerce_intent`` on the way
 out — a schema is a strong constraint, not a proof, and the cost of trusting it wrongly is
 the bot acting on an intent nobody defined.
 

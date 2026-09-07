@@ -1,6 +1,6 @@
-"""Per-case delegate (PRD §7.4.5, Decision O, D67; WA-26).
+"""Per-case delegate (PRD §26.4.5, Decision O, D67; WA-26).
 
-The buyer's answer to "my brother is handling this for me". §7.4.5 exists because that
+The buyer's answer to "my brother is handling this for me". §26.4.5 exists because that
 sentence is a social-engineering script, and the bot has to be able to refuse it without
 being useless — which it can only do if there is a legitimate way for the account holder
 to say yes. A delegate is that way, and it is deliberately the narrowest grant that is

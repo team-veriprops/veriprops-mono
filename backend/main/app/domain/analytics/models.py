@@ -66,18 +66,18 @@ class AgentTrendsDto(Object):
     points: List[AgentTrendPointDto] = []
 
 
-# ─── WhatsApp channel (§7.10, WA-43) ──────────────────────────────
+# ─── WhatsApp channel (§26.10, WA-43) ──────────────────────────────
 
 
 class ChannelCountDto(Object):
-    """One bar in a §7.10 breakdown — a page code, or an escalation reason."""
+    """One bar in a §26.10 breakdown — a page code, or an escalation reason."""
 
     label: str
     count: int
 
 
 class WhatsAppNumberHealthDto(Object):
-    """Meta's verdict on our sending number (§7.10, D81).
+    """Meta's verdict on our sending number (§26.10, D81).
 
     `synced_at` is rendered beside the rating rather than hidden, because a GREEN we have
     not been able to refresh for a week is a different fact from a GREEN from this morning
@@ -91,9 +91,9 @@ class WhatsAppNumberHealthDto(Object):
 
 
 class WhatsAppChannelAnalyticsDto(Object):
-    """§7.10's seven metrics over one window (WA-43).
+    """§26.10's seven metrics over one window (WA-43).
 
-    Counts and rates are both returned. The rate is the number §7.10 asks for, and the
+    Counts and rates are both returned. The rate is the number §26.10 asks for, and the
     counts behind it are what makes a rate readable — "60%" over three conversations is a
     very different thing from the same figure over three hundred, and an admin who cannot
     see which is being shown will act on the wrong one.
@@ -101,7 +101,7 @@ class WhatsAppChannelAnalyticsDto(Object):
 
     window_days: int
 
-    # Seam conversion — §7.10's headline: "the cost of the A1 trust boundary, measured."
+    # Seam conversion — §26.10's headline: "the cost of the A1 trust boundary, measured."
     intake_completed: int = 0
     payment_completed: int = 0
     seam_conversion_rate: float = 0.0
@@ -119,7 +119,7 @@ class WhatsAppChannelAnalyticsDto(Object):
     escalation_rate: float = 0.0
     escalations_by_reason: List[ChannelCountDto] = []
 
-    # Consent asset growth (§7.4.6). Denominator is ACTIVE linked numbers (D84): of the
+    # Consent asset growth (§26.4.6). Denominator is ACTIVE linked numbers (D84): of the
     # customers this channel can actually reach, how many said yes.
     linked_numbers: int = 0
     utility_opt_ins: int = 0

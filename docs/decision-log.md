@@ -285,7 +285,7 @@ Super Admin (RBAC `INVITE_ADMIN`) is exactly the authorized exception. Keeping a
 ### Context
 S7 deferred the real presigned-S3 upload UX (stored refs only). S11 (Phase 7) is where evidence
 carries proof-of-work weight: server-side GPS+timestamp stamping, per-item SHA-256 content hash
-(§4.5), image compression/derivatives, progressive viewing, and the offline upload queue (§7.4).
+(§4.5), image compression/derivatives, progressive viewing, and the offline upload queue (§12.3).
 
 ### Chosen Option
 **Full S3 presigned upload** (user direction). S11 wires a real storage facade (presigned PUT +
@@ -294,7 +294,7 @@ content-hash + server-set GPS/timestamp/capture-date), and the frontend upload m
 retry queue (Field/Surveyor).
 
 ### Tradeoffs
-- Pros: §4.5/§7.3a/§7.4 exercised end-to-end; evidence layer (S13) inherits real media.
+- Pros: §4.5/§12.3/§12.3 exercised end-to-end; evidence layer (S13) inherits real media.
 - Cons: largest S11 sub-scope; storage-facade + upload manager + offline queue are real engineering.
 
 ### Constraints
@@ -309,7 +309,7 @@ retry queue (Field/Surveyor).
 ## Decision: D12 — Real scheduler for time-based automation (S10/S11)
 
 ### Context
-Broadcast first-accept-wins expiry, no-show/pool timeouts, starvation backstop (§7.2), and graceful
+Broadcast first-accept-wins expiry, no-show/pool timeouts, starvation backstop (§11.4), and graceful
 SLA shedding (§6.4) are time-driven. They need a periodic trigger.
 
 ### Chosen Option
@@ -1057,10 +1057,10 @@ Extend the scrub set + revisit the token/retention basis once §B item 12 legal 
 
 ---
 
-# Cycle 2 — WhatsApp Channel (PRD.md §7)
+# Cycle 2 — WhatsApp Channel (PRD.md §26)
 
 > Cycle 1 (core platform, D1–D41) closed with [final-audit.md](final-audit.md); its as-built state
-> is consolidated in [MASTER-PRD.md](../MASTER-PRD.md). Cycle 2 implements the locked §7 WhatsApp
+> is consolidated in [MASTER-PRD.md](../MASTER-PRD.md). Cycle 2 implements the locked §26 WhatsApp
 > Channel spec. The PRD's own Decision Record A–P is imported as **locked upstream input** — those
 > letters are cited directly and are not re-decided here. D-numbering continues below with the
 > decisions taken at the cycle-2 `initialize` clarification gate (2026-08-31, user-answered).
@@ -1130,20 +1130,20 @@ If Meta assets stall the schedule, slices proceed on the stub and live smoke mov
 ## Decision: D44 — LLM-assisted intent classification (Claude), deterministic flows and guardrails
 
 ### Context
-§7.6 requires "structured conversation flows, intent matching, guardrail enforcement". Options
+§26.6 requires "structured conversation flows, intent matching, guardrail enforcement". Options
 were deterministic keyword/menu matching vs LLM-assisted classification of free text into the
 fixed intent set.
 
 ### Options Considered
 1. Deterministic menus + keyword matching only.
-2. **Claude classifies free text into the fixed §7.6 intent set; flows stay deterministic
+2. **Claude classifies free text into the fixed §26.6 intent set; flows stay deterministic
    state machines.**
 
 ### Chosen Option
 **Option 2** (user-selected, overriding the deterministic-only recommendation).
 
 ### Rationale
-Better free-text handling from day one; escalation-rate metric (§7.10) still measures coverage.
+Better free-text handling from day one; escalation-rate metric (§26.10) still measures coverage.
 
 ### Tradeoffs / Constraints
 - The classifier lives behind its own facade (`INTENT_PROVIDER=STUB|CLAUDE` pattern): STUB is a
@@ -1151,7 +1151,7 @@ Better free-text handling from day one; escalation-rate metric (§7.10) still me
 - **Guardrails remain deterministic and sit outside the classifier**: guardrail topics, menu
   selections, and the two-unmatched-intents escalation rule are enforced by the bot engine
   regardless of classifier output. Classifier error/timeout/low-confidence routes to a human,
-  never a guess (§7.6.4).
+  never a guess (§26.6.4).
 - The classifier only ever returns a member of the closed intent enum (structured output;
   free literals prohibited per repo enum rule).
 - Default model assumption: **Haiku-class** (`claude-haiku-4-5`) for cost/latency; a Settings
@@ -1159,31 +1159,31 @@ Better free-text handling from day one; escalation-rate metric (§7.10) still me
 - Consult the `claude-api` skill at implementation time for current model ids/limits.
 
 ### Revisit
-Model choice and prompt once real conversation data accrues (concierge corpus, §7.11).
+Model choice and prompt once real conversation data accrues (concierge corpus, §26.11).
 **Amended by D48 (2026-08-31):** the classifier facade is provider-agnostic — no lock-in to
 Anthropic/Claude; the Claude-specific knob and key named above are superseded.
 
-## Decision: D45 — §7.3.2 channel states are a projection, not a new case state machine
+## Decision: D45 — §26.3.2 channel states are a projection, not a new case state machine
 
 ### Context
-§7.3.2 lists `enquiry → intake_in_progress → intake_complete → payment_pending → paid → verifying
+§26.3.2 lists `enquiry → intake_in_progress → intake_complete → payment_pending → paid → verifying
 → field_inspection → report_ready → delivered → closed`. The backend already has the authoritative
-`VerificationStatus` machine (MASTER-PRD §3.1) plus draft/payment states, and §7.3.1 mandates the
+`VerificationStatus` machine (MASTER-PRD §3.1) plus draft/payment states, and §26.3.1 mandates the
 bot read the same state through the same API as the dashboard.
 
 ### Chosen Option
-Map §7.3.2 names onto existing state: pre-case stages (`enquiry`, `intake_in_progress`,
+Map §26.3.2 names onto existing state: pre-case stages (`enquiry`, `intake_in_progress`,
 `intake_complete`) live in bot-session + existing submission-draft state; from payment onward the
 projection derives from `VerificationStatus` + payment records, exactly as the customer tracking
 labels (§14.2) already do. No schema change to the case machine; a single projection function
 owns the mapping (single state-derivation owner, §4.1).
 
 ### Rationale
-Two state machines for one case is the "two surfaces show different statuses" failure §7.3.1
+Two state machines for one case is the "two surfaces show different statuses" failure §26.3.1
 exists to prevent.
 
 ### Tradeoffs / Constraints
-Milestone template triggers (§7.7) bind to existing domain events, not to projected names.
+Milestone template triggers (§26.7) bind to existing domain events, not to projected names.
 
 ### Revisit
 Only if intake resumability turns out to need persisted states the draft model cannot express.
@@ -1294,7 +1294,7 @@ Not expected — this is the normal posture from here.
 ## Decision: D50 — Landing depth is per-intent, not uniform
 
 ### Context
-§7.4.2 says the three `/wa/*` landings are "pre-authenticated for that action"; §7.5 says
+§26.4.2 says the three `/wa/*` landings are "pre-authenticated for that action"; §26.5 says
 the token is not a session; and locked Decision B says report delivery is an
 **authenticated** portal link. Those cannot all be satisfied by one uniform depth.
 
@@ -1308,12 +1308,12 @@ the token is not a session; and locked Decision B says report delivery is an
 
 ### Rationale
 The intents carry very different downside. A leaked `pay` link costs a stranger paying
-someone else's bill — no disclosure, no card data, and payment friction is what §7.10
+someone else's bill — no disclosure, no card data, and payment friction is what §26.10
 calls the channel's most important metric. A leaked `report` link would let whoever taps
 first in a forwarded family group open the full report, deciding access by tap order and
 bypassing the §13.2/§13.3 sharing model whose exit criterion is that revocation works. A
 leaked `upload` link would let anyone inject evidence into the canonical verification file
-(§7.1.6/M1) — the conversation-hijack class §7.4.3 exists to defeat.
+(§26.1.6/M1) — the conversation-hijack class §26.4.3 exists to defeat.
 
 ### Tradeoffs / Constraints
 - Two of three landings still require a login; both pre-fill the redirect so a signed-in
@@ -1327,7 +1327,7 @@ alone — with a fresh decision, not silently.
 ## Decision: D51 — Redeem once, then hold a short-lived scoped grant
 
 ### Context
-§7.5 records the `jti` on redemption and rejects replays. Read literally, the link burns
+§26.5 records the `jti` on redemption and rejects replays. Read literally, the link burns
 on the first page load — a refresh, a back-navigation, or WhatsApp's own link-preview
 fetch is enough.
 
@@ -1395,7 +1395,7 @@ and model "chosen at S5". S5 needs the answer before the facade is written.
 
 ### Rationale
 Native structured output is the most reliable way to force an answer from the closed
-intent enum — the guarantee §7.6.4 rests on. The generic adapter keeps provider switching
+intent enum — the guarantee §26.6.4 rests on. The generic adapter keeps provider switching
 a config change, so there is no lock-in despite a named default.
 
 ### Tradeoffs / Constraints
@@ -1407,6 +1407,8 @@ a config change, so there is no lock-in despite a named default.
 ### Revisit
 If live error rates warrant it, add a cross-provider fallback chain in the shape the
 email router already uses.
+**Amended by D87 (2026-09-04):** the live default is DeepSeek through the generic adapter;
+the Anthropic default named above is superseded, though the adapter itself is retained.
 
 **Implementation note (S5, 2026-09-01) — amends D48's "zero dependencies".** The Claude
 adapter uses the official `anthropic` SDK rather than raw HTTP: it maintains the API
@@ -1449,7 +1451,7 @@ editor S8's template registry will already have the shape for.
 ## Decision: D55 — `HandoffIntent.LINK`: one signer, two exclusive claim shapes
 
 ### Context
-WA-24 (WhatsApp→web linking) needs a signed link carrying a phone number. §7.5's claim
+WA-24 (WhatsApp→web linking) needs a signed link carrying a phone number. §26.5's claim
 list is `sub · case · intent · exp · jti` — an action token's shape. A linking token has
 no case, and no customer either: it is minted for a number with no account yet.
 
@@ -1464,11 +1466,11 @@ no case, and no customer either: it is minted for a number with no account yet.
 
 ### Rationale
 One RS256 signer, one `jti` ledger, one pen-check surface. A second implementation would
-double what §7.11's token pen-check has to cover, for a token that is strictly weaker than
+double what §26.11's token pen-check has to cover, for a token that is strictly weaker than
 the ones already there.
 
 ### Tradeoffs / Constraints
-- Deviates from §7.5's literal claim list — hence this entry.
+- Deviates from §26.5's literal claim list — hence this entry.
 - The shapes are **mutually exclusive by construction**: a model validator rejects a
   `link` token naming a case and an action token missing one, and `_encode` emits only the
   keys a shape uses, so neither carries the other's claims even on the wire.
@@ -1486,8 +1488,8 @@ than growing the validator.
 ## Decision: D56 — Chat intake collects the full field set; consent and payment stay on web
 
 ### Context
-§7.6.2 requires chat intake to collect "the same fields as web intake", while §7.4.6 puts
-the two consent controls at payment confirmation and the §7.3.4 capability matrix makes
+§26.6.2 requires chat intake to collect "the same fields as web intake", while §26.4.6 puts
+the two consent controls at payment confirmation and the §26.3.4 capability matrix makes
 payment web-only.
 
 ### Options Considered
@@ -1499,7 +1501,7 @@ payment web-only.
 **Option 1** (user-selected; also the recommendation).
 
 ### Rationale
-Honours "same fields" without moving consent off the screen §7.4.6 names. Option 2 leaves
+Honours "same fields" without moving consent off the screen §26.4.6 names. Option 2 leaves
 the WhatsApp-only customer unable to finish; option 3 downgrades the evidentiary quality
 of a consent record that has to stand up as a legal artefact.
 
@@ -1514,7 +1516,7 @@ If chat intake completion rates are poor, revisit the step granularity — not t
 
 ### Context
 Every inbound WhatsApp message already lands in the admin console. Once an agent is in the
-thread, the bot must stop answering — §7.6.2's escalation says "routed to console", which
+thread, the bot must stop answering — §26.6.2's escalation says "routed to console", which
 only means something if the bot then goes quiet.
 
 ### Options Considered
@@ -1527,7 +1529,7 @@ only means something if the bot then goes quiet.
 
 ### Rationale
 A bot talking over an agent mid-conversation is the failure customers notice most, and a
-time window is a guess that will be wrong for slow threads. It also makes §7.10's
+time window is a guess that will be wrong for slow threads. It also makes §26.10's
 escalation-rate metric exactly countable rather than inferred.
 
 ### Tradeoffs / Constraints
@@ -1541,7 +1543,7 @@ not a silent one.
 ## Decision: D58 — WA-21's opaque short code is the existing VID
 
 ### Context
-§7.4.3 requires "Continue on WhatsApp" affordances to carry an opaque case code, never an
+§26.4.3 requires "Continue on WhatsApp" affordances to carry an opaque case code, never an
 address or customer name, because WhatsApp renders message previews.
 
 ### Chosen Option
@@ -1561,8 +1563,8 @@ Not expected.
 S4 shipped the `otp_auth` linking OTP, but `render_whatsapp_payload` could only produce
 free text. Meta accepts free text only inside the 24-hour service window, and an OTP to a
 number that has never messaged us is definitionally outside it — so the path worked on the
-stub and would have failed live. Closing it means building §7.7, which also unblocks the
-launch gate: "all §7.7 templates approved" is on the critical path because approval lags,
+stub and would have failed live. Closing it means building §26.7, which also unblocks the
+launch gate: "all §26.7 templates approved" is on the critical path because approval lags,
 and nothing in the app could say which templates existed or what Meta thought of them.
 
 ### Options Considered
@@ -1579,14 +1581,14 @@ language, ordered parameter list and button kind live in
 lives in `whatsapp_templates`, populated from `GET /{waba_id}/message_templates` through a
 `WHATSAPP_PROVIDER`-selected directory facade. Closes WA-15/WA-41.
 
-**D59b — template-by-registration, not window-by-send.** A declared §7.7 template always
-sends as a template; free text is reserved for in-conversation bot replies. All seven §7.7
+**D59b — template-by-registration, not window-by-send.** A declared §26.7 template always
+sends as a template; free text is reserved for in-conversation bot replies. All seven §26.7
 templates are business-initiated and therefore outside the window by construction, and a
 bot reply is inside it by construction — so the rule is a property of the message, not a
 runtime guess about timing.
 
 **D59c — approval is advisory at send time.** An unapproved template shows in the registry
-and on the §7.11 checklist; it never fails a send. A stale sync must not be able to take
+and on the §26.11 checklist; it never fails a send. A stale sync must not be able to take
 the channel down.
 
 ### Rationale
@@ -1605,9 +1607,9 @@ gives each half an owner that can actually be right.
   fully demoable without Meta; the live directory is the same interface behind the other
   transport, and CI/e2e never reach Meta.
 - An unreadable or absent status becomes `NOT_FOUND`, never `APPROVED`: optimism here
-  would let the §7.11 gate pass on a template that cannot be delivered.
+  would let the §26.11 gate pass on a template that cannot be delivered.
 - All seven templates are declared with bodies although only `otp_auth` has a sender —
-  §7.7 exists to get them submitted early. Their consumer until S6–S9 is the registry page
+  §26.7 exists to get them submitted early. Their consumer until S6–S9 is the registry page
   and the Meta submission.
 - The authentication-template *button* component was initially left unwired because Meta's
   own send-side pages 404 or omit it. **Closed by D61** once the shape was confirmed from
@@ -1620,7 +1622,7 @@ the registry page already has the shape for it.
 ## Decision: D60 — SMS fallback for the linking OTP (amends D46)
 
 ### Context
-D46 deferred the §7.4.4 SMS fallback entirely, on the grounds that the upstream §B SMS
+D46 deferred the §26.4.4 SMS fallback entirely, on the grounds that the upstream §B SMS
 **provider** decision was unmade. Revisiting the code while closing S4's gaps showed that
 premise no longer holds: `MessageRouter`'s `sms` channel already encodes the full chain —
 `MOCK_SMS` exclusively in test/dev/dev_personal, and Termii → Twilio with a fallback order
@@ -1637,7 +1639,7 @@ in the router, and nothing was reading it.
 **Option 1.**
 
 ### Rationale
-§7.4.4 names SMS as E1's fallback, and a WhatsApp send can fail for reasons that have
+§26.4.4 names SMS as E1's fallback, and a WhatsApp send can fail for reasons that have
 nothing to do with the customer — an unapproved template, a Meta outage, a number with no
 WhatsApp account. Each of those dead-ends account linking for somebody who did nothing
 wrong, and the fallback costs one `except` branch over provider selection that already
@@ -1652,7 +1654,7 @@ exists.
 - Delivery stays best-effort — a failing fallback never propagates, because the code is
   already stored and raising would turn an undelivered message into a failed API call.
 - A code delivered by SMS proves control of the *phone* rather than of WhatsApp on it.
-  That is §7.4.4's own trade, not a new one.
+  That is §26.4.4's own trade, not a new one.
 
 ### Revisit
 If §B later names a different provider, it changes the router's chain, not this call site.
@@ -1660,7 +1662,7 @@ If §B later names a different provider, it changes the router's chain, not this
 ## Decision: D61 — Authentication templates send their mandatory OTP button
 
 ### Context
-D59 shipped the §7.7 registry with the authentication-template *button* component unwired:
+D59 shipped the §26.7 registry with the authentication-template *button* component unwired:
 Meta's public send-side documentation 404s or omits the shape, and shipping a guessed JSON
 as though it were verified was the worse error. Meta **mandates** an OTP button on
 authentication templates, so `otp_auth` could not actually have been delivered.
@@ -1715,7 +1717,7 @@ the bot captures consent (D56's rejected option 3) or the landing does more than
 
 ### Rationale
 Honours D56 literally and keeps the WhatsApp-only customer able to finish — the seam
-§7.10 calls the channel's most important number. Option 2 is D56's own rejected option 3:
+§26.10 calls the channel's most important number. Option 2 is D56's own rejected option 3:
 it downgrades a consent record that has to stand up as a legal artefact. Option 3 is
 D56's rejected option 2.
 
@@ -1724,8 +1726,8 @@ D56's rejected option 2.
   case. It is grant-scoped: the case id comes from the grant cookie, **never** from the
   request body, so a holder of one link cannot submit against another case. Same posture
   as `pay/initiate`, which already works this way.
-- The landing is the §7.4.6 consent screen too, so all three controls (VERIFICATION_TERMS,
-  utility opt-in, marketing opt-in) render on one page — the placement §7.4.6 names.
+- The landing is the §26.4.6 consent screen too, so all three controls (VERIFICATION_TERMS,
+  utility opt-in, marketing opt-in) render on one page — the placement §26.4.6 names.
 - A case reaching the landing is a DRAFT, so the landing shows a quote rather than a
   locked price until submit.
 
@@ -1733,11 +1735,11 @@ D56's rejected option 2.
 If chat intake ever needs to complete without a web round trip, that is a fresh decision
 about consent evidence, not a change to this endpoint.
 
-## Decision: D63 — `WhatsAppConsent` entity is the §7.4.6 consent store
+## Decision: D63 — `WhatsAppConsent` entity is the §26.4.6 consent store
 
 ### Context
-§7.4.6 puts two separate unticked consents (utility, marketing) "on the customer object";
-§7.8 requires consent records to be timestamped and exportable.
+§26.4.6 puts two separate unticked consents (utility, marketing) "on the customer object";
+§26.8 requires consent records to be timestamped and exportable.
 
 ### Options Considered
 1. **A `WhatsAppConsent` entity in `channel/whatsapp/consent/`** — one row per user,
@@ -1749,7 +1751,7 @@ about consent evidence, not a change to this endpoint.
 **Option 1** (user-selected; also the recommendation).
 
 ### Rationale
-The §7.8 export becomes a query rather than a reconstruction, and provenance ("who turned
+The §26.8 export becomes a query rather than a reconstruction, and provenance ("who turned
 this off — the pay screen, account settings, or a STOP keyword?") is recorded at the point
 it is known. Option 2's model is per-event while these consents are channel-wide, and it
 carries neither timestamp nor source. Option 3 loses revocation history and widens `users`
@@ -1766,7 +1768,7 @@ If a third WhatsApp consent appears, promote to one row per consent kind.
 ## Decision: D64 — STOP kills both consents; START restores utility only
 
 ### Context
-§7.4.6 requires both opt-ins to be revocable "via STOP-style keywords in chat" and does
+§26.4.6 requires both opt-ins to be revocable "via STOP-style keywords in chat" and does
 not say what re-subscribing looks like.
 
 ### Chosen Option
@@ -1777,7 +1779,7 @@ deliberate opt-in on the web.
 ### Rationale
 Matches the opt-out convention WhatsApp users already expect, and keeps marketing
 re-consent an explicit evidenced act rather than a one-word chat message — marketing
-opt-in is exactly the consent §7.10 counts as a growth asset, so its record has to be
+opt-in is exactly the consent §26.10 counts as a growth asset, so its record has to be
 worth counting.
 
 ### Tradeoffs / Constraints
@@ -1796,16 +1798,16 @@ settled before that is buildable.
 
 ### Chosen Option
 `NotificationRule` gains `whatsapp: bool` and a **distinct** `whatsapp_template` — the
-§7.7 template is not the email template, and one field cannot be both. The WhatsApp branch
+§26.7 template is not the email template, and one field cannot be both. The WhatsApp branch
 of `NotificationService._dispatch_external` (a) reads the D63 consent, (b) resolves the
 recipient's **linked** number via `WhatsAppLinkService`, not `user.phone`, and (c) sends
-the §7.7 template. Delegates are not users, so `delegate_status` goes out through a
+the §26.7 template. Delegates are not users, so `delegate_status` goes out through a
 separate audience path in the same subscriber.
 
 ### Rationale
 Consent enforcement stays in the router, never at a send site — the WA-16/WA-27 property.
 Sending to `user.phone` would deliver case milestones to a number that was never
-OTP-verified as this customer's WhatsApp, which is precisely what §7.4.3 forbids.
+OTP-verified as this customer's WhatsApp, which is precisely what §26.4.3 forbids.
 
 ### Tradeoffs / Constraints
 The rule table now carries a channel whose recipient address is resolved elsewhere; that
@@ -1817,7 +1819,7 @@ If a second phone-addressed channel appears, lift recipient resolution into the 
 ## Decision: D66 — `VERIFICATION_STARTED` and `INSPECTION_COMPLETE` are real events
 
 ### Context
-§7.7 names four milestone templates. `payment_confirmed` and `report_ready` already have
+§26.7 names four milestone templates. `payment_confirmed` and `report_ready` already have
 events; "verification started" and "field inspection complete" do not — today they are
 implicit in a `STATUS_CHANGED` payload and a `TASK_UPDATED` SSE nudge.
 
@@ -1845,7 +1847,7 @@ If either moment ever warrants an email, flip the flag — the rule row already 
 ## Decision: D67 — Delegate identity is independent of `WhatsAppLink`
 
 ### Context
-§7.4.5 has a delegate OTP-verified "via the same E1 mechanics (narrower grant)".
+§26.4.5 has a delegate OTP-verified "via the same E1 mechanics (narrower grant)".
 `WhatsAppLink` is 1:1 between an account and a number, and a delegate has no account.
 
 ### Chosen Option
@@ -1861,20 +1863,20 @@ is strictly wider, and reading it as a delegate would *lose* the customer their 
 
 ### Tradeoffs / Constraints
 - Two identity lookups instead of one, so `resolve_user_for_phone` stays the single
-  account lookup (§7.4.3's audit surface) and the delegate lookup sits beside it rather
+  account lookup (§26.4.3's audit surface) and the delegate lookup sits beside it rather
   than inside it.
 - An OTP to a phone that is mid-linking and mid-delegate-authorization shares the
   `OtpChannel.WHATSAPP` key space; the second send overwrites the first, which is the
   existing resend semantics, not a new failure.
 
 ### Revisit
-The §7.9 delegate enhancements (multiple delegates, granular permissions) would revisit
+The §26.9 delegate enhancements (multiple delegates, granular permissions) would revisit
 the shape.
 
 ## Decision: D68 — G1 support hours live in `system_config`
 
 ### Context
-§7.6.2 escalation copy and §7.6.5 failure copy both state a response window that depends
+§26.6.2 escalation copy and §26.6.5 failure copy both state a response window that depends
 on Decision G's coverage hours (8am–8pm WAT weekdays + Saturday morning).
 
 ### Chosen Option
@@ -1894,13 +1896,13 @@ If coverage becomes per-day rather than weekday/Saturday, promote to a table.
 
 ### Context
 `VerificationService.create_draft` needs a `customer_id`, and a WhatsApp number that has
-never linked an account has none. §7.3.4 lists intake as a **full** WhatsApp capability, so
+never linked an account has none. §26.3.4 lists intake as a **full** WhatsApp capability, so
 the flow has to work for a stranger's first message — which is the common case, since the
 widget and the official number are what bring people in.
 
 ### Chosen Option (user)
 The bot collects its answers into `WhatsAppBotSession.context`. Nothing is written to
-`verifications` during the conversation. Completion mints a phone-scoped §7.5 `intake`
+`verifications` during the conversation. Completion mints a phone-scoped §26.5 `intake`
 token whose landing authenticates the customer (signup or login), then creates the draft,
 seeds it with the collected answers, and hands into the **existing** submission wizard.
 
@@ -1908,7 +1910,7 @@ seeds it with the collected answers, and hands into the **existing** submission 
 Identity lands where signup already exists, is tested, and has its own recovery paths. The
 alternative — sending an unlinked number through OTP linking before the bot will take any
 details — puts "verify your number before I can help you" in front of every new customer,
-which is precisely the friction the channel exists to remove. §7.10 makes intake→payment
+which is precisely the friction the channel exists to remove. §26.10 makes intake→payment
 the channel's headline number, and a gate at question one is the cheapest way to lose it.
 
 The cost is accepted knowingly: an abandoned chat intake leaves no row in `verifications`,
@@ -1987,7 +1989,7 @@ per message the agent types.
 ### Rationale
 Nudge-only would dead-end the thread. By the time an agent has replied it is sticky-`HUMAN`
 (D57), so the bot will not answer the customer's reply to the nudge either — they would get
-a nudge followed by silence, which is exactly the §7.6.5 failure the channel exists to
+a nudge followed by silence, which is exactly the §26.6.5 failure the channel exists to
 avoid.
 
 `channel_delivered_at` is deliberately not a reuse of `delivered_at`, which already means
@@ -2006,7 +2008,7 @@ rather than replaying each.
 ## Decision: D73 — "unofficial media" is derived, never stored
 
 ### Context
-§7.6.3 requires chat images to be flagged unofficial in the console, and §7.1.6 rule 6 says
+§26.6.3 requires chat images to be flagged unofficial in the console, and §26.1.6 rule 6 says
 only portal uploads and structured intake are canonical.
 
 ### Chosen Option
@@ -2029,7 +2031,7 @@ evidence only through the portal, never from a message row.
 ## Decision: D74 — an `upload` link needs a linked number *and* a case
 
 ### Context
-§7.6.3 says an image or document should be answered with an `upload` token link. But an
+§26.6.3 says an image or document should be answered with an `upload` token link. But an
 action token names a customer and a case (D55, `ACTION_INTENTS`), and a photograph arrives
 with neither attached.
 
@@ -2041,7 +2043,7 @@ evidence rule and the next step, with no link.
 
 ### Rationale
 Issuing a token to an unverified number would attach a stranger's file to somebody's
-verification — the §7.4.3 leak in its writeable form. Reusing the status flow's list means a
+verification — the §26.4.3 leak in its writeable form. Reusing the status flow's list means a
 customer answers both "which case?" questions the same way; a second matcher would be a
 second thing to get wrong.
 
@@ -2055,7 +2057,7 @@ one flow rather than two turns.
 ## Decision: D75 — `report_ready` carries the portal link, not a handoff token
 
 ### Context
-§7.7's `report_ready` template takes a link. WA-35 says a `report` handoff token; Decision
+§26.7's `report_ready` template takes a link. WA-35 says a `report` handoff token; Decision
 B says "notification template + authenticated portal link". The two readings had never been
 reconciled, because until S8 nothing sent the template.
 
@@ -2068,29 +2070,29 @@ reconciled, because until S8 nothing sent the template.
 **Option 1** (user-selected; also the recommendation).
 
 ### Rationale
-A §7.5 token lives fifteen minutes and a milestone is read whenever the customer next opens
+A §26.5 token lives fifteen minutes and a milestone is read whenever the customer next opens
 WhatsApp — so option 2 sends most readers to the expiry page from a message they never
-clicked, turning §7.4.2's recovery path from an edge case into the normal experience.
+clicked, turning §26.4.2's recovery path from an edge case into the normal experience.
 Decision B already puts the report behind a real login, and D50 routes `/wa/report/[token]`
 into the authenticated portal anyway, so the token buys no privacy the login does not.
 
 Option 3 puts two links in a utility template. Meta approves the body as written, and two
 links in a milestone is a phishing-shaped message in a scam-saturated category — it also
-doubles what the customer has to judge, which is the opposite of §7.1.2's posture.
+doubles what the customer has to judge, which is the opposite of §26.1.2's posture.
 
 ### Tradeoffs / Constraints
 - WA-35's wording is amended in the requirements matrix to match.
-- The bot still mints a fresh `report` token **on request** (§7.4.2), so the capability link
+- The bot still mints a fresh `report` token **on request** (§26.4.2), so the capability link
   is used when it is actually needed rather than on every send.
 
 ### Revisit
 If a report ever needs to be readable without an account, that is a fresh decision about
 report access, not about this template.
 
-## Decision: D76 — both payment surfaces capture the §7.4.6 consents
+## Decision: D76 — both payment surfaces capture the §26.4.6 consents
 
 ### Context
-§7.4.6 puts the two unticked opt-ins "at payment confirmation". By S8 there are two payment
+§26.4.6 puts the two unticked opt-ins "at payment confirmation". By S8 there are two payment
 surfaces: the authenticated web pay screen, and the `/wa/pay/<token>` landing D62 built for
 a customer who arrived from chat.
 
@@ -2105,7 +2107,7 @@ a customer who arrived from chat.
 ### Rationale
 The handoff-landing payer is the channel's *own* customer. If only the web screen asks, the
 people most likely to want WhatsApp updates are the only ones never offered them, and could
-opt in solely by finding account settings on a site they reached from a chat link. §7.10
+opt in solely by finding account settings on a site they reached from a chat link. §26.10
 counts the opt-in rate as the channel's consent asset, so that is the population it can
 least afford to miss.
 
@@ -2119,7 +2121,7 @@ screen at all.
   body, so a holder of one link cannot consent on another customer's behalf.
 - Consent is written **on toggle**, not on payment success. The tick is the consent act;
   tying it to a gateway outcome would discard it every time a card fails, and would make the
-  §7.8 timestamp mean something other than when the customer decided.
+  §26.8 timestamp mean something other than when the customer decided.
 - The control is one shared presentational component, so the two surfaces cannot drift into
   asking different questions.
 
@@ -2129,7 +2131,7 @@ If a third capture point appears, extend the source enum rather than the compone
 ## Decision: D77 — STOP from a delegate ends the delegation
 
 ### Context
-D64 makes STOP revoke both consents on the customer's D63 row. A §7.4.5 delegate receives
+D64 makes STOP revoke both consents on the customer's D63 row. A §26.4.5 delegate receives
 milestones and has no account, so no consent row exists for them to revoke.
 
 ### Options Considered
@@ -2160,12 +2162,12 @@ not to be emailed about someone else's messaging preference.
   still revokes their consents rather than a delegation they happen to also hold.
 
 ### Revisit
-If §7.9's multiple-delegate enhancement lands, the event needs to name which delegate left.
+If §26.9's multiple-delegate enhancement lands, the event needs to name which delegate left.
 
 ## Decision: D78 — "verification started" fires on the first start, not every start
 
 ### Context
-D66 gave §7.6.2's "verification started" milestone its own event, published wherever §4.1's
+D66 gave §26.6.2's "verification started" milestone its own event, published wherever §4.1's
 derivation moves a case into `IN_PROGRESS`. The live drive-through then showed the template
 going out **three times** on a STANDARD case.
 
@@ -2176,7 +2178,7 @@ Publish only when no task has yet reached `SUBMITTED` or `APPROVED`.
 `derive_status` is a pure projection with no memory: a case drops back to `PAID` when its
 one active task is submitted and re-enters `IN_PROGRESS` when the next agent is assigned, so
 a three-role tier passes through the transition three times. That is correct for a status
-feed and wrong for a milestone — §7.6.2 promises the customer three or four messages per
+feed and wrong for a milestone — §26.6.2 promises the customer three or four messages per
 verification, not one per agent.
 
 A settled task is exactly the difference between work *starting* and work *continuing*, and
@@ -2195,7 +2197,7 @@ to a timestamp column on `verifications`.
 ## Decision: D79 — one message answers both the unlinked customer and the third party
 
 ### Context
-§7.4.3 says an unlinked number asking about a case is offered the linking flow. §7.4.5 says
+§26.4.3 says an unlinked number asking about a case is offered the linking flow. §26.4.5 says
 a non-delegate third party is "warmly treated as a new enquiry; told the account holder can
 share updates or authorize them as a delegate". Both describe the same inbound message.
 
@@ -2215,7 +2217,7 @@ verification.
 
 So `content.unlinked_number()` states the refusal once and names both legitimate routes:
 link your own account, or have the account holder share updates or authorize you as a
-delegate. §7.4.5's requirement is that the delegate route is *stated*, not that it is stated
+delegate. §26.4.5's requirement is that the delegate route is *stated*, not that it is stated
 exclusively.
 
 ### Tradeoffs / Constraints
@@ -2226,10 +2228,10 @@ help them.
 If the classifier ever reliably distinguishes "my verification" from "my brother's", split
 the copy — the two paragraphs are already separable.
 
-## Decision: D80 — an append-only fact table for §7.10, not the tables the channel already had
+## Decision: D80 — an append-only fact table for §26.10, not the tables the channel already had
 
 ### Context
-§7.10 asks for seven metrics "instrumented from day one", and four of them are **rates over
+§26.10 asks for seven metrics "instrumented from day one", and four of them are **rates over
 a window**: seam conversion, enquiry→intake, escalation rate, opt-in rate.
 
 ### Options Considered
@@ -2245,7 +2247,7 @@ Option 1 cannot answer two of the four. `whatsapp_bot_sessions` holds **one muta
 phone number**: `last_escalation_reason` is overwritten on every escalation, so the table can
 say why a particular person was last handed to a human and nothing about how often that
 happens. `current_flow` is cleared when a flow ends, so a completed intake is
-indistinguishable from one that never started. Shipping §7.10 on that basis would not have
+indistinguishable from one that never started. Shipping §26.10 on that basis would not have
 produced missing metrics — it would have produced wrong ones, which is worse.
 
 Option 3 is the wrong home rather than a wrong shape. `audit_logs` is the legal transition
@@ -2270,12 +2272,12 @@ service method, so nothing else would move.
 ## Decision: D81 — Meta's quality rating is synced, in the template registry's posture
 
 ### Context
-§7.10 lists the Meta quality rating as the channel's platform-dependency early warning, and
-§7.11 makes platform health a launch concern. It lives behind the Graph API, and CI never
+§26.10 lists the Meta quality rating as the channel's platform-dependency early warning, and
+§26.11 makes platform health a launch concern. It lives behind the Graph API, and CI never
 reaches Meta.
 
 ### Chosen Option
-A read facade beside the §7.7 template directory: `WHATSAPP_PROVIDER` picks stub or live,
+A read facade beside the §26.7 template directory: `WHATSAPP_PROVIDER` picks stub or live,
 the value is stored with a `last_synced_at` and any `sync_error`, and an admin refreshes it
 from the analytics page.
 
@@ -2307,7 +2309,7 @@ runbook marked ⊘.
 
 ### Rationale
 Waiting would have left a real compliance gap open for an unbounded time (J2 puts no timebox
-on the launch gate). The §7.8 items — consent records exportable, the channel disclosed in the
+on the launch gate). The §26.8 items — consent records exportable, the channel disclosed in the
 policy, an erasure that actually reaches the channel's tables — are ours alone and were
 genuinely missing, not merely untested.
 
@@ -2337,7 +2339,7 @@ so it stays inert rather than becoming a CI failure.
 ## Decision: D84 — the opt-in denominator is reachable numbers, not consent rows
 
 ### Context
-§7.10 wants "template opt-in rates (utility, marketing)" as a measure of consent-asset growth
+§26.10 wants "template opt-in rates (utility, marketing)" as a measure of consent-asset growth
 and the Marketplace launch audience. A rate needs a denominator, and nothing recorded that a
 customer had been *asked*.
 
@@ -2351,7 +2353,7 @@ customer had been *asked*.
 ### Rationale
 Option 1 needs the frontend to POST on render — a write triggered by a component mounting,
 which is both a new class of traffic and a number that would drift the moment a surface was
-re-laid-out. And it answers a less useful question. §7.10 says what the metric is *for*:
+re-laid-out. And it answers a less useful question. §26.10 says what the metric is *for*:
 consent asset growth, and the audience a Marketplace launch could reach. That audience is
 exactly the customers whose numbers we hold — so "of the people this channel can actually
 reach, how many said yes" is the number that answers the stated question.
@@ -2364,7 +2366,7 @@ overloading this one.
 ## Decision: D85 — the widget page code is stripped before anything reads the message
 
 ### Context
-§7.4.1's wa.me deep link prefills `"Hi Veriprops! [ref: web-home]"`, so the page code arrives
+§26.4.1's wa.me deep link prefills `"Hi Veriprops! [ref: web-home]"`, so the page code arrives
 as literal text inside the customer's first message.
 
 ### Chosen Option
@@ -2374,7 +2376,7 @@ Extract it at ingest, store it, and remove it from the text everything downstrea
 The customer did not type the marker — their phone did, and most will not even see it. Left
 in, the intent classifier scores a fragment of markup, the guardrails match against it, and an
 agent opening the console reads a message their customer did not write. The raw Meta envelope
-is retained untouched on `whatsapp_inbound_messages.payload`, so the §7.8 record loses
+is retained untouched on `whatsapp_inbound_messages.payload`, so the §26.8 record loses
 nothing.
 
 Only the **first** marker is honoured: a forwarded conversation can carry someone else's, and
@@ -2390,7 +2392,7 @@ automated run — precisely the split the automation-determinism contract exists
 ## Decision: D86 — one analytics API and one analytics route, two tabs
 
 ### Context
-§7.10's metrics needed a read surface, and the channel already owns its own domain package.
+§26.10's metrics needed a read surface, and the channel already owns its own domain package.
 
 ### Chosen Option
 The facts and the recorder live in `channel/whatsapp/analytics/`; the aggregation extends
@@ -2412,3 +2414,83 @@ read service — would have cost a router, a guard, and a second frontend servic
 
 ### Revisit
 If a third analytics area appears, split the service by area behind the one router.
+
+## Decision: D87 — DeepSeek is the live intent classifier; the Anthropic adapter stays
+
+### Context
+D53 chose Anthropic/`claude-haiku-4-5` as the live default, behind D48's provider-agnostic
+facade. The facade's whole claim was that the choice is a config change. This is the first
+time that claim is tested.
+
+### Options Considered
+1. **DeepSeek via the existing `openai_compatible` adapter; keep the Anthropic adapter.**
+2. DeepSeek, and delete the Anthropic adapter plus the `anthropic` SDK dependency.
+3. Stay on Anthropic.
+
+### Chosen Option
+**Option 1** (user-selected). `INTENT_PROVIDER=openai_compatible`,
+`INTENT_API_BASE_URL=https://api.deepseek.com`, `INTENT_MODEL=deepseek-chat`, in prod and
+staging alike.
+
+### Rationale
+No adapter was written: `openai_compatible` is a raw-httpx `/chat/completions` client that
+already named DeepSeek in its own docstring, so the switch is exactly the config change D48
+promised — which is also the argument for keeping the Anthropic adapter rather than banking
+the deletion. A facade with one live implementation is not a facade, and the cost of the
+second is one dependency already in `requirements.txt`.
+
+`deepseek-chat`, never `deepseek-reasoner`: this is a single closed-set label on a live
+customer path under `INTENT_TIMEOUT_SECONDS`, and a reasoning model spends its budget on
+tokens no customer reads, then trips the timeout — whose outcome is the human routing the
+classifier existed to avoid.
+
+### Tradeoffs / Constraints
+- Loses D53's native forced-tool-use, which was its reliability argument for closed-set
+  output. The generic adapter asks for JSON and validates it, and `coerce_intent` closes
+  the vocabulary regardless — an off-vocabulary answer is `UNKNOWN`, not a new intent.
+- `INTENT_API_KEY` becomes a DeepSeek key in every Doppler config that sets one.
+- The privacy policy names no AI sub-processor, and DeepSeek processes in China. Flagged,
+  deliberately not actioned here (owner's call, §26.8 documents are still `DRAFT`).
+
+### Revisit
+If classification quality on the live corpus disappoints, `INTENT_PROVIDER=anthropic` is
+one env var and the adapter is still there.
+
+## Decision: D88 — staging runs the live transport on Meta's test number
+
+### Context
+`.env.staging` claimed to mirror prod but ran the WhatsApp channel entirely on stubs, so
+signature verification, template-approval rejections and real Graph errors were first met
+in **production**, against the runbook's §3 smoke table. The blocker was real: the official
+number binds to exactly one Cloud API webhook, one-way.
+
+### Options Considered
+1. **Meta's developer test number on staging** (`WHATSAPP_PROVIDER=meta`, its own
+   phone-number/WABA ids in Doppler `stg`).
+2. Keep staging stubbed; smoke the live path in production.
+3. Register a second production-grade number and WABA for staging.
+
+### Chosen Option
+**Option 1** (user-selected). Staging is `meta`; dev stays stubbed.
+
+### Rationale
+The test number is free, is issued per developer app, and speaks the same Cloud API the
+production number will — so the failures worth catching (a template Meta has not approved,
+a signature that does not verify, an id that names nothing) surface in the environment built
+for finding them. Its ~5-recipient allowlist is a cap on audience, not on wire fidelity, and
+QA has fewer than five handsets. Option 3 buys no additional fidelity for the cost of a
+second number to buy, verify, hold custody of and get templates approved on.
+
+### Tradeoffs / Constraints
+- **This is what forced `WHATSAPP_PHONE_NUMBER_ID` / `WHATSAPP_BUSINESS_ACCOUNT_ID` to lose
+  their defaults.** They were committed as production's identifiers, harmless only while
+  every non-prod environment was stubbed; on `meta` a forgotten Doppler value would have
+  meant staging sending from the production number to real customers, silently.
+  `_enforce_whatsapp_identity_policy` now refuses to boot instead — the one failure mode
+  that cannot reach a customer.
+- Staging's `WHATSAPP_OFFICIAL_NUMBER` needs the test number too, or the staging widget
+  deep-links QA to production. Carried as a `FIXME(ops)` until the number is issued.
+- Custom templates need approval on the test WABA separately from production's.
+
+### Revisit
+At cutover, when the production number binds and prod stops being the only live surface.

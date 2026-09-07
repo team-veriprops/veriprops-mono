@@ -1,4 +1,4 @@
-"""Handoff token minting and verification (PRD §7.5).
+"""Handoff token minting and verification (PRD §26.5).
 
 These tokens travel through WhatsApp, where forwarding a message is ordinary behaviour,
 so the PRD's threat model is the design brief: a leaked or forwarded link must expose at
@@ -28,7 +28,7 @@ from main.app.domain.channel.whatsapp.handoff.models import ACTION_INTENTS, Hand
 from main.appodus_utils import Utils
 from main.appodus_utils.config.settings import SECRET_PLACEHOLDER, Environment
 
-# §7.5 pins the algorithm. Never widen this, and never let a token's own header choose.
+# §26.5 pins the algorithm. Never widen this, and never let a token's own header choose.
 HANDOFF_ALGORITHM = "RS256"
 HANDOFF_TOKEN_TTL = timedelta(minutes=15)
 
@@ -166,7 +166,7 @@ def issue_handoff_token(
 ) -> str:
     """Mint a token authorizing *intent* on *case_id* for *customer_id*.
 
-    The payload carries nothing beyond the §7.5 claims — no role, persona, or session
+    The payload carries nothing beyond the §26.5 claims — no role, persona, or session
     marker that a later reader could mistake for proof of login.
     """
     if intent not in ACTION_INTENTS:
@@ -177,7 +177,7 @@ def issue_handoff_token(
 
 
 def issue_link_token(phone_e164: str, ttl: timedelta = HANDOFF_TOKEN_TTL) -> str:
-    """Mint a token identifying *phone_e164* for the §7.4.4 WhatsApp→web linking flow.
+    """Mint a token identifying *phone_e164* for the §26.4.4 WhatsApp→web linking flow.
 
     Deliberately weaker than an action token, because it is handed to a number we cannot
     yet attribute to anyone: it names no customer and no case, so on its own it unlocks

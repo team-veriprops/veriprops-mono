@@ -249,7 +249,7 @@ async def test_a_customers_own_message_does_not_silence_the_bot(monkeypatch):
 
 async def test_an_admin_can_reply_to_a_thread_they_never_joined():
     """The gap the WhatsApp console found: admins work threads they are not participants
-    of, so requiring membership left a §7.8 enquiry readable and unanswerable — and D57's
+    of, so requiring membership left a §26.8 enquiry readable and unanswerable — and D57's
     bot take-over, which fires on an agent's reply, could never happen."""
     svc = _service(tasks=[], user_type="ADMIN")
     svc._conversations.get_owned_participant = AsyncMock(

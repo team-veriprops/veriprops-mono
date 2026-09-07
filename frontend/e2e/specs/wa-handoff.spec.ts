@@ -1,5 +1,5 @@
 /**
- * UAT-WAH — WhatsApp handoff landings (PRD §7.4.2, §7.5, S3).
+ * UAT-WAH — WhatsApp handoff landings (PRD §26.4.2, §26.5, S3).
  *
  * A handoff link is a bearer capability that travels through a chat, where forwarding a
  * message is ordinary behaviour. So the scenarios below are written from both sides: the
@@ -41,18 +41,18 @@ test.describe("UAT-WAH — handoff landings @P0", () => {
 
     await goto(page, ROUTES.WA.PAY(token));
 
-    // §7.4.2: the page must say where the customer left off — silent context loss is a
+    // §26.4.2: the page must say where the customer left off — silent context loss is a
     // spec violation, not a cosmetic gap.
     const context = page.locator("[data-testid=wa-handoff-context]");
     await expect(context).toBeVisible();
     await expect(context).toContainText("Picking up where you left off");
     await expect(context).toContainText(seed.verification.vid);
 
-    // §7.1.1: the payment pledge is repeated at every payment handoff — this is exactly
+    // §26.1.1: the payment pledge is repeated at every payment handoff — this is exactly
     // where an impersonator's lookalike link would land.
     await expect(page.locator("[data-testid=wa-handoff-pledge]")).toContainText("veriprops.ng");
 
-    // No login happened: the token authorized the action, not a session (§7.5).
+    // No login happened: the token authorized the action, not a session (§26.5).
     expect(await page.evaluate(() => window.__auth_snapshot__?.isAuthenticated ?? false)).toBe(
       false,
     );
@@ -102,7 +102,7 @@ test.describe("UAT-WAH — handoff landings @P0", () => {
 
     const expired = page.locator("[data-testid=wa-handoff-expired]");
     await expect(expired).toBeVisible();
-    // The bot resends on request only (§7.4.2) — the page offers the ask, never an
+    // The bot resends on request only (§26.4.2) — the page offers the ask, never an
     // automatic resend.
     await expect(page.locator("[data-testid=wa-handoff-new-link]")).toBeVisible();
 
@@ -116,7 +116,7 @@ test.describe("UAT-WAH — handoff landings @P0", () => {
   });
 
   test("UAT-WAH-05 · a link presented at the wrong landing is refused", async ({ page }) => {
-    // A report link opened at the payment landing is not a payment authorization (§7.5).
+    // A report link opened at the payment landing is not a payment authorization (§26.5).
     const token = await mintToken(HandoffIntent.REPORT);
     await goto(page, ROUTES.WA.PAY(token));
     await expect(page.locator("[data-testid=wa-handoff-expired]")).toBeVisible();
@@ -125,7 +125,7 @@ test.describe("UAT-WAH — handoff landings @P0", () => {
   test("UAT-WAH-06 · document and report links continue into the authenticated portal", async ({
     page,
   }) => {
-    // D50: canonical evidence (§7.1.6) and the report link (Decision B) sit behind a real
+    // D50: canonical evidence (§26.1.6) and the report link (Decision B) sit behind a real
     // login, so these landings acknowledge context and hand off rather than completing.
     const token = await mintToken(HandoffIntent.REPORT);
     await goto(page, ROUTES.WA.REPORT(token));

@@ -3,7 +3,7 @@ import { SuccessResponse } from "@/types/models";
 import { WhatsAppLink, WhatsAppLinkChallenge } from "@/types/whatsappLink";
 
 /**
- * WhatsApp account-linking API (PRD §7.4.4). Mirrors the backend controller at
+ * WhatsApp account-linking API (PRD §26.4.4). Mirrors the backend controller at
  * `app/domain/channel/whatsapp/link`.
  *
  * Two directions, one confirm step. The `/me/*` pair is web→WhatsApp: the customer names

@@ -1,12 +1,12 @@
 /**
- * WhatsApp channel attribution (PRD §7.4.1, §7.10).
+ * WhatsApp channel attribution (PRD §26.4.1, §26.10).
  *
  * The widget deep-links out to the official number with a prefilled greeting carrying a
  * page code, so an enquiry can be attributed to the page it started from — the
  * "WhatsApp-attributed enquiries" metric. The number itself is **not** here: it is
  * backend-owned and arrives via `/config/public`, because it is also published on
  * certified reports and in investor materials and must never drift between surfaces
- * (§7.1.2). Page codes, by contrast, describe *frontend* routes the backend does not
+ * (§26.1.2). Page codes, by contrast, describe *frontend* routes the backend does not
  * model, so they are derived from the route registry.
  */
 import { PAYMENT_FLOW_PATH_PATTERNS, ROUTES } from "./routes";
@@ -17,9 +17,9 @@ export const WHATSAPP_PREFILL_GREETING = "Hi Veriprops!";
 /** Pages whose attribution code is worth naming rather than deriving. */
 const EXPLICIT_PAGE_CODES: Readonly<Record<string, string>> = {
   [ROUTES.HOME]: "web-home",
-  // The PRD names this code directly (§7.4.1).
+  // The PRD names this code directly (§26.4.1).
   [ROUTES.SAMPLE_REPORT]: "web-report-sample",
-  // Enquiry → intake-started is its own funnel step (§7.10), so intake is not just
+  // Enquiry → intake-started is its own funnel step (§26.10), so intake is not just
   // another portal page.
   [ROUTES.PORTAL.VERIFICATIONS_NEW]: "web-intake",
 };
@@ -60,7 +60,7 @@ export function pageCodeFor(pathname: string): string {
 /**
  * The `wa.me` deep link for a page code. Returns an empty string when no number is
  * configured yet — callers render nothing rather than falling back to a hardcoded
- * number, which would defeat the §7.1.2 single-source rule.
+ * number, which would defeat the §26.1.2 single-source rule.
  */
 export function waMeUrl(numberDigits: string, pageCode: string): string {
   if (!numberDigits) return "";
@@ -68,14 +68,14 @@ export function waMeUrl(numberDigits: string, pageCode: string): string {
   return `https://wa.me/${numberDigits}?text=${text}`;
 }
 
-/** True inside a payment flow, where the widget stays hidden (§7.4.1). */
+/** True inside a payment flow, where the widget stays hidden (§26.4.1). */
 export function isPaymentFlowPath(pathname: string): boolean {
   const path = normalizePath(pathname);
   return PAYMENT_FLOW_PATH_PATTERNS.some((pattern) => pattern.test(path));
 }
 
 /**
- * A `wa.me` link that opens the chat already quoting a case (§7.4.3, D58).
+ * A `wa.me` link that opens the chat already quoting a case (§26.4.3, D58).
  *
  * The bot recognises a `VP-…` reference in the customer's own words, so pre-filling it is
  * what makes "continue on WhatsApp" land on the right case in one tap rather than asking

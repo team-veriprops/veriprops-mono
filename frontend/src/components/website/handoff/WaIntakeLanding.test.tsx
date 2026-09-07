@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 /**
- * The chat→web intake landing (§5.1, §7.5, D69).
+ * The chat→web intake landing (§5.1, §26.5, D69).
  *
  * Server-rendered assertions only, so what is pinned is the **first paint** — which is the
  * part that matters here. The customer arrives from WhatsApp having answered four
- * questions, and §7.4.2 requires the landing to acknowledge the context it picked up:
+ * questions, and §26.4.2 requires the landing to acknowledge the context it picked up:
  * dropping them into a form with no explanation is a spec violation, not a rough edge.
  *
  * The dead-link copy is the other load-bearing piece. Expired, spent and forged must read
@@ -41,7 +41,7 @@ beforeEach(() => {
 });
 
 describe("WaIntakeLanding", () => {
-  it("acknowledges the context it picked up while redeeming (§7.4.2)", () => {
+  it("acknowledges the context it picked up while redeeming (§26.4.2)", () => {
     const html = renderToStaticMarkup(<WaIntakeLanding token="tok-123" />);
 
     expect(html).toContain("Bringing over what you told us on WhatsApp");
@@ -52,7 +52,7 @@ describe("WaIntakeLanding", () => {
     state.failed = true;
 
     const html = renderToStaticMarkup(<WaIntakeLanding token="tok-123" />);
-    // The prose only — the `wa.me` prefill carries a fixed `…-expired` page code for §7.10
+    // The prose only — the `wa.me` prefill carries a fixed `…-expired` page code for §26.10
     // attribution, which is the same for every failure and so classifies nothing.
     const copy = html.split('data-testid="wa-intake-landing-dead">')[1].split("</p>")[0];
 

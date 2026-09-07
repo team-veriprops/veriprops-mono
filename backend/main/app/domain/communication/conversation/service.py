@@ -73,7 +73,7 @@ class ConversationService:
     async def get_or_create_whatsapp_thread(
         self, phone: str, user_id: Optional[str] = None, subject: Optional[str] = None
     ) -> Conversation:
-        """The single thread for a WhatsApp number (§7.3.1, §7.8 — one conversation object).
+        """The single thread for a WhatsApp number (§26.3.1, §26.8 — one conversation object).
 
         It is an ordinary general-support thread that happens to have arrived over
         WhatsApp, so once the number is linked to an account the same row simply gains an
@@ -98,10 +98,10 @@ class ConversationService:
     ) -> Optional[Conversation]:
         """Attach (or detach) the account that owns the thread for a WhatsApp number.
 
-        §7.8 wants one conversation object per person, not one per surface, so linking a
+        §26.8 wants one conversation object per person, not one per surface, so linking a
         number gives the *existing* thread an owner rather than opening a second one.
         Passing ``None`` is the other half of that: an unlinked number's thread goes cold
-        (§7.4.4) — it stays in the console for the agents, but it no longer belongs to
+        (§26.4.4) — it stays in the console for the agents, but it no longer belongs to
         anyone's account, so nothing will read case data into it.
         """
         conversation = await self._conversation_repo.get_whatsapp_thread(phone)

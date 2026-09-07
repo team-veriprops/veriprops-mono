@@ -62,7 +62,7 @@ export function ClientWrapperProvider({ children }: { children: React.ReactNode 
         <SessionRecoveryOverlay />
         {/* Flush a logout that couldn't reach the backend once connectivity returns. */}
         <PendingLogoutRetry />
-        {/* PRD §7.4.1: the WhatsApp front door rides every page (it suppresses itself
+        {/* PRD §26.4.1: the WhatsApp front door rides every page (it suppresses itself
             inside the payment flow), so it mounts once here rather than per layout. */}
         <WhatsAppWidget />
         {/* </LoadScript> */}

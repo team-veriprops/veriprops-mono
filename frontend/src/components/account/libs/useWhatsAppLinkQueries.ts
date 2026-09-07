@@ -41,7 +41,7 @@ export function useUnlinkWhatsAppMutation() {
 }
 
 /**
- * The WhatsApp→web direction (§7.4.4). These carry the bot's signed token rather than a
+ * The WhatsApp→web direction (§26.4.4). These carry the bot's signed token rather than a
  * number, so the landing page never gets to say which number it is claiming.
  */
 export function useStartWhatsAppLinkFromTokenMutation() {

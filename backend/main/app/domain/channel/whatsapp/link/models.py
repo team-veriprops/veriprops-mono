@@ -1,4 +1,4 @@
-"""WhatsApp ↔ account link (PRD §7.4.4, WA-23/WA-24/WA-25).
+"""WhatsApp ↔ account link (PRD §26.4.4, WA-23/WA-24/WA-25).
 
 The channel's identity seam. Everything downstream that refuses to read case data to an
 unverified number — the status flow, short-code continuation, delegates — asks exactly one
@@ -8,7 +8,7 @@ this WhatsApp number?*
 Three properties make that answer trustworthy:
 
 * **One row per account, one number per row.** `user_id` and `phone_e164` are both unique,
-  so the §7.4.4 one-to-one rule is enforced by the database rather than by every caller
+  so the §26.4.4 one-to-one rule is enforced by the database rather than by every caller
   remembering to check it.
 * **A revoked link releases its number.** `phone_e164` is nullable and cleared on unlink,
   which is what lets a number move to another account later — a unique constraint over a
@@ -35,7 +35,7 @@ class WhatsAppLinkStatus(str, enum.Enum):
 
     Only ``ACTIVE`` grants anything. ``PENDING`` is an OTP awaiting confirmation, and
     ``REVOKED`` is a link the customer ended or replaced — the state that makes the old
-    WhatsApp thread go cold (§7.4.4).
+    WhatsApp thread go cold (§26.4.4).
     """
 
     PENDING = "PENDING"
@@ -48,7 +48,7 @@ class WhatsAppLinkStatus(str, enum.Enum):
 class WhatsAppLink(BaseEntity):
     __tablename__ = "whatsapp_links"
 
-    # One link per account (§7.4.4). A number change rewrites this row rather than
+    # One link per account (§26.4.4). A number change rewrites this row rather than
     # adding another, so there is never a moment with two live numbers on one account.
     user_id = Column(String(36), nullable=False)
     # E.164 with the leading '+', matching `users.phone_e164` and the conversation's
@@ -110,7 +110,7 @@ class ConfirmWhatsAppLinkDto(Object):
 
 
 class StartWhatsAppLinkFromTokenDto(Object):
-    """The §7.4.4 WhatsApp→web direction: the number comes from the signed link, never
+    """The §26.4.4 WhatsApp→web direction: the number comes from the signed link, never
     from the request, so the browser cannot nominate a number the bot never messaged."""
 
     token: str

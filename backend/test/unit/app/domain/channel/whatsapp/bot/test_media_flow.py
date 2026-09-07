@@ -1,4 +1,4 @@
-"""§7.6.3 non-text inbound policy (WA-06, WA-38).
+"""§26.6.3 non-text inbound policy (WA-06, WA-38).
 
 Three rows in the PRD table, three different answers, and getting them confused is not a
 cosmetic failure. Before this flow existed a customer who photographed their survey plan
@@ -6,7 +6,7 @@ got "Sorry, I didn't quite get that" — the image kinds were left out of the bo
 unreadable set on the assumption the upload handoff would catch them, and the handoff had
 not been built.
 
-The rule underneath all of it is the **evidence rule** (§7.1.6): what arrives over WhatsApp
+The rule underneath all of it is the **evidence rule** (§26.1.6): what arrives over WhatsApp
 is never what the verifiers work from. So a document is not refused — it is redirected to
 the upload page, where it counts.
 """
@@ -89,7 +89,7 @@ class TestOnlyAPaidCaseCanReceiveADocument:
     The live drive-through caught this: the bot offered an upload link for a DRAFT, and the
     landing 500'd because a draft has no tier — it has not been quoted, let alone paid for.
     The cut is at payment rather than anywhere later: a customer sending a document about a
-    *delivered* case is disputing or re-checking it, which is exactly what §7.6.3 is for.
+    *delivered* case is disputing or re-checking it, which is exactly what §26.6.3 is for.
     Filtering here also means the landing's required fields hold by construction, rather
     than through a defensive default that would have hidden the same mistake.
     """
@@ -182,7 +182,7 @@ class TestTheEvidenceRuleIsAlwaysStated:
         assert "link my account" in outcome.text
 
     def test_an_unlinked_number_is_never_handed_an_upload_link(self):
-        # §7.4.3 — an `upload` token names a customer and a case. Issuing one off a phone
+        # §26.4.3 — an `upload` token names a customer and a case. Issuing one off a phone
         # number alone would mean guessing whose file the document belongs in.
         outcome = media_flow.render(InboundKind.IMAGE, is_linked=False, cases=[])
 
@@ -199,7 +199,7 @@ class TestTheEvidenceRuleIsAlwaysStated:
 
 class TestVoiceNotes:
     def test_a_voice_note_gets_its_own_reason_not_the_generic_one(self):
-        # §7.10 asks for voice-note volume by name, so it cannot be pooled with pins and
+        # §26.10 asks for voice-note volume by name, so it cannot be pooled with pins and
         # contact cards under one counter.
         outcome = media_flow.render(InboundKind.AUDIO, is_linked=True, cases=[_case()])
 
@@ -241,7 +241,7 @@ class TestEverythingElseGoesToAPerson:
         assert outcome.escalation_reason == EscalationReason.UNSUPPORTED_MEDIA
 
     def test_a_type_meta_added_after_this_code_was_written_is_still_answered(self):
-        # Never dropped — that is the whole promise of §7.6.3's last row.
+        # Never dropped — that is the whole promise of §26.6.3's last row.
         outcome = media_flow.render(
             InboundKind.UNSUPPORTED, is_linked=True, cases=[_case()]
         )

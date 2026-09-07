@@ -1,8 +1,8 @@
-"""Reading template approval status back from Meta (PRD §7.7, WA-15/WA-41).
+"""Reading template approval status back from Meta (PRD §26.7, WA-15/WA-41).
 
 Submitting a template is not the same as being able to send it. Meta reviews each one and
 the answer arrives asynchronously — sometimes days later, sometimes as a rejection with a
-reason. §7.11 makes "all §7.7 templates approved" a launch gate precisely because that lag
+reason. §26.11 makes "all §26.7 templates approved" a launch gate precisely because that lag
 sits on the critical path, so the answer has to be visible in the app rather than in
 somebody's inbox.
 
@@ -133,10 +133,10 @@ def whatsapp_template_directory() -> IWhatsAppTemplateDirectory:
     return StubTemplateDirectory()
 
 
-# ─── Number health (§7.10, §7.11; D81) ────────────────────────────
+# ─── Number health (§26.10, §26.11; D81) ────────────────────────────
 #
 # The same posture as the template directory above, for the other thing Meta knows about
-# us: how healthy it considers our number. §7.10 counts the quality rating as the channel's
+# us: how healthy it considers our number. §26.10 counts the quality rating as the channel's
 # platform-dependency early warning — property is a scam-saturated category under
 # aggressive automated enforcement, and the rating is the signal that arrives *before* the
 # number is throttled or banned. A separate interface rather than a method on the template

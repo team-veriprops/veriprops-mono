@@ -1,4 +1,4 @@
-"""WhatsAppInboundService (PRD §7.3.3, WA-09/WA-12/WA-13).
+"""WhatsAppInboundService (PRD §26.3.3, WA-09/WA-12/WA-13).
 
 Where a Meta delivery becomes an ordinary Veriprops conversation. The two properties
 under test are the ones the rest of the channel leans on: a redelivery never produces a
@@ -40,7 +40,7 @@ def mock_db_session():
 
 @pytest.fixture(autouse=True)
 def stub_console_sender(monkeypatch):
-    """Ingestion flushes any agent reply queued while Meta's window was shut (§7.7).
+    """Ingestion flushes any agent reply queued while Meta's window was shut (§26.7).
 
     Stubbed here like every other collaborator: these tests are about what ingestion
     records and answers, and the queue's own behaviour is pinned in
@@ -99,7 +99,7 @@ class TestIngest:
         conversation, sender_user_id, sender_kind, body = svc._chat.send.await_args.args
         assert conversation.id == "conv-1"
         # Identity is never taken from the message — the sender is a phone number until
-        # the linking flow says otherwise (§7.4.3 conversation-hijack defense).
+        # the linking flow says otherwise (§26.4.3 conversation-hijack defense).
         assert sender_user_id is None
         assert sender_kind == SenderKind.CUSTOMER
         assert body == "How much for a Lagos land check?"
@@ -154,7 +154,7 @@ class TestNonTextInbound:
         ],
     )
     async def test_every_non_text_type_reaches_the_console_labelled(self, kind, expected):
-        # §7.6.3: nothing is silently dropped — an agent always sees that something came
+        # §26.6.3: nothing is silently dropped — an agent always sees that something came
         # in, and what kind of thing it was.
         svc = _service()
         await svc.ingest(inbound(kind=kind, text=None))
@@ -183,7 +183,7 @@ class TestThreadSubject:
 
 
 class TestWidgetAttribution:
-    """§7.4.1's `[ref: …]` marker, lifted out at ingest (§7.10, D85).
+    """§26.4.1's `[ref: …]` marker, lifted out at ingest (§26.10, D85).
 
     It happens here rather than in the Meta normalizer for a determinism reason: `ingest`
     is the single funnel both doors pass through — the signed webhook and

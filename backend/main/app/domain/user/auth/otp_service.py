@@ -184,8 +184,8 @@ async def send_verification_msg(
 
     try:
         if channel == OtpChannel.WHATSAPP:
-            # PRD §7.4.4: WhatsApp account linking delivers its code over WhatsApp itself,
-            # using the §7.7 `otp_auth` template, and falls back to SMS on the same number
+            # PRD §26.4.4: WhatsApp account linking delivers its code over WhatsApp itself,
+            # using the §26.7 `otp_auth` template, and falls back to SMS on the same number
             # (D60, amending D46). The code is stored under the WHATSAPP channel key
             # either way, so verification is unaffected by which transport carried it.
             await _send_whatsapp_otp_with_sms_fallback(
@@ -229,7 +229,7 @@ async def _send_whatsapp_otp_with_sms_fallback(
         code: str,
         expires_at: datetime,
 ) -> None:
-    """Deliver an account-linking OTP over WhatsApp, falling back to SMS (§7.4.4, D60).
+    """Deliver an account-linking OTP over WhatsApp, falling back to SMS (§26.4.4, D60).
 
     WhatsApp is the primary transport because the number being linked *is* a WhatsApp
     number, so a code that arrives there is the most direct proof of control. But a
@@ -237,7 +237,7 @@ async def _send_whatsapp_otp_with_sms_fallback(
     unapproved template, a Meta outage, a number with no WhatsApp account — and a linking
     flow that dead-ends on any of those strands somebody who did nothing wrong.
 
-    SMS to the same number is the fallback §7.4.4 names. The provider chain is the
+    SMS to the same number is the fallback §26.4.4 names. The provider chain is the
     messaging router's existing one (Termii → Twilio for +234, the mock provider in
     dev/test), so this needs no new provider decision — which is the blocker D46 deferred
     on, and which the router had already settled.
@@ -256,7 +256,7 @@ async def _send_whatsapp_otp_with_sms_fallback(
         return
     except Exception as e:
         logger.warning(
-            "WhatsApp OTP delivery failed for {}; falling back to SMS (§7.4.4): {}",
+            "WhatsApp OTP delivery failed for {}; falling back to SMS (§26.4.4): {}",
             recipient.international_number, e,
         )
 

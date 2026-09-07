@@ -13,7 +13,7 @@ import { BotChannelReadiness, BotSession } from "@/types/chat";
 export class WhatsAppBotService {
   constructor(private readonly http: HttpClient) {}
 
-  /** §7.11 — which transport and classifier are live, and whether one is configured. */
+  /** §26.11 — which transport and classifier are live, and whether one is configured. */
   readiness(): Promise<SuccessResponse<BotChannelReadiness>> {
     return this.http.get(`/admin/whatsapp/bot/readiness`);
   }

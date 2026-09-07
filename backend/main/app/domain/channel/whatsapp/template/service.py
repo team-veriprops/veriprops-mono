@@ -1,4 +1,4 @@
-"""Meta template registry (PRD §7.7, WA-15/WA-41).
+"""Meta template registry (PRD §26.7, WA-15/WA-41).
 
 Keeps the app's picture of what Meta will accept in step with Meta's own answer.
 
@@ -9,7 +9,7 @@ Two rules shape everything here:
   leftover, and mirroring it would put rows on the launch-gate page that nothing can send.
 * **An unreadable status is never optimism.** A declared template Meta has never seen, or
   one whose status we cannot parse, lands as `NOT_FOUND`. Guessing `APPROVED` would let
-  the §7.11 gate pass on a template that cannot actually be delivered.
+  the §26.11 gate pass on a template that cannot actually be delivered.
 
 Approval is **advisory at send time** (D59c): it shows up here and on the launch-gate
 checklist, and it does not block a send. A sync is a point-in-time snapshot, and a stale
@@ -48,7 +48,7 @@ class WhatsAppTemplateService:
         self._whatsapp_template_repo = whatsapp_template_repo
 
     async def list_all(self) -> List[WhatsAppTemplateDto]:
-        """The §7.7 set, as the admin registry renders it.
+        """The §26.7 set, as the admin registry renders it.
 
         Driven by the **declarations**, not by the table: a template declared but never
         synced still has to appear, because "we have not submitted this yet" is the state

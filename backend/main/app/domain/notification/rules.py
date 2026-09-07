@@ -21,15 +21,15 @@ class NotificationRule:
     defaults a user may opt out of; ``chat_only`` suppresses the notification entirely
     (Chat counter only); ``template`` is the external-dispatch template (email/SMS).
 
-    ``whatsapp`` marks the §7.6.2 milestones (D65). It is a **separate** channel with a
-    **separate** template, because the §7.7 Meta template is not the email template and
+    ``whatsapp`` marks the §26.6.2 milestones (D65). It is a **separate** channel with a
+    **separate** template, because the §26.7 Meta template is not the email template and
     one field cannot be both. Two further things follow from `whatsapp=True`, and they are
     the reason it is a flag rather than a second table:
 
-    * the customer's opt-in (§7.4.6) is checked in the router before the send, never at a
+    * the customer's opt-in (§26.4.6) is checked in the router before the send, never at a
       send site — that is the WA-16/WA-27 property; and
     * an authorized delegate on the same case receives the milestone too, as
-      `delegate_status` and never as this template (§7.4.5).
+      `delegate_status` and never as this template (§26.4.5).
     """
 
     in_app: bool = True
@@ -51,7 +51,7 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.STATUS_CHANGED: NotificationRule(email=True, template=_T.VERIFICATION_STATUS_CHANGE),
     EventType.AGENTS_ASSIGNED: NotificationRule(email=True, template=_T.VERIFICATION_AGENTS_ASSIGNED),
     EventType.EVIDENCE_ADDED: NotificationRule(in_app=True),
-    # The two §7.6.2 milestones that exist only to be told on WhatsApp (D66). No in-app
+    # The two §26.6.2 milestones that exist only to be told on WhatsApp (D66). No in-app
     # entry and no email: the customer already has a status-change notification for the
     # same moment, and a second one would be noise rather than news.
     EventType.VERIFICATION_STARTED: NotificationRule(
@@ -62,7 +62,7 @@ RULES: Dict[EventType, NotificationRule] = {
         in_app=False, email=False,
         whatsapp=True, whatsapp_template=_T.WHATSAPP_INSPECTION_COMPLETE,
     ),
-    # §7.6.2 report delivery (WA-35): WhatsApp respects the opt-in, **email is
+    # §26.6.2 report delivery (WA-35): WhatsApp respects the opt-in, **email is
     # unconditional**. The durable record of a delivered report cannot depend on a
     # messaging preference, so `email=True` here is a requirement, not a default.
     EventType.REPORT_READY: NotificationRule(
@@ -93,7 +93,7 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.CONFLICT_FLAGGED: NotificationRule(in_app=True),
     EventType.AGENT_NO_SHOW: NotificationRule(in_app=True),
     EventType.FRAUD_FLAGGED_MESSAGE: NotificationRule(in_app=True),
-    # §7.6.5: in-app only, and deliberately so. The customer has already been answered
+    # §26.6.5: in-app only, and deliberately so. The customer has already been answered
     # with the handover copy, so this is an operational signal — emailing it would page
     # the team for something the conversation has already recovered from.
     EventType.BOT_PIPELINE_FAILED: NotificationRule(in_app=True),
@@ -108,7 +108,7 @@ RULES: Dict[EventType, NotificationRule] = {
     # channel that reaches them; the in-app entry still lands for post-reactivation review.
     EventType.ACCOUNT_SUSPENDED: NotificationRule(email=True, template=_T.ACCOUNT_DEACTIVATION),
     EventType.ACCOUNT_REACTIVATED: NotificationRule(email=True, template=_T.ACCOUNT_ACTIVATION),
-    # §7.4.5 (D77): a delegate opted out in chat. In-app only — the buyer needs to know
+    # §26.4.5 (D77): a delegate opted out in chat. In-app only — the buyer needs to know
     # their case has no delegate any more, not to be emailed about someone else's
     # messaging preference.
     EventType.DELEGATE_REVOKED: NotificationRule(in_app=True),

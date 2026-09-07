@@ -44,7 +44,7 @@ class TestPublicConfig:
 
 
 class TestWhatsAppChannelConfig:
-    """§7.1.2/§7.4.1 — the widget's number comes from the backend, never a frontend copy."""
+    """§26.1.2/§26.4.1 — the widget's number comes from the backend, never a frontend copy."""
 
     async def test_serves_both_forms_of_the_official_number(self):
         resp = await config_controller.public_config()
@@ -58,7 +58,7 @@ class TestWhatsAppChannelConfig:
         assert resp.data.whatsapp_widget_enabled is False
 
     async def test_widget_is_live_by_default(self, monkeypatch):
-        # §7.4.1 concierge phase: the widget is live now, ahead of the Cloud API cutover.
+        # §26.4.1 concierge phase: the widget is live now, ahead of the Cloud API cutover.
         monkeypatch.setattr(settings, "WHATSAPP_WIDGET_ENABLED", True)
         resp = await config_controller.public_config()
         assert resp.data.whatsapp_widget_enabled is True

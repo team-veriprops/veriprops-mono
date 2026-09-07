@@ -1,4 +1,4 @@
-"""Human coverage hours (Decision G, §7.6.2, D68).
+"""Human coverage hours (Decision G, §26.6.2, D68).
 
 The escalation copy makes a promise, and this service decides which promise. Both
 directions cost trust: an unstaffed "a team member is joining" reads as a lie, and a

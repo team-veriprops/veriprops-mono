@@ -1,8 +1,8 @@
-# PRD Analysis — WhatsApp Channel (PRD.md §7, cycle 2)
+# PRD Analysis — WhatsApp Channel (PRD.md §26, cycle 2)
 
 > Cycle 2 of the orchestrator. Cycle 1 (core platform) is archived in `docs.back/`; its as-built
 > consolidation is [MASTER-PRD.md](../MASTER-PRD.md) (v3.0). This cycle implements the locked
-> **§7 WhatsApp Channel (Verify)** spec in [PRD.md](../PRD.md) — Decision Record A–P, scope frozen.
+> **§26 WhatsApp Channel (Verify)** spec in [PRD.md](../PRD.md) — Decision Record A–P, scope frozen.
 
 ## Executive Summary
 
@@ -23,16 +23,16 @@ contract, the consent domain, and the facade/stub pattern (§4.13).
 
 ## Goals
 
-- Full §7.6 bot scope (frozen): welcome, FAQ/pricing, intake, payment handoff, status, milestones,
+- Full §26.6 bot scope (frozen): welcome, FAQ/pricing, intake, payment handoff, status, milestones,
   report delivery, human escalation, refund routing, non-text handling, guardrails, failure fallback.
-- Website side: chat widget (§7.4.1), `/wa/{pay,upload,report}/<token>` landing endpoints (§7.4.2),
-  continuation affordances (§7.4.3), OTP linking (§7.4.4), delegate management (§7.4.5),
-  dual consent capture (§7.4.6).
-- Token service per §7.5 (RS256, 15-min, single-use jti, intent+case scoped).
-- Template registry (§7.7), compliance surface updates (§7.8), analytics (§7.10).
+- Website side: chat widget (§26.4.1), `/wa/{pay,upload,report}/<token>` landing endpoints (§26.4.2),
+  continuation affordances (§26.4.3), OTP linking (§26.4.4), delegate management (§26.4.5),
+  dual consent capture (§26.4.6).
+- Token service per §26.5 (RS256, 15-min, single-use jti, intent+case scoped).
+- Template registry (§26.7), compliance surface updates (§26.8), analytics (§26.10).
 - Live Meta Cloud API wiring from day one (user decision D43) with a deterministic stub sibling.
 
-## Non-Goals (v1.1 backlog, §7.9 — frozen out)
+## Non-Goals (v1.1 backlog, §26.9 — frozen out)
 
 - Voice-note transcription-assist (v1: route to human, flagged audio).
 - Multiple delegates / granular delegate permissions.
@@ -68,12 +68,12 @@ S8 ──→ S9 delegates (delegate_status template) ──→ S10 analytics ─
 | Area | Why |
 |---|---|
 | Webhook signature + replay handling | Only unauthenticated public inbound surface of the backend; edge-auth contract must exempt/accommodate Meta's calls |
-| Token service (§7.5) | Pen-check launch gate: replay, expiry, scope containment; never a session |
+| Token service (§26.5) | Pen-check launch gate: replay, expiry, scope containment; never a session |
 | Conversation-hijack defense | Bot must never read case data to an unlinked/unverified number — enforced server-side, not in flow logic |
 | Meta 24-hour service window | Agent replies outside the window require the `window_reopen` template; console adapter must detect and route |
-| Delegate social engineering | §7.4.5 "my relative is handling it" rule — status-only, one per case, OTP-verified, no exceptions |
+| Delegate social engineering | §26.4.5 "my relative is handling it" rule — status-only, one per case, OTP-verified, no exceptions |
 | LLM intent classification (D44) | Guardrail topics must route to human deterministically regardless of classifier output; classifier failure ⇒ human routing, never a guess |
-| Consent enforcement | Router-enforced, never per-send-site (§7.4.6) — matches the existing §17 rule-table pattern |
+| Consent enforcement | Router-enforced, never per-send-site (§26.4.6) — matches the existing §17 rule-table pattern |
 
 ## Cross-Cutting Concerns
 
@@ -86,7 +86,7 @@ S8 ──→ S9 delegates (delegate_status template) ──→ S10 analytics ─
   sends from services. State transitions already publish; new subscribers consume.
 - **Determinism:** stub transport records outbound + injects inbound for e2e; `OTP_MODE`
   governs linking OTPs; intent classifier STUB is keyword-deterministic.
-- **Observability:** §7.10 metrics instrumented from day one; Meta quality rating monitored (ops).
+- **Observability:** §26.10 metrics instrumented from day one; Meta quality rating monitored (ops).
 
 ## System Implications
 
@@ -103,7 +103,7 @@ labeling columns. All via Alembic; raw strings in migrations per repo convention
 - Authenticated web: linking endpoints (send OTP / confirm), delegate CRUD (one per case,
   revoke), consent toggles, continuation short-code issuance.
 - Admin: template registry, WhatsApp conversation surfacing in existing console, channel analytics.
-- Bot reads case state **through the same service layer the dashboard uses** (§7.3.1) — no
+- Bot reads case state **through the same service layer the dashboard uses** (§26.3.1) — no
   parallel query path.
 
 ### Security
@@ -118,10 +118,10 @@ labeling columns. All via Alembic; raw strings in migrations per repo convention
 
 Resolved at the initialize gate (see decision log D42–D47). Residual, carried as defaults:
 
-- [ ] §7.3.2 state names vs existing `VerificationStatus` → D45: channel-level projection, no new
+- [ ] §26.3.2 state names vs existing `VerificationStatus` → D45: channel-level projection, no new
   case state machine. Revisit if intake-resumability needs its own persisted states beyond drafts.
 - [ ] Console integration shape (new `ConversationType` vs source label on existing types) →
-  decided at S2 design; PRD requires "one conversation object" across surfaces (§7.8).
+  decided at S2 design; PRD requires "one conversation object" across surfaces (§26.8).
 - [ ] SMS-OTP fallback provider (§B pending) → D46: deferred, `TODO(gap):`; WhatsApp auth
   template is the only linking OTP transport at v1.
 - [ ] Intent-LLM provider/model → D48 (amends D44): provider-agnostic facade; default provider +
@@ -137,9 +137,9 @@ Resolved at the initialize gate (see decision log D42–D47). Residual, carried 
 
 ## Key Risks
 
-- **Meta platform dependency** (accepted, §7.11): scam-saturated category; mitigation = strict
+- **Meta platform dependency** (accepted, §26.11): scam-saturated category; mitigation = strict
   opt-in, low template volume, quality-rating monitoring; containment = website remains canonical.
-- **Approval lag on templates** (§7.7): draft + submit early — S8 registry ships before live
+- **Approval lag on templates** (§26.7): draft + submit early — S8 registry ships before live
   template sends are possible; approval status tracked in-registry.
 - **Live-wiring assets** (D43): WABA/green tick/number custody are business gates; live path can
   only be exercised end-to-end once Meta assets exist — stub keeps CI green regardless.

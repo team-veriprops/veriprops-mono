@@ -55,7 +55,7 @@ class Verification(BaseEntity):
     # email is sent exactly once per abandoned draft; also flips the customer-facing banner.
     recovery_reminded_at = Column(UTCDateTime, nullable=True)
 
-    # Admin operational hold (§7.5) — a flag, NOT a state: the derived status is
+    # Admin operational hold (§26.5) — a flag, NOT a state: the derived status is
     # unaffected so work resumes cleanly. Set/cleared by the admin control panel.
     paused = Column(Boolean, nullable=False, server_default="false")
 

@@ -1,9 +1,9 @@
-"""The §7.6.4 adversarial suite — what the bot must never answer (WA-39).
+"""The §26.6.4 adversarial suite — what the bot must never answer (WA-39).
 
 This is the highest-stakes test file in the channel. Everything else here decides *how
 well* the bot answers; these cases decide whether it stays inside the Trust Charter. A
 regression that lets one of these through is the bot rendering a verification judgment on
-someone's property — the one thing §7.1.3 says only the certified report and a human may
+someone's property — the one thing §26.1.3 says only the certified report and a human may
 do.
 
 The suite is written against `guardrails` directly rather than through the engine, because
@@ -19,7 +19,7 @@ from main.app.domain.channel.whatsapp.bot import guardrails
 from main.app.domain.channel.whatsapp.bot.session.models import EscalationReason
 from main.appodus_utils.integrations.intent.models import BotIntent
 
-# §7.6.4's forbidden set, phrased the way real customers phrase it — including the
+# §26.6.4's forbidden set, phrased the way real customers phrase it — including the
 # indirect and jailbreak-flavoured framings, which are the ones a keyword list misses.
 _MUST_NOT_ANSWER = [
     # Verification judgments
@@ -63,7 +63,7 @@ _MUST_NOT_ANSWER = [
 
 @pytest.mark.parametrize("message", _MUST_NOT_ANSWER, ids=lambda m: m[:40])
 def test_forbidden_topics_never_reach_a_flow(message):
-    """§7.6.4 — no partial answers. The whole turn routes to a person."""
+    """§26.6.4 — no partial answers. The whole turn routes to a person."""
     verdict = guardrails.check_message(message)
 
     assert verdict is not None, f"guardrail missed: {message!r}"
@@ -143,7 +143,7 @@ def test_language_gate_is_narrow_on_purpose(message, expected):
 
 
 def test_non_english_escalates_with_its_own_reason():
-    """§7.10 wants reasons, not just a rate — "we don't speak that yet" is a product
+    """§26.10 wants reasons, not just a rate — "we don't speak that yet" is a product
     signal, not a bot failure."""
     verdict = guardrails.check_message("Bonjour, je voudrais des informations")
 

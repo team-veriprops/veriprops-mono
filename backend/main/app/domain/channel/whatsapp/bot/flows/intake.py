@@ -1,4 +1,4 @@
-"""Chat intake (PRD §5.1, §7.3.4, D69/D70).
+"""Chat intake (PRD §5.1, §26.3.4, D69/D70).
 
 Four questions, and the bar is the **website's**: `canAdvanceSubmissionStep` lets a web
 customer past the property step with a type and either an address or a landmark, then a
@@ -49,7 +49,7 @@ class IntakeOutcome:
     collected: Dict[str, Any]
     complete: bool = False
     # True when the step did not advance because the answer was unusable. The engine reads
-    # it to keep a re-ask out of the §7.6.2 unmatched counter — a customer mistyping inside
+    # it to keep a re-ask out of the §26.6.2 unmatched counter — a customer mistyping inside
     # a flow the bot is running has not "not been understood", they have been asked again.
     reprompted: bool = False
 
@@ -217,7 +217,7 @@ def _ask_tier(tiers: TierPricingViewDto) -> str:
 def _closing() -> str:
     """The handoff message.
 
-    The §7.1.1 pledge is repeated here rather than assumed from the welcome: this is the
+    The §26.1.1 pledge is repeated here rather than assumed from the welcome: this is the
     moment a customer is asked to leave WhatsApp and pay, which is the single most
     impersonation-prone step in the channel.
     """

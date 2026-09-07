@@ -15,7 +15,7 @@ from main.app.domain.user.auth.consent.models import (
 
 _PLATFORM_EFFECTIVE = datetime(2026, 1, 15, tzinfo=timezone.utc)
 _VERIFICATION_EFFECTIVE = datetime(2026, 5, 1, tzinfo=timezone.utc)
-# The §7.8 WhatsApp clauses. A separate date because the three documents carrying them
+# The §26.8 WhatsApp clauses. A separate date because the three documents carrying them
 # move to a new version together: a cross-border transfer disclosure is a material
 # change, so existing accounts re-accept rather than acknowledging it passively.
 _WHATSAPP_EFFECTIVE = datetime(2026, 9, 3, tzinfo=timezone.utc)

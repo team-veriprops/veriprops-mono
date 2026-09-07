@@ -185,7 +185,7 @@ class MessageRouter:
                 "rules": [
                     {
                         # The transport is an explicit contract, not a fallback chain
-                        # (PRD §7, D43): CI and e2e run entirely on the stub, and both
+                        # (PRD §26, D43): CI and e2e run entirely on the stub, and both
                         # rules are exclusive so a misconfiguration can never silently
                         # cross over — production reaching the stub, or a test run
                         # reaching Meta, are both startup failures instead.

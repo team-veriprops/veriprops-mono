@@ -1,4 +1,4 @@
-"""Link-token handling on HandoffTokenService (PRD §7.4.4, D55).
+"""Link-token handling on HandoffTokenService (PRD §26.4.4, D55).
 
 A `link` token is the weakest thing the token service mints: it names a phone number and
 nothing else, and on its own it unlocks nothing — the OTP that follows is what proves the
@@ -105,7 +105,7 @@ class TestRedeemLink:
             await svc.redeem_link(token)
 
     async def test_the_ledger_records_the_number_instead_of_a_case(self):
-        # §7.11 pen-check trail: a link redemption names no case, so the number is the
+        # §26.11 pen-check trail: a link redemption names no case, so the number is the
         # only thing that identifies what was spent.
         svc = _service()
         claims = await svc.redeem_link(await svc.issue_link(PHONE), redeemed_ip="102.89.1.1")

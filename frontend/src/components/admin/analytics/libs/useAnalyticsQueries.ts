@@ -39,7 +39,7 @@ export function useWhatsAppChannelAnalyticsQuery(days?: number) {
 }
 
 /**
- * Re-reads Meta's quality rating (§7.10, D81). The backend returns the whole panel, so the
+ * Re-reads Meta's quality rating (§26.10, D81). The backend returns the whole panel, so the
  * cache is seeded from the response rather than invalidated — a second round trip would
  * re-run five aggregations to change one tile.
  */

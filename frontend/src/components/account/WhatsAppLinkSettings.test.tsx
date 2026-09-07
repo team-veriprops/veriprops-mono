@@ -55,7 +55,7 @@ describe("WhatsAppLinkSettings", () => {
   });
 
   it("states up front that a number is never told anything until it is linked", () => {
-    // The page's whole justification for existing (§7.4.3 — no case data to an
+    // The page's whole justification for existing (§26.4.3 — no case data to an
     // unverified number), so the copy is part of the contract, not decoration.
     expect(render(null)).toContain("never told");
   });

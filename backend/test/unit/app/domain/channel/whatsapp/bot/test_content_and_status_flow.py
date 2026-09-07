@@ -1,8 +1,8 @@
-"""The words the bot says, and how the status flow branches (§7.6.1, §7.6.2, D54).
+"""The words the bot says, and how the status flow branches (§26.6.1, §26.6.2, D54).
 
 Copy is normally not worth testing. Three pieces of it here are, because they are
-*obligations* rather than wording: the bot disclosure (§7.1.4), the payment pledge
-(§7.1.1), and the rule that pricing comes from the live config and never from a literal
+*obligations* rather than wording: the bot disclosure (§26.1.4), the payment pledge
+(§26.1.1), and the rule that pricing comes from the live config and never from a literal
 (D54). Each would be trivially easy to lose in an innocuous copy edit, and none would fail
 anything else.
 
@@ -30,7 +30,7 @@ from main.app.domain.verification.pricing_config.models import (
 # ─── Obligations ──────────────────────────────────────────────────
 
 def test_the_welcome_discloses_the_bot_and_states_the_payment_pledge():
-    """§7.1.4 and §7.1.1. Both ride on the welcome, which is the only message every
+    """§26.1.4 and §26.1.1. Both ride on the welcome, which is the only message every
     customer is guaranteed to receive."""
     message = content.welcome()
 
@@ -78,7 +78,7 @@ def test_pricing_with_no_configured_tiers_offers_a_person_rather_than_a_number()
 @pytest.mark.parametrize("reason", list(EscalationReason), ids=lambda r: r.value)
 def test_every_escalation_reason_has_copy(reason):
     """A reason with no copy would raise inside the handover — the bot going silent at
-    precisely the moment §7.6.5 says it must not."""
+    precisely the moment §26.6.5 says it must not."""
     message = content.escalation(reason, Coverage(CoverageState.OPEN, 12))
 
     assert message.strip()
@@ -126,7 +126,7 @@ def test_the_faq_answers_what_it_covers(question, expected):
     ],
 )
 def test_the_faq_says_nothing_outside_its_content_set(question):
-    """§7.6.2 — there is deliberately no nearest-match fallback. A confident answer to a
+    """§26.6.2 — there is deliberately no nearest-match fallback. A confident answer to a
     question we do not cover is worse than a handover."""
     assert content.faq_topic_for(question) is None
 
@@ -162,7 +162,7 @@ def test_one_case_is_answered_outright():
     assert "VP-2026-0001" in outcome.text
     assert "Verification in progress" in outcome.text
     assert "15 Sep 2026" in outcome.text
-    # The full picture stays behind the login (§7.3.4).
+    # The full picture stays behind the login (§26.3.4).
     assert "veriprops.ng" in outcome.text
 
 

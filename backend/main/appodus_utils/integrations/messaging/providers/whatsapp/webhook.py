@@ -1,4 +1,4 @@
-"""Meta Cloud API webhook receiver (PRD §7.3.3).
+"""Meta Cloud API webhook receiver (PRD §26.3.3).
 
 The channel's public front door. There is no session and no cookie here — the
 `X-Hub-Signature-256` HMAC over the **raw** request body is the authentication, so this
@@ -47,7 +47,7 @@ def _is_configured(secret: Optional[str]) -> bool:
 
 @inject
 class WhatsAppWebhookHandler(BaseWebhookHandler):
-    """Terminates Meta webhooks: verifies, normalizes, and hands off (§7.3.3)."""
+    """Terminates Meta webhooks: verifies, normalizes, and hands off (§26.3.3)."""
 
     def __init__(self):
         super().__init__(settings.WHATSAPP_APP_SECRET_KEY)

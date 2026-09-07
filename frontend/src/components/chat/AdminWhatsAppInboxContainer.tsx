@@ -14,7 +14,7 @@ import { useBotReadinessQuery } from "./libs/useWhatsAppBotQueries";
 import { cn } from "@lib/utils";
 
 /**
- * The admin WhatsApp inbox (PRD §7.3.3, §7.8, Decision K).
+ * The admin WhatsApp inbox (PRD §26.3.3, §26.8, Decision K).
  *
  * WhatsApp and the website feed **one** console, so this is not a second messaging app —
  * it is the same conversation list, filtered to the threads that arrived over WhatsApp,
@@ -130,7 +130,7 @@ export default function AdminWhatsAppInboxContainer() {
 
 /**
  * A WhatsApp enquiry often arrives before we know who is sending it, so the number is the
- * only identity there is until the linking flow resolves one (§7.4.4).
+ * only identity there is until the linking flow resolves one (§26.4.4).
  */
 function titleFor(thread: Conversation): string {
   return thread.externalRef ?? "WhatsApp enquiry";

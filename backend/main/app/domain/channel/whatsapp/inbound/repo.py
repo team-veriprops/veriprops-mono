@@ -64,9 +64,9 @@ class WhatsAppInboundMessageRepo(
     async def count_by_kind(
         self, kind: InboundKind, since: Optional[datetime] = None
     ) -> int:
-        """How many messages of *kind* arrived — the §7.10 voice-note volume metric.
+        """How many messages of *kind* arrived — the §26.10 voice-note volume metric.
 
-        `since` windows it, because §7.10 reads voice-note volume as the trigger data for
+        `since` windows it, because §26.10 reads voice-note volume as the trigger data for
         v1.1 transcription-assist: what matters is whether it is *rising*, which an
         all-time total can never say.
         """

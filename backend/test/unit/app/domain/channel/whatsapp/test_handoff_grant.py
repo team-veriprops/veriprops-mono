@@ -1,4 +1,4 @@
-"""The action grant a redeemed handoff link leaves behind (PRD §7.5, D51).
+"""The action grant a redeemed handoff link leaves behind (PRD §26.5, D51).
 
 The grant exists so a landing page survives a refresh without the link surviving a
 forward. These tests hold both halves of that: it must work for the customer who redeemed
@@ -132,7 +132,7 @@ class TestReadGrant:
             assert read_grant(_request({name: junk}), HandoffIntent.PAY) is None
 
     def test_carries_no_session_material(self):
-        # Completing the action must never amount to logging in (§7.5).
+        # Completing the action must never amount to logging in (§26.5).
         _, cookie = _issue()
         payload = jwt.get_unverified_claims(cookie.value)
         assert set(payload) == {"jti", "case", "sub", "intent", "exp"}
