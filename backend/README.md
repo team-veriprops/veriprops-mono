@@ -26,7 +26,7 @@ set APPODUS_ACTIVE_ENV=test && pip install -r test-requirements.txt && alembic u
 # Alembic
 alembic upgrade head
 set APPODUS_ACTIVE_ENV=test && alembic upgrade head
-$env:APPODUS_ACTIVE_ENV="dev_personal"; alembic upgrade head; pytest
+$env:APPODUS_ACTIVE_ENV="dev_personal"; alembic upgrade head; pytest 
 set APPODUS_ACTIVE_ENV=dev && alembic revision -m ""
 set APPODUS_ACTIVE_ENV=dev && alembic revision --autogenerate -m ""
 $env:APPODUS_ACTIVE_ENV="dev_personal"; alembic revision --autogenerate -m "auto_generated"

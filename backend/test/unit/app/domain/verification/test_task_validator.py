@@ -1,4 +1,4 @@
-"""Role submission validation (§7.3) — the four role forms."""
+"""Role submission validation (§12.2) — the four role forms."""
 import pytest
 
 from main.app.core.state.status import AgentRole

@@ -117,6 +117,7 @@ export default function ResetPasswordContainer({ token }: Props) {
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             placeholder="Type it again"
+            data-testid="reset-password-confirm"
             {...form.register("confirmPassword")}
           />
           {form.formState.errors.confirmPassword && (
@@ -139,6 +140,7 @@ export default function ResetPasswordContainer({ token }: Props) {
           type="submit"
           className="w-full"
           size="lg"
+          data-testid="reset-password-submit"
           disabled={resetMutation.isPending}
         >
           {resetMutation.isPending ? "Updating…" : "Reset password"}

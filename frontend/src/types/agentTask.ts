@@ -1,4 +1,4 @@
-// Agent task-execution types (PRD §7.1, §7.3) — mirror backend camelCase DTOs at
+// Agent task-execution types (PRD §12.1, §12.2) — mirror backend camelCase DTOs at
 // app/domain/verification/task. Backend owns task state + derivation.
 import { AgentRole } from "@/types/agent";
 import { TaskState, TaskAssignmentMode } from "@/types/adminVerification";
@@ -32,7 +32,7 @@ export interface AgentTask {
   submittedAt?: string;
 }
 
-/** Agent home summary (§7) — backend-derived counts over the agent's own tasks. */
+/** Agent home summary (§12) — backend-derived counts over the agent's own tasks. */
 export interface AgentDashboard {
   assigned: number;
   active: number;
@@ -57,7 +57,7 @@ export interface EvidenceItem {
   uploadedAt: string;
 }
 
-// The per-role submission form fields (mirrors the backend validator's required set, §7.3).
+// The per-role submission form fields (mirrors the backend validator's required set, §12.2).
 export const ROLE_FORM_FIELDS: Record<AgentRole, { key: string; label: string; required: boolean }[]> = {
   [AgentRole.REGISTRY]: [
     { key: "registered_owner", label: "Registered owner", required: true },

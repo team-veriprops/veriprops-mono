@@ -15,6 +15,7 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 import filetype
 import inflection
+from loguru import logger
 from fastapi import APIRouter, UploadFile
 from fastapi import Path
 from fastapi.encoders import jsonable_encoder
@@ -327,7 +328,10 @@ class Utils:
                     supplementary_dict.setdefault(field, in_obj[field])
                 in_obj_copy.pop(field)
             except AttributeError as e:
-                # TODO logger.error
+                # Names the field that failed to convert: the exception alone says only that
+                # something in the payload lacked an attribute, and the caller sees a dict of
+                # unknown provenance rather than the key that broke it.
+                logger.error(f"obj_time_to_str failed converting field '{field}': {e}")
                 raise e
 
         supplementary_dict.update(in_obj_copy)
@@ -561,7 +565,12 @@ class Utils:
                         supplementary_dict.setdefault(converted_field, in_obj[field])
                     in_obj_copy.pop(field)
                 except AttributeError as e:
-                    # TODO logger.error
+                    # Logged unconditionally, because the default path swallows the error
+                    # entirely: with `raise_exception` off, a field that fails to convert is
+                    # simply absent from the result, and nothing else records that it happened.
+                    logger.error(
+                        f"obj_convert_field_set_value failed converting field '{field}': {e}"
+                    )
                     if raise_exception:
                         raise e
 

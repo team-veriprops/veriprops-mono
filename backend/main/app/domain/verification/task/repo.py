@@ -19,7 +19,7 @@ from main.app.domain.verification.task.models import (
 )
 from main.appodus_utils.db.repo import GenericRepo
 
-# States in which a task counts against an agent's active-task capacity (§6.5, §7.2).
+# States in which a task counts against an agent's active-task capacity (§6.5, §11.3).
 _ACTIVE_STATES = (
     TaskState.ASSIGNED.value,
     TaskState.ACCEPTED.value,
@@ -93,7 +93,7 @@ class VerificationTaskRepo(
         return int(await self._session.scalar(stmt) or 0)
 
     async def count_by_state_for_agent(self, agent_id: str) -> dict[str, int]:
-        """state → count over an agent's assigned tasks (agent dashboard §7)."""
+        """state → count over an agent's assigned tasks (agent dashboard §12)."""
         stmt = (
             select(VerificationTask.state, func.count())
             .where(
@@ -106,7 +106,7 @@ class VerificationTaskRepo(
         return {state: int(count) for state, count in rows}
 
     async def list_pool_expired(self, now: datetime) -> List[VerificationTask]:
-        """Broadcast tasks still unclaimed past their pool timeout (§7.2 starvation)."""
+        """Broadcast tasks still unclaimed past their pool timeout (§11.4 starvation)."""
         stmt = select(VerificationTask).where(
             VerificationTask.deleted.is_(False),
             VerificationTask.in_pool.is_(True),
@@ -117,7 +117,7 @@ class VerificationTaskRepo(
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def list_accept_deadline_expired(self, now: datetime) -> List[VerificationTask]:
-        """Manually-assigned tasks the agent never accepted in time (§7.2 no-show)."""
+        """Manually-assigned tasks the agent never accepted in time (§11.4 no-show)."""
         stmt = select(VerificationTask).where(
             VerificationTask.deleted.is_(False),
             VerificationTask.state == TaskState.ASSIGNED.value,

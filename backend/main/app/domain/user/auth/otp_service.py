@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loguru import Logger
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional, Union
 
 from main.appodus_utils.db.types.phone import PhoneNumber
@@ -106,7 +106,7 @@ class OtpService:
         await self._kv.set(_otp_key(channel, recipient), OTP_TTL, code)
         await self._kv.set(r_key, RESEND_LOCKOUT, attempts)
 
-        await send_verification_msg(recipient=recipient, code=code)
+        await send_verification_msg(recipient=recipient, code=code, channel=channel)
         await self._session_service.record_event(
             SecurityEventType.OTP_SENT,
             f"OTP sent via {channel.value.lower()}",
@@ -170,17 +170,28 @@ def recipient_for(channel: OtpChannel, *, email: Optional[str], dial_code: Optio
     return PhoneNumber(dial_code=dial_code, number=phone)
 
 
-async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], code: str) -> None:
+async def send_verification_msg(
+        recipient: Union[EmailRecipient, PhoneNumber],
+        code: str,
+        channel: OtpChannel = OtpChannel.EMAIL,
+) -> None:
     from main.app.domain.user.user_messages import AccountSecurityMessages
     account_security_messages = di[AccountSecurityMessages]
 
-    channel: OtpChannel = OtpChannel.EMAIL
     # The code is useless (or stale — resends overwrite it) past its validity, so
     # cap delivery retries at the OTP window instead of the full retry ladder.
     expires_at = Utils.datetime_now() + OTP_TTL
 
     try:
-        if isinstance(recipient, EmailRecipient):
+        if channel == OtpChannel.WHATSAPP:
+            # PRD §26.4.4: WhatsApp account linking delivers its code over WhatsApp itself,
+            # using the §26.7 `otp_auth` template, and falls back to SMS on the same number
+            # (D60, amending D46). The code is stored under the WHATSAPP channel key
+            # either way, so verification is unaffected by which transport carried it.
+            await _send_whatsapp_otp_with_sms_fallback(
+                account_security_messages, recipient, code, expires_at
+            )
+        elif isinstance(recipient, EmailRecipient):
             firstname, _, lastname = Utils.parse_fullname(str(recipient.fullname))
 
             await account_security_messages.send_direct_email_verification_message(
@@ -198,7 +209,6 @@ async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], c
                 expires_at=expires_at
             )
         else:
-            channel: OtpChannel = OtpChannel.PHONE
             await account_security_messages.send_direct_phone_verification_message(
                 recipient=MessageRequestRecipient(
                     phone=recipient
@@ -211,3 +221,47 @@ async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], c
             )
     except Exception as e:
         logger.warning("OTP delivery failed for {} via {}: {}", recipient, channel.value, e)
+
+
+async def _send_whatsapp_otp_with_sms_fallback(
+        account_security_messages,
+        recipient: PhoneNumber,
+        code: str,
+        expires_at: datetime,
+) -> None:
+    """Deliver an account-linking OTP over WhatsApp, falling back to SMS (§26.4.4, D60).
+
+    WhatsApp is the primary transport because the number being linked *is* a WhatsApp
+    number, so a code that arrives there is the most direct proof of control. But a
+    WhatsApp send can fail for reasons that have nothing to do with the customer — an
+    unapproved template, a Meta outage, a number with no WhatsApp account — and a linking
+    flow that dead-ends on any of those strands somebody who did nothing wrong.
+
+    SMS to the same number is the fallback §26.4.4 names. The provider chain is the
+    messaging router's existing one (Termii → Twilio for +234, the mock provider in
+    dev/test), so this needs no new provider decision — which is the blocker D46 deferred
+    on, and which the router had already settled.
+
+    The fallback is deliberately **not** silent: a customer who received the code by SMS
+    got the experience the PRD's second choice describes, and that is worth seeing in the
+    logs when diagnosing why linking rates differ from send counts.
+    """
+    context = {MessageContext.OTP: code, MessageContext.VALIDITY: _validity_label()}
+    try:
+        await account_security_messages.send_whatsapp_link_verification_message(
+            recipient=MessageRequestRecipient(phone=recipient),
+            context=context,
+            expires_at=expires_at,
+        )
+        return
+    except Exception as e:
+        logger.warning(
+            "WhatsApp OTP delivery failed for {}; falling back to SMS (§26.4.4): {}",
+            recipient.international_number, e,
+        )
+
+    await account_security_messages.send_direct_phone_verification_message(
+        recipient=MessageRequestRecipient(phone=recipient),
+        context=context,
+        expires_at=expires_at,
+    )

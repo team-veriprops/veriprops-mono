@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, ShieldCheck, Info } from "lucide-react";
-import { ChatMessage, MessageKind, SenderKind } from "@/types/chat";
+import { Clock, Mic, Paperclip, Send, ShieldCheck, Info } from "lucide-react";
+import { ChatMessage, InboundKind, MessageKind, SenderKind } from "@/types/chat";
+import ChannelBadge from "./ChannelBadge";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { usePublicConfigQuery } from "@components/website/auth/libs/useAuthQueries";
 import { useMarkReadMutation, useMessagesQuery } from "./libs/useChatQueries";
-import { cn } from "@lib/utils";
+import { cn, humanizeEnumLabel } from "@lib/utils";
 
 // Fallback until /config/public resolves; backend is the source of truth.
 const DEFAULT_CHAT_MESSAGE_MAX_LENGTH = 2000;
@@ -150,7 +151,29 @@ function MessageBubble({ message, mine }: { message: ChatMessage; mine: boolean 
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
-        {!mine && <span className="text-[11px] text-gray-400 mb-0.5 px-1">{name}</span>}
+        {!mine && (
+          <span className="text-[11px] text-gray-400 mb-0.5 px-1 flex items-center gap-1.5">
+            {name}
+            <ChannelBadge source={message.source} />
+            {message.unofficialMedia && (
+              <span
+                data-testid="chat-unofficial-media"
+                className="inline-flex items-center gap-1 rounded-full bg-amber-500/12 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                title={
+                  "Sent over WhatsApp. Only uploads made on veriprops.ng enter the " +
+                  "verification file (§26.1.6)."
+                }
+              >
+                {message.mediaKind === InboundKind.AUDIO ? (
+                  <Mic className="h-2.5 w-2.5" aria-hidden="true" />
+                ) : (
+                  <Paperclip className="h-2.5 w-2.5" aria-hidden="true" />
+                )}
+                {humanizeEnumLabel(message.mediaKind ?? InboundKind.UNSUPPORTED)} · not evidence
+              </span>
+            )}
+          </span>
+        )}
         <div
           className={cn(
             "rounded-2xl px-3.5 py-2 text-sm",
@@ -161,6 +184,20 @@ function MessageBubble({ message, mine }: { message: ChatMessage; mine: boolean 
         </div>
         {message.heldNotice && (
           <span className="text-[11px] text-amber-600 mt-0.5 px-1">{message.heldNotice}</span>
+        )}
+        {/*
+          §26.7 — written here, not yet delivered. Meta only carries free text within 24
+          hours of the customer's last message, so this reply waits for their next one.
+          Without the marker an agent has no way to tell it apart from a sent message.
+        */}
+        {message.pendingChannelDelivery && (
+          <span
+            data-testid="chat-pending-channel-delivery"
+            className="mt-0.5 flex items-center gap-1 px-1 text-[11px] text-amber-600"
+          >
+            <Clock className="h-3 w-3" aria-hidden="true" />
+            Waiting for the customer to reply before this can be delivered
+          </span>
         )}
       </div>
     </div>

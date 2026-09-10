@@ -13,8 +13,8 @@ export function shouldFlushPendingLogout(pendingLogout: boolean, isMutationPendi
  * Flushes a logout that failed to reach the backend (offline click) as soon as
  * connectivity is available — on mount (covers a new tab / reopened browser
  * seeing the flag via the shared `veriprops-auth` localStorage key) and on the
- * `online` event (covers the same tab regaining connectivity), mirroring the
- * retry pattern in MediaUploadManager. A no-op whenever `pendingLogout` is false.
+ * `online` event (covers the same tab regaining connectivity). A no-op whenever
+ * `pendingLogout` is false.
  *
  * Mounted once in `ClientWrapperProvider`, next to `useProactiveSessionRefresh`.
  */

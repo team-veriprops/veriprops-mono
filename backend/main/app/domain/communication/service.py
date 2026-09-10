@@ -13,9 +13,10 @@ admin id it is handed.
 """
 from __future__ import annotations
 
+from logging import Logger
 from typing import List, Optional
 
-from kink import inject
+from kink import di, inject
 
 from main.app.core.state.status import TaskState
 from main.app.domain.user.auth.session.models import UserType
@@ -28,7 +29,12 @@ from main.app.domain.communication.chat_message.models import (
     SenderKind,
 )
 from main.app.domain.communication.chat_message.service import ChatMessageService
-from main.app.domain.communication.conversation.models import Conversation, ConversationDto, ConversationType
+from main.app.domain.communication.conversation.models import (
+    Conversation,
+    ConversationChannel,
+    ConversationDto,
+    ConversationType,
+)
 from main.app.domain.communication.conversation.service import ConversationService
 from main.app.domain.communication.conversation_participant.service import (
     ConversationParticipantService,
@@ -40,6 +46,8 @@ from main.appodus_utils.decorators.decorate_all_methods import decorate_all_meth
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import ForbiddenException, ResourceNotFoundException
+
+logger: Logger = di["logger"]
 
 
 @inject
@@ -101,15 +109,55 @@ class CommunicationService:
         task_id: Optional[str] = None,
         kind: MessageKind = MessageKind.CHAT,
     ) -> ChatMessage:
-        """Send into a thread the user is a member of. ``sender_kind`` is derived
+        """Send into a thread the user may write to. ``sender_kind`` is derived
         server-side from the caller's role and the thread type — never trusted from the
         client — so a member cannot post as ADMIN/SYSTEM. Membership is the base
-        authorization, and an agent posting about an approved task is refused (§11.1)."""
-        convo = await self._conversations.get_owned_participant(conversation_id, user_id)
+        authorization, and an agent posting about an approved task is refused (§11.1).
+
+        **Admins are the exception, as they already are for reading.** They work a shared
+        inbox rather than joining threads (§N.3, G4) — `list_conversations`, `mark_read`
+        and `list_messages` all say so — and a WhatsApp enquiry has no admin participant
+        at all. Requiring membership here made every such thread readable from the console
+        and unanswerable, which also meant D57's bot take-over could never fire.
+        """
+        convo = (
+            await self._conversations.get_for_admin(conversation_id)
+            if await self._is_admin(user_id)
+            else await self._conversations.get_owned_participant(conversation_id, user_id)
+        )
         sender_kind = await self._resolve_sender_kind(user_id, convo)
         if sender_kind == SenderKind.AGENT and task_id:
             await self._assert_task_writable(task_id, user_id)
-        return await self._chat.send(convo, user_id, sender_kind, body, task_id=task_id, kind=kind)
+        message = await self._chat.send(
+            convo, user_id, sender_kind, body, task_id=task_id, kind=kind
+        )
+        await self._silence_the_bot_if_a_human_joined(convo, sender_kind)
+        return message
+
+    async def _silence_the_bot_if_a_human_joined(
+        self, convo: Conversation, sender_kind: SenderKind
+    ) -> None:
+        """D57 — an agent replying to a WhatsApp thread takes it off the bot.
+
+        The trigger is a *human* speaking, not an escalation: a customer whose question
+        nobody has picked up yet should still get bot answers to their next question,
+        rather than silence. Sticky until someone hands back from the console.
+
+        Best-effort. The reply has already been sent and delivered; failing the request
+        now would tell an agent their message did not go through when it did.
+        """
+        if convo.channel != ConversationChannel.WHATSAPP.value or not convo.external_ref:
+            return
+        if sender_kind not in (SenderKind.ADMIN, SenderKind.AGENT):
+            return
+        from main.app.domain.channel.whatsapp.bot.session.service import (
+            WhatsAppBotSessionService,
+        )
+
+        try:
+            await di[WhatsAppBotSessionService].take_over(convo.external_ref)
+        except Exception as exc:  # noqa: BLE001 — see the docstring
+            logger.error(f"Could not hand {convo.external_ref} to the agent: {exc}")
 
     async def _resolve_sender_kind(self, user_id: str, convo: Conversation) -> SenderKind:
         """Trusted sender identity for the generic post path: admins post as ADMIN, the

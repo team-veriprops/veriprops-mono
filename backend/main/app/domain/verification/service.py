@@ -120,6 +120,27 @@ class VerificationService:
         ))
         return await self._verification_repo.get_model(verification_id)
 
+    async def seed_draft_payload(
+        self, verification: Verification, step: int, payload: dict
+    ) -> Verification:
+        """Fill a draft the caller already holds, without re-fetching it.
+
+        Takes the **object**, not an id, because the only caller creates the draft moments
+        earlier in the same transaction — and `get_model` on a row created in an
+        uncommitted transaction can return `None`, which would make the seeding silently
+        do nothing (the same reason `ConversationService.touch` takes its conversation).
+        Ownership is the caller's to establish; it holds the row.
+
+        `async` despite doing no awaiting: this class is wrapped by
+        `decorate_all_methods(transactional())`, which turns every public method into a
+        coroutine function. A `def` here would return a coroutine the caller drops on the
+        floor, and the seeding would vanish with it.
+        """
+        verification.draft_step = step
+        verification.draft_payload = json.dumps(payload)
+        self._verification_repo._session.add(verification)
+        return verification
+
     async def get_owned(self, verification_id: str, customer_id: str) -> Verification:
         return await self._require_owned(verification_id, customer_id)
 

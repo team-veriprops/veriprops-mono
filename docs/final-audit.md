@@ -29,7 +29,7 @@ both ends.
 
 ## PRD compliance
 - §6 control panel, §6a chargeback (flag/rebuttal/won/lost without touching the state machine),
-  §7 task execution + §4.5 content hash + §7.3a server-stamped GPS/timestamp, §8 review/release +
+  §12 task execution + §4.5 content hash + §12.3 server-stamped GPS/timestamp, §8 review/release +
   §8.3 admin weights + §8.6 recompute-at-release-only + versioning. D11–D14 honoured.
 
 ## Architecture

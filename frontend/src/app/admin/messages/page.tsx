@@ -1,5 +1,5 @@
-import HeldMessagesContainer from "@components/chat/HeldMessagesContainer";
+import AdminMessagesTabs from "@components/chat/AdminMessagesTabs";
 
 export default function AdminMessagesPage() {
-  return <HeldMessagesContainer />;
+  return <AdminMessagesTabs />;
 }

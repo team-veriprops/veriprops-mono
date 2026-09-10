@@ -4,7 +4,7 @@ On evidence upload we compute and store a **SHA-256 content hash of the file**
 (per item, not chained). Combined with object-store immutability and the audit
 log, this makes any post-submission alteration *detectable*: the stored hash no
 longer matches the bytes. This proves integrity *after receipt*; authenticity
-*at capture* (server-side GPS / timestamp) is a separate control (§7.3a).
+*at capture* (server-side GPS / timestamp) is a separate control (§12.3).
 """
 from __future__ import annotations
 

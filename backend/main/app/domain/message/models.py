@@ -147,13 +147,22 @@ class UpsertMessageDto(MessageBaseDto):
         """Convert a MessageRequest to UpsertMessageDto.
 
         MessageRequest and UpsertMessageDto share a compatible field set by design.
-        Any schema change to either must be mirrored in the other. The one naming
-        difference is mapped explicitly: the request's ``schedule_at`` is the DTO's
-        ``scheduled_at`` (this model ignores unknown fields, so relying on the raw
-        dump would silently drop the schedule).
+        Any schema change to either must be mirrored in the other. Two differences are
+        reconciled explicitly:
+
+        * the request's ``schedule_at`` is the DTO's ``scheduled_at`` (this model ignores
+          unknown fields, so relying on the raw dump would silently drop the schedule);
+        * the request's ``extras`` is optional while the DTO's is a required dict.
+          ``model_dump`` emits an explicit ``None``, and pydantic applies a default only
+          when a key is *absent* — so a request that simply never set ``extras`` failed
+          validation. The builder always sets ``{}``, which is why this only bit a caller
+          constructing ``MessageRequest`` directly (the bot's free-text replies), and it
+          surfaced as a silently undelivered message rather than an error at the call site.
         """
         data = request.model_dump()
         data["scheduled_at"] = data.pop("schedule_at", None)
+        if data.get("extras") is None:
+            data.pop("extras", None)
         return cls(**data)
 
     model_config = ConfigDict(

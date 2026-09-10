@@ -142,6 +142,27 @@ export function useSendMessageMutation(role: "customer" | "agent" | "admin" | "s
   });
 }
 
+/**
+ * Send into a thread the caller is a member of, addressed by conversation id.
+ *
+ * The admin WhatsApp inbox needs this rather than `useSendMessageMutation`: a §26.8
+ * enquiry thread often has no verification behind it yet, so there is no id to send by.
+ */
+export function useConversationSendMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ conversationId, body }: { conversationId: string; body: string }) =>
+      service.sendToConversation(conversationId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat", "messages"] });
+      qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+      // Replying takes a WhatsApp thread off the bot (D57), so the mode banner beside
+      // this thread is now stale.
+      qc.invalidateQueries({ queryKey: ["whatsapp-bot", "session"] });
+    },
+  });
+}
+
 // ── Admin hold review ────────────────────────────────────────────────
 
 export function useHeldQueueQuery(page = 0, enabled = true) {

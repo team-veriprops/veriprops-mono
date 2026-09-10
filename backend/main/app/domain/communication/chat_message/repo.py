@@ -13,6 +13,7 @@ from main.app.domain.communication.chat_message.models import (
     CreateChatMessageDto,
     QueryChatMessageDto,
     SearchChatMessageDto,
+    SenderKind,
     UpdateChatMessageDto,
 )
 from main.appodus_utils import Utils
@@ -105,6 +106,34 @@ class ChatMessageRepo(
         return int((await self._session.execute(
             select(func.count(ChatMessage.id)).where(where)
         )).scalar() or 0)
+
+    async def list_pending_channel_delivery(self, conversation_id: str) -> List[ChatMessage]:
+        """Agent replies released into the thread but not yet sent over its channel (§26.7).
+
+        These are the messages an agent typed outside Meta's 24-hour window. The customer's
+        next inbound reopens the window, and this is the queue that flushes then — oldest
+        first, because the agent wrote them as a sequence and delivering them out of order
+        would rewrite the conversation.
+
+        Deliberately restricted to human senders: a bot reply already went out through
+        ``bot/sender.py``, and re-sending it would answer the customer twice.
+        """
+        stmt = (
+            select(ChatMessage)
+            .where(
+                and_(
+                    ChatMessage.deleted.is_(False),
+                    ChatMessage.conversation_id == Utils.uuid_to_hex(conversation_id),
+                    ChatMessage.state == ChatMessageState.DELIVERED.value,
+                    ChatMessage.channel_delivered_at.is_(None),
+                    ChatMessage.sender_kind.in_(
+                        [SenderKind.ADMIN.value, SenderKind.AGENT.value]
+                    ),
+                )
+            )
+            .order_by(asc(ChatMessage.date_created))
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
 
     async def latest_delivered(self, conversation_id: str) -> Optional[ChatMessage]:
         stmt = (

@@ -92,8 +92,11 @@ class MessageProviderName(str, Enum):
     FIREBASE_PUSH = "FIREBASE_PUSH"
     TWILIO_SMS = "TWILIO_SMS"
     MAILJET = "MAILJET"
+    RESEND = "RESEND"
+    AWS_SES = "AWS_SES"
     SMTP = "SMTP"       # Dev/test email capture via Mailpit
     MOCK_SMS = "MOCK_SMS"  # Dev/test SMS suppression (no real SMS sent)
+    WHATSAPP_STUB = "WHATSAPP_STUB"  # Dev/test/CI WhatsApp transport (records, never sends)
 
 
 class MessageStatus(str, Enum):
@@ -360,6 +363,13 @@ class WhatsappPayload(Object):
         None,
         description="Variables for template messages"
     )
+    template_button_parameter: Optional[str] = Field(
+        None,
+        description=(
+            "The value Meta's OTP button carries (the verification code). Authentication "
+            "templates require a button component; utility templates leave this unset."
+        )
+    )
     language_code: str = Field(
         "en",
         pattern=r'^[a-z]{2}(_[A-Z]{2})?$',
@@ -576,6 +586,19 @@ class MessageRequestRecipient(Object):
         default_factory=list,
         description="BCC recipient(s). Only applicable for email channel."
     )
+
+    @property
+    def phone_digits(self) -> str:
+        """The recipient's number in the digits-only form WhatsApp addresses (``wa_id``).
+
+        Meta identifies a participant by digits with no leading ``+``, while the rest of
+        the app keys identity on E.164 — one character apart, and the reason the WhatsApp
+        request builder reads this rather than `phone.international_number`.
+        """
+        from main.appodus_utils.integrations.messaging.providers.whatsapp.phone import (
+            to_wa_recipient,
+        )
+        return to_wa_recipient(self.phone.international_number) if self.phone else ""
 
 
 class MultiChannelMessageRequest(Object):

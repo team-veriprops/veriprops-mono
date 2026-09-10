@@ -1,4 +1,4 @@
-"""EvidenceService (§4.5, §7.3a): content-hash + server-stamped GPS/timestamp on
+"""EvidenceService (§4.5, §12.3): content-hash + server-stamped GPS/timestamp on
 capture, stored via the storage facade. Repo + provider mocked, no DB/storage."""
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock

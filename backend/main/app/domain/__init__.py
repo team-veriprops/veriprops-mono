@@ -3,11 +3,22 @@ from fastapi import APIRouter
 from main.app.config.settings import settings  # noqa: F401
 from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
 from main.app.domain.config.controller import config_router
+# The WhatsApp channel: inbound arrives through the shared webhook router, and the
+# handoff landings are public (the token is the authorization). The package import
+# also keeps every channel model reachable for Alembic.
+from main.app.domain import channel  # noqa: F401
+from main.app.domain.channel.whatsapp.bot.intake_controller import whatsapp_intake_router
+from main.app.domain.channel.whatsapp.bot.session.controller import whatsapp_bot_router
+from main.app.domain.channel.whatsapp.consent.controller import whatsapp_consent_router
+from main.app.domain.channel.whatsapp.handoff.controller import handoff_router
+from main.app.domain.channel.whatsapp.link.controller import whatsapp_link_router
+from main.app.domain.channel.whatsapp.template.controller import whatsapp_template_router
 from main.app.domain.message.controller import message_router
 from main.app.domain.user.controller import user_router
 from main.app.domain.verification.controller import verification_router
 from main.app.domain.verification.tracking.controller import customer_tracking_router
 from main.app.domain.verification.report.controller import customer_report_router
+from main.app.domain.verification.delegate.controller import delegate_router
 from main.app.domain.verification.share.controller import share_router
 from main.app.domain.verification.share.public_controller import public_share_router
 from main.app.domain.verification.recheck.controller import recheck_router, admin_recheck_router
@@ -53,11 +64,18 @@ from main.appodus_utils.config.settings import Environment
 
 router = APIRouter()
 router.include_router(config_router)
+router.include_router(whatsapp_bot_router)
+router.include_router(whatsapp_intake_router)
+router.include_router(handoff_router)
+router.include_router(whatsapp_consent_router)
+router.include_router(whatsapp_link_router)
+router.include_router(whatsapp_template_router)
 router.include_router(message_router)
 router.include_router(user_router)
 router.include_router(verification_router)
 router.include_router(customer_tracking_router)
 router.include_router(customer_report_router)
+router.include_router(delegate_router)
 router.include_router(share_router)
 router.include_router(public_share_router)
 router.include_router(recheck_router)

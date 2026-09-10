@@ -74,6 +74,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
   const country = useWatch({ control: form.control, name: "countryOfResidence" });
   const preferredCurrency = useWatch({ control: form.control, name: "preferredCurrency" });
   const phone = useWatch({ control: form.control, name: "phone" });
+  const phoneCountryCode = useWatch({ control: form.control, name: "countryCode" });
 
   // Phone is always required, whether or not it needs to be OTP-verified here.
   // When verification is off, the number is still collected — so we satisfy
@@ -179,9 +180,13 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
                 Phone <span className="text-destructive">*</span>
               </label>
               <PhoneInputWithCountry
-                form={form as never}
-                isVerified={false}
-                onChanged={() => {}}
+                countryCode={phoneCountryCode}
+                phone={phone}
+                onChange={({ countryCode, dialCode, phone }) => {
+                  form.setValue("countryCode", countryCode, { shouldValidate: true });
+                  form.setValue("dialCode", dialCode, { shouldValidate: true });
+                  form.setValue("phone", phone, { shouldValidate: true });
+                }}
                 placeholder="0801 234 5678"
               />
               {(form.formState.touchedFields.phone || form.formState.isSubmitted) &&

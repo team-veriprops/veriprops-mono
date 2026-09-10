@@ -70,6 +70,12 @@ async def handle_webhook(platform: IntegratedPlatform, request: Request):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail={"error": f"platform '{platform}' not supported"})
 
+    except HTTPException:
+        # Deliberate responses (e.g. an unsupported platform) must reach the client as
+        # themselves — the catch-all below would otherwise report them as 500s and hide
+        # a routing/registration mistake behind an apparent server fault.
+        raise
+
     except ValueError as e:
         logger.error(f"Webhook processing failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,

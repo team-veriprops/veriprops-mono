@@ -17,6 +17,7 @@ from main.app.domain.user.auth.consent.models import (
     CreateUserConsentDto,
     LegalDocumentDto,
     LegalDocumentSummaryDto,
+    REQUIRED_SIGNUP_CONSENTS,
     UserConsentHistoryItemDto,
     UserConsentHistoryPageDto,
 )
@@ -101,12 +102,8 @@ class ConsentService:
     async def list_missing_required_consents(self, user_id: str) -> List[ConsentDocument]:
         """Returns the current consent_versions of any required consents the user has
         not yet accepted (or has only accepted an older consent_version of)."""
-        required = [
-            ConsentDocumentType.PLATFORM_TERMS,
-            ConsentDocumentType.PRIVACY_POLICY,
-        ]
         missing: List[ConsentDocument] = []
-        for doc_type in required:
+        for doc_type in REQUIRED_SIGNUP_CONSENTS:
             current = await self._doc_repo.get_current(doc_type)
             if not current:
                 continue

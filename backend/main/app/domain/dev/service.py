@@ -7,12 +7,14 @@ so an admin can immediately drive release, hold-review, and the SLA sweep agains
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from kink import inject
+from kink import di, inject
 from sqlalchemy import text
 
 from main.app.config.settings import settings
+from main.app.core import fault_injection
+from main.app.core.fault_injection import FaultPoint
 from main.app.core.state.dependencies import roles_for_tier
 from main.app.core.state.status import (
     AgentRole,
@@ -31,6 +33,7 @@ from main.app.domain.user.agent.credential.models import (
     CredentialStatus,
 )
 from main.app.domain.user.agent.profile.models import AgentProfile
+from main.app.domain.user.auth.consent.models import REQUIRED_SIGNUP_CONSENTS, UserConsent
 from main.app.domain.user.auth.session.models import UserType
 from main.app.domain.user.models import User
 from main.app.domain.verification.models import Verification
@@ -40,6 +43,12 @@ from main.appodus_utils.db.session import get_db_session_from_context
 from main.appodus_utils.db.types.money import TransactionCurrency
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
+    InboundKind,
+    InboundWhatsAppMessage,
+)
+from main.appodus_utils.integrations.messaging.providers.whatsapp.phone import to_e164
+from main.appodus_utils.integrations.messaging.providers.whatsapp.stub import whatsapp_outbox
 
 # Deterministic e2e credentials (non-prod only). A non-special-use domain — the email
 # validator rejects reserved TLDs like `.test`/`example.com`.
@@ -71,6 +80,24 @@ _RESET_TABLES = [
     "data_erasure_requests",
     # Admin onboarding (§4) + messaging bookkeeping (rows accrue when ENABLE_OUT_MESSAGING=True).
     "admin_invitations", "messages",
+    # Per-user consent acceptances (§3.2) — user data, not reference data (the
+    # consent_documents they point at are preserved). Cleared so seed() can re-record them
+    # for the fresh users and the surviving super-admin without stacking duplicates.
+    "user_consents",
+    # WhatsApp messaging consent (§26.4.6) — keyed on the user, so a row outliving its
+    # account is dead data. The rest of the channel's tables are deliberately left alone:
+    # `whatsapp_links` holds a unique number per row, and the drive-through takes a fresh
+    # number per scenario rather than depending on a reset to release one.
+    "whatsapp_consents",
+    # §26.4.5 delegations are per-verification, and `verifications` is cleared above — a
+    # surviving row would point at a case that no longer exists.
+    "case_delegates",
+    # §26.10 analytics facts are per-run scenario data. Cleared so a drive-through asserting
+    # "these counts moved" is reading its own traffic rather than the previous run's — a
+    # metric that only ever accumulates would pass on stale rows even if every recorder
+    # call site had been deleted. `whatsapp_number_health` is *not* cleared: it caches
+    # Meta's verdict on the number, which is reference-like and survives a scenario.
+    "whatsapp_channel_events",
 ]
 
 
@@ -86,6 +113,9 @@ class DevSeedService:
             text("DELETE FROM users WHERE email <> :admin"),
             {"admin": settings.SUPER_ADMIN_EMAIL},
         )
+        # An armed drill is process state, not table state, so it would otherwise survive
+        # the one call whose whole job is to hand back a known-clean environment.
+        fault_injection.disarm_all()
         return {"reset": True, "tables_cleared": len(_RESET_TABLES) + 1}
 
     async def seed(self) -> Dict[str, Any]:
@@ -279,6 +309,13 @@ class DevSeedService:
                 ip_address="198.51.100.7", occurred_at=now,
             ))
 
+        # Consents for every seeded account — see _record_required_consents.
+        await self._record_required_consents(
+            session,
+            [str(customer.id), str(erasable.id)] + [str(a.id) for a in agents.values()],
+            now,
+        )
+
         await session.flush()
         return {
             "customer": {"id": str(customer.id), "email": CUSTOMER_EMAIL, "password": CUSTOMER_PASSWORD},
@@ -290,6 +327,47 @@ class DevSeedService:
             "tasks": task_ids,
             "ops": {"id": ops_hex, "vid": ops.vid, "txRef": ops_tx_ref, "tasks": ops_task_ids},
         }
+
+    async def _record_required_consents(self, session, user_ids, now) -> None:
+        """Accept the current version of every required consent for each seeded user.
+
+        Seeded users are inserted directly, bypassing ``AuthService.signup`` — the only
+        path that normally records consents. The super-admin is likewise inserted by
+        migration ``0001``. Without these rows every persona looks like an account with
+        outdated terms and is held behind the **non-dismissible** re-acceptance modal
+        (§3.2) on every authenticated page, which blocks UI automation and misrepresents a
+        normal signed-up user.
+
+        The current version is read from ``consent_documents`` rather than hardcoded:
+        accepting a superseded version still counts as missing, so a version bump in the
+        content registry must not silently re-trap every seeded account.
+        """
+        required = {t.value for t in REQUIRED_SIGNUP_CONSENTS}
+        rows = (await session.execute(text(
+            "SELECT type, consent_version FROM consent_documents "
+            "ORDER BY effective_at DESC"
+        ))).all()
+
+        current: Dict[str, str] = {}
+        for row in rows:
+            if row.type in required and row.type not in current:
+                current[row.type] = row.consent_version
+
+        # The super-admin survives reset(), so it is not in the seeded-user list but needs
+        # the same treatment — an admin trapped by the modal blocks every admin scenario.
+        admin_row = (await session.execute(
+            text("SELECT id FROM users WHERE email = :email LIMIT 1"),
+            {"email": settings.SUPER_ADMIN_EMAIL},
+        )).first()
+        all_ids = list(user_ids) + ([str(admin_row.id)] if admin_row else [])
+
+        for user_id in all_ids:
+            for document_type, consent_version in current.items():
+                session.add(self._new(
+                    UserConsent,
+                    user_id=user_id, document_type=document_type,
+                    consent_version=consent_version, accepted_at=now,
+                ))
 
     async def latest_message(self, recipient: str) -> Dict[str, Any]:
         """Snapshot of the newest outbound-message row addressed to *recipient* (fragment
@@ -339,6 +417,117 @@ class DevSeedService:
             {"frag": f"%{recipient}%"},
         )).first()
         return {"rewound": row is not None, "id": row.id.hex if row else None}
+
+    # ── WhatsApp channel (PRD §26, D43) ────────────────────────────
+
+    async def inject_whatsapp_inbound(
+        self,
+        from_phone: str,
+        text: Optional[str] = None,
+        kind: str = InboundKind.TEXT.value,
+        wamid: Optional[str] = None,
+        sender_name: Optional[str] = None,
+        interactive_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Deliver an inbound message as if Meta had posted it.
+
+        Goes through the real ``WhatsAppInboundService``, so an automated run exercises
+        thread resolution, the fraud scan, and the console post — the same code a signed
+        Meta delivery reaches. Only the transport is simulated.
+        """
+        from main.app.domain.channel.whatsapp.inbound.service import WhatsAppInboundService
+
+        inbound_service: WhatsAppInboundService = di[WhatsAppInboundService]
+        message = InboundWhatsAppMessage(
+            # A distinct default id per injection, so repeated calls read as separate
+            # messages while an explicit wamid can still exercise the dedup path.
+            wamid=wamid or f"wamid.dev.{Utils.random_str(16)}",
+            from_phone=to_e164(from_phone),
+            kind=InboundKind(kind),
+            text=text,
+            interactive_id=interactive_id,
+            sender_name=sender_name,
+            received_at=Utils.datetime_now(),
+            raw={"injected": True},
+        )
+        record = await inbound_service.ingest(message)
+        return {
+            "wamid": message.wamid,
+            "ingested": record is not None,
+            "duplicate": record is None,
+            "chat_message_id": record.chat_message_id if record else None,
+        }
+
+    async def issue_handoff_token(
+        self, case_id: str, customer_id: str, intent: str
+    ) -> Dict[str, Any]:
+        """Mint a §26.5 handoff link without going through a bot conversation.
+
+        The bot flows that normally issue these land in later slices, so this is how an
+        automated run reaches the landing pages. It calls the real service, so ownership
+        is still checked and the token is signed exactly as a live one would be.
+        """
+        from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
+        from main.app.domain.channel.whatsapp.handoff.service import HandoffTokenService
+
+        handoff_service: HandoffTokenService = di[HandoffTokenService]
+        token = await handoff_service.issue(customer_id, case_id, HandoffIntent(intent))
+        return {"token": token, "intent": intent, "case_id": case_id}
+
+    async def whatsapp_outbox(self, recipient: Optional[str] = None) -> Dict[str, Any]:
+        """What the stub transport recorded, newest last.
+
+        Serialised `by_alias`, like every other response the app returns. A bare
+        `model_dump()` emits the Python field names, so this endpoint alone answered in
+        snake_case — and an assertion written against the documented camelCase contract
+        read `templateName` as absent and reported a working template send as free text.
+        """
+        messages = (
+            whatsapp_outbox.for_recipient(recipient) if recipient else whatsapp_outbox.all()
+        )
+        return {
+            "count": len(messages),
+            "messages": [m.model_dump(by_alias=True) for m in messages],
+        }
+
+    async def clear_whatsapp_outbox(self) -> Dict[str, Any]:
+        whatsapp_outbox.clear()
+        return {"cleared": True}
+
+    async def arm_whatsapp_bot_failure(self) -> dict:
+        """Arm the §26.6.5 failure drill: the next bot turn raises (§26.11 launch gate).
+
+        The gate asks someone to "kill the bot and observe the auto-reply + alert", and
+        this is the smallest honest way to do that on a running stack — one real turn takes
+        the same `except` path a real outage would, rather than a mock proving the branch in
+        isolation. One-shot, so a forgotten arm cannot silence an environment.
+        """
+        fault_injection.arm(FaultPoint.WHATSAPP_BOT_TURN)
+        return {"armed": FaultPoint.WHATSAPP_BOT_TURN.value}
+
+    async def rewind_whatsapp_window(self, phone: str, hours: int = 25) -> Dict[str, Any]:
+        """Age a number's inbound journal so Meta's 24-hour window reads as closed (§26.7).
+
+        The closed-window path — `window_reopen` instead of free text, and the reply queue
+        behind it — is otherwise unreachable from a test that runs in a few seconds, since
+        `WhatsAppWindowService` derives the window from `whatsapp_inbound_messages` rather
+        than from a column something could set. Same shape and same justification as
+        `rewind_message`: it touches ONLY `received_at`, so what the pipeline under test
+        owns stays owned by it.
+        """
+        session = get_db_session_from_context()
+        # The journal keys on E.164, while callers hand us Meta's digits-only `wa_id` —
+        # the one-character difference the channel converts at every seam.
+        normalized = to_e164(phone)
+        rows = (await session.execute(
+            text(
+                "UPDATE whatsapp_inbound_messages "
+                "SET received_at = received_at - make_interval(hours => :hours) "
+                "WHERE from_phone = :phone RETURNING id"
+            ),
+            {"hours": hours, "phone": normalized},
+        )).all()
+        return {"rewound": len(rows), "phone": normalized, "hours": hours}
 
     @staticmethod
     def _new(model, **fields):

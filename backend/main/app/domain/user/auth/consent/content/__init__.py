@@ -15,6 +15,10 @@ from main.app.domain.user.auth.consent.models import (
 
 _PLATFORM_EFFECTIVE = datetime(2026, 1, 15, tzinfo=timezone.utc)
 _VERIFICATION_EFFECTIVE = datetime(2026, 5, 1, tzinfo=timezone.utc)
+# The §26.8 WhatsApp clauses. A separate date because the three documents carrying them
+# move to a new version together: a cross-border transfer disclosure is a material
+# change, so existing accounts re-accept rather than acknowledging it passively.
+_WHATSAPP_EFFECTIVE = datetime(2026, 9, 3, tzinfo=timezone.utc)
 
 
 @dataclass(frozen=True)
@@ -63,7 +67,22 @@ You agree to submit accurate property information, to use the Platform lawfully,
 to keep all communication on the Platform. All communications are recorded for
 quality, security, and dispute resolution.
 
-### 6. Changes
+### 6. WhatsApp as a communication surface
+We operate an official WhatsApp channel. It is part of the Platform for every purpose
+in these Terms, including the limitation of liability in clause 3 — the same 1x
+fees-paid cap applies to anything said or done there.
+
+Two limits are absolute and are not changed by anything you may be told on WhatsApp
+or anywhere else. **Payment only ever happens at veriprops.ng** — we will never ask
+you to pay through a chat message, a transfer to an individual, or any address other
+than our website. And **only documents uploaded through your Veriprops account form
+part of your verification**; anything sent over chat is treated as unofficial and
+never enters the verification file.
+
+Our official number is published on veriprops.ng and in your reports. Messages from
+any other number are not from us.
+
+### 7. Changes
 We version these Terms. Material changes require your re-acceptance before you
 continue; cosmetic changes are acknowledged passively.
 """
@@ -98,7 +117,29 @@ while the legally necessary event record is preserved.
 We share data only with the vetted agents and processors needed to deliver your
 verification, and where the law requires.
 
-### 6. Contact
+### 6. WhatsApp
+If you contact us on WhatsApp, or link your number to your account, we process the
+messages you send, the number you send them from, and the WhatsApp profile name Meta
+supplies. Chat logs are retained business records, held under the same access controls
+as your case data and covered by clause 3.
+
+**Cross-border transfer.** WhatsApp is operated by Meta, and messages transit and are
+processed on Meta infrastructure outside Nigeria. Choosing to message us is a choice
+to send that content through Meta; we cannot apply Nigerian data protection to what
+happens inside their service, and their own terms govern it.
+
+**The two consents.** We ask separately, and unticked, for permission to send you
+(a) progress updates about your verification and (b) news and offers. Neither is
+required in order to buy a verification, both are recorded with the date, time and the
+screen on which you gave them, and either can be withdrawn — reply STOP in the chat,
+or use your account settings. Withdrawing does not affect your verification, and you
+continue to receive everything by email.
+
+You may authorize one other person per verification to receive **status updates only**
+on WhatsApp. They never receive your documents, your report, your chat history or the
+details you submitted, and you can revoke the authorization at any time.
+
+### 7. Contact
 Privacy questions: privacy@veriprops.ng.
 """
 
@@ -235,6 +276,12 @@ You consent to the **recording and retention of all communications** on the Plat
 relating to your verification — messages with admin, and admin↔agent coordination on
 your behalf.
 
+This includes our official **WhatsApp** channel. A WhatsApp conversation is the same
+conversation record as one held on the website — one log per person, across both
+surfaces — and it reaches the same team, is scanned by the same checks, and is
+retained on the same basis. Messages there also pass through Meta's infrastructure
+outside Nigeria; see the Privacy Policy.
+
 Recording supports quality, fraud prevention, security, and dispute resolution. All
 messages are scanned for attempts to share contact or payment details off-platform,
 which are blocked. Recorded communications form part of the audit trail and are
@@ -268,13 +315,13 @@ reverse-FX gap.
 
 _ENTRIES: list[LegalDocumentContent] = [
     LegalDocumentContent(
-        type=ConsentDocumentType.PLATFORM_TERMS, consent_version="1.0.0",
-        effective_at=_PLATFORM_EFFECTIVE, title="Platform Terms of Service",
+        type=ConsentDocumentType.PLATFORM_TERMS, consent_version="1.1.0",
+        effective_at=_WHATSAPP_EFFECTIVE, title="Platform Terms of Service",
         href="/legal/terms", signoff_status=ConsentSignoffStatus.DRAFT, body=_PLATFORM_TERMS,
     ),
     LegalDocumentContent(
-        type=ConsentDocumentType.PRIVACY_POLICY, consent_version="1.0.0",
-        effective_at=_PLATFORM_EFFECTIVE, title="Privacy Policy",
+        type=ConsentDocumentType.PRIVACY_POLICY, consent_version="1.1.0",
+        effective_at=_WHATSAPP_EFFECTIVE, title="Privacy Policy",
         href="/legal/privacy", signoff_status=ConsentSignoffStatus.DRAFT, body=_PRIVACY_POLICY,
     ),
     LegalDocumentContent(
@@ -308,8 +355,8 @@ _ENTRIES: list[LegalDocumentContent] = [
         href="/legal/jurisdiction", signoff_status=ConsentSignoffStatus.DRAFT, body=_JURISDICTION_PLATFORM_ONLY,
     ),
     LegalDocumentContent(
-        type=ConsentDocumentType.COMMUNICATION_RECORDING, consent_version="1.0.0",
-        effective_at=_VERIFICATION_EFFECTIVE, title="Communication Recording",
+        type=ConsentDocumentType.COMMUNICATION_RECORDING, consent_version="1.1.0",
+        effective_at=_WHATSAPP_EFFECTIVE, title="Communication Recording",
         href="/legal/communication-recording", signoff_status=ConsentSignoffStatus.DRAFT, body=_COMMUNICATION_RECORDING,
     ),
     LegalDocumentContent(

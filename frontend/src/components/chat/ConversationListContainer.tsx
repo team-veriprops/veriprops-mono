@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { MessageCircle, LifeBuoy } from "lucide-react";
 import { ROUTES } from "@lib/routes";
-import { Conversation, ConversationType } from "@/types/chat";
+import { Conversation, ConversationChannel, ConversationType, MessageSource } from "@/types/chat";
+import ChannelBadge from "./ChannelBadge";
 import { useConversationsQuery } from "./libs/useChatQueries";
 
 /** Chat conversation list (§N.3) — all the user's threads, unread first. */
@@ -50,8 +51,11 @@ export default function ConversationListContainer() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate text-brand-navy">
-                  {titleFor(c)}
+                <p className="text-sm font-medium truncate text-brand-navy flex items-center gap-1.5">
+                  <span className="truncate">{titleFor(c)}</span>
+                  {c.channel === ConversationChannel.WHATSAPP && (
+                    <ChannelBadge source={MessageSource.WHATSAPP} />
+                  )}
                 </p>
                 <p className="text-xs text-gray-400 truncate">{subtitleFor(c)}</p>
               </div>
@@ -82,6 +86,9 @@ function titleFor(c: Conversation): string {
 }
 
 function subtitleFor(c: Conversation): string {
+  // A WhatsApp enquiry often arrives before we know who is sending it, so the number is
+  // the only identity there is until the linking flow resolves one (§26.4.4).
+  if (c.channel === ConversationChannel.WHATSAPP) return c.externalRef ?? "WhatsApp enquiry";
   if (c.type === ConversationType.CUSTOMER_ADMIN) return "You and the Veriprops team";
   if (c.type === ConversationType.GENERAL_SUPPORT) return "Account & billing help";
   return "Verification thread";

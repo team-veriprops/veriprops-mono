@@ -14,6 +14,10 @@ from main.appodus_utils.db.types.money import TransactionCurrency
 class OtpChannel(str, enum.Enum):
     EMAIL = "EMAIL"
     PHONE = "PHONE"
+    # WhatsApp account linking (PRD §26.4.4, D46). A separate channel rather than a
+    # delivery detail of PHONE: the OTP keys are namespaced by channel, so a code sent to
+    # a number over WhatsApp cannot be spent as a signup SMS code for the same number.
+    WHATSAPP = "WHATSAPP"
 
 
 class AuthIntent(str, enum.Enum):

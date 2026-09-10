@@ -36,6 +36,16 @@ export class ChatService {
     return this.http.post(`/chat/conversations/${conversationId}/read`);
   }
 
+  /**
+   * Post into a thread by id — the member-gated path, used where the caller holds a
+   * conversation rather than a verification (the admin WhatsApp inbox: a §26.8 enquiry
+   * thread has no case behind it yet). `senderKind` is derived server-side from the
+   * caller's role, never sent.
+   */
+  sendToConversation(conversationId: string, body: string): Promise<SuccessResponse<ChatMessage>> {
+    return this.http.post(`/chat/conversations/${conversationId}/messages`, { body });
+  }
+
   /** Per-user SSE stream URL (§4.9, §N) — consumed by EventSource in useUserStream. */
   streamUrl(): string {
     return `/api/chat/stream`;

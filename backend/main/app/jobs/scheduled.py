@@ -1,4 +1,4 @@
-"""Background scheduler wiring (PRD §7.2 timeout sweeps, §6.4 SLA shedding).
+"""Background scheduler wiring (PRD §11.4 timeout sweeps, §6.4 SLA shedding).
 
 The individual sweep tasks — job wrappers plus their ``check_*`` entrypoints —
 live one-file-per-concern under ``app/jobs/tasks/``. This module owns the

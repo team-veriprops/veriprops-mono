@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ROUTES, isAuthIntent, buildAuthUrl } from "./routes";
+import { PAYMENT_FLOW_PATH_PATTERNS, ROUTES, isAuthIntent, buildAuthUrl } from "./routes";
 import { AuthIntent } from "@/components/website/auth/models";
 
 describe("ROUTES", () => {
@@ -74,5 +74,38 @@ describe("buildAuthUrl", () => {
       lastName: "",
     });
     expect(url).toBe("/auth/signup?email=ada%40example.com");
+  });
+});
+
+describe("WhatsApp handoff routes", () => {
+  it("builds the three token landings", () => {
+    expect(ROUTES.WA.PAY("tok")).toBe("/wa/pay/tok");
+    expect(ROUTES.WA.UPLOAD("tok")).toBe("/wa/upload/tok");
+    expect(ROUTES.WA.REPORT("tok")).toBe("/wa/report/tok");
+  });
+
+  it("keeps the landings outside every protected surface", () => {
+    // The handoff token is the authorization (§26.5) — a customer arriving from WhatsApp
+    // must not be bounced to a login page before the landing can even acknowledge their
+    // case. proxy.ts derives its protected prefixes from these constants.
+    const protectedPrefixes = [
+      ROUTES.PORTAL.GATE,
+      ROUTES.ADMIN.GATE,
+      ROUTES.AGENT.GATE,
+      ROUTES.ACCOUNT.ROOT,
+    ];
+    for (const landing of [ROUTES.WA.PAY("t"), ROUTES.WA.UPLOAD("t"), ROUTES.WA.REPORT("t")]) {
+      expect(protectedPrefixes.some((p) => landing.startsWith(p))).toBe(false);
+    }
+  });
+});
+
+describe("PAYMENT_FLOW_PATH_PATTERNS", () => {
+  it("matches what the pay route builders produce", () => {
+    // The patterns mirror the builders; if one moves without the other, the widget stops
+    // suppressing itself at the payment step.
+    const matches = (path: string) => PAYMENT_FLOW_PATH_PATTERNS.some((p) => p.test(path));
+    expect(matches(ROUTES.PORTAL.VERIFICATION_PAY("abc"))).toBe(true);
+    expect(matches(ROUTES.WA.PAY("tok"))).toBe(true);
   });
 });

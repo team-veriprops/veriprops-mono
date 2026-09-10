@@ -1,15 +1,15 @@
-"""Stage 2 — admin assignment + agent task execution (S10 §6.3, S11 §7).
+"""Stage 2 — admin assignment + agent task execution (S10 §6.3, S11 §12).
 
 The first live coverage of the pipeline middle: for each STANDARD-tier role the admin
 consults the ranked suggestions and assigns the seeded agent; the agent accepts, starts,
-uploads content-hashed evidence (§4.5, §7.3a), and submits the role form (§7.3). Once every
+uploads content-hashed evidence (§4.5, §12.3), and submits the role form (§12.2). Once every
 required task is SUBMITTED the derive owner promotes the verification to UNDER_REVIEW (§2.5).
 """
 from __future__ import annotations
 
 from .harness import MINIMAL_PNG, Ctx, check
 
-# Minimal valid role forms (per-role required fields, task/validator.py §7.3).
+# Minimal valid role forms (per-role required fields, task/validator.py §12.2).
 ROLE_PAYLOADS = {
     "REGISTRY": {"registered_owner": "Chief A. Danladi", "title_search_result": "CLEAN",
                  "search_reference": "LAG/REG/2026/0042", "summary": "Registry search clear."},
@@ -44,36 +44,36 @@ def run(ctx: Ctx) -> None:
         check(f"admin assigned the {role} task to the seeded agent (§6.3)",
               r.status_code == 200, f"http {r.status_code}: {r.text[:200]}")
 
-        # Agent: the assignment shows on their work surface (§7.1).
+        # Agent: the assignment shows on their work surface (§12.1).
         agent = ctx.agent(role)
         tasks = agent.get("/agents/tasks").json()["data"]["items"]
         mine = next((t for t in tasks if t["verificationId"] == vid_id), None)
-        check(f"{role} agent sees the assigned task on their dashboard (§7.1)",
+        check(f"{role} agent sees the assigned task on their dashboard (§12.1)",
               mine is not None and mine["state"] == "ASSIGNED",
               f"state={mine and mine['state']}")
         task_id = mine["id"]
         ctx.task_ids[role] = task_id
 
-        # Accept → start → capture evidence → submit (§7.1, §7.3, §7.3a).
+        # Accept → start → capture evidence → submit (§12.1, §12.2, §12.3).
         accepted = agent.post(f"/agents/tasks/{task_id}/accept").json()["data"]
-        check(f"{role} agent accepted the task (§7.1)", accepted["state"] == "ACCEPTED")
+        check(f"{role} agent accepted the task (§12.1)", accepted["state"] == "ACCEPTED")
         started = agent.post(f"/agents/tasks/{task_id}/start").json()["data"]
-        check(f"{role} agent started the task (§7.3)", started["state"] == "IN_PROGRESS")
+        check(f"{role} agent started the task (§12.2)", started["state"] == "IN_PROGRESS")
 
         evidence = agent.post(
             f"/agents/tasks/{task_id}/evidence",
             files={"file": (f"{role.lower()}-site.png", MINIMAL_PNG, "image/png")},
             data={"kind": "PHOTO", "gps_latitude": "6.4478", "gps_longitude": "3.4723"},
         ).json()["data"]
-        check(f"{role} evidence upload is content-hashed at receipt (§4.5, §7.3a)",
+        check(f"{role} evidence upload is content-hashed at receipt (§4.5, §12.3)",
               bool(evidence.get("contentSha256")), f"sha256={evidence.get('contentSha256', '')[:12]}")
         listed = agent.get(f"/agents/tasks/{task_id}/evidence").json()["data"]
-        check(f"{role} evidence is listed for the task (§7.3a)",
+        check(f"{role} evidence is listed for the task (§12.3)",
               any(e["id"] == evidence["id"] for e in listed), f"count={len(listed)}")
 
         submitted = agent.post(f"/agents/tasks/{task_id}/submit",
                                json={"payload": ROLE_PAYLOADS[role]}).json()["data"]
-        check(f"{role} agent submitted the role findings (§7.3)",
+        check(f"{role} agent submitted the role findings (§12.2)",
               submitted["state"] == "SUBMITTED", f"state={submitted['state']}")
 
     # Every required task SUBMITTED → derive owner promotes to UNDER_REVIEW (§2.5).

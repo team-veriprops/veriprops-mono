@@ -13,6 +13,7 @@ from kink import inject
 
 from main.app.domain.communication.conversation.models import (
     Conversation,
+    ConversationChannel,
     ConversationDto,
     ConversationType,
     CreateConversationDto,
@@ -69,6 +70,47 @@ class ConversationService:
             )
         )
 
+    async def get_or_create_whatsapp_thread(
+        self, phone: str, user_id: Optional[str] = None, subject: Optional[str] = None
+    ) -> Conversation:
+        """The single thread for a WhatsApp number (§26.3.1, §26.8 — one conversation object).
+
+        It is an ordinary general-support thread that happens to have arrived over
+        WhatsApp, so once the number is linked to an account the same row simply gains an
+        owner — there is no second thread to reconcile.
+        """
+        existing = await self._conversation_repo.get_whatsapp_thread(phone)
+        if existing:
+            return existing
+        return await self._conversation_repo.create_return_model(
+            CreateConversationDto(
+                type=ConversationType.GENERAL_SUPPORT,
+                verification_id=None,
+                subject=subject or "WhatsApp enquiry",
+                created_by=user_id,
+                channel=ConversationChannel.WHATSAPP,
+                external_ref=phone,
+            )
+        )
+
+    async def set_whatsapp_thread_owner(
+        self, phone: str, user_id: Optional[str]
+    ) -> Optional[Conversation]:
+        """Attach (or detach) the account that owns the thread for a WhatsApp number.
+
+        §26.8 wants one conversation object per person, not one per surface, so linking a
+        number gives the *existing* thread an owner rather than opening a second one.
+        Passing ``None`` is the other half of that: an unlinked number's thread goes cold
+        (§26.4.4) — it stays in the console for the agents, but it no longer belongs to
+        anyone's account, so nothing will read case data into it.
+        """
+        conversation = await self._conversation_repo.get_whatsapp_thread(phone)
+        if conversation is None:
+            return None
+        conversation.created_by = user_id
+        self._conversation_repo._session.add(conversation)
+        return conversation
+
     async def get_owned_participant(self, conversation_id: str, user_id: str) -> Conversation:
         """The thread, asserting the user is a participant — raises 404 otherwise (so a
         non-member cannot probe a thread's existence)."""
@@ -80,15 +122,32 @@ class ConversationService:
             raise ResourceNotFoundException(resource="Conversation")
         return convo
 
-    async def touch(self, conversation_id: str, at: datetime) -> None:
+    async def get_for_admin(self, conversation_id: str) -> Conversation:
+        """Any live thread, without a membership check.
+
+        Admins are a **shared inbox** (§N.3, G4): they are not participants of the threads
+        they work, so requiring membership would leave a WhatsApp enquiry readable from the
+        console and unanswerable — which is also how D57's take-over would never fire.
+        RBAC is enforced at the controller; the caller must already have established that
+        this user is an admin.
+        """
+        convo = await self._conversation_repo.get_model(conversation_id)
+        if convo is None or convo.deleted:
+            raise ResourceNotFoundException(resource="Conversation")
+        return convo
+
+    async def touch(self, conversation: Conversation, at: datetime) -> None:
         """Advance ``last_message_at`` to a delivered message's time (drives unread state).
 
-        Set on the attached row rather than the update DTO path (datetime columns)."""
-        convo = await self._conversation_repo.get_model(conversation_id)
-        if convo is None:
-            return
-        convo.last_message_at = at
-        self._conversation_repo._session.add(convo)
+        Takes the conversation **object**, not its id, on purpose: a thread opened by the
+        same request that posts its first message (a WhatsApp enquiry from a new number,
+        say) has not been committed yet, and re-fetching it by id returns ``None`` — the
+        bump would be silently skipped and the thread would never surface in a list that
+        orders by ``last_message_at``. Set on the attached row rather than the update DTO
+        path, which json-encodes datetimes.
+        """
+        conversation.last_message_at = at
+        self._conversation_repo._session.add(conversation)
 
     async def list_for_user(self, user_id: str) -> List[ConversationDto]:
         """The user's threads (Chat conversation list, §N.3), each with its unread count."""
@@ -105,7 +164,7 @@ class ConversationService:
     async def list_for_admin(self, admin_id: str) -> List[ConversationDto]:
         """Admin shared inbox (§N.3): every verification thread, unread computed against this
         admin's own read state (a thread the admin has never opened reads as unread)."""
-        threads = await self._conversation_repo.list_verification_threads()
+        threads = await self._conversation_repo.list_admin_inbox_threads()
         result: List[ConversationDto] = []
         for convo in threads:
             participant = await self._participants.get_for(convo.id, admin_id)
@@ -114,7 +173,7 @@ class ConversationService:
         return result
 
     async def unread_count_for_admin(self, admin_id: str) -> int:
-        threads = await self._conversation_repo.list_verification_threads()
+        threads = await self._conversation_repo.list_admin_inbox_threads()
         count = 0
         for convo in threads:
             participant = await self._participants.get_for(convo.id, admin_id)
@@ -129,6 +188,8 @@ class ConversationService:
             type=ConversationType(convo.type),
             verification_id=convo.verification_id,
             subject=convo.subject,
+            channel=ConversationChannel(convo.channel or ConversationChannel.WEB.value),
+            external_ref=convo.external_ref,
             last_message_at=convo.last_message_at,
             closed=convo.closed,
             unread=unread,

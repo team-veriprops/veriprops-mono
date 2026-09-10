@@ -1,3 +1,4 @@
+import inspect
 from typing import Callable
 
 
@@ -15,13 +16,30 @@ def decorate_all_methods(
         startswith_excluded.extend(exclude_startswith)
 
     def decorate(cls):
-        for attr_name, attr_value in cls.__dict__.items():
+        # Names of the methods this decorator wrapped that were **not** coroutine
+        # functions to begin with. Recorded because the wrapper hides the fact: after
+        # decoration every method looks async, so the only moment the original shape is
+        # visible is right here. A synchronous method wrapped by an async decorator does
+        # not run when called — it returns a coroutine the caller drops — and that has
+        # shipped twice as a silent no-op. `test_decorated_service_contract.py` reads this.
+        wrapped_sync: list[str] = []
+        for attr_name, attr_value in list(cls.__dict__.items()):
             if (
                 callable(attr_value)
                 and attr_name not in excluded
                 and not attr_name.startswith(tuple(startswith_excluded))
             ):
+                original = (
+                    attr_value.__func__
+                    if isinstance(attr_value, (staticmethod, classmethod))
+                    else attr_value
+                )
+                if inspect.isfunction(original) and not inspect.iscoroutinefunction(original):
+                    wrapped_sync.append(attr_name)
                 setattr(cls, attr_name, decorator(attr_value))
+        cls._appodus_wrapped_sync_methods = tuple(
+            sorted(set(getattr(cls, "_appodus_wrapped_sync_methods", ())) | set(wrapped_sync))
+        )
         return cls
 
     return decorate

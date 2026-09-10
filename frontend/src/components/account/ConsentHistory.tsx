@@ -62,7 +62,7 @@ export default function ConsentHistory() {
                 <p className={cn("text-sm font-semibold text-brand-navy")}>
                   {humanizeEnumLabel(c.documentType)} <span className="font-normal text-xs">v{c.consentVersion}</span>
                 </p>
-                <p className={cn("text-xs mt-1 text-brand-on-surface-variant/55")}>
+                <p className={cn("text-xs mt-1 text-brand-on-surface-variant")}>
                   Accepted {new Date(c.acceptedAt).toLocaleString()}
                 </p>
               </div>

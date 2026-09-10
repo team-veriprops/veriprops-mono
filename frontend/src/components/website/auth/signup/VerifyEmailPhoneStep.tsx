@@ -46,6 +46,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
   const emailVerified = useWatch({ control: form.control, name: "emailVerified" });
   const phoneVerified = useWatch({ control: form.control, name: "phoneVerified" });
   const phone = useWatch({ control: form.control, name: "phone" });
+  const phoneCountryCode = useWatch({ control: form.control, name: "countryCode" });
 
   // Phone is always required, whether or not it needs to be OTP-verified here.
   // When verification is off, the number is still collected (and verified
@@ -144,9 +145,13 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
             Phone <span className="text-destructive">*</span>
           </label>
           <PhoneInputWithCountry
-            form={form}
-            isVerified={false}
-            onChanged={() => {}}
+            countryCode={phoneCountryCode}
+            phone={phone}
+            onChange={({ countryCode, dialCode, phone }) => {
+              form.setValue("countryCode", countryCode, { shouldValidate: true });
+              form.setValue("dialCode", dialCode, { shouldValidate: true });
+              form.setValue("phone", phone, { shouldValidate: true });
+            }}
             placeholder="0801 234 5678"
           />
           {(form.formState.touchedFields.phone || form.formState.isSubmitted) &&

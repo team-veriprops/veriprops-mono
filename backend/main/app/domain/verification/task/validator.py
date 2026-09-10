@@ -1,4 +1,4 @@
-"""Role submission validation (PRD §7.3).
+"""Role submission validation (PRD §12.2).
 
 Each role captures a different structured form on submit. Rather than four ORM
 shapes, the payload is JSON validated here against a per-role required-field set —
@@ -12,7 +12,7 @@ from typing import Any, Dict, List
 from main.app.core.state.status import AgentRole
 from main.appodus_utils.exception.exceptions import ValidationException
 
-# Required keys per role form (§7.3). Values must be present and non-empty.
+# Required keys per role form (§12.2). Values must be present and non-empty.
 _REQUIRED_FIELDS: Dict[AgentRole, List[str]] = {
     AgentRole.REGISTRY: ["registered_owner", "title_search_result", "search_reference"],
     AgentRole.FIELD: ["occupancy_status", "physical_condition"],

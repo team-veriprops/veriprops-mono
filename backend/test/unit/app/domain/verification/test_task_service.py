@@ -1,5 +1,5 @@
 """VerificationTaskService — instantiation (§4.2 locks), assignment (§6), derivation
-owner integration (§4.1), and timeout sweeps (§7.2). Repos mocked, no DB."""
+owner integration (§4.1), and timeout sweeps (§11.4). Repos mocked, no DB."""
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -54,7 +54,10 @@ def _task(role, state=TaskState.PENDING, agent=None, **over):
 
 
 def _verification(status=VerificationStatus.PAID, tier=VerificationTier.STANDARD):
-    return SimpleNamespace(id="v-1", status=status.value, tier=tier.value, customer_id="cust-1")
+    return SimpleNamespace(
+        id="v-1", vid="VP-2026-0001", status=status.value, tier=tier.value,
+        customer_id="cust-1",
+    )
 
 
 def _make_service(verification, tasks):
@@ -145,6 +148,18 @@ class TestPrepareForPaid:
         assert all(getattr(t, "in_pool", False) is not True for t in svc._state["tasks"])
 
 
+def _capture_events(monkeypatch):
+    """Every event one call publishes, from both modules that emit during derivation."""
+    import main.app.domain.verification.status_events as status_events_mod
+    import main.app.domain.verification.task.service as task_mod
+
+    published = []
+    recorder = AsyncMock(side_effect=lambda e: published.append(e))
+    monkeypatch.setattr(task_mod, "publish_domain_event", recorder)
+    monkeypatch.setattr(status_events_mod, "publish_domain_event", recorder)
+    return published
+
+
 class TestAssign:
     async def test_first_assignment_derives_in_progress(self):
         svc = _make_service(_verification(status=VerificationStatus.PAID), [_task(AgentRole.REGISTRY)])
@@ -152,6 +167,44 @@ class TestAssign:
         svc._verification_repo.update.assert_awaited()
         derived = svc._verification_repo.update.await_args.args[1]
         assert derived.status == VerificationStatus.IN_PROGRESS.value
+
+    async def test_first_assignment_announces_the_start_milestone(self, monkeypatch):
+        """§26.6.2's "verification started" (D66): the first agent picking the case up is
+        the moment, and this is the only site that produces it — a rejection needs a
+        SUBMITTED task, so the review half can only ever be work *continuing*."""
+        from main.app.core.events.events import EventType
+
+        published = _capture_events(monkeypatch)
+        svc = _make_service(
+            _verification(status=VerificationStatus.PAID),
+            [_task(AgentRole.REGISTRY), _task(AgentRole.FIELD)],
+        )
+        await svc.assign("v-1", AgentRole.REGISTRY, "agent-1", "admin-1")
+
+        started = [e for e in published if e.type == EventType.VERIFICATION_STARTED]
+        assert len(started) == 1
+        assert started[0].recipient_user_ids == ("cust-1",)
+        assert started[0].data["vid"] == "VP-2026-0001"
+
+    async def test_assigning_the_next_agent_does_not_announce_it_again(self, monkeypatch):
+        """The defect the live drive-through caught. `derive_status` has no memory, so a
+        case drops back to PAID when a task is submitted and re-enters IN_PROGRESS when
+        the next agent is assigned — three roles meant three "we've started" messages.
+
+        A task already submitted is what tells the two apart, and it needs no column to
+        record.
+        """
+        from main.app.core.events.events import EventType
+
+        published = _capture_events(monkeypatch)
+        svc = _make_service(
+            _verification(status=VerificationStatus.PAID),
+            [_task(AgentRole.REGISTRY, TaskState.SUBMITTED, agent="agent-1"),
+             _task(AgentRole.FIELD)],
+        )
+        await svc.assign("v-1", AgentRole.FIELD, "agent-2", "admin-1")
+
+        assert not [e for e in published if e.type == EventType.VERIFICATION_STARTED]
 
     async def test_sets_assigned_state_and_agent(self):
         svc = _make_service(_verification(), [_task(AgentRole.REGISTRY)])

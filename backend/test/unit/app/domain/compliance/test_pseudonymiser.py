@@ -31,13 +31,61 @@ class TestTokenFor:
         assert "user-1" not in t1  # opaque — the raw id is not recoverable from the token
 
 
+def _linked(session, phones):
+    """Make the subject's linked-number lookup answer with *phones*.
+
+    The channel keys on a phone number rather than a user id, so the pseudonymiser reads
+    the links first and scrubs by number — the one SELECT among the UPDATEs.
+    """
+    result = MagicMock()
+    result.all.return_value = [(phone,) for phone in phones]
+    session.execute = AsyncMock(return_value=result)
+
+
 class TestPseudonymise:
-    async def test_scrubs_every_pii_surface(self, mock_session):
+    async def test_scrubs_every_identity_surface(self, mock_session):
+        _linked(mock_session, [])
         p = PiiPseudonymiser()
         surfaces = await p.pseudonymise("user-9", "erased-xyz")
 
-        # Each surface is one bulk UPDATE; the audit actor is severed among them (§4.11).
+        # The audit actor is severed among them (§4.11).
         assert "users" in surfaces
         assert "audit_logs" in surfaces
         assert "device_sessions" in surfaces
-        assert mock_session.execute.await_count == len(surfaces)
+
+    async def test_a_subject_who_never_linked_a_number_stops_at_the_link_table(
+        self, mock_session
+    ):
+        # Everything downstream in the channel keys on a phone number, so there is nothing
+        # to scrub — and issuing `IN ()` updates against an empty list would be five
+        # pointless statements on every erasure the platform runs.
+        _linked(mock_session, [])
+        surfaces = await PiiPseudonymiser().pseudonymise("user-9", "erased-xyz")
+
+        assert "whatsapp_links" in surfaces
+        assert "whatsapp_bot_sessions" not in surfaces
+
+    async def test_the_whole_whatsapp_channel_is_scrubbed_for_a_linked_subject(
+        self, mock_session
+    ):
+        """§26.8 — none of these were covered before S11, so an approved erasure left the
+        subject's number in five places, and their half-finished chat intake in a sixth."""
+        _linked(mock_session, ["+2348012345678"])
+        surfaces = await PiiPseudonymiser().pseudonymise("user-9", "erased-xyz")
+
+        for surface in (
+            "whatsapp_links",
+            "whatsapp_bot_sessions",
+            "whatsapp_inbound_messages",
+            "case_delegates",
+            "handoff_token_redemptions",
+        ):
+            assert surface in surfaces, surface
+
+    async def test_every_surface_is_one_statement_plus_the_lookup(self, mock_session):
+        _linked(mock_session, ["+2348012345678"])
+        p = PiiPseudonymiser()
+        surfaces = await p.pseudonymise("user-9", "erased-xyz")
+
+        # One UPDATE per surface, plus the single SELECT that reads the subject's numbers.
+        assert mock_session.execute.await_count == len(surfaces) + 1

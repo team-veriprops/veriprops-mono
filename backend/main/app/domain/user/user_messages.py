@@ -114,6 +114,46 @@ class AccountSecurityMessages(BaseMessageSender):
             expires_at=expires_at
         )
 
+    async def send_whatsapp_link_verification_message(self, recipient: MessageRequestRecipient,
+                                                      context: dict[MessageContext, Any],
+                                                      expires_at: Optional[datetime] = None):
+        """The §26.4.4 account-linking OTP, delivered over WhatsApp itself (D46).
+
+        WhatsApp-only on purpose: the code proves control of *this* WhatsApp number, so
+        delivering it anywhere else would prove something different.
+        """
+        await self._send_direct_message(
+            recipient=recipient,
+            template=AvailableTemplate.WHATSAPP_OTP_AUTH,
+            context=context,
+            category=MessageCategory.VERIFICATION,
+            default_channels=[
+                MessageChannel.WHATSAPP
+            ],
+            expires_at=expires_at
+        )
+
+    async def send_whatsapp_window_reopen_message(self, recipient: MessageRequestRecipient,
+                                                  context: dict[MessageContext, Any]):
+        """§26.7 `window_reopen` — an agent replied outside Meta's 24-hour service window.
+
+        Meta will not deliver free text that late, so the agent's own words stay queued and
+        this template goes instead: it says a person has replied and invites the customer
+        back, which reopens the window and flushes the queue.
+
+        Addressed by phone rather than by user id on purpose — a §26.8 enquiry thread often
+        belongs to a number with no account behind it yet.
+        """
+        await self._send_direct_message(
+            recipient=recipient,
+            template=AvailableTemplate.WHATSAPP_WINDOW_REOPEN,
+            context=context,
+            category=MessageCategory.TRANSACTION,
+            default_channels=[
+                MessageChannel.WHATSAPP
+            ],
+        )
+
     async def send_login_security_alert_message(self, recipient_user_id: MessageRecipientUserId,
                                                 context_modules:List[MessageContextModule]):
         await self._send_message(

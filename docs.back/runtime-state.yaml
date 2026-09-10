@@ -1,0 +1,842 @@
+session_id: run-s23-audit-compliance
+command: resume
+
+status: idle
+phase: s23-complete + live-e2e-verified — ALL 23 SLICES DONE (Phases 0-19)
+
+current_slice: null   # S23 (Phase 19 audit & compliance maturity) delivered & live-verified — the PRD spine is complete.
+current_subtask: "S23 (Phase 19 audit & compliance maturity, D39/D40/D41) COMPLETE — completes Phase 19 on
+  top of the pre-built S56/S57 audit-read + consent-download (reconciled per D39). Backend 814 (+23),
+  frontend 348 (+9); migration round-trip clean; live drive-through e2e_s23.py ALL 15 CHECKS PASS. §19.3
+  exit criterion met (admin exports a legally defensible audit pack per VID). All 23 slices (Phases 0-19)
+  now ship end-to-end. Recommended next step: final system audit (docs/final-audit.md)."
+
+# ── S23 (Phase 19) summary — see decision-log D39-D41 ──
+s23_audit_compliance:
+  backend: "Completed Phase 19 (D39: reconciled the undocumented S56/S57/S58 pre-build). Fixed the latent
+    bug in the pre-built export (list_for_verification_pack filtered UPPERCASE resource_type while the DB
+    stores lowercase — pack would have been empty) → id-based AuditLogRepo.list_by_resource_ids +
+    VerificationAuditPackService (audit/pack_service.py) gathering the whole verification object graph
+    (every related repo exposes list_for_verification) into one flat legal-pack CSV (transitions + evidence
+    content hashes + consent snapshots) at GET /admin/audit/verifications/{vid}/export (VIEW_ADMIN_PANEL).
+    Agent task-history GET /agents/tasks/{taskId}/history (ownership-gated, reuses the PII-safe audit read
+    model). 2 config keys (pii_retention_days=2555, erasure_request_review_sla_days=30). New
+    Permission.MANAGE_COMPLIANCE (SUPER-only, D40). compliance/erasure domain: DataErasureRequest entity +
+    ErasureRequestState machine (PENDING->{APPROVED,REJECTED}, APPROVED->EXECUTED); self-service request +
+    admin approve/reject/execute; PiiPseudonymiser (D41) scrubs 8 surfaces to a stable token
+    (users/audit_logs actor/device_sessions+revoked/security_events/user_consents/oauth_identities/
+    kyc_records/agent_bank_accounts) — login impossible after, audit actor severed but events retained
+    (§4.11). EventType.ERASURE_STATUS_CHANGED (in-app rule + content). data_erasure_requests table in 0001
+    (round-trip clean). Dev seed extended (erasable customer + verification audit rows)."
+  frontend: "types audit/erasure/consentHistory; shared ErasureService (self + admin) + hooks; admin
+    AuditService + hooks; account ConsentHistoryService + hook; verification-service.getActivity +
+    agent-task-service.getHistory. 7 surfaces: admin Audit Log (/admin/audit/actions, DataTable) + Erasure
+    Requests (/admin/erasure-requests, DataTable + approve/reject/execute w/ irreversible confirm) + Export
+    audit-pack button on the verification detail; account Data & Privacy (self-service erasure) + Consents
+    (history + CSV download); portal activity (/portal/verifications/[id]/activity) + agent task history
+    (/agents/tasks/[taskId]/history) via a shared ActivityTimeline; contextual links + admin/account nav."
+  tests: "backend 814 (+23: erasure lifecycle/state-guards/idempotency, pseudonymiser token stability +
+    8-surface scrub, pack CSV shape + id-universe, task-history authz, MANAGE_COMPLIANCE matrix, refactored
+    audit pack test); frontend vitest 348 (+9 service contracts). migration round-trip clean; tsc+lint clean."
+  live_e2e: "backend/scripts/e2e_s23.py — reset->seed->admin export VID pack (transitions) -> customer activity
+    (PII-safe) -> agent task history -> consent CSV download -> config keys seeded -> self-service erasure PENDING
+    (dup blocked, customer 403 on admin queue) -> admin approve -> execute (EXECUTED) -> erased account login
+    fails -> DATA_ERASURE_EXECUTED audited with 8 pseudonymised surfaces. ALL 15 CHECKS PASS."
+
+self_audit_s23:
+  completed: true
+  findings:
+    - "§19.3 exit criterion MET and live-verified: the admin audit pack for a VID is one flat CSV covering
+       the verification + every child resource's transitions (id-set query — resource ids are globally-unique
+       UUIDs, so no resource_type coupling), plus evidence content hashes and the customer's consent snapshots.
+       Refund/dispute records ride the transitions (PAYMENT_REFUNDED / DISPUTE_* are audit events on their ids)."
+    - "The pre-built S56 export was latently broken (uppercase resource_type filter -> empty pack) and untested
+       end-to-end; the live e2e is what proved the fix. Consistent with every prior slice's live-run catching
+       what mocked unit tests could not."
+    - "Erasure = pseudonymisation, not deletion (§4.11, D41). Eight surfaces scrubbed to a deterministic token
+       in one transaction; the account can no longer authenticate; the audit actor is severed while events are
+       retained. §B item 12 (post-erasure legal basis + re-identification risk) is a documented LAUNCH GATE,
+       not a build blocker — execute is fully built and works in non-prod (proven by the e2e)."
+    - "Pseudonymisation scope is bounded to identity + auth + audit + KYC + agent bank details. Secondary PII —
+       payment card fingerprints, verification-share recipient emails (third-party, not the subject), property
+       addresses — is a documented follow-up; each needs its own retention basis. True anonymisation is out of
+       scope by design (§4.11 caveat: context can re-identify)."
+    - "MANAGE_COMPLIANCE is SUPER-only (D40) for the irreversible action; audit read/export stays
+       VIEW_ADMIN_PANEL. A frontend confirm dialog guards execute; one open request per subject is enforced
+       server-side. Erasure decisions notify the subject in-app (no email templates — the account is being erased)."
+    - "Full `pnpm build` deferred (low disk, per every prior slice); tsc --noEmit + eslint + vitest 348 are the
+       frontend gate. Backend 814 green; migration round-trip validated live; e2e ALL 15 PASS."
+
+# ── S22 (Phase 18) summary — see decision-log D36-D38 ──
+s22_admin_ops_analytics:
+  backend: "RBAC += VIEW_ANALYTICS + BROADCAST (OPERATIONS + FINANCE/SUPER). pricing_config domain (D36:
+    pricing_tier_config + pricing_line_items child, admin CRUD /admin/pricing, seeded from static defaults);
+    pricing.py helpers now take a resolved base price and quote/submit/recheck/upgrade resolve via
+    PricingConfigService.tier_price_kobo (DB, static fallback) — edits hit the NEXT quote, locks honoured
+    (§18.2 exit criterion, live-verified). Mission Control: AdminDashboardDto += revenue_minor/sla_at_risk/
+    available_agents. analytics domain (D38, no entity): funnel, time-by-tier, revenue by tier & location,
+    per-state regional, 6-month agent trend — all server-derived, /admin/analytics/* (VIEW_ANALYTICS).
+    broadcast domain (D37): audience/compose/preview/send-now + scheduled (BroadcastSweepJobs) + cancel/list,
+    fan-out via BROADCAST_ANNOUNCEMENT on the event bus. finance summary /admin/finance/summary. 3 tables in
+    0001 (round-trip clean)."
+  frontend: "types analytics/pricing/broadcast/finance + AdminDashboard mission-control fields. Mission
+    Control tiles (revenue/SLA-at-risk/available-agents). /admin/analytics (funnel + theme-aware accessible
+    CSS-bar charts + regional table), /admin/pricing (tier editors + line items + upgrade deltas),
+    /admin/broadcasts (+ /new compose: audience/preview/send-now/schedule), /admin/finance (summary tiles).
+    Services + hooks + 4 contract tests; admin nav items restored (Analytics/Broadcasts/Finance/Pricing)."
+  tests: "backend 791 (+24: pricing-config resolve/seed/line-items, analytics funnel/time/revenue/regional/
+    trends, broadcast compose/send/audience/sweep, mission-control counts, permission matrix); frontend
+    vitest 339 (+8 service contracts). migration round-trip clean; tsc+lint clean."
+  live_e2e: "e2e_s21_s22.py — admin price edit reflects in next quote (§18.2, locked untouched) → analytics
+    funnel/revenue derived → broadcast send-now fan-out + scheduled sweep → finance + mission-control revenue.
+    ALL 22 checks PASS."
+
+# ── S21 (Phase 17) summary — see decision-log D34-D35 ──
+s21_growth_conversion:
+  backend: "system_config += growth keys (first_time_discount_percent/referral_credit_ngn/max_discount_percent/
+    cancellation_surcharge_pct). pricing.apply_discounts (pure, kobo-reconciling, capped at max_discount_percent)
+    wired into quote/submit — price_locked_minor is the NET; breakdown recorded. referral/ domain (link) +
+    referral/credit/ ledger: D34 anti-farming (unique verified phone now; forward-compatible card_fingerprint
+    hook, null under stub), D35 two-stage clearance (PENDING on invitee first payment → CLEARED after the
+    chargeback window into referrer credit_balance_kobo) + sweep firing REFERRAL_CREDIT_EARNED. Payment +=
+    card_fingerprint; webhook awards referral credit best-effort; mark_paid debits applied credit once.
+    Abandoned-draft recovery: sweep_abandoned_drafts (one email ever via recovery_reminded_at) +
+    ABANDONMENT_RECOVERY event; re-lock guard (refresh_price_lock_if_expired → price_changed) so a customer is
+    never silently re-charged. GrowthSweepJobs + admin dev sweep endpoints. Signup accepts referral_code
+    (users.referred_by). 2 tables + cols in 0001 (round-trip clean)."
+  frontend: "types/referral + discount fields on PriceQuote/Verification + PriceRefresh. /portal/referrals
+    (link + credit balances + history) + referral-service/hooks/contract test + nav item; referral-credit
+    StatCard + abandonment recovery banner on the dashboard; discount lines in TierStep + PayContainer;
+    'price updated' interstitial (re-lock guard); signup ?ref= capture."
+  tests: "backend 767 (+23: discount math + cap, first-time eligibility, referral anti-farming, credit
+    clearance sweep, abandonment once, re-lock flag); frontend vitest 331 (+1 referral contract)."
+  live_e2e: "e2e_s21_s22.py — growth quote fields + net reconcile, referral link issued, re-lock no-change,
+    sweeps callable. ALL PASS (folded into the S21/S22 run)."
+
+# ── S20 (Phase 16) summary — see decision-log D32-D33 ──
+s20_reputation_coverage:
+  backend: "reputation/ domain (no entity, D32): pure metrics.py (completion/accuracy-5pt-from-review_quality/
+    timeliness-vs-task_sla_hours/composite/decline-penalty, derived on read) + AgentReputationService
+    (get_metrics, get_profile_summary, set_availability [effective forced RED at agent_max_active_tasks],
+    coverage CRUD validated against the states canon, suggested_agents ranking). AgentProfile += availability
+    column. Config knobs task_sla_hours/agent_low_performance_threshold/agent_top_agent_accuracy_threshold/
+    agent_wide_coverage_states. Backend-owned 37-state canon (config/nigeria_locations.py + GET
+    /config/nigeria-locations, D33); coverage role-differentiated (Field/Surveyor location-bound, Registry/
+    Lawyer remote). Suggested-agents = approved + active-role + coverage + capacity → composite order + Top-
+    Agent/low-perf flags (ASSIGN_AGENT). Endpoints /agents/me/{metrics,profile,availability,coverage} +
+    /admin/agents/suggested. availability col in 0001 (round-trip clean). Dev seed now creates APPROVED
+    agent profiles + Lagos coverage."
+  frontend: "types/agentReputation; reputation-service (agent + admin suggested) + hooks + contract test.
+    Interactive Nigeria SVG coverage map (schematic 37-state geo-grid, clickable); /agents/settings/coverage
+    (map + chips + travel radius) + /agents/profile (metrics StatCards + availability + coverage). Unified
+    dashboard enhanced (reputation + availability). Admin verification-detail assign flow gains a ranked
+    suggested-agents picker (score/accuracy/availability/Top-Agent/in-area). AvailabilityToggle shared."
+  tests: "backend 744 (+16: metrics math, ranking filter/order, availability effective, coverage validation);
+    frontend vitest 330 (+5 reputation-service contract). tsc+lint clean."
+  live_e2e: "Drive-through extended (§16): agent metrics derived on read (composite 98) → set availability →
+    coverage reject-unknown + declare-on-canon → 37-state canon → admin ranked suggested-agents. Full
+    S15-S20 run ALL 47 checks PASS."
+  bugs_fixed_by_e2e:
+    - "Dev seed created AGENT users but no agent_profiles/agent_coverage → profile/availability/coverage 404, empty ranking; seed now creates APPROVED profile + coverage per agent."
+    - "GenericRepo soft-delete is soft_delete(_id) not delete(); set_coverage + bank-account remove fixed; set_coverage echoes written rows (same-txn re-list read stale)."
+
+# ── S19 (Phase 15) summary — see decision-log D30-D31 ──
+s19_earnings_commission:
+  backend: "commission_rule domain (per-role×tier rate in bps, admin CRUD CONFIGURE_PRICING, seeded from a
+    static role-weight map × AGENT_COMMISSION_SHARE to reproduce the flat model, D30). Commission += reserve_
+    amount_minor/reserve_until/reserve_released_at; accrual now uses the rule, stamps clearing/reserve dates,
+    and SKIPS a task already carrying a live commission (double-accrual guard, S18 follow-up). earnings/ domain
+    (no entity): derive-by-date balance (available/clearing/reserve/on-hold/lifetime/paid, reconciles to kobo,
+    D31) + GET /agents/earnings[/jobs] + claim-based clearance sweep (CLEARING→AVAILABLE, reserve release)
+    firing COMMISSION_CLEARED + scheduler job + admin sweep endpoint. payout/ domain (Payout + child bank_
+    account/): agent request (locks funds out of available) / cancel / stored+one-time beneficiary; finance
+    approve→PAID (stub disburse, PAYOUT_APPROVED) / hold (PAYOUT_HELD) / adjust / reject, APPROVE_PAYOUT,
+    2-business-day SLA. 3 tables + commission cols in 0001 (round-trip clean)."
+  frontend: "types earnings/payout/commission; earnings-service + payout-service + admin finance (payout +
+    commission-rule) services + hooks + contract tests. /agents/earnings (hero Available StatCard + secondary
+    lines + per-job list + earnings realtime), /agents/payouts (request + bank accounts + history),
+    /admin/finance/payouts (finance panel), /admin/commission-rules (rate grid). formatMinor util; agent+admin
+    nav items."
+  tests: "backend 728 (+28: earnings calc, commission-rule, earnings sweep, payout service, double-accrual +
+    accrual dates); frontend vitest 325 (+10 service contracts). tsc+lint clean."
+  live_e2e: "Extended e2e_drive_through.py: release→accrue→clearance sweep→available→payout request (locks
+    funds)→finance approve→PAID + PAYOUT_APPROVED/COMMISSION_CLEARED notifications. ALL 41 checks PASS."
+  bugs_fixed_by_e2e:
+    - "get_live_for_task called with native UUIDs (String(36) ref cols) — 500'd EVERY release; coerced with Utils.uuid_to_hex."
+    - "CommissionRuleService.seed_defaults read trust weights mid-seed-txn before visible → all rates 0, no accrual; now static role-weight map."
+    - "Payout _resolve_beneficiary keyed stored accounts by raw uuid.UUID not the .hex wire id; now Utils.uuid_to_hex(a.id)."
+
+# ── S17 + S18 (Phases 13-14) summary — see decision-log D26-D29 ──
+s17_public_lookup_sharing:
+  backend: "verification/share/ domain: VerificationShare (LINK_SUMMARY/NAMED_FULL, tokenised, revocable,
+    30-day default expiry) + verifications.public_lookup_enabled (PUBLIC mode). Unauthenticated
+    public_controller: GET /public/verify/{vid} (summary-only §13.1 state routing — never the numeric
+    score/full address) + GET /public/shared/{token} (link summary / named full report after a one-time
+    disclaimer ack) + POST ack. Customer /verifications/{id}/shares + public-visibility toggle. Named share
+    invite email (VERIFICATION_REPORT_SHARE, raw-email send). Reuses report/content.trust_band +
+    CustomerReportService.build_shared_content. verification_shares + public_lookup_enabled in 0001."
+  frontend: "public /verify/[vid] (SSR, noindex unless completed+public) + /shared/[token]; reusable
+    ReportView; ReportShareModal on the report page; share-service + hooks + types."
+  tests: "backend 665 (+16: token validity/revocation, summary no-leak, state routing, named ack);
+    frontend vitest 306 (+7 share-service contract). Committed 5024aa5."
+s18_revision_disputes:
+  backend: "system_config domain (typed key-value store: dispute_window_days/recheck_price_pct/
+    agent_dispute_defence_hours; seeded idempotently; RBAC CRUD CONFIGURE_SYSTEM, D28). Report re-versioning
+    (version_label + revision_kind; ReportService.release computes v1.0->v2.0 recheck->v3.0 upgrade; release
+    gate generalised to accept already-APPROVED tasks for partial re-check, D29). Payment.purpose routes the
+    idempotent webhook; initiate_secondary charges a completed verification off the state machine. recheck
+    (request->approve+scope->pay % of tier price [D26]->reopen scoped tasks->v2.0), upgrade (delta pricing,
+    idempotent resubmit, on-pay raises tier + adds new-scope tasks preserving approved work + extends SLA->
+    v3.0), dispute (window + >=100-char, COMPLETED->DISPUTED + commission freeze, admin-mediated agent
+    defence, 3 outcomes reject/full-refund/partial-recheck + mandatory verbatim note). Fires RECHECK_DECISION
+    / DISPUTE_OPENED / DISPUTE_RESOLVED (D21). 6 tables in 0001 (round-trip clean)."
+  frontend: "customer ReportActions (recheck/upgrade/dispute modals on the report page); admin System Config
+    CRUD + Disputes (3-outcome resolve) + Re-checks (approve/scope/reject) pages; agent dispute-defence page;
+    revision-service + system-config-service + hooks + contract tests; nav + routes updated."
+  tests: "backend 700 (+35: config, pricing/versioning, recheck v2.0, upgrade idempotent v3.0, dispute 3
+    outcomes + window + freeze); frontend vitest 315 (+9). Committed e3372f7 (backend) + this commit (frontend)."
+  live_e2e: "Extended backend/scripts/e2e_drive_through.py — real HTTP: release -> public lookup (private->
+    enable->summary, no score leak) -> link + named share (ack->full report) -> revoke (token dead) ->
+    dispute (open->admin reject->COMPLETED, DISPUTE_OPENED/RESOLVED) -> re-check (approve+scope->pay->
+    IN_PROGRESS) -> tier upgrade (pay delta->PREMIUM). ALL 32 checks PASS."
+  bugs_fixed_by_e2e:
+    - "get_released called with a native UUID (CustomerReportService._content_from_verification +
+       ShareService._build_summary) — broke the customer report endpoint for ALL customers; now coerced
+       with Utils.uuid_to_hex."
+    - "Payment reference two-string-forms in re-check/upgrade (entity .id is a uuid.UUID; update path
+       json-encodes to str(uuid) 36-char while lookups used .hex 32-char) — standardised on
+       Utils.uuid_to_hex(payment.id) for storage/audit-json/get_by_payment."
+    - "Get-after-create-returns-None in UpgradeService.request (re-fetched the row created in the same
+       uncommitted txn) — now returns the attached row directly."
+
+self_audit_s17:
+  completed: true
+  findings:
+    - "Public summary is structurally leak-proof: PublicSummaryDto has no address/score/agent fields, and a
+       test asserts the serialized payload carries the trust BAND (string) but never trustScore or the street
+       address. §4.10 lookup safety rides the existing non-sequential VID (S3); no enumeration surface added."
+    - "Named-recipient share tokens are stored raw (bearer-capability model, like an unguessable share link)
+       rather than hashed — acceptable for a revocable, expiring, summary-or-disclaimer-gated capability;
+       revocation invalidates immediately (§13.3, live-verified). Admin invites remain sha256-hashed."
+    - "Share-invite email is best-effort (a comms failure never breaks share creation); external dispatch is
+       gated by ENABLE_OUT_MESSAGING (Mailpit/log in non-prod)."
+    - "Full pnpm build deferred (low disk, per prior slices); tsc + eslint + vitest are the frontend gate."
+
+self_audit_s18:
+  completed: true
+  findings:
+    - "Re-check pricing = % of original tier price (D26, the PRD open-question resolution); re-check/upgrade
+       pricing centralised in pricing.py so the Phase-18 admin pricing API is a single-call-site swap."
+    - "Report re-versioning uses version_label + revision_kind (D29); the integer report_version stays the
+       monotonic counter. ADMIN_REVISION (v1.1 minor) is supported by the label helper but not produced by
+       an S18 flow (re-check/upgrade are major bumps) — an admin minor-revision trigger is a follow-up."
+    - "Commission handling on resolve: reject unfreezes, full-refund reverses, partial-recheck unfreezes (the
+       same agents redo the work). Re-release re-runs _accrue_commissions, so a re-checked release re-accrues
+       CLEARING rows — a double-accrual guard (skip roles that already have a live commission) is a documented
+       S19 follow-up when the earnings ledger lands."
+    - "Agent dispute-defence is admin-mediated (the agent thread breadcrumb + a GET /agents/disputes list +
+       POST defence, bounded by agent_dispute_defence_hours); the customer's identity is never exposed. The
+       agent is reached via the chat auto-post + the disputes list — a dedicated agent notification event is a
+       small follow-up (no agent-facing DISPUTE_* template yet)."
+    - "System-config is a minimal typed key-value store (D28) — the broader Phase-18 Mission-Control config
+       (pricing, commission rules, upgrade-delta matrix) stays S22, building on this store."
+    - "Live drive-through ALL PASSED (32 checks) and caught 3 real runtime bugs unit tests missed — the
+       decisive gate for this slice, consistent with the S15/S16 gap-closure cadence."
+
+# ── Gap-closure + live-e2e follow-up (this turn) — see decision-log D24-D25 ──
+gap_closure_and_e2e:
+  gaps_closed:
+    G1: "Customer status-change chat auto-post: chat_autopost_subscriber on STATUS_CHANGED →
+         CommunicationService.auto_post_customer (reuses customer_status_label). Registered as the 4th bus
+         subscriber. Verified live (SYSTEM_AUTO breadcrumb appears in the customer thread on release)."
+    G2: "Task-rejection agent notification: ReviewService.reject_task publishes TASK_REJECTED to the
+         assigned agent (rule → VERIFICATION_REVISION_REQUEST email). Unit-tested."
+    G3: "Admin SLA-breach notification: SlaMonitorService adds UserRepo.list_admins ids to SlaBreached
+         recipients. Verified live (customer AND admin get SLA_BREACHED)."
+    G4: "Admin Chat unread counter (shared-inbox, D25): CommunicationService._is_admin →
+         ConversationRepo.list_verification_threads + per-admin read state; admins bypass membership on
+         read. Verified live (admin sees the thread + a non-zero counter)."
+  dev_seed: "Restored app/domain/dev/ (D24): /dev/reset + /dev/seed, prod-gated twice. Seeds a customer +
+             approved agents + an UNDER_REVIEW, SLA-overdue verification with review-approved tasks."
+  live_e2e: "backend/scripts/e2e_drive_through.py — real HTTP run against `python veriprops.py` (local):
+             reset→seed→customer login→clean fast-lane→phone-number HELD→admin approve→delivered→SLA sweep
+             (customer+admin SLA_BREACHED)→release (COMPLETED)→REPORT_READY+STATUS_CHANGED notifications
+             (counter=3)+§11.1 SYSTEM auto-post→admin shared-inbox+counter. ALL 19 checks PASS."
+  bugs_fixed_by_e2e:
+    - "UUID-vs-String references: entity.id is a native uuid.UUID but ref columns are String(36);
+       wire form is .hex (entities) vs str(uuid) (users). Coerced with Utils.uuid_to_hex / str at the
+       communication+notification repo/DTO boundaries (mocked unit tests could not catch this)."
+    - "ORM models passed to build_page (which validates DTOs) — chat/notification list repos now return
+       (rows, total) and the service builds the typed page from DTOs."
+    - "ReportService.release re-fetched a report created in the same uncommitted txn (get_model → None →
+       crash); now sets released_at on the attached row and returns it directly."
+  verification: "Backend 649 tests green after fixes; live e2e ALL PASS; frontend unchanged (299)."
+
+# ── S16 (Phase 12) summary ────────────────────────────────────────
+s16_notifications_event_bus:
+  backend:
+    - "app/core/events/: §4.8 in-process synchronous EventBus (DomainEvent + EventType full §12.2 set;
+       publish once, best-effort per subscriber). publish_domain_event helper. Three subscribers
+       registered at bootstrap: realtime_subscriber (re-emits the EXACT S13 verification SSE event name —
+       frontend hooks untouched, D15/D20), notification_subscriber (rule-table fan-out), chat_counter_
+       subscriber (per-user Chat counter for MESSAGE_SENT, §12.3). DomainEvent.type is Optional so a pure
+       SSE-refresh nudge carries only sse_event (no notification)."
+    - "notification/ domain: Notification entity + feed (paged) + unread counter + mark-read/all.
+       rules.py = the single declarative Chat-vs-Notification rule table (full §12.2; MESSAGE_SENT is
+       chat_only → Chat counter only, never a notification — FR-6/7). content.py = backend-owned copy +
+       deep links. dispatcher.py (NotificationDispatcher extends BaseMessageSender) sends the template on a
+       computed channel set. notification_preference/ domain: per-event email/SMS opt-out (in-app never
+       disableable). Endpoints /notifications/* + /notification-preferences."
+    - "REFACTOR (D20): every publish_verification_event(...) call (review/task/verification services)
+       now publishes a DomainEvent once → realtime_subscriber re-emits the SSE. Notification-worthy events
+       carry the customer recipient + type (PAYMENT_CONFIRMED at PAID, STATUS_CHANGED on derive, REPORT_READY
+       at release). The direct send_report_ready call is removed — the notification subscriber dispatches it.
+       Chat delivery publishes MESSAGE_SENT through the bus (chat_counter_subscriber pushes the counter)."
+    - "SLA-breach sweep (D23): SlaMonitorService.sweep_sla_breaches publishes SlaBreached once per newly-
+       overdue verification (idempotent on an existing SLA-breach notification). Wired into the S10
+       scheduler (SlaMonitorJobs, ALWAYS_NEW, 30-min interval, disabled under test) + admin dev endpoint
+       /admin/verifications/sweeps/sla-breach. 2 tables folded into 0001 (round-trip clean)."
+  frontend:
+    - "types/notification; notification-service + useNotificationQueries (+useNotificationRealtime SSE →
+       invalidate counter/feed). Real NotificationBell (replaces the stub): counter (9+ cap, hidden at 0) +
+       dropdown (recent + mark-all + View all) → /portal/notifications history. Notification-preferences
+       page (portal + agent) with per-event email/SMS toggles (in-app locked on). Reuses the S15 useUserStream."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 644 (+17: event bus fan-out/best-effort, rule routing, notification service
+                    #   opt-out, subscriber SSE-name preservation, SLA sweep idempotency); frontend 299
+                    #   (+3 notification-service contract). migration round-trip clean; tsc+lint clean.
+
+self_audit_s16:
+  completed: true
+  findings:
+    - "One publish point (D20): the S13 emitter calls + the report-ready external dispatch now flow through
+       the bus. The realtime_subscriber re-emits the identical SSE event names, so the S13 frontend hooks and
+       their 49+ tests are untouched (verified: full suite green). Redis fan-out swaps the dispatcher
+       internals later without an API change (D15)."
+    - "Rule table covers the full §12.2 set (D21); dispute/payout/re-check rows are declared but unfired
+       until S18/S19 add their source domains. Publishing today: payment/status/agents-assigned/report/
+       SLA-breach (customer) + task-rejected (agent, via the S15 auto-post + a notification hook is a
+       follow-up) + MESSAGE_SENT (chat counter)."
+    - "Customer status-change chat AUTO-POST (§11.1, the S15-deferred item) is NOT yet wired as a bus
+       subscriber — the STATUS_CHANGED event drives the notification + SSE, but the SYSTEM_AUTO message into
+       the customer↔admin thread is a small documented follow-up (a chat_autopost subscriber on STATUS_CHANGED).
+       The task-rejection auto-post IS wired (S15). Corrects the S15 self-audit's optimistic wording."
+    - "External email/SMS dispatch is best-effort and globally gated by ENABLE_OUT_MESSAGING (off in non-prod
+       → Mailpit/log). Per-event email/SMS opt-out is honoured; in-app is always on (§12.1). Admin SLA-breach
+       notification (§12.2 admin) not wired — enrolling all admins as recipients is a follow-up; admins see
+       overdue on the dashboard + the SLA-breach fires for the customer."
+    - "SLA-breach idempotency is notification-existence based (no schema flag) — safe for the single-threaded
+       30-min sweep; a stricter claim would need a per-verification flag if the sweep ever parallelises."
+    - "Full live UI drive-through (flagged→held→approve→delivered over SSE; status-change→notification in the
+       bell) NOT run this resume — verified instead by 644 backend + 299 frontend tests (incl. full event-bus
+       fan-out, rule routing, subscriber SSE-name preservation, fraud hold→approve journey, SLA sweep
+       idempotency), migration round-trip, and import/DI wiring smoke tests. Consistent with the S13/S14
+       test-substitute gate. A scripted end-to-end is the recommended next verification."
+
+# ── Recovery note (this resume) ───────────────────────────────────
+recovery:
+  recovered: "Uncommitted post-MVP hardening pass (persona dashboard summary endpoints for all three
+    personas, StatCard, DrawerRoutePage, DataTable/TableToolbar server-side upgrades, DetailDrawer
+    left-side, JSON-column coercion + camel-model tests) documented in progress.md but not captured in
+    prior runtime state. Verified green (backend 595, frontend 289) and committed as f881754 before S15."
+  config_note: "config.yaml is advisory (progress.md 'strict' note was stale)."
+
+# ── S15-S16 scope decisions (this resume) — see decision-log D19-D23 ─
+scope_decisions_s15_s16:
+  D19: "S15 = full Phase 11, including the §11.1 structured clarification request/response flow."
+  D20: "S16 = full event-bus refactor: S13 publish_verification_event + best-effort VerificationMessages
+        dispatch both become event-bus publishes (D15 'swap internals, not API'); publish once, fan out."
+  D21: "Notification enum + declarative rule table cover the full §12.2 set; publishes wire only at
+        choke points that exist today. Dispute/payout/re-check (S18/S19) declared-but-unfired."
+  D22: "Chat is text + fraud-scan only this slice; attachment upload deferred (column kept forward-compat)."
+  D23: "Minimal SLA-breach emitter sweep (S10 scheduler pattern) so the §12.2 SLA-breach notification fires."
+
+# ── S10-S12 scope decisions (this resume) — see decision-log D11-D14 ─
+scope_decisions:
+  D11: "S11 evidence = full presigned-S3 upload (not ref-only)."
+  D12: "Real scheduler for broadcast expiry / no-show / pool / starvation / SLA shedding."
+  D13: "Pull commission + refund forward: minimal commission domain (freeze/reverse) in S10; gateway
+        refund execution in S12."
+  D14: "Build admin Trust Score Weights CRUD in S12 (recreate trust_score_weight_config in 0001)."
+
+# ── S13-S14 scope decisions (this resume) — see decision-log D15-D18 ─
+scope_decisions_s13_s14:
+  D15: "SSE now via in-process asyncio emitter + poll fallback (shared shape); Redis fan-out → S16. Poll
+        is source of truth; emit best-effort, never breaks the transaction."
+  D16: "Report PDF = fpdf2 (pure-Python) behind a stub-first report_pdf facade; per-page footer + QR."
+  D17: "Customer sees a role's evidence + interim milestone only after admin review-approval (§9.3 guardrail)."
+  D18: "Build the Premium Legal Opinion report section fully but gate display behind LEGAL_OPINION_ENABLED."
+
+# ── S15 (Phase 11) summary ────────────────────────────────────────
+s15_communication_layer:
+  backend:
+    - "communication/ parent domain, one entity per child: conversation/ (Conversation thread,
+       CUSTOMER_ADMIN/ADMIN_AGENT/GENERAL_SUPPORT), conversation_participant/ (per-user read state —
+       backs the §N.3 Chat unread counter), chat_message/ (ChatMessage + §4.7 fraud-hold state).
+       CommunicationService façade orchestrates ownership + thread resolution + send."
+    - "fraud_scan.py (pure, deterministic §4.7): phone/email/URL/banking/social/off-platform regex →
+       matched categories; clean = fast lane (DELIVERED), any flag = HELD. ChatMessageState added to
+       core/state/status.py + transition table in machine.py (PENDING_SCAN→{DELIVERED,HELD}; HELD→
+       {DELIVERED,BLOCKED}; DELIVERED/BLOCKED terminal)."
+    - "Admin hold review: /admin/messages/held queue + approve(→DELIVERED)/reject(→BLOCKED),
+       audit-logged (MESSAGE_SENT/HELD/APPROVED/REJECTED). Structured clarifications (D19):
+       CLARIFICATION_REQUEST/RESPONSE kinds + clarification_status (OPEN→ANSWERED). Rejection reason
+       auto-posts to the admin↔agent thread tagged to the task (§11.1, best-effort hook in ReviewService)."
+    - "Per-user SSE: UserEventEmitter + publish_user_event in core/realtime (mirrors the verification
+       emitter; chat_message/chat_unread/notification events) + GET /chat/stream. §11.3 identity guard:
+       customer-facing sender projection returns first_name/avatar only — never last name/email/phone.
+       Read-only-when-approved enforced for agents (§11.1). D22: attachments column kept, no upload built.
+       3 tables folded into 0001 (round-trip clean; created_by inherited from BaseEntity)."
+  frontend:
+    - "types/chat; chat-service + useChatQueries (+useChatRealtime per-user SSE → invalidate counter);
+       useUserStream hook. ChatButton in AppShell top nav (Support→Chat→Notifications→Account, 9+ cap,
+       hidden at 0). Shared ChatThread (message list + composer + held notice + clarification toggle +
+       mark-read). Thread pages: portal/agent/admin verification messages; /portal/chat conversation list;
+       /portal/support (FAQ reuse + general support thread); /admin/messages hold-review queue. Contextual
+       Messages CTAs on customer tracking, admin detail, agent task detail. Nav items added."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 627 (+36: fraud scan, state machine, chat service, comms authz);
+                    #   frontend 296 (+7 chat-service contract). migration round-trip clean; tsc+lint clean.
+
+self_audit_s15:
+  completed: true
+  findings:
+    - "Customer status-change auto-posts (§11.1) are wired via the S16 event bus (one publish point),
+       not scattered across every mutation. The task-rejection auto-post is wired now (single call site
+       in ReviewService). Net state after S16 is complete; done this resume (S15→S16 straight through)."
+    - "Chat unread counter is accurate for the users who rely on it (customers + agents, who are enrolled
+       as participants). Admins use the global hold queue + the admin verification-detail thread view
+       rather than a personal chat counter; enrolling every admin as a per-thread participant is a
+       documented follow-up if an admin chat counter is wanted."
+    - "Attachments deferred (D22) — the column exists; presigned upload reuses the S11 storage facade later."
+    - "Fraud scanner is deterministic regex (single hold behaviour, §4.7). Severity tiers are the
+       documented fast-follow once false-positive data exists; every held/approve/reject is audit-logged."
+    - "Emission/auto-post are best-effort and exception-isolated — a comms failure never breaks the
+       emitting transaction (mirrors the S13 emitter contract)."
+    - "Full live drive-through (send flagged → held → admin approve → delivered over SSE) deferred to the
+       end-of-resume verification after S16 (cadence: S15→S16 straight through). Backend 627 + frontend
+       296 + migration round-trip + tsc/lint are the S15 gate."
+
+completed_slices:
+  - S1   # foundation reconciliation
+  - S2   # state derivation owner + tier task-dependency config + status enums
+  - S3   # idempotency store, VID generator, evidence content-hash, Money kobo tests
+  - S4   # SLA business-day calculator + Nigerian holiday calendar
+  - S5   # Phase 1 marketing completion + Legal documents + footer pages
+  - S6   # Phase 2 auth hardening: phone-flag + public config, revoked-session, security log, cross-portal
+  - S7   # Phase 3 agent onboarding & KYC
+  - S8   # Phase 4 admin onboarding & RBAC
+  - S9   # Phase 5 customer submission & payment (see below)
+  - S10  # Phase 6 admin control panel + 6a chargeback (see below)
+  - S11  # Phase 7 agent task execution (see below)
+  - S12  # Phase 8 admin review & report release (see below)
+  - S13  # Phase 9 customer tracking & evidence over SSE (see below)
+  - S14  # Phase 10 final report experience + branded PDF (see below)
+  - S15  # Phase 11 communication layer (see above)
+  - S16  # Phase 12 notifications & event bus (see above)
+  - S17  # Phase 13 public lookup & sharing (see above)
+  - S18  # Phase 14 revision / re-verification / disputes (see above)
+  - S19  # Phase 15 agent earnings & commission (see above)
+  - S20  # Phase 16 agent reputation & coverage (see above)
+  - S21  # Phase 17 growth & conversion (see above)
+  - S22  # Phase 18 admin ops & analytics (see above)
+  - S23  # Phase 19 audit & compliance maturity (see above) — FINAL SLICE, PRD spine complete
+
+# ── S14 (Phase 10) summary ────────────────────────────────────────
+s14_final_report:
+  backend:
+    - "report_pdf facade (appodus_utils/integrations/report_pdf/): decoupled primitive ReportPdfContext (no app
+       DTOs — keeps the integration layer independent). Fpdf2ReportPdfProvider is the DEFAULT (pure-Python, D16;
+       branded cover + section pages + embedded QR to the public lookup + SUPERSEDED watermark; §3.5 legal
+       footer on EVERY page via footer(); compression off so the footer is verifiable). StubReportPdfProvider
+       = deterministic minimal real PDF (still carries the footer). Factory selects by REPORT_PDF_STUB_MODE."
+    - "report/content.py (pure): trust_band (90+ Safe / 60-89 Caution / 0-59 High Risk) + opinion-framed verdict
+       (final wording on §B list) + tier-gated sections (Exec Summary / Registry & Title / Physical / Boundary
+       & Survey / Legal Opinion / Risk Summary / Customer-Submitted Docs). Legal Opinion section built but its
+       content is withheld unless LEGAL_OPINION_ENABLED (D18). LEGAL_FOOTER_TEXT = the §3.5 disclaimer verbatim."
+    - "CustomerReportService: ownership gate (VerificationService.get_owned) -> get_released report (404 if none)
+       -> build content -> access-gate ack state -> PDF render. Access-gate acknowledgement child domain
+       (report/acknowledgement/: entity + repo + idempotent service, recorded against report_version;
+       report_acknowledgements folded into 0001, round-trip clean). Customer endpoints (report/controller.py,
+       child of verification): GET /report, POST /report/acknowledge, GET /report/pdf (StreamingResponse pdf)."
+    - "Wired VerificationMessages.send_report_ready into ReviewService.release (best-effort) — closes the S12
+       report-ready email follow-up. LEGAL_OPINION_ENABLED surfaced via /config/public (PublicConfigDto). New
+       settings: REPORT_PDF_STUB_MODE(False default), PUBLIC_APP_BASE_URL, REPORT_BRAND_NAME, LEGAL_OPINION_ENABLED."
+  frontend:
+    - "types/report; report-service (getReport/acknowledge/pdfUrl) + useReportQueries. Report page
+       /portal/verifications/[id]/report: one-time access-gate modal (blurs + blocks content until acknowledged,
+       POST acknowledge), verified-badge header (VID/version/date/tier/address + Download PDF link to the proxied
+       /api/.../report/pdf + Request Re-check disabled), plain-language verdict lead, trust-score band (numeric +
+       coloured band + What-does-this-mean tooltip), collapsible tier-dependent <details> sections with the Legal
+       Opinion section hidden until public-config legalOpinionEnabled (D18), per-page legal footer, superseded
+       banner. 'View report' CTA on the tracking page when COMPLETED. PublicConfig type + /config/public gain
+       legalOpinionEnabled."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 582 (+20: content, report_pdf facade real render, customer report service);
+                    #   frontend 280 (+3 report-service contract). migration round-trip clean; tsc+lint clean.
+                    #   Real fpdf2 render verified: %PDF, footer on 7/7 pages, QR embedded, tier-gated sections.
+
+self_audit_s14:
+  completed: true
+  findings:
+    - "PDF is fpdf2 (D16) — a clean branded layout, not pixel-for-pixel with the HTML view. The §10.2 exit
+       criterion (legal footer on EVERY page) is met and verified by a real render (7/7 pages); a WeasyPrint/
+       Playwright HTML-parity renderer can drop in behind the same facade later."
+    - "Legal Opinion section is BUILD-ONLY (D18): content withheld unless LEGAL_OPINION_ENABLED (default off,
+       surfaced via /config/public and hidden on the frontend). Go-live blocked on NBA sign-off + lawyer-role
+       PI cover (§B items 15, 17). The verdict wording is the safe 'opinion, not advice' default pending the
+       §B item-11 legal sign-off."
+    - "Customer-Submitted Documents appendix is a stub section — customer-vs-agent upload attribution ('which
+       roles referenced each') lands once the property-documents pipeline surfaces uploads (follow-up)."
+    - "The report shows the live RELEASED version; superseded=False for the customer view (a superseded version
+       is only reachable admin-side). The supersede state transition itself is covered by the S12 report service."
+    - "Report-ready email is wired best-effort into release (send_report_ready); actual dispatch is gated by
+       ENABLE_OUT_MESSAGING / Mailpit in non-prod, consistent with the rest of the messaging layer."
+    - "Full `pnpm build` still deferred (low disk); tsc --noEmit + eslint (src) + full vitest (280) green.
+       Backend 582 green; migration round-trip validated live; real PDF render verified end-to-end."
+
+# ── S13 (Phase 9) summary ─────────────────────────────────────────
+s13_tracking_evidence:
+  backend:
+    - "Realtime transport (app/core/realtime): in-process asyncio VerificationEventEmitter (per-verification
+       queues, bounded, best-effort/exception-free publish, DI singleton). Event names match the frontend
+       hook (status_changed/task_updated/conflict_detected/report_released/heartbeat). publish_verification_event
+       wired at every mutation choke point (task _derive_and_persist + evidence, review approve/_derive/release,
+       payment mark_paid). D15: poll is source of truth, SSE is a latency hint; Redis fan-out → S16."
+    - "Customer tracking sub-package (verification/tracking/, orchestration-only like admin/): pure §9.2 label
+       projection (labels.py — customer_status_label/customer_task_state/customer_sla_label/interim_message,
+       all backend-owned). CustomerTrackingService builds the shared snapshot (header, SLA tracker w/
+       elapsed/total business days, tier-adaptive progress, interim milestones, evidence preview) + list +
+       evidence feed + activity. Endpoints /verifications/{GET list, /tracking, /stream(SSE), /evidence,
+       /activity}; ownership via VerificationService.get_owned."
+    - "SECURITY (§9.5 exit): AssignedAgentDto exposes ONLY role/first_name/avatar_url/verified — first-name
+       enforced at the API (test asserts no last_name/email/phone in payload). Evidence gated to
+       review_decision==APPROVED (D17); presigned URLs via storage facade; tamper-evidence hash carried through."
+    - "Shared SLA-health extracted to core/sla.py (SlaHealth + compute_sla_health) — admin control panel now
+       reuses it (DRY; admin/models re-exports SlaHealth). interim_note column on verification_tasks folded
+       into 0001 (round-trip clean); ReviewService.approve_task accepts optional interim_note + ApproveTaskDto."
+  frontend:
+    - "types/tracking; verification-service (listMine/getTracking/getEvidence/streamUrl) + hooks incl.
+       useVerificationTracking (TanStack 60s refetchInterval + useVerificationStream SSE → invalidate; D15).
+       Shared VerificationStatusBadge + portable VerificationProgress (tier-adaptive steps, locked-Lawyer
+       'Awaiting other stages'). Tracking dashboard /portal/verifications/[id] (header, state-reassurance
+       banner §9.3, SLA card, progress, interim 'what we've found so far', agents, evidence preview + View
+       all). Evidence feed + full-screen viewer w/ SHA-256 tamper-evidence metadata panel
+       /portal/verifications/[id]/evidence. My-Verifications list /portal/verifications (fixes sidebar 404).
+       SSE hook URL fixed to /api/verifications/{id}/stream."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 562 (+29: emitter, labels, tracking service); frontend 277 (+4 service
+                    #   contract). migration round-trip clean; tsc+lint clean.
+
+self_audit_s13:
+  completed: true
+  findings:
+    - "Emission is pre-commit inside the transaction (best-effort). A push may arrive marginally before the
+       row is committed; the customer is a passive subscriber and refetches, and the 60s poll reconciles, so
+       this only costs latency, never correctness (D15). Post-commit emission lands with the S16 event bus."
+    - "No Redis multi-instance fan-out — single-process only (D15). Correct on `python veriprops.py`; the
+       poll fallback keeps multi-worker/serverless correct. S16 swaps the emitter internals, not its API."
+    - "Progressive low-res-first + derivative image pipeline (§9.4) NOT built — the full-resolution original
+       is served via a single presigned URL (documented follow-up, consistent with S11)."
+    - "Messages preview (§9.1) is a placeholder — the communication layer is Phase 11 (S15)."
+    - "SSE endpoint checks ownership up front (session-backed) then streams with no mid-stream DB; safe after
+       the per-request session closes. `is_disconnected` polling ends the generator on client disconnect."
+    - "Full `pnpm build` still deferred (low disk per prior slices); tsc --noEmit + eslint (src) + full
+       vitest (277) green substitute. Backend 562 green; migration round-trip validated live."
+
+# ── S12 (Phase 8) summary ─────────────────────────────────────────
+s12_review_release:
+  backend:
+    - "Trust Score Weights domain (verification/scoring): trust_score_weight_config table
+       (tier×role, sum-to-100 enforced per tier), idempotent default seed (now in migration 0001),
+       admin CRUD /admin/trust-score-weights (D14), deterministic compute_composite = Σ
+       (weight/100 × per-task quality)."
+    - "Report domain (verification/report): versioned Report entity (report_version — NOT the
+       optimistic-lock version), ReportState DRAFT→RELEASED→SUPERSEDED. ReportService.release
+       supersedes the live version and creates the next (§8.6); supersede_current on reopen."
+    - "Review service (verification/review) = the release gate (§8). approve_task RECORDS admin
+       intent + a quality score WITHOUT changing task state (stays SUBMITTED) — so all-approved
+       never auto-completes; reject_task SUBMITTED→REJECTED (derive→IN_PROGRESS rework). release
+       requires UNDER_REVIEW + every required task review-approved + no HIGH conflict; flips all
+       SUBMITTED→APPROVED atomically (derive→COMPLETED exactly at release), accrues CLEARING
+       commissions (price×weight×AGENT_COMMISSION_SHARE, D13), computes composite, creates the
+       RELEASED report. reopen_task APPROVED→IN_PROGRESS + supersede. fail → FAILED + gateway
+       refund (PaymentService.refund, stub default; PaymentStatus.REFUNDED added)."
+    - "Conflict detection (review/conflict.py): pure §8.2 rules (registry-encumbrance vs lawyer-
+       proceed = HIGH; high legal risk = MEDIUM). Admin endpoints /admin/review/* (RBAC). New
+       task columns review_decision/review_quality; trust_score_weight_config + reports tables
+       folded into 0001 (round-trip clean)."
+  frontend:
+    - "types/adminReview.ts; review-service + trust-weight-service + useReviewQueries. Report
+       review at /admin/verifications/[id]/report-review: per-task approve(quality)/reject(reason)/
+       reopen, conflict banners, projected trust score, findings JSON, release (gated on releasable)
+       + fail&refund. Trust Score Weights CRUD at /admin/config/trust-score-weights (per-tier edit,
+       live sum-to-100 validation). 'Report review' CTA on the admin verification detail; nav item."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 533 (+18: scoring, conflict, review services); frontend 273 (+3
+                    #   review + trust-weight contract). migration round-trip clean; tsc+lint clean.
+
+# ── S11 (Phase 7) summary ─────────────────────────────────────────
+s11_agent_task_execution:
+  backend:
+    - "Agent task execution on the S10 task domain: list_for_agent (paged), accept (broadcast
+       first-accept-wins guard + §6.5 capacity; manual = only assigned agent), decline (->pool,
+       decline_count++), start (ACCEPTED->IN_PROGRESS), submit (IN_PROGRESS->SUBMITTED). Every
+       mutation re-derives verification.status via the §4.1 owner; all-submitted -> UNDER_REVIEW.
+       First successful submit upgrades the AGENT to trusted (§3.3)."
+    - "Role submission validator (task/validator.py) — the four role forms (Registry/Field/
+       Surveyor/Lawyer) enforced as per-role required-field sets over a JSON submission_payload;
+       submit requires >=1 evidence item (proof-of-work)."
+    - "Evidence child domain (task/evidence): EvidenceService.capture computes the §4.5 SHA-256
+       content hash and stamps §7.3a server-side GPS+timestamp at receipt (client GPS is a hint),
+       uploads via the storage facade (encrypted), persists the tamper-evident row. Content-addressed
+       key (evidence/<vid>/<task>/<sha256>)."
+    - "StubDocumentStorageProvider added to the document_storage facade (FileStorage.STUB) — the
+       deterministic default under DOCUMENT_STORAGE_STUB_MODE (mirrors PAYMENT_STUB_MODE/OTP_MODE);
+       real S3/R2 selected by settings. No AWS creds needed for tests/local."
+    - "Agent task controller /agents/tasks/* (list/accept/decline/start/evidence multipart/submit)
+       mounted at the domain root; ownership-based authz via JWT subject. New audit actions
+       TASK_ACCEPTED/DECLINED/STARTED/SUBMITTED + EVIDENCE_CAPTURED. task_evidence table +
+       verification_tasks.submission_payload/rejection_reason folded into 0001 (round-trip clean)."
+  frontend:
+    - "types/agentTask.ts (+ROLE_FORM_FIELDS); agent-task-service + useAgentTaskQueries. My-tasks
+       dashboard /agents/tasks (state filter, accept/decline inline, open). Task detail
+       /agents/tasks/[taskId]: accept->start->evidence upload (multipart + geolocation GPS hint,
+       shows content-hash) -> role findings form (per-role required fields, submit gated on
+       required fields + >=1 evidence). Rework banner on rejection_reason; submitted state."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 515 (+21: agent flow, validator, evidence service); frontend 270
+                    #   (+4 agent-task-service contract). migration round-trip clean; tsc+lint clean.
+
+# ── S10 (Phase 6 + 6a) summary ────────────────────────────────────
+s10_admin_control_chargeback:
+  backend:
+    - "Task domain (app/domain/verification/task): per-role VerificationTask + state machine;
+       instantiate_unlocked at PAID respecting §4.2 dependency locks (Premium Lawyer skipped
+       until siblings SUBMITTED); manual assign/reassign with §6.5 capacity cap; broadcast pool
+       + §7.2 no-show / pool-starvation sweeps; every mutation re-derives verification.status via
+       the §4.1 derive owner (single writer). PAID->IN_PROGRESS on first assign."
+    - "Admin control panel (app/domain/verification/admin): filtered paged list with SLA health,
+       composed detail (tasks/property/payments/commissions/chargebacks/notes + progress),
+       pause/resume (a flag, not a state), cancel (state-machine guarded), SLA delay/shedding,
+       admin notes. RBAC-gated (MANAGE_VERIFICATIONS / ASSIGN_AGENT)."
+    - "admin_note domain (internal-only notes, pinned-first). commission domain (D13): entity +
+       freeze/unfreeze/reverse ops backing the chargeback sub-process; accrual wired in S12."
+    - "chargeback domain (§6a): idempotent gateway webhook flags the payment + freezes commissions
+       WITHOUT touching the verification state machine; auto-assembles the rebuttal pack from audit
+       artefacts; admin rebuttal/resolve (won->unfreeze, lost->reverse+payment FAILED). Non-prod
+       deterministic stub-flag endpoint (/payments/chargebacks/stub/flag)."
+    - "Scheduler (D12): APScheduler jobs wired to the real sweeps via ALWAYS_NEW session wrappers
+       (TaskSweepJobs), disabled under ENVIRONMENT=test; admin dev sweep endpoints for on-demand
+       trigger. payment.handle_webhook now calls task_service.prepare_for_paid at PAID."
+    - "0001: verification_tasks / commissions / chargebacks / admin_notes tables folded in;
+       payments += chargeback_status/refunded_amount_minor; verifications += paused. Validated
+       downgrade base -> upgrade head clean."
+    - "BUG FOUND+FIXED: AdminVerificationService._sla_health OVERDUE branch was dead code
+       (business_days_remaining clamps at 0); now detects overdue from the due-date directly and
+       reports negative business-days-past-due. Caught by the new SLA test."
+  frontend:
+    - "types/adminVerification.ts (TaskState/SlaHealth/Commission/Chargeback/etc mirrors);
+       admin-verification-service + useAdminVerificationQueries (detail mutations seed the cache
+       from the returned detail). List at /admin/verifications (DataTable + status/tier/overdue
+       filters, SLA-health badge, row->detail). Detail at /admin/verifications/[id]: task grid with
+       inline manual (re)assign, progress bar, property/payments/commissions/chargebacks, add-note
+       + list, pause/resume + SLA-extend + cancel. Chargeback rebuttal/resolve controls."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 494 (+41: task/commission/chargeback/admin services, payment fixup);
+                    #   frontend 266 (+6 admin-verification-service contract). migration round-trip clean.
+
+# ── S9 (Phase 5) summary ──────────────────────────────────────────
+s9_submission_payment:
+  backend:
+    - "Domains: property (thin first-class, §4.3), verification (central aggregate — VID/DRAFT on step-1,
+       resumable draft on the row, 24h price-lock, VERIFICATION_TERMS consent snapshot, lifecycle
+       DRAFT->SUBMITTED->PAYMENT_PENDING->PAID guarded by the verification state machine; post-PAID projected
+       by the derive owner), payment (idempotent init + idempotent webhook on gateway event id)."
+    - "Provisional per-tier pricing (app/domain/verification/pricing.py) in NGN kobo; foreign figure indicative
+       via TransactionCurrency.fx_rate — pending admin pricing API (Phase 18). Money in integer minor units."
+    - "Geocoding facade (appodus_utils/integrations/geocoding — deterministic Stub default + gated Google
+       Places scaffold + factory); NG autocomplete/geocode endpoints on the verification router."
+    - "Deterministic payment: PAYMENT_STUB_MODE returns a synthetic checkout URL; POST /payments/stub/confirm
+       (non-prod only) routes through the idempotent webhook to drive PAID. Phone gate before payment; first
+       successful payment upgrades the customer to trusted. property/verifications/payments folded into 0001."
+  frontend:
+    - "Submission wizard in WizardOverlay at /portal/verifications/new (Property / Tier & Pricing / Consent),
+       VID/DRAFT created on load (idempotent client key), autosaved per step; Continue-to-Payment submits and
+       routes to the pay overlay at /portal/verifications/[id]/pay (step 4) — phone-verify gate (OTP) then
+       initiate + deterministic confirm; /confirmed shows VID + SLA + track CTA."
+    - "Backend-sourced pricing/FX (never recomputed on the client): currency pills, NGN-prominent quote,
+       indicative foreign range + 24h price-lock note. verification-service + hooks + types."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 453 (+22: pricing, geocoding, verification state/idempotency/consent, payment
+                    #   phone-gate/webhook-idempotency/trust); frontend 260 (+9: submission validation + service)
+
+# ── S8 (Phase 4) summary ──────────────────────────────────────────
+s8_admin_rbac:
+  backend:
+    - "RBAC matrix + require_permission already existed (app/domain/user/auth/utils/permissions.py, 19
+       tests). New: admin_invitation domain (models/repo/service/controller) + admin_team domain
+       (service/controller over the users table — no new table)."
+    - "Invitation: tokenised (sha256) 72h link, single-use, email-match guard on accept. Accept ELEVATES
+       the authenticated user to user_type=ADMIN + admin_sub_role (decision-log D10 — sanctioned path past
+       §3.2 immutability, keeps require_permission's user_type==ADMIN predicate consistent). Unauthenticated
+       preview endpoint returns the 3-scenario hint (NEW_USER / EXISTING_USER / ALREADY_ADMIN)."
+    - "Team: list (paged), change sub-role, deactivate (demote_to_user) with self-deactivate guard; all
+       audited (ADMIN_INVITED / ADMIN_INVITE_ACCEPTED / ADMIN_ROLE_CHANGED). Endpoints gated by
+       require_permission (INVITE_ADMIN / VIEW_ADMIN_PANEL / MANAGE_USERS). admin_invitations folded into 0001."
+  frontend:
+    - "admin-service + useAdminQueries; /admin/team management (DataTable -> DetailDrawer for change-role/
+       deactivate + invite form returning a copyable link); pending-invitations list with revoke."
+    - "Invite acceptance at /auth/admin-invite/[token]: preview-driven 3-scenario routing (signup pre-fill /
+       login / already-admin notice) then accept. admin nav + Admin Team item; types/admin.ts."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 431 (+13); frontend 251 (+5 admin-service contract)
+
+# ── S7 (Phase 3) summary ──────────────────────────────────────────
+s7_agent_onboarding:
+  backend:
+    - "KYC provider facade at appodus_utils/integrations/kyc/ (interface + deterministic StubKycProvider
+       default + gated DojahKycProvider scaffold + KycProviderFactory; registered like the payment facade).
+       Stores provider result + reference only — never raw biometrics."
+    - "Agent domain app/domain/user/agent/ (models, repo, service, validator, controller, kyc_service) +
+       pure credentials.py role-level expiry/suspension helper (§3.3a). Resumable application drafts."
+    - "Endpoints under /users/agents: draft get/save, submit, my status; admin applications list/detail/
+       approve/reject gated by require_permission(Permission.APPROVE_AGENT) — the existing RBAC util."
+    - "On submit: KYC run, PENDING profile, credentials+coverage persisted, AGENT_TERMS consent recorded,
+       AGENT persona added, AGENT_APPLICATION_SUBMITTED audit; draft discarded."
+    - "Agent/KYC tables folded into 0001_initial_schema (greenfield single-migration); validated
+       downgrade base -> upgrade head clean, 61 tables, all 5 agent tables present."
+  frontend:
+    - "Reusable full-screen WizardOverlay (components/ui/wizard) — fixed inset-0 z-[70] above AppShell,
+       reuses Stepper + body-scroll lock; route-backed at /agents/apply (deep-linkable, resumable)."
+    - "4-step onboarding wizard (Roles / KYC / Credentials / Review) + agent-service + React Query hooks +
+       draft resume; approval status card on /agents/dashboard."
+    - "Admin review at /admin/agents/applications: DataTable -> DetailDrawer (approve / reject) — the
+       mandated admin master-detail pattern. routes.ts AGENT.APPLY + admin nav updated."
+  tests:
+    written: true
+    executed: true
+    passing: true   # backend 418 passed (+31 new); frontend 246 passed (+5 wizard-validation)
+
+self_audit_s7:
+  completed: true
+  findings:
+    - "KYC document/selfie S3 upload UI is NOT wired in the wizard yet — the flow passes selfieReference/
+       documentRef strings and the backend stores refs (facade supports encrypted upload), but the actual
+       presigned-upload UX (via MediaUploadManager/DocumentUploadField) is deferred. PRD §3.2 'KYC docs
+       encrypted in S3' is satisfied at the storage-facade level, not yet exercised end-to-end from the UI."
+    - "DojahKycProvider is a deliberate gated scaffold: it raises until credentials + sandbox testing are in
+       place. StubKycProvider is the deterministic default (KYC_PROVIDER=STUB) per the OTP_MODE philosophy."
+    - "Full `pnpm build` was NOT run due to ~2GB free disk (.next risk). Substituted tsc --noEmit (clean)
+       + eslint on new files (clean) + full vitest (246 passed). Run the build once disk is freed."
+    - "Two frontend timezone tests (suggestTimezoneForCountry) are flaky/environment-dependent — passed on
+       re-run; unrelated to S7."
+
+self_audit_s9:
+  completed: true
+  findings:
+    - "Live gateway (Paystack) initialize_payment is NOT wired for PAYMENT_STUB_MODE=false — checkout_url is
+       empty in live mode. The facade + webhook idempotency are in place; wiring the real provider call +
+       signature-verified webhook is a follow-up (stub-first, deterministic default per OTP_MODE philosophy)."
+    - "Emailed receipt (§5.4) not wired (no AvailableTemplate.PAYMENT_RECEIPT) — follow-up."
+    - "Draft resume is partial: the wizard autosaves per step to the verification row, but /new always starts
+       a fresh DRAFT — a 'resume abandoned draft' list/entry is a follow-up."
+    - "Submission property step captures type/address/landmark/state; conditional Land/Building details,
+       document upload, and seller info (model supports them) are not yet surfaced in the wizard UI."
+    - "Tracking page /portal/verifications/[id] (the /confirmed 'Track' target) is Phase 9/S13 — not built here."
+    - "Pricing is provisional per-tier (pending Phase 18 admin pricing API); §B liability-cap copy gates
+       Phase-5 GO-LIVE only (build proceeds against the seeded VERIFICATION_TERMS draft copy)."
+    - "Full `pnpm build` still deferred (low disk); tsc --noEmit + eslint (new files) + full vitest (260) green."
+
+self_audit_s10:
+  completed: true
+  findings:
+    - "Chargeback ingestion in prod expects a signed gateway chargeback webhook; only the
+       deterministic non-prod stub-flag endpoint is wired now (mirrors PAYMENT_STUB_MODE). Real
+       provider chargeback-webhook parsing/signature-verify is a follow-up, like the live payment gateway."
+    - "Commission ACCRUAL is intentionally not triggered yet (no CLEARING rows created) — accrual
+       lands at task-approval/report-release in S12 (D13). Freeze/unfreeze/reverse are complete and tested."
+    - "Manual assignment UI takes a raw Agent ID (no agent picker/eligibility-by-coverage yet). The
+       broadcast/open-pool acceptance UX is agent-side (S11). Full agent directory picker is a follow-up."
+    - "Full `pnpm build` still deferred (low disk per prior slices); tsc --noEmit + eslint (new files)
+       + full vitest (266) green substitute. Backend 494 green; migration round-trip validated live."
+    - "Refund EXECUTION on cancel/chargeback-lost is recorded (audit + payment refunded_amount) but the
+       gateway refund call is deferred to S12 (D13), consistent with the stub-first posture."
+
+self_audit_s11:
+  completed: true
+  findings:
+    - "Offline upload queue (§7.4) NOT implemented — evidence upload is synchronous multipart. D11's
+       fallback (ref+hash binary path, keep the domain) is honoured; the offline retry queue + image
+       compression/derivatives (progressive viewing) are documented follow-ups."
+    - "Storage is server-side multipart through the facade with the deterministic stub default, NOT
+       client-direct presigned-PUT. Content hash + server GPS/timestamp are exercised end-to-end; the
+       presigned-PUT path is a follow-up like the live payment gateway (stub-first posture)."
+    - "Agent task detail fetches the agent's task page (size 100) and finds by id — no single-task GET
+       endpoint. Fine for MVP (few active tasks/agent); add GET /agents/tasks/{id} if lists grow."
+    - "Proof-of-work COI: EvidenceKind.CERTIFICATE exists but there is no dedicated COI generation flow."
+    - "Full `pnpm build` still deferred (low disk); tsc --noEmit + eslint (new) + full vitest (270) green.
+       Backend 515 green; migration round-trip validated live."
+
+self_audit_s12:
+  completed: true
+  findings:
+    - "Composite trust score blends per-task admin quality (0–100, default 100) by the tier
+       weights; with all-100 quality a full release scores 100. A richer per-role quality rubric
+       (evidence completeness, timeliness) is a follow-up — the weight config + quality input are
+       in place."
+    - "Release model choice: admin approve records intent (task stays SUBMITTED); release flips all
+       to APPROVED atomically. This preserves the derive owner's all-approved→COMPLETED contract and
+       its 49 S2 tests untouched, while making release the sole gate (§8 — no report without release)."
+    - "Refund is deterministic (PAYMENT_STUB_MODE no-op call + PaymentStatus.REFUNDED + refunded_amount);
+       the live gateway refund call behind the facade is a follow-up (stub-first, like init payment)."
+    - "Conflict detection is a focused rule set (encumbrance-vs-proceed HIGH, high-risk MEDIUM). More
+       cross-role rules (owner mismatch, occupancy vs land-use) can extend conflict.py without API change."
+    - "Emailed 'report ready' notification (§10) not wired (no AvailableTemplate) — follow-up, like the
+       Phase-5 receipt. The final report *experience* + branded PDF is Phase 10/S14 (NBA go-live gate)."
+    - "Full `pnpm build` still deferred (low disk); tsc + eslint (new) + full vitest (273) green.
+       Backend 533 green; migration round-trip validated live."
+
+next_action: idle — S21 (Phase 17 growth & conversion) and S22 (Phase 18 admin ops & analytics) delivered,
+             committed, and live-verified this resume. Phases 0–18 now ship end-to-end: submission → payment
+             (+ first-time & referral discounts) → assignment → agent execution → admin review/release → live
+             tracking → final report + PDF → mediated chat → notifications → public proof + sharing →
+             re-check/tier-upgrade/dispute → earnings/payouts → reputation/coverage → referral program +
+             abandonment recovery → mission control + analytics + DB-configurable pricing + broadcasts +
+             finance. Next slice is S23 (Phase 19 audit & compliance maturity — audit export per VID, NDPA
+             data-erasure workflow + pseudonymisation, versioned consent download). Deferred follow-ups:
+             live card-fingerprint anti-farming (D34, needs live gateway); pricing line-item admin editor UI
+             (backend CRUD exists; frontend shows read-only breakdown); analytics rollup/cache if volume grows
+             (D38); broadcast batched fan-out for large audiences (D37); seed↔real property_id form
+             consistency (seed uses .hex, real uses str(uuid) — regional analytic lumps seeded rows as
+             Unknown); Redis SSE fan-out; live UI (Playwright) drive-through.
+
+started_at: 2026-07-05
+last_checkpoint: "S21 + S22 complete. S21 (Phase 17): growth config keys, apply_discounts wired into
+                  quote/submit (NET price locked), referral/ + referral/credit/ domains (D34 anti-farming +
+                  D35 two-stage clearance), Payment.card_fingerprint, abandonment recovery sweep + re-lock
+                  guard, GrowthSweepJobs, signup referral_code. S22 (Phase 18): VIEW_ANALYTICS/BROADCAST perms,
+                  pricing_config domain (D36 DB tier prices + line items, pricing.py resolves via DB — §18.2
+                  exit criterion), mission-control extension, analytics domain (D38), broadcast domain (D37 +
+                  sweep), finance summary. 5 tables in 0001 (round-trip clean). Backend 791 tests, frontend
+                  vitest 339; tsc+lint clean. Two live drive-throughs ALL PASSED (S15-S20 48 checks + new
+                  e2e_s21_s22.py 22 checks; fixed 2 runtime bugs — uuid=varchar analytics join, seed missing
+                  Payment). S21 846b1fa, S22 01a6ed1, live-e2e fixes 11f5943."

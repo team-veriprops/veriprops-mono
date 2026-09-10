@@ -1,5 +1,24 @@
 import { AuthIntent } from "@/components/website/auth/models";
 
+
+
+/**
+ * The one `/wa/*` landing that needs a session (PRD §26.4.4). Its siblings are public —
+ * the handoff token *is* the authorization there — but linking has to know which account
+ * is claiming the number, so this prefix joins `proxy.ts`'s protected set. A static
+ * prefix rather than the `WA.LINK(token)` builder, because the guard matches path
+ * segments, not a specific token.
+ */
+export const WA_LINK_PREFIX = '/wa/link';
+
+/**
+ * The chat-intake landing (§5.1, D69), protected for the same reason as `WA_LINK_PREFIX`:
+ * the token carries a conversation, not an identity, so the customer signs in (or
+ * registers) before their answers become a draft.
+ */
+export const WA_INTAKE_PREFIX = '/wa/intake';
+
+
 export const ROUTES = {
   HOME: '/',
 
@@ -20,6 +39,9 @@ export const ROUTES = {
     SECURITY: '/account/security',
     DEVICES: '/account/devices',
     LINKED: '/account/linked',
+    // PRD §26.4.4 — the WhatsApp number link, separate from the OAuth sign-in providers
+    // above: it has its own OTP lifecycle and its own consequences when revoked.
+    WHATSAPP: '/account/whatsapp',
     PASSWORD: '/account/password',
     CONSENTS: '/account/consents',
     DATA_PRIVACY: '/account/data-privacy',
@@ -58,6 +80,8 @@ export const ROUTES = {
     CONFIG: '/admin/config',
     TRUST_SCORE_WEIGHTS: '/admin/config/trust-score-weights',
     SYSTEM_CONFIG: '/admin/config/system',
+    // PRD §26.7 — Meta template approval status, read-only (definitions are code-owned).
+    WHATSAPP_TEMPLATES: '/admin/config/whatsapp-templates',
     // TODO(gap): routes declared, pages not built (dispute detail, fraud flags) —
     // PRD "Known Gaps & Roadmap".
     DISPUTE_DETAIL: (id: string) => `/admin/disputes/${id}`,
@@ -115,6 +139,24 @@ export const ROUTES = {
     CHAT: '/portal/chat',
   },
 
+  // WhatsApp -> website handoff landings (PRD §26.4.2). Each consumes a signed
+  // single-use action token; they are public by design — the token is the authorization,
+  // so they must stay outside PROTECTED_PREFIXES in proxy.ts.
+  WA: {
+    PAY: (token: string) => `/wa/pay/${token}`,
+    UPLOAD: (token: string) => `/wa/upload/${token}`,
+    REPORT: (token: string) => `/wa/report/${token}`,
+    // §26.4.4 WhatsApp→web linking. Unlike its siblings this one *does* need a session —
+    // the token says which number is being claimed, the login says which account claims
+    // it — so `WA_LINK_PREFIX` puts it inside `proxy.ts`'s protected set and the customer
+    // is sent to sign in (or register) and returned here.
+    LINK: (token: string) => `${WA_LINK_PREFIX}/${token}`,
+    // §5.1 chat intake (D69). Like LINK, this one needs a session: the token says which
+    // conversation's answers to pick up, the login says whose draft they become — which
+    // is the whole point, since the chat could not establish who the customer is.
+    INTAKE: (token: string) => `${WA_INTAKE_PREFIX}/${token}`,
+  },
+
   FORBIDDEN: '/forbidden',
 
   LEGAL: {
@@ -144,6 +186,17 @@ export const ROUTES = {
     NOTIFICATIONS: '/settings/notifications',
   },
 } as const;
+
+/**
+ * Paths that sit *inside* a payment flow. Kept beside the route builders they mirror so
+ * the two cannot drift: each pattern matches what `PORTAL.VERIFICATION_PAY` / `WA.PAY`
+ * produce. The WhatsApp widget suppresses itself here (PRD §26.4.1 — no distraction at
+ * the highest-value moment).
+ */
+export const PAYMENT_FLOW_PATH_PATTERNS: readonly RegExp[] = [
+  /^\/portal\/verifications\/[^/]+\/pay\/?$/,
+  /^\/wa\/pay(\/|$)/,
+] as const;
 
 // export type AuthIntent = 'verify' | 'agent' | 'default';
 

@@ -4,7 +4,7 @@ import { Button } from "@components/3rdparty/ui/button";
 import { Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import VerificationModal from "./VerificationModal";
-import type { UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 
 import PhoneInputWithCountry from "../form/PhoneInputWithCountry";
 import { toast } from "sonner";
@@ -37,6 +37,11 @@ const VerifiedInput = ({ form, field, label, type, placeholder, inputType = "tex
   const isVerified = form.watch(verifiedField);
   const fieldError = form.formState.errors[field];
   const fieldValue = form.watch(field);
+  // Subscribed rather than read through `form.watch(...)`: the phone input is a
+  // controlled child, and a `watch()` result passed down makes React Compiler skip
+  // memoizing this component (and risk a stale value in the child).
+  const phoneCountryCode = useWatch({ control: form.control, name: "countryCode" });
+  const phoneNumber = useWatch({ control: form.control, name: "phone" });
 
   const canVerify = !isVerified && fieldValue && !fieldError;
   const [otpError, setOtpError] = useState<string | null>(null);
@@ -72,10 +77,14 @@ const VerifiedInput = ({ form, field, label, type, placeholder, inputType = "tex
         {field === "phone" ? (
           <div className="flex-1">
             <PhoneInputWithCountry
-              form={form}
+              countryCode={phoneCountryCode}
+              phone={phoneNumber}
               placeholder={placeholder}
               isVerified={isVerified}
-              onChanged={() => {
+              onChange={({ countryCode, dialCode, phone }) => {
+                form.setValue("countryCode", countryCode, { shouldValidate: true });
+                form.setValue("dialCode", dialCode, { shouldValidate: true });
+                form.setValue("phone", phone, { shouldValidate: true });
                 setOtpError(null);
                 if (isVerified) {
                   form.setValue(verifiedField, false, { shouldValidate: true });
