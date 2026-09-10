@@ -18,13 +18,16 @@ def get_absolute_path(path: str):
     directory = os.getcwd()
     test = 'test'
     main = 'main'
-    appodus_utils = 'appodus_utils'
+    appodus_utils = 'main/appodus_utils'
+    scripts = 'scripts'
     if test in directory:
         directory = directory.split(sep=test)[0]
     if main in directory:
         directory = directory.split(sep=main)[0]
     if appodus_utils in directory:
         directory = directory.split(sep=appodus_utils)[0]
+    if scripts in directory:
+        directory = directory.split(sep=scripts)[0]
     directory = os.path.join(directory, path)
 
     return directory
