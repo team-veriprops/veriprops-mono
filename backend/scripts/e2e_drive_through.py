@@ -39,8 +39,8 @@ from __future__ import annotations
 import argparse
 import sys
 
-from main.app.config.settings import settings  # noqa: F401
-from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
+# from main.app.config.settings import settings  # noqa: F401
+# from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
 
 from e2e import (
     stage_admin_ops,
