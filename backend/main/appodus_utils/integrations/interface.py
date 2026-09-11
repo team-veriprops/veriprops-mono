@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from fastapi.responses import PlainTextResponse
+
 from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 
 if TYPE_CHECKING:
@@ -127,7 +129,7 @@ class BaseWebhookHandler(IWebhookHandler):
         pass
 
     @abstractmethod
-    async def _process_verify_webhook_payload(self, payload: QueryParams) -> Dict:
+    async def _process_verify_webhook_payload(self, payload: QueryParams) -> PlainTextResponse:
         pass
 
     @abstractmethod

@@ -48,6 +48,9 @@ jobs:
       ENABLE_OUT_MESSAGING: "True" # email → Mailpit, SMS → mock provider
       MAILPIT_CONTAINER: mailpit # stage_messaging_retry docker stop/starts this
       PYTHONIOENCODING: utf-8
+      # To enable webhooks drive_through
+      WHATSAPP_APP_SECRET_KEY: "WHATSAPP_APP_SECRET_KEY"
+      WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN: "WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

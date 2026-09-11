@@ -23,6 +23,7 @@ import hmac
 import json
 from typing import Dict, Optional
 
+from fastapi.responses import PlainTextResponse
 from httpx import QueryParams
 from kink import di, inject
 from starlette.responses import RedirectResponse, Response
@@ -83,7 +84,7 @@ class WhatsAppWebhookHandler(BaseWebhookHandler):
         # stored callbacks.
         return None
 
-    async def _process_verify_webhook_payload(self, payload: QueryParams) -> str:
+    async def _process_verify_webhook_payload(self, payload: QueryParams) -> PlainTextResponse:
         """Meta's subscription handshake: echo `hub.challenge` for the right token."""
         verify_token = settings.WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN
         if not _is_configured(verify_token):
@@ -93,10 +94,11 @@ class WhatsAppWebhookHandler(BaseWebhookHandler):
 
         mode = payload.get("hub.mode")
         supplied = payload.get("hub.verify_token") or ""
+        challenge = payload.get("hub.challenge") or ""
         if mode != "subscribe" or not hmac.compare_digest(str(supplied), str(verify_token)):
             raise UnauthorizedException("Invalid WhatsApp webhook verification request.")
 
-        return str(payload.get("hub.challenge") or "")
+        return PlainTextResponse(challenge or "", status_code=200)
 
     async def _process_handle_redirect_payload(
         self, payload: QueryParams, headers: Dict, response: Response
