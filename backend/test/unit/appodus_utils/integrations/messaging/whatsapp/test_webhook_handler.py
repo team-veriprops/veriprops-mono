@@ -14,6 +14,7 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
+from starlette.datastructures import QueryParams
 
 from main.app.config.settings import IntegratedPlatform, settings
 from main.appodus_utils.config.settings import SECRET_PLACEHOLDER
@@ -96,10 +97,19 @@ class TestSignatureVerification:
 class TestSubscriptionHandshake:
     async def test_echoes_the_challenge_for_the_configured_verify_token(self, handler):
         challenge = await handler._process_verify_webhook_payload(
-            {"hub.mode": "subscribe", "hub.verify_token": VERIFY_TOKEN, "hub.challenge": "1158201444"}
+            QueryParams(
+                {
+                    "hub.mode": "subscribe",
+                    "hub.verify_token": VERIFY_TOKEN,
+                    "hub.challenge": "1158201444",
+                }
+            )
         )
-        # Meta requires the challenge echoed verbatim.
-        assert challenge == "1158201444"
+
+        # Meta requires the challenge echoed verbatim as plain text.
+        assert challenge.status_code == 200
+        assert challenge.media_type == "text/plain"
+        assert challenge.body == b"1158201444"
 
     async def test_refuses_a_wrong_verify_token(self, handler):
         with pytest.raises(UnauthorizedException):
