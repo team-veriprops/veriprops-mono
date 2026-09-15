@@ -268,6 +268,8 @@ export default function LoginContainer() {
 
         {errorMessage && !isLockedNow && (
           <div
+            role="alert"
+            data-testid="login-error"
             className="p-3 rounded-lg text-sm flex items-start gap-2 bg-danger/6 text-danger border border-danger/18"
           >
             <Lock className="w-4 h-4 shrink-0 mt-0.5" />
