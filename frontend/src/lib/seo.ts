@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { TransactionCurrency } from "@app-types/models";
+
 /** Site identity used to build every page's metadata and structured data. */
 export const SITE = {
   name: "Veriprops",
@@ -123,5 +125,41 @@ export function faqJsonLd(faqs: { question: string; answer: string }[]) {
       name: f.question,
       acceptedAnswer: { "@type": "Answer", text: f.answer },
     })),
+  };
+}
+
+/**
+ * Verification as a schema.org Service, with one Offer per priced tier. Prices are the backend's
+ * (in whole naira), so the structured data can never disagree with the rendered pricing section.
+ * Returns null when no tier is priced — the page then emits no pricing node at all, rather than a
+ * Service with an empty offer list.
+ */
+export function pricingJsonLd(
+  tiers: { name: string; description: string; priceNGN: number | null }[],
+) {
+  const offers = tiers.flatMap((tier) =>
+    tier.priceNGN == null
+      ? []
+      : [
+          {
+            "@type": "Offer",
+            name: tier.name,
+            description: tier.description,
+            price: tier.priceNGN,
+            priceCurrency: TransactionCurrency.NGN,
+            url: absoluteUrl("/#pricing"),
+          },
+        ],
+  );
+  if (offers.length === 0) return null;
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: "Property verification",
+    serviceType: "Property due diligence",
+    areaServed: "NG",
+    provider: { "@type": "Organization", name: SITE.name, url: SITE.url },
+    offers,
   };
 }

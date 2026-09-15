@@ -13,7 +13,9 @@ import {
   formatPrice,
   CTA_VERIFY_HREF,
   CTA_AGENT_HREF,
+  withLivePrices,
 } from "./home.data";
+import { VerificationTier } from "@/types/verification";
 import { AuthIntent } from "./auth/models";
 import { ROUTES } from "@lib/routes";
 
@@ -26,10 +28,10 @@ describe("pricingTiers", () => {
     expect(pricingTiers.map((t) => t.name)).toEqual(["Basic", "Standard", "Premium"]);
   });
 
-  it("each tier has a positive priceNGN and non-empty features", () => {
+  it("each tier has non-empty features and carries no price figure (the backend owns prices)", () => {
     for (const tier of pricingTiers) {
-      expect(typeof tier.priceNGN).toBe("number");
-      expect(tier.priceNGN).toBeGreaterThan(0);
+      expect(tier).not.toHaveProperty("priceNGN");
+      expect(tier).not.toHaveProperty("priceDisplay");
       expect(Array.isArray(tier.features)).toBe(true);
       expect(tier.features.length).toBeGreaterThan(0);
     }
@@ -42,6 +44,24 @@ describe("pricingTiers", () => {
       expect(typeof tier.sla).toBe("string");
       expect(tier.sla.length).toBeGreaterThan(0);
     }
+  });
+
+  it("each tier names the backend tier it markets, so its live price can be found", () => {
+    expect(pricingTiers.map((t) => t.tier)).toEqual([
+      VerificationTier.BASIC,
+      VerificationTier.STANDARD,
+      VerificationTier.PREMIUM,
+    ]);
+  });
+
+  it("withLivePrices pairs each tier with its backend price in whole naira, null when unpriced", () => {
+    const tiers = withLivePrices([{ tier: VerificationTier.STANDARD, priceNgnMinor: 12_000_000 }]);
+
+    expect(tiers.map((t) => [t.name, t.priceNGN])).toEqual([
+      ["Basic", null],
+      ["Standard", 120000],
+      ["Premium", null],
+    ]);
   });
 
   it("Standard tier is marked popular", () => {
@@ -294,12 +314,10 @@ describe("formatPrice", () => {
     }
   });
 
-  it("all three tier prices format correctly in NGN", () => {
-    for (const tier of pricingTiers) {
-      const result = formatPrice(tier.priceNGN, "NGN");
-      expect(result.startsWith("₦")).toBe(true);
-      expect(result.endsWith("k")).toBe(true);
-    }
+  it("a whole-naira tier price formats as a compact ₦ figure", () => {
+    const result = formatPrice(120000, "NGN");
+    expect(result.startsWith("₦")).toBe(true);
+    expect(result.endsWith("k")).toBe(true);
   });
 });
 

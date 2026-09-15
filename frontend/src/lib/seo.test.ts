@@ -5,6 +5,7 @@ import {
   faqJsonLd,
   organizationJsonLd,
   legalDocumentJsonLd,
+  pricingJsonLd,
   SITE,
 } from "./seo";
 
@@ -50,6 +51,27 @@ describe("structured data builders", () => {
       name: "q1",
       acceptedAnswer: { text: "a1" },
     });
+  });
+
+  it("pricingJsonLd publishes one NGN Offer per priced tier on a Service node", () => {
+    const node = pricingJsonLd([
+      { name: "Basic", description: "Registry search", priceNGN: 52000 },
+      { name: "Standard", description: "Site visit", priceNGN: 120000 },
+    ]);
+    expect(node?.["@type"]).toBe("Service");
+    expect(node?.provider).toMatchObject({ "@type": "Organization", name: SITE.name });
+    expect(node?.offers).toHaveLength(2);
+    expect(node?.offers[1]).toMatchObject({
+      "@type": "Offer",
+      name: "Standard",
+      price: 120000,
+      priceCurrency: "NGN",
+    });
+    expect(node?.offers[0].url).toContain("#pricing");
+  });
+
+  it("pricingJsonLd emits nothing when no tier has a price, rather than an empty offer list", () => {
+    expect(pricingJsonLd([])).toBeNull();
   });
 
   it("legalDocumentJsonLd carries version + url", () => {
