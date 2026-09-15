@@ -33,14 +33,10 @@ interface Props {
   onComplete: () => void;
 }
 
-// Mirrors the `phone` field constraints in verifyFormSchema. Also rejects the
-// synthetic placeholder AuthService.find_or_create_oauth_user seeds new OAuth
-// signups with ("0000000000") — it's shaped like a valid number, so it must
-// be excluded explicitly or a user could complete their profile without ever
-// entering a real one.
-const OAUTH_PLACEHOLDER_PHONE = "0000000000";
-const isValidPhoneNumber = (phone: string) =>
-  /^\d{7,15}$/.test(phone) && phone !== OAUTH_PLACEHOLDER_PHONE;
+// Mirrors the `phone` field constraints in verifyFormSchema. A new OAuth account's
+// synthetic number never reaches this form: the session exposes it as an empty phone,
+// so the customer always has to enter a real one.
+const isValidPhoneNumber = (phone: string) => /^\d{7,15}$/.test(phone);
 
 export default function ProfileCompletionModal({ open, user, onComplete }: Props) {
   const browserTz = useMemo(() => detectBrowserTimezone(), []);

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from main.app.domain.user.auth.session.models import UserType
 from main.app.domain.user.auth.session.service import _user_to_session_dto
-from main.app.domain.user.models import AccountStatus
+from main.app.domain.user.models import OAUTH_PLACEHOLDER_PHONE, AccountStatus
 
 
 def _make_user(**overrides):
@@ -48,3 +48,15 @@ def test_maps_has_started_verification_false():
     user = _make_user(has_started_verification=False)
     dto = _user_to_session_dto(user, has_password=True, linked=[])
     assert dto.has_started_verification is False
+
+
+def test_oauth_placeholder_phone_is_exposed_as_no_phone():
+    # Clients render "no number yet" rather than a synthetic one they would need to recognise.
+    user = _make_user(phone=OAUTH_PLACEHOLDER_PHONE, phone_verified=False)
+    dto = _user_to_session_dto(user, has_password=False, linked=[])
+    assert dto.phone == ""
+
+
+def test_real_phone_is_passed_through():
+    dto = _user_to_session_dto(_make_user(), has_password=True, linked=[])
+    assert dto.phone == "8012345678"

@@ -12,10 +12,12 @@ import type {
   LoginRequest,
   OtpSendRequest,
   OtpVerifyRequest,
+  PhoneOtpRequest,
   ProfileCompletionRequest,
   ResetPasswordRequest,
   SetPasswordRequest,
   SignupRequest,
+  VerifyPhoneRequest,
 } from "./auth-service";
 import { SocialProvider } from "@components/website/auth/models";
 const authService = new AuthService(httpClient);
@@ -99,12 +101,12 @@ export const useSendOtpMutation = () =>
 export const useVerifyOtpMutation = () =>
   useMutation({ mutationFn: (payload: OtpVerifyRequest) => authService.verifyOtp(payload) });
 
-/** Phase-5 phone verification for the logged-in user (§5) — the phone comes from the session. */
+/** Pay-step phone verification for the logged-in user (§10.5) — confirm or correct the number. */
 export const useSendPhoneOtpMutation = () =>
-  useMutation({ mutationFn: () => authService.sendPhoneOtp() });
+  useMutation({ mutationFn: (payload: PhoneOtpRequest) => authService.sendPhoneOtp(payload) });
 
 export const useVerifyPhoneMutation = () =>
-  useMutation({ mutationFn: (code: string) => authService.verifyPhone(code) });
+  useMutation({ mutationFn: (payload: VerifyPhoneRequest) => authService.verifyPhone(payload) });
 
 export const useForgotPasswordMutation = () =>
   useMutation({ mutationFn: (payload: ForgotPasswordRequest) => authService.forgotPassword(payload) });

@@ -95,9 +95,6 @@ class UserService:
     async def mark_email_verified(self, user_id: str) -> None:
         await self._user_repo.update(user_id, UpdateUserDto(email_verified=True))
 
-    async def mark_phone_verified(self, user_id: str) -> None:
-        await self._user_repo.update(user_id, UpdateUserDto(phone_verified=True))
-
     async def set_password_hash(self, user_id: str, password_hash: str) -> None:
         await self._user_repo.update(user_id, UpdateUserDto(password_hash=password_hash))
 

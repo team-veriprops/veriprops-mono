@@ -49,6 +49,7 @@ from main.appodus_utils import Object, Utils
 from main.appodus_utils.db.session import get_db_session_from_context
 from main.appodus_utils.db.types.money import TransactionCurrency
 from main.appodus_utils.decorators.transactional import TransactionSessionPolicy, transactional
+from main.appodus_utils.exception.exceptions import ValidationException
 
 T = TypeVar("T")
 
@@ -92,6 +93,10 @@ RELEASE_REASON = "Scenario release — all checks passed."
 class BuildScenarioDto(Object):
     stage: ScenarioStage
     tier: VerificationTier = VerificationTier.STANDARD
+    # False leaves the customer at their first payment with an unverified phone, so a spec
+    # can drive the pay-step phone gate (§10.5). Only meaningful before PAID — a stage that
+    # pays needs the gate already cleared.
+    customer_phone_verified: bool = True
 
 
 class ScenarioAccountDto(Object):
@@ -139,7 +144,13 @@ class DevScenarioService:
 
     async def build(self, req: BuildScenarioDto) -> ScenarioDto:
         target, tier = req.stage, req.tier
-        customer, agents = await self._create_people(tier)
+        if not req.customer_phone_verified and stage_reached(target, ScenarioStage.PAID):
+            raise ValidationException(
+                message="A scenario that pays needs a customer whose phone is verified.",
+            )
+        customer, agents = await self._create_people(
+            tier, customer_phone_verified=req.customer_phone_verified,
+        )
         agent_ids = {role: agent.id for role, agent in agents.items()}
 
         draft = await self._step(lambda: self._verification_service.create_draft(customer.id))
@@ -249,7 +260,7 @@ class DevScenarioService:
 
     @transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW)
     async def _create_people(
-        self, tier: VerificationTier,
+        self, tier: VerificationTier, *, customer_phone_verified: bool = True,
     ) -> Tuple[ScenarioAccountDto, Dict[AgentRole, ScenarioAccountDto]]:
         """A fresh customer plus one approved agent per role the tier requires."""
         session = get_db_session_from_context()
@@ -259,6 +270,7 @@ class DevScenarioService:
         customer = add_verified_user(
             session, first_name="Ada", last_name="Scenario", email=customer_email,
             phone_local=unique_local_phone(), persona="CUSTOMER",
+            phone_verified=customer_phone_verified,
         )
         agents: Dict[AgentRole, ScenarioAccountDto] = {}
         for role in roles_for_tier(tier):

@@ -72,6 +72,18 @@ def _make_service(phone_verified=True, verification=None):
     return svc
 
 
+class TestRequiresPhoneVerification:
+    """The pay-step phone rule (§10.5), asked by both the portal and the WhatsApp pay landing."""
+
+    async def test_true_while_the_customers_phone_is_unverified(self):
+        svc = _make_service(phone_verified=False)
+        assert await svc.requires_phone_verification("cust-1") is True
+
+    async def test_false_once_verified(self):
+        svc = _make_service(phone_verified=True)
+        assert await svc.requires_phone_verification("cust-1") is False
+
+
 class TestInitiate:
     async def test_blocks_when_phone_unverified(self):
         svc = _make_service(phone_verified=False)

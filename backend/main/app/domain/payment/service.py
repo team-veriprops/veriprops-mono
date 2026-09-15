@@ -67,6 +67,14 @@ class PaymentService:
         self._idempotency = idempotency_service
         self._audit = audit_service
 
+    async def requires_phone_verification(self, customer_id: str) -> bool:
+        """The pay-step phone gate (§10.5): a customer must verify their phone before paying.
+
+        One rule for every payment surface — the portal pay page renders its phone gate from
+        the session, and the WhatsApp pay landing (which has no session) asks this directly."""
+        user = await self._user_service.get_user_model(customer_id)
+        return not user.phone_verified
+
     async def initiate(
         self,
         verification_id: str,
@@ -81,9 +89,7 @@ class PaymentService:
                 message="This verification is not awaiting payment.",
             )
 
-        # Phone gate (§5.4): phone must be verified before payment completes.
-        user = await self._user_service.get_user_model(customer_id)
-        if not user.phone_verified:
+        if await self.requires_phone_verification(customer_id):
             raise ValidationException(message="Verify your phone number before paying.")
 
         if idempotency_key:

@@ -18,8 +18,10 @@ from kink import di, inject
 
 from main.app.domain.user.auth.models import (
     OtpChannel,
+    PhoneOtpSendDto,
     ProfileCompletionDto,
     SignupRequestDto, AuthIntent,
+    VerifyPhoneDto,
 )
 from main.app.domain.user.auth.otp_service import OtpService, recipient_for
 from main.appodus_utils.db.types.phone import PhoneNumber
@@ -31,6 +33,7 @@ from main.app.domain.user.auth.session.models import (
 )
 from main.app.domain.user.auth.session.service import SessionService
 from main.app.domain.user.models import (
+    OAUTH_PLACEHOLDER_PHONE,
     CreateUserDto,
     UpdateUserDto,
     User,
@@ -235,7 +238,7 @@ class AuthService:
             last_name=last_name or "User",
             email=email,
             password_hash=None,
-            phone="0000000000",
+            phone=OAUTH_PLACEHOLDER_PHONE,
             phone_country_code="NG",
             phone_dial_code="+234",
             country_of_residence="NG",
@@ -390,30 +393,64 @@ class AuthService:
             channel, recipient, code, user_id=user_id, ip_address=ip_address,
         )
 
-    # ── Phase-5 phone verification (PRD §5) ───────────────────────────
+    # ── Pay-step phone verification (PRD §10.5) ───────────────────────
     # When PHONE_VERIFICATION_ENABLED=false the number is collected but left unverified at
-    # signup; the payment step then requires a verified phone. These two authenticated
-    # helpers send/verify an OTP to the *logged-in user's own* phone and flip phone_verified.
+    # signup; the payment step then requires a verified phone. At that gate the logged-in
+    # customer confirms the number on file or enters a corrected one, and the profile only
+    # takes that number once its OTP is verified.
 
-    async def send_phone_otp_for_user(self, user_id: str, *, ip_address: Optional[str] = None) -> int:
+    async def send_phone_otp_for_user(
+            self, user_id: str, req: PhoneOtpSendDto, *, ip_address: Optional[str] = None,
+    ) -> int:
         user = await self._user_service.get_user_model(user_id)
+        _, recipient = await self._resolve_phone_for_verification(user, req)
         return await self.send_otp(
             OtpChannel.PHONE,
-            dial_code=user.phone_dial_code,
-            phone=user.phone,
+            dial_code=recipient.dial_code,
+            phone=recipient.number,
             user_id=user_id,
             ip_address=ip_address,
             fullname=f"{user.first_name} {user.last_name}".strip(),
         )
 
-    async def verify_phone_for_user(self, user_id: str, code: str, *, ip_address: Optional[str] = None) -> None:
+    async def verify_phone_for_user(
+            self, user_id: str, req: VerifyPhoneDto, *, ip_address: Optional[str] = None,
+    ) -> None:
         user = await self._user_service.get_user_model(user_id)
-        recipient = PhoneNumber(dial_code=user.phone_dial_code, number=user.phone)
+        country_code, recipient = await self._resolve_phone_for_verification(user, req)
         await self._otp_service.verify_otp(
-            OtpChannel.PHONE, recipient, code, user_id=user_id, ip_address=ip_address,
+            OtpChannel.PHONE, recipient, req.code, user_id=user_id, ip_address=ip_address,
         )
-        await self._user_service.mark_phone_verified(user_id)
+        await self._user_service.update_user(user_id, UpdateUserDto(
+            phone_country_code=country_code,
+            phone_dial_code=recipient.dial_code,
+            phone=recipient.number,
+            phone_e164=_phone_e164(recipient.dial_code, recipient.number),
+            phone_verified=True,
+        ))
         # Single-use — drop the marker so the code can't be replayed.
         await self._otp_service.consume_verified_marker(
             OtpChannel.PHONE, recipient.international_number,
         )
+
+    async def _resolve_phone_for_verification(
+            self, user: User, req: PhoneOtpSendDto,
+    ) -> tuple[Optional[str], PhoneNumber]:
+        """The number a pay-step OTP targets: the one entered, else the one on the profile.
+
+        Refuses a missing/placeholder number, swapping out an already-verified number, and a
+        number another account holds (the same uniqueness rule signup enforces)."""
+        if req.phone:
+            country_code, dial_code, phone = req.country_code, req.dial_code, req.phone
+        else:
+            country_code, dial_code, phone = user.phone_country_code, user.phone_dial_code, user.phone
+        if not phone or not dial_code or phone == OAUTH_PLACEHOLDER_PHONE:
+            raise ValidationException(message="Enter your phone number.")
+
+        e164 = _phone_e164(dial_code, phone)
+        if user.phone_verified and e164 != _phone_e164(user.phone_dial_code or "", user.phone or ""):
+            raise ValidationException(message="Your phone number is already verified.")
+        owner = await self._user_service.get_user_by_phone_e164(e164)
+        if owner and str(owner.id) != str(user.id):
+            raise ValidationException(message="An account with this phone number already exists.")
+        return country_code, PhoneNumber(dial_code=dial_code, number=phone)

@@ -837,7 +837,11 @@ amount.
 ### 10.5 Payment
 
 - **Phone-verification gate:** because phone OTP is deferred from signup (§7.1), the customer's phone must
-  be verified here before payment proceeds.
+  be verified here before payment proceeds — in practice on their first verification, since a verified
+  phone stays verified. The gate shows the number on file and lets the customer correct it before the
+  OTP is sent; the profile only takes a number once its code verifies, and a number another account
+  holds is refused. The WhatsApp pay landing (§26.4.2) cannot run this gate without a login, so for an
+  unverified customer it continues into the portal pay page instead of offering payment.
 - Gateway-mediated (§4.4): card (`PaymentMethodKind.CARD`) returns a hosted `checkoutUrl` on live gateways;
   under `PAYMENT_STUB_MODE` a deterministic stub-confirm path stands in (§25.2). NGN bank transfer via
   gateway-issued virtual account is modelled (`PENDING_TRANSFER`). No direct SWIFT/IBAN wire.

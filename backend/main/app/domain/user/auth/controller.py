@@ -24,6 +24,7 @@ from main.app.domain.user.auth.models import (
     ForgotPasswordDto,
     OtpSendDto,
     OtpVerifyDto,
+    PhoneOtpSendDto,
     ProfileCompletionDto,
     ResetPasswordDto,
     SetPasswordDto,
@@ -151,18 +152,20 @@ async def verify_otp(req: OtpVerifyDto, request: Request, _: None = Depends(_otp
     return SuccessResponse[dict](data={"verified": True})
 
 
-# ─── Phase-5 phone verification (logged-in user) ──────────────────────
-# Satisfies the payment-step phone gate when the number was collected but left unverified
-# at signup (PHONE_VERIFICATION_ENABLED=false). The phone is read from the user's profile.
+# ─── Pay-step phone verification (logged-in user) ─────────────────────
+# Satisfies the payment-step phone gate (PRD §10.5) when the number was collected but left
+# unverified at signup (PHONE_VERIFICATION_ENABLED=false). The customer confirms the number on
+# their profile (empty body) or enters a corrected one; it is saved only once verified.
 
 @auth_router.post("/phone/otp/send", response_model=SuccessResponse[dict])
 async def send_phone_otp(
-    request: Request, authorize: AuthJWT = Depends(), _: None = Depends(_otp_send_rate_limit),
+    req: PhoneOtpSendDto, request: Request, authorize: AuthJWT = Depends(),
+    _: None = Depends(_otp_send_rate_limit),
 ):
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
     resend_in = await auth_service.send_phone_otp_for_user(
-        user_id, ip_address=ClientUtils.get_client_ip(request),
+        user_id, req, ip_address=ClientUtils.get_client_ip(request),
     )
     return SuccessResponse[dict](data={"resend_in": resend_in})
 
@@ -175,7 +178,7 @@ async def verify_phone(
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
     await auth_service.verify_phone_for_user(
-        user_id, req.code, ip_address=ClientUtils.get_client_ip(request),
+        user_id, req, ip_address=ClientUtils.get_client_ip(request),
     )
     return SuccessResponse[dict](data={"verified": True})
 

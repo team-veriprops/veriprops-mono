@@ -66,16 +66,17 @@ def unique_local_phone() -> str:
 
 def add_verified_user(
     session, *, first_name: str, last_name: str, email: str, phone_local: str,
-    persona: str, password: str = QA_PASSWORD,
+    persona: str, password: str = QA_PASSWORD, phone_verified: bool = True,
 ) -> User:
     """A login-able user with verified email + phone — the state signup and the payment
-    step's phone gate leave a real customer or agent in."""
+    step's phone gate leave a real customer or agent in. ``phone_verified=False`` is the
+    state a customer reaches their first payment in, before clearing that gate."""
     user = new_entity(
         User,
         first_name=first_name, last_name=last_name,
         email=email, email_normalized=email, email_verified=True,
         phone_country_code="NG", phone_dial_code="+234", phone=phone_local,
-        phone_e164=f"+234{phone_local}", phone_verified=True,
+        phone_e164=f"+234{phone_local}", phone_verified=phone_verified,
         country_of_residence="NG", timezone="Africa/Lagos", preferred_currency="NGN",
         user_type=UserType.USER.value, personas=[persona], trust_status="TRUSTED",
         password_hash=Utils.get_password_hash(password),

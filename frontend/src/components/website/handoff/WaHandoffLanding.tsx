@@ -194,7 +194,7 @@ const LABEL_BY_INTENT: Record<HandoffIntent, string> = {
   [HandoffIntent.REPORT]: "your report",
 };
 
-function PaySection({
+export function PaySection({
   context,
   payment,
   paying,
@@ -224,6 +224,17 @@ function PaySection({
 
       <PaymentPledge />
 
+      {context.phoneVerificationRequired ? (
+        // §10.5: paying needs a verified phone, and verifying needs a real login. The portal
+        // pay page runs that gate and asks the same two WhatsApp opt-ins (D76).
+        <ContinueInPortal
+          href={ROUTES.PORTAL.VERIFICATION_PAY(context.caseId)}
+          title="Verify your phone to pay"
+          body="Before your first payment we confirm your phone number. Sign in to finish that and pay on the same page."
+          cta="Continue to payment"
+        />
+      ) : (
+      <>
       {/* §26.4.6, D76 — the customer who arrived from chat is asked here or nowhere. */}
       <WhatsAppOptInControls consent={consent} onChange={onConsentChange} />
 
@@ -246,6 +257,8 @@ function PaySection({
             </a>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   );

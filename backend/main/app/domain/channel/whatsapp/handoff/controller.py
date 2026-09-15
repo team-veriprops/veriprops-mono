@@ -105,6 +105,10 @@ async def redeem(
         raise ResourceNotFoundException(resource=TOKEN_REJECTED_MESSAGE)
 
     verification = await verification_service.get_by_id(claims.case)
+    phone_verification_required = (
+        claims.intent == HandoffIntent.PAY
+        and await payment_service.requires_phone_verification(claims.sub)
+    )
     set_grant_cookie(response, claims)
     return SuccessResponse[HandoffContextDto](data=HandoffContextDto(
         intent=claims.intent,
@@ -115,6 +119,7 @@ async def redeem(
         amount_due_minor=verification.price_locked_minor,
         currency=verification.currency,
         expires_at=claims.expires_at,
+        phone_verification_required=phone_verification_required,
     ))
 
 

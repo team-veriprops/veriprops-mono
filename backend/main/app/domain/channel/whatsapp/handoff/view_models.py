@@ -29,6 +29,9 @@ class HandoffContextDto(Object):
     amount_due_minor: Optional[int] = None
     currency: Optional[TransactionCurrency] = None
     expires_at: datetime
+    # `pay` only: the customer must verify their phone before paying (§10.5). That needs a
+    # real login, so the landing hands into the portal pay page instead of offering "Pay now".
+    phone_verification_required: bool = False
 
 
 class HandoffPaymentDto(Object):

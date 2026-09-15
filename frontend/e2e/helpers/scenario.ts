@@ -48,14 +48,23 @@ export interface Scenario {
   agents: Partial<Record<AgentRole, ScenarioAgent>>;
 }
 
+export interface ScenarioOptions {
+  /**
+   * `false` leaves the customer at their first payment with an unverified phone, so a spec can
+   * drive the pay-step phone gate (§10.5). Only valid for stages before `PAID`.
+   */
+  customerPhoneVerified?: boolean;
+}
+
 /** Build an isolated verification at *stage*. */
 export async function buildScenario(
   stage: ScenarioStage,
   tier: VerificationTier = VerificationTier.STANDARD,
+  options: ScenarioOptions = {},
 ): Promise<Scenario> {
   const dev = await anonymousApi();
   try {
-    return await dev.post<Scenario>("/dev/scenario", { stage, tier });
+    return await dev.post<Scenario>("/dev/scenario", { stage, tier, ...options });
   } finally {
     await dev.dispose();
   }

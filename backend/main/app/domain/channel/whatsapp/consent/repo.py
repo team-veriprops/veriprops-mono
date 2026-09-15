@@ -1,7 +1,7 @@
 """WhatsApp consent data access."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Type
 
 from kink import inject
@@ -61,7 +61,17 @@ class WhatsAppConsentRepo(
         path stringifies datetimes, which a timestamp column will not take.
         """
         prefix = "utility" if kind is WhatsAppConsentKind.UTILITY else "marketing"
-        setattr(consent, f"{prefix}_granted_at" if granted else f"{prefix}_revoked_at", at)
+        moved, opposite = (
+            (f"{prefix}_granted_at", f"{prefix}_revoked_at") if granted
+            else (f"{prefix}_revoked_at", f"{prefix}_granted_at")
+        )
+        # This decision overrides the opposite one, so it must read as later. Two decisions
+        # can share a clock reading (STOP then START in quick succession), and an equal pair
+        # would resolve as revoked — silently undoing a START.
+        previous = getattr(consent, opposite)
+        if previous is not None and at <= previous:
+            at = previous + timedelta(microseconds=1)
+        setattr(consent, moved, at)
         setattr(consent, f"{prefix}_source", source.value)
         self._session.add(consent)
         return consent

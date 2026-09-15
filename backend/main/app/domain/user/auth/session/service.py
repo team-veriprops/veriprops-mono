@@ -12,7 +12,7 @@ from libre_fastapi_jwt import AuthJWT
 from main.app.config.settings import settings
 from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
 from main.app.domain.user.auth.utils.jwt_auth_utils import JwtAuthUtils
-from main.app.domain.user.models import AccountStatus, User
+from main.app.domain.user.models import OAUTH_PLACEHOLDER_PHONE, AccountStatus, User
 from main.appodus_utils.exception.exceptions import UnauthorizedException, InvalidCredentialsException
 
 from kink import di, inject
@@ -49,7 +49,9 @@ def _user_to_session_dto(user: User, has_password: bool, linked: List[str]) -> S
         last_name=user.last_name,
         email=user.email,
         email_verified=bool(user.email_verified),
-        phone=user.phone,
+        # An OAuth account that has not completed its profile carries a synthetic number;
+        # expose it as "no number yet" so no client has to recognise the placeholder.
+        phone="" if user.phone == OAUTH_PLACEHOLDER_PHONE else user.phone,
         phone_country_code=user.phone_country_code,
         phone_dial_code=user.phone_dial_code,
         phone_verified=bool(user.phone_verified),

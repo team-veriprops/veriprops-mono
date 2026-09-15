@@ -14,11 +14,14 @@
 import { expect, test } from "@playwright/test";
 
 import { ROUTES } from "@lib/routes";
+import { VerificationTier } from "@/types/verification";
 
 import { expectNoA11yViolations } from "../helpers/a11y";
 import { goto, waitReady } from "../helpers/app";
+import { loginViaUi } from "../helpers/auth";
 import { TEST_OTP } from "../helpers/env";
 import { PERSONAS, storageStatePath } from "../helpers/personas";
+import { buildScenario, ScenarioStage } from "../helpers/scenario";
 
 test.describe("UAT-GP — golden path, leg 1: submission & payment @P0", () => {
   test.use({ storageState: storageStatePath(PERSONAS.CUSTOMER) });
@@ -57,14 +60,10 @@ test.describe("UAT-GP — golden path, leg 1: submission & payment @P0", () => {
     await expect(page.getByTestId("verify-pay")).toBeVisible();
     await expectNoA11yViolations(page);
 
-    // A customer whose phone is unverified must clear the phone gate before paying
-    // (PRD §10.5). The seeded customer is already verified, so this is conditional.
-    const phoneGate = page.getByTestId("verify-pay-phone-gate");
-    if (await phoneGate.isVisible().catch(() => false)) {
-      await page.getByTestId("verify-pay-send-otp").click();
-      await page.getByTestId("verify-pay-otp").fill(TEST_OTP);
-      await page.getByTestId("verify-pay-verify-otp").click();
-    }
+    // The seeded customer verified their phone long ago, so the pay-step phone gate (PRD
+    // §10.5) must not stand in their way. UAT-GP-02 covers the customer who hasn't.
+    await expect(page.getByTestId("verify-pay-initiate")).toBeVisible();
+    await expect(page.getByTestId("verify-pay-phone-gate")).toHaveCount(0);
 
     await page.getByTestId("verify-pay-initiate").click();
     // The stub gateway stands in for Paystack/Flutterwave — the checkout hand-off is
@@ -82,6 +81,52 @@ test.describe("UAT-GP — golden path, leg 1: submission & payment @P0", () => {
     await expect(confirmation).toContainText(/VP-/);
     await expect(confirmation).toContainText(/Estimated completion/i);
     await expect(page.getByTestId("verify-confirmed-track")).toBeVisible();
+    await expectNoA11yViolations(page);
+  });
+});
+
+test.describe("UAT-GP — golden path, leg 1: first-payment phone gate @P0", () => {
+  // A fresh scenario customer, logged in through the UI — never the seeded persona.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("UAT-GP-02 · a customer with an unverified phone corrects their number and verifies it before paying", async ({
+    page,
+  }) => {
+    const scenario = await buildScenario(ScenarioStage.SUBMITTED, VerificationTier.STANDARD, {
+      customerPhoneVerified: false,
+    });
+    await loginViaUi(page, scenario.customer.email, scenario.customer.password);
+    await goto(page, ROUTES.PORTAL.VERIFICATION_PAY(scenario.verificationId));
+    await waitReady(page);
+
+    // ── The gate: the number on file is shown, and payment is not offered yet (PRD §10.5) ──
+    const gate = page.getByTestId("verify-pay-phone-gate");
+    await expect(gate).toBeVisible();
+    await expect(page.getByTestId("verify-pay-initiate")).toHaveCount(0);
+    const phoneInput = page.getByTestId("verify-pay-phone-input");
+    await expect(phoneInput).not.toHaveValue("");
+    await expectNoA11yViolations(page);
+
+    // ── Correct the number, receive a code, verify it ───────────────────────
+    const correctedNumber = `81${Math.floor(Math.random() * 1e8).toString().padStart(8, "0")}`;
+    await phoneInput.fill(correctedNumber);
+    await page.getByTestId("verify-pay-send-otp").click();
+    await expect(page.getByTestId("verify-pay-otp")).toBeVisible();
+    // The number is locked while its code is pending; "Change number" unlocks it.
+    await expect(phoneInput).toBeDisabled();
+    await expect(page.getByTestId("verify-pay-change-phone")).toBeVisible();
+    await expectNoA11yViolations(page);
+    await page.getByTestId("verify-pay-otp").fill(TEST_OTP);
+    await page.getByTestId("verify-pay-verify-otp").click();
+
+    // ── Outcome: the gate lifts and the customer pays ───────────────────────
+    await expect(gate).toBeHidden();
+    await page.getByTestId("verify-pay-initiate").click();
+    await expect(page.getByTestId("verify-pay-checkout")).toBeVisible();
+    await page.getByTestId("verify-pay-confirm").click();
+    await page.waitForURL(/\/portal\/verifications\/[^/]+\/confirmed/, { timeout: 30_000 });
+    await waitReady(page);
+    await expect(page.getByTestId("verify-confirmed")).toContainText(scenario.vid);
     await expectNoA11yViolations(page);
   });
 });

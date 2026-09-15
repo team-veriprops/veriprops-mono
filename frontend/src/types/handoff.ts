@@ -26,6 +26,11 @@ export interface HandoffContext {
   amountDueMinor?: number | null;
   currency?: TransactionCurrency | null;
   expiresAt: string;
+  /**
+   * `pay` only: the customer must verify their phone before paying (§10.5). That needs a
+   * login, so the landing continues into the portal pay page rather than offering "Pay now".
+   */
+  phoneVerificationRequired?: boolean;
 }
 
 /** The checkout a redeemed `pay` link opens. */
