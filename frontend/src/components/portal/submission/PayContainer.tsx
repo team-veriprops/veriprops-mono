@@ -119,7 +119,8 @@ export default function PayContainer({ verificationId }: { verificationId: strin
             </p>
             {/* Applied-discount summary (§17.1). */}
             {((verification.firstTimeDiscountMinor ?? 0) + (verification.referralCreditAppliedMinor ?? 0)) > 0 && (
-              <div className="mt-2 space-y-1 text-sm text-emerald-600 dark:text-emerald-400" data-testid="verify-pay-discount">
+              // emerald-700 keeps small discount text above the 4.5:1 contrast minimum on white.
+              <div className="mt-2 space-y-1 text-sm text-emerald-700 dark:text-emerald-400" data-testid="verify-pay-discount">
                 {verification.firstTimeDiscountMinor > 0 && (
                   <div className="flex justify-between">
                     <span>First-time discount</span>

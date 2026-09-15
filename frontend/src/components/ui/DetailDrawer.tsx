@@ -2,7 +2,7 @@ import { Button } from "@components/3rdparty/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { CopyText } from "./CopyText";
-import { ReactNode } from "react";
+import { ReactNode, useId } from "react";
 import MobileNavigationBottomPadding from "./MobileNavigationBottomPadding";
 import { useBodyOverflowHidden } from "@hooks/useBodyOverflowHidden";
 import { cn } from "@lib/utils";
@@ -24,6 +24,10 @@ interface DetailDrawerProps {
   drawerWidth?: DetailDrawerWidth;
   side?: DetailDrawerSide;
 }
+/**
+ * A modal side drawer for a record's detail. It is announced as a dialog named by its title, and
+ * carries `detail-drawer` / `detail-drawer-close` anchors so every drawer is driven the same way.
+ */
 export default function DetailDrawer({
   title,
   reference,
@@ -34,6 +38,7 @@ export default function DetailDrawer({
   drawerWidth = DetailDrawerWidth.SMALL,
   side = "right",
 }: DetailDrawerProps) {
+  const titleId = useId();
   // Lock body scroll when modal is open
   useBodyOverflowHidden(open);
 
@@ -55,6 +60,10 @@ export default function DetailDrawer({
 
           {/* Drawer */}
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            data-testid="detail-drawer"
             initial={{ x: offscreenX }}
             animate={{ x: 0 }}
             exit={{ x: offscreenX }}
@@ -70,13 +79,15 @@ export default function DetailDrawer({
             <div className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border z-10 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold capitalize">{title}</h2>
+                  <h2 id={titleId} className="text-2xl font-bold capitalize">{title}</h2>
                   <CopyText text={reference} />
                   {description && <p className=" text-muted-foreground">{description}</p>}
                 </div>
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="Close"
+                  data-testid="detail-drawer-close"
                   onClick={() => onOpenChange(false)}
                 >
                   <X className="h-5 w-5" />

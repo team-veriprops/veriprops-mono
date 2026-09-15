@@ -49,7 +49,9 @@ const PhoneInputWithCountry = ({
       <div
         className={`flex flex-1 items-center rounded-md border bg-background ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${
           isVerified ? "border-[hsl(var(--success))]" : "border-input"
-        } ${locked ? "opacity-50 cursor-not-allowed" : ""}`}
+        } ${locked ? "cursor-not-allowed" : ""}`}
+        // Locked state is shown on the input itself, not by dimming this wrapper: dimming would
+        // drag the dial code below the 4.5:1 contrast minimum.
       >
         <span className="pl-3 text-sm text-muted-foreground select-none shrink-0">
           {selected?.dialCode}
@@ -69,7 +71,7 @@ const PhoneInputWithCountry = ({
               phone: e.target.value.replace(/\D/g, ""),
             })
           }
-          className="flex h-10 rounded-2xl w-full bg-transparent px-2 py-2 text-base outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed md:text-sm"
+          className="flex h-10 rounded-2xl w-full bg-transparent px-2 py-2 text-base outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:text-muted-foreground md:text-sm"
         />
       </div>
     </div>
