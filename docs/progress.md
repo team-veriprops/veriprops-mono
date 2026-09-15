@@ -59,7 +59,11 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
     - The shared toast close button was unnamed. It now has `aria-label="Close"`.
     - `PhoneInputWithCountry` dimmed its whole locked field with `opacity-50`, putting the "+234" dial code at 2.48:1 contrast. The input now shows the locked state itself; tested.
 - **chromium-desktop rerun after those fixes (2 workers, both lanes): 25/25 on first attempt, no retries.** Parallel lane 22/22; serial lane 3/3.
-- **Not yet run:** the full 6-engine matrix for Slice 1. It's worth running on an otherwise idle machine; a 4-worker run starved this 8 GB box.
+- **Full 6-engine matrix (2 workers, both lanes, after commit `c38a053`):** parallel lane 118/120 on first attempt, serial lane 18/18, **0 failures**, 2 retries.
+  - Both retries were UAT-GP-02 on firefox-desktop and firefox-mobile: `page.goto(pay page)` failed with `NS_BINDING_ABORTED`.
+  - Cause (spec helper race): `loginViaUi` returned as soon as the session was authenticated, while the login form was still redirecting into the portal. The spec's next navigation raced that redirect; Firefox cancels the losing navigation, Chromium didn't. The failure snapshot shows the portal dashboard.
+  - Fix: `loginViaUi` also waits until the page has left `/auth` and the destination reports ready. This hardens every caller: `global-setup`, UAT-AUTH-05, `pageFor`.
+- **Firefox rerun after the `loginViaUi` fix (firefox-desktop + firefox-mobile, both lanes):** 44/44 on first attempt (parallel 38, serial 6), no retries. Slice 1 is green across the 6-engine matrix.
 
 ---
 
