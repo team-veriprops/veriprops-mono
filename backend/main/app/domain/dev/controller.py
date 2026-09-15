@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from kink import di
 
 from main.app.config.settings import settings
+from main.app.domain.dev.scenario import BuildScenarioDto, DevScenarioService, ScenarioDto
 from main.app.domain.dev.service import DevSeedService
 from main.appodus_utils.config.settings import Environment
 from main.appodus_utils import Object
@@ -22,6 +23,7 @@ from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import
 
 dev_router = APIRouter(prefix="/dev", tags=["Dev"])
 service: DevSeedService = di[DevSeedService]
+scenario_service: DevScenarioService = di[DevScenarioService]
 
 
 def _require_non_prod() -> None:
@@ -40,6 +42,15 @@ async def reset():
 async def seed():
     _require_non_prod()
     return SuccessResponse[dict](data=await service.seed())
+
+
+@dev_router.post("/scenario", response_model=SuccessResponse[ScenarioDto])
+async def build_scenario(req: BuildScenarioDto):
+    """Build an isolated verification standing at a lifecycle stage — its own customer and
+    its own approved agents, every transition driven through the real services — so a
+    browser spec can start mid-journey without depending on another spec's actions."""
+    _require_non_prod()
+    return SuccessResponse[ScenarioDto](data=await scenario_service.build(req))
 
 
 @dev_router.get("/messages/latest", response_model=SuccessResponse[dict])

@@ -24,18 +24,15 @@ from main.app.core.state.status import (
 )
 from main.app.core.vid import generate_vid
 from main.app.domain.audit.models import AuditActionType, AuditLog
+from main.app.domain.dev.fixtures import (
+    add_approved_agent,
+    add_verified_user,
+    new_entity,
+    record_required_consents,
+    seeded_agent_email,
+)
 from main.app.domain.payment.models import Payment, PaymentMethodKind, PaymentPurpose, PaymentStatus
 from main.app.domain.property.models import Property
-from main.app.domain.user.agent.coverage.models import AgentCoverage
-from main.app.domain.user.agent.credential.models import (
-    ROLE_REQUIRED_CREDENTIAL,
-    AgentCredential,
-    CredentialStatus,
-)
-from main.app.domain.user.agent.profile.models import AgentProfile
-from main.app.domain.user.auth.consent.models import REQUIRED_SIGNUP_CONSENTS, UserConsent
-from main.app.domain.user.auth.session.models import UserType
-from main.app.domain.user.models import User
 from main.app.domain.verification.models import Verification
 from main.app.domain.verification.task.models import ReviewDecision, VerificationTask
 from main.appodus_utils import Utils
@@ -124,59 +121,23 @@ class DevSeedService:
         session = get_db_session_from_context()
         now = Utils.datetime_now()
 
-        customer = self._new(
-            User,
-            first_name="Chidi", last_name="Okafor",
-            email=CUSTOMER_EMAIL, email_normalized=CUSTOMER_EMAIL, email_verified=True,
-            phone_country_code="NG", phone_dial_code="+234", phone="8030000001",
-            phone_e164="+2348030000001", phone_verified=True,
-            country_of_residence="NG", timezone="Africa/Lagos", preferred_currency="NGN",
-            user_type=UserType.USER.value, personas=["CUSTOMER"], trust_status="TRUSTED",
-            password_hash=Utils.get_password_hash(CUSTOMER_PASSWORD),
+        customer = add_verified_user(
+            session, first_name="Chidi", last_name="Okafor", email=CUSTOMER_EMAIL,
+            phone_local="8030000001", persona="CUSTOMER", password=CUSTOMER_PASSWORD,
         )
-        session.add(customer)
 
         tier = VerificationTier.STANDARD
         roles = roles_for_tier(tier)
         # Agents exist for every PREMIUM role (adds LAWYER beyond the STANDARD task set) so
         # the tier-upgrade leg can assign a credentialed lawyer without extra setup.
         agent_roles = roles_for_tier(VerificationTier.PREMIUM)
-        agents = {}
-        for i, role in enumerate(agent_roles):
-            agent = self._new(
-                User,
-                first_name=role.value.title(), last_name="Agent",
-                email=f"qa-agent-{role.value.lower()}@veriprops.io",
-                email_normalized=f"qa-agent-{role.value.lower()}@veriprops.io", email_verified=True,
-                phone_country_code="NG", phone_dial_code="+234", phone=f"803000010{i}",
-                phone_e164=f"+234803000010{i}", phone_verified=True,
-                country_of_residence="NG", timezone="Africa/Lagos", preferred_currency="NGN",
-                user_type=UserType.USER.value, personas=["AGENT"], trust_status="TRUSTED",
-                password_hash=Utils.get_password_hash(AGENT_PASSWORD),
+        agents = {
+            role: add_approved_agent(
+                session, role, email=seeded_agent_email(role),
+                phone_local=f"803000010{i}", now=now,
             )
-            session.add(agent)
-            agents[role] = agent
-            # An APPROVED agent profile + coverage (§16) so reputation/ranking has real data.
-            session.add(self._new(
-                AgentProfile,
-                user_id=str(agent.id), roles=[role.value], approved_roles=[role.value],
-                status="APPROVED", availability="GREEN", submitted_at=now, reviewed_at=now,
-            ))
-            session.add(self._new(
-                AgentCoverage, user_id=str(agent.id), state="lagos", lga="eti-osa",
-            ))
-            # Credentialed roles (§3.3a) need a VERIFIED, unexpired licence on file —
-            # without it the role is inactive and the agent never ranks in suggestions.
-            required_credential = ROLE_REQUIRED_CREDENTIAL.get(role)
-            if required_credential is not None:
-                session.add(self._new(
-                    AgentCredential,
-                    user_id=str(agent.id), role=role.value,
-                    credential_type=required_credential.value,
-                    licence_number=f"QA-{role.value}-0001",
-                    expiry_date=Utils.datetime_now_plus(days=365).date(),
-                    status=CredentialStatus.VERIFIED.value,
-                ))
+            for i, role in enumerate(agent_roles)
+        }
 
         prop = self._new(
             Property,
@@ -291,17 +252,10 @@ class DevSeedService:
 
         # A disposable customer for the data-erasure e2e, plus audit rows it is the actor of
         # (so pseudonymisation of the audit actor identity is observable, §4.11).
-        erasable = self._new(
-            User,
-            first_name="Ngozi", last_name="Eze",
-            email=ERASABLE_EMAIL, email_normalized=ERASABLE_EMAIL, email_verified=True,
-            phone_country_code="NG", phone_dial_code="+234", phone="8030009999",
-            phone_e164="+2348030009999", phone_verified=True,
-            country_of_residence="NG", timezone="Africa/Lagos", preferred_currency="NGN",
-            user_type=UserType.USER.value, personas=["CUSTOMER"], trust_status="TRUSTED",
-            password_hash=Utils.get_password_hash(ERASABLE_PASSWORD),
+        erasable = add_verified_user(
+            session, first_name="Ngozi", last_name="Eze", email=ERASABLE_EMAIL,
+            phone_local="8030009999", persona="CUSTOMER", password=ERASABLE_PASSWORD,
         )
-        session.add(erasable)
         for action in (AuditActionType.CONSENT_RECORDED, AuditActionType.PAYMENT_INITIATED):
             session.add(self._new(
                 AuditLog, actor_id=str(erasable.id), action=action.value,
@@ -310,10 +264,11 @@ class DevSeedService:
             ))
 
         # Consents for every seeded account — see _record_required_consents.
-        await self._record_required_consents(
+        await record_required_consents(
             session,
             [str(customer.id), str(erasable.id)] + [str(a.id) for a in agents.values()],
             now,
+            include_super_admin=True,
         )
 
         await session.flush()
@@ -327,47 +282,6 @@ class DevSeedService:
             "tasks": task_ids,
             "ops": {"id": ops_hex, "vid": ops.vid, "txRef": ops_tx_ref, "tasks": ops_task_ids},
         }
-
-    async def _record_required_consents(self, session, user_ids, now) -> None:
-        """Accept the current version of every required consent for each seeded user.
-
-        Seeded users are inserted directly, bypassing ``AuthService.signup`` — the only
-        path that normally records consents. The super-admin is likewise inserted by
-        migration ``0001``. Without these rows every persona looks like an account with
-        outdated terms and is held behind the **non-dismissible** re-acceptance modal
-        (§3.2) on every authenticated page, which blocks UI automation and misrepresents a
-        normal signed-up user.
-
-        The current version is read from ``consent_documents`` rather than hardcoded:
-        accepting a superseded version still counts as missing, so a version bump in the
-        content registry must not silently re-trap every seeded account.
-        """
-        required = {t.value for t in REQUIRED_SIGNUP_CONSENTS}
-        rows = (await session.execute(text(
-            "SELECT type, consent_version FROM consent_documents "
-            "ORDER BY effective_at DESC"
-        ))).all()
-
-        current: Dict[str, str] = {}
-        for row in rows:
-            if row.type in required and row.type not in current:
-                current[row.type] = row.consent_version
-
-        # The super-admin survives reset(), so it is not in the seeded-user list but needs
-        # the same treatment — an admin trapped by the modal blocks every admin scenario.
-        admin_row = (await session.execute(
-            text("SELECT id FROM users WHERE email = :email LIMIT 1"),
-            {"email": settings.SUPER_ADMIN_EMAIL},
-        )).first()
-        all_ids = list(user_ids) + ([str(admin_row.id)] if admin_row else [])
-
-        for user_id in all_ids:
-            for document_type, consent_version in current.items():
-                session.add(self._new(
-                    UserConsent,
-                    user_id=user_id, document_type=document_type,
-                    consent_version=consent_version, accepted_at=now,
-                ))
 
     async def latest_message(self, recipient: str) -> Dict[str, Any]:
         """Snapshot of the newest outbound-message row addressed to *recipient* (fragment
@@ -531,13 +445,5 @@ class DevSeedService:
 
     @staticmethod
     def _new(model, **fields):
-        """Construct a BaseEntity row with the audit bookkeeping the repos set on create.
-
-        ``id`` is a real ``UUID`` (not a str) so SQLAlchemy's insertmanyvalues sentinel
-        matching lines up with what asyncpg returns."""
-        obj = model(**fields)
-        obj.id = Utils.generate_uuid()
-        obj.version = 1
-        obj.deleted = False
-        obj.date_created = Utils.datetime_now()
-        return obj
+        """Construct a BaseEntity row with the audit bookkeeping the repos set on create."""
+        return new_entity(model, **fields)
