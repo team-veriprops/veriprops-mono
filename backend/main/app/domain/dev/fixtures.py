@@ -23,8 +23,8 @@ from main.app.domain.user.agent.credential.models import (
 )
 from main.app.domain.user.agent.profile.models import AgentProfile
 from main.app.domain.user.auth.consent.models import REQUIRED_SIGNUP_CONSENTS, UserConsent
-from main.app.domain.user.auth.session.models import UserType
-from main.app.domain.user.models import User
+from main.app.domain.user.auth.session.models import UserPersona, UserType
+from main.app.domain.user.models import AdminSubRole, User
 from main.appodus_utils import Utils
 
 # The password every QA account shares (non-prod only).
@@ -66,7 +66,7 @@ def unique_local_phone() -> str:
 
 def add_verified_user(
     session, *, first_name: str, last_name: str, email: str, phone_local: str,
-    persona: str, password: str = QA_PASSWORD, phone_verified: bool = True,
+    persona: str | None, password: str = QA_PASSWORD, phone_verified: bool = True,
 ) -> User:
     """A login-able user with verified email + phone — the state signup and the payment
     step's phone gate leave a real customer or agent in. ``phone_verified=False`` is the
@@ -78,7 +78,7 @@ def add_verified_user(
         phone_country_code="NG", phone_dial_code="+234", phone=phone_local,
         phone_e164=f"+234{phone_local}", phone_verified=phone_verified,
         country_of_residence="NG", timezone="Africa/Lagos", preferred_currency="NGN",
-        user_type=UserType.USER.value, personas=[persona], trust_status="TRUSTED",
+        user_type=UserType.USER.value, personas=[persona] if persona else [], trust_status="TRUSTED",
         password_hash=Utils.get_password_hash(password),
     )
     session.add(user)
@@ -94,7 +94,7 @@ def add_approved_agent(
     which the role is inactive and the agent never ranks in suggestions."""
     agent = add_verified_user(
         session, first_name=role.value.title(), last_name="Agent", email=email,
-        phone_local=phone_local, persona="AGENT", password=password,
+        phone_local=phone_local, persona=UserPersona.AGENT.value, password=password,
     )
     session.add(new_entity(
         AgentProfile,
@@ -113,6 +113,25 @@ def add_approved_agent(
             status=CredentialStatus.VERIFIED.value,
         ))
     return agent
+
+
+def seeded_admin_email(sub_role: AdminSubRole) -> str:
+    """The deterministic email of the seeded admin holding *sub_role*."""
+    return f"qa-admin-{sub_role.value.lower()}@{QA_EMAIL_DOMAIN}"
+
+
+def add_admin(
+    session, sub_role: AdminSubRole, *, email: str, phone_local: str, password: str = QA_PASSWORD,
+) -> User:
+    """A login-able admin restricted to *sub_role*'s permissions — the state an accepted admin
+    invitation leaves a user in (§4), so RBAC is exercised against a real non-super admin."""
+    admin = add_verified_user(
+        session, first_name=sub_role.value.title(), last_name="Admin", email=email,
+        phone_local=phone_local, persona=None, password=password,
+    )
+    admin.user_type = UserType.ADMIN.value
+    admin.admin_sub_role = sub_role.value
+    return admin
 
 
 async def current_consent_versions(session) -> Dict[str, str]:

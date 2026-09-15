@@ -60,6 +60,12 @@ class TestSeededConsents:
     @staticmethod
     async def _seed_adds():
         """Run seed() against a mocked session; returns everything it added."""
+        added, _payload = await TestSeededConsents._seed_run()
+        return added
+
+    @staticmethod
+    async def _seed_run():
+        """Run seed() against a mocked session; returns (everything it added, its payload)."""
         from contextlib import asynccontextmanager
         from types import SimpleNamespace
         from unittest.mock import AsyncMock, MagicMock
@@ -101,10 +107,10 @@ class TestSeededConsents:
         svc = object.__new__(DevSeedService)
         token = db_session_ctx.set(session)
         try:
-            await svc.seed()
+            payload = await svc.seed()
         finally:
             db_session_ctx.reset(token)
-        return added
+        return added, payload
 
     async def test_every_seeded_user_accepts_all_required_consents(self):
         from main.app.domain.user.auth.consent.models import (
@@ -158,6 +164,48 @@ class TestSeededConsents:
         added = await self._seed_adds()
         consents = [c for c in added if isinstance(c, UserConsent)]
         assert consents and all(c.accepted_at is not None for c in consents)
+
+
+class TestSeedPersonasAndPaging:
+    """The browser suite drives RBAC and paged lists from the seed, so it must provide an admin
+    per restricted sub-role, credentials for every persona it logs in, and enough cases for
+    lists to actually page."""
+
+    async def test_seed_creates_one_admin_per_restricted_sub_role_and_returns_its_credentials(self):
+        from main.app.domain.user.auth.session.models import UserType
+        from main.app.domain.user.models import AdminSubRole, User
+
+        added, payload = await TestSeededConsents._seed_run()
+        admins = [u for u in added if isinstance(u, User) and u.user_type == UserType.ADMIN.value]
+
+        expected = {AdminSubRole.OPERATIONS.value, AdminSubRole.FINANCE.value}
+        assert sorted(u.admin_sub_role for u in admins) == sorted(expected)
+        assert set(payload["admins"]) == expected
+        for sub_role, account in payload["admins"].items():
+            admin = next(u for u in admins if u.admin_sub_role == sub_role)
+            assert account["id"] == str(admin.id) and account["email"] == admin.email
+            assert account["password"]
+
+    async def test_seed_returns_login_credentials_for_every_agent(self):
+        from main.app.domain.user.models import User
+
+        added, payload = await TestSeededConsents._seed_run()
+        users_by_id = {str(u.id): u for u in added if isinstance(u, User)}
+
+        assert payload["agents"], "seed() returned no agents"
+        for account in payload["agents"].values():
+            assert users_by_id[account["id"]].email == account["email"]
+            assert account["password"]
+
+    async def test_seed_adds_enough_cases_across_statuses_for_lists_to_page(self):
+        from main.app.domain.verification.models import Verification
+
+        added, _payload = await TestSeededConsents._seed_run()
+        verifications = [v for v in added if isinstance(v, Verification)]
+
+        # The two scenario cases plus a paging set that overflows a default page of 10.
+        assert len(verifications) >= 14
+        assert len({v.status for v in verifications}) >= 4
 
 
 class TestMessageDeterminismHelpers:

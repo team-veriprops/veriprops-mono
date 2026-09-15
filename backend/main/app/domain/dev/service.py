@@ -25,12 +25,17 @@ from main.app.core.state.status import (
 from main.app.core.vid import generate_vid
 from main.app.domain.audit.models import AuditActionType, AuditLog
 from main.app.domain.dev.fixtures import (
+    QA_PASSWORD,
+    add_admin,
     add_approved_agent,
     add_verified_user,
     new_entity,
     record_required_consents,
+    seeded_admin_email,
     seeded_agent_email,
 )
+from main.app.domain.user.auth.session.models import UserPersona
+from main.app.domain.user.models import AdminSubRole
 from main.app.domain.payment.models import Payment, PaymentMethodKind, PaymentPurpose, PaymentStatus
 from main.app.domain.property.models import Property
 from main.app.domain.verification.models import Verification
@@ -123,7 +128,7 @@ class DevSeedService:
 
         customer = add_verified_user(
             session, first_name="Chidi", last_name="Okafor", email=CUSTOMER_EMAIL,
-            phone_local="8030000001", persona="CUSTOMER", password=CUSTOMER_PASSWORD,
+            phone_local="8030000001", persona=UserPersona.CUSTOMER.value, password=CUSTOMER_PASSWORD,
         )
 
         tier = VerificationTier.STANDARD
@@ -254,7 +259,7 @@ class DevSeedService:
         # (so pseudonymisation of the audit actor identity is observable, §4.11).
         erasable = add_verified_user(
             session, first_name="Ngozi", last_name="Eze", email=ERASABLE_EMAIL,
-            phone_local="8030009999", persona="CUSTOMER", password=ERASABLE_PASSWORD,
+            phone_local="8030009999", persona=UserPersona.CUSTOMER.value, password=ERASABLE_PASSWORD,
         )
         for action in (AuditActionType.CONSENT_RECORDED, AuditActionType.PAYMENT_INITIATED):
             session.add(self._new(
@@ -263,10 +268,22 @@ class DevSeedService:
                 ip_address="198.51.100.7", occurred_at=now,
             ))
 
+        # One admin per restricted sub-role, so RBAC specs sign in as a real non-super admin.
+        admins = {
+            sub_role: add_admin(
+                session, sub_role, email=seeded_admin_email(sub_role), phone_local=f"803000020{i}",
+            )
+            for i, sub_role in enumerate((AdminSubRole.OPERATIONS, AdminSubRole.FINANCE))
+        }
+
+        self._add_paging_verifications(session, str(customer.id), tier, now)
+
         # Consents for every seeded account — see _record_required_consents.
         await record_required_consents(
             session,
-            [str(customer.id), str(erasable.id)] + [str(a.id) for a in agents.values()],
+            [str(customer.id), str(erasable.id)]
+            + [str(a.id) for a in agents.values()]
+            + [str(a.id) for a in admins.values()],
             now,
             include_super_admin=True,
         )
@@ -276,7 +293,14 @@ class DevSeedService:
             "customer": {"id": str(customer.id), "email": CUSTOMER_EMAIL, "password": CUSTOMER_PASSWORD},
             "erasable": {"id": str(erasable.id), "email": ERASABLE_EMAIL, "password": ERASABLE_PASSWORD},
             "admin": {"email": settings.SUPER_ADMIN_EMAIL, "password": settings.SUPER_ADMIN_PASSWORD},
-            "agents": {r.value: str(agents[r].id) for r in agent_roles},
+            "admins": {
+                sub_role.value: {"id": str(admin.id), "email": admin.email, "password": QA_PASSWORD}
+                for sub_role, admin in admins.items()
+            },
+            "agents": {
+                r.value: {"id": str(agents[r].id), "email": agents[r].email, "password": AGENT_PASSWORD}
+                for r in agent_roles
+            },
             "verification": {"id": Utils.uuid_to_hex(verification.id), "vid": verification.vid,
                              "status": verification.status},
             "tasks": task_ids,
@@ -442,6 +466,36 @@ class DevSeedService:
             {"hours": hours, "phone": normalized},
         )).all()
         return {"rewound": len(rows), "phone": normalized, "hours": hours}
+
+    # Enough extra cases to overflow a default page of 10, spread across statuses so list
+    # filters have something to separate.
+    _PAGING_STATUSES = (
+        VerificationStatus.SUBMITTED, VerificationStatus.PAID,
+        VerificationStatus.IN_PROGRESS, VerificationStatus.COMPLETED,
+    )
+    _PAGING_VERIFICATION_COUNT = 12
+
+    @classmethod
+    def _add_paging_verifications(cls, session, customer_id: str, tier: VerificationTier, now) -> None:
+        """Rows for list paging and filtering only — a spec that acts on a case builds it with
+        `/dev/scenario` instead, where the real services drive every transition."""
+        for i in range(cls._PAGING_VERIFICATION_COUNT):
+            status = cls._PAGING_STATUSES[i % len(cls._PAGING_STATUSES)]
+            prop = cls._new(
+                Property,
+                customer_id=customer_id, property_type="LAND",
+                address=f"Plot {40 + i} Paging Crescent, Ajah", landmark="Opposite the market",
+                state="Lagos", lga="Eti-Osa",
+            )
+            session.add(prop)
+            session.add(cls._new(
+                Verification,
+                vid=generate_vid(), customer_id=customer_id, property_id=Utils.uuid_to_hex(prop.id),
+                tier=tier.value, status=status.value,
+                price_locked_minor=15_000_000, currency=TransactionCurrency.NGN.value,
+                paid_at=None if status == VerificationStatus.SUBMITTED else now,
+                sla_due_date=Utils.datetime_now_plus(days=7).date(),
+            ))
 
     @staticmethod
     def _new(model, **fields):
