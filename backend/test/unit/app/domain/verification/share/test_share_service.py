@@ -224,6 +224,17 @@ class TestCreateShare:
         )
         svc._messages.send_report_share.assert_awaited_once()
 
+    async def test_named_share_survives_a_failed_invite(self):
+        """The invite is best-effort: a failed send never breaks share creation."""
+        svc = _service()
+        svc._share_repo.create_return_model = AsyncMock(return_value=_share(ShareType.NAMED_FULL))
+        svc._messages.send_report_share = AsyncMock(side_effect=RuntimeError("smtp down"))
+        out = await svc.create_share(
+            "v-1", "cust-1",
+            CreateShareRequestDto(share_type=ShareType.NAMED_FULL, recipient_email="a@b.com"),
+        )
+        assert out.token == "tok-123"
+
 
 class TestRevoke:
     async def test_revoke_sets_revoked_at(self):

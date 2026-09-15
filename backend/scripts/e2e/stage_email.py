@@ -47,6 +47,11 @@ def run(ctx: Ctx) -> None:
           len(_search(mp, f'to:"{email}" subject:"report"')) > 0)
     check("broadcast announcement email delivered (§18.1, D37)",
           len(_search(mp, 'subject:"Maintenance window"')) > 0)
+    # The share invite is best-effort, so a broken send leaves share creation green — only
+    # the recipient's inbox shows whether it went. Scoped to this run's VID, because Mailpit
+    # keeps mail across runs and an earlier run's invite would otherwise satisfy the check.
+    check("named report-share invite delivered to the recipient (§13.2)",
+          len(_search(mp, f'to:"friend@example.com" {ctx.vid}')) > 0)
 
     # 2. Password reset — the token only ever surfaces in the email (§2).
     ctx.root.post("/users/auth/password/forgot", json={"email": email}).raise_for_status()
