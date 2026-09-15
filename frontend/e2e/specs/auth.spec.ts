@@ -70,6 +70,11 @@ test.describe("UAT-AUTH — signed-out access @P0", () => {
     const snapshot = await page.evaluate(() => window.__auth_snapshot__);
     expect(snapshot?.personas).toContain("CUSTOMER");
   });
+});
+
+// Clears the shared Mailpit inbox and changes a seeded account's password, so it runs alone.
+test.describe("UAT-AUTH — password recovery @P0 @serial", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
 
   test("UAT-AUTH-05 · password reset issues a single-use link that changes the password", async ({
     page,

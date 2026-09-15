@@ -22,8 +22,10 @@ import { loginViaUi } from "../helpers/auth";
 import { TEST_OTP } from "../helpers/env";
 import { PERSONAS, storageStatePath } from "../helpers/personas";
 import { buildScenario, ScenarioStage } from "../helpers/scenario";
+import { stubPay } from "../helpers/ui";
 
-test.describe("UAT-GP — golden path, leg 1: submission & payment @P0", () => {
+// The seeded customer resumes any unpaid draft, so parallel runs of this journey would share one.
+test.describe("UAT-GP — golden path, leg 1: submission & payment @P0 @serial", () => {
   test.use({ storageState: storageStatePath(PERSONAS.CUSTOMER) });
 
   test("UAT-GP-01 · a customer submits and pays for a STANDARD verification", async ({ page }) => {
@@ -65,16 +67,9 @@ test.describe("UAT-GP — golden path, leg 1: submission & payment @P0", () => {
     await expect(page.getByTestId("verify-pay-initiate")).toBeVisible();
     await expect(page.getByTestId("verify-pay-phone-gate")).toHaveCount(0);
 
-    await page.getByTestId("verify-pay-initiate").click();
-    // The stub gateway stands in for Paystack/Flutterwave — the checkout hand-off is
-    // asserted, the real gateway is out of scope (PRD §G).
-    await expect(page.getByTestId("verify-pay-checkout")).toBeVisible();
-    await page.getByTestId("verify-pay-confirm").click();
+    await stubPay(page);
 
     // ── Outcome: the business-observable result ─────────────────────────────
-    await page.waitForURL(/\/portal\/verifications\/[^/]+\/confirmed/, { timeout: 30_000 });
-    await waitReady(page);
-
     const confirmation = page.getByTestId("verify-confirmed");
     await expect(confirmation).toBeVisible();
     // A VID the customer can quote to support, and a completion date they can hold us to.
@@ -121,11 +116,7 @@ test.describe("UAT-GP — golden path, leg 1: first-payment phone gate @P0", () 
 
     // ── Outcome: the gate lifts and the customer pays ───────────────────────
     await expect(gate).toBeHidden();
-    await page.getByTestId("verify-pay-initiate").click();
-    await expect(page.getByTestId("verify-pay-checkout")).toBeVisible();
-    await page.getByTestId("verify-pay-confirm").click();
-    await page.waitForURL(/\/portal\/verifications\/[^/]+\/confirmed/, { timeout: 30_000 });
-    await waitReady(page);
+    await stubPay(page);
     await expect(page.getByTestId("verify-confirmed")).toContainText(scenario.vid);
     await expectNoA11yViolations(page);
   });

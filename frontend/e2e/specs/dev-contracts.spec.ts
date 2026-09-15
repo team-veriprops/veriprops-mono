@@ -30,6 +30,8 @@ test.describe("UAT-DEV — automation determinism contracts @P0", () => {
     expect(Object.keys(seed.agents)).toEqual(
       expect.arrayContaining(["REGISTRY", "FIELD", "SURVEYOR", "LAWYER"]),
     );
+    // A restricted admin per sub-role, so RBAC scenarios sign in as a real non-super admin.
+    expect(Object.keys(seed.admins).sort()).toEqual(["FINANCE", "OPERATIONS"]);
 
     // The primary verification is the review/release entry point; the ops verification is
     // the destructive-scenario fixture. Both must survive a reset+seed.
@@ -68,6 +70,10 @@ test.describe("UAT-DEV — automation determinism contracts @P0", () => {
     }
   });
 
+});
+
+// Clears the shared Mailpit inbox, so it must not run beside another spec reading email.
+test.describe("UAT-DEV — email capture @P0 @serial", () => {
   test("UAT-DEV-04 · Mailpit captures outbound email", async () => {
     await clearMailbox();
 

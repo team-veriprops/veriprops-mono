@@ -6,17 +6,27 @@
  * specs needing a precondition the seed lacks bootstrap it themselves via the API helper,
  * so any spec can still run alone under `--grep`.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 
 import { chromium } from "@playwright/test";
 
 import { anonymousApi } from "./helpers/api";
 import { loginViaUi } from "./helpers/auth";
-import { AUTH_STATE_DIR, BASE_URL, QA_PASSWORD, SEED_STATE_FILE } from "./helpers/env";
-import { AGENT_PERSONA_BY_ROLE, Persona, PERSONAS, storageStatePath } from "./helpers/personas";
-import { SeedPayload, agentEmail } from "./helpers/seed";
+import { AUTH_STATE_DIR, BASE_URL, SEED_STATE_FILE } from "./helpers/env";
+import {
+  ADMIN_PERSONA_BY_SUB_ROLE,
+  AGENT_PERSONA_BY_ROLE,
+  Persona,
+  PERSONAS,
+  storageStatePath,
+} from "./helpers/personas";
+import { SeedPayload, SeededAccount } from "./helpers/seed";
 
 export default async function globalSetup(): Promise<void> {
+  // The serial lane (run-lanes.mjs) continues the parallel lane's run: re-seeding would wipe the
+  // baseline mid-run and re-capture every session for nothing.
+  if (process.env.UAT_REUSE_SEED === "1" && existsSync(SEED_STATE_FILE)) return;
+
   mkdirSync(AUTH_STATE_DIR, { recursive: true });
 
   const seed = await resetAndSeed();
@@ -36,6 +46,16 @@ async function resetAndSeed(): Promise<SeedPayload> {
   }
 }
 
+/** Pair each persona in *byKey* with the seeded account the payload holds for that key. */
+function personaAccounts(
+  byKey: Record<string, Persona>,
+  accounts: Record<string, SeededAccount>,
+): [Persona, string, string][] {
+  return Object.entries(byKey)
+    .filter(([key]) => key in accounts)
+    .map(([key, persona]) => [persona, accounts[key].email, accounts[key].password]);
+}
+
 /**
  * Log every persona in through the real login form and persist its `storageState`.
  *
@@ -48,14 +68,8 @@ async function captureSessions(seed: SeedPayload): Promise<void> {
     [PERSONAS.CUSTOMER, seed.customer.email, seed.customer.password],
     [PERSONAS.ERASABLE, seed.erasable.email, seed.erasable.password],
     [PERSONAS.ADMIN, seed.admin.email, seed.admin.password],
-    ...Object.entries(AGENT_PERSONA_BY_ROLE)
-      .filter(([role]) => role in seed.agents)
-      // Seeded agents all share the QA password; the seed payload returns only their ids.
-      .map(([role, persona]): [Persona, string, string] => [
-        persona,
-        agentEmail(role),
-        QA_PASSWORD,
-      ]),
+    ...personaAccounts(ADMIN_PERSONA_BY_SUB_ROLE, seed.admins),
+    ...personaAccounts(AGENT_PERSONA_BY_ROLE, seed.agents),
   ];
 
   const browser = await chromium.launch();

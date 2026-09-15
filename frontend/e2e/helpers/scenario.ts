@@ -13,7 +13,11 @@ import { VerificationStatus, VerificationTier } from "@/types/verification";
 
 import { anonymousApi } from "./api";
 
-/** Where a scenario leaves its verification; each stage includes every earlier one. */
+/**
+ * Where a scenario leaves its verification. Stages up to `RELEASED` are cumulative; the last
+ * three are alternative branches off a released case — each includes `RELEASED`, never another
+ * branch.
+ */
 export enum ScenarioStage {
   DRAFT = "DRAFT",
   SUBMITTED = "SUBMITTED",
@@ -23,6 +27,12 @@ export enum ScenarioStage {
   UNDER_REVIEW = "UNDER_REVIEW",
   REVIEW_APPROVED = "REVIEW_APPROVED",
   RELEASED = "RELEASED",
+  /** The customer disputed the released report (`disputeId` set). */
+  DISPUTED = "DISPUTED",
+  /** A re-check awaits the admin's decision (`recheckId` set). */
+  RECHECK_REQUESTED = "RECHECK_REQUESTED",
+  /** Commissions cleared: each agent has an available balance and a stored beneficiary. */
+  PAYOUT_READY = "PAYOUT_READY",
 }
 
 /** A login-able participant; every scenario account shares the QA password. */
@@ -35,6 +45,10 @@ export interface ScenarioAccount {
 export interface ScenarioAgent extends ScenarioAccount {
   /** The agent's task on this verification, once assigned (hex id, as the wire carries it). */
   taskId: string | null;
+  /** `PAYOUT_READY` only: withdrawable balance in kobo. */
+  availableMinor: number | null;
+  /** `PAYOUT_READY` only: the stored beneficiary a payout can be requested into. */
+  bankAccountId: string | null;
 }
 
 export interface Scenario {
@@ -46,6 +60,10 @@ export interface Scenario {
   customer: ScenarioAccount;
   /** One agent per role the tier requires. */
   agents: Partial<Record<AgentRole, ScenarioAgent>>;
+  /** `DISPUTED` only. */
+  disputeId: string | null;
+  /** `RECHECK_REQUESTED` only. */
+  recheckId: string | null;
 }
 
 export interface ScenarioOptions {
