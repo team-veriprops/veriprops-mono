@@ -2,6 +2,7 @@ import { Metadata, Viewport } from "next";
 import "@app/globals.css";
 import { ClientWrapperProvider } from "@/providers/client-wrapper";
 import { buildMetadata } from "@lib/seo";
+import { fontVariables } from "@lib/fonts";
 
 export const metadata: Metadata = {
   // Site-wide default; pages override title/description/canonical via buildMetadata.
@@ -39,7 +40,7 @@ export default function RootLayout({
   return (
     // next-themes sets `class`/`color-scheme` on <html> client-side before hydration,
     // so the server markup intentionally differs — suppress the expected mismatch here.
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={fontVariables} suppressHydrationWarning>
       <body className="">
         <ClientWrapperProvider>{children}</ClientWrapperProvider>
       </body>

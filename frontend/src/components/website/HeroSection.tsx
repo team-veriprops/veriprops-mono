@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { CheckCircle2, ArrowRight, TrendingUp } from "lucide-react";
 import { CTA_VERIFY_HREF } from "./home.data";
@@ -100,12 +101,16 @@ export default function HeroSection() {
           <div
             className="relative rounded-2xl overflow-hidden aspect-4/5 shadow-[0_40px_80px_-20px_rgba(0,13,34,0.4),0_20px_40px_-10px_rgba(0,13,34,0.2)]"
           >
-            {/* Building photo */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAO_Eq5vDmcaofv3N4Q_Amj9Crd55fK23KCGojQWeOYWjNv8tbaDH1Eh5IiOCHtVPoFcbLFPYKsVIoU77rFIw31qIl5eSxg5YHpRMXtT7oX4G80w2QOJ6vGmf__Cq3MGpaHjqZ3Zk-N-zwPdd733mz5gtwLmtI-cHIWtvojaAxkg3ALvtbBI2aFrImZY3bBO1DA-78_UxBkgswpTwgebrzSxqUUHvl3WFpY12gpF3PFkt1KQF8vY0T7QF8iKRTGmk4aVtwukfYFs3U"
+            {/* Building photo — served from this site so the hero never waits on a third-party host.
+                It is the desktop LCP element, so it is preloaded; below `lg` the card is hidden, and
+                the 1px size entry makes the browser fetch only the smallest candidate there. */}
+            <Image
+              src="/assets/hero-property.png"
               alt="Modern luxury property in Lagos Nigeria"
-              className="w-full h-full object-cover"
+              fill
+              preload
+              sizes="(min-width: 1024px) 45vw, 1px"
+              className="object-cover"
             />
 
             {/* Top-left: property ID chip */}
