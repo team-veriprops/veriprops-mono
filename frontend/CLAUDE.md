@@ -199,8 +199,9 @@ When working on UI/UX, use the `frontend-design` skill. When implementing featur
 `e2e/` is the browser UAT suite defined by [docs/uat-strategy.md](../docs/uat-strategy.md) — net-new *UI* coverage, distinct from `backend/scripts/e2e_drive_through.py` (which drives the API directly). Run it against a live local stack (strategy §9); it is **not** wired into CI yet.
 
 ```bash
-pnpm dev:https                            # REQUIRED — the suite runs against https://localhost:3000
-pnpm e2e                                  # full six-engine matrix
+# The suite runs against https://localhost:3000: a production build behind Caddy TLS for
+# acceptance (docs/uat-strategy.md §9), or `pnpm dev:https` while authoring a spec.
+pnpm e2e                                  # full six-engine matrix (parallel lane, then @serial lane)
 UAT_ENGINES=chromium-desktop pnpm e2e     # one engine (fast local loop)
 pnpm e2e specs/auth.spec.ts --grep UAT-AUTH-05
 pnpm e2e:report                           # open the HTML report
@@ -209,8 +210,25 @@ pnpm e2e:report                           # open the HTML report
 - **The suite must run over HTTPS.** Session cookies are `__Host-` prefixed ⇒ `Secure`. Chromium treats `http://localhost` as a secure context and keeps them; **WebKit drops all four**, failing every authenticated scenario for a reason that cannot happen in production. `pnpm dev:https` reads a per-machine cert from `certificates/` (gitignored) — see strategy §9 for generating one without admin rights. Playwright sets `ignoreHTTPSErrors`, so a self-signed cert is fine.
 
 - **Scenario ids.** Every test is `UAT-<AREA>-<n> · <business-observable outcome>` and carries its PRD reference in the describe/file docstring. Risk tags (`@P0`/`@P1`/`@P2`) go on the describe so `--grep @P0` scopes a partial run.
+- **Tags choose engines and lanes** ([e2e/playwright.config.ts](e2e/playwright.config.ts)).
+  - `@P0` runs on all six projects; `@P1`/`@P2` run only on `chromium-desktop` + `webkit-mobile`.
+  - Tests run fully parallel (`UAT_WORKERS`, default 4 locally, 2 in CI).
+  - A describe tagged **`@serial`** touches state other specs can see: the shared Mailpit inbox (`clearMailbox`), a seeded persona's data, or the seeded customer's drafts. `pnpm e2e` ([e2e/run-lanes.mjs](e2e/run-lanes.mjs)) runs two invocations: `UAT_LANE=parallel`, then `UAT_LANE=serial` (the `<engine>-serial` projects, one worker, reusing the first lane's seed and sessions via `UAT_REUSE_SEED`). The serial lane still runs when the parallel lane has failures, and either lane failing fails the run. Project dependencies would skip it instead, so don't chain the lanes that way. Always run the suite through `pnpm e2e`: a bare `playwright test` would run both lanes at once. Anything not tagged `@serial` must own its data (a `scenario` fixture), so it stays parallel-safe.
 - **Seed once, bootstrap per spec.** [global-setup.ts](e2e/global-setup.ts) runs one `/dev/reset` + `/dev/seed` and logs every persona in, saving `storageState` per persona; specs consume it via `test.use({ storageState: storageStatePath(PERSONAS.X) })`. A spec needing a precondition the seed lacks creates it with the API helper in its own setup — never by depending on another spec's UI actions. For a verification at a lifecycle stage, use `buildScenario(ScenarioStage.X, tier)` ([helpers/scenario.ts](e2e/helpers/scenario.ts), backed by `POST /dev/scenario`): it returns a fresh customer and per-role agents (with credentials and task ids) that no other spec touches, so the spec is parallel-safe — log those accounts in with `loginViaUi` rather than reusing the seeded personas' `storageState`.
-- **Helpers before new plumbing.** [e2e/helpers/](e2e/helpers/): `api()`/`anonymousApi()` (CSRF-aware HTTP for preconditions **only** — never for assertions), `loginViaUi`, `goto`/`waitReady`/`expectAuthenticated` (window hooks), `readSeed`, `waitForEmail`/`extractLinkFromEmail` (Mailpit), `expectNoA11yViolations`.
+- **Fixtures before boilerplate.** New specs import `test`/`expect` from [e2e/fixtures.ts](e2e/fixtures.ts):
+  - persona pages `customerPage`, `adminPage`, `opsAdminPage`, `financeAdminPage`, `agentPage(role)`, `anonPage`, and `pageAs(persona)` for any seeded persona;
+  - `scenario(stage, { tier })` plus `pageFor(account)` to sign a scenario's fresh accounts in;
+  - `sweep(Sweep.X)` for the admin sweep jobs;
+  - `wa` for WhatsApp stub inbound/outbox/window/handoff, and `mail` for Mailpit.
+
+  Scenario stages up to `RELEASED` are cumulative; `DISPUTED`/`RECHECK_REQUESTED`/`PAYOUT_READY` branch off a released case. Fixture callbacks are named `provide`, because React's hook lint rules flag a parameter named `use`.
+- **Helpers before new plumbing.** [e2e/helpers/](e2e/helpers/):
+  - `api()`/`anonymousApi()`: CSRF-aware HTTP for preconditions **only** — never for assertions;
+  - `loginViaUi`; `goto`/`waitReady`/`expectAuthenticated` (window hooks); `readSeed`;
+  - `waitForEmail`/`extractLinkFromEmail` (Mailpit); `expectNoA11yViolations`;
+  - [helpers/ui.ts](e2e/helpers/ui.ts): `tableRow`, `rowAction`, `drawer`/`closeDrawer`, `expectForbidden`, `stubPay`, `downloadAndRead`.
+
+  `helpers/ui.ts` imports DataTable anchors from `components/ui/table/testIds.ts`, the same module the component renders from, so selectors never drift.
 - **Deterministic waits only.** `waitReady(page)` (`__app_ready__`) and web-first assertions — never `waitForTimeout`.
 - **A11y is an acceptance criterion, not a separate pass.** Call `expectNoA11yViolations(page)` on every page state a scenario visits; serious/critical axe violations fail the scenario. `A11Y_BASELINE` in [helpers/a11y.ts](e2e/helpers/a11y.ts) is tracked, justified debt to burn down — prefer fixing the violation.
 - **Assert business-observable outcomes** through rendered UI (visible label, state, artifact, email), never "no error thrown".
@@ -233,6 +251,8 @@ Auth form elements carry stable `data-testid` selectors for Playwright automatio
 | Forgot password | `forgot-form`, `forgot-email`, `forgot-submit` |
 | Reset password | `reset-password-form`, `reset-password-password`, `reset-password-confirm`, `reset-password-submit` |
 | OAuth buttons | `oauth-google`, `oauth-apple`, `oauth-facebook` |
+| DataTable (every admin table) | `datatable-row` + `data-row-id`, `datatable-row-actions`, `datatable-action-{label-slug}`, `datatable-prev`, `datatable-next` — defined once in `components/ui/table/testIds.ts` |
+| DetailDrawer | `detail-drawer` (`role="dialog"`, `aria-modal`, labelled by its title), `detail-drawer-close` |
 
 When adding new forms, follow the same `{flow}-{element}` pattern.
 

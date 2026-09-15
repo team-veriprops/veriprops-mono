@@ -25,11 +25,41 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
   - Verified in the served HTML: backend prices, 3 Offers, no third-party font/image hosts, font and hero preloads.
 - **Gates:** Vitest 593/593, `tsc` and eslint clean. Backend unit 2066/2066 (`/dev/scenario` work); ruff and mypy clean.
 
-## Slice 1 — foundation (partial, uncommitted)
-- **Done:** `POST /dev/scenario` (`dev/scenario.py`, `dev/fixtures.py`, e2e `helpers/scenario.ts`) builds stages `DRAFT` → `RELEASED` on both tiers. Live-verified 11/11.
-- **Remaining:**
-  - `DISPUTED`/`RECHECK_REQUESTED`/`PAYOUT_READY` stages; the seed extension (RBAC admins, extra verifications); `e2e/fixtures.ts`; `helpers/ui.ts`; parallel config; `DataTable`/`DetailDrawer` testids.
-  - `buildScenario` has no consumer yet.
+## Slice 1 — foundation (code complete; browser pass pending)
+- **`/dev/scenario`:** stages `DRAFT` → `RELEASED` are cumulative. `DISPUTED`, `RECHECK_REQUESTED` and `PAYOUT_READY` are alternative branches off `RELEASED`, all driven by the real services.
+  - The only direct write is `PAYOUT_READY` backdating the commission `clearing_until`, before the real clearance sweep runs.
+  - Live check: 12/12 builds OK. DISPUTED returns a dispute id; PAYOUT_READY gives every agent a positive balance and a bank account on both tiers.
+  - The `customer` option is deferred (user decision) until a spec needs a shared customer.
+- **Seed:**
+  - one restricted admin per `AdminSubRole` (OPERATIONS/FINANCE);
+  - login credentials for every agent and admin in the payload;
+  - 12 paging verifications across 4 statuses, as rows.
+
+  Live check: all 6 seeded admins and agents sign in with the returned credentials.
+- **Frontend:**
+  - `DataTable` testids (`datatable-row`/`data-row-id`, `-row-actions`, `datatable-action-{slug}`, `-prev`/`-next`) come from `components/ui/table/testIds.ts`.
+  - `DetailDrawer` is now a labelled modal dialog, with `detail-drawer`/`detail-drawer-close`.
+- **Browser suite plumbing:**
+  - `e2e/fixtures.ts`: persona pages, `scenario`/`pageFor`, `sweep`, `wa`, `mail`.
+  - `helpers/ui.ts`: `tableRow`, `rowAction`, `drawer`, `expectForbidden`, `stubPay`, `downloadAndRead`.
+  - Config: `fullyParallel` with `UAT_WORKERS`. `@P0` runs on 6 engines, `@P1`/`@P2` on chromium-desktop + webkit-mobile. `@serial` specs run in chained single-worker `<engine>-serial` projects; UAT-DEV-04, UAT-AUTH-05 and UAT-GP-01 are tagged.
+  - `global-setup` logs in every persona from seed credentials. `agentEmail`/`QA_PASSWORD` are removed.
+- **Deferred:** evidence fixture files, until the first evidence-upload spec (Slice 4).
+- **Gates:** backend unit 2093/2093, ruff and mypy clean. Frontend Vitest 607/607 (before the testIds refactor; component tests re-run 7/7), tsc and eslint clean. `playwright --list` split: 138 tests.
+- **First chromium-desktop pass (4 workers): inconclusive, but it surfaced three real problems.** The machine was saturated (100% CPU, 0.7 GB of 7.8 GB free) because a full Vitest run overlapped it. Result: 11 passed, 8 flaky, 3 failed, 3 not run; most first attempts timed out after 1–2 min.
+  - **Real defects on the pay page**, first seen because scenario customers are first-time customers (the seeded customer never sees these):
+    - `CountryCodeSelect`'s flag-only trigger had no accessible name (axe `button-name`, critical). It now carries an `aria-label`, with a test.
+    - The first-time-discount line failed contrast (`text-emerald-600`); it's now `emerald-700`.
+  - **Config flaw:** the `@serial` lane was chained with project dependencies, which skip dependants on any failure, so all 3 serial tests "did not run". Replaced by `e2e/run-lanes.mjs`: two invocations (`UAT_LANE=parallel`, then `UAT_LANE=serial` on one worker, reusing the seed). The serial lane always runs, and either lane failing fails the run.
+  - UAT-AUTH-07 (stuck on "Loading devices…") and UAT-WAH-01 (stuck on the loading placeholder) failed both attempts. Their page snapshots show loading states, not errors, which fits starvation. To be confirmed on a rerun with 2 workers.
+- **chromium-desktop rerun (2 workers, both lanes):**
+  - **Parallel lane:** 21/22 first attempt. UAT-AUTH-07 and UAT-WAH-01 pass, confirming starvation.
+  - **Serial lane:** 3/3, and it ran despite the parallel failure, so the runner works.
+  - **UAT-GP-02 failed both attempts on two more real a11y defects**, visible only once the OTP is sent and the number is locked. The earlier two are confirmed fixed.
+    - The shared toast close button was unnamed. It now has `aria-label="Close"`.
+    - `PhoneInputWithCountry` dimmed its whole locked field with `opacity-50`, putting the "+234" dial code at 2.48:1 contrast. The input now shows the locked state itself; tested.
+- **chromium-desktop rerun after those fixes (2 workers, both lanes): 25/25 on first attempt, no retries.** Parallel lane 22/22; serial lane 3/3.
+- **Not yet run:** the full 6-engine matrix for Slice 1. It's worth running on an otherwise idle machine; a 4-worker run starved this 8 GB box.
 
 ---
 

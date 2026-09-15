@@ -50,7 +50,10 @@ New top-level `frontend/e2e/` with `playwright.config.ts`, `global-setup.ts`, `f
 1. `globalSetup` runs **one** `/dev/reset` + `/dev/seed` → the deterministic baseline for the whole run.
 2. Each persona logs in once; auth is persisted with Playwright **`storageState`** (`customer.json`, `agent-{role}.json`, `admin.json`) and reused, so specs don't re-login.
 3. **Every spec is independently bootstrappable.** A spec that needs a precondition the seed doesn't provide (e.g. "a verification already at PAID") creates it via **API setup helpers** in its own `beforeEach`, not by depending on an earlier spec's UI actions. The shared seed is a *fast default*, not a hard chain — a failure in spec N never blinds specs N+1…, and any spec can run alone with `--grep`.
-4. Ordering: use Playwright **project dependencies** so the golden-path backbone (§4) runs first and its produced ids are published to a run-scoped fixture; branch specs consume those ids **or** self-bootstrap if absent. Config runs single-worker / `fullyParallel:false` for shared-state areas (the isolation decision), but the self-bootstrap rule makes this a performance choice, not a correctness dependency.
+4. **Parallel by default, serial by tag.**
+   - Specs own their data: `POST /dev/scenario` gives each one a fresh customer and fresh agents. That lets the suite run `fullyParallel` across workers.
+   - A describe tagged `@serial` touches state other specs can see: the Mailpit inbox, a seeded persona's data, or the seeded customer's drafts. `pnpm e2e` (`frontend/e2e/run-lanes.mjs`) runs the parallel lane, then the serial lane: the per-engine `<engine>-serial` projects on one worker, reusing the parallel lane's seed. Nothing races a serial spec, and the serial lane still runs when the parallel lane fails. Playwright project dependencies would skip it instead.
+   - Risk tags pick engines: `@P0` on all six projects, `@P1`/`@P2` on `chromium-desktop` + `webkit-mobile`.
 
 **Helper layer to build once:** `login(page, persona)`, `waitReady(page)` (`__app_ready__`), `authSnapshot(page)`, `resetAndSeed()`, `api(persona)` (thin authenticated HTTP client for preconditions/teardown, mirroring `e2e/harness.py`), `mailpit(recipient)`, `stubPay(page)`, `runSweep(name)` (admin sweep triggers), `portalSwitch(page, persona)`.
 
@@ -205,7 +208,7 @@ Named because they are the "will this actually automate?" risks; each becomes a 
    Use the committed [Caddyfile](../frontend/e2e/tls/Caddyfile), not the `caddy reverse-proxy` one-liner. The one-liner cannot shorten upstream keep-alive, so Caddy can reuse a socket Node's 5 s `keepAliveTimeout` has already closed. A POST sent on that socket (sign-in) then fails as a bare 502 ("An error occurred" on the form). This was observed on UAT-AUTH-05. The same file also retries failed dials (`lb_try_duration`), because Docker Desktop's container→host hop can stall a new connection for a few seconds; that was observed on UAT-WAH-01 as a bare 502. A dial that failed was never sent, so the retry is safe for POST.
 
    Keep `pnpm dev:https` for authoring a spec; judge green/red only against the build.
-3. `pnpm e2e` (single worker) — `globalSetup` reset+seeds once; `--grep @P0` or `--grep UAT-PAY` to scope; `UAT_ENGINES=chromium-desktop` (or `--project=…`) to run one engine/device of the six-permutation matrix (§7). `UAT_BASE_URL` overrides the origin.
+3. `pnpm e2e` (parallel workers, `UAT_WORKERS` overrides; `@serial` specs then run one at a time) — `globalSetup` reset+seeds once; `--grep @P0` or `--grep UAT-PAY` to scope; `UAT_ENGINES=chromium-desktop` (or `--project=…`) to run one engine/device of the six-permutation matrix (§7). `UAT_BASE_URL` overrides the origin.
 4. Debug failures with the Playwright trace viewer (`pnpm e2e:report`) and the `playwright-cli` skill for ad-hoc UI investigation.
 
 ## 10. Out of scope
