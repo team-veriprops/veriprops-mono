@@ -1,0 +1,29 @@
+# TLS front for the UAT suite: https://localhost:3000 → the standalone Next server on the host.
+#
+# Session cookies are `__Host-`/Secure, so browsers (WebKit above all) only keep them over HTTPS;
+# `tls internal` issues a local certificate, which Playwright accepts via ignoreHTTPSErrors.
+#
+# Upstream keep-alive must stay SHORTER than Node's HTTP keepAliveTimeout (5 s). Otherwise Caddy
+# can reuse a socket Node has just closed; a POST (e.g. sign-in) on that socket fails with EOF,
+# and because POST is not retried, the browser receives a bare 502.
+#
+# Docker Desktop's container→host hop (host.docker.internal) can stall a new connection for a
+# few seconds under load. A failed dial means the request was never sent, so retrying it is safe
+# even for POST: `lb_try_duration` keeps re-dialling within the window, and `dial_timeout` gives
+# each attempt room, instead of answering the browser with a bare 502.
+#
+# Run from frontend/:
+#   docker run -d --name veriprops-uat-tls -p 3000:3000 \
+#     -v "$(pwd)/e2e/tls/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine
+
+localhost:3000 {
+	tls internal
+	reverse_proxy host.docker.internal:3001 {
+		lb_try_duration 15s
+		lb_try_interval 250ms
+		transport http {
+			dial_timeout 10s
+			keepalive 2s
+		}
+	}
+}

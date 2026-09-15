@@ -191,6 +191,20 @@ Named because they are the "will this actually automate?" risks; each becomes a 
    ```
 
    `certificates/` is gitignored and per-machine.
+   **Acceptance runs use the production build, not the dev server.** `next dev` compiles each route on first visit (15–20 s, plus periodic cache compaction), which surfaced as navigation timeouts that only passed on retry — noise that hides real flake and is not what CI runs. Build with the automation environment forced over `.env.production` (process env beats env files), serve on :3001, and terminate TLS with Caddy on :3000:
+
+   ```bash
+   NEXT_PUBLIC_ENVIRONMENT=dev_personal API_BASE_URL=http://localhost:8000 pnpm build
+   # output: "standalone" is not served by `next start` — run it the way the Dockerfile does
+   cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public
+   (cd .next/standalone && API_BASE_URL=http://localhost:8000 PORT=3001 HOSTNAME=0.0.0.0 node server.js)
+   docker run -d --name veriprops-uat-tls -p 3000:3000 \
+     -v "$(pwd)/e2e/tls/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine
+   ```
+
+   Use the committed [Caddyfile](../frontend/e2e/tls/Caddyfile), not the `caddy reverse-proxy` one-liner. The one-liner cannot shorten upstream keep-alive, so Caddy can reuse a socket Node's 5 s `keepAliveTimeout` has already closed. A POST sent on that socket (sign-in) then fails as a bare 502 ("An error occurred" on the form). This was observed on UAT-AUTH-05. The same file also retries failed dials (`lb_try_duration`), because Docker Desktop's container→host hop can stall a new connection for a few seconds; that was observed on UAT-WAH-01 as a bare 502. A dial that failed was never sent, so the retry is safe for POST.
+
+   Keep `pnpm dev:https` for authoring a spec; judge green/red only against the build.
 3. `pnpm e2e` (single worker) — `globalSetup` reset+seeds once; `--grep @P0` or `--grep UAT-PAY` to scope; `UAT_ENGINES=chromium-desktop` (or `--project=…`) to run one engine/device of the six-permutation matrix (§7). `UAT_BASE_URL` overrides the origin.
 4. Debug failures with the Playwright trace viewer (`pnpm e2e:report`) and the `playwright-cli` skill for ad-hoc UI investigation.
 

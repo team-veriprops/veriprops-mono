@@ -1,3 +1,38 @@
+# Progress Tracker — Playwright UAT suite (cycle 3)
+
+status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pending user approval.
+
+## Slice 0 — baseline gate (existing 5 specs × 6 projects)
+- **Stack:** backend `dev_personal` on :8000. Frontend is the **production standalone build** (`node .next/standalone/server.js` on :3001) behind Caddy TLS on :3000 ([e2e/tls/Caddyfile](../frontend/e2e/tls/Caddyfile)). See uat-strategy §9.
+- **chromium-desktop:** 24/24 on first attempt, after the fixes below.
+- **Full matrix:** 144 tests (24 × 6 projects), **143 passed first attempt, 0 failed**, 1 retry, 23.3 min.
+  - The retry was UAT-WAH-01 on chromium-mobile. Its setup POST `/dev/whatsapp/handoff-token` got a 502 because Caddy logged `dial tcp …:3001: i/o timeout` twice: Docker Desktop's container→host hop stalled. The request never reached Next or the backend, and the next mint (5 s later) succeeded.
+  - Environment, not the app. Fix: the Caddyfile retries failed dials within 15 s (`lb_try_duration`, `dial_timeout 10s`); a failed dial was never sent, so this is safe for POST.
+  - The matrix was **not re-run** after that Caddyfile change.
+- **Every retry, and what caused it:**
+  - **UAT-AUTH-05:** three causes, all fixed.
+    - The spec logged in before the reset request had completed; it now waits for `?reset=ok`.
+    - A wrong-password 401 triggered a session refresh, so login showed "Session refresh failed". `FetchHttpClient` now skips the refresh without a refresh cookie and surfaces the original error; UAT-AUTH-03 asserts the message via `login-error`.
+    - Caddy reused an upstream socket Node had closed after its 5 s keep-alive, so the POST got a bare 502. The Caddyfile now sets `keepalive 2s`.
+  - **UAT-DEV-02:** the home pricing section hydrated with a mismatch, because the server rendered static prices and the client the backend's. Prices are now fetched on the server via `lib/public-config.server.ts` and the shared `lib/backend-fetch.server.ts`; the static figures are deleted.
+  - **UAT-GP-01:** `next dev` compiled the route on first visit. The suite now runs against the production build.
+  - **UAT-WA-01:** the home page's `load` event waited on Google Fonts and a Google-hosted hero image.
+    - Fonts are self-hosted via `next/font` (`lib/fonts.ts`).
+    - The hero image is committed at `public/assets/hero-property.png` and preloaded via `next/image`.
+    - `goto()` waits for `domcontentloaded`, then `__app_ready__`.
+- **SEO pass (user requirement: every UI decision is SEO-optimized):**
+  - The pricing tiers now carry `pricingJsonLd` (a schema.org Service with one NGN Offer per priced tier), built from `withLivePrices`, the same helper the pricing section renders from.
+  - Verified in the served HTML: backend prices, 3 Offers, no third-party font/image hosts, font and hero preloads.
+- **Gates:** Vitest 593/593, `tsc` and eslint clean. Backend unit 2066/2066 (`/dev/scenario` work); ruff and mypy clean.
+
+## Slice 1 — foundation (partial, uncommitted)
+- **Done:** `POST /dev/scenario` (`dev/scenario.py`, `dev/fixtures.py`, e2e `helpers/scenario.ts`) builds stages `DRAFT` → `RELEASED` on both tiers. Live-verified 11/11.
+- **Remaining:**
+  - `DISPUTED`/`RECHECK_REQUESTED`/`PAYOUT_READY` stages; the seed extension (RBAC admins, extra verifications); `e2e/fixtures.ts`; `helpers/ui.ts`; parallel config; `DataTable`/`DetailDrawer` testids.
+  - `buildScenario` has no consumer yet.
+
+---
+
 # Progress Tracker — WhatsApp Channel (cycle 2)
 
 status: **cycle complete** — S1–S11 delivered (+ S4.1 template registry, + S10.0 handoffs)

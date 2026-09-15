@@ -97,7 +97,12 @@ Record-detail views and one-off forms / centered modals use the shared right-sid
 ## SEO (every public page)
 
 - Build a page's metadata with `buildMetadata({ title, description, path, image?, type?, noindex? })` from [src/lib/seo.ts](src/lib/seo.ts) — export it as `metadata` (static) or `generateMetadata` (dynamic). It sets canonical, Open Graph, Twitter, and robots from one place; don't hand-roll `Metadata`.
-- Add structured data with `<JsonLd data={...} />` ([src/components/seo/JsonLd.tsx](src/components/seo/JsonLd.tsx)) using the builders in `seo.ts` (`organizationJsonLd`, `websiteJsonLd`, `faqJsonLd`, `legalDocumentJsonLd`).
+- Add structured data with `<JsonLd data={...} />` ([src/components/seo/JsonLd.tsx](src/components/seo/JsonLd.tsx)) using the builders in `seo.ts` (`organizationJsonLd`, `websiteJsonLd`, `faqJsonLd`, `legalDocumentJsonLd`, `pricingJsonLd`). Pricing structured data is a schema.org `Service` with one `Offer` per tier, built from the same backend prices the page renders (`withLivePrices` in `home.data.ts`), and omitted entirely when no tier is priced.
+- **UI decisions are SEO decisions.** Judge assets and rendering by what a crawler receives and by Core Web Vitals:
+  - Indexable content that the backend owns (prices) is rendered in the server HTML.
+  - Fonts are self-hosted through [src/lib/fonts.ts](src/lib/fonts.ts) (`next/font`), never a runtime `@import` from a third-party origin. A guard test in `src/styles/` enforces this.
+  - Images are local files served through `next/image` with accurate `sizes`.
+  - The above-the-fold LCP image is preloaded. An image hidden at a breakpoint gets a `1px` `sizes` entry for that breakpoint, so the browser only fetches a tiny candidate there.
 - Keep [src/app/sitemap.ts](src/app/sitemap.ts) and [src/app/robots.ts](src/app/robots.ts) current: public marketing + legal routes are crawlable; `/portal`, `/admin`, `/agents`, `/account`, `/auth` are disallowed. VID-lookup pages pass `noindex` until `COMPLETED`.
 
 ## WhatsApp channel surfaces (PRD §26)
@@ -119,6 +124,7 @@ Record-detail views and one-off forms / centered modals use the shared right-sid
 ## Backend-served content & public flags
 
 - Legal pages render content the backend owns: the dynamic `/legal/[slug]` route fetches via [src/lib/legal.server.ts](src/lib/legal.server.ts) (`fetchLegalDocument`/`fetchLegalDocuments` → `/api/users/auth/consents/documents/...`) and renders Markdown through `LegalDocument`. Do not hardcode legal prose on the frontend.
+- Server-rendered pages read the backend through [src/lib/backend-fetch.server.ts](src/lib/backend-fetch.server.ts) (`fetchBackendData(path, caching)` → envelope `data` or null), which `legal.server.ts`, `public-lookup.server.ts` and `public-config.server.ts` share — don't add another fetch-and-unwrap. Backend-owned figures a public page shows (tier prices) are fetched in the server page and passed down as props, never hardcoded as a client fallback: a client-only query renders different HTML on the server and in the browser, which is a hydration mismatch. `fetchPublicConfig()` returns null when the backend is unreachable so `next build` can prerender without one.
 - Read runtime flags from the backend, not from `NEXT_PUBLIC_*`. `usePublicConfigQuery()` exposes `/config/public` (e.g. `phoneVerificationEnabled`, which drives whether the signup flow shows the phone-verification step).
 - The `/account/*` security surface (security log, devices, linked accounts, password) lives under `src/app/account/` on `AppShell`; the `PortalSwitcher` in the shell shows the cross-portal badge for multi-persona users.
 
@@ -202,7 +208,7 @@ pnpm e2e:report                           # open the HTML report
 - **The suite must run over HTTPS.** Session cookies are `__Host-` prefixed ⇒ `Secure`. Chromium treats `http://localhost` as a secure context and keeps them; **WebKit drops all four**, failing every authenticated scenario for a reason that cannot happen in production. `pnpm dev:https` reads a per-machine cert from `certificates/` (gitignored) — see strategy §9 for generating one without admin rights. Playwright sets `ignoreHTTPSErrors`, so a self-signed cert is fine.
 
 - **Scenario ids.** Every test is `UAT-<AREA>-<n> · <business-observable outcome>` and carries its PRD reference in the describe/file docstring. Risk tags (`@P0`/`@P1`/`@P2`) go on the describe so `--grep @P0` scopes a partial run.
-- **Seed once, bootstrap per spec.** [global-setup.ts](e2e/global-setup.ts) runs one `/dev/reset` + `/dev/seed` and logs every persona in, saving `storageState` per persona; specs consume it via `test.use({ storageState: storageStatePath(PERSONAS.X) })`. A spec needing a precondition the seed lacks creates it with the API helper in its own setup — never by depending on another spec's UI actions.
+- **Seed once, bootstrap per spec.** [global-setup.ts](e2e/global-setup.ts) runs one `/dev/reset` + `/dev/seed` and logs every persona in, saving `storageState` per persona; specs consume it via `test.use({ storageState: storageStatePath(PERSONAS.X) })`. A spec needing a precondition the seed lacks creates it with the API helper in its own setup — never by depending on another spec's UI actions. For a verification at a lifecycle stage, use `buildScenario(ScenarioStage.X, tier)` ([helpers/scenario.ts](e2e/helpers/scenario.ts), backed by `POST /dev/scenario`): it returns a fresh customer and per-role agents (with credentials and task ids) that no other spec touches, so the spec is parallel-safe — log those accounts in with `loginViaUi` rather than reusing the seeded personas' `storageState`.
 - **Helpers before new plumbing.** [e2e/helpers/](e2e/helpers/): `api()`/`anonymousApi()` (CSRF-aware HTTP for preconditions **only** — never for assertions), `loginViaUi`, `goto`/`waitReady`/`expectAuthenticated` (window hooks), `readSeed`, `waitForEmail`/`extractLinkFromEmail` (Mailpit), `expectNoA11yViolations`.
 - **Deterministic waits only.** `waitReady(page)` (`__app_ready__`) and web-first assertions — never `waitForTimeout`.
 - **A11y is an acceptance criterion, not a separate pass.** Call `expectNoA11yViolations(page)` on every page state a scenario visits; serious/critical axe violations fail the scenario. `A11Y_BASELINE` in [helpers/a11y.ts](e2e/helpers/a11y.ts) is tracked, justified debt to burn down — prefer fixing the violation.
@@ -219,7 +225,7 @@ Auth form elements carry stable `data-testid` selectors for Playwright automatio
 
 | Component | Selector |
 |---|---|
-| Login form | `login-form`, `login-email`, `login-password`, `login-password-toggle`, `login-submit` |
+| Login form | `login-form`, `login-email`, `login-password`, `login-password-toggle`, `login-submit`, `login-error` |
 | Signup step 1 | `signup-basics-form`, `signup-first-name`, `signup-last-name`, `signup-email`, `signup-password`, `signup-basics-submit` |
 | Signup stepper | `signup-stepper` |
 | Verify step | `verify-form`, `verify-submit`, `verify-back` |

@@ -23,9 +23,15 @@ export async function waitReady(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__app_ready__ === true);
 }
 
-/** Navigate to *path* on the app origin and wait for the ready gate. */
+/**
+ * Navigate to *path* on the app origin and wait for the ready gate.
+ *
+ * Waits for `domcontentloaded`, not `load`: the app's readiness signal is `__app_ready__`, and
+ * `load` additionally waits on every image and font — so third-party asset latency would fail a
+ * spec that never asserts on those assets.
+ */
 export async function goto(page: Page, path: string): Promise<void> {
-  await page.goto(path);
+  await page.goto(path, { waitUntil: "domcontentloaded" });
   await waitReady(page);
 }
 

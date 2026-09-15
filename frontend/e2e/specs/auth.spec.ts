@@ -52,6 +52,9 @@ test.describe("UAT-AUTH — signed-out access @P0", () => {
     // The user must remain on the login form with no session — a failed attempt that
     // silently navigated would be a far worse defect than a missing message.
     await expect(page.getByTestId("login-form")).toBeVisible();
+    // The rejection is explained in the backend's own words — a signed-out form has no
+    // session, so the session-refresh machinery must never replace that message.
+    await expect(page.getByTestId("login-error")).toHaveText(/invalid username or password/i);
     expect(page.url()).toContain(ROUTES.AUTH.LOGIN);
     expect(await page.evaluate(() => window.__auth_snapshot__?.isAuthenticated ?? false)).toBe(
       false,
@@ -90,6 +93,9 @@ test.describe("UAT-AUTH — signed-out access @P0", () => {
     await page.getByTestId("reset-password-password").fill(newPassword);
     await page.getByTestId("reset-password-confirm").fill(newPassword);
     await page.getByTestId("reset-password-submit").click();
+    // The form moves on to login only once the backend has accepted the new password;
+    // signing in any earlier races the reset request itself.
+    await page.waitForURL(/\/auth\/login\?reset=ok/);
 
     // Acceptance is the business outcome: the new password signs in.
     await loginViaUi(page, email, newPassword);
