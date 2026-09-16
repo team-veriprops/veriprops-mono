@@ -284,6 +284,7 @@ export default function SignupContainer() {
       {resumed && step > 0 && (
         <p
           className="mt-6 text-xs text-center text-brand-on-surface-variant"
+          data-testid="signup-resumed"
         >
           We restored your previous progress.
         </p>

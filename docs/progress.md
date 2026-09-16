@@ -97,6 +97,43 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
   - SESS-01's symptom is the same one the hashing/SSE fixes addressed. It has not recurred on any other engine or run, so this reads as cold-start slowness on the slowest engine — worth watching rather than treating as closed.
 - **Slice 2 gates:** backend unit 2096/2096, ruff + mypy clean; frontend Vitest 615/615, tsc + eslint clean.
 
+## Slice 3 — signup funnel (`auth.spec.ts` extended, P0/P1)
+- **Scenarios** (each signs up a brand-new account, so they own their data and run in parallel):
+  - UAT-AUTH-09: the four-step funnel (Account → Verify → Residence → Consent) ends on the new-verification wizard, because a new customer has no verification yet.
+  - UAT-AUTH-10: a half-finished signup resumes, restoring the typed email.
+  - UAT-AUTH-11: signing up through a **real** referral code (read from `/referrals/me`) costs the invitee nothing. The referrer's credit only exists after the invitee's first payment clears the chargeback window, so that assertion belongs to the referral spec — not faked here with an API check.
+  - UAT-AUTH-12: `?intent=agent` lands in the agent portal with the AGENT persona.
+  - UAT-AUTH-13: every step is scanned for a11y, including the OTP dialog while open.
+  - UAT-AUTH-14: a password set at `/auth/set-password` is the one that then signs the user in.
+- `auth.spec.ts` now imports from `../fixtures`, and its two free `"CUSTOMER"`/`"AGENT"` literals are `UserPersona` members.
+- **Testids:** `verify-{email,phone}-{input,send,verified,error}` (parameterised, so the OAuth profile modal gets them too), `verify-otp-{modal,digit-N,confirm,cancel,resend,error}`, `signup-{country,timezone,currency-CODE,residence-*,consent-*,resumed}`.
+- **This stack runs `PHONE_VERIFICATION_ENABLED=false`**, so the Verify step asks for one OTP (email) and collects the phone for the pay step. The spec uses the same `verify-phone-input` id on both sides of the flag, so it survives the flag flipping.
+
+### Real app defects found and fixed (test-first)
+- **Unlabelled selects — axe `select-name`, critical.** The residence step's country and timezone selects had no accessible name: the local `Field` rendered a `<label>` with no `htmlFor` and the selects carried no id. Screen-reader users heard two unnamed dropdowns. The sibling text inputs escaped the equivalent rule only because axe accepts their `placeholder` as a name — selects have no such fallback.
+  - The same defect sat in `ProfileCompletionModal` (the OAuth twin of this step), and `AdminPayouts`' status filter was unnamed too.
+  - Fixed by extracting shared [`Field`/`FieldGroup`](../frontend/src/components/ui/form/Field.tsx), which hands the control the id its label points at so the binding cannot be forgotten. That removed **three** duplicated local `Field` copies (residence, account basics, profile modal). `FieldGroup` names the currency button row via `role="group"` + `aria-labelledby`, since there is no single control to bind. `FormField`/`FormSelect` were not reusable here — they require `useFormContext`, and these steps use plain `useForm`.
+- **Credentials written into the URL on a pre-hydration submit.** UAT-AUTH-14 caught `/auth/set-password?password=…&confirmPassword=…`: before React attaches `onSubmit`, the browser submits the form itself, and with no `method` that is a GET — putting the password in browser history, the `Referer` header and Caddy's access log. Every credential form in the app was built this way (login, signup basics, reset, forgot, account password).
+  - Fixed with [`SubmitButton`](../frontend/src/components/ui/form/SubmitButton.tsx) — disabled until hydrated, which also blocks implicit Enter-key submission — plus `method="post"` on the eight auth forms as defence in depth. Hydration is detected with `useSyncExternalStore` ([`useHydrated`](../frontend/src/hooks/useHydrated.ts)); the obvious `setState`-in-effect version is banned by this repo's React Compiler lint.
+  - `renderToStaticMarkup` *is* the pre-hydration HTML, so the guard test asserts directly that the server never ships a live submit.
+  - **`__app_ready__` cannot protect against this.** It is set by a `useEffect` on the root provider, so it means "the app mounted", not "this form is interactive" — the app has to own the fix.
+
+### Misjudgements of mine, recorded so they are not repeated
+- **The a11y scan raced an animation.** UAT-AUTH-13's first failure was `color-contrast 2.16` on an OTP box whose style was `opacity: 0` — axe scanned mid-stagger. The helper now waits for the last box to reach full opacity. Same class as the Slice 2 overlay race.
+- **I under-budgeted the OTP wait, twice.** UAT-AUTH-09 failed on four engines against a 15 s then a 45 s budget. Sending a code **delivers the email inside the request** (below), measured at 3–12 s idle and longer under two workers. The funnel describes are now `test.slow()` and the dialog wait is 90 s. Re-verified green on the three engines that had failed (24.9–35.7 s).
+- **I misdiagnosed it as rate limiting first.** `otp_send` is capped at 5/min/IP, which fit the symptom — but a truncated grep let me read "no hit in `.env.dev_personal`" as "not set", when that file does set `DISABLE_RATE_LIMITING=true`. Throttles were off the whole time. A truncated search is not evidence of absence.
+- The helper now races the dialog against `verify-{field}-error` and fails with the app's own message, so a refused send can never again present as a bare "element not found".
+
+### Open finding — not changed, needs a product decision
+- **Requesting an OTP takes 3–12 s**, because `_send_direct_message` awaits dispatch on purpose: the row is persisted before the send, so a transient failure is recorded `RETRYING` and re-driven, rather than lost with a worker that goes away mid-request. That is a deliberate durability-over-latency trade-off, documented in the code — so it was left alone. But the user waits on "Sending code…" for that whole time, and `send_verification_msg` swallows delivery failures with a log warning, so a broken send shows neither a dialog nor an error.
+- **Watch item:** UAT-AUTH-03 on webkit-mobile once timed out after 20 s waiting for `login-submit` to become enabled — the cost side of disabled-until-hydrated, under two-worker load. It passed on retry in 9.7 s. Worth watching; the alternative re-opens the credentials-in-URL hole.
+
+### Results
+- **All six engines green**, assembled from chunked runs (a full matrix in one invocation exceeds the per-run time budget on this box): chromium-desktop 13/13, chromium-mobile 9 P0, webkit-desktop 9 P0, webkit-mobile 13/13, firefox-desktop 9 P0, firefox-mobile 9/9 first attempt.
+- **`@serial` lane: 6/6** — UAT-AUTH-05 passes on every engine.
+- The final edits were timeout-only (`test.slow()`, 90 s dialog wait) and so cannot invalidate the earlier passes; they were re-verified on the three engines that had failed.
+- **Slice 3 gates:** frontend Vitest 620/620, tsc + eslint clean. The backend was not touched, so no ruff/mypy/pytest was owed.
+
 ---
 
 # Progress Tracker — WhatsApp Channel (cycle 2)
