@@ -150,6 +150,11 @@ Both fixes came from reading the OTP path while chasing a latency problem that t
 - **Verified:** backend ruff + mypy clean, unit **2109/2109**; frontend Vitest **623/623**, tsc + eslint clean; `auth.spec.ts` **13/13 on chromium-desktop, first attempt, no retries**.
 - **Worth knowing for the next slice:** the backend does not hot-reload. A stale process serves the old contract and fails the funnel in a way that looks like a code defect — the verification run now polls until `/otp/send` actually returns `delivered` before it starts testing.
 
+### Decisions carried into Slice 4 (user, 2026-09-16)
+- **The 6-engine matrix is not re-run for the follow-on.** chromium-desktop 13/13 stands as its verification, and full-matrix confirmation folds into Slice 4's checkpoint — so that run covers both slices' specs. Recorded rather than assumed: the follow-on's engine risk is low because it changed a JSON field and a navigation option, not rendering.
+- **Slice 4 is next:** golden-path legs 2–5 (`golden-path.spec.ts`, `@serial`) — customer pays → admin suggests/assigns → agents accept, start, upload and submit → admin rejects FIELD → the agent sees the reason and resubmits → approve with quality → release → the customer sees the REPORT_READY bell, the disclaimer gate, the trust gauge and a parsed PDF (`%PDF` + VID). Folds in the assign/suggest testids.
+- **Stack at handover:** backend on :8000 restarted and confirmed serving the new `OtpSendResultDto`; standalone frontend on :3001 from the current production build; Caddy TLS on :3000. `dev` is at `52d09ea`.
+
 ---
 
 # Progress Tracker — WhatsApp Channel (cycle 2)
