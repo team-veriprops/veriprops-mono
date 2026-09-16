@@ -51,6 +51,43 @@ export async function stubPay(page: Page): Promise<void> {
   await waitReady(page);
 }
 
+/**
+ * Sign out the way the user would on this layout, then wait for the login page. Desktop signs out
+ * from the top-nav user menu; below `lg` that menu is hidden, and signing out lives in the drawer.
+ */
+export async function signOut(page: Page): Promise<void> {
+  const userMenu = page.getByTestId("user-menu");
+  const drawerToggle = page.getByTestId("sidebar-open");
+  // Both entry points are always in the DOM — CSS hides one per breakpoint — so wait for whichever
+  // is actually visible before choosing (an instant check can run before the shell paints).
+  await expect(userMenu.or(drawerToggle).filter({ visible: true })).toBeVisible();
+  if (await userMenu.isVisible()) {
+    const signOutItem = page.getByTestId("user-menu-signout");
+    // A click that lands before the dropdown is interactive only focuses the trigger. Retry the
+    // open until the item shows, clicking only while the menu is closed so a slow render is never
+    // toggled shut.
+    await expect(async () => {
+      if ((await userMenu.getAttribute("aria-expanded")) !== "true") {
+        await userMenu.click();
+      }
+      await expect(signOutItem).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+    await signOutItem.click();
+  } else {
+    const signOutItem = page.getByTestId("sidebar-signout");
+    // The drawer stays mounted and slides in, so its contents keep a box on the page and read as
+    // "visible" even while parked off-screen — being *in the viewport* is what says it is open.
+    // The toggle only ever opens (never closes), so retrying the click is safe: a click that lands
+    // before hydration does nothing at all.
+    await expect(async () => {
+      await drawerToggle.click();
+      await expect(signOutItem).toBeInViewport({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+    await signOutItem.click();
+  }
+  await page.waitForURL((url) => url.pathname === ROUTES.AUTH.LOGIN);
+}
+
 /** Run *trigger*, capture the download it starts, and return the file's bytes (PDF/CSV). */
 export async function downloadAndRead(page: Page, trigger: () => Promise<void>): Promise<Buffer> {
   const [download] = await Promise.all([page.waitForEvent("download"), trigger()]);

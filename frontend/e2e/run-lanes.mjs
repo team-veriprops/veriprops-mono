@@ -16,7 +16,9 @@ const args = process.argv.slice(2);
 function runLane(lane, extraEnv) {
   const result = spawnSync(
     "pnpm",
-    ["exec", "playwright", "test", "--config", "e2e/playwright.config.ts", ...args],
+    // A filtered run (`pnpm e2e session.spec.ts`) often has nothing for one lane; that lane
+    // passing empty is correct, not a failure.
+    ["exec", "playwright", "test", "--config", "e2e/playwright.config.ts", "--pass-with-no-tests", ...args],
     { stdio: "inherit", shell: true, env: { ...process.env, UAT_LANE: lane, ...extraEnv } },
   );
   return result.status ?? 1;
