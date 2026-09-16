@@ -65,6 +65,38 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
   - Fix: `loginViaUi` also waits until the page has left `/auth` and the destination reports ready. This hardens every caller: `global-setup`, UAT-AUTH-05, `pageFor`.
 - **Firefox rerun after the `loginViaUi` fix (firefox-desktop + firefox-mobile, both lanes):** 44/44 on first attempt (parallel 38, serial 6), no retries. Slice 1 is green across the 6-engine matrix.
 
+## Slice 2 — session lifecycle (`session.spec.ts`, P0)
+- **Scenarios** (each builds its own customer, so all run parallel):
+  - UAT-SESS-01: an expired access token is renewed silently.
+  - UAT-SESS-02: a lost session goes to login and back to the page.
+  - UAT-SESS-03: a device revoked elsewhere gets "Your session has expired", then login. Access tokens live out their 15-min TTL per PRD §3/§7.2, so the spec clears the access-cookie pair to stand in for expiry.
+  - UAT-SESS-04: sign-out via the desktop user menu or the mobile drawer.
+- **Testids:** `user-menu`, `user-menu-signout`, `sidebar-open`, `sidebar-signout`. The `signOut(page)` helper picks the layout.
+- **Real defects found and fixed (test-first):**
+  - **Revoked-session login loop (backend).** A rejected refresh called `unset_jwt_cookies()` and then *raised*. The exception handler renders a fresh response, so the cookie deletions were dropped. The frontend proxy still saw a refresh cookie, bounced `/auth/login` back to the dashboard, got another 401, and redirected to login again, endlessly. The refresh now *returns* the 401 via the new shared `exception_json_response`, with the deletions on it. The test asserts the real `Set-Cookie` headers; the old test mocked `authorize` and so passed while the bug was live.
+  - **Password hashing blocked the event loop (backend).** Argon2 ran synchronously in login, signup, reset and set-password, stalling every concurrent request, including other users' silent refreshes. New `Utils.hash_password`/`check_password` use `asyncio.to_thread`, like the other blocking integrations. Dev fixtures hash the shared QA password once.
+  - **Three SSE connections per tab (frontend).** The chat, notification and earnings hooks each opened `/api/chat/stream` and retried independently on a broken session. `lib/userStream.ts` now shares one connection per tab, fanning out to subscribers, with the same retry budget.
+  - Together, the last two caused SESS-01's retries: its refresh never answered within 15 s.
+- **Runner fix:** `run-lanes.mjs` passes `--pass-with-no-tests`, so a filtered run with nothing for one lane doesn't fail.
+- **Spec-side lessons:**
+  - Change session cookies from `about:blank`: an open portal page reacts to the change and races the test's navigation.
+  - Both sign-out entry points are always in the DOM, so wait for the visible one.
+  - A dropdown clicked before it is interactive only focuses the trigger, so retry the open while closed.
+  - The expired-session dialog redirects after 1.5 s, so it is not axe-scanned (known a11y gap on a transient dialog). The login page it lands on is scanned.
+- **Result on chromium-desktop + webkit-mobile after the fixes:** 8/8 on first attempt, each test 12–25 s (previously 30–90 s).
+- **Full-suite 6-engine run (2 workers, both lanes):** parallel lane 140 passed, 2 flaky, **2 failed**; serial lane 18/18.
+  - **UAT-SESS-04 (chromium-mobile) — real app defect.** The mobile drawer stays mounted and slides off-screen, so while closed its links and sign-out remained focusable and clickable outside the viewport (Playwright: "visible, enabled and stable … outside of the viewport"; a keyboard or screen-reader user could land in hidden navigation). The drawer is now `inert` while closed. Its close button gained `sidebar-close`, and `signOut` retries opening until sign-out is in the viewport — the same pre-hydration race as the desktop dropdown.
+  - **UAT-SESS-03 (chromium-desktop) — load, not a defect.** It failed twice in the matrix (snapshots still on the dashboard; the retry timed out inside `loginViaUi`) but passed on every other engine, and passes in 41.3 s when run alone on an idle machine.
+  - **Flaky (both load, not defects):** UAT-DEV-02 (webkit-mobile) waited 20 s for `__app_ready__` then passed in 8.2 s; UAT-WA-01 (chromium-desktop) waited for the widget then passed in 19.9 s. 144 tests × 2 workers on one 8 GB box.
+- **Second look at UAT-SESS-04 — the failure was the helper, not the drawer.** The `inert` change is still right on its own merits (a closed drawer must not hold focusable, clickable controls off-screen), but it did not fix the test. A closed drawer's contents keep a layout box, so Playwright reports `sidebar-close` as *visible* even while the drawer is parked off-screen; the helper's "already open?" check therefore never clicked the toggle (19 polls, sign-out at viewport ratio 0). The toggle only ever opens, so the helper now clicks it on every attempt and waits for sign-out to be **in the viewport** — visibility is not openness for a transform-based drawer.
+- **UAT-SESS-03's dialog assertion was racy.** The expired dialog hands off to login after ~1.5 s, so on a fast machine the redirect wins and the dialog is gone before the assertion runs. The spec now checks its wording only while it is still on screen, and always asserts the login handoff, which is the outcome that matters.
+- **A retry once ran 13.8 min.** It died in setup: `POST /dev/scenario` hit the API client's 120 s timeout under load. A fixture's pending request is not capped by the 90 s test timeout — worth remembering when a "hung" test appears.
+- **Rerun after those fixes (chromium-desktop + chromium-mobile):** 8/8 on first attempt, 11–39 s each, no retries — including UAT-SESS-04 on chromium-mobile, the case that had failed twice.
+- **Same spec on firefox-desktop/mobile + webkit-desktop/mobile:** 16 tests, 14 passed on first attempt, 2 flaky, 0 failed. **UAT-SESS-04 passes on all six engines**, so the drawer fix holds on every layout.
+  - Both retries were firefox-desktop's first two tests, running together off a cold browser start: each hit the 90 s *test timeout* rather than failing an assertion (SESS-01 still waiting on `devices-list`; SESS-02 killed mid-fill as its page was torn down). Both passed on retry in ~30 s.
+  - SESS-01's symptom is the same one the hashing/SSE fixes addressed. It has not recurred on any other engine or run, so this reads as cold-start slowness on the slowest engine — worth watching rather than treating as closed.
+- **Slice 2 gates:** backend unit 2096/2096, ruff + mypy clean; frontend Vitest 615/615, tsc + eslint clean.
+
 ---
 
 # Progress Tracker — WhatsApp Channel (cycle 2)
