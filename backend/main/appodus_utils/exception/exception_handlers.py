@@ -23,8 +23,13 @@ from main.appodus_utils.exception.exceptions import AppodusBaseException
 logger: Logger = di["logger"]
 
 
-async def appodus_exception_handler(request: Request, exc: AppodusBaseException):
-    logger.warning(f"{exc.code}: {exc.message}")
+def exception_json_response(exc: AppodusBaseException) -> JSONResponse:
+    """The API's error envelope for *exc*.
+
+    Shared by the global handler and by endpoints that must *return* an error rather than raise it:
+    a raised exception is rendered as a fresh response here, so anything set on the endpoint's own
+    response — cookie deletions on a rejected session refresh, say — would never reach the browser.
+    """
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -34,6 +39,11 @@ async def appodus_exception_handler(request: Request, exc: AppodusBaseException)
             }
         },
     )
+
+
+async def appodus_exception_handler(request: Request, exc: AppodusBaseException):
+    logger.warning(f"{exc.code}: {exc.message}")
+    return exception_json_response(exc)
 
 
 # in production, you can tweak performance using orjson response
