@@ -8,7 +8,11 @@ from types import SimpleNamespace
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from main.app.domain.user.auth.models import PhoneOtpSendDto, VerifyPhoneDto
+from main.app.domain.user.auth.models import (
+    OtpSendResultDto,
+    PhoneOtpSendDto,
+    VerifyPhoneDto,
+)
 from main.app.domain.user.auth.service import AuthService
 from main.app.domain.user.models import OAUTH_PLACEHOLDER_PHONE
 from main.appodus_utils.db.session import db_session_ctx
@@ -45,7 +49,7 @@ def _service(*, phone="8030000001", phone_verified=False, owner_of_number=None):
     svc._user_service.update_user = AsyncMock()
     svc._otp_service.verify_otp = AsyncMock()
     svc._otp_service.consume_verified_marker = AsyncMock()
-    svc.send_otp = AsyncMock(return_value=30)
+    svc.send_otp = AsyncMock(return_value=OtpSendResultDto(resend_in=30, delivered=True))
     return svc
 
 
@@ -56,9 +60,10 @@ class TestSendPhoneOtpForUser:
     async def test_without_a_number_sends_to_the_profile_phone(self):
         svc = _service()
 
-        resend_in = await svc.send_phone_otp_for_user("u-1", PhoneOtpSendDto())
+        result = await svc.send_phone_otp_for_user("u-1", PhoneOtpSendDto())
 
-        assert resend_in == 30
+        assert result.resend_in == 30
+        assert result.delivered is True
         _, kwargs = svc.send_otp.call_args
         assert kwargs["dial_code"] == "+234" and kwargs["phone"] == "8030000001"
         assert kwargs["user_id"] == "u-1"

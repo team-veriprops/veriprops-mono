@@ -9,6 +9,7 @@ import VerifiedInput, { VerifiedInputType } from "@components/ui/verified_input/
 import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
 import { verifyFormSchema, type VerifyFormValues } from "@components/ui/verified_input/schemas";
 import { useSendOtpMutation, useVerifyOtpMutation, usePublicConfigQuery } from "../libs/useAuthQueries";
+import { otpDeliveryError } from "../libs/otpDelivery";
 import { OtpChannel } from "@components/website/auth/models";
 import { getErrorMessage } from "@lib/utils";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
@@ -89,7 +90,12 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
           sendOtp.mutate(
             { channel: OtpChannel.EMAIL, email: form.getValues("email") },
             {
-              onSuccess: () => onSuccess(),
+              // A 2xx only means the code was issued — `delivered` says whether it was sent.
+              onSuccess: (res) => {
+                const undelivered = otpDeliveryError(res.data);
+                if (undelivered) onError(undelivered);
+                else onSuccess();
+              },
               onError: (err) =>
                 onError(getErrorMessage(err as Error, "Could not send code. Please try again.")),
             },
@@ -124,7 +130,11 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
                 phone: v.phone,
               },
               {
-                onSuccess: () => onSuccess(),
+                onSuccess: (res) => {
+                  const undelivered = otpDeliveryError(res.data);
+                  if (undelivered) onError(undelivered);
+                  else onSuccess();
+                },
                 onError: (err) =>
                   onError(getErrorMessage(err as Error, "Could not send code. Please try again.")),
               },

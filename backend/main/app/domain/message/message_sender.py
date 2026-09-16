@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from loguru import Logger
+
+    from main.appodus_utils.integrations.messaging.service import BulkSendResult
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -71,12 +73,18 @@ class BaseMessageSender:
                                    context: Dict[str, Any],
                                    category: MessageCategory,
                                    default_channels: List[MessageChannel],
-                                   expires_at: Optional[datetime] = None):
+                                   expires_at: Optional[datetime] = None) -> Optional["BulkSendResult"]:
+        """Dispatch *template* to *recipient*, returning the dispatch outcome.
 
+        The result is returned rather than discarded so a caller can tell whether delivery
+        actually completed — `send_bulk` buckets failures instead of raising, so without it a
+        send that failed on every channel is indistinguishable from one that succeeded.
+        None means nothing was dispatched at all (no usable channel, or outbound messaging off).
+        """
         channels = self._get_available_channels(recipient, default_channels)
         if not channels:
             logger.info(f"Message send to '{recipient}', for '{template}' cannot continue: no available configured channel")
-            return
+            return None
 
         final_context = await self._build_context(
             context=context,
@@ -100,7 +108,7 @@ class BaseMessageSender:
             # already recorded as RETRYING and re-driven by MessagingService.process_retries.
             # Backgrounding would buy latency at the cost of losing that outcome on a worker
             # that goes away mid-request.
-            await self._messaging_dispatcher.dispatch_to_channels(request)
+            return await self._messaging_dispatcher.dispatch_to_channels(request)
         else:
             cc = [r.email for r in recipient.cc_recipient]
             bcc = [r.email for r in recipient.bcc_recipient]
@@ -115,6 +123,7 @@ class BaseMessageSender:
                 f"web_push_tokens={len(recipient.web_push_token) if recipient.web_push_token else 0}, "
                 f"cc={cc}, bcc={bcc})"
             )
+        return None
 
     @staticmethod
     def _get_available_channels(

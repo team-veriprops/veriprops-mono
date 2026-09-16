@@ -24,6 +24,7 @@ import {
   useVerifyOtpMutation,
   usePublicConfigQuery,
 } from "../libs/useAuthQueries";
+import { otpDeliveryError } from "../libs/otpDelivery";
 import { getErrorMessage, cn } from "@lib/utils";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 
@@ -154,7 +155,12 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
                     phone: v.phone,
                   },
                   {
-                    onSuccess: () => onSuccess(),
+                    // A 2xx only means the code was issued — `delivered` says whether it was sent.
+                    onSuccess: (res) => {
+                      const undelivered = otpDeliveryError(res.data);
+                      if (undelivered) onError(undelivered);
+                      else onSuccess();
+                    },
                     onError: (err) =>
                       onError(getErrorMessage(err as Error, "Could not send code.")),
                   },

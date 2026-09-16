@@ -18,6 +18,7 @@ from kink import di, inject
 
 from main.app.domain.user.auth.models import (
     OtpChannel,
+    OtpSendResultDto,
     PhoneOtpSendDto,
     ProfileCompletionDto,
     SignupRequestDto, AuthIntent,
@@ -361,7 +362,7 @@ class AuthService:
             user_id: Optional[str] = None,
             ip_address: Optional[str] = None,
             fullname: Optional[str] = None,
-    ) -> int:
+    ) -> OtpSendResultDto:
         # During signup / profile completion (no authenticated user), reject if the
         # contact already belongs to an existing account before issuing the OTP.
         if user_id is None:
@@ -401,7 +402,7 @@ class AuthService:
 
     async def send_phone_otp_for_user(
             self, user_id: str, req: PhoneOtpSendDto, *, ip_address: Optional[str] = None,
-    ) -> int:
+    ) -> OtpSendResultDto:
         user = await self._user_service.get_user_model(user_id)
         _, recipient = await self._resolve_phone_for_verification(user, req)
         return await self.send_otp(

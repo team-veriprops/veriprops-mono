@@ -34,6 +34,9 @@ export interface LoginRequest {
   deviceFingerprint?: string;
 }
 
+export type { OtpSendResult } from "./otpDelivery";
+import type { OtpSendResult } from "./otpDelivery";
+
 export interface OtpSendRequest {
   channel: OtpChannel;
   email?: string;
@@ -101,7 +104,7 @@ export class AuthService {
     return this.http.get(`${this.base}/sessions/current`);
   }
 
-  sendOtp(payload: OtpSendRequest): Promise<SuccessResponse<{ resendIn: number }>> {
+  sendOtp(payload: OtpSendRequest): Promise<SuccessResponse<OtpSendResult>> {
     return this.http.post(`${this.base}/otp/send`, payload);
   }
 
@@ -112,7 +115,7 @@ export class AuthService {
   /** Pay-step phone gate (§10.5): sends an OTP to the logged-in user's confirmed or corrected
    *  number. Unlike sendOtp, the account is the session's, and a number another account holds
    *  is refused. */
-  sendPhoneOtp(payload: PhoneOtpRequest): Promise<SuccessResponse<{ resendIn: number }>> {
+  sendPhoneOtp(payload: PhoneOtpRequest): Promise<SuccessResponse<OtpSendResult>> {
     return this.http.post(`${this.base}/phone/otp/send`, payload);
   }
 

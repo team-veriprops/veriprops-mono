@@ -136,7 +136,19 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
 - **All six engines green**, assembled from chunked runs (a full matrix in one invocation exceeds the per-run time budget on this box): chromium-desktop 13/13, chromium-mobile 9 P0, webkit-desktop 9 P0, webkit-mobile 13/13, firefox-desktop 9 P0, firefox-mobile 9/9 first attempt.
 - **`@serial` lane: 6/6** — UAT-AUTH-05 passes on every engine.
 - The final edits were timeout-only (`test.slow()`, 90 s dialog wait) and so cannot invalidate the earlier passes; they were re-verified on the three engines that had failed.
-- **Slice 3 gates:** frontend Vitest 620/620, tsc + eslint clean. The backend was not touched, so no ruff/mypy/pytest was owed.
+- **Slice 3 gates:** frontend Vitest 623/623, tsc + eslint clean; backend ruff + mypy clean, unit 2109/2109 (the backend was touched by the follow-on below).
+
+## Slice 3 follow-on — telling the truth about an undelivered code
+Both fixes came from reading the OTP path while chasing a latency problem that turned out not to exist.
+
+- **A failed OTP send was invisible to the customer.** `MessagingService.send_bulk` *buckets* failures into its result rather than raising, and `_send_direct_message` discarded that result — so a send that failed on every channel was indistinguishable from one that succeeded. `send_otp` returned 200, the dialog opened, and the customer waited for a code that had never been sent.
+  - Best-effort delivery is deliberate **and tested** (`test_a_failing_fallback_never_propagates`: "the code is already stored, and raising here would turn an undelivered message into a failed API call"), so the fix is additive rather than a reversal: `_send_direct_message` returns its `BulkSendResult`, the three verification senders pass it through, and `send_verification_msg` reports `delivered` without ever raising.
+  - `send_otp` now answers with an `OtpSendResultDto`, which also closes a contract drift: the endpoint returned a raw dict, so the wire key was literally `resend_in` while the frontend's type claimed `resendIn`. Nothing read it, so the mismatch had gone unnoticed.
+  - A shared `otpDeliveryError` helper drives all three surfaces that request a code — the signup verify step, the OAuth profile modal, and the §10.5 pay gate — so none of them can read a 2xx as "the code is on its way".
+- **`IntegrationException` could not be rendered at all.** It never called `super().__init__`, so it carried no `status_code`/`code`; raised across a request boundary it would fail *inside* `appodus_exception_handler` and return an unmapped 500. It now carries a 502 envelope, with 429 for the rate-limit subclass and 422 for validation. (`Exception.__new__` had always populated `args`, so `str(exc)` looked right and the gap stayed hidden — the provider tests match on message text and still pass.)
+- **Another spec mistake of mine:** four `waitForURL` calls used Playwright's default `waitUntil: "load"`, which waits on every image and font — precisely what `goto()` avoids. UAT-AUTH-14 timed out on it once; all four now use `domcontentloaded`, and the set-password describe is `test.slow()` like the funnel describes.
+- **Verified:** backend ruff + mypy clean, unit **2109/2109**; frontend Vitest **623/623**, tsc + eslint clean; `auth.spec.ts` **13/13 on chromium-desktop, first attempt, no retries**.
+- **Worth knowing for the next slice:** the backend does not hot-reload. A stale process serves the old contract and fails the funnel in a way that looks like a code defect — the verification run now polls until `/otp/send` actually returns `delivered` before it starts testing.
 
 ---
 

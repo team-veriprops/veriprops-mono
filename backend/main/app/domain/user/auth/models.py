@@ -59,6 +59,18 @@ class OtpVerifyDto(OtpSendDto):
     code: str
 
 
+class OtpSendResultDto(Object):
+    """What a request for a code tells the caller.
+
+    ``delivered`` is False when dispatch did not complete. The code is stored either way, and a
+    transient failure is already recorded RETRYING and re-driven — but the caller should be able
+    to say so, rather than present an entry box for a code that may never arrive.
+    """
+
+    resend_in: int
+    delivered: bool
+
+
 class PhoneOtpSendDto(Object):
     """Pay-step phone verification for the logged-in user (PRD §10.5).
 

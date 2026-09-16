@@ -292,8 +292,12 @@ test.describe("UAT-AUTH — signup funnel @P0", () => {
 
     // A brand-new customer owns no verification yet, so the journey continues into the wizard
     // rather than stranding them on an empty dashboard.
+    // `domcontentloaded` rather than the default `load`, for the same reason `goto` uses it:
+    // `load` additionally waits on every image and font, which this assertion does not care
+    // about and which is what makes an otherwise-passing wait time out under parallel load.
     await page.waitForURL((url) => url.pathname === ROUTES.PORTAL.VERIFICATIONS_NEW, {
       timeout: 30_000,
+      waitUntil: "domcontentloaded",
     });
     await waitReady(page);
 
@@ -345,6 +349,7 @@ test.describe("UAT-AUTH — signup variants @P1", () => {
     // arriving through a referral link changes nothing about the invitee's own signup.
     await page.waitForURL((url) => url.pathname === ROUTES.PORTAL.VERIFICATIONS_NEW, {
       timeout: 30_000,
+      waitUntil: "domcontentloaded",
     });
   });
 
@@ -360,7 +365,10 @@ test.describe("UAT-AUTH — signup variants @P1", () => {
     await fillResidenceStep(page);
     await acceptConsentsAndSubmit(page);
 
-    await page.waitForURL((url) => url.pathname.startsWith(ROUTES.AGENT.GATE), { timeout: 30_000 });
+    await page.waitForURL((url) => url.pathname.startsWith(ROUTES.AGENT.GATE), {
+      timeout: 30_000,
+      waitUntil: "domcontentloaded",
+    });
     await waitReady(page);
 
     const snapshot = await page.evaluate(() => window.__auth_snapshot__);
@@ -395,6 +403,9 @@ test.describe("UAT-AUTH — signup variants @P1", () => {
 });
 
 test.describe("UAT-AUTH — set a password @P1", () => {
+  // Builds its own scenario and signs in twice, so it is slow by design rather than by accident.
+  test.slow();
+
   test("UAT-AUTH-14 · setting a password makes it the one that signs the user in", async ({
     scenario,
     pageFor,
@@ -415,7 +426,7 @@ test.describe("UAT-AUTH — set a password @P1", () => {
     await page.waitForURL(
       (url) =>
         url.pathname === ROUTES.ACCOUNT.SECURITY && url.searchParams.get("password") === "ok",
-      { timeout: 30_000 },
+      { timeout: 30_000, waitUntil: "domcontentloaded" },
     );
 
     // Acceptance is the business outcome: the chosen password is the one that now signs in.

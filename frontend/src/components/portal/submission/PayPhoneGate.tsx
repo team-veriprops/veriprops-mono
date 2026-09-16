@@ -13,6 +13,7 @@ import {
   useSendPhoneOtpMutation,
   useVerifyPhoneMutation,
 } from "@components/website/auth/libs/useAuthQueries";
+import { otpDeliveryError } from "@components/website/auth/libs/otpDelivery";
 import type { AuthUser } from "@components/website/auth/models";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 import { getErrorMessage } from "@lib/utils";
@@ -62,7 +63,13 @@ export default function PayPhoneGate({ user, onVerified }: Props) {
   const onSend = form.handleSubmit(async (values) => {
     setError(null);
     try {
-      await sendOtp.mutateAsync(values);
+      // A 2xx only means the code was issued — `delivered` says whether it was actually sent,
+      // and asking for a code that never left is worse than saying so.
+      const undelivered = otpDeliveryError((await sendOtp.mutateAsync(values)).data);
+      if (undelivered) {
+        setError(undelivered);
+        return;
+      }
       setSentTo(values);
       setOtp("");
       toast({ title: "Code sent", description: "Enter the code sent to your phone." });
