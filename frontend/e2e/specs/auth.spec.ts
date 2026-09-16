@@ -205,12 +205,10 @@ async function openOtpDialog(page: Page, field: "email" | "phone"): Promise<void
 
   const modal = page.getByTestId("verify-otp-modal");
   const sendError = page.getByTestId(`verify-${field}-error`);
-  // Requesting a code delivers the email *within* the request: the backend awaits dispatch on
-  // purpose, so that a failed send is already recorded as RETRYING rather than lost with the
-  // worker (`_send_direct_message`). Measured at 3–12s idle on the dev stack, and longer under
-  // parallel load — hence a budget far beyond a normal UI wait. The form's own error is watched
-  // alongside, so a refused send is reported in the app's words rather than as a bare
-  // "element not found" on the dialog.
+  // The endpoint itself is quick (~0.15s measured), but this whole step is generously budgeted
+  // because the browser gets starved when several workers share one machine, and that is where
+  // this wait has actually failed. The form's own error is watched alongside, so a refused send
+  // is reported in the app's words rather than as a bare "element not found" on the dialog.
   const opened = await Promise.race([
     modal.waitFor({ state: "visible", timeout: 90_000 }).then(() => true),
     sendError.waitFor({ state: "visible", timeout: 90_000 }).then(() => false),
