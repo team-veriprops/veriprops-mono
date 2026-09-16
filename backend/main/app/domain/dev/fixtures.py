@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime
+from functools import lru_cache
 from typing import Dict, Iterable
 
 from sqlalchemy import text
@@ -64,6 +65,14 @@ def unique_local_phone() -> str:
     return f"81{secrets.randbelow(10 ** 8):08d}"
 
 
+@lru_cache(maxsize=None)
+def fixture_password_hash(password: str) -> str:
+    """The hash for a fixture password, computed once per process. Fixture accounts share a password,
+    and Argon2 is deliberately slow: hashing per account would block the event loop once for every
+    account a seed or scenario creates."""
+    return Utils.get_password_hash(password)
+
+
 def add_verified_user(
     session, *, first_name: str, last_name: str, email: str, phone_local: str,
     persona: str | None, password: str = QA_PASSWORD, phone_verified: bool = True,
@@ -79,7 +88,7 @@ def add_verified_user(
         phone_e164=f"+234{phone_local}", phone_verified=phone_verified,
         country_of_residence="NG", timezone="Africa/Lagos", preferred_currency="NGN",
         user_type=UserType.USER.value, personas=[persona] if persona else [], trust_status="TRUSTED",
-        password_hash=Utils.get_password_hash(password),
+        password_hash=fixture_password_hash(password),
     )
     session.add(user)
     return user

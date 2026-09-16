@@ -114,7 +114,7 @@ class SessionService:
         valid = bool(
             user
             and user.password_hash
-            and Utils.verify_password(req.password, user.password_hash)
+            and await Utils.check_password(req.password, user.password_hash)
         )
         if not valid:
             if user:

@@ -140,7 +140,7 @@ class AuthService:
                 ),
             )
 
-        password_hash = Utils.get_password_hash(req.password)
+        password_hash = await Utils.hash_password(req.password)
         intent_persona = (
             [UserPersona.AGENT]
             if req.intent == AuthIntent.AGENT
@@ -331,7 +331,7 @@ class AuthService:
         token = await self._session_service.consume_password_reset_token(token_hash)
         if not token:
             raise InvalidTokenException("This reset link is invalid or has expired.")
-        new_hash = Utils.get_password_hash(new_password)
+        new_hash = await Utils.hash_password(new_password)
         await self._user_service.set_password_hash(str(token.user_id), new_hash)
         await self._session_service.revoke_all_devices_for_user(str(token.user_id))
         await self._session_service.record_event(
@@ -343,7 +343,7 @@ class AuthService:
 
     async def set_password(self, user_id: str, new_password: str) -> None:
         _assert_password_strength(new_password)
-        new_hash = Utils.get_password_hash(new_password)
+        new_hash = await Utils.hash_password(new_password)
         await self._user_service.set_password_hash(user_id, new_hash)
         await self._session_service.record_event(
             SecurityEventType.PASSWORD_CHANGED, "Password set",
