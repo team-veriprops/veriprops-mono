@@ -51,11 +51,6 @@ def _builder_tables() -> set[str]:
                 for name in dir(module)
                 if name.startswith("_create_") and callable(getattr(module, name))
             )
-        # A later migration may rename a table it did not build (`_TABLE_RENAMES`, applied
-        # in revision order), so the name the schema ends up with is the one to compare.
-        for old_name, new_name in getattr(module, "_TABLE_RENAMES", []):
-            tables.discard(old_name)
-            tables.add(new_name)
     return tables
 
 
