@@ -79,6 +79,8 @@ const ToastClose = React.forwardRef<
       className
     )}
     toast-close=""
+    // Icon-only control: without a name a screen reader announces an unlabelled button.
+    aria-label="Close"
     {...props}
   >
     <X className="h-4 w-4" />

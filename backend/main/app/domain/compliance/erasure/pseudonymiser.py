@@ -20,10 +20,20 @@ import hashlib
 from typing import List
 
 from kink import inject
-from sqlalchemy import update
+from sqlalchemy import String, case, cast, func, or_, select, update
 
 from main.app.config.settings import settings
 from main.app.domain.audit.models import AuditLog
+from main.app.domain.communication.assistant.session.models import AssistantSession, BotMode
+from main.app.domain.communication.conversation.models import Conversation
+from main.app.domain.verification.models import Verification
+from main.app.domain.channel.whatsapp.handoff.models import HandoffTokenRedemption
+from main.app.domain.channel.whatsapp.inbound.models import WhatsAppInboundMessage
+from main.app.domain.channel.whatsapp.link.models import (
+    WhatsAppLink,
+    WhatsAppLinkStatus,
+)
+from main.app.domain.verification.delegate.models import CaseDelegate
 from main.app.domain.payout.bank_account.models import AgentBankAccount
 from main.app.domain.user.agent.kyc.models import KycRecord
 from main.app.domain.user.auth.oauth.models import OAuthIdentity
@@ -141,4 +151,162 @@ class PiiPseudonymiser:
         )
         surfaces.append("agent_bank_accounts")
 
+        # 9-13) The assistant's conversation state and the WhatsApp channel (§26.8).
+        surfaces += await self._pseudonymise_whatsapp(session, subject_user_id, token)
+
         return surfaces
+
+    async def _pseudonymise_whatsapp(
+        self, session, subject_user_id: str, token: str
+    ) -> List[str]:
+        """Sever the subject's identity across the WhatsApp channel (§26.8, NDPA).
+
+        The channel keys almost everything on a **phone number** rather than a user id, so
+        this starts by reading the subject's linked numbers and then scrubs by number. It
+        has to run before the link rows are cleared, which is why it is one method rather
+        than five more blocks above.
+
+        The line drawn here is §26.8's own: **identity is severed, content is retained.**
+        Chat logs are retained business records covered by the same access controls as case
+        data, so what a customer said stays; the number that said it, the profile name Meta
+        supplied, and the raw envelope carrying both do not. That is the same split as
+        `audit_logs` above, where the actor is severed and the events stay intact.
+        """
+        surfaces: List[str] = []
+
+        # The subject's numbers, read before the link rows are cleared. Includes revoked
+        # links, whose rows keep no number — hence the null filter.
+        rows = await session.execute(
+            select(WhatsAppLink.phone_e164).where(
+                WhatsAppLink.user_id == subject_user_id,
+                WhatsAppLink.phone_e164.is_not(None),
+            )
+        )
+        phones = [phone for (phone,) in rows.all() if phone]
+
+        # 9) Assistant sessions (D93) — on the subject's numbers and on their own web threads.
+        # `context` is dropped outright rather than tokenised: it holds the free-text answers
+        # of a half-finished intake (a property address, a landmark), personal data that never
+        # became a business record. One statement covers both surfaces; only a row on one of
+        # the subject's numbers has a number to replace.
+        #
+        # The rest of the session's memory is reset to a blank slate, not just the number:
+        # sessions are keyed by *conversation* now, and a WhatsApp conversation's row is never
+        # deleted by erasure (§26.8 retains the content) — so the next message from this
+        # number would otherwise find the old, already-welcomed session and pick up the old
+        # conversation exactly where it left off. Resetting `welcomed_at` etc. is what makes
+        # the bot treat that number as a stranger again, matching a subject who never wrote.
+        await session.execute(
+            update(AssistantSession)
+            .where(
+                or_(
+                    AssistantSession.phone_e164.in_(phones),
+                    AssistantSession.conversation_id.in_(_subject_conversation_refs(subject_user_id)),
+                )
+            )
+            .values(
+                phone_e164=case(
+                    (AssistantSession.phone_e164.in_(phones), token),
+                    else_=AssistantSession.phone_e164,
+                ),
+                mode=BotMode.BOT.value,
+                mode_changed_at=None,
+                current_flow=None,
+                step=0,
+                context=None,
+                last_inbound_at=None,
+                welcomed_at=None,
+                unmatched_count=0,
+                last_escalation_reason=None,
+                last_escalated_at=None,
+                pending_turn_message_id=None,
+                pending_turn_at=None,
+                turn_claimed_at=None,
+            ),
+            execution_options={"synchronize_session": False},
+        )
+        surfaces.append("chat_bot_sessions")
+
+        # 10) The link itself. The number is cleared to NULL rather than tokenised, because
+        # `phone_e164` is uniquely constrained and a retained value would hold that
+        # constraint forever — locking a real number out of every future account. This is
+        # the same reasoning as `WhatsAppLinkRepo.release_number`.
+        await session.execute(
+            update(WhatsAppLink)
+            .where(WhatsAppLink.user_id == subject_user_id)
+            .values(
+                phone_e164=None,
+                wa_id=None,
+                status=WhatsAppLinkStatus.REVOKED.value,
+                revoked_reason="erasure",
+            )
+        )
+        surfaces.append("whatsapp_links")
+
+        if not phones:
+            # Never linked a number: nothing downstream keys on this subject.
+            return surfaces
+
+        # 11) The inbound journal. `from_phone` is 20 characters and the subject token is
+        # 23, so it takes the flat redaction; re-identification still works through
+        # `chat_message_id`, whose conversation carries the (stable) user id. `payload` is
+        # Meta's raw envelope — it duplicates the normalized columns and carries the number
+        # and profile name besides, so it goes rather than being picked apart.
+        await session.execute(
+            update(WhatsAppInboundMessage)
+            .where(WhatsAppInboundMessage.from_phone.in_(phones))
+            .values(from_phone=_REDACTED, sender_name=_REDACTED, payload=None)
+        )
+        surfaces.append("whatsapp_inbound_messages")
+
+        # 12) Delegations the subject holds on **other people's** cases (§26.4.5). Revoked
+        # as well as scrubbed: a grant addressed to a number nobody can reach any more is
+        # not a grant, and leaving it live would keep the case's delegate slot occupied.
+        # Delegates on the subject's *own* cases are other people, and their erasure is
+        # their own request to make.
+        await session.execute(
+            update(CaseDelegate)
+            .where(CaseDelegate.phone_e164.in_(phones))
+            .values(
+                name=_REDACTED,
+                phone_e164=token,
+                revoked_at=Utils.datetime_now(),
+                revoked_reason="erasure",
+            )
+        )
+        surfaces.append("case_delegates")
+
+        # 13) The §26.5 handoff ledger. The jti rows stay — they are what makes a token
+        # single-use, and dropping them would let a captured link be replayed — but the
+        # number and the redeeming IP are identity, not enforcement.
+        await session.execute(
+            update(HandoffTokenRedemption)
+            .where(
+                or_(
+                    HandoffTokenRedemption.customer_id == subject_user_id,
+                    HandoffTokenRedemption.phone_e164.in_(phones),
+                )
+            )
+            .values(phone_e164=token, redeemed_ip=None)
+        )
+        surfaces.append("handoff_token_redemptions")
+
+        return surfaces
+
+
+def _hex_ref(column):
+    """A UUID column in the 32-char form reference columns store."""
+    return func.replace(cast(column, String), "-", "")
+
+
+def _subject_conversation_refs(subject_user_id: str):
+    """The subject's own threads, as stored conversation refs: the ones they opened (web
+    support, an owned WhatsApp thread) and their cases' customer threads, whose opener may
+    have been an admin."""
+    own_cases = select(_hex_ref(Verification.id)).where(Verification.customer_id == subject_user_id)
+    return select(_hex_ref(Conversation.id)).where(
+        or_(
+            Conversation.created_by == subject_user_id,
+            Conversation.verification_id.in_(own_cases),
+        )
+    )

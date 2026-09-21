@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loguru import Logger
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional, Union
 
 from main.appodus_utils.db.types.phone import PhoneNumber
@@ -14,7 +14,7 @@ from main.appodus_utils.integrations.messaging.models import EmailRecipient, Mes
 from kink import di, inject
 
 from main.app.config.settings import settings
-from main.app.domain.user.auth.models import OtpChannel
+from main.app.domain.user.auth.models import OtpChannel, OtpSendResultDto
 from main.app.domain.user.auth.session.models import SecurityEventType
 from main.app.domain.user.auth.session.service import SessionService
 from main.appodus_utils import Utils
@@ -93,9 +93,13 @@ class OtpService:
             *,
             user_id: Optional[str] = None,
             ip_address: Optional[str] = None,
-    ) -> int:
-        """Issue (or rotate) an OTP and dispatch via the chosen channel.
-        Returns seconds until the user can request a resend (TTL of the OTP)."""
+    ) -> OtpSendResultDto:
+        """Issue (or rotate) an OTP and dispatch it over *channel*.
+
+        Reports the resend window (the OTP's TTL) and whether dispatch completed. Delivery stays
+        best-effort — a failed send must not fail the request, because the code is stored and the
+        retry ladder may still carry it — but the caller can now tell the user when a code is not
+        on its way instead of presenting an entry box for it."""
         r_key = _resend_key(channel, recipient)
         recent = await self._kv.get(r_key)
         attempts = int(recent or 0) + 1
@@ -106,14 +110,16 @@ class OtpService:
         await self._kv.set(_otp_key(channel, recipient), OTP_TTL, code)
         await self._kv.set(r_key, RESEND_LOCKOUT, attempts)
 
-        await send_verification_msg(recipient=recipient, code=code)
+        delivered = await send_verification_msg(recipient=recipient, code=code, channel=channel)
         await self._session_service.record_event(
             SecurityEventType.OTP_SENT,
             f"OTP sent via {channel.value.lower()}",
             user_id=user_id,
             ip_address=ip_address,
         )
-        return int(OTP_TTL.total_seconds())
+        return OtpSendResultDto(
+            resend_in=int(OTP_TTL.total_seconds()), delivered=delivered,
+        )
 
     async def verify_otp(
             self,
@@ -170,20 +176,47 @@ def recipient_for(channel: OtpChannel, *, email: Optional[str], dial_code: Optio
     return PhoneNumber(dial_code=dial_code, number=phone)
 
 
-async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], code: str) -> None:
+def _dispatch_completed(result) -> bool:
+    """A dispatch counts as delivered once at least one channel reported success.
+
+    `send_bulk` buckets failures rather than raising, so an all-channels-failed dispatch returns
+    normally — the successes list is the only thing that distinguishes it from a real send.
+    """
+    return bool(result is not None and result.successes)
+
+
+async def send_verification_msg(
+        recipient: Union[EmailRecipient, PhoneNumber],
+        code: str,
+        channel: OtpChannel = OtpChannel.EMAIL,
+) -> bool:
+    """Deliver *code*, returning whether dispatch completed.
+
+    Never raises: delivery is best-effort because the code is already stored, and a transient
+    failure is recorded RETRYING and re-driven, so failing the customer's request over it would
+    turn a recoverable hiccup into a dead end. Reporting the outcome is what lets the caller be
+    honest about a code that is not coming.
+    """
     from main.app.domain.user.user_messages import AccountSecurityMessages
     account_security_messages = di[AccountSecurityMessages]
 
-    channel: OtpChannel = OtpChannel.EMAIL
     # The code is useless (or stale — resends overwrite it) past its validity, so
     # cap delivery retries at the OTP window instead of the full retry ladder.
     expires_at = Utils.datetime_now() + OTP_TTL
 
     try:
-        if isinstance(recipient, EmailRecipient):
+        if channel == OtpChannel.WHATSAPP:
+            # PRD §26.4.4: WhatsApp account linking delivers its code over WhatsApp itself,
+            # using the §26.7 `otp_auth` template, and falls back to SMS on the same number
+            # (D60, amending D46). The code is stored under the WHATSAPP channel key
+            # either way, so verification is unaffected by which transport carried it.
+            return await _send_whatsapp_otp_with_sms_fallback(
+                account_security_messages, recipient, code, expires_at
+            )
+        elif isinstance(recipient, EmailRecipient):
             firstname, _, lastname = Utils.parse_fullname(str(recipient.fullname))
 
-            await account_security_messages.send_direct_email_verification_message(
+            return _dispatch_completed(await account_security_messages.send_direct_email_verification_message(
                 recipient=MessageRequestRecipient(
                     fullname=recipient.fullname,
                     email=recipient.email
@@ -196,10 +229,9 @@ async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], c
                     MessageContext.VALIDITY: _validity_label(),
                 },
                 expires_at=expires_at
-            )
+            ))
         else:
-            channel: OtpChannel = OtpChannel.PHONE
-            await account_security_messages.send_direct_phone_verification_message(
+            return _dispatch_completed(await account_security_messages.send_direct_phone_verification_message(
                 recipient=MessageRequestRecipient(
                     phone=recipient
                 ),
@@ -208,6 +240,54 @@ async def send_verification_msg(recipient: Union[EmailRecipient, PhoneNumber], c
                     MessageContext.VALIDITY: _validity_label(),
                 },
                 expires_at=expires_at
-            )
+            ))
     except Exception as e:
         logger.warning("OTP delivery failed for {} via {}: {}", recipient, channel.value, e)
+        return False
+
+
+async def _send_whatsapp_otp_with_sms_fallback(
+        account_security_messages,
+        recipient: PhoneNumber,
+        code: str,
+        expires_at: datetime,
+) -> bool:
+    """Deliver an account-linking OTP over WhatsApp, falling back to SMS (§26.4.4, D60).
+
+    WhatsApp is the primary transport because the number being linked *is* a WhatsApp
+    number, so a code that arrives there is the most direct proof of control. But a
+    WhatsApp send can fail for reasons that have nothing to do with the customer — an
+    unapproved template, a Meta outage, a number with no WhatsApp account — and a linking
+    flow that dead-ends on any of those strands somebody who did nothing wrong.
+
+    SMS to the same number is the fallback §26.4.4 names. The provider chain is the
+    messaging router's existing one (Termii → Twilio for +234, the mock provider in
+    dev/test), so this needs no new provider decision — which is the blocker D46 deferred
+    on, and which the router had already settled.
+
+    The fallback is deliberately **not** silent: a customer who received the code by SMS
+    got the experience the PRD's second choice describes, and that is worth seeing in the
+    logs when diagnosing why linking rates differ from send counts.
+    """
+    context = {MessageContext.OTP: code, MessageContext.VALIDITY: _validity_label()}
+    try:
+        return _dispatch_completed(
+            await account_security_messages.send_whatsapp_link_verification_message(
+                recipient=MessageRequestRecipient(phone=recipient),
+                context=context,
+                expires_at=expires_at,
+            )
+        )
+    except Exception as e:
+        logger.warning(
+            "WhatsApp OTP delivery failed for {}; falling back to SMS (§26.4.4): {}",
+            recipient.international_number, e,
+        )
+
+    return _dispatch_completed(
+        await account_security_messages.send_direct_phone_verification_message(
+            recipient=MessageRequestRecipient(phone=recipient),
+            context=context,
+            expires_at=expires_at,
+        )
+    )

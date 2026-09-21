@@ -9,7 +9,9 @@ cycle, release gate) → release → report + branded PDF → tracking/SSE → p
 dispute/re-check/upgrade → payouts → the finished PREMIUM leg (LAWYER + v2/v3 reports,
 declined re-check, upheld dispute) → referral earn+spend → pricing/analytics/broadcast
 hardening → pool/no-show/starvation + pause/delay/cancel/fail + chargeback → audit pack +
-NDPA erasure (reject + execute) → Mailpit email delivery + password reset → outbound-message
+NDPA erasure (reject + execute) → the WhatsApp channel (signature-verified Meta webhook,
+redelivery dedup, console inbound under the same fraud scan, and a handoff link carried all
+the way to a PAID case) → Mailpit email delivery + password reset → outbound-message
 failure→retry→threshold→expiry pipeline (stops/starts the Mailpit container via the docker
 CLI; warn-skips without docker). Prints PASS/FAIL per step; exits non-zero on any failure.
 
@@ -37,6 +39,9 @@ from __future__ import annotations
 import argparse
 import sys
 
+# from main.app.config.settings import settings  # noqa: F401
+# from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
+
 from e2e import (
     stage_admin_ops,
     stage_admin_team,
@@ -55,8 +60,9 @@ from e2e import (
     stage_session_refresh,
     stage_sharing,
     stage_tracking,
+    stage_whatsapp,
 )
-from e2e.harness import Ctx, check, client, failures, login
+from e2e.harness import Ctx, check, checks_run, client, failures, login
 
 # Ordered pipeline — each stage consumes state the previous ones produced (Ctx).
 STAGES = [
@@ -73,8 +79,9 @@ STAGES = [
     ("premium_release", stage_premium_release),      # §14 finish — LAWYER, v2/v3, declined recheck
     ("growth", stage_growth),                        # S21 — referral earn + spend, abandonment
     ("admin_ops", stage_admin_ops),                  # S22 — pricing, analytics, broadcast hardening
-    ("ops_unhappy", stage_ops_unhappy),              # §6/§7.2/§8.5/§6a — pool, lifecycle, chargeback
+    ("ops_unhappy", stage_ops_unhappy),              # §6/§11.3/§8.5/§6a — pool, lifecycle, chargeback
     ("compliance", stage_compliance),                # S23 — audit pack, erasure reject + execute
+    ("whatsapp", stage_whatsapp),                    # §26 S1–S11 — the channel end to end
     ("email", stage_email),                          # Mailpit delivery + password reset (warn-skips)
     ("messaging_retry", stage_messaging_retry),      # failure→retry→threshold→expiry (warn-skips)
 ]
@@ -134,7 +141,12 @@ def main() -> int:
         module.run(ctx)
 
     failed = failures()
-    print("\n" + ("ALL PASSED" if not failed else f"{len(failed)} FAILED: {failed}"))
+    # The total is counted rather than left to be grepped out of the [PASS] lines, which
+    # is how the figures quoted in docs/runtime-state.yaml used to be arrived at.
+    summary = f"{checks_run()} checks"
+    if failed:
+        summary += f", {len(failed)} FAILED: {failed}"
+    print("\n" + ("ALL PASSED — " if not failed else "") + summary)
     return 1 if failed else 0
 
 

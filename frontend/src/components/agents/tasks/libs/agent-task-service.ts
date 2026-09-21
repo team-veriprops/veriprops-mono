@@ -22,7 +22,7 @@ export class AgentTaskService {
     return this.http.get(`${this.base}?${params.toString()}`);
   }
 
-  /** Agent home summary (§7) — backend-derived counts over the agent's own tasks. */
+  /** Agent home summary (§12) — backend-derived counts over the agent's own tasks. */
   getSummary(): Promise<SuccessResponse<AgentDashboard>> {
     return this.http.get(`${this.base}/summary`);
   }

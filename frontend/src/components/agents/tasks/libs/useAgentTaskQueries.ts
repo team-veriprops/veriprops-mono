@@ -24,7 +24,7 @@ export function useTaskHistoryQuery(taskId: string, page = 0) {
   });
 }
 
-/** Agent dashboard summary (§7) — backend-derived counts over the agent's own tasks. */
+/** Agent dashboard summary (§12) — backend-derived counts over the agent's own tasks. */
 export function useAgentDashboardQuery(enabled = true) {
   return useQuery({
     queryKey: agentTaskKeys.summary(),

@@ -45,7 +45,7 @@ export default function ConsentStep({ loading, errorMessage, onSubmit, onBack }:
   };
 
   return (
-    <form className="space-y-6" onSubmit={handleSubmit} noValidate>
+    <form className="space-y-6" onSubmit={handleSubmit} noValidate data-testid="signup-consent-form">
       <p className="text-sm leading-relaxed text-brand-on-surface-variant">
         We need your explicit acceptance of the documents below before creating your account. We
         record the exact version you accept along with the timestamp.
@@ -57,28 +57,45 @@ export default function ConsentStep({ loading, errorMessage, onSubmit, onBack }:
           checked={acceptedTerms}
           onChange={setAcceptedTerms}
           error={touched && !acceptedTerms ? "Required to continue" : undefined}
+          data-testid="signup-consent-terms"
         />
         <ConsentCheckbox
           doc={PRIVACY_POLICY}
           checked={acceptedPrivacy}
           onChange={setAcceptedPrivacy}
           error={touched && !acceptedPrivacy ? "Required to continue" : undefined}
+          data-testid="signup-consent-privacy"
         />
       </div>
 
       {errorMessage && (
         <div
           className="p-3 rounded-lg text-sm bg-danger/6 text-danger border border-danger/18"
+          data-testid="signup-consent-error"
         >
           {errorMessage}
         </div>
       )}
 
       <div className="flex gap-3 pt-2">
-        <Button type="button" variant="outline" className="flex-1" onClick={onBack} size="lg" disabled={loading}>
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={onBack}
+          size="lg"
+          disabled={loading}
+          data-testid="signup-consent-back"
+        >
           Back
         </Button>
-        <Button type="submit" className="flex-1" size="lg" disabled={loading}>
+        <Button
+          type="submit"
+          className="flex-1"
+          size="lg"
+          disabled={loading}
+          data-testid="signup-consent-submit"
+        >
           {loading ? "Creating account…" : "Create my account"}
         </Button>
       </div>

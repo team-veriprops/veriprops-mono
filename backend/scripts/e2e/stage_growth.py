@@ -7,7 +7,7 @@ clears it into the referrer's spendable balance and fires REFERRAL_CREDIT_EARNED
 """
 from __future__ import annotations
 
-from .harness import CONSENT_VERSION, Ctx, check
+from .harness import Ctx, check, consent_version_for
 
 
 def run(ctx: Ctx) -> None:
@@ -40,7 +40,8 @@ def run(ctx: Ctx) -> None:
     referrer.post(f"/verifications/{draft['id']}/submit", json={
         "property": {"property_type": "LAND", "address": "8 Bourdillon Rd, Ikoyi",
                      "state": "Lagos", "lga": "Eti-Osa", "landmark": "Near the towers"},
-        "tier": "BASIC", "currency": "NGN", "consent": {"consent_version": CONSENT_VERSION},
+        "tier": "BASIC", "currency": "NGN",
+        "consent": {"consent_version": consent_version_for("VERIFICATION_TERMS")},
     }).raise_for_status()
     pay = referrer.post(f"/payments/initiate/{draft['id']}", json={"method": "CARD"}).json()["data"]
     referrer.post("/payments/stub/confirm",

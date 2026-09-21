@@ -1,4 +1,6 @@
+from main.appodus_utils.integrations.messaging.providers.email.aws_ses import AmazonSESEmailProvider
 from main.appodus_utils.integrations.messaging.providers.email.mailjet import MailjetEmailProvider
+from main.appodus_utils.integrations.messaging.providers.email.resend import ResendEmailProvider
 from main.appodus_utils.integrations.messaging.providers.email.smtp import SmtpEmailProvider
 from main.appodus_utils.integrations.messaging.providers.push.firebase import FirebasePushProvider
 from main.appodus_utils.integrations.messaging.providers.push.web_push import WebPushProvider
@@ -6,3 +8,4 @@ from main.appodus_utils.integrations.messaging.providers.sms.mock import MockSms
 from main.appodus_utils.integrations.messaging.providers.sms.termii import TermiiSMSProvider
 from main.appodus_utils.integrations.messaging.providers.sms.twilio_sms import TwilioSMSProvider
 from main.appodus_utils.integrations.messaging.providers.whatsapp.whatsapp_business import WhatsAppBusinessProvider
+from main.appodus_utils.integrations.messaging.providers.whatsapp.stub import WhatsAppStubProvider

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import Optional, List
+from typing import Final, Optional, List
 
 from sqlalchemy import Column, DateTime, Index, String, Text, UniqueConstraint
 
@@ -29,6 +29,16 @@ class ConsentSignoffStatus(str, enum.Enum):
     shown with a banner; FINAL is cleared for production."""
     DRAFT = "DRAFT"
     FINAL = "FINAL"
+
+
+# The consents every account must hold at the current version (PRD §3.2). A user missing
+# any of these — or holding only a superseded version — is forced through the
+# non-dismissible re-acceptance modal on every authenticated page. Signup records them;
+# any other path that creates a user (e.g. the dev seeder) must record them too.
+REQUIRED_SIGNUP_CONSENTS: Final[tuple[ConsentDocumentType, ...]] = (
+    ConsentDocumentType.PLATFORM_TERMS,
+    ConsentDocumentType.PRIVACY_POLICY,
+)
 
 
 class ConsentDocument(BaseEntity):

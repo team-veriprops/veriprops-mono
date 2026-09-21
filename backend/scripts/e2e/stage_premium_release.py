@@ -32,7 +32,7 @@ def run(ctx: Ctx) -> None:
     admin.post(f"/admin/review/{vid_id}/tasks/SURVEYOR/approve", json={"quality": 90}).raise_for_status()
 
     # 2. LAWYER unlocks once the other three are settled (§2.5 dependency gate) — full cycle.
-    lawyer_id = ctx.seed["agents"]["LAWYER"]
+    lawyer_id = ctx.seed["agents"]["LAWYER"]["id"]
     r = admin.post(f"/admin/verifications/{vid_id}/tasks/LAWYER/assign", json={"agentId": lawyer_id})
     check("PREMIUM upgrade unlocks the LAWYER assignment (§2.5/§14.2)", r.status_code == 200,
           f"http {r.status_code}: {r.text[:180]}")
@@ -48,7 +48,7 @@ def run(ctx: Ctx) -> None:
     ).raise_for_status()
     submitted = lawyer.post(f"/agents/tasks/{l_task['id']}/submit",
                             json={"payload": ROLE_PAYLOADS["LAWYER"]}).json()["data"]
-    check("LAWYER executes and submits the legal-opinion task (§7.3)",
+    check("LAWYER executes and submits the legal-opinion task (§12.2)",
           submitted["state"] == "SUBMITTED")
     admin.post(f"/admin/review/{vid_id}/tasks/LAWYER/approve", json={"quality": 95}).raise_for_status()
 

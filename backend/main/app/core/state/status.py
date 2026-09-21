@@ -113,7 +113,7 @@ class ShareType(str, enum.Enum):
 
 
 class AgentRole(str, enum.Enum):
-    """Agent / task role (PRD §1.4, §7.3)."""
+    """Agent / task role (PRD §1.4, §12.2)."""
 
     REGISTRY = "REGISTRY"
     FIELD = "FIELD"

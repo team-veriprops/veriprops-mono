@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, AlertTriangle } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
 import { Button } from "@3rdparty/ui/button";
+import { SubmitButton } from "@components/ui/form/SubmitButton";
 import AuthShell from "../AuthShell";
 import AuthHeading from "../AuthHeading";
 import PasswordStrengthMeter from "../PasswordStrengthMeter";
@@ -52,7 +53,15 @@ export default function SetPasswordContainer() {
         subtitle="You signed up with a social account. Adding a password is optional but recommended."
       />
 
-      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="set-password-form">
+      {/* method="post" so that a submit landing before hydration cannot put the new password
+          in the URL — see SubmitButton. */}
+      <form
+        className="space-y-5"
+        method="post"
+        onSubmit={form.handleSubmit(onSubmit)}
+        noValidate
+        data-testid="set-password-form"
+      >
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-brand-navy">
             New password
@@ -126,15 +135,14 @@ export default function SetPasswordContainer() {
           >
             Skip for now
           </Button>
-          <Button
-            type="submit"
+          <SubmitButton
             className="flex-1"
             size="lg"
             data-testid="set-password-submit"
             disabled={setPasswordMutation.isPending}
           >
             {setPasswordMutation.isPending ? "Saving…" : "Save password"}
-          </Button>
+          </SubmitButton>
         </div>
       </form>
     </AuthShell>

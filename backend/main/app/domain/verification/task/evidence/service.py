@@ -1,7 +1,7 @@
-"""Task evidence service (PRD §4.5, §7.3a).
+"""Task evidence service (PRD §4.5, §12.3).
 
 Receives an agent's captured file, applies the two receipt-time integrity controls
-— per-item SHA-256 content hash (§4.5) and server-set GPS + timestamp (§7.3a) — uploads
+— per-item SHA-256 content hash (§4.5) and server-set GPS + timestamp (§12.3) — uploads
 the bytes through the storage facade (deterministic stub default, real S3/R2 by settings),
 and persists the evidence row. The client-supplied GPS is accepted only as a hint; the
 authoritative capture facts are stamped here so they cannot be forged.

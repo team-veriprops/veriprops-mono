@@ -1,3 +1,11 @@
+# TODO(gap): this package is dead and does not import — `repo.py`, `service.py` and
+# `validator.py` all reference `main.app.domain.webhook.google_drive.*` and `main.app.db.repo`,
+# neither of which exists, so only this module loads. It registers
+# `g_drive_webhook_subscriptions` with no migration builder behind it. Nothing in the app's
+# import graph reaches any of it, so it is inert rather than broken in production — kept and
+# marked rather than deleted (D83, 2026-09-03), because it is vendored code outside the
+# WhatsApp scope. The choice when someone picks it up: remove the package, or fix the imports
+# and give the table a migration. PRD "Known Gaps & Roadmap".
 from datetime import datetime
 from typing import Optional
 

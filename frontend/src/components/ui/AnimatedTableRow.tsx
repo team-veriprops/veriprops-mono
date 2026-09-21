@@ -10,6 +10,8 @@ interface AnimatedTableRowProps {
   children: ReactNode;
   isClickable?: boolean;
   onClick?: () => void
+  /** Automation anchor for the row; the row's own id is always exposed as `data-row-id`. */
+  testId?: string;
 }
 
 export function AnimatedTableRow({
@@ -18,11 +20,14 @@ export function AnimatedTableRow({
   elementOfInterest,
   children,
   isClickable,
-  onClick
+  onClick,
+  testId,
 }: AnimatedTableRowProps) {
   return (
     <motion.tr
       key={id}
+      data-testid={testId}
+      data-row-id={id}
       initial={{ opacity: 0, y: 20 }}
       animate={{
         opacity: elementOfInterest === id ? 0.5 : 1,

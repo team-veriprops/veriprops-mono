@@ -1,9 +1,9 @@
-"""Task evidence domain (PRD §4.5, §7.3a, §7.4).
+"""Task evidence domain (PRD §4.5, §12.3, §12.3).
 
 Each piece of proof an agent captures for a task — a geotagged photo, a document
 scan, a short video, a certificate of inspection. Two integrity controls attach at
 receipt: a per-item SHA-256 **content hash** (§4.5 — makes post-submission alteration
-detectable) and **server-set GPS + timestamp** (§7.3a — proof-of-presence the client
+detectable) and **server-set GPS + timestamp** (§12.3 — proof-of-presence the client
 cannot forge). The binary lives in object storage behind the storage facade; the row
 holds the key, hash and provenance. A child of the task domain.
 """
@@ -20,7 +20,7 @@ from main.appodus_utils.db.models import UTCDateTime
 
 
 class EvidenceKind(str, enum.Enum):
-    """What the captured artefact is (drives per-role validation, §7.3)."""
+    """What the captured artefact is (drives per-role validation, §12.2)."""
 
     PHOTO = "PHOTO"
     VIDEO = "VIDEO"
@@ -46,7 +46,7 @@ class EvidenceItem(BaseEntity):
 
     # §4.5 tamper-evidence: SHA-256 of the exact bytes received.
     content_sha256 = Column(String(64), nullable=False)
-    # §7.3a proof-of-presence: set server-side at receipt, never trusted from the client.
+    # §12.3 proof-of-presence: set server-side at receipt, never trusted from the client.
     gps_latitude = Column(Float, nullable=True)
     gps_longitude = Column(Float, nullable=True)
     captured_at = Column(UTCDateTime, nullable=True)

@@ -24,3 +24,29 @@ export function isAutomationEnvironment(): boolean {
 
   return AUTOMATION_ENVS.includes(env as AutomationEnv);
 }
+
+/** The auth slice `__auth_snapshot__` exposes — kept minimal and PII-light on purpose. */
+export interface AuthSnapshotSource {
+  user?: { id?: string | null; personas?: string[] | null } | null;
+}
+
+/**
+ * Publish the current session to `window.__auth_snapshot__` — automation's single source
+ * of truth for "is this page signed in, and as whom".
+ *
+ * Called from the auth store's setters so **every** path that changes the session
+ * (login, signup, session query, token refresh, logout) keeps the hook accurate. Writing
+ * it from only one of those paths is what made a freshly-logged-in page look signed out.
+ * No-ops outside automation environments (fail-closed via `isAutomationEnvironment`).
+ */
+export function publishAuthSnapshot(session: AuthSnapshotSource | null): void {
+  if (typeof window === "undefined" || !isAutomationEnvironment()) return;
+
+  window.__auth_snapshot__ = {
+    isAuthenticated: !!session,
+    userId: session?.user?.id ?? null,
+    personas: (session?.user?.personas ?? []) as NonNullable<
+      Window["__auth_snapshot__"]
+    >["personas"],
+  };
+}

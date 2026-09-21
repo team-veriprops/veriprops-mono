@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import enum
 import hashlib
@@ -15,6 +16,7 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 import filetype
 import inflection
+from loguru import logger
 from fastapi import APIRouter, UploadFile
 from fastapi import Path
 from fastapi.encoders import jsonable_encoder
@@ -327,7 +329,10 @@ class Utils:
                     supplementary_dict.setdefault(field, in_obj[field])
                 in_obj_copy.pop(field)
             except AttributeError as e:
-                # TODO logger.error
+                # Names the field that failed to convert: the exception alone says only that
+                # something in the payload lacked an attribute, and the caller sees a dict of
+                # unknown provenance rather than the key that broke it.
+                logger.error(f"obj_time_to_str failed converting field '{field}': {e}")
                 raise e
 
         supplementary_dict.update(in_obj_copy)
@@ -386,7 +391,20 @@ class Utils:
 
     @staticmethod
     def get_password_hash(password: str) -> str:
+        """Synchronous Argon2 hash — for contexts with no event loop (migrations, fixtures).
+        Request handlers use `hash_password`, which does not block the loop."""
         return Utils.pwd_context.hash(secret=password)
+
+    @staticmethod
+    async def hash_password(password: str) -> str:
+        """Argon2-hash *password* off the event loop. Hashing is deliberately CPU-heavy; run inline in
+        an async handler it would stall every other request the process is serving meanwhile."""
+        return await asyncio.to_thread(Utils.get_password_hash, password)
+
+    @staticmethod
+    async def check_password(plain_password: str, hashed_password: str) -> bool:
+        """Verify *plain_password* against *hashed_password* off the event loop (see `hash_password`)."""
+        return await asyncio.to_thread(Utils.verify_password, plain_password, hashed_password)
 
     @staticmethod
     def get_otp_code(prefix: str = None, suffix: str = None):
@@ -561,7 +579,12 @@ class Utils:
                         supplementary_dict.setdefault(converted_field, in_obj[field])
                     in_obj_copy.pop(field)
                 except AttributeError as e:
-                    # TODO logger.error
+                    # Logged unconditionally, because the default path swallows the error
+                    # entirely: with `raise_exception` off, a field that fails to convert is
+                    # simply absent from the result, and nothing else records that it happened.
+                    logger.error(
+                        f"obj_convert_field_set_value failed converting field '{field}': {e}"
+                    )
                     if raise_exception:
                         raise e
 

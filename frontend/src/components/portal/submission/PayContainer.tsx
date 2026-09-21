@@ -3,25 +3,30 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@3rdparty/ui/button";
-import { Input } from "@3rdparty/ui/input";
-import { Label } from "@3rdparty/ui/label";
 import { toast } from "@components/3rdparty/ui/use-toast";
 import WizardOverlay from "@components/ui/wizard/WizardOverlay";
 import { ROUTES } from "@lib/routes";
 import { getCurrencySymbol, TransactionCurrency } from "@/types/models";
 import { PaymentMethodKind, PriceRefresh, VerificationStatus } from "@/types/verification";
-import {
-  useCurrentSession,
-  useSendPhoneOtpMutation,
-  useVerifyPhoneMutation,
-} from "@components/website/auth/libs/useAuthQueries";
+import { useCurrentSession } from "@components/website/auth/libs/useAuthQueries";
 import {
   useInitiatePaymentMutation,
   useRefreshLockMutation,
   useStubConfirmMutation,
   useVerificationQuery,
 } from "@components/portal/libs/useVerificationQueries";
+import {
+  useSetWhatsAppConsentMutation,
+  useWhatsAppConsentQuery,
+} from "@components/account/libs/useWhatsAppConsentQueries";
+import WhatsAppOptInControls from "@components/shared/whatsapp/WhatsAppOptInControls";
+import {
+  NO_WHATSAPP_CONSENT,
+  WhatsAppConsent,
+  WhatsAppConsentSource,
+} from "@/types/whatsappConsent";
 import { SUBMISSION_STEPS } from "./types";
+import PayPhoneGate from "./PayPhoneGate";
 
 function major(minor?: number): string {
   return ((minor ?? 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -31,14 +36,13 @@ export default function PayContainer({ verificationId }: { verificationId: strin
   const router = useRouter();
   const { data: session, refetch: refetchSession } = useCurrentSession();
   const { data: verification, refetch: refetchVerification } = useVerificationQuery(verificationId);
-  const sendPhoneOtp = useSendPhoneOtpMutation();
-  const verifyPhone = useVerifyPhoneMutation();
   const initiate = useInitiatePaymentMutation();
   const stubConfirm = useStubConfirmMutation();
   const refreshLock = useRefreshLockMutation();
+  // §26.4.6's two opt-ins, at the moment the spec names for capturing them.
+  const { data: waConsent } = useWhatsAppConsentQuery();
+  const setWaConsent = useSetWhatsAppConsentMutation(WhatsAppConsentSource.PAY_SCREEN);
 
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
   const [txRef, setTxRef] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   // Re-lock guard (§17.1): a price that changed since the customer last saw it must be
@@ -60,17 +64,20 @@ export default function PayContainer({ verificationId }: { verificationId: strin
     }).catch(() => undefined);
   }, [verificationId, refreshLock, refetchVerification]);
 
-  const onSendOtp = async () => {
-    await sendPhoneOtp.mutateAsync();
-    setOtpSent(true);
-    toast({ title: "Code sent", description: "Enter the code sent to your phone." });
-  };
-
-  const onVerifyOtp = async () => {
-    // Authenticated Phase-5 verification — flips the user's phoneVerified server-side (§5).
-    await verifyPhone.mutateAsync(otp);
-    await refetchSession();
-    toast({ title: "Phone verified" });
+  const onConsentChange = async (next: WhatsAppConsent) => {
+    // Best-effort: a consent that fails to save must not block the payment the customer
+    // came here to make. They can set it again in account settings.
+    try {
+      await setWaConsent.mutateAsync({
+        utility: next.utility,
+        marketing: next.marketing,
+      });
+    } catch {
+      toast({
+        title: "Preference not saved",
+        description: "You can set this later under WhatsApp in your account settings.",
+      });
+    }
   };
 
   const onPay = async () => {
@@ -112,7 +119,8 @@ export default function PayContainer({ verificationId }: { verificationId: strin
             </p>
             {/* Applied-discount summary (§17.1). */}
             {((verification.firstTimeDiscountMinor ?? 0) + (verification.referralCreditAppliedMinor ?? 0)) > 0 && (
-              <div className="mt-2 space-y-1 text-sm text-emerald-600 dark:text-emerald-400" data-testid="verify-pay-discount">
+              // emerald-700 keeps small discount text above the 4.5:1 contrast minimum on white.
+              <div className="mt-2 space-y-1 text-sm text-emerald-700 dark:text-emerald-400" data-testid="verify-pay-discount">
                 {verification.firstTimeDiscountMinor > 0 && (
                   <div className="flex justify-between">
                     <span>First-time discount</span>
@@ -147,23 +155,22 @@ export default function PayContainer({ verificationId }: { verificationId: strin
           </div>
         )}
 
-        {priceUpdate ? null : !phoneVerified ? (
-          <div className="space-y-3 rounded-lg border border-border p-4" data-testid="verify-pay-phone-gate">
-            <p className="text-sm text-foreground">Verify your phone number before paying.</p>
-            {!otpSent ? (
-              <Button onClick={onSendOtp} disabled={sendPhoneOtp.isPending} data-testid="verify-pay-send-otp">
-                Send code
-              </Button>
-            ) : (
-              <div className="space-y-2">
-                <Label>Enter code</Label>
-                <Input value={otp} onChange={(e) => setOtp(e.target.value)} data-testid="verify-pay-otp" />
-                <Button onClick={onVerifyOtp} disabled={verifyPhone.isPending || !otp} data-testid="verify-pay-verify-otp">
-                  Verify phone
-                </Button>
-              </div>
-            )}
-          </div>
+        {/*
+          §26.4.6: the two WhatsApp opt-ins are captured **at payment confirmation**. They
+          are written the moment a box is ticked rather than on a successful charge — the
+          tick is the consent act, and tying it to a gateway outcome would lose it every
+          time a card fails.
+        */}
+        {!priceUpdate && (
+          <WhatsAppOptInControls
+            consent={waConsent ?? NO_WHATSAPP_CONSENT}
+            onChange={onConsentChange}
+            disabled={setWaConsent.isPending}
+          />
+        )}
+
+        {priceUpdate || !session?.user ? null : !phoneVerified ? (
+          <PayPhoneGate user={session.user} onVerified={refetchSession} />
         ) : !txRef ? (
           <Button onClick={onPay} disabled={initiate.isPending} data-testid="verify-pay-initiate">
             {initiate.isPending ? "Starting…" : "Pay now"}

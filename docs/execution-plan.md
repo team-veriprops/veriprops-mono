@@ -1,368 +1,268 @@
-# Execution Plan
+# Execution Plan — WhatsApp Channel (cycle 2)
 
-> Slice-based, **MVP-first** (D2). Each slice is a vertical cut where possible (backend domain + Alembic +
-> tests + frontend), per CLAUDE.md non-negotiables. Status seeded from the brownfield audit (D1); rebuilt
-> models align to the `0001` schema (D6). Run order is top-to-bottom; later slices assume earlier are green.
+> Vertical slices (backend + migrations + tests + frontend, demoable end-to-end). Batch sizing per
+> skill rules: schema/auth/integration slices are small; flow/UI slices medium-large. Cycle-1 plan
+> archived at `docs.back/execution-plan.md`. Requirement ids → `requirements-matrix.md`.
 
-## Sequencing overview
+## Slice S1 — Website chat widget + attribution
 
-```
-S1  Reconcile foundation + doc fixes        (closes survivors, fixes CLAUDE.md DB)
-S2  State-machine core (validator + derive owner + dependency config)   ← unblocks everything
-S3  Money + idempotency + VID + evidence-hash primitives
-S4  SLA business-day/holiday calendar
-── MVP feature spine ──
-S5  Phase 1 marketing completion
-S6  Phase 2 auth hardening (account-security gaps)
-S7  Phase 3 agent onboarding & KYC
-S8  Phase 4 admin onboarding & RBAC
-S9  Phase 5 customer submission + payment      (legal-cap copy gate)
-S10 Phase 6 admin control panel + 6a chargeback
-S11 Phase 7 agent task execution
-S12 Phase 8 admin review & report release
-S13 Phase 9 customer tracking & evidence layer (SSE)
-S14 Phase 10 final report experience           (NBA gate on Legal Opinion go-live)
-── Harden & scale ──
-S15 Phase 11 communication layer
-S16 Phase 12 notifications & event bus
-S17 Phase 13 public lookup & sharing
-S18 Phase 14 revision/re-verification/disputes
-S19 Phase 15 agent earnings & commission
-S20 Phase 16 reputation & coverage
-S21 Phase 17 growth & conversion
-S22 Phase 18 admin ops & analytics
-S23 Phase 19 audit & compliance maturity
-```
+### Objective
+§26.4.1 live immediately against the concierge-phase number: floating WhatsApp button on all public
++ authenticated pages except payment routes, wa.me deep link with page-code prefill.
+
+### Requirements Covered
+WA-18, WA-19, WA-01 (site pledge copy), WA-02 (number from single config source)
+
+### Dependencies — none (independent)
+### Files Impacted
+`frontend/src/components/` shared layout/AppShell + new `WhatsAppWidget`; route-aware suppression
+via the route registry (`frontend/src/lib/routes.ts`); official number + page codes in one config module.
+### Schema / API Changes — none
+### Tests Required
+vitest render/suppression/aria; Playwright a11y + zero-CLS check; page-code table unit test.
+### Acceptance Criteria
+Widget everywhere except payment flow; opens wa.me with correct prefill; no layout shift.
+### Risk — Low
+### Commit — `feat(whatsapp): site-wide WhatsApp widget with page-code attribution (S1)`
+
+## Slice S2 — Channel foundation: webhook receiver + facade transports + inbound console path
+
+### Objective
+Signature-verified Meta webhook (hub handshake + HMAC over raw body), inbound normalization,
+`WHATSAPP_PROVIDER=STUB|META` selection, deterministic stub transport with dev-endpoint injection,
+and WhatsApp-sourced messages landing in the existing admin console with source labeling.
+
+### Requirements Covered
+WA-09, WA-10, WA-12 (inbound half), WA-13, WA-05
+
+### Dependencies — none
+### Files Impacted
+`app/domain/channel/whatsapp/webhook/`; `appodus_utils/integrations/messaging/providers/whatsapp/`
+(reuse `whatsapp_business.py`, add `stub.py` + inbound models); `app/domain/communication/`
+source labeling; `app/domain/dev/` inbound-injection endpoint (double prod gate); Alembic migration
+(source label, inbound log); edge-auth exemption for the webhook path (backend + `proxy.ts` note).
+### Schema Changes
+chat message source/channel column; webhook inbound log table (or reuse messages bookkeeping).
+### Tests Required
+signed-fixture webhook tests (valid/invalid/replayed), normalization units, fraud-scan-on-WA test,
+e2e: injected inbound appears in admin console via SSE.
+### Risk — High (public unauthenticated surface) → small batch
+### Commit — `feat(whatsapp): signature-verified webhook, stub/live transports, console inbound (S2)`
+
+## Slice S3 — Handoff token service + /wa/* landing pages
+
+### Objective
+§26.5 token service (RS256, 15-min, jti single-use, intent+case scope) + the three token-gated
+landing routes with origin acknowledgment and friendly expiry/recovery page.
+
+### Requirements Covered
+WA-14, WA-28, WA-20
+
+### Dependencies — S2 (facade for "get a new link" deep link)
+### Files Impacted
+`app/domain/channel/whatsapp/handoff/`; keypair settings (+`SECRET_ENV_KEYS`, env hygiene test);
+migration for redemptions; frontend `/wa/{pay,upload,report}/[token]` routes + expiry page.
+### Tests Required
+unit: expiry, replay, wrong-intent, wrong-case, tampered signature; e2e: token → pay page with
+context banner; reused token → recovery page. Pen-check list drafted (launch gate §26.11).
+### Risk — High → small batch
+### Commit — `feat(whatsapp): RS256 single-use handoff tokens and /wa landing pages (S3)`
+
+## Slice S4 — OTP account linking (E1) + number lifecycle
+
+### Objective
+Web→WhatsApp and WhatsApp→web linking; 1:1 constraint; number-change re-verification; old thread
+goes cold.
+
+### Requirements Covered
+WA-23, WA-24, WA-25, part of WA-22
+
+### Dependencies — S2 (send OTP via facade), S3 (signed web link for WA→web)
+### Files Impacted
+`WhatsAppLink` entity + migration; linking endpoints under user/auth; account-settings UI;
+`otp_auth` template registry stub use; `TODO(gap): SMS fallback` (D46).
+### Tests Required
+unit: 1:1 enforcement, re-link, cold-thread; e2e both directions under deterministic OTP.
+### Risk — High (auth) → small batch
+### Commit — `feat(whatsapp): OTP cross-channel account linking (S4)`
+
+## Slice S5 — Bot engine core: sessions, welcome, FAQ, status, escalation, failure fallback
+
+### Objective
+Deterministic flow FSM with per-conversation sessions; welcome (disclosure + pledge + menu);
+FAQ/pricing from content set; status flow with short-code disambiguation and unlinked-number
+defense; human escalation w/ G1-hours copy; health-checked failure auto-reply + console alert;
+intent-classifier facade (STUB + provider-agnostic LLM adapters, D48).
+
+### Requirements Covered
+WA-03, WA-04, WA-07, WA-08, WA-11, WA-17, WA-22, WA-29, WA-30, WA-33, WA-36, WA-37, WA-39, WA-40
+
+### Dependencies — S2, S4
+### Files Impacted
+`app/domain/channel/whatsapp/bot/` (sessions entity + migration, flows, guardrails);
+`appodus_utils/integrations/intent/`; content-set storage; §26.3.2 projection function (D45).
+### Tests Required
+per-flow units; adversarial guardrail suite (judgment requests, non-English, classifier failure);
+capability-matrix denial tests; e2e conversation scripts on stub; failure drill (kill bot →
+auto-reply + alert).
+### Risk — High → medium batches, flows landed incrementally
+### Commit — `feat(whatsapp): guardrailed bot engine with LLM-assisted intent facade (S5)`
+
+## Slice S6 — Intake flow + payment handoff + website→WhatsApp continuation
+
+### Objective
+Chat intake writing the canonical case via shared services; resumable on both surfaces; completion
+→ `pay` token handoff with pledge + domain-check; "Continue on WhatsApp" affordances with opaque
+short codes.
+
+### Requirements Covered
+WA-31, WA-32, WA-21, WA-01 (handoff pledge)
+
+### Dependencies — S3, S5
+### Files Impacted
+bot intake flow reusing submission-draft services; short-code issuance on verification; dashboard
++ mid-wizard continuation UI.
+### Tests Required
+e2e: start in chat → finish on web; start on web → finish in chat; handoff message contents;
+short-code opacity unit test.
+### Risk — Medium
+### Commit — `feat(whatsapp): resumable chat intake with payment handoff (S6)`
+
+## Slice S7 — Console adapter completion: agent replies, 24h window, non-text inbound
+
+### Objective
+Agent console replies out through the facade; `window_reopen` template outside Meta's 24-hour
+window; §26.6.3 non-text handling (images → evidence rule + upload token, unofficial flag; voice →
+flagged audio routing; pins/contacts → human).
+
+### Requirements Covered
+WA-12 (complete), WA-06, WA-38, WA-41 (window_reopen wiring)
+
+### Dependencies — S3 (upload token), S5
+### Files Impacted
+`communication/` reply path + window tracking; console UI source labels + unofficial-media badge +
+audio flag.
+### Tests Required
+unit per media type; window boundary unit; e2e: admin reply reaches stub outbound; image inbound
+never links to evidence.
+### Risk — Medium
+### Commit — `feat(whatsapp): full console mediation, 24h window handling, non-text policy (S7)`
+
+## Slice S8 — Consent capture, milestones, report delivery ✅
+
+> The §26.7 **registry** half of this slice shipped early, in S4.1: template approval lag is on
+> the critical path, so the registry went in as soon as the templates were declared rather than
+> waiting for the senders that read them.
+
+### Objective
+§26.4.6 dual unticked consents at payment confirmation + settings + STOP keywords;
+router-enforced consent; milestone templates on domain events; report-ready delivery
+(WhatsApp opt-in + unconditional email).
+
+### Requirements Covered
+WA-15 (S4.1), WA-16, WA-27, WA-34, WA-35, WA-41 (senders)
+
+### Dependencies — S5; S6 (consent placement at payment confirmation)
+### Delivered
+`channel/whatsapp/consent/` + migration `0008` (D63 — grant/revoke timestamp pairs, granted-ness
+derived); `NotificationRule.whatsapp`/`whatsapp_template` + the router's WhatsApp branch (D65 —
+consent and linked-number resolution happen there, never at a send site); `EventType`
+`VERIFICATION_STARTED`/`INSPECTION_COMPLETE` (D66) with the first-start guard (D78);
+`channel/whatsapp/milestones.py` (the three gates); D64's STOP/START answered by the bot in one
+turn; the shared opt-in control on both payment surfaces (D76); `report_ready` carrying the
+portal deep link (D75).
+### Tests
+`test_whatsapp_consent_service.py`, `test_milestones.py`, the rule-table properties in
+`test_notification_service.py`, the D64 keyword matrix in `test_bot_engine.py`, D66/D78 in the
+review + task service suites; drive-through `_run_consent_checks` + `_run_milestone_checks`.
+### Risk — Medium
+### Commit — `feat(whatsapp): dual consent, event-driven milestones, report delivery (S8)`
+
+## Slice S9 — Delegates (O2 slim) ✅
+
+### Objective
+One OTP-verified delegate per case: authorize from case detail, status-milestones only, instant
+revoke, bot role identification, social-engineering defense for non-delegates.
+
+### Requirements Covered
+WA-26
+
+### Dependencies — S4 (OTP mechanics), S8 (delegate_status template)
+### Delivered
+`verification/delegate/` + migration `0009` (D67 — `case_delegates` independent of
+`WhatsAppLink`; one *live* delegate per case as a partial unique index, so a revoked row does
+not block a replacement); the bot's second identity lookup, asked only after
+`resolve_user_for_phone` answers `None`; `status.render_for_delegate` (no report link exists to
+give); the delegate audience in the notification subscriber (`delegate_status` for all four
+milestones); D77's STOP → revoke + `DELEGATE_REVOKED`; D79's single answer for the unlinked
+customer and the third party; `DelegatePanel` on the case page, between the agents and the
+evidence.
+### Tests
+`test_case_delegate_service.py` (23), `test_delegate_flow.py` (15), `DelegatePanel.test.tsx`,
+`delegate-service.test.ts`; drive-through `_run_delegate_checks`.
+### Risk — Medium-High (access control) → small batch
+### Commit — `feat(whatsapp): slim per-case delegates with status-only visibility (S9)`
+
+## Slice S10 — Channel analytics ✅
+
+> Preceded by **S10.0**, unplanned: §26.3.4 marks three actions `HANDOFF` and only `upload`
+> had a producer, so `/wa/pay/<token>` and `/wa/report/<token>` were built and unreachable
+> from a conversation — and seam conversion had no payment seam to measure.
+
+### Objective
+§26.10 instrumented from day one of launch: seam conversion, widget-attributed enquiries,
+enquiry→intake rate, escalation rate + reasons, opt-in rates, quality-rating placeholder,
+voice-note volume; admin analytics surface.
+
+### Requirements Covered
+WA-43, WA-19 (attribution consumption)
+
+### Dependencies — S5–S9 (events to count)
+### Delivered
+`channel/whatsapp/analytics/` + migration `0010` — an append-only `whatsapp_channel_events`
+fact table (D80), because four of the seven metrics are rates the mutated session row cannot
+answer; `whatsapp_inbound_messages.page_code` with extraction at `ingest` (D85);
+`whatsapp_number_health` synced in the template registry's posture (D81); the read surface on
+the existing `AnalyticsService`/`analytics_router` (D86); opt-in rate over ACTIVE linked
+numbers (D84); one `/admin/analytics` route, two tabs.
+### Tests
+`test_handoff_flow.py`, `test_channel_event_recorder.py`, `test_attribution.py`, the seven
+derivations in `test_analytics_service.py`, the attribution cases in `test_inbound_service.py`,
+`WhatsAppChannelAnalytics.test.tsx`; drive-through `_run_pay_report_handoff_checks` +
+`_run_channel_analytics_checks`.
+### Risk — Low (realised: the live run found four defects unit tests could not — see the commit)
+### Commit — `feat(whatsapp): reachable pay and report handoffs (S10.0)` + `feat(whatsapp): channel analytics (S10)`
+
+## Slice S11 — Live hardening & launch-gate closeout ✅ (code-side; ⊘ live path)
+
+### Objective
+Exercise the live Meta path (D43) once assets exist: live smoke on send/receive/template flows,
+token pen-check execution, failure drill on live config, env hygiene + docs; compliance copy
+(§26.8) landed; launch checklist in progress.md updated; MASTER-PRD §26 incorporation + CLAUDE.md
+pattern notes.
+
+### Requirements Covered
+WA-02, WA-40 (live), WA-42, WA-44
+
+### Dependencies — all prior; external Meta assets (⊘)
+### Delivered (D82 — everything not bound to Meta ships now)
+**WA-42:** §26.8 clauses in the Platform Terms, Privacy Policy and Communication Recording at
+consent version `1.1.0` (migration `0011`; existing accounts re-accept, which is the correct
+NDPA answer for a new cross-border transfer disclosure); `whatsapp_consents` in the §19.3 audit
+pack, emitted from the grant/revoke timestamp pair; `PiiPseudonymiser` extended to five channel
+surfaces that survived an approved erasure entirely. **WA-40:** `app/core/fault_injection.py`
++ `POST /dev/whatsapp/fail-next-turn` and a live drill slice. **WA-44:**
+`docs/whatsapp-launch-runbook.md`. Plus the requirements matrix reconciled — sixteen S5/S6 rows
+had read `pending` since they shipped — and the `google_drive` finding marked (D83).
+### Tests
+Erasure + audit-pack suites rewritten around the channel surfaces; the drill in
+`test_bot_engine.py`; drive-through `_run_failure_drill_checks`.
+### Risk — Medium (external-dependency bound)
+### Commit — `chore(whatsapp): live-path hardening and launch-gate closeout (S11)`
 
 ---
 
-## Slice S1 — Foundation reconciliation & doc fixes
-### Objective
-Confirm surviving foundation works against `0001`; fix the CLAUDE.md DB mismatch (D4) and `web/`→`frontend/` (D5).
-### Requirements Covered
-R0.1–R0.7, R0.17, R0.19, R0.22 (verify); doc corrections.
-### Dependencies
-none.
-### Files Impacted
-`CLAUDE.md` (MySQL→PostgreSQL), `appodus_utils/*` (verify), `backend/main/alembic/versions/0001_initial_schema.py` (read-only check).
-### Schema Changes
-none (reconciliation only).
-### Tests Required
-`alembic upgrade head` clean on local/test; existing foundation unit tests green.
-### Acceptance Criteria
-Foundation imports/tests pass; CLAUDE.md states PostgreSQL; no `web/` references in new docs.
-### Risk Level
-Low.
-### Commit Message
-`chore(foundation): reconcile survivors with 0001 schema; fix DB/dir docs`
-
-## Slice S2 — State-machine core (§2, §4.1, §4.2)
-### Objective
-Build the reusable transition validator, `deriveVerificationState(...)` owner, and per-tier task-dependency config.
-### Requirements Covered
-R0.9, R0.10, R0.11.
-### Dependencies
-S1.
-### Files Impacted
-new `app/domain/verification/state_machine.py`, `.../derivation.py`, `.../dependencies.py`; align to `0001`.
-### Schema Changes
-confirm `task_dependencies`/tier-config tables in `0001`; additive only if missing.
-### API Changes
-none (internal primitives).
-### Tests Required
-every valid/invalid transition for all four machines; §2.5 rules in order incl. dependency-blocked Lawyer counted from tier config; acyclicity rejection.
-### Acceptance Criteria
-Invalid transitions rejected; status derived, never set inline; Lawyer not instantiated until siblings SUBMITTED.
-### Risk Level
-High (correctness-critical; everything depends on it).
-### Commit Message
-`feat(core): state-machine validator, derivation owner, task-dependency config`
-
-## Slice S3 — Money, idempotency, VID, evidence-hash primitives
-### Objective
-Close the remaining Phase-0 money/safety primitives.
-### Requirements Covered
-R0.5 (confirm), R0.13, R0.14, R0.15.
-### Dependencies
-S1.
-### Files Impacted
-`appodus_utils/db/types/money.py` (confirm), new idempotency-key middleware + dedup store, VID generator, evidence content-hash helper.
-### Schema Changes
-idempotency/dedup table keyed on gateway event ID + client key (additive).
-### Tests Required
-replayed-webhook → one PAID/receipt; double-tap create → one row; VID non-sequential/high-entropy; SHA-256 mismatch detectable.
-### Acceptance Criteria
-Phase-0 idempotency + VID + evidence-hash exit criteria pass.
-### Risk Level
-High.
-### Commit Message
-`feat(core): idempotency keys, non-sequential VID generator, evidence content-hash`
-
-## Slice S4 — SLA business-day & Nigerian holiday calendar
-### Objective
-Wire the SLA calculator used from PAID onward.
-### Requirements Covered
-R0.21.
-### Dependencies
-S1.
-### Files Impacted
-new `app/domain/verification/sla.py` + holiday data.
-### Tests Required
-SLA excludes weekends + NG public holidays; countdown correctness.
-### Acceptance Criteria
-Phase-0 SLA exit criterion met.
-### Risk Level
-Medium.
-### Commit Message
-`feat(core): SLA business-day calculator with Nigerian holiday calendar`
-
-## Slice S5 — Phase 1 Marketing completion
-### Objective
-Finish landing sections, currency toggle, SEO/noindex, dynamic year.
-### Requirements Covered
-R1.1–R1.6.
-### Dependencies
-S1.
-### Files Impacted
-`frontend/src/components/website/*`.
-### Tests Required
-content/data module unit tests; renders 1440px + 375px.
-### Acceptance Criteria
-All sections render; CTAs route with intent; currency cycles NGN→USD→GBP→EUR.
-### Risk Level
-Low.
-### Commit Message
-`feat(marketing): complete Phase 1 landing sections + currency toggle + SEO`
-
-## Slice S6 — Phase 2 Auth hardening
-### Objective
-Close account-security gaps on top of the working auth core.
-### Requirements Covered
-R2.2, R2.5–R2.9, R2.14 (partials → done).
-### Dependencies
-S1.
-### Files Impacted
-`app/domain/user/auth/*`, `frontend/src/components/website/auth/*`.
-### Tests Required
-lockout (warn@5/lockout@7); reset invalidates sessions; device revoke; link/unlink password guard; cross-portal badge.
-### Acceptance Criteria
-Phase-2 exit criteria fully met; no PII leak.
-### Risk Level
-Medium.
-### Commit Message
-`feat(auth): rate-limit, password reset, devices, linked accounts, cross-portal badge`
-
-## Slice S7 — Phase 3 Agent Onboarding & KYC
-### Objective
-Rebuild agent application wizard + KYC facade + credentials/expiry + approval queue.
-### Requirements Covered
-R3.1–R3.7.
-### Dependencies
-S2, S6.
-### Files Impacted
-`app/domain/user/agent/**` (+kyc providers), `frontend/src/app/agents/**`.
-### Schema Changes
-align agent/KYC/credential tables to `0001` (additive if needed).
-### Tests Required
-resumable wizard; provider result persisted (no raw biometrics); role-level suspension on expiry.
-### Acceptance Criteria
-Phase-3 exit criteria; KYC docs encrypted + access-controlled.
-### Risk Level
-High (KYC, encryption).
-### Commit Message
-`feat(agent): onboarding wizard, KYC provider facade, credential expiry, approval queue`
-
-## Slice S8 — Phase 4 Admin Onboarding & RBAC
-### Objective
-Rebuild admin invite/acceptance, RBAC matrix, team management, seed Super Admin.
-### Requirements Covered
-R4.1–R4.5.
-### Dependencies
-S6.
-### Files Impacted
-`app/domain/user/admin_invitation/**`, `app/domain/user/admin_team/**`, migration seed, `frontend/src/app/admin/**`.
-### Tests Required
-permission checks per admin endpoint; role changes audit-logged; invite scenarios.
-### Acceptance Criteria
-Phase-4 exit criteria; first Super Admin seeded.
-### Risk Level
-High (authz).
-### Commit Message
-`feat(admin): invitations, RBAC matrix, team management, super-admin seed`
-
-## Slice S9 — Phase 5 Customer Submission & Payment
-### Objective
-Rebuild submission wizard, pricing/price-lock, consent, gateway payment, phone gate, receipts.
-### Requirements Covered
-R5.1–R5.11.
-### Dependencies
-S2, S3, S4, S6.
-### Gate
-**Liability-cap consent copy (§3.5/§B) must be finalised before go-live.**
-### Files Impacted
-`app/domain/property/**`, `app/domain/verification/**`, `app/domain/payment/**`, `frontend/src/app/portal/verifications/new/**` + pay.
-### Schema Changes
-align property/verification/payment to `0001`; price-lock + charge fields.
-### Tests Required
-DRAFT→SUBMITTED→PAYMENT_PENDING→PAID via derivation owner; dup-webhook idempotency; double-tap create idempotent; phone gate; trusted upgrade.
-### Acceptance Criteria
-Phase-5 exit criteria all pass.
-### Risk Level
-High (money, legal gate).
-### Commit Message
-`feat(verification): submission wizard, pricing/price-lock, consent, gateway payment`
-
-## Slice S10 — Phase 6 + 6a Admin Control Panel & Chargeback
-### Objective
-Verifications list/detail, assignment (manual + broadcast), work queue/SLA shedding, chargeback sub-process.
-### Requirements Covered
-R6.1–R6.9, R6a.1–R6a.2.
-### Dependencies
-S7, S8, S9.
-### Files Impacted
-`app/domain/verification/admin/**`, `app/domain/payment/**`, `frontend/src/app/admin/verifications/**`.
-### Tests Required
-first assign → PAID→IN_PROGRESS; Lawyer auto-lock; chargeback flags payment + freezes commission without touching state machine; rebuttal pack assembles.
-### Acceptance Criteria
-Phase-6 + 6a exit criteria.
-### Risk Level
-High.
-### Commit Message
-`feat(admin): verification control panel, assignment, work queue, chargeback handling`
-
-## Slice S11 — Phase 7 Agent Task Execution
-### Objective
-Agent dashboard, accept/decline + capacity, role submission UIs, proof-of-work/COI, offline.
-### Requirements Covered
-R7.1–R7.7.
-### Dependencies
-S2, S3, S10.
-### Files Impacted
-`app/domain/verification/task/**` (+evidence), `frontend/src/app/agents/tasks/**`.
-### Tests Required
-four forms validate; IN_PROGRESS→SUBMITTED; all-submitted→UNDER_REVIEW; capacity on broadcast; evidence hashes; trusted on first submit.
-### Acceptance Criteria
-Phase-7 exit criteria.
-### Risk Level
-High (offline queue, evidence integrity).
-### Commit Message
-`feat(agent): task execution, role submission forms, proof-of-presence, offline queue`
-
-## Slice S12 — Phase 8 Admin Review & Report Release
-### Objective
-Task review, conflict detection, release gate + composite trust score, reopen, FAILED, versioning.
-### Requirements Covered
-R8.1–R8.6.
-### Dependencies
-S11.
-### Files Impacted
-`app/domain/verification/review/**`, `.../conflict/**`, `.../scoring/**`, `frontend/src/app/admin/verifications/[id]/report-review/**`.
-### Tests Required
-reject→IN_PROGRESS; all-approved→release-ready; release→COMPLETED; reopen APPROVED→IN_PROGRESS; version bump+reason; recompute at release only.
-### Acceptance Criteria
-Phase-8 exit criteria; no report without explicit release.
-### Risk Level
-High.
-### Commit Message
-`feat(admin): task review, conflict detection, trust-score release gate, versioning`
-
-## Slice S13 — Phase 9 Customer Tracking & Evidence (SSE)
-### Objective
-Live tracking dashboard, state labels, interim reassurance, evidence layer with content hash.
-### Requirements Covered
-R9.1–R9.5.
-### Dependencies
-S9–S12; SSE transport (§4.9).
-### Files Impacted
-`app/domain/verification/**` (SSE endpoints), `frontend/src/app/portal/verifications/[id]/**`.
-### Tests Required
-status advances live; first-name-only at API; evidence tamper-evidence; risk-bearing interim withheld until review.
-### Acceptance Criteria
-Phase-9 exit criteria.
-### Risk Level
-Medium-High.
-### Commit Message
-`feat(portal): live tracking dashboard + evidence layer over SSE`
-
-## Slice S14 — Phase 10 Final Report Experience
-### Objective
-Report view, access gate, PDF parity, versioning/supersede, Premium Legal Opinion framing.
-### Requirements Covered
-R10.1–R10.6.
-### Dependencies
-S12.
-### Gate
-**NBA counsel sign-off gates Legal Opinion go-live (§3.5/§B)** — build, do not go live, until cleared.
-### Files Impacted
-`app/domain/verification/report/**` (+PDF), `frontend/src/app/portal/verifications/[id]/report/**`.
-### Tests Required
-COMPLETED report renders; PDF/HTML footer parity; supersede transition.
-### Acceptance Criteria
-Phase-10 exit criteria.
-### Risk Level
-Medium-High (legal gate).
-### Commit Message
-`feat(report): final report experience, branded PDF, versioning, legal-opinion framing`
-
-## Slice S15 — Phase 11 Communication Layer *(expanded at run; full, D19)*
-### Objective
-Structured, admin-mediated, fraud-scanned in-app chat: Customer↔Admin + task-tagged Admin↔Agent +
-general support threads, the §4.7 fraud-hold state machine, admin hold review, structured
-clarifications, per-user SSE, first-name-only identity.
-### Files Impacted
-new `app/domain/communication/{conversation,conversation_participant,chat_message}/**` +
-`communication/{fraud_scan,service,controller}.py`; `app/core/state/{status,machine}.py`
-(ChatMessageState); `app/core/realtime/user_emitter.py`; `ReviewService.reject_task` (auto-post hook);
-`0001` (+3 tables); frontend `types/chat`, `components/chat/**`, thread/support/held pages, `AppShell` (ChatButton).
-### Tests Required
-fraud-scan rules + fast lane; message state-machine transitions; send hold vs deliver; admin
-approve/reject journey; first-name-only sender projection (§11.3); clarification OPEN status;
-agent authz (assigned + read-only-when-approved); frontend service contract.
-### Acceptance Criteria
-No customer endpoint leaks agent last name/phone/email; held→approved/rejected verified;
-routine messages bump the Chat counter only.
-### Commit Message
-`feat(comms): admin-mediated chat, fraud-hold state machine, clarifications, per-user SSE`
-
-## Slice S16 — Phase 12 Notification System & Event Bus *(expanded at run; full refactor, D20)*
-### Objective
-The single §4.8 in-process event bus; the declarative Chat-vs-Notification rule table; the
-in-app notification feed + counter + per-event email/SMS preferences; the SLA-breach sweep;
-and routing the S13 emitter + external dispatch through the bus (publish once, fan out).
-### Files Impacted
-new `app/core/events/**` (bus, events, subscribers); `app/domain/notification/**` (+rules,
-content, dispatcher); `app/domain/notification_preference/**`; `app/domain/verification/sla_monitor.py`;
-`app/jobs/scheduled.py` (+SLA sweep); refactored emit sites in `verification/{service,review/service,
-task/service}`; `0001` (+2 tables); frontend `types/notification`, `components/notifications/**`,
-`NotificationBell` (stub→real), notifications + preferences pages.
-### Tests Required
-bus fan-out + best-effort isolation; rule-table routing (chat-only vs notification); notification
-service in-app + email/SMS opt-out; subscriber preserves the S13 SSE event names; SLA sweep
-idempotency; frontend notification service contract.
-### Acceptance Criteria
-All Phase 2–11 events flow through the bus to ≥ the in-app channel; fan-out + Chat-vs-Notification
-rule unit-tested.
-### Commit Message
-`feat(notifications): §4.8 event bus, rule-table fan-out, in-app feed + preferences, SLA-breach sweep`
-
-## Slices S17–S23 — Harden & Scale (Phases 13–19)
-
-| Slice | Phase | Scope (reqs) | Deps | Risk |
-|---|---|---|---|---|
-| S17 | 13 | Public lookup + sharing + lookup safety (R13.1–13.2) | S14 | H |
-| S18 | 14 | Re-check / tier upgrade / disputes (R14.1–14.3) | S14 | H |
-| S19 | 15 | Earnings, commission clearance/reserve, payouts (R15.1–15.3) | S11,S12,S8 | H |
-| S20 | 16 | Reputation metrics + coverage + role dashboards (R16.1–16.3) | S12 | M |
-| S21 | 17 | Referral anti-farming, first-time discount, abandonment recovery (R17.1–17.3) | S9,S14 | H |
-| S22 | 18 | Mission Control, analytics, pricing/finance/broadcasts, system config (R18.1–18.5) | S9–S20 | M |
-| S23 | 19 | Audit export, activity logs, NDPA erasure + pseudonymisation (R19.1–19.3) | all | H |
-
-> Each S17–S23 slice expands into objective/files/schema/tests/acceptance/commit at the start of its `run`,
-> following the same template as S1–S16.
-
-## Cross-slice non-negotiables (every slice)
-- Write tests first (TDD); after changes run tests, build, and lint **both** ends.
-- Backend API and frontend service contract changed together in the same slice.
-- No frontend/backend duplicate implementations; reuse existing abstractions (`GenericRepo`, `DataTable`, `Page<T>`).
-- Backend is the only source of truth; no derived facts on the frontend.
-- Self-audit after each slice (correctness, PRD/architecture compliance, security, migration safety, API consistency, tests).
+## External prerequisites (tracked, non-blocking for S1–S10)
+Meta Business verification + green tick · template approvals (draft early — S8 registry holds
+status) · number custody (+2349167624347) · Doppler secrets (WHATSAPP_*, RS256 keypair,
+intent-provider API key(s)) · counsel items (§26.8 retention, ToS copy).

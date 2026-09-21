@@ -80,6 +80,9 @@ export default function SubmissionContainer() {
     resumeChecked.current = true;
     draftStartRequested.current = true; // already have a draft id — startDraft must never fire
     setVerificationId(resumable.id);
+    // If the customer already started typing before this check resolved, keep their
+    // input and current step — just the id above so saves target the existing draft.
+    if (dirtiedRef.current) return;
     setStep(Math.min(resumable.step, LAST_IN_WIZARD_STEP));
     setState((s) => ({ ...s, ...(resumable.payload as Partial<SubmissionState>) }));
   }, [resumable]);

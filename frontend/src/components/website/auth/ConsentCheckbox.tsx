@@ -9,9 +9,17 @@ interface ConsentCheckboxProps {
   onChange: (checked: boolean) => void;
   error?: string;
   id?: string;
+  "data-testid"?: string;
 }
 
-export default function ConsentCheckbox({ doc, checked, onChange, error, id }: ConsentCheckboxProps) {
+export default function ConsentCheckbox({
+  doc,
+  checked,
+  onChange,
+  error,
+  id,
+  "data-testid": testId,
+}: ConsentCheckboxProps) {
   const inputId = id ?? `consent-${doc.type}`;
   return (
     <div>
@@ -21,6 +29,7 @@ export default function ConsentCheckbox({ doc, checked, onChange, error, id }: C
       >
         <Checkbox
           id={inputId}
+          data-testid={testId}
           checked={checked}
           onCheckedChange={(value) => onChange(value === true)}
           className="mt-0.5"

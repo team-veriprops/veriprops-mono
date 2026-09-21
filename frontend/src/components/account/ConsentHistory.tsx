@@ -4,6 +4,7 @@ import { useState } from "react";
 import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { Loader2, Download, FileText } from "lucide-react";
 import { Button } from "@3rdparty/ui/button";
+import ListPager from "@components/ui/ListPager";
 import { cn, humanizeEnumLabel } from "@lib/utils";
 import { UserConsentHistoryItem } from "@/types/consentHistory";
 import { useConsentHistoryQuery, consentHistoryService } from "./libs/useConsentHistoryQueries";
@@ -62,7 +63,7 @@ export default function ConsentHistory() {
                 <p className={cn("text-sm font-semibold text-brand-navy")}>
                   {humanizeEnumLabel(c.documentType)} <span className="font-normal text-xs">v{c.consentVersion}</span>
                 </p>
-                <p className={cn("text-xs mt-1 text-brand-on-surface-variant/55")}>
+                <p className={cn("text-xs mt-1 text-brand-on-surface-variant")}>
                   Accepted {new Date(c.acceptedAt).toLocaleString()}
                 </p>
               </div>
@@ -71,19 +72,8 @@ export default function ConsentHistory() {
         </ul>
       )}
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-6">
-          <Button variant="outline" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-            Previous
-          </Button>
-          <span className={cn("text-xs text-brand-on-surface-variant")}>
-            Page {page + 1} of {totalPages}
-          </span>
-          <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>
-            Next
-          </Button>
-        </div>
-      )}
+      <ListPager page={page} totalPages={totalPages} onPageChange={setPage} className="mt-6" />
+
     </div>
   );
 }

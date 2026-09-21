@@ -1,4 +1,4 @@
-"""Agent task-execution controller (PRD §7.1, §7.3).
+"""Agent task-execution controller (PRD §12.1, §12.2).
 
 URL shape: /agents/tasks/... — the agent's own work surface. Identity is the JWT
 subject; authorization is ownership-based (a task belongs to the accepting/assigned
@@ -122,7 +122,7 @@ async def add_evidence(
     gps_longitude: Optional[float] = Form(default=None),
     authorize: AuthJWT = Depends(),
 ):
-    """Upload a piece of proof-of-work (§4.5, §7.3a). Content hash + server GPS/timestamp
+    """Upload a piece of proof-of-work (§4.5, §12.3). Content hash + server GPS/timestamp
     are stamped at receipt; the client GPS is a hint only."""
     await authorize.jwt_required()
     agent_id = str(authorize.get_jwt_subject())

@@ -5,13 +5,18 @@ import { REFETCH_INTERVAL_MS, SHORT_REFETCH_INTERVAL_MS } from "@lib/config/app"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
 import { useUserStream } from "@lib/useUserStream";
-import { ConversationType, MessageKind } from "@/types/chat";
-import { ChatService } from "./chat-service";
+import { ConversationType } from "@/types/chat";
+import { assistantKeys } from "./useAssistantQueries";
+import { AdminConversationsParams, ChatService } from "./chat-service";
 
 const service = new ChatService(httpClient);
 
 export const chatKeys = {
   conversations: () => ["chat", "conversations"] as const,
+  // Nested under `conversations` so every invalidation of the list (SSE, read, send)
+  // refreshes the admin inbox too.
+  adminConversations: (params: AdminConversationsParams) =>
+    ["chat", "conversations", "admin", params] as const,
   unread: () => ["chat", "unread"] as const,
   messages: (conversationId: string, page: number) => ["chat", "messages", conversationId, page] as const,
   held: (page: number) => ["chat", "held", page] as const,
@@ -51,6 +56,17 @@ export function useConversationsQuery(enabled = true) {
     queryKey: chatKeys.conversations(),
     enabled,
     queryFn: async () => (await service.listConversations()).data ?? [],
+    refetchInterval: REFETCH_INTERVAL_MS,
+  });
+}
+
+/** One page of the admin Conversations inbox (§16.5), kept on screen while the next loads. */
+export function useAdminConversationsQuery(params: AdminConversationsParams, enabled = true) {
+  return useQuery({
+    queryKey: chatKeys.adminConversations(params),
+    enabled,
+    queryFn: async () => (await service.adminConversations(params)).data ?? null,
+    placeholderData: (prev) => prev,
     refetchInterval: REFETCH_INTERVAL_MS,
   });
 }
@@ -117,7 +133,6 @@ interface SendVars {
   verificationId: string;
   body: string;
   taskId?: string;
-  kind?: MessageKind;
   type?: ConversationType;
 }
 
@@ -125,7 +140,7 @@ export function useSendMessageMutation(role: "customer" | "agent" | "admin" | "s
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: SendVars) => {
-      if (role === "customer") return service.customerSend(vars.verificationId, vars.body, vars.kind);
+      if (role === "customer") return service.customerSend(vars.verificationId, vars.body);
       if (role === "agent") return service.agentSend(vars.verificationId, vars.body, vars.taskId);
       if (role === "support") return service.supportSend(vars.body);
       return service.adminSend(
@@ -138,6 +153,44 @@ export function useSendMessageMutation(role: "customer" | "agent" | "admin" | "s
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["chat", "messages"] });
       qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+      if (role === "admin") {
+        // An admin replying on a Customer↔Admin thread can silence the assistant (D57, D93).
+        qc.invalidateQueries({ queryKey: assistantKeys.readiness() });
+        qc.invalidateQueries({ queryKey: ["assistant", "session"] });
+      }
+    },
+  });
+}
+
+/** Answer a web assistant turn a send left pending (D93). */
+export function useRunAssistantTurnMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (conversationId: string) => service.runAssistantTurn(conversationId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat", "messages"] });
+      qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+    },
+  });
+}
+
+/**
+ * Send into a thread the caller is a member of, addressed by conversation id.
+ *
+ * The admin Conversations inbox needs this rather than `useSendMessageMutation`: a §26.8
+ * enquiry or web support thread has no verification behind it, so there is no id to send by.
+ */
+export function useConversationSendMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ conversationId, body }: { conversationId: string; body: string }) =>
+      service.sendToConversation(conversationId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat", "messages"] });
+      qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+      // Replying takes the thread off the assistant (D57), so the mode banner beside it
+      // is now stale.
+      qc.invalidateQueries({ queryKey: ["assistant", "session"] });
     },
   });
 }

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import List
 
-from kink import inject
+from kink import di, inject
 
 from main.app.core.events.events import DomainEvent
 from main.app.core.realtime.user_emitter import UserEventType, publish_user_event
@@ -69,6 +69,12 @@ class NotificationService:
                 publish_user_event(user_id, UserEventType.NOTIFICATION_UNREAD, {})
 
             await self._dispatch_external(event, user_id, rule)
+            await self._dispatch_whatsapp(event, user_id, rule)
+
+        # Delegates are not users, so they never appear in `recipient_user_ids` — their
+        # fan-out is a second audience on the same event (D65), resolved once for the case
+        # rather than once per recipient.
+        await self._dispatch_delegates(event, rule)
 
     async def _dispatch_external(self, event: DomainEvent, user_id: str, rule) -> None:
         if not rule.template or not (rule.email or rule.sms):
@@ -85,6 +91,56 @@ class NotificationService:
             await self._dispatcher.dispatch(user_id, rule.template, channels, external_context(event))
         except Exception:  # noqa: BLE001 — external send is best-effort, never fatal
             pass
+
+    # ── WhatsApp milestones (§26.6.2, D65) ─────────────────────────────
+    #
+    # A separate branch rather than a third entry in the channel list above, because the
+    # WhatsApp recipient is resolved somewhere else entirely: `email`/`sms` address the
+    # user's profile, while a §26.7 template may only go to the number that account
+    # OTP-verified (§26.4.3). That asymmetry is the price of the link being the join key,
+    # and D65 names it rather than hiding it. What stays identical is the important part —
+    # the consent check happens **here**, in the router, never at a send site.
+
+    async def _dispatch_whatsapp(self, event: DomainEvent, user_id: str, rule) -> None:
+        if not rule.whatsapp or not rule.whatsapp_template:
+            return
+        try:
+            await self._milestones().send_customer_milestone(
+                user_id, event.verification_id, rule.whatsapp_template
+            )
+        except Exception:  # noqa: BLE001 — a milestone never breaks the emitting transaction
+            pass
+
+    async def _dispatch_delegates(self, event: DomainEvent, rule) -> None:
+        """The §26.4.5 audience: a case's authorized delegate hears the same four moments.
+
+        Always as `delegate_status`, never as the customer's template — which is what
+        makes "status milestones only, never documents or reports" structural rather than
+        a rule someone has to remember: `delegate_status` has no link parameter to fill.
+        """
+        if not rule.whatsapp or not event.verification_id:
+            return
+        try:
+            await self._delegates().notify_milestone(event.verification_id)
+        except Exception:  # noqa: BLE001 — same best-effort posture as every other fan-out
+            pass
+
+    @staticmethod
+    def _delegates():
+        from main.app.domain.verification.delegate.service import CaseDelegateService
+
+        return di[CaseDelegateService]
+
+    @staticmethod
+    def _milestones():
+        """Resolved lazily so the notification domain never hard-depends on the channel.
+
+        The rule table is generic; WhatsApp is one consumer of it. Importing the channel at
+        module scope would invert that and close an import cycle through the message domain.
+        """
+        from main.app.domain.channel.whatsapp.milestones import WhatsAppMilestoneSender
+
+        return di[WhatsAppMilestoneSender]
 
     # ── Feed / counter / read ─────────────────────────────────────────
 

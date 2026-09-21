@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtDecode } from "jwt-decode";
-import { ROUTES } from "./lib/routes";
+import { ROUTES, WA_INTAKE_PREFIX, WA_LINK_PREFIX } from "./lib/routes";
 import { EDGE_AUTH_HEADER, isEdgeAuthorized } from "./lib/edgeAuth";
 import { JwtPayload, UserPersona, UserType } from "./components/website/auth/models";
 
@@ -37,7 +37,12 @@ const PROTECTED_PREFIXES = [
   ROUTES.ADMIN.GATE,
   ROUTES.AGENT.GATE,
   ROUTES.ACCOUNT.ROOT,
-  ROUTES.AUTH.LOGIN_SUCCESS_REDIRECT
+  ROUTES.AUTH.LOGIN_SUCCESS_REDIRECT,
+  // The one `/wa/*` landing that is not public: linking has to know which account is
+  // claiming the number (PRD §26.4.4). Its siblings stay out — a handoff token is the
+  // authorization there, and requiring a session would break the whole point.
+  WA_LINK_PREFIX,
+  WA_INTAKE_PREFIX,
 ] as const;
 
 // Surfaces hidden from authenticated users.

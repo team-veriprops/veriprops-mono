@@ -14,6 +14,7 @@ from main.appodus_utils import Utils
 from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.common.rate_limit import RateLimiter
 from main.appodus_utils.db.models import Page, SuccessResponse
+from main.appodus_utils.exception.exception_handlers import exception_json_response
 from main.appodus_utils.exception.exceptions import UnauthorizedException
 
 session_router = APIRouter(prefix="/sessions", tags=["Sessions"])
@@ -87,8 +88,14 @@ async def refresh_session(request: Request, authorize: AuthJWT = Depends()):
     token_hash = Utils.sha256(refresh_cookie) if refresh_cookie else None
     device = await session_service.get_device_by_token_hash(token_hash) if token_hash else None
     if not device:
-        authorize.unset_jwt_cookies()
-        raise UnauthorizedException("Session has been revoked. Please sign in again.")
+        # Returned, not raised: a raised exception is rendered as a fresh response, which would drop
+        # the cookie deletions. A surviving refresh cookie still reads as a live session to the
+        # frontend proxy, which then bounces the user off the login page back into the app — a loop.
+        response = exception_json_response(
+            UnauthorizedException("Session has been revoked. Please sign in again.")
+        )
+        authorize.unset_jwt_cookies(response)
+        return response
 
     await JwtAuthUtils.refresh_access_token(authorize=authorize)
     await session_service.touch_device_session(token_hash)

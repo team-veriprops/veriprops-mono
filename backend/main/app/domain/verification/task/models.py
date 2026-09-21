@@ -1,4 +1,4 @@
-"""Verification task domain (PRD §2.2, §4.2, §6, §7).
+"""Verification task domain (PRD §2.2, §4.2, §6, §12).
 
 One per-role unit of work on a verification (Field / Surveyor / Registry / Lawyer).
 Its lifecycle is the task state machine (``core/state/machine.py``); the global
@@ -59,12 +59,12 @@ class VerificationTask(BaseEntity):
     assignment_mode = Column(String(16), nullable=True)
     # In the open broadcast pool awaiting the first accept (§2.2, §6.2).
     in_pool = Column(Boolean, nullable=False, server_default="false")
-    # Broadcast starvation timeout — past this the sweep escalates to targeted (§7.2).
+    # Broadcast starvation timeout — past this the sweep escalates to targeted (§11.4).
     pool_expires_at = Column(UTCDateTime, nullable=True)
-    # Manual-assign accept deadline — past this the no-show sweep returns to pool (§7.2).
+    # Manual-assign accept deadline — past this the no-show sweep returns to pool (§11.4).
     accept_deadline_at = Column(UTCDateTime, nullable=True)
     decline_count = Column(Integer, nullable=False, server_default="0")
-    # Optional flat remote-job bonus attached to an aging/hard-to-reach task (§7.2).
+    # Optional flat remote-job bonus attached to an aging/hard-to-reach task (§11.3).
     remote_bonus_minor = Column(BigInteger, nullable=True)
 
     assigned_at = Column(UTCDateTime, nullable=True)
@@ -72,7 +72,7 @@ class VerificationTask(BaseEntity):
     submitted_at = Column(UTCDateTime, nullable=True)
     approved_at = Column(UTCDateTime, nullable=True)
 
-    # Role-specific structured findings captured on submit (§7.3) — the shape differs
+    # Role-specific structured findings captured on submit (§12.2) — the shape differs
     # per role (Registry search, Field inspection, Surveyor measurement, Lawyer opinion).
     # Held as JSON so each role form evolves without a schema change; evidence binaries
     # live in the task_evidence child domain.
@@ -168,20 +168,20 @@ class AssignTaskDto(Object):
 
 
 class DeclineTaskDto(Object):
-    """Agent declines an assigned/accepted task (§7.1). Returns it to the pool."""
+    """Agent declines an assigned/accepted task (§12.1). Returns it to the pool."""
 
     reason: Optional[str] = None
 
 
 class SubmitTaskDto(Object):
-    """Agent submits role findings (§7.3). ``payload`` is the role-specific form;
+    """Agent submits role findings (§12.2). ``payload`` is the role-specific form;
     validated by the task validator per role. Evidence binaries are uploaded separately."""
 
     payload: Dict[str, Any]
 
 
 class AgentTaskDto(Object):
-    """A task as the owning/eligible agent sees it (agent dashboard, §7.1)."""
+    """A task as the owning/eligible agent sees it (agent dashboard, §12.1)."""
 
     id: str
     verification_id: str
@@ -201,7 +201,7 @@ class AgentTaskDto(Object):
 
 
 class AgentDashboardDto(Object):
-    """Agent home summary (§7) — backend-derived counts over the agent's own tasks so the
+    """Agent home summary (§12) — backend-derived counts over the agent's own tasks so the
     dashboard renders workload at a glance."""
 
     assigned: int = 0      # ASSIGNED — awaiting the agent's accept

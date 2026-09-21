@@ -44,7 +44,6 @@ from main.app.domain.user.auth.service import AuthService
 from main.app.domain.user.auth.session.service import SessionService
 from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.db.models import SuccessResponse
-from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.exception.exceptions import UserAlreadyExistsException
 from main.appodus_utils.integrations.messaging.models import MessageRequestRecipient, MessageContext
 
@@ -188,7 +187,7 @@ async def auth_callback(
                     recipient=MessageRequestRecipient(
                         fullname=fullname,
                         email=user.email,
-                        phone=PhoneNumber(dial_code=user.phone_dial_code, number=user.phone),
+                        # phone=PhoneNumber(dial_code=user.phone_dial_code, number=user.phone),
                     ),
                     context={
                         MessageContext.FIRST_NAME: user.first_name,

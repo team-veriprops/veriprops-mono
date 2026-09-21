@@ -6,6 +6,7 @@ import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-qu
 import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import ConsentReacceptanceModal from "@components/website/auth/ConsentReacceptanceModal";
+import WhatsAppWidget from "@components/website/WhatsAppWidget";
 import SessionRecoveryOverlay from "@components/website/auth/SessionRecoveryOverlay";
 import { useProactiveSessionRefresh } from "@components/website/auth/libs/useProactiveSessionRefresh";
 import { usePendingLogoutRetry } from "@components/website/auth/libs/usePendingLogoutRetry";
@@ -61,6 +62,9 @@ export function ClientWrapperProvider({ children }: { children: React.ReactNode 
         <SessionRecoveryOverlay />
         {/* Flush a logout that couldn't reach the backend once connectivity returns. */}
         <PendingLogoutRetry />
+        {/* PRD §26.4.1: the WhatsApp front door rides every page (it suppresses itself
+            inside the payment flow), so it mounts once here rather than per layout. */}
+        <WhatsAppWidget />
         {/* </LoadScript> */}
       </QueryClientProvider>
       <Toaster />

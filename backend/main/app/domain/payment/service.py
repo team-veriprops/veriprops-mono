@@ -12,6 +12,7 @@ from typing import Optional
 from kink import inject
 
 from main.app.config.settings import settings
+from main.app.core.links.portal import VerificationPage, verification_path
 from main.app.core.idempotency.service import IdempotencyService
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
@@ -67,6 +68,14 @@ class PaymentService:
         self._idempotency = idempotency_service
         self._audit = audit_service
 
+    async def requires_phone_verification(self, customer_id: str) -> bool:
+        """The pay-step phone gate (§10.5): a customer must verify their phone before paying.
+
+        One rule for every payment surface — the portal pay page renders its phone gate from
+        the session, and the WhatsApp pay landing (which has no session) asks this directly."""
+        user = await self._user_service.get_user_model(customer_id)
+        return not user.phone_verified
+
     async def initiate(
         self,
         verification_id: str,
@@ -81,9 +90,7 @@ class PaymentService:
                 message="This verification is not awaiting payment.",
             )
 
-        # Phone gate (§5.4): phone must be verified before payment completes.
-        user = await self._user_service.get_user_model(customer_id)
-        if not user.phone_verified:
+        if await self.requires_phone_verification(customer_id):
             raise ValidationException(message="Verify your phone number before paying.")
 
         if idempotency_key:
@@ -269,7 +276,7 @@ class PaymentService:
     def _checkout_url(self, verification_id: str, tx_ref: str) -> str:
         if settings.PAYMENT_STUB_MODE:
             # Deterministic path: the frontend pay page completes via the stub webhook.
-            return f"/portal/verifications/{verification_id}/pay?txRef={tx_ref}&stub=1"
+            return f"{verification_path(verification_id, VerificationPage.PAY)}?txRef={tx_ref}&stub=1"
         # Live gateways return their own hosted checkout URL (wired via the payment
         # gateway facade); left to the provider integration.
         return ""

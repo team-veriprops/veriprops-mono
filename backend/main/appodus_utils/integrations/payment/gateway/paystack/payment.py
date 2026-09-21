@@ -248,7 +248,9 @@ class PaystackPaymentGateway(IPaymentGateway):
         Returns:
             TransferFeeResponse
         """
-        # TODO: calc using API cost documentation
+        # TODO(gap): Paystack exposes no transfer-fee endpoint, so the figure has to be
+        # computed locally from their published transfer-cost table — unwired while payouts
+        # run against the stub disburser — PRD "Known Gaps & Roadmap".
         raise NotImplementedException("Feature not natively available in Paystack client.")
 
     async def charge_bank_transfer(

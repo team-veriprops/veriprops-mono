@@ -63,7 +63,7 @@ export function ActivityTimeline({ events, isLoading, isError, emptyLabel }: Act
                 {e.toState ?? ""}
               </p>
             )}
-            <p className="text-xs mt-1 text-brand-on-surface-variant/55">
+            <p className="text-xs mt-1 text-brand-on-surface-variant">
               {new Date(e.occurredAt).toLocaleString()}
             </p>
           </div>

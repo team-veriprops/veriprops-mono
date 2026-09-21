@@ -1,12 +1,11 @@
 "use client";
 
 import ChatThread from "./ChatThread";
-import { MessageKind } from "@/types/chat";
 import { useCustomerThreadQuery, useSendMessageMutation } from "./libs/useChatQueries";
 
 /**
- * Customer ↔ Admin thread for one verification (§11.1). The customer may raise a
- * structured clarification request; delivery and holds are backend-owned.
+ * Customer ↔ Admin thread for one verification (§11.1). Delivery and holds are
+ * backend-owned.
  */
 export default function CustomerMessagesContainer({ verificationId }: { verificationId: string }) {
   const { data: convo, isLoading } = useCustomerThreadQuery(verificationId);
@@ -27,10 +26,8 @@ export default function CustomerMessagesContainer({ verificationId }: { verifica
       ) : (
         <ChatThread
           conversationId={convo?.id ?? null}
-          allowClarifications
-          onSend={(body, kind) =>
-            send.mutateAsync({ verificationId, body, kind: kind ?? MessageKind.CHAT })
-          }
+          onSend={(body) => send.mutateAsync({ verificationId, body })}
+          assistantPending={convo?.assistantPending}
         />
       )}
     </div>

@@ -344,9 +344,10 @@
   --shadow-card-hover: var(--shadow-card-hover);
   --shadow-glow:       var(--shadow-glow);
 
-  /* Typography */
-  --font-sans:    'Inter', system-ui, sans-serif;
-  --font-display: 'Manrope', system-ui, sans-serif;
+  /* Typography — the families are self-hosted by next/font (src/lib/fonts.ts), which defines
+     --font-inter / --font-manrope on <html>. */
+  --font-sans:    var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-manrope), system-ui, sans-serif;
   --font-mono:    ui-monospace, 'Cascadia Code', monospace;
 }
 
@@ -380,11 +381,11 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: var(--font-sans);
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Manrope', system-ui, sans-serif;
+    font-family: var(--font-display);
   }
 }
 

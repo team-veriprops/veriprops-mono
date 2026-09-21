@@ -31,3 +31,27 @@ describe("AnalyticsService contract (mirrors app/domain/analytics/controller.py)
     expect(calls.every((c) => c.method === "get")).toBe(true);
   });
 });
+
+describe("WhatsApp channel analytics (§26.10, WA-43)", () => {
+  it("reads the channel panel, letting the backend pick the window by default", async () => {
+    // No `?days=` — the backend owns the default so the window is the same everywhere it
+    // is quoted, rather than the frontend guessing one.
+    const { http, calls } = mockHttp();
+    await new AnalyticsService(http).getWhatsAppChannel();
+    expect(calls).toEqual([{ method: "get", url: "/admin/analytics/whatsapp" }]);
+  });
+
+  it("passes an explicit window through", async () => {
+    const { http, calls } = mockHttp();
+    await new AnalyticsService(http).getWhatsAppChannel(7);
+    expect(calls[0].url).toBe("/admin/analytics/whatsapp?days=7");
+  });
+
+  it("syncs the Meta quality rating over POST", async () => {
+    const { http, calls } = mockHttp();
+    await new AnalyticsService(http).syncWhatsAppQuality();
+    expect(calls).toEqual([
+      { method: "post", url: "/admin/analytics/whatsapp/quality/sync" },
+    ]);
+  });
+});

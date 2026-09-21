@@ -41,3 +41,24 @@ class TestPublicConfig:
         assert {t.tier for t in resp.data.pricing_tiers} == set(VerificationTier)
         assert all(t.price_ngn_minor == 5_000_000 for t in resp.data.pricing_tiers)
         assert mock_pricing_config_service.tier_price_kobo.await_count == len(VerificationTier)
+
+
+class TestWhatsAppChannelConfig:
+    """§26.1.2/§26.4.1 — the widget's number comes from the backend, never a frontend copy."""
+
+    async def test_serves_both_forms_of_the_official_number(self):
+        resp = await config_controller.public_config()
+        # Digits-only for the wa.me deep link, grouped for on-page copy.
+        assert resp.data.whatsapp_number == "2349167624347"
+        assert resp.data.whatsapp_display_number == "+234 916 762 4347"
+
+    async def test_reflects_the_widget_kill_switch(self, monkeypatch):
+        monkeypatch.setattr(settings, "WHATSAPP_WIDGET_ENABLED", False)
+        resp = await config_controller.public_config()
+        assert resp.data.whatsapp_widget_enabled is False
+
+    async def test_widget_is_live_by_default(self, monkeypatch):
+        # §26.4.1 concierge phase: the widget is live now, ahead of the Cloud API cutover.
+        monkeypatch.setattr(settings, "WHATSAPP_WIDGET_ENABLED", True)
+        resp = await config_controller.public_config()
+        assert resp.data.whatsapp_widget_enabled is True

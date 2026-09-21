@@ -3,31 +3,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Plus, Clock } from "lucide-react";
-import { pricingTiers, currencies, formatPrice, CTA_VERIFY_HREF, type Currency } from "./home.data";
-import { usePublicConfigQuery } from "./auth/libs/useAuthQueries";
-import { VerificationTier } from "@/types/verification";
+import { currencies, formatPrice, withLivePrices, CTA_VERIFY_HREF, type Currency } from "./home.data";
+import type { PublicPricingTier } from "@/types/models";
 import { cn } from "@lib/utils";
 
-// Maps the static marketing tier name onto the backend tier enum so a live
-// pricing_config price can be merged in; falls back per-tier to the static
-// home.data.ts figure when the backend price is unavailable for that tier.
-const TIER_ENUM_BY_NAME: Record<string, VerificationTier> = {
-  Basic: VerificationTier.BASIC,
-  Standard: VerificationTier.STANDARD,
-  Premium: VerificationTier.PREMIUM,
-};
+interface PricingSectionProps {
+  /** Live tier prices from the backend's public config, fetched by the server page so the
+   * server HTML and the hydrated client render the same figures. A tier without one shows no
+   * figure — the backend is the only source of prices. */
+  prices: PublicPricingTier[];
+}
 
-export default function PricingSection() {
+export default function PricingSection({ prices }: PricingSectionProps) {
   const [currency, setCurrency] = useState<Currency>("NGN");
-  const { data: publicConfig } = usePublicConfigQuery();
 
-  const resolvedTiers = pricingTiers.map((tier) => {
-    const backendMinor = publicConfig?.pricingTiers?.find(
-      (t) => t.tier === TIER_ENUM_BY_NAME[tier.name]
-    )?.priceNgnMinor;
-    // Backend price is in kobo (minor units); home.data.ts prices are whole naira.
-    return backendMinor != null ? { ...tier, priceNGN: backendMinor / 100 } : tier;
-  });
+  const resolvedTiers = withLivePrices(prices);
 
   return (
     <section id="pricing" className="py-24 lg:py-32 bg-white">
@@ -114,11 +104,13 @@ export default function PricingSection() {
                   >
                     {tier.name}
                   </h3>
-                  <div
-                    className="text-4xl font-extrabold editorial-spacing font-display text-brand-navy"
-                  >
-                    {formatPrice(tier.priceNGN, currency)}
-                  </div>
+                  {tier.priceNGN != null && (
+                    <div
+                      className="text-4xl font-extrabold editorial-spacing font-display text-brand-navy"
+                    >
+                      {formatPrice(tier.priceNGN, currency)}
+                    </div>
+                  )}
                   <div
                     className="flex items-center gap-1.5 mt-2 text-xs text-brand-on-surface-variant"
                   >

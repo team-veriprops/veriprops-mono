@@ -1,12 +1,15 @@
 "use client";
 
-import { ShieldAlert, Check, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useHeldQueueQuery, useReviewMessageMutation } from "./libs/useChatQueries";
 
 /**
  * Admin hold-review queue (§11.2). Flagged messages wait here for approve (deliver) or
  * reject (block). Each item shows the raw body + why it was held, so decisions are informed
  * and the false-positive rate can be tuned.
+ *
+ * Renders as a tab panel inside `AdminMessagesTabs`, so the page title and container come
+ * from the shell rather than from here.
  */
 export default function HeldMessagesContainer() {
   const { data, isLoading } = useHeldQueueQuery(0);
@@ -14,13 +17,7 @@ export default function HeldMessagesContainer() {
   const items = data?.items ?? [];
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-1">
-        <ShieldAlert className="w-5 h-5 text-brand-viridian" />
-        <h1 className="text-xl font-semibold text-brand-navy">
-          Message review
-        </h1>
-      </div>
+    <div>
       <p className="text-sm text-gray-500 mb-5">
         Messages flagged for off-platform contact or payment details are held here. Approve to
         deliver, or reject to block.

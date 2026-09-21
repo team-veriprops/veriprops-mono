@@ -6,13 +6,17 @@ growth discount breakdown → re-lock guard → submit (price lock) → Phase-5 
 stub payment → PAID. Leaves ``ctx.customer``/``ctx.vid_id``/``ctx.vid`` for later stages.
 
 Runs against the default config (PHONE_VERIFICATION_ENABLED=false): the number is collected
-but left unverified at signup, then verified at the Phase-5 payment step via the authenticated
-POST /users/auth/phone/otp/send + /users/auth/phone/verify endpoints (satisfying the payment
-"Verify your phone number before paying" gate).
+but left unverified at signup, then corrected and verified at the pay-step gate (§10.5) via the
+authenticated POST /users/auth/phone/otp/send + /users/auth/phone/verify endpoints.
 """
 from __future__ import annotations
 
-from .harness import CONSENT_VERSION, TEST_OTP, Ctx, check, idem_key, signup_fresh_user
+import uuid
+
+from .harness import TEST_OTP, Ctx, check, consent_version_for, idem_key, signup_fresh_user
+
+# The seeded customer's verified number (`/dev/seed`) — no other account may claim it.
+_SEEDED_CUSTOMER_NUMBER = {"countryCode": "NG", "dialCode": "+234", "phone": "8030000001"}
 
 
 def run(ctx: Ctx) -> None:
@@ -88,7 +92,7 @@ def run(ctx: Ctx) -> None:
             "state": "Lagos", "lga": "Eti-Osa", "landmark": "Opposite the roundabout",
         },
         "tier": "STANDARD", "currency": "NGN",
-        "consent": {"consent_version": CONSENT_VERSION},
+        "consent": {"consent_version": consent_version_for("VERIFICATION_TERMS")},
     })
     check("submit finalised the verification (§5.6)", r.status_code == 200,
           f"http {r.status_code}: {r.text[:220]}")
@@ -108,15 +112,31 @@ def run(ctx: Ctx) -> None:
           r.status_code == 200 and r.json()["data"]["id"] == ctx.vid_id,
           f"http {r.status_code}: {r.text[:200]}")
 
-    # 5b. Phase-5 phone verification: the number was collected-but-unverified at signup
-    # (PHONE_VERIFICATION_ENABLED=false), so verify it now to satisfy the payment gate (§5).
-    r = fresh.post("/users/auth/phone/otp/send")
-    check("Phase-5 phone OTP send (authenticated) accepted (§5)", r.status_code == 200,
+    # 5b. Pay-step phone gate (§10.5): the number was collected but left unverified at signup
+    # (PHONE_VERIFICATION_ENABLED=false). Payment is refused until it is verified; the customer
+    # may correct the number at the gate, a number another account holds is refused, and the
+    # profile only takes the number once its OTP verifies.
+    r = fresh.post(f"/payments/initiate/{ctx.vid_id}", json={"method": "CARD"})
+    check("payment is refused while the customer's phone is unverified (§10.5)",
+          400 <= r.status_code < 500, f"http {r.status_code}: {r.text[:160]}")
+    r = fresh.post("/users/auth/phone/otp/send", json=_SEEDED_CUSTOMER_NUMBER)
+    check("the pay-step gate refuses a number another account holds (§10.5)",
+          400 <= r.status_code < 500, f"http {r.status_code}: {r.text[:160]}")
+
+    corrected = {"countryCode": "NG", "dialCode": "+234", "phone": f"81{uuid.uuid4().int % 10**8:08d}"}
+    r = fresh.post("/users/auth/phone/otp/send", json=corrected)
+    check("pay-step OTP sent to the customer's corrected number (§10.5)", r.status_code == 200,
           f"http {r.status_code}: {r.text[:160]}")
-    r = fresh.post("/users/auth/phone/verify", json={"code": TEST_OTP})
-    check("Phase-5 phone verify flips phone_verified (§5, fixes the payment-gate gap)",
+    before = fresh.get("/users/auth/sessions/current").json()["data"]["user"]
+    check("sending a code does not change the profile number (§10.5)",
+          before["phone"] != corrected["phone"] and before["phoneVerified"] is False, f"user={before}")
+    r = fresh.post("/users/auth/phone/verify", json={**corrected, "code": TEST_OTP})
+    check("pay-step phone verify accepted (§10.5)",
           r.status_code == 200 and r.json()["data"].get("verified") is True,
           f"http {r.status_code}: {r.text[:160]}")
+    after = fresh.get("/users/auth/sessions/current").json()["data"]["user"]
+    check("the verified, corrected number is now the customer's profile phone (§10.5)",
+          after["phone"] == corrected["phone"] and after["phoneVerified"] is True, f"user={after}")
 
     # 6. Initiate payment → tx_ref, then deterministically confirm it (§5.4, stub gateway).
     r = fresh.post(f"/payments/initiate/{ctx.vid_id}", json={"method": "CARD"})

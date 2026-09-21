@@ -25,3 +25,11 @@ class PublicConfigDto(Object):
     # Live per-tier prices — the marketing pricing section reads this rather than
     # holding static copy (backend `pricing_tier_config` is the source of truth).
     pricing_tiers: List[PublicPricingTierDto] = []
+    # §26.1.2 anti-impersonation: the one official WhatsApp number, served from the single
+    # backend source so the site widget, reports, and bot copy can never drift apart.
+    # `whatsapp_number` is digits-only for wa.me links; `whatsapp_display_number` is the
+    # human-readable form for on-page copy.
+    whatsapp_number: str = ""
+    whatsapp_display_number: str = ""
+    # §26.4.1 kill switch for the floating chat widget.
+    whatsapp_widget_enabled: bool = False

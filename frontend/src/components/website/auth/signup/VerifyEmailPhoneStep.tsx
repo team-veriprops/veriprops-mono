@@ -4,10 +4,12 @@ import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@3rdparty/ui/button";
+import { SubmitButton } from "@components/ui/form/SubmitButton";
 import VerifiedInput, { VerifiedInputType } from "@components/ui/verified_input/VerifiedInput";
 import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
 import { verifyFormSchema, type VerifyFormValues } from "@components/ui/verified_input/schemas";
 import { useSendOtpMutation, useVerifyOtpMutation, usePublicConfigQuery } from "../libs/useAuthQueries";
+import { otpDeliveryError } from "../libs/otpDelivery";
 import { OtpChannel } from "@components/website/auth/models";
 import { getErrorMessage } from "@lib/utils";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
@@ -46,6 +48,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
   const emailVerified = useWatch({ control: form.control, name: "emailVerified" });
   const phoneVerified = useWatch({ control: form.control, name: "phoneVerified" });
   const phone = useWatch({ control: form.control, name: "phone" });
+  const phoneCountryCode = useWatch({ control: form.control, name: "countryCode" });
 
   // Phone is always required, whether or not it needs to be OTP-verified here.
   // When verification is off, the number is still collected (and verified
@@ -59,7 +62,15 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
   }, [phoneVerificationEnabled, phone, form]);
 
   return (
-    <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="verify-form">
+    <form
+      className="space-y-6"
+      method="post"
+      onSubmit={form.handleSubmit(onSubmit)}
+      noValidate
+      data-testid="verify-form"
+    >
+      {/* method="post" so that a submit landing before hydration cannot put the email and
+          phone number in the URL — see SubmitButton. */}
       <p
         className="text-sm leading-relaxed text-brand-on-surface-variant"
       >
@@ -79,7 +90,12 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
           sendOtp.mutate(
             { channel: OtpChannel.EMAIL, email: form.getValues("email") },
             {
-              onSuccess: () => onSuccess(),
+              // A 2xx only means the code was issued — `delivered` says whether it was sent.
+              onSuccess: (res) => {
+                const undelivered = otpDeliveryError(res.data);
+                if (undelivered) onError(undelivered);
+                else onSuccess();
+              },
               onError: (err) =>
                 onError(getErrorMessage(err as Error, "Could not send code. Please try again.")),
             },
@@ -114,7 +130,11 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
                 phone: v.phone,
               },
               {
-                onSuccess: () => onSuccess(),
+                onSuccess: (res) => {
+                  const undelivered = otpDeliveryError(res.data);
+                  if (undelivered) onError(undelivered);
+                  else onSuccess();
+                },
                 onError: (err) =>
                   onError(getErrorMessage(err as Error, "Could not send code. Please try again.")),
               },
@@ -144,9 +164,16 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
             Phone <span className="text-destructive">*</span>
           </label>
           <PhoneInputWithCountry
-            form={form}
-            isVerified={false}
-            onChanged={() => {}}
+            countryCode={phoneCountryCode}
+            phone={phone}
+            // Same id as the OTP-verified branch above: a spec fills "the phone field on the
+            // verify step" without needing to know which side of the flag rendered it.
+            data-testid="verify-phone-input"
+            onChange={({ countryCode, dialCode, phone }) => {
+              form.setValue("countryCode", countryCode, { shouldValidate: true });
+              form.setValue("dialCode", dialCode, { shouldValidate: true });
+              form.setValue("phone", phone, { shouldValidate: true });
+            }}
             placeholder="0801 234 5678"
           />
           {(form.formState.touchedFields.phone || form.formState.isSubmitted) &&
@@ -162,15 +189,14 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
         <Button type="button" variant="outline" className="flex-1" onClick={onBack} size="lg" data-testid="verify-back">
           Back
         </Button>
-        <Button
-          type="submit"
+        <SubmitButton
           className="flex-1"
           size="lg"
           disabled={!emailVerified || !phoneVerified}
           data-testid="verify-submit"
         >
           Continue
-        </Button>
+        </SubmitButton>
       </div>
     </form>
   );

@@ -5,8 +5,8 @@ Three mounted routers:
   counter, per-user SSE stream, per-conversation message feed + read + send.
 - ``verification_chat_router`` — thread openers for the two verification channels
   (customer-owned and agent-assigned) plus general support.
-- ``admin_chat_router`` (/admin/messages, /admin/verifications/{id}/chat) — RBAC-gated hold
-  review queue + admin thread open/send.
+- ``admin_chat_router`` (/admin/messages, /admin/conversations, /admin/verifications/{id}/chat)
+  — RBAC-gated hold review queue, the paged Conversations inbox, and admin thread open/send.
 
 Delivery is over ``GET /chat/stream`` (SSE); sends are ordinary HTTP POST (§4.9).
 Frontend service: frontend/src/components/chat/libs/chat-service.
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
@@ -28,9 +29,14 @@ from main.app.domain.communication.chat_message.models import (
     ChatMessageDto,
     HeldMessageDto,
     MessageKind,
+    MessageSource,
     SenderKind,
 )
-from main.app.domain.communication.conversation.models import ConversationDto, ConversationType
+from main.app.domain.communication.conversation.models import (
+    AdminInboxFilter,
+    ConversationDto,
+    ConversationType,
+)
 from main.app.domain.communication.service import CommunicationService
 from main.app.domain.communication.chat_message.service import HELD_NOTICE
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
@@ -49,8 +55,9 @@ _HEARTBEAT_SECONDS = settings.SSE_HEARTBEAT_SECONDS
 # ─── Request bodies (defined before the routes reference them) ────────
 
 class SendMessageBodyDto(Object):
+    # No `kind`: the server always stores CHAT. SYSTEM_AUTO skips the fraud scan, so a
+    # client-chosen kind would let anyone post unscanned.
     body: str
-    kind: MessageKind = MessageKind.CHAT
 
 
 class AgentSendMessageDto(Object):
@@ -66,29 +73,33 @@ class AdminSendMessageDto(Object):
 
 class SendToConversationDto(Object):
     body: str
-    # sender_kind is intentionally NOT accepted from the client — it is derived
-    # server-side from the caller's role and the thread type (see post_message).
+    # Neither sender_kind nor the message kind is accepted from the client — both are
+    # derived server-side (see post_message).
     task_id: str | None = None
-    kind: MessageKind = MessageKind.CHAT
 
 
 def _sse_frame(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
-def _convo_dto(convo) -> ConversationDto:
-    return ConversationDto(
-        id=convo.id,
-        type=ConversationType(convo.type),
-        verification_id=convo.verification_id,
-        subject=convo.subject,
-        last_message_at=convo.last_message_at,
-        closed=convo.closed,
-    )
+class AssistantTurnDto(Object):
+    """The answer to a deferred assistant turn (D93): the reply it posted, if this request
+    ran the turn, and whether a turn is still pending (another request holds it, or a newer
+    message is waiting for its own)."""
+
+    reply: ChatMessageDto | None = None
+    pending: bool = False
 
 
-def _sent_dto(message: ChatMessage) -> ChatMessageDto:
-    """Projection of the just-sent message back to its sender (carries the held notice)."""
+async def _convo_dto(convo) -> ConversationDto:
+    """A thread opener's response — the same projection as the conversation list, so an
+    opener never reports a WhatsApp thread as a web one."""
+    return await comms.conversation_dto(convo)
+
+
+def _sent_dto(message: ChatMessage, outcome=None) -> ChatMessageDto:
+    """Projection of the just-sent message back to its sender (carries the held notice, and
+    the assistant's inline answer when there is one)."""
     from main.app.core.state.status import ChatMessageState
 
     held = message.state == ChatMessageState.HELD.value
@@ -99,11 +110,13 @@ def _sent_dto(message: ChatMessage) -> ChatMessageDto:
         task_id=message.task_id,
         state=ChatMessageState(message.state),
         message_kind=MessageKind(message.message_kind),
-        clarification_status=None,
+        source=MessageSource(message.source or MessageSource.WEB.value),
         sender=_sender_self(message),
         held_notice=HELD_NOTICE if held else None,
         date_created=message.date_created,
         delivered_at=message.delivered_at,
+        assistant_reply=_sent_dto(outcome.reply) if outcome and outcome.reply else None,
+        assistant_pending=bool(outcome and outcome.pending),
     )
 
 
@@ -165,10 +178,25 @@ async def post_message(
 ):
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
-    message = await comms.post_message(
-        conversation_id, user_id, req.body, task_id=req.task_id, kind=req.kind
-    )
-    return SuccessResponse[ChatMessageDto](data=_sent_dto(message))
+    message = await comms.post_message(conversation_id, user_id, req.body, task_id=req.task_id)
+    outcome = await comms.answer_with_assistant(message)
+    return SuccessResponse[ChatMessageDto](data=_sent_dto(message, outcome))
+
+
+@chat_router.post(
+    "/conversations/{conversation_id}/assistant/turn",
+    response_model=SuccessResponse[AssistantTurnDto],
+)
+async def assistant_turn(conversation_id: str, authorize: AuthJWT = Depends()):
+    """Answer the assistant turn a send left pending (D93). Safe to call repeatedly: the turn
+    is claimed atomically, so only one request ever answers it."""
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
+    outcome = await comms.run_assistant_turn(conversation_id, user_id)
+    return SuccessResponse[AssistantTurnDto](data=AssistantTurnDto(
+        reply=_sent_dto(outcome.reply) if outcome.reply else None,
+        pending=outcome.pending,
+    ))
 
 
 @chat_router.get("/stream")
@@ -212,7 +240,7 @@ async def open_customer_thread(verification_id: str, authorize: AuthJWT = Depend
     await authorize.jwt_required()
     customer_id = str(authorize.get_jwt_subject())
     convo = await comms.customer_thread(verification_id, customer_id)
-    return SuccessResponse[ConversationDto](data=_convo_dto(convo))
+    return SuccessResponse[ConversationDto](data=await _convo_dto(convo))
 
 
 @verification_chat_router.post(
@@ -223,8 +251,9 @@ async def customer_send(
 ):
     await authorize.jwt_required()
     customer_id = str(authorize.get_jwt_subject())
-    message = await comms.customer_send(verification_id, customer_id, req.body, kind=req.kind)
-    return SuccessResponse[ChatMessageDto](data=_sent_dto(message))
+    message = await comms.customer_send(verification_id, customer_id, req.body)
+    outcome = await comms.answer_with_assistant(message)
+    return SuccessResponse[ChatMessageDto](data=_sent_dto(message, outcome))
 
 
 @verification_chat_router.get("/support/chat", response_model=SuccessResponse[ConversationDto])
@@ -232,7 +261,7 @@ async def open_support_thread(authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
     convo = await comms.support_thread(user_id)
-    return SuccessResponse[ConversationDto](data=_convo_dto(convo))
+    return SuccessResponse[ConversationDto](data=await _convo_dto(convo))
 
 
 @verification_chat_router.post("/support/chat/messages", response_model=SuccessResponse[ChatMessageDto])
@@ -240,7 +269,8 @@ async def support_send(req: "SendMessageBodyDto", authorize: AuthJWT = Depends()
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
     message = await comms.support_send(user_id, req.body)
-    return SuccessResponse[ChatMessageDto](data=_sent_dto(message))
+    outcome = await comms.answer_with_assistant(message)
+    return SuccessResponse[ChatMessageDto](data=_sent_dto(message, outcome))
 
 
 @verification_chat_router.get(
@@ -250,7 +280,7 @@ async def open_agent_thread(verification_id: str, authorize: AuthJWT = Depends()
     await authorize.jwt_required()
     agent_id = str(authorize.get_jwt_subject())
     convo = await comms.agent_thread(verification_id, agent_id)
-    return SuccessResponse[ConversationDto](data=_convo_dto(convo))
+    return SuccessResponse[ConversationDto](data=await _convo_dto(convo))
 
 
 @verification_chat_router.post(
@@ -295,6 +325,22 @@ async def reject_message(
     return SuccessResponse[dict](data={"id": message.id, "state": message.state})
 
 
+@admin_chat_router.get("/conversations", response_model=SuccessResponse[Page[ConversationDto]])
+async def admin_conversations(
+    inbox_filter: Optional[AdminInboxFilter] = Query(default=None, alias="filter"),
+    query: Optional[str] = Query(default=None, max_length=100),
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=10, ge=1, le=100),
+    admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
+):
+    """The Conversations inbox (§16.5): cases, web support and WhatsApp in one server-paged
+    list, narrowed by an enum facet and a search over the number, subject and owner."""
+    result = await comms.admin_inbox(
+        admin_id, page, page_size, inbox_filter=inbox_filter, query=query
+    )
+    return SuccessResponse[Page[ConversationDto]](data=result)
+
+
 @admin_chat_router.get(
     "/verifications/{verification_id}/chat", response_model=SuccessResponse[ConversationDto]
 )
@@ -304,7 +350,7 @@ async def open_admin_thread(
     admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
 ):
     convo = await comms.admin_thread(verification_id, conversation_type, admin_id)
-    return SuccessResponse[ConversationDto](data=_convo_dto(convo))
+    return SuccessResponse[ConversationDto](data=await _convo_dto(convo))
 
 
 @admin_chat_router.post(

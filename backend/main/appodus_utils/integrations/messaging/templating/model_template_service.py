@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from main.appodus_utils import Object
 from main.appodus_utils.exception.exceptions import TemplateRenderingException, ValidationException
 from main.appodus_utils.integrations.messaging.models import MessageChannel, PushPayload, WebPushPayload, WhatsappPayload
+from main.appodus_utils.integrations.messaging.templating.whatsapp_templates import meta_template_for
 from main.appodus_utils.integrations.messaging.templating.models import AvailableTemplate
 from main.appodus_utils.integrations.messaging.templating.service import TemplateService
 
@@ -117,11 +118,38 @@ class ModelTemplateService:
             context: Dict[str, Any],
             **kwargs
     ) -> WhatsappPayload:
-        """Convenience method specifically for rendering WhatsappPayload"""
-        return await self.render_model(
-            model_class=WhatsappPayload,
+        """Render a WhatsApp payload from its template.
+
+        Unlike the push payloads above, this does **not** go through ``render_model``:
+        those templates emit JSON that is parsed into a model, while every WhatsApp
+        template in this repo is the plain message body a customer reads in the thread.
+        Feeding one to a JSON parser fails on the first word.
+
+        **A §26.7 template gets both halves** (D59b). ``template_name`` plus positional
+        variables is what Meta will actually accept for a business-initiated message; the
+        rendered body travels alongside in ``text`` so the admin console, the stub outbox
+        and the drive-through can read what the customer will see. The live provider
+        prefers the template when both are present, so the text is a faithful preview
+        rather than a second delivery path.
+
+        Anything not declared in §26.7 is in-conversation copy — a bot reply, inside the
+        service window by construction — and goes out as plain text.
+        """
+        body = await self.template_service.render_message(
             channel=MessageChannel.WHATSAPP,
             template_name=template,
             context=context,
-            **kwargs
+        )
+
+        declaration = meta_template_for(template)
+        if declaration is None:
+            return WhatsappPayload(text=body.strip(), **kwargs)
+
+        return WhatsappPayload(
+            text=body.strip(),
+            template_name=declaration.name,
+            template_variables=declaration.positional_variables(context),
+            template_button_parameter=declaration.button_parameter(context),
+            language_code=declaration.language,
+            **kwargs,
         )

@@ -22,6 +22,8 @@ const CountryCodeSelect = ({ value, onChange, disabled }: CountryCodeSelectProps
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          // The trigger shows only a flag, so it needs an explicit name for screen readers.
+          aria-label={selected ? `Country code: ${selected.name} ${selected.dialCode}` : "Country code"}
           disabled={disabled}
           // className="h-10 w-27.5 shrink-0 justify-between gap-1 px-2.5 font-normal"
           className="h-10 w-17.5 shrink-0 justify-between gap-1 px-2 font-normal"

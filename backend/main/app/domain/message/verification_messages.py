@@ -8,7 +8,6 @@ from main.app.domain.message.message_sender import BaseMessageSender
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.integrations.messaging.models import (
-    EmailRecipient,
     MessageCategory,
     MessageChannel,
     MessageContext,
@@ -130,9 +129,7 @@ class VerificationMessages(BaseMessageSender):
     async def send_report_share(self, recipient_email: str, vid: str, share_url: str) -> None:
         """Email a tokenised report link to a named recipient (§13.2). The recipient need
         not be a registered user, so the message goes to a raw email address."""
-        recipient = MessageRequestRecipient(
-            email=EmailRecipient(email=recipient_email),
-        )
+        recipient = MessageRequestRecipient(email=recipient_email)
         await self._send_direct_message(
             recipient=recipient,
             template=AvailableTemplate.VERIFICATION_REPORT_SHARE,
@@ -177,4 +174,51 @@ class VerificationMessages(BaseMessageSender):
             category=MessageCategory.TRANSACTION,
             default_channels=[MessageChannel.EMAIL],
             extra_context={MessageContext.ABANDONMENT_VID.value: vid},
+        )
+
+    # ── §26.6.2 WhatsApp milestones (D65) ──────────────────────────────
+    #
+    # Addressed **directly by phone**, not by user id, and that is the whole point. The
+    # by-user path resolves `users.phone` — a profile field nobody proved control of over
+    # WhatsApp. A milestone carries case details, so it may only ever go to the number the
+    # customer OTP-verified as theirs (§26.4.3), which the caller resolves through
+    # `WhatsAppLinkService.resolve_phone_for_user` before calling in here.
+    #
+    # A delegate has no account at all, which is the second reason: `send_delegate_status`
+    # could not be expressed on the by-user path even in principle.
+
+    async def send_whatsapp_milestone(
+        self,
+        recipient: MessageRequestRecipient,
+        template: AvailableTemplate,
+        context: dict,
+    ) -> None:
+        """One §26.7 milestone template to a verified WhatsApp number.
+
+        The template is chosen by the notification rule table, so this method stays a
+        transport: adding a fifth milestone is a rule row, not a method here.
+        """
+        await self._send_direct_message(
+            recipient=recipient,
+            template=template,
+            context=context,
+            category=MessageCategory.TRANSACTION,
+            default_channels=[MessageChannel.WHATSAPP],
+        )
+
+    async def send_whatsapp_delegate_status(
+        self, recipient: MessageRequestRecipient, context: dict
+    ) -> None:
+        """The §26.4.5 delegate's milestone — status and case reference, nothing else.
+
+        A separate template rather than the customer's is what makes "never documents,
+        reports, chat history, or intake data" structural: `delegate_status` has no link
+        parameter, so no code path can hand a delegate a report.
+        """
+        await self._send_direct_message(
+            recipient=recipient,
+            template=AvailableTemplate.WHATSAPP_DELEGATE_STATUS,
+            context=context,
+            category=MessageCategory.TRANSACTION,
+            default_channels=[MessageChannel.WHATSAPP],
         )

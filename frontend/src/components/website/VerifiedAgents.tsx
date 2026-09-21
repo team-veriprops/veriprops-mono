@@ -2,6 +2,7 @@ import type { ComponentType, CSSProperties } from "react";
 import Link from "next/link";
 import { MapPin, Ruler, FileText, Scale, CheckCircle2, ArrowRight } from "lucide-react";
 import { agentTypes, CTA_AGENT_HREF } from "./home.data";
+import { cn } from "@lib/utils";
 
 const iconMap: Record<string, ComponentType<{ className?: string; strokeWidth?: number; style?: CSSProperties }>> = {
   MapPin,
@@ -9,6 +10,17 @@ const iconMap: Record<string, ComponentType<{ className?: string; strokeWidth?: 
   FileText,
   Scale,
 };
+
+/**
+ * Per-card index watermark, one static class each because Tailwind scans source text —
+ * a class assembled at runtime would never be generated.
+ */
+const INDEX_WATERMARK = [
+  "before:content-['01']",
+  "before:content-['02']",
+  "before:content-['03']",
+  "before:content-['04']",
+];
 
 export default function VerifiedAgents() {
   return (
@@ -51,12 +63,18 @@ export default function VerifiedAgents() {
                 key={agent.name}
                 className="bg-white rounded-2xl p-8 group transition-all duration-300 hover:-translate-y-1 relative overflow-hidden border border-brand-outline-variant/10 shadow-[0_2px_8px_rgba(0,13,34,0.04)] ease-[cubic-bezier(0.16,1,0.3,1)]"
               >
-                {/* Subtle index number — decorative */}
+                {/* Subtle index watermark. Rendered as a CSS pseudo-element rather than
+                    a text node: at 4% opacity it is texture, not content, and real text
+                    would owe a contrast ratio it was never meant to meet. Keeping
+                    decoration in CSS says that unambiguously — to axe and to a reader. */}
                 <div
-                  className="absolute top-4 right-5 text-5xl font-extrabold font-display pointer-events-none select-none text-brand-navy/4"
-                >
-                  0{idx + 1}
-                </div>
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute top-4 right-5 text-5xl font-extrabold font-display",
+                    "pointer-events-none select-none text-brand-navy/4",
+                    INDEX_WATERMARK[idx] ?? "",
+                  )}
+                />
 
                 {/* Icon */}
                 <div

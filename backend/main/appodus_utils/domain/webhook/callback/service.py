@@ -11,6 +11,7 @@ from main.appodus_utils.domain.webhook.callback.model import CreateCallbackDto, 
     _UpdateCallbackDto
 from main.appodus_utils.domain.webhook.callback.repo import CallbackRepo
 from main.appodus_utils.domain.webhook.callback.validator import CallbackValidator
+from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -65,8 +66,16 @@ class CallbackService:
             await self._callback_repo.update(callback_id, obj_in.model_dump(exclude_none=True))
 
             return True
-        else:
-            raise  # TODO: be explicit
+
+        # No unhandled callback matches this platform/event/external-id triple. The bare
+        # `raise` that stood here was outside an `except` block, so it surfaced as
+        # `RuntimeError: No active exception to reraise` and hid the condition it meant to
+        # report — a provider re-posting an event we already handled, or one we never saw.
+        raise ResourceNotFoundException(
+            "Callbacks",
+            f"No unhandled callback for {obj_in.platform.value}/{obj_in.event_type.value} "
+            f"(external_id={obj_in.external_id})",
+        )
 
     async def exists_for_event(self, obj_in: CreateCallbackDto) -> bool:
         return await self._callback_repo.exists_by_platform_event_type_and_external_id(

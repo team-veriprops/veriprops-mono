@@ -4,7 +4,7 @@ import { Button } from "@components/3rdparty/ui/button";
 import { Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import VerificationModal from "./VerificationModal";
-import type { UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 
 import PhoneInputWithCountry from "../form/PhoneInputWithCountry";
 import { toast } from "sonner";
@@ -37,6 +37,11 @@ const VerifiedInput = ({ form, field, label, type, placeholder, inputType = "tex
   const isVerified = form.watch(verifiedField);
   const fieldError = form.formState.errors[field];
   const fieldValue = form.watch(field);
+  // Subscribed rather than read through `form.watch(...)`: the phone input is a
+  // controlled child, and a `watch()` result passed down makes React Compiler skip
+  // memoizing this component (and risk a stale value in the child).
+  const phoneCountryCode = useWatch({ control: form.control, name: "countryCode" });
+  const phoneNumber = useWatch({ control: form.control, name: "phone" });
 
   const canVerify = !isVerified && fieldValue && !fieldError;
   const [otpError, setOtpError] = useState<string | null>(null);
@@ -72,10 +77,15 @@ const VerifiedInput = ({ form, field, label, type, placeholder, inputType = "tex
         {field === "phone" ? (
           <div className="flex-1">
             <PhoneInputWithCountry
-              form={form}
+              countryCode={phoneCountryCode}
+              phone={phoneNumber}
               placeholder={placeholder}
               isVerified={isVerified}
-              onChanged={() => {
+              data-testid={`verify-${field}-input`}
+              onChange={({ countryCode, dialCode, phone }) => {
+                form.setValue("countryCode", countryCode, { shouldValidate: true });
+                form.setValue("dialCode", dialCode, { shouldValidate: true });
+                form.setValue("phone", phone, { shouldValidate: true });
                 setOtpError(null);
                 if (isVerified) {
                   form.setValue(verifiedField, false, { shouldValidate: true });
@@ -89,6 +99,7 @@ const VerifiedInput = ({ form, field, label, type, placeholder, inputType = "tex
               type={inputType}
               placeholder={placeholder}
               disabled={isVerified}
+              data-testid={`verify-${field}-input`}
               {...form.register(field, {
                 onChange: () => {
                   setOtpError(null);
@@ -109,7 +120,12 @@ const VerifiedInput = ({ form, field, label, type, placeholder, inputType = "tex
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.8, opacity: 0 }}
             >
-              <Button variant="outline" disabled className="gap-1.5 border-[hsl(var(--success))] text-[hsl(var(--success))]">
+              <Button
+                variant="outline"
+                disabled
+                data-testid={`verify-${field}-verified`}
+                className="gap-1.5 border-[hsl(var(--success))] text-[hsl(var(--success))]"
+              >
                 <Check className="w-4 h-4" /> Verified
               </Button>
             </motion.div>
@@ -125,6 +141,7 @@ const VerifiedInput = ({ form, field, label, type, placeholder, inputType = "tex
                 variant={canVerify ? "default" : "outline"}
                 disabled={!canVerify}
                 onClick={handleVerifyClick}
+                data-testid={`verify-${field}-send`}
               >
                   {isVerifying ? (
                     <span
@@ -142,10 +159,16 @@ const VerifiedInput = ({ form, field, label, type, placeholder, inputType = "tex
           )}
         </AnimatePresence>
       </div>
-      {fieldError && <p className="text-sm text-destructive">{fieldError.message}</p>}
+      {/* The two messages are mutually exclusive, so they share one test id: a spec asserts
+          "this field is complaining" without caring which layer produced the complaint. */}
+      {fieldError && (
+        <p className="text-sm text-destructive" data-testid={`verify-${field}-error`}>
+          {fieldError.message}
+        </p>
+      )}
 
       {otpError && !fieldError && (
-        <p className="text-sm text-destructive">
+        <p className="text-sm text-destructive" data-testid={`verify-${field}-error`}>
           {otpError}
         </p>
       )}

@@ -46,15 +46,26 @@ describe("AuthService endpoint contracts (S6)", () => {
     expect(http.get).toHaveBeenCalledWith("/config/public");
   });
 
-  it("sendPhoneOtp posts to the authenticated Phase-5 phone-otp endpoint (§5)", () => {
+  const number = { countryCode: "NG", dialCode: "+234", phone: "8129998888" };
+
+  it("sendPhoneOtp posts the entered number to the authenticated pay-step endpoint (§10.5)", () => {
     const { http } = makeHttp();
-    new AuthService(http).sendPhoneOtp();
+    new AuthService(http).sendPhoneOtp(number);
+    expect(http.post).toHaveBeenCalledWith("/users/auth/phone/otp/send", number);
+  });
+
+  it("sendPhoneOtp with no number confirms the one on the profile", () => {
+    const { http } = makeHttp();
+    new AuthService(http).sendPhoneOtp({});
     expect(http.post).toHaveBeenCalledWith("/users/auth/phone/otp/send", {});
   });
 
-  it("verifyPhone posts the code to the authenticated phone-verify endpoint (§5)", () => {
+  it("verifyPhone posts the code with the number it was sent to (§10.5)", () => {
     const { http } = makeHttp();
-    new AuthService(http).verifyPhone("654123");
-    expect(http.post).toHaveBeenCalledWith("/users/auth/phone/verify", { code: "654123" });
+    new AuthService(http).verifyPhone({ ...number, code: "654123" });
+    expect(http.post).toHaveBeenCalledWith("/users/auth/phone/verify", {
+      ...number,
+      code: "654123",
+    });
   });
 });

@@ -28,7 +28,10 @@ export default function AdminPayouts() {
       title="Payouts"
       description="Approve, hold, adjust, or reject agent withdrawal requests."
       actions={
+        // A toolbar filter has no visible label to bind to, so it names itself — without this
+        // the control is announced only as "combo box" (axe `select-name`, critical).
         <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(0); }}
+          aria-label="Filter payouts by status"
           className="h-9 rounded-md border bg-background px-3 text-sm" data-testid="payout-status-filter">
           {STATUSES.map((s) => <option key={s || "all"} value={s}>{s ? humanizeEnumLabel(s) : "All"}</option>)}
         </select>

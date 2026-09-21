@@ -153,7 +153,7 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
       if (!newOpen) return; // ignore backdrop clicks
       }}
     >
-      <DialogContent showCloseButton={false} className="sm:max-w-md">
+      <DialogContent showCloseButton={false} className="sm:max-w-md" data-testid="verify-otp-modal">
         <DialogHeader className="relative">
           <DialogTitle className="text-xl font-semibold">Verify {type}</DialogTitle>
           <button
@@ -179,6 +179,8 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
               inputMode="numeric"
               maxLength={1}
               value={digit}
+              data-testid={`verify-otp-digit-${i}`}
+              aria-label={`Digit ${i + 1} of ${OTP_LENGTH}`}
               onChange={(e) => handleChange(i, e.target.value)}
               onKeyDown={(e) => handleKeyDown(i, e)}
               className={`w-11 h-13 text-center text-lg font-semibold rounded-md border bg-background focus:outline-none focus:ring-2 transition-all ${otpError ? "border-destructive focus:ring-destructive" : "border-input focus:ring-ring"}`}
@@ -196,6 +198,7 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               className="text-sm text-destructive text-center"
+              data-testid="verify-otp-error"
             >
               {otpError}
             </motion.p>
@@ -238,6 +241,7 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
                   onClick={handleResend}
                   disabled={resending || resendsRemaining === 0}
                   className="text-primary p-0 h-auto"
+                  data-testid="verify-otp-resend"
                 >
                   <AnimatePresence mode="wait">
                     {resending ? (
@@ -261,8 +265,13 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
         </div>
 
         <div className="flex gap-3 mt-2">
-          <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
-          <Button className="flex-1" disabled={!isComplete || verifying} onClick={handleConfirm}>
+          <Button variant="outline" className="flex-1" onClick={onClose} data-testid="verify-otp-cancel">Cancel</Button>
+          <Button
+            className="flex-1"
+            disabled={!isComplete || verifying}
+            onClick={handleConfirm}
+            data-testid="verify-otp-confirm"
+          >
             <AnimatePresence mode="wait">
               {verifying ? (
                 <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}

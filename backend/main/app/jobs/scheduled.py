@@ -1,4 +1,4 @@
-"""Background scheduler wiring (PRD §7.2 timeout sweeps, §6.4 SLA shedding).
+"""Background scheduler wiring (PRD §11.4 timeout sweeps, §6.4 SLA shedding).
 
 The individual sweep tasks — job wrappers plus their ``check_*`` entrypoints —
 live one-file-per-concern under ``app/jobs/tasks/``. This module owns the
@@ -22,6 +22,7 @@ from main.app.jobs.tasks import (
     check_abandoned_drafts,
     check_commission_clearance,
     check_message_retries,
+    check_pending_assistant_turns,
     check_referral_credits,
     check_scheduled_broadcasts,
     check_sla_breaches,
@@ -51,6 +52,9 @@ scheduler.add_job(check_scheduled_broadcasts, "interval", minutes=5, id="schedul
 # Outbound-message retries: re-dispatch RETRYING rows whose next_retry_at has passed.
 # Every minute — the first ladder rung defaults to 60s, so a slower sweep would stretch it.
 scheduler.add_job(check_message_retries, "interval", minutes=1, id="message_retry_check")
+# Assistant turns left pending when a customer's tab closed before asking for them (D93).
+# The backstop, not the path: every environment is serverless today, where this cannot run.
+scheduler.add_job(check_pending_assistant_turns, "interval", minutes=1, id="assistant_pending_turn_check")
 
 
 def start_scheduler():

@@ -10,9 +10,11 @@ the false-positive rate can be instrumented from day one (§4.7).
 """
 from __future__ import annotations
 
+from datetime import datetime
+from logging import Logger
 from typing import Optional
 
-from kink import inject
+from kink import di, inject
 
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.machine import chat_message_state_machine
@@ -21,17 +23,18 @@ from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.communication.chat_message.models import (
     BODY_MAX_LENGTH,
+    ChannelDeliveryStatus,
     ChatMessage,
     ChatMessageDto,
     ChatSenderDto,
-    ClarificationStatus,
     CreateChatMessageDto,
     HeldMessageDto,
     MessageKind,
+    MessageSource,
     SenderKind,
 )
 from main.app.domain.communication.chat_message.repo import ChatMessageRepo
-from main.app.domain.communication.conversation.models import Conversation
+from main.app.domain.communication.conversation.models import Conversation, ConversationChannel
 from main.app.domain.communication.conversation.service import ConversationService
 from main.app.domain.communication.conversation_participant.service import (
     ConversationParticipantService,
@@ -47,10 +50,61 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import InboundKind
+
+logger: Logger = di["logger"]
 
 # Sender-facing notice while a message is held for review (§11.2) — worded so it never
 # reads as suspicion of the sender.
 HELD_NOTICE = "Just a moment while we check this through."
+
+
+def _is_platform_authored(sender_kind: SenderKind, kind: MessageKind) -> bool:
+    """True for copy Veriprops writes about itself, which is not scan material."""
+    return sender_kind == SenderKind.SYSTEM or kind == MessageKind.SYSTEM_AUTO
+
+
+def _is_unofficial_media(message: ChatMessage) -> bool:
+    """§26.1.6/§26.6.3 — media that arrived over chat is never canonical evidence.
+
+    Derived from ``media_kind`` rather than stored: only portal uploads and structured
+    intake enter the verification file, so *every* chat-borne image, document or voice
+    note is unofficial by rule. A persisted flag could only ever drift from that.
+    """
+    return bool(message.media_kind)
+
+
+def _is_pending_channel_delivery(message: ChatMessage, channel: Optional[str]) -> bool:
+    """An agent reply sitting in the thread that has not left over WhatsApp yet (§26.7).
+
+    Three conditions, and the *channel* one is what keeps this off the website: a web
+    thread has no outbound transport, so its messages are never pending — they are simply
+    read in the portal. Only human replies queue, because a SYSTEM message is either
+    platform copy that never leaves the console or a bot reply ``bot/sender.py`` already
+    delivered.
+    """
+    if channel != ConversationChannel.WHATSAPP.value:
+        return False
+    return (
+        message.channel_delivered_at is None
+        and message.channel_status != ChannelDeliveryStatus.CANCELLED.value
+        and message.state == ChatMessageState.DELIVERED.value
+        and message.sender_kind in (SenderKind.ADMIN.value, SenderKind.AGENT.value)
+    )
+
+
+def _is_seen_by_support(message: ChatMessage, support_read_at: Optional[datetime]) -> bool:
+    """A customer's own message that an admin has read the thread past (§16.6).
+
+    Compared on ``delivered_at`` — when the message reached the thread an admin reads — so
+    a message still held for review is never "seen".
+    """
+    return (
+        support_read_at is not None
+        and message.sender_kind == SenderKind.CUSTOMER.value
+        and message.delivered_at is not None
+        and message.delivered_at <= support_read_at
+    )
 
 
 @inject
@@ -82,9 +136,18 @@ class ChatMessageService:
         *,
         task_id: Optional[str] = None,
         kind: MessageKind = MessageKind.CHAT,
+        source: MessageSource = MessageSource.WEB,
+        external_message_id: Optional[str] = None,
+        media_kind: Optional[InboundKind] = None,
     ) -> ChatMessage:
         """Send a message into a thread. Clean messages deliver immediately (fast lane);
-        flagged messages are held for admin review (§4.7)."""
+        flagged messages are held for admin review (§4.7).
+
+        ``source`` records which surface the message came from — WhatsApp text runs the
+        same scan as web chat (§26.3.3), so the hold behaviour is identical on both.
+        ``media_kind`` records what arrived when it was not text (§26.6.3), which is what
+        lets the console flag it as unofficial rather than showing a bare placeholder.
+        """
         body = (body or "").strip()
         if not body:
             raise ValidationException(message="Message body is required")
@@ -93,25 +156,29 @@ class ChatMessageService:
                 message=f"Message exceeds the {BODY_MAX_LENGTH}-character limit"
             )
 
-        categories = scan_message(body)
+        # The scan exists to stop people being taken off-platform, so it applies to what
+        # people write — not to what the platform writes about itself. Platform-authored
+        # copy legitimately carries veriprops.ng links and the official WhatsApp number,
+        # both of which the URL/social rules match; holding our own status updates and
+        # bot replies for review would stall the very messages that keep a customer
+        # oriented.
+        categories = [] if _is_platform_authored(sender_kind, kind) else scan_message(body)
         now = Utils.datetime_now()
         held = bool(categories)
-
-        clarification_status = (
-            ClarificationStatus.OPEN if kind == MessageKind.CLARIFICATION_REQUEST else None
-        )
 
         message = await self._chat_message_repo.create_return_model(
             CreateChatMessageDto(
                 conversation_id=Utils.uuid_to_hex(conversation.id),
                 sender_user_id=sender_user_id,
                 sender_kind=sender_kind,
+                source=source,
+                external_message_id=external_message_id,
                 body=body,
                 task_id=task_id,
                 state=ChatMessageState.HELD if held else ChatMessageState.DELIVERED,
                 message_kind=kind,
-                clarification_status=clarification_status,
                 flagged_categories=[c.value for c in categories] or None,
+                media_kind=media_kind,
                 held_at=now if held else None,
                 delivered_at=None if held else now,
             )
@@ -194,11 +261,65 @@ class ChatMessageService:
     # ── Feeds & projections ───────────────────────────────────────────
 
     async def list_messages(
-        self, conversation_id: str, viewer_id: Optional[str], page: int, page_size: int
+        self,
+        conversation_id: str,
+        viewer_id: Optional[str],
+        page: int,
+        page_size: int,
+        *,
+        visible_from: Optional[datetime] = None,
+        visible_until: Optional[datetime] = None,
+        viewer_is_admin: bool = False,
     ) -> Page[ChatMessageDto]:
-        rows, total = await self._chat_message_repo.list_delivered_page(conversation_id, viewer_id, page, page_size)
-        dtos = [await self._to_dto(m, viewer_id) for m in rows]
+        """The feed for one viewer. An admin sees how far each message got on the customer's
+        phone; a member sees which of their own messages support has read."""
+        rows, total = await self._chat_message_repo.list_delivered_page(
+            conversation_id, viewer_id, page, page_size,
+            visible_from=visible_from, visible_until=visible_until,
+        )
+        # Fetched once for the page rather than per row: the thread's channel decides
+        # whether a message can even be pending outbound delivery (§26.7), and one read time
+        # answers "seen by support" for every message on the page.
+        conversation = await self._conversations._conversation_repo.get_model(conversation_id)
+        channel = conversation.channel if conversation else None
+        support_read_at = (
+            None if viewer_is_admin
+            else await self._participants._participant_repo.latest_admin_read_at(conversation_id)
+        )
+        dtos = [
+            await self._to_dto(
+                m, viewer_id, channel,
+                viewer_is_admin=viewer_is_admin, support_read_at=support_read_at,
+            )
+            for m in rows
+        ]
         return self._chat_message_repo._db_utils.build_page(dtos, total, page, page_size)
+
+    async def cancel_pending_channel_delivery(
+        self,
+        conversation_id: str,
+        *,
+        read_at: datetime,
+        visible_from: Optional[datetime] = None,
+    ) -> int:
+        """Stop queued WhatsApp replies the customer has now read in the portal (§26.7, D92).
+
+        A reply typed outside Meta's window waits for the customer's next message. If they
+        read it on the website first, sending it to their phone later would repeat an answer
+        they already have, out of context. Only replies that reached the thread by
+        *read_at*, and inside the reader's window, count as read. Returns how many stopped.
+        """
+        cancelled = 0
+        for queued in await self._chat_message_repo.list_pending_channel_delivery(conversation_id):
+            if queued.delivered_at is None or queued.delivered_at > read_at:
+                continue
+            if visible_from is not None and queued.date_created < visible_from:
+                continue
+            queued.channel_status = ChannelDeliveryStatus.CANCELLED.value
+            queued.channel_status_at = read_at
+            self._chat_message_repo._session.add(queued)
+            cancelled += 1
+        return cancelled
 
     async def held_queue(self, page: int, page_size: int) -> Page[HeldMessageDto]:
         rows, total = await self._chat_message_repo.list_held_page(page, page_size)
@@ -213,12 +334,27 @@ class ChatMessageService:
     async def _deliver_effects(
         self, conversation: Conversation, message: ChatMessage, sender_user_id: Optional[str]
     ) -> None:
-        """Bump the thread timestamp and publish MESSAGE_SENT on the §4.8 bus. The
-        chat-counter subscriber pushes the Chat counter to the other participants; the rule
-        table keeps a routine message out of Notifications (§12.3)."""
-        await self._conversations.touch(conversation.id, message.delivered_at or Utils.datetime_now())
+        """Bump the thread timestamp, publish MESSAGE_SENT on the §4.8 bus, and carry the
+        message out over the thread's own channel where it has one.
+
+        The chat-counter subscriber pushes the Chat counter to the other participants; the
+        rule table keeps a routine message out of Notifications (§12.3).
+
+        **This is the right seam for channel delivery, and `post_message` is not.** Both
+        `send()` (clean message) and `approve()` (released past the §4.7 fraud hold) land
+        here, and only here — so a held agent reply cannot reach the customer's WhatsApp
+        before an admin has cleared it, without that needing a second guard of its own.
+        """
+        await self._conversations.touch(conversation, message.delivered_at or Utils.datetime_now())
+        await self._deliver_over_channel(conversation, message)
         participants = await self._participants._participant_repo.list_for_conversation(conversation.id)
-        recipients = tuple(p.user_id for p in participants if p.user_id != sender_user_id)
+        # A member whose window has closed (a released WhatsApp number) cannot read what is
+        # being said now, so pushing them a message or an unread nudge would badge a thread
+        # they cannot open.
+        recipients = tuple(
+            p.user_id for p in participants
+            if p.user_id != sender_user_id and not p.is_read_only
+        )
         await publish_domain_event(DomainEvent(
             type=EventType.MESSAGE_SENT,
             verification_id=conversation.verification_id,
@@ -226,7 +362,38 @@ class ChatMessageService:
             data={"conversation_id": conversation.id},
         ))
 
-    async def _to_dto(self, message: ChatMessage, viewer_id: Optional[str]) -> ChatMessageDto:
+    async def _deliver_over_channel(
+        self, conversation: Conversation, message: ChatMessage
+    ) -> None:
+        """Hand a console reply to the conversation's channel adapter (§26.3.3, WA-12).
+
+        The adapter is resolved here rather than injected: the WhatsApp package imports
+        this service (its bot mirrors replies into the console), so an import-time
+        dependency would close a cycle — the same reason `WhatsAppInboundService._answer`
+        resolves the bot engine at call time.
+
+        Best-effort. The message is already in the thread and the agent has been told it
+        sent; raising now would report a failure that did not happen to the one part of
+        the system that already succeeded.
+        """
+        if conversation.channel != ConversationChannel.WHATSAPP.value:
+            return
+        from main.app.domain.channel.whatsapp.console_sender import WhatsAppConsoleSender
+
+        try:
+            await di[WhatsAppConsoleSender].deliver(conversation, message)
+        except Exception as exc:  # noqa: BLE001 — see the docstring
+            logger.error(f"Console reply not delivered on {conversation.external_ref}: {exc}")
+
+    async def _to_dto(
+        self,
+        message: ChatMessage,
+        viewer_id: Optional[str],
+        channel: Optional[str] = None,
+        *,
+        viewer_is_admin: bool = False,
+        support_read_at: Optional[datetime] = None,
+    ) -> ChatMessageDto:
         held_notice = None
         if (
             message.state in (ChatMessageState.HELD.value, ChatMessageState.PENDING_SCAN.value)
@@ -241,15 +408,19 @@ class ChatMessageService:
             task_id=message.task_id,
             state=ChatMessageState(message.state),
             message_kind=MessageKind(message.message_kind),
-            clarification_status=(
-                ClarificationStatus(message.clarification_status)
-                if message.clarification_status
-                else None
-            ),
+            source=MessageSource(message.source or MessageSource.WEB.value),
             sender=await self._sender_dto(message),
             held_notice=held_notice,
             date_created=message.date_created,
             delivered_at=message.delivered_at,
+            media_kind=InboundKind(message.media_kind) if message.media_kind else None,
+            unofficial_media=_is_unofficial_media(message),
+            pending_channel_delivery=_is_pending_channel_delivery(message, channel),
+            channel_status=(
+                ChannelDeliveryStatus(message.channel_status)
+                if viewer_is_admin and message.channel_status else None
+            ),
+            seen_by_support=not viewer_is_admin and _is_seen_by_support(message, support_read_at),
         )
 
     async def _sender_dto(self, message: ChatMessage) -> ChatSenderDto:
@@ -275,6 +446,7 @@ class ChatMessageService:
             verification_id=conversation.verification_id if conversation else None,
             sender_user_id=message.sender_user_id,
             sender_kind=SenderKind(message.sender_kind),
+            source=MessageSource(message.source or MessageSource.WEB.value),
             body=message.body,
             flagged_categories=list(message.flagged_categories or []),
             held_at=message.held_at,

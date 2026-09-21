@@ -17,7 +17,7 @@ import { ROUTES } from "@lib/routes";
 import { AgentApplicationStatus } from "@/types/agent";
 
 /**
- * Agent home (§7). The approval-status card plus, once approved, a backend-derived
+ * Agent home (§12). The approval-status card plus, once approved, a backend-derived
  * snapshot of the agent's own workload (`/agents/tasks/summary`).
  */
 export default function AgentDashboard() {

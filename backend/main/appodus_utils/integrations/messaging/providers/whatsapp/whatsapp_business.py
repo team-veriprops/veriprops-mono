@@ -22,6 +22,7 @@ from main.appodus_utils.integrations.messaging.models import (
     WhatsappSection,
 )
 from main.appodus_utils.integrations.messaging.providers.models import IMessageProvider
+from main.appodus_utils.integrations.messaging.providers.whatsapp.outbound import assert_no_outbound_voice
 from main.appodus_utils import Utils
 
 logger: Logger = di['logger']
@@ -62,6 +63,7 @@ class WhatsAppBusinessProvider(IMessageProvider):
         }
 
         payload: WhatsappPayload = message.payload
+        assert_no_outbound_voice(payload)
         body = self._build_body(message.to.recipient, payload)
 
         response = await self.client.post(url, json=body, headers=headers)
@@ -115,14 +117,36 @@ class WhatsAppBusinessProvider(IMessageProvider):
 
     @staticmethod
     def _build_template(payload: WhatsappPayload) -> Dict[str, Any]:
+        """Meta's template message body.
+
+        Body parameters are **positional**, and the keys carrying those positions are
+        strings. Sorting them as strings puts "10" before "2", which silently delivers a
+        customer the right values in the wrong sentence once a template passes nine
+        parameters — so the sort is numeric, falling back to string order for any key
+        that is not a position.
+        """
         components = []
         if payload.template_variables:
             components.append({
                 "type": "body",
                 "parameters": [
                     {"type": "text", "text": v}
-                    for _, v in sorted(payload.template_variables.items())
+                    for _, v in sorted(
+                        payload.template_variables.items(),
+                        key=lambda item: (0, int(item[0])) if item[0].isdigit() else (1, item[0]),
+                    )
                 ],
+            })
+        if payload.template_button_parameter is not None:
+            # Meta mandates an OTP button on authentication templates, and the send must
+            # carry a matching component or the message is rejected. Copy-code and
+            # one-tap buttons are both created as URL buttons, so both send this shape —
+            # the difference is in how the client handles the tap.
+            components.append({
+                "type": "button",
+                "sub_type": "url",
+                "index": "0",
+                "parameters": [{"type": "text", "text": payload.template_button_parameter}],
             })
         return {
             "type": "template",

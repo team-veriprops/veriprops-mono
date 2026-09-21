@@ -19,7 +19,7 @@ from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
 from main.appodus_utils.db.models import SuccessResponse
 
-audit_router = APIRouter(prefix="/admin/audit", tags=["Admin — Audit"])
+audit_router = APIRouter(prefix="/admin/audit", tags=["Admin: Audit"])
 
 @audit_router.get(
     "/actions",

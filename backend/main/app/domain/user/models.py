@@ -15,6 +15,12 @@ from main.appodus_utils.db.models import UTCDateTime, jsonb_variant
 from main.appodus_utils.db.types.money import TransactionCurrency
 
 
+# The synthetic number a brand-new OAuth account holds until profile completion collects a
+# real one (the phone columns are NOT NULL). It is never a usable phone: the session exposes
+# it as empty and the pay-step phone gate refuses to send an OTP to it.
+OAUTH_PLACEHOLDER_PHONE = "0000000000"
+
+
 class AdminSubRole(str, enum.Enum):
     SUPER = "SUPER"
     OPERATIONS = "OPERATIONS"

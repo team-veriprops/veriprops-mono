@@ -134,13 +134,13 @@ async def add_note(
     return SuccessResponse[VerificationDetailDto](data=await admin_service.add_note(verification_id, req, admin_id))
 
 
-# ── Timeout sweeps (§7.2) — manual/deterministic trigger ──────────
+# ── Timeout sweeps (§11.4) — manual/deterministic trigger ──────────
 
 @admin_verification_router.post("/sweeps/no-show", response_model=SuccessResponse[dict])
 async def sweep_no_show(
     _admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
 ):
-    """Reclaim manually-assigned tasks the agent never accepted in time (§7.2). Runs
+    """Reclaim manually-assigned tasks the agent never accepted in time (§11.4). Runs
     on a schedule in non-test envs; this endpoint triggers it on demand (idempotent)."""
     from main.app.domain.verification.task.service import VerificationTaskService
     reclaimed = await di[VerificationTaskService].sweep_no_show()
@@ -151,7 +151,7 @@ async def sweep_no_show(
 async def sweep_pool_starvation(
     _admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
 ):
-    """Escalate broadcast tasks unclaimed past the pool timeout off the open pool (§7.2)."""
+    """Escalate broadcast tasks unclaimed past the pool timeout off the open pool (§11.4)."""
     from main.app.domain.verification.task.service import VerificationTaskService
     escalated = await di[VerificationTaskService].sweep_pool_starvation()
     return SuccessResponse[dict](data={"escalated": escalated})

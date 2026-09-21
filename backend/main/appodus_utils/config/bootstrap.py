@@ -1,3 +1,4 @@
+import inspect
 from typing import Type, List
 
 from httpx import AsyncClient
@@ -53,6 +54,14 @@ class BaseDiBootstrap:
             if len(other_subclasses) > 0:
                 _instances = BaseDiBootstrap._get_all_subclasses_instances(subclass)
                 instances.extend(_instances)
+            elif inspect.isabstract(subclass):
+                # An abstract intermediate (e.g. PushNotificationProvider) with no
+                # concrete subclass *yet visible* means its implementations simply have
+                # not been imported at this point in the import graph. It can never be
+                # instantiated, so skip it rather than asking the container for it —
+                # otherwise the registration order of a provider package decides whether
+                # the process starts at all.
+                continue
             else:
                 instance = di[subclass]  # Use DI container to resolve dependencies
                 instances.append(instance)

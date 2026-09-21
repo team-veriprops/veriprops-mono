@@ -41,6 +41,7 @@ from main.app.domain.verification.report.service import ReportService
 from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.review.conflict import ReviewConflict, detect_conflicts
 from main.app.domain.verification.scoring.service import TrustScoreWeightService
+from main.app.domain.verification.status_events import publish_verification_started
 from main.app.domain.verification.task.models import ReviewDecision, UpdateTaskDto, VerificationTask
 from main.app.domain.verification.task.repo import VerificationTaskRepo
 from main.appodus_utils import Utils
@@ -127,6 +128,18 @@ class ReviewService:
         await publish_domain_event(DomainEvent(
             verification_id=verification_id, sse_event=VerificationEventType.TASK_UPDATED.value,
         ))
+        if role is AgentRole.FIELD:
+            # §26.6.2's "field inspection complete" milestone (D66). Approval of the FIELD
+            # task is the moment — the inspection is not complete when the agent submits,
+            # only when an admin has accepted what they submitted. It gets its own event
+            # rather than being inferred from the nudge above, so the WhatsApp rule row
+            # does not depend on another event's payload shape.
+            verification = await self._get_verification(verification_id)
+            await publish_domain_event(DomainEvent(
+                type=EventType.INSPECTION_COMPLETE, verification_id=verification_id,
+                recipient_user_ids=(verification.customer_id,),
+                data={"vid": verification.vid},
+            ))
         return await self._tasks.get_model(task.id)
 
     async def reject_task(
@@ -403,6 +416,12 @@ class ReviewService:
             sse_event=VerificationEventType.STATUS_CHANGED.value,
             data={"status": new_status.value},
         ))
+        # §26.6.2's "verification started" milestone (D66), from the admin-decision half of
+        # §4.1's derivation. The task states go with it: they are what tells a first start
+        # apart from a rework re-activating a case that was already under review.
+        await publish_verification_started(
+            verification_id, verification, new_status, task_states
+        )
 
 
 class ReviewContext:

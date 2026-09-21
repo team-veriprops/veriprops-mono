@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, Header
+from fastapi import APIRouter, Depends, Header
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
@@ -15,6 +15,7 @@ from main.app.domain.payment.models import (
     PaymentWebhookDto,
 )
 from main.app.domain.payment.service import PaymentService
+from main.appodus_utils import Object
 from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.db.types.money import TransactionCurrency
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
@@ -58,10 +59,21 @@ async def initiate_payment(
     return SuccessResponse[PaymentDto](data=_to_dto(payment))
 
 
+class StubConfirmPaymentDto(Object):
+    """Body for the deterministic stub confirmation.
+
+    A DTO rather than embedded `Body` scalars: `Body(embed=True)` binds the raw Python
+    parameter name, so `tx_ref` would only ever accept snake_case while every client
+    sends camelCase through the shared alias generator.
+    """
+
+    tx_ref: str
+    succeeded: bool = True
+
+
 @payment_router.post("/stub/confirm", response_model=SuccessResponse[dict])
 async def stub_confirm_payment(
-    tx_ref: str = Body(..., embed=True),
-    succeeded: bool = Body(default=True, embed=True),
+    req: StubConfirmPaymentDto,
     authorize: AuthJWT = Depends(),
 ):
     """Deterministic completion for local/test/dev — routes through the idempotent
@@ -71,6 +83,8 @@ async def stub_confirm_payment(
         raise ResourceNotFoundException(resource="stub payment confirm")
     await authorize.jwt_required()
     processed = await payment_service.handle_webhook(
-        PaymentWebhookDto(event_id=f"stub-{tx_ref}", tx_ref=tx_ref, succeeded=succeeded)
+        PaymentWebhookDto(
+            event_id=f"stub-{req.tx_ref}", tx_ref=req.tx_ref, succeeded=req.succeeded
+        )
     )
     return SuccessResponse[dict](data={"processed": processed})

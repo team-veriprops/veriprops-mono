@@ -35,7 +35,7 @@ def run(ctx: Ctx) -> None:
     agent = ctx.agent(_REWORK_ROLE)
     agent_view = next(t for t in agent.get("/agents/tasks").json()["data"]["items"]
                       if t["id"] == ctx.task_ids[_REWORK_ROLE])
-    check("agent sees the rejection reason on the task (§7.4)",
+    check("agent sees the rejection reason on the task (§12.3)",
           bool(agent_view.get("rejectionReason")), f"reason={agent_view.get('rejectionReason')}")
     check("agent got the TASK_REJECTED notification (§12.2 agent)",
           "TASK_REJECTED" in {n["type"] for n in agent.get("/notifications").json()["data"]["items"]})

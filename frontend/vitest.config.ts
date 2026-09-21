@@ -5,7 +5,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: false,
-    exclude: ["node_modules", ".next"],
+    // `e2e/` is the Playwright UAT suite (its own runner + config) — Vitest must not
+    // collect those specs: `test.describe` there is Playwright's, not Vitest's.
+    exclude: ["node_modules", ".next", "e2e"],
   },
   resolve: {
     alias: {
