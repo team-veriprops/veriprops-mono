@@ -13,9 +13,9 @@ the upload page, where it counts.
 from datetime import date
 
 from main.app.domain.channel.whatsapp.bot.flows import media as media_flow
-from main.app.domain.channel.whatsapp.bot.flows import status as status_flow
-from main.app.domain.channel.whatsapp.bot.projection import ChannelState
-from main.app.domain.channel.whatsapp.bot.session.models import EscalationReason
+from main.app.domain.communication.assistant.flows import status as status_flow
+from main.app.domain.communication.assistant.projection import ChannelState
+from main.app.domain.communication.assistant.session.models import EscalationReason
 from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import InboundKind
 
 
@@ -168,7 +168,7 @@ class TestOnlyAPaidCaseCanReceiveADocument:
 
 class TestTheEvidenceRuleIsAlwaysStated:
     def test_when_a_link_is_offered_the_caller_still_states_it(self):
-        from main.app.domain.channel.whatsapp.bot import content
+        from main.app.domain.communication.assistant import content
 
         reply = content.document_received_with_link("https://veriprops.ng/wa/upload/tok")
 
@@ -206,8 +206,8 @@ class TestVoiceNotes:
         assert outcome.escalation_reason == EscalationReason.VOICE_NOTE
 
     def test_the_copy_promises_a_person_will_listen(self):
-        from main.app.domain.channel.whatsapp.bot import content
-        from main.app.domain.channel.whatsapp.bot.support_hours import Coverage, CoverageState
+        from main.app.domain.communication.assistant import content
+        from main.app.domain.communication.assistant.support_hours import Coverage, CoverageState
 
         reply = content.escalation(
             EscalationReason.VOICE_NOTE,

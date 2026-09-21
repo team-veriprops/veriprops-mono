@@ -36,7 +36,11 @@ from kink import di, inject
 from main.app.config.settings import settings
 from main.app.domain.channel.whatsapp.link.service import WhatsAppLinkService
 from main.app.domain.channel.whatsapp.window import WhatsAppWindowService
-from main.app.domain.communication.chat_message.models import ChatMessage, SenderKind
+from main.app.domain.communication.chat_message.models import (
+    ChannelDeliveryStatus,
+    ChatMessage,
+    SenderKind,
+)
 from main.app.domain.communication.chat_message.repo import ChatMessageRepo
 from main.app.domain.communication.conversation.models import Conversation, ConversationChannel
 from main.app.domain.user.repo import UserRepo
@@ -92,8 +96,9 @@ class WhatsAppConsoleSender:
 
         phone_e164 = str(conversation.external_ref)
         if await self._whatsapp_window_service.is_open(phone_e164):
-            if await self._deliver_text(phone_e164, message.body):
-                self._mark_delivered(message)
+            wamid = await self._deliver_text(phone_e164, message.body)
+            if wamid is not None:
+                self._mark_delivered(message, wamid)
             return
 
         # Outside the window the reply stays queued. The nudge goes only if this is the
@@ -112,8 +117,9 @@ class WhatsAppConsoleSender:
         for queued in await self._chat_message_repo.list_pending_channel_delivery(
             conversation.id
         ):
-            if await self._deliver_text(str(conversation.external_ref), queued.body):
-                self._mark_delivered(queued)
+            wamid = await self._deliver_text(str(conversation.external_ref), queued.body)
+            if wamid is not None:
+                self._mark_delivered(queued, wamid)
 
     # ─── Guards ───────────────────────────────────────────────────
 
@@ -125,6 +131,10 @@ class WhatsAppConsoleSender:
             # A WhatsApp thread with no number is a data fault, not a delivery target.
             return False
         if SenderKind(message.sender_kind) not in _HUMAN_SENDERS:
+            return False
+        # Read in the portal first (D92): the customer already has it, so it stays off
+        # their phone.
+        if message.channel_status == ChannelDeliveryStatus.CANCELLED.value:
             return False
         # Already sent — a re-entrant `_deliver_effects` (an approve after a send) must not
         # duplicate the message on the customer's phone.
@@ -138,8 +148,9 @@ class WhatsAppConsoleSender:
 
     # ─── Transport ────────────────────────────────────────────────
 
-    async def _deliver_text(self, phone_e164: str, text: str) -> bool:
-        """Free text inside the window. Returns whether it actually went out."""
+    async def _deliver_text(self, phone_e164: str, text: str) -> Optional[str]:
+        """Free text inside the window. Returns Meta's id for what went out — an empty string
+        when the transport gave none — or ``None`` when nothing did."""
         if not settings.ENABLE_OUT_MESSAGING:
             # Same posture as the rest of the messaging pipeline: the console already
             # holds the message, so a local run without outbound stays fully inspectable.
@@ -148,19 +159,19 @@ class WhatsAppConsoleSender:
                 "Console reply not dispatched (ENABLE_OUT_MESSAGING=False): "
                 f"recipient={to_wa_recipient(phone_e164)}"
             )
-            return False
+            return None
         try:
-            await self._messaging_service.send_message(
+            result = await self._messaging_service.send_message(
                 MessageRequest(
                     channel=MessageChannel.WHATSAPP,
                     to=MessageRecipient(recipient=to_wa_recipient(phone_e164)),
                     payload=WhatsappPayload(text=text),
                 )
             )
-            return True
+            return result.provider_id or ""
         except Exception as exc:  # noqa: BLE001 — see the module docstring
             logger.error(f"Console reply delivery failed for {to_wa_recipient(phone_e164)}: {exc}")
-            return False
+            return None
 
     async def _send_window_reopen(self, phone_e164: str) -> None:
         """The §26.7 nudge that invites the customer back so the window reopens."""
@@ -199,12 +210,6 @@ class WhatsAppConsoleSender:
 
     # ─── Bookkeeping ──────────────────────────────────────────────
 
-    def _mark_delivered(self, message: ChatMessage) -> None:
-        """Stamp the row that is attached to this transaction's session.
-
-        Set on the object rather than re-fetched by id: the caller created or loaded it in
-        this same uncommitted transaction, where a re-fetch can return `None` and the
-        stamping would silently do nothing.
-        """
-        message.channel_delivered_at = Utils.datetime_now()
-        self._chat_message_repo._session.add(message)
+    def _mark_delivered(self, message: ChatMessage, wamid: str) -> None:
+        """Stamp the row as sent, keeping the wamid Meta's receipts will cite (D92)."""
+        self._chat_message_repo.mark_channel_sent(message, wamid, Utils.datetime_now())

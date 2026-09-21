@@ -12,6 +12,7 @@ from typing import Optional
 from kink import inject
 
 from main.app.config.settings import settings
+from main.app.core.links.portal import VerificationPage, verification_path
 from main.app.core.idempotency.service import IdempotencyService
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
@@ -275,7 +276,7 @@ class PaymentService:
     def _checkout_url(self, verification_id: str, tx_ref: str) -> str:
         if settings.PAYMENT_STUB_MODE:
             # Deterministic path: the frontend pay page completes via the stub webhook.
-            return f"/portal/verifications/{verification_id}/pay?txRef={tx_ref}&stub=1"
+            return f"{verification_path(verification_id, VerificationPage.PAY)}?txRef={tx_ref}&stub=1"
         # Live gateways return their own hosted checkout URL (wired via the payment
         # gateway facade); left to the provider integration.
         return ""

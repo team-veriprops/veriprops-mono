@@ -154,30 +154,92 @@ def _normalize_message(
     )
 
 
+class WhatsAppDeliveryStatus(str, enum.Enum):
+    """Meta's receipt for a message we sent, in its own vocabulary (lowercase on the wire)."""
+
+    SENT = "sent"
+    DELIVERED = "delivered"
+    READ = "read"
+    FAILED = "failed"
+
+
+class InboundWhatsAppStatus(Object):
+    """One delivery/read receipt for an outbound message."""
+
+    wamid: str                                   # the id Meta returned when we sent it
+    status: WhatsAppDeliveryStatus
+    recipient_phone: Optional[str] = None        # E.164
+    timestamp: Optional[datetime] = None
+    error_codes: List[int] = []                  # Meta's codes on a FAILED receipt
+
+
+def _values(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Every ``change.value`` in an envelope — messages and receipts both live there."""
+    return [
+        _as_dict(_as_dict(change).get("value"))
+        for entry in _as_list(_as_dict(payload).get("entry"))
+        for change in _as_list(_as_dict(entry).get("changes"))
+    ]
+
+
+def _normalize_status(raw: Dict[str, Any]) -> Optional[InboundWhatsAppStatus]:
+    wamid = raw.get("id")
+    if not isinstance(wamid, str) or not wamid:
+        return None
+    try:
+        status = WhatsAppDeliveryStatus(str(raw.get("status") or ""))
+    except ValueError:
+        # A status Meta adds later is not guessed at — ignoring it leaves the last known one.
+        return None
+    recipient = raw.get("recipient_id")
+    error_codes = [
+        code for code in (_as_dict(error).get("code") for error in _as_list(raw.get("errors")))
+        if isinstance(code, int)
+    ]
+    return InboundWhatsAppStatus(
+        wamid=wamid,
+        status=status,
+        recipient_phone=to_e164(str(recipient)) if recipient else None,
+        timestamp=_timestamp(raw.get("timestamp")),
+        error_codes=error_codes,
+    )
+
+
+def normalize_statuses(payload: Dict[str, Any]) -> List[InboundWhatsAppStatus]:
+    """Every delivery/read receipt in a Meta webhook body, in delivery order.
+
+    Meta does not promise the order across deliveries, so the consumer applies them
+    monotonically; within one body the order is kept as sent.
+    """
+    return [
+        normalized
+        for value in _values(payload)
+        for raw in _as_list(value.get("statuses"))
+        if (normalized := _normalize_status(_as_dict(raw))) is not None
+    ]
+
+
 def normalize_webhook(payload: Dict[str, Any]) -> List[InboundWhatsAppMessage]:
     """Every customer message in a Meta webhook body, in delivery order.
 
-    Delivery receipts, account notices, and malformed bodies yield an empty list — the
-    caller acknowledges them and does nothing.
+    Delivery receipts (see ``normalize_statuses``), account notices, and malformed bodies
+    yield an empty list.
     """
     messages: List[InboundWhatsAppMessage] = []
 
-    for entry in _as_list(_as_dict(payload).get("entry")):
-        for change in _as_list(_as_dict(entry).get("changes")):
-            value = _as_dict(_as_dict(change).get("value"))
+    for value in _values(payload):
+        # Meta supplies the sender's profile name alongside, not inside, the message.
+        names_by_wa_id: Dict[str, str] = {}
+        for contact in _as_list(value.get("contacts")):
+            contact = _as_dict(contact)
+            name = _clean(_as_dict(contact.get("profile")).get("name"))
+            wa_id = contact.get("wa_id")
+            if name and isinstance(wa_id, str):
+                names_by_wa_id[wa_id] = name
 
-            # Meta supplies the sender's profile name alongside, not inside, the message.
-            names_by_wa_id: Dict[str, str] = {}
-            for contact in _as_list(value.get("contacts")):
-                contact = _as_dict(contact)
-                name = _clean(_as_dict(contact.get("profile")).get("name"))
-                wa_id = contact.get("wa_id")
-                if name and isinstance(wa_id, str):
-                    names_by_wa_id[wa_id] = name
-
-            for raw_message in _as_list(value.get("messages")):
-                normalized = _normalize_message(_as_dict(raw_message), names_by_wa_id)
-                if normalized is not None:
-                    messages.append(normalized)
+        for raw_message in _as_list(value.get("messages")):
+            normalized = _normalize_message(_as_dict(raw_message), names_by_wa_id)
+            if normalized is not None:
+                messages.append(normalized)
 
     return messages

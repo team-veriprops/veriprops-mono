@@ -54,11 +54,13 @@ def stub_console_sender(monkeypatch):
     return sender
 
 
-def _service(existing=None):
+def _service(existing=None, linked_user_id=None):
     svc = object.__new__(WhatsAppInboundService)
     svc._whatsapp_inbound_message_repo = MagicMock()
     svc._conversations = MagicMock()
     svc._chat = MagicMock()
+    svc._whatsapp_link_service = MagicMock()
+    svc._whatsapp_link_service.resolve_user_for_phone = AsyncMock(return_value=linked_user_id)
 
     async def _create(dto):
         return SimpleNamespace(
@@ -76,7 +78,10 @@ def _service(existing=None):
             channel="WHATSAPP", external_ref="+2348012345678",
         )
     )
-    svc._chat.send = AsyncMock(return_value=SimpleNamespace(id=Utils.generate_uuid()))
+    svc._chat.send = AsyncMock(return_value=SimpleNamespace(
+        id=Utils.generate_uuid(), delivered_at=Utils.datetime_now(), date_created=Utils.datetime_now(),
+    ))
+    svc._participants = MagicMock(advance_read=AsyncMock(return_value=True))
     return svc
 
 
@@ -117,6 +122,23 @@ class TestIngest:
         assert svc._conversations.get_or_create_whatsapp_thread.await_args.args[0] == (
             "+2348012345678"
         )
+
+    async def test_a_linked_numbers_thread_is_opened_for_its_owner(self):
+        """A customer who linked on the website before ever messaging has no thread until
+        this first inbound. Resolving the owner through the channel's single identity
+        lookup means the thread is born visible to them rather than orphaned."""
+        svc = _service(linked_user_id="user-1")
+        await svc.ingest(inbound())
+
+        svc._whatsapp_link_service.resolve_user_for_phone.assert_awaited_once_with("+2348012345678")
+        assert svc._conversations.get_or_create_whatsapp_thread.await_args.kwargs["user_id"] == "user-1"
+        # The owner is the thread's, never the message's: the sender stays a phone number.
+        assert svc._chat.send.await_args.args[1] is None
+
+    async def test_an_unlinked_numbers_thread_has_no_owner(self):
+        svc = _service(linked_user_id=None)
+        await svc.ingest(inbound())
+        assert svc._conversations.get_or_create_whatsapp_thread.await_args.kwargs["user_id"] is None
 
     async def test_links_the_journal_row_to_the_console_message(self):
         # The audit trail from a console message back to exactly what Meta delivered.
@@ -229,3 +251,24 @@ class TestWidgetAttribution:
         written = svc._whatsapp_inbound_message_repo.create_return_model.await_args.args[0]
         assert written.page_code == "web-home"
         assert written.text is None
+
+
+class TestWritingBackCountsAsReading:
+    """The fallback for customers with read receipts off (D92): a customer who writes on
+    WhatsApp has seen the thread, so their portal badge clears without a receipt."""
+
+    async def test_a_linked_customers_message_reads_the_thread_for_them(self):
+        svc = _service(linked_user_id="user-1")
+
+        await svc.ingest(inbound())
+
+        [conversation_id, user_id, at] = svc._participants.advance_read.await_args.args
+        assert (conversation_id, user_id) == ("conv-1", "user-1")
+        assert at == svc._chat.send.return_value.delivered_at
+
+    async def test_an_unlinked_number_has_no_portal_to_update(self):
+        svc = _service(linked_user_id=None)
+
+        await svc.ingest(inbound())
+
+        svc._participants.advance_read.assert_not_awaited()

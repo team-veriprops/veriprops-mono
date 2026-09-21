@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ChatService } from "./chat-service";
 import { HttpClient } from "@lib/FetchHttpClient";
-import { ConversationType, MessageKind } from "@/types/chat";
+import { AdminInboxFilter, ConversationType } from "@/types/chat";
 
 function mockHttp() {
   const calls: { method: string; url: string; body?: unknown }[] = [];
@@ -43,17 +43,15 @@ describe("ChatService contract (mirrors /chat + /admin/messages)", () => {
     expect(new ChatService(http).streamUrl()).toBe("/api/chat/stream");
   });
 
-  it("opens the customer thread and sends (with clarification kind)", async () => {
+  it("opens the customer thread and sends the body alone", async () => {
     const { http, calls } = mockHttp();
     const svc = new ChatService(http);
     await svc.openCustomerThread("ver-1");
-    await svc.customerSend("ver-1", "hello", MessageKind.CLARIFICATION_REQUEST);
+    await svc.customerSend("ver-1", "hello");
     expect(calls[0]).toMatchObject({ method: "get", url: "/verifications/ver-1/chat" });
-    expect(calls[1]).toMatchObject({
-      method: "post",
-      url: "/verifications/ver-1/chat/messages",
-      body: { body: "hello", kind: MessageKind.CLARIFICATION_REQUEST },
-    });
+    expect(calls[1]).toMatchObject({ method: "post", url: "/verifications/ver-1/chat/messages" });
+    // The message kind is server-owned: the client never sends one.
+    expect(calls[1].body).toEqual({ body: "hello" });
   });
 
   it("sends an agent message tagged to a task", async () => {
@@ -75,6 +73,28 @@ describe("ChatService contract (mirrors /chat + /admin/messages)", () => {
     expect(calls[0]).toMatchObject({ method: "get", url: "/admin/messages/held?page=0&pageSize=20" });
     expect(calls[1]).toMatchObject({ method: "post", url: "/admin/messages/msg-1/approve" });
     expect(calls[2]).toMatchObject({ method: "post", url: "/admin/messages/msg-2/reject" });
+  });
+
+  it("pages the admin Conversations inbox with its filter and search", async () => {
+    const { http, calls } = mockHttp();
+    const svc = new ChatService(http);
+    await svc.adminConversations({ page: 2, pageSize: 10, filter: AdminInboxFilter.WHATSAPP, query: "+234 80" });
+    await svc.adminConversations({ page: 0, pageSize: 10 });
+    expect(calls[0]).toMatchObject({
+      method: "get",
+      url: "/admin/conversations?page=2&page_size=10&filter=WHATSAPP&query=%2B234+80",
+    });
+    // No facet and no search: every thread the console works.
+    expect(calls[1]).toMatchObject({ method: "get", url: "/admin/conversations?page=0&page_size=10" });
+  });
+
+  it("asks for a deferred assistant turn by conversation id (D93)", async () => {
+    const { http, calls } = mockHttp();
+    await new ChatService(http).runAssistantTurn("conv-1");
+    expect(calls[0]).toMatchObject({
+      method: "post",
+      url: "/chat/conversations/conv-1/assistant/turn",
+    });
   });
 
   it("opens an admin thread by channel type", async () => {

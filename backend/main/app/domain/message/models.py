@@ -29,6 +29,8 @@ class Message(BaseEntity):
     __table_args__ = (
         # Retry-sweep hot path: WHERE status = RETRYING AND next_retry_at <= now.
         Index("ix_messages_status_next_retry_at", "status", "next_retry_at"),
+        # Provider receipts (a WhatsApp read, say) find their row by the provider's id.
+        Index("ix_messages_provider_id", "provider_id"),
     )
     channel = Column(String(20), nullable=False)
     to = Column(JSONB_VARIANT, nullable=False)

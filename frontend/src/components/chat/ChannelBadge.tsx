@@ -24,7 +24,7 @@ export default function ChannelBadge({
       title="Received on WhatsApp"
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5",
-        "text-[10px] font-medium text-[#128C7E] bg-[#25D366]/12",
+        "text-[10px] font-medium text-[#0B5D52] bg-[#25D366]/12",
         className,
       )}
     >

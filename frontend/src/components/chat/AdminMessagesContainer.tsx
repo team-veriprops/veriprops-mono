@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import AssistantModeBanner from "./AssistantModeBanner";
 import ChatThread from "./ChatThread";
 import { ConversationType } from "@/types/chat";
 import { useAdminThreadQuery, useSendMessageMutation } from "./libs/useChatQueries";
@@ -14,6 +15,10 @@ const CHANNELS: { type: ConversationType; label: string }[] = [
 /**
  * Admin view of a verification's threads (§11.1) — switch between the Customer↔Admin and
  * Admin↔Agent channels. Admin sends are never fraud-held, but customer/agent messages are.
+ *
+ * The assistant can answer on the Customer channel (§16.7, D93) — never Agents, which is
+ * staff talking to staff. `AssistantModeBanner` mounts on both and hides itself where the
+ * assistant does not apply, so replying on Agents never has to remember not to show it.
  */
 export default function AdminMessagesContainer({ verificationId }: { verificationId: string }) {
   const [channel, setChannel] = useState<ConversationType>(ConversationType.CUSTOMER_ADMIN);
@@ -44,12 +49,16 @@ export default function AdminMessagesContainer({ verificationId }: { verificatio
         </div>
       </div>
       {isLoading ? (
-        <p className="text-sm text-gray-400">Opening conversation…</p>
+        <p className="text-sm text-gray-600">Opening conversation…</p>
       ) : (
-        <ChatThread
-          conversationId={convo?.id ?? null}
-          onSend={(body) => send.mutateAsync({ verificationId, body, type: channel })}
-        />
+        <>
+          <AssistantModeBanner conversationId={convo?.id ?? null} className="mb-1" />
+          <ChatThread
+            conversationId={convo?.id ?? null}
+            onSend={(body) => send.mutateAsync({ verificationId, body, type: channel })}
+            assistantPending={convo?.assistantPending}
+          />
+        </>
       )}
     </div>
   );

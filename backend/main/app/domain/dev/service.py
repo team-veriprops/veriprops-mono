@@ -7,7 +7,7 @@ so an admin can immediately drive release, hold-review, and the SLA sweep agains
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from kink import di, inject
 from sqlalchemy import text
@@ -48,6 +48,8 @@ from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
     InboundKind,
     InboundWhatsAppMessage,
+    InboundWhatsAppStatus,
+    WhatsAppDeliveryStatus,
 )
 from main.appodus_utils.integrations.messaging.providers.whatsapp.phone import to_e164
 from main.appodus_utils.integrations.messaging.providers.whatsapp.stub import whatsapp_outbox
@@ -395,6 +397,20 @@ class DevSeedService:
             "duplicate": record is None,
             "chat_message_id": record.chat_message_id if record else None,
         }
+
+    async def inject_whatsapp_status(
+        self, wamid: str, status: str, error_codes: Optional[List[int]] = None
+    ) -> Dict[str, Any]:
+        """Apply a receipt for an outbound message as if Meta had posted it (D92)."""
+        from main.app.domain.channel.whatsapp.status.service import WhatsAppStatusService
+
+        moved = await di[WhatsAppStatusService].apply(InboundWhatsAppStatus(
+            wamid=wamid,
+            status=WhatsAppDeliveryStatus(status),
+            timestamp=Utils.datetime_now(),
+            error_codes=list(error_codes or []),
+        ))
+        return {"wamid": wamid, "applied": moved}
 
     async def issue_handoff_token(
         self, case_id: str, customer_id: str, intent: str

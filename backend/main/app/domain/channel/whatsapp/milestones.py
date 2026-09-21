@@ -24,6 +24,7 @@ from typing import Any, Dict, Optional
 from kink import di, inject
 
 from main.app.config.settings import settings
+from main.app.core.links.portal import absolute_url, verification_path
 from main.app.core.state.status import VerificationStatus
 from main.app.domain.channel.whatsapp.consent.service import WhatsAppConsentService
 from main.app.domain.channel.whatsapp.link.service import WhatsAppLinkService
@@ -140,10 +141,7 @@ class WhatsAppMilestoneSender:
         """
         context: Dict[MessageContext, Any] = {MessageContext.SHARE_VID: verification.vid}
         if template is AvailableTemplate.WHATSAPP_REPORT_READY:
-            context[MessageContext.LINK] = (
-                f"{settings.PUBLIC_APP_BASE_URL.rstrip('/')}"
-                f"/portal/verifications/{verification.vid}"
-            )
+            context[MessageContext.LINK] = absolute_url(verification_path(verification.vid))
         return context
 
     async def _get_verification(self, verification_id: Optional[str]) -> Optional[Verification]:

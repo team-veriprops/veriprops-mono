@@ -23,18 +23,12 @@ from __future__ import annotations
 
 from kink import inject
 
-from main.app.domain.channel.whatsapp.bot.session.service import WhatsAppBotSessionService
-from main.app.domain.verification.service import VerificationService
-from main.appodus_utils import Utils
+from main.app.domain.communication.assistant.intake_seeder import IntakeDraftSeeder
+from main.app.domain.communication.assistant.session.service import AssistantSessionService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
-
-# The wizard step the seeded draft resumes at. Zero, deliberately: the customer lands on
-# the property step with their answers filled in, so the first thing they see is what the
-# bot understood — and the §5.1 fields the chat skipped (D70) are right there.
-_SEEDED_WIZARD_STEP = 0
 
 
 @inject
@@ -43,39 +37,30 @@ _SEEDED_WIZARD_STEP = 0
 class WhatsAppIntakeHandoffService:
     def __init__(
         self,
-        whatsapp_bot_session_service: WhatsAppBotSessionService,
-        verification_service: VerificationService,
+        assistant_session_service: AssistantSessionService,
+        intake_draft_seeder: IntakeDraftSeeder,
     ):
-        self._whatsapp_bot_session_service = whatsapp_bot_session_service
-        self._verification_service = verification_service
+        self._assistant_session_service = assistant_session_service
+        self._intake_draft_seeder = intake_draft_seeder
 
     async def seed_draft(self, phone_e164: str, customer_id: str) -> str:
-        """Create (or resume) this customer's draft, filled with what the bot collected.
+        """Seed this customer's draft with what the assistant collected on this number.
 
-        Returns the verification id the wizard should open. `create_draft` already
-        auto-resumes a customer's unpaid draft, so a customer who had one open on the web
-        gets *that* row seeded rather than a second one — which is what keeps "one
-        verification in flight" true across both surfaces.
+        Returns the verification id the wizard should open.
         """
         collected = await self._collected_for(phone_e164)
-        verification = await self._verification_service.create_draft(customer_id)
-        # By object, not by id: the draft may have been created moments ago in this same
-        # uncommitted transaction, where a re-fetch can come back empty and the seeding
-        # would silently do nothing.
-        await self._verification_service.seed_draft_payload(
-            verification, _SEEDED_WIZARD_STEP, collected
-        )
+        verification_id = await self._intake_draft_seeder.seed(customer_id, collected)
         await self._clear_collected(phone_e164)
-        return Utils.uuid_to_hex(verification.id)
+        return verification_id
 
     async def _collected_for(self, phone_e164: str) -> dict:
-        """The answers the bot gathered for this number.
+        """The answers the assistant gathered for this number.
 
         A missing or emptied session is a link opened twice, or one opened long after the
         conversation was reset. Refusing is right: seeding a blank draft would put a
         customer who answered four questions in front of an empty form with no explanation.
         """
-        session = await self._whatsapp_bot_session_service.get(phone_e164)
+        session = await self._assistant_session_service.get_by_phone(phone_e164)
         collected = (session.context or {}).get("intake") if session else None
         if not collected:
             raise ResourceNotFoundException(resource="Intake")
@@ -83,6 +68,6 @@ class WhatsAppIntakeHandoffService:
 
     async def _clear_collected(self, phone_e164: str) -> None:
         """Forget the conversation's working state now that it is a real draft."""
-        session = await self._whatsapp_bot_session_service.get(phone_e164)
+        session = await self._assistant_session_service.get_by_phone(phone_e164)
         if session is not None:
-            await self._whatsapp_bot_session_service.clear_flow(session)
+            await self._assistant_session_service.clear_flow(session)

@@ -173,8 +173,9 @@ class WhatsAppLinkService:
         )
         self._whatsapp_link_repo.activate(link, Utils.datetime_now())
         # §26.8: one conversation object per person. The thread this number has been
-        # talking in gains an owner rather than a second thread being opened.
-        await self._conversations.set_whatsapp_thread_owner(normalized, user_id)
+        # talking in gains an owner rather than a second thread being opened, and the owner
+        # sees it from the moment of linking — earlier messages may be a previous holder's.
+        await self._conversations.set_whatsapp_thread_owner(normalized, user_id, link.linked_at)
         self._audit.schedule(
             AuditActionType.WHATSAPP_NUMBER_LINKED,
             resource_type=_AUDIT_RESOURCE,
@@ -222,11 +223,13 @@ class WhatsAppLinkService:
 
     async def _release(self, link: WhatsAppLink, reason: str) -> None:
         released = link.phone_e164
-        self._whatsapp_link_repo.release_number(link, reason, Utils.datetime_now())
+        released_at = Utils.datetime_now()
+        self._whatsapp_link_repo.release_number(link, reason, released_at)
         if released:
             # The thread stays in the console for the agents; it just stops belonging to
-            # an account, so nothing will read case data into it again (§26.4.4).
-            await self._conversations.set_whatsapp_thread_owner(released, None)
+            # an account, so nothing will read case data into it again (§26.4.4). The
+            # former owner keeps read-only history up to this moment.
+            await self._conversations.release_whatsapp_thread(released, link.user_id, released_at)
         self._audit.schedule(
             AuditActionType.WHATSAPP_NUMBER_UNLINKED,
             resource_type=_AUDIT_RESOURCE,
