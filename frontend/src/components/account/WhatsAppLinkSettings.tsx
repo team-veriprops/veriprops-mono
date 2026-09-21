@@ -8,6 +8,7 @@ import { Button } from "@3rdparty/ui/button";
 import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
 import { DEFAULT_COUNTRY_CODE, DEFAULT_DIAL_CODE } from "@lib/config/app";
 import { getErrorMessage } from "@lib/utils";
+import { otpDeliveryError } from "@components/website/auth/libs/otpDelivery";
 import { WhatsAppLinkStatus } from "@/types/whatsappLink";
 import {
   useConfirmWhatsAppLinkMutation,
@@ -51,6 +52,12 @@ export default function WhatsAppLinkSettings() {
   const onSend = async () => {
     try {
       const challenge = await startLink.mutateAsync(toE164(dialCode, phone));
+      // A stored-but-undelivered code must not open an entry box for a code that is not coming.
+      const notSent = otpDeliveryError(challenge);
+      if (notSent) {
+        toast.error(notSent);
+        return;
+      }
       setPendingNumber(challenge?.phoneE164 ?? null);
       toast.success("We sent a code to that number on WhatsApp.");
     } catch (err) {

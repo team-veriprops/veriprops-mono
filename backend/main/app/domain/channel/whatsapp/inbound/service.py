@@ -33,10 +33,14 @@ from main.app.domain.channel.whatsapp.inbound.models import (
     WhatsAppInboundMessage,
 )
 from main.app.domain.channel.whatsapp.inbound.repo import WhatsAppInboundMessageRepo
+from main.app.domain.channel.whatsapp.link.service import WhatsAppLinkService
 from main.app.domain.communication.chat_message.models import MessageSource, SenderKind
 from main.app.domain.communication.chat_message.service import ChatMessageService
 from main.app.domain.communication.conversation.models import Conversation
 from main.app.domain.communication.conversation.service import ConversationService
+from main.app.domain.communication.conversation_participant.service import (
+    ConversationParticipantService,
+)
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
@@ -75,10 +79,14 @@ class WhatsAppInboundService:
         whatsapp_inbound_message_repo: WhatsAppInboundMessageRepo,
         conversation_service: ConversationService,
         chat_message_service: ChatMessageService,
+        whatsapp_link_service: WhatsAppLinkService,
+        participant_service: ConversationParticipantService,
     ):
         self._whatsapp_inbound_message_repo = whatsapp_inbound_message_repo
         self._conversations = conversation_service
         self._chat = chat_message_service
+        self._whatsapp_link_service = whatsapp_link_service
+        self._participants = participant_service
 
     async def ingest(self, message: InboundWhatsAppMessage) -> Optional[WhatsAppInboundMessage]:
         """Record an inbound message and surface it in the admin console.
@@ -120,8 +128,12 @@ class WhatsAppInboundService:
             )
         )
 
+        # The number's owner, through the channel's single identity lookup. It only matters
+        # when this message opens the thread: a customer who linked on the website before
+        # ever writing gets a thread created owned and visible to them, not orphaned.
+        owner_id = await self._whatsapp_link_service.resolve_user_for_phone(message.from_phone)
         conversation = await self._conversations.get_or_create_whatsapp_thread(
-            message.from_phone, subject=self._subject_for(message)
+            message.from_phone, user_id=owner_id, subject=self._subject_for(message)
         )
         chat_message = await self._chat.send(
             conversation,
@@ -140,6 +152,13 @@ class WhatsAppInboundService:
         record.chat_message_id = Utils.uuid_to_hex(chat_message.id)
         record.processed_at = Utils.datetime_now()
         self._whatsapp_inbound_message_repo._session.add(record)
+
+        if owner_id:
+            # Writing back means they have seen the thread — the fallback for customers
+            # whose WhatsApp read receipts are off (D92), so the portal badge still clears.
+            await self._participants.advance_read(
+                conversation.id, owner_id, chat_message.delivered_at or chat_message.date_created
+            )
 
         await self._flush_queued_replies(conversation)
         await self._answer(message, conversation)
@@ -175,10 +194,10 @@ class WhatsAppInboundService:
         on this package — an inbound message is what a bot turn *is*. Resolving at call
         time keeps that cycle out of the import graph.
         """
-        from main.app.domain.channel.whatsapp.bot.engine import WhatsAppBotEngine
+        from main.app.domain.channel.whatsapp.bot.surface import WhatsAppAssistantSurface
 
         try:
-            await di[WhatsAppBotEngine].handle(message, conversation)
+            await di[WhatsAppAssistantSurface].handle(message, conversation)
         except Exception as exc:  # noqa: BLE001 — see the module docstring
             logger.error(f"Bot failed to answer {message.from_phone}: {exc}")
 

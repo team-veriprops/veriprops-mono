@@ -37,6 +37,23 @@ class ConversationChannel(str, enum.Enum):
     WHATSAPP = "WHATSAPP"
 
 
+class ConversationReadOnlyReason(str, enum.Enum):
+    """Why a member may read a thread but no longer write to it."""
+
+    # The WhatsApp number behind the thread was unlinked or released (§26.4.4): the history
+    # up to that moment stays, but the thread no longer belongs to this account.
+    NUMBER_UNLINKED = "NUMBER_UNLINKED"
+
+
+class AdminInboxFilter(str, enum.Enum):
+    """The facets of the admin Conversations inbox (§16.5). Each is a server-side scope on
+    the one inbox query, so the list and its paging never drift from what the SQL counts."""
+
+    SUPPORT = "SUPPORT"    # web general-support threads
+    WHATSAPP = "WHATSAPP"  # threads that arrived over WhatsApp, linked to an account or not
+    CASES = "CASES"        # the two verification threads: customer↔admin and admin↔agent
+
+
 # ─── ORM ──────────────────────────────────────────────────────────
 
 class Conversation(BaseEntity):
@@ -105,3 +122,14 @@ class ConversationDto(Object):
     last_message_at: Optional[datetime] = None
     closed: bool = False
     unread: int = 0
+    # Per viewer, from their membership's visibility window: the history stays readable
+    # but the composer is closed, and the reason says why.
+    read_only: bool = False
+    read_only_reason: Optional[ConversationReadOnlyReason] = None
+    # The account a support thread belongs to, for the admin console only: admins work
+    # threads they are not members of, and a web support thread has no other identity.
+    owner_name: Optional[str] = None
+    owner_email: Optional[str] = None
+    # A web turn is waiting for the assistant's intent model (D93): the client shows the
+    # assistant typing and asks for the turn, which is how a reload mid-turn recovers.
+    assistant_pending: bool = False

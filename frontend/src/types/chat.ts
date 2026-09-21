@@ -50,16 +50,22 @@ export enum ChatMessageState {
   BLOCKED = "BLOCKED",
 }
 
+/**
+ * How far a message got on the customer's WhatsApp (D92) — Meta's receipts, plus CANCELLED
+ * for a queued reply the customer read on the website first, so it never went to the phone.
+ */
+export enum ChannelDeliveryStatus {
+  SENT = "SENT",
+  DELIVERED = "DELIVERED",
+  READ = "READ",
+  FAILED = "FAILED",
+  CANCELLED = "CANCELLED",
+}
+
+/** Server-owned: every human message is CHAT; only the platform writes SYSTEM_AUTO. */
 export enum MessageKind {
   CHAT = "CHAT",
   SYSTEM_AUTO = "SYSTEM_AUTO",
-  CLARIFICATION_REQUEST = "CLARIFICATION_REQUEST",
-  CLARIFICATION_RESPONSE = "CLARIFICATION_RESPONSE",
-}
-
-export enum ClarificationStatus {
-  OPEN = "OPEN",
-  ANSWERED = "ANSWERED",
 }
 
 export enum SenderKind {
@@ -67,6 +73,18 @@ export enum SenderKind {
   ADMIN = "ADMIN",
   AGENT = "AGENT",
   SYSTEM = "SYSTEM",
+}
+
+/** Why a member may read a thread but no longer write to it. */
+export enum ConversationReadOnlyReason {
+  NUMBER_UNLINKED = "NUMBER_UNLINKED",
+}
+
+/** The facets of the admin Conversations inbox (§16.5) — each a server-side scope. */
+export enum AdminInboxFilter {
+  SUPPORT = "SUPPORT",
+  WHATSAPP = "WHATSAPP",
+  CASES = "CASES",
 }
 
 export interface Conversation {
@@ -80,6 +98,21 @@ export interface Conversation {
   lastMessageAt?: string | null;
   closed: boolean;
   unread: number;
+  /**
+   * Backend-derived for this viewer: the history stays readable but the composer is
+   * closed (e.g. the WhatsApp number behind the thread was unlinked, §26.4.4).
+   */
+  readOnly?: boolean;
+  readOnlyReason?: ConversationReadOnlyReason | null;
+  /** The account a support thread belongs to — set only in the admin inbox. */
+  ownerName?: string | null;
+  ownerEmail?: string | null;
+  /**
+   * A web turn is waiting on the assistant's intent model (D93): the thread shows the
+   * assistant typing, and the client asks for the turn (`POST .../assistant/turn`). A
+   * reload mid-turn sees this on the conversation list/opener and can recover by asking.
+   */
+  assistantPending?: boolean;
 }
 
 /** Customer-safe sender identity (§11.3) — first name + avatar only for agents. */
@@ -99,7 +132,6 @@ export interface ChatMessage {
   state: ChatMessageState;
   messageKind: MessageKind;
   source?: MessageSource;
-  clarificationStatus?: ClarificationStatus | null;
   sender: ChatSender;
   heldNotice?: string | null;
   dateCreated: string;
@@ -116,6 +148,17 @@ export interface ChatMessage {
    * 24-hour window (§26.7). It goes out on the customer's next message.
    */
   pendingChannelDelivery?: boolean;
+  /** Console only (backend-derived per viewer): the WhatsApp delivery ticks. */
+  channelStatus?: ChannelDeliveryStatus | null;
+  /** Customer only: an admin has read the thread past this message of theirs. */
+  seenBySupport?: boolean;
+  /**
+   * On a send's response only (D93): the assistant's inline answer to this message, when
+   * the deterministic steps could answer it without the intent model.
+   */
+  assistantReply?: ChatMessage | null;
+  /** On a send's response only: the answer needs the intent model — call the turn endpoint. */
+  assistantPending?: boolean;
 }
 
 /** Admin hold-review queue item (§11.2). */
@@ -133,20 +176,25 @@ export interface HeldMessage {
   dateCreated: string;
 }
 
-// ── WhatsApp bot state (PRD §26.6, D57) ───────────────────────────────
+// ── The assistant (PRD §26.6, §16.7, D57, D93) ────────────────────────
+//
+// One assistant answers on every surface it is enabled for — a WhatsApp thread, a web
+// support thread, a case's customer thread — keyed by conversation rather than by number.
 
-/** Who is answering a WhatsApp thread. Sticky once a human joins (D57). */
+/** Who is answering a thread. Sticky once a human joins (D57). */
 export enum BotMode {
   BOT = "BOT",
   HUMAN = "HUMAN",
 }
 
-/** A multi-step conversation the bot is part-way through; null between flows. */
+/** A multi-step conversation the assistant is part-way through; null between flows. */
 export enum BotFlow {
   WELCOME = "WELCOME",
   STATUS = "STATUS",
   INTAKE = "INTAKE",
   UPLOAD = "UPLOAD",
+  PAY = "PAY",
+  REPORT = "REPORT",
 }
 
 /** Why a conversation went to a person (§26.6.2, §26.10). */
@@ -162,25 +210,30 @@ export enum EscalationReason {
   PIPELINE_FAILURE = "PIPELINE_FAILURE",
 }
 
-/** The bot's state for one WhatsApp number, as the console shows it. */
-export interface BotSession {
-  phoneE164: string;
+/** The assistant's state for one conversation, as the console shows it. */
+export interface AssistantSession {
+  conversationId: string;
+  /** False for a thread the assistant never answers (an admin↔agent thread) — the console
+   * shows nothing rather than a stale BOT/HUMAN mode for a thread with no assistant at all. */
+  enabled: boolean;
+  /** Set only on a WhatsApp thread. */
+  phoneE164?: string | null;
   mode: BotMode;
   modeChangedAt?: string | null;
   currentFlow?: BotFlow | null;
   lastInboundAt?: string | null;
   /**
-   * Whether Meta's 24-hour service window is still open on this number (§26.7). Closed
-   * means a reply typed now is queued behind a `window_reopen` template rather than
-   * delivered as written — which an agent needs to know *before* they write it.
+   * Whether Meta's 24-hour service window is still open (§26.7) — WhatsApp only, `null`
+   * elsewhere. Closed means a reply typed now is queued behind a `window_reopen` template
+   * rather than delivered as written, which an agent needs to know *before* they write it.
    */
-  windowOpen?: boolean;
+  windowOpen?: boolean | null;
   lastEscalationReason?: EscalationReason | null;
   lastEscalatedAt?: string | null;
 }
 
 /** Whether the channel is wired for live traffic (§26.11). Never carries a credential. */
-export interface BotChannelReadiness {
+export interface AssistantReadiness {
   whatsappProvider: string;
   intentProvider: string;
   intentModel: string;

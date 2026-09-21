@@ -2,12 +2,25 @@ import { HttpClient } from "@lib/FetchHttpClient";
 import { DEFAULT_HISTORY_PAGE_SIZE,CHAT_MESSAGES_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import {
+  AdminInboxFilter,
   ChatMessage,
   Conversation,
   ConversationType,
   HeldMessage,
-  MessageKind,
 } from "@/types/chat";
+
+export interface AdminConversationsParams {
+  page: number;
+  pageSize: number;
+  filter?: AdminInboxFilter;
+  query?: string;
+}
+
+/** The answer to a deferred assistant turn (D93). */
+export interface AssistantTurn {
+  reply: ChatMessage | null;
+  pending: boolean;
+}
 
 /**
  * Communication-layer API. Mirrors the backend controllers at
@@ -38,12 +51,20 @@ export class ChatService {
 
   /**
    * Post into a thread by id — the member-gated path, used where the caller holds a
-   * conversation rather than a verification (the admin WhatsApp inbox: a §26.8 enquiry
-   * thread has no case behind it yet). `senderKind` is derived server-side from the
-   * caller's role, never sent.
+   * conversation rather than a verification (the admin Conversations inbox: a §26.8 enquiry
+   * or web support thread has no case behind it). The sender kind and message kind are both derived
+   * server-side, never sent.
    */
   sendToConversation(conversationId: string, body: string): Promise<SuccessResponse<ChatMessage>> {
     return this.http.post(`/chat/conversations/${conversationId}/messages`, { body });
+  }
+
+  /**
+   * Answer the assistant turn a send left pending (D93). Safe to call repeatedly — the
+   * backend claims the turn atomically, so only one call ever gets the reply.
+   */
+  runAssistantTurn(conversationId: string): Promise<SuccessResponse<AssistantTurn>> {
+    return this.http.post(`/chat/conversations/${conversationId}/assistant/turn`);
   }
 
   /** Per-user SSE stream URL (§4.9, §N) — consumed by EventSource in useUserStream. */
@@ -57,8 +78,8 @@ export class ChatService {
     return this.http.get(`/verifications/${verificationId}/chat`);
   }
 
-  customerSend(verificationId: string, body: string, kind: MessageKind = MessageKind.CHAT): Promise<SuccessResponse<ChatMessage>> {
-    return this.http.post(`/verifications/${verificationId}/chat/messages`, { body, kind });
+  customerSend(verificationId: string, body: string): Promise<SuccessResponse<ChatMessage>> {
+    return this.http.post(`/verifications/${verificationId}/chat/messages`, { body });
   }
 
   openAgentThread(verificationId: string): Promise<SuccessResponse<Conversation>> {
@@ -78,6 +99,19 @@ export class ChatService {
   }
 
   // ── Admin surface (RBAC-gated) ─────────────────────────────────────
+
+  /**
+   * The Conversations inbox (§16.5): cases, web support and WhatsApp in one server-paged
+   * list. Filtering, search and paging all happen on the backend.
+   */
+  adminConversations(params: AdminConversationsParams): Promise<SuccessResponse<Page<Conversation>>> {
+    const search = new URLSearchParams();
+    search.set("page", String(params.page));
+    search.set("page_size", String(params.pageSize));
+    if (params.filter) search.set("filter", params.filter);
+    if (params.query) search.set("query", params.query);
+    return this.http.get(`/admin/conversations?${search.toString()}`);
+  }
 
   heldQueue(page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<Page<HeldMessage>>> {
     return this.http.get(`/admin/messages/held?page=${page}&pageSize=${pageSize}`);

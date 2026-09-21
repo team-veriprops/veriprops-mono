@@ -33,7 +33,10 @@ from main.appodus_utils.config.settings import SECRET_PLACEHOLDER
 from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 from main.appodus_utils.exception.exceptions import UnauthorizedException
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
-from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import normalize_webhook
+from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
+    normalize_statuses,
+    normalize_webhook,
+)
 
 logger = di["logger"]
 
@@ -127,15 +130,28 @@ class WhatsAppWebhookHandler(BaseWebhookHandler):
         return None
 
     async def _process_handle_webhook_payload(self, payload_dict: Dict) -> Dict:
-        """Normalize a verified delivery and ingest each customer message.
+        """Normalize a verified delivery: apply each receipt, then ingest each message.
 
-        Per-message error isolation: one message that cannot be ingested must not stop
-        the others in the same batch, and must not turn into a non-2xx for Meta.
+        Per-item error isolation: one receipt or message that cannot be handled must not
+        stop the others in the same batch, and must not turn into a non-2xx for Meta.
+        Receipts go first because they arrive alone far more often than not, and an empty
+        message list must not short-circuit them.
         """
+        statuses = normalize_statuses(payload_dict)
+        applied = 0
+        if statuses:
+            status_service = self._resolve_status_service()
+            for status in statuses:
+                try:
+                    await status_service.apply(status)
+                    applied += 1
+                except Exception:
+                    logger.exception("Failed to apply WhatsApp receipt for {}", status.wamid)
+
         messages = normalize_webhook(payload_dict)
         if not messages:
-            # Delivery receipts and account notices land here — acknowledged, no work.
-            return {"ingested": 0}
+            # Account notices land here too — acknowledged, no work.
+            return {"ingested": 0, "statuses": applied}
 
         service = self._resolve_inbound_service()
         ingested = 0
@@ -148,7 +164,14 @@ class WhatsAppWebhookHandler(BaseWebhookHandler):
                 logger.exception(
                     "Failed to ingest inbound WhatsApp message {}", message.wamid
                 )
-        return {"ingested": ingested}
+        return {"ingested": ingested, "statuses": applied}
+
+    def _resolve_status_service(self):
+        if self._status_service is None:
+            from main.app.domain.channel.whatsapp.status.service import WhatsAppStatusService
+
+            self._status_service = di[WhatsAppStatusService]
+        return self._status_service
 
     def _resolve_inbound_service(self):
         if self._inbound_service is None:

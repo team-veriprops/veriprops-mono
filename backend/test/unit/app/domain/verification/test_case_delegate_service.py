@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from main.app.domain.user.auth.models import OtpSendResultDto
 from main.app.domain.verification.delegate.models import CaseDelegate
 from main.app.domain.verification.delegate.service import (
     ALREADY_DELEGATED_MESSAGE,
@@ -115,7 +116,7 @@ def _service(rows=None, owner=OWNER):
     svc._verification_repo = MagicMock(
         get_model=AsyncMock(return_value=_verification(owner))
     )
-    svc._otp = MagicMock(send_otp=AsyncMock(return_value=600), verify_otp=AsyncMock())
+    svc._otp = MagicMock(send_otp=AsyncMock(return_value=OtpSendResultDto(resend_in=600, delivered=True)), verify_otp=AsyncMock())
     svc._audit = MagicMock(schedule=MagicMock())
     svc._held = held
     return svc

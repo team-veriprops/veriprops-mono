@@ -19,7 +19,10 @@ from main.appodus_utils import Object
 from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
-from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import InboundKind
+from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
+    InboundKind,
+    WhatsAppDeliveryStatus,
+)
 
 dev_router = APIRouter(prefix="/dev", tags=["Dev"])
 service: DevSeedService = di[DevSeedService]
@@ -90,6 +93,15 @@ class InjectWhatsAppInboundDto(Object):
     interactive_id: Optional[str] = None
 
 
+class InjectWhatsAppStatusDto(Object):
+    """Body for a simulated Meta receipt about a message we sent (D92). ``wamid`` is the id
+    the stub transport recorded in the outbox for that send."""
+
+    wamid: str
+    status: WhatsAppDeliveryStatus
+    error_codes: list[int] = []
+
+
 class IssueHandoffTokenDto(Object):
     case_id: str
     customer_id: str
@@ -112,6 +124,32 @@ async def inject_whatsapp_inbound(req: InjectWhatsAppInboundDto):
         sender_name=req.sender_name,
         interactive_id=req.interactive_id,
     ))
+
+
+@dev_router.post("/whatsapp/status", response_model=SuccessResponse[dict])
+async def inject_whatsapp_status(req: InjectWhatsAppStatusDto):
+    """Deliver a delivery/read receipt as if Meta had posted it — through the same
+    `WhatsAppStatusService` a signed webhook reaches, so ticks, read state and the
+    bookkeeping row are exercised for real."""
+    _require_non_prod()
+    return SuccessResponse[dict](data=await service.inject_whatsapp_status(
+        wamid=req.wamid, status=req.status.value, error_codes=req.error_codes,
+    ))
+
+
+@dev_router.post("/assistant/sweep", response_model=SuccessResponse[dict])
+async def sweep_assistant_turns(waiting_seconds: float = 0):
+    """Answer pending web assistant turns now (D93) — the sweep a long-running host would run
+    every minute. *waiting_seconds* defaults to no grace, so a test can leave a turn orphaned
+    and prove it is recovered without sleeping."""
+    _require_non_prod()
+    from kink import di as _di
+
+    from main.app.domain.communication.assistant.web import WebAssistantService
+
+    return SuccessResponse[dict](
+        data=await _di[WebAssistantService].sweep(waiting_seconds=waiting_seconds)
+    )
 
 
 @dev_router.post("/whatsapp/handoff-token", response_model=SuccessResponse[dict])

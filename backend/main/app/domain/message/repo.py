@@ -1,8 +1,9 @@
 import json
 from datetime import datetime
-from typing import Type
+from typing import Optional, Type
 
 from kink import inject
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.message.models import Message, SearchMessageDto, \
@@ -20,6 +21,13 @@ class MessageRepo(GenericRepo[Message, UpsertMessageDto, UpsertMessageDto, Query
     def __init__(self, db: AsyncSession, model: Type[Message] = Message, query_dto: Type[QueryMessageDto] = QueryMessageDto):
         super().__init__(db, model, query_dto)
         self.db = db
+
+    async def get_by_provider_id(self, provider_id: str) -> Optional[Message]:
+        """The bookkeeping row for a send the provider knows by *provider_id* (a wamid)."""
+        stmt = select(Message).where(
+            and_(Message.deleted.is_(False), Message.provider_id == provider_id)
+        )
+        return (await self._session.execute(stmt)).scalars().first()
 
     async def create_from_upsert(self, dto: UpsertMessageDto) -> Message:
         """Persist the bookkeeping row for a dispatch, keeping only real columns.

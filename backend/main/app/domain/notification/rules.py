@@ -102,6 +102,7 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.PAYMENT_SETTLED: NotificationRule(in_app=True),
     # Chat routing (§12.3): a routine message bumps the Chat counter only — never a notification.
     EventType.MESSAGE_SENT: NotificationRule(in_app=False, chat_only=True),
+    EventType.MESSAGE_STATUS_CHANGED: NotificationRule(in_app=False, chat_only=True),
     # Compliance (§19): NDPA erasure decision to the data subject — in-app only, no external template.
     EventType.ERASURE_STATUS_CHANGED: NotificationRule(in_app=True),
     # Admin user management (§4.2): a suspended user cannot log in, so email is the only

@@ -24,4 +24,6 @@ export interface WhatsAppLink {
 export interface WhatsAppLinkChallenge {
   phoneE164: string;
   resendAfterSeconds: number;
+  /** False when the code was stored but its dispatch did not complete. */
+  delivered: boolean;
 }

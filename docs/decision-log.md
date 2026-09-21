@@ -2494,3 +2494,264 @@ second number to buy, verify, hold custody of and get templates approved on.
 
 ### Revisit
 At cutover, when the production number binds and prod stops being the only live surface.
+
+---
+
+## Decision: D89 — structured clarifications are withdrawn (supersedes D19)
+
+### Context
+D19 shipped §16.3 as `CLARIFICATION_REQUEST` / `CLARIFICATION_RESPONSE` message kinds with a
+`clarification_status` (`OPEN → ANSWERED`). Only the first step was ever built: a checkbox let a
+customer label a message as a request. Nothing relayed it to the assigned agent (agents only see the
+Admin ↔ Agent thread), no surface sent a response, and nothing set `ANSWERED` — so every request stayed
+`OPEN` and no screen rendered it differently from ordinary chat. Separately, the send endpoints accepted
+a client-chosen `kind`, and `SYSTEM_AUTO` exempts platform copy from the §4.7 fraud scan, so a client
+could post unscanned. The unified-chat work (web assistant on per-case threads) also needed a rule for
+how the bot treats a clarification, which a label with no behaviour could not answer.
+
+### Options Considered
+1. **Remove the feature** until it can be built end to end.
+2. Finish it: relay requests to the agent, carry answers back, track `ANSWERED`.
+3. Leave it and record the gap.
+
+### Chosen Option
+**Option 1** (user-selected).
+
+### Rationale
+The label promised a structure that did not exist. With it gone, `CHAT` is the only kind a human can
+legitimately send, so the wire stops carrying `kind` at all — which closes the `SYSTEM_AUTO` bypass **by
+construction** rather than by a per-role validator someone could later loosen. Customer ↔ agent
+coordination stays admin-mediated, as it already was in practice.
+
+### Tradeoffs / Constraints
+- Migration `0012_remove_chat_clarifications` converts existing clarification rows to `CHAT` (their words
+  are untouched) and drops `clarification_status`; the kind conversion is one-way.
+- An old client still sending `kind` is not rejected — Pydantic ignores the unknown field and the message
+  is stored as scanned `CHAT`.
+- Recorded as a `TODO(gap):` on `MessageKind` plus a PRD §G.2 row.
+
+### Revisit
+When agents need customer questions without an admin relaying each one — build option 2 as its own slice.
+
+---
+
+## Decision: D90 — a customer sees their WhatsApp thread through a visibility window
+
+### Context
+§26.8 put WhatsApp and web chat in one conversation store, but only the admin side could see it.
+Linking a number set `conversations.created_by`, while the portal's conversation list is driven by
+`conversation_participants` — so a linked customer never saw their own WhatsApp thread, and clicking a
+thread with no case behind it led back to the list. A WhatsApp thread is keyed on a **phone number**,
+which can change hands, so simply making the owner a member would show them a previous holder's messages.
+
+### Options Considered
+1. **A visibility window on the membership** — visible from linking, closed (read-only) on release.
+2. Enrol the owner with no window — show the whole thread.
+3. Enrol with a start bound only — the thread disappears from the portal on unlink.
+
+### Chosen Option
+**Option 1** (user-selected: history only from linking; read-only after unlinking).
+
+### Rationale
+The OTP proves who controls the number now, not who held it before, so the window starts at `linked_at`.
+Keeping read-only history after unlinking lets the customer see what they themselves said without letting
+them write into a thread that no longer belongs to their account.
+
+### Tradeoffs / Constraints
+- Relinking reopens the window from the new link; history from the earlier linked period is no longer shown.
+- The unread rule caps the thread's latest message at `visible_until`. That is an upper bound, so a thread
+  released with possibly-unread history stays unread until opened once — erring towards unread.
+- Migration `0013_chat_thread_visibility` backfills owners of ACTIVE links and closes (with an empty window)
+  any other non-admin membership on a WhatsApp thread, which could only have come from the pre-D89
+  `/portal/support` lookup.
+- Admins remain a shared inbox with no window.
+
+### Revisit
+If numbers are commonly relinked by the same account and customers ask for their earlier history.
+
+---
+
+## Decision: D91 — one admin Conversations inbox over every thread
+
+### Context
+The console's second tab listed only WhatsApp threads, filtered on the client from the unpaged
+`/chat/conversations` list. Web support threads were in no admin list at all, so a customer writing to
+`/portal/support` reached nobody. The admin list and Chat counter each looked up the admin's read state one
+thread at a time, and an admin's Chat button opened the customer portal's list, whose links go to
+customer pages.
+
+### Options Considered
+1. **One Conversations tab over every thread the console works** (cases, web support, WhatsApp), server-paged,
+   with a filter and search.
+2. Web support and WhatsApp only, leaving case threads to their case pages.
+3. Separate tabs per surface.
+
+### Chosen Option
+**Option 1.** The user chose one tab for web support and WhatsApp. Case threads are included too, because
+the admin Chat counter already counts them and the inbox has to list what the counter counts.
+A **Cases** filter narrows the list back to them.
+
+### Rationale
+Decision K puts every surface in one console. The list, its total, the unpaged `/chat/conversations` admin
+branch and the Chat counter now read one scope in `ConversationRepo`. Unread uses the same SQL rule as the
+member counter (`unread_condition`), so they cannot disagree.
+
+### Tradeoffs / Constraints
+- `GET /admin/conversations?filter=SUPPORT|WHATSAPP|CASES&query=&page=&page_size=` (`MANAGE_VERIFICATIONS`).
+  The filter is an enum, so an unknown value is a 422.
+- Each admin's read state is an outer join on their own participant row: one query per page instead of a
+  lookup per thread.
+- `ConversationDto.ownerName` / `ownerEmail` come only from the admin inbox, and only for support threads.
+  A case thread's `created_by` is whoever opened it first (often an admin), so it would name the wrong
+  person. Search covers the number, the subject and the owner's name and email.
+- Sorted by latest activity rather than unread first, so opening a thread does not reshuffle the pages.
+- An admin's Chat button and the bot-failure notification open `/admin/messages?tab=conversations`.
+- No migration.
+
+### Revisit
+If admins need an assignment or "mine" view, or unread-first sorting across pages.
+
+---
+
+## Decision: D92 — WhatsApp receipts drive ticks, the portal badge, and cancelled phone delivery
+
+### Context
+Meta posts delivery and read receipts to the same webhook as customer messages, and they were being
+acknowledged and dropped. The outbound wamid was never stored on the chat message, so no receipt could be
+matched. A customer who read a reply on WhatsApp still saw it unread in the portal. An agent could not tell
+whether a reply had arrived. A reply queued outside Meta's window still went to the phone after the customer
+had already read it on the website.
+
+### Options Considered
+1. **Store the wamid on each outbound chat message and apply receipts forward-only on it**, counting a read
+   on the phone as a portal read.
+2. Keep delivery state only on the `messages` bookkeeping table.
+3. Ignore receipts; rely on the customer opening the portal.
+
+### Chosen Option
+**Option 1** (user-selected: receipts clear in-app unread, ticks in the console, "Seen by support" for
+customers, writing back as the fallback, and cancelling phone delivery of a reply read in-app).
+
+### Rationale
+The chat message is what both the console and the portal render, so the state belongs on it. The
+`messages` row for the same send is updated too, but it cannot answer "which thread message is this".
+
+### Tradeoffs / Constraints
+- `chat_messages.channel_status` / `channel_status_at` (migration `0014_chat_channel_status`), indexes on
+  `chat_messages.external_message_id` and `messages.provider_id`. Replies sent before this carry no wamid:
+  backfilled to `SENT`, and no receipt will move them.
+- `advance_channel_status` is the one progression rule. `FAILED` never overrides an arrival, and nothing
+  follows `CANCELLED`.
+- A read receipt advances the owner's `last_read_at` to the message's `delivered_at`, not the receipt time,
+  because portal-only messages posted since have not been seen. A closed window never advances.
+- Cancelling happens when the customer marks the thread read, inside an open window. Opening the thread is
+  "reading" by definition, and the `window_reopen` nudge has already been sent by then.
+- "Seen by support" is the latest read by **any** admin, since admins are a shared inbox.
+- A receipt publishes `MESSAGE_STATUS_CHANGED` (chat-only rule) so members' streams refresh. It does not
+  cross serverless instances; the poll fallback covers that.
+- Dev door: `POST /dev/whatsapp/status` applies a receipt by the wamid the stub outbox recorded.
+
+### Revisit
+If customers find cancelled phone delivery surprising, or Meta's receipts prove too unreliable to clear
+badges.
+
+---
+
+## Decision: D93 — the assistant becomes surface-neutral, keyed by conversation
+
+### Context
+The bot answered WhatsApp only, keyed on a phone number (`whatsapp_bot_sessions`, one row per
+number). §16.7 wanted the same assistant answering a customer's web support thread and a
+case's customer↔admin thread, and every environment runs serverless today (staging/prod move
+to Docker later), where after-response work can be frozen and the in-process scheduler cannot
+be relied on — so a web turn cannot simply run in the background after the send responds.
+
+### Options Considered
+1. **Move the engine to `communication/assistant/`, key its session by conversation, and split
+   a turn at the intent-model call**: deterministic steps answer inline in the customer's send;
+   a turn needing the model is left `assistant_pending` and answered by a client-triggered
+   second request, claimed atomically.
+2. Run the model call inline in the send request on the web too, accepting the latency.
+3. Rely on the in-process scheduler to pick up pending turns after the response returns.
+
+### Chosen Option
+**Option 1** (user-selected: "fast path inline; only turns needing the model deferred, via a
+second request with an atomic claim").
+
+### Rationale
+Option 2 makes every web send as slow as the model, including the many turns a keyword or a
+menu number already answers deterministically. Option 3 is unsafe today: Vercel serverless
+does not guarantee the process survives past the response, so a background continuation can
+simply never run. The atomic claim (one conditional `UPDATE ... WHERE pending_turn_message_id
+IS NOT NULL AND (turn_claimed_at IS NULL OR turn_claimed_at < stale_before) RETURNING ...`)
+is what makes a second tab, a reload, or the sweep all safe to call the same endpoint without
+answering a turn twice.
+
+### Tradeoffs / Constraints
+- `chat_bot_sessions` (renamed from `whatsapp_bot_sessions`, migration `0015_assistant_sessions`):
+  keyed by `conversation_id` (unique), `phone_e164` now nullable with a plain index (WhatsApp
+  lookups and the intake handoff still find a session by number). `pending_turn_message_id`,
+  `pending_turn_at`, `turn_claimed_at` hold a deferred web turn and its claim.
+- The engine (`communication/assistant/`) is surface-neutral: an `AssistantSurface` protocol
+  supplies identity resolution, links, delivery and channel-analytics recording.
+  `channel/whatsapp/bot/surface.py` is WhatsApp's adapter (unchanged behaviour — both phases
+  still run back to back inside the webhook); `communication/assistant/web.py` is the portal's.
+  A shared `core/links/portal.py` replaces three separate hand-built portal-URL builders
+  (notification content, WhatsApp milestones, the payment stub checkout URL).
+- The assistant answers a customer's general-support thread and a case's customer↔admin
+  thread — never admin↔agent, which is staff talking to staff. On a case's own thread the
+  party is pinned to that verification, so "my status" never asks which one.
+- D57's take-over generalises to any assistant-enabled thread: a person replying (admin or
+  agent) silences it, from `POST /admin/assistant/sessions/{conversationId}/hand-back`
+  (`MANAGE_VERIFICATIONS` — the same permission that lets an admin reply). Readiness stays
+  `CONFIGURE_SYSTEM`.
+- A web turn counts as none of §26.10's WhatsApp facts — `WebAssistantSurface.record` is a
+  no-op — so a web enquiry never inflates the channel's own metrics.
+- Erasure resets more than the number now: because a WhatsApp conversation's row (and its
+  session) outlives erasure by design (§26.8 retains content), the session's welcome/mode
+  state is cleared too, or the next message from that number would resume the old,
+  already-welcomed session instead of reading as a stranger's first contact.
+- `check_pending_assistant_turns` (a 1-minute sweep) and `POST /dev/assistant/sweep` exist as
+  the backstop for once staging/prod move off serverless; not relied on today.
+
+### Revisit
+Once staging/prod run on Docker, the sweep can be trusted as the primary recovery path rather
+than a backstop, and the client-triggered second request could become optional.
+
+
+## Decision: D94 — one live membership per (conversation, user) is enforced by the database
+
+### Context
+`conversation_participants` had no uniqueness. `ensure_participant` checked for a membership
+and then inserted, and a browser opening a thread fires mark-read and (for an admin replying)
+the send together, so two requests both saw "not a member yet" and both inserted. The
+duplicate row doubled that member's line in every list that joins memberships — the admin
+Conversations inbox (D91) listed the thread twice and its `count` exceeded its `total`.
+The browser suite (UAT-CHAT-05/06) exposed it.
+
+### Options Considered
+1. **Partial unique index over live rows plus a race-safe insert** — the database is the only
+   place a concurrent check-then-insert can be made safe.
+2. **`DISTINCT` in the inbox query** — hides the symptom in one list; every other join over
+   memberships (unread counts, "Seen by support") would still double-count.
+3. **An advisory lock around the insert** — serialises correctly but adds a lock to a hot path
+   for something a constraint already expresses.
+
+### Chosen
+Option 1: migration `0016_participant_unique` merges existing duplicates (earliest row kept,
+latest `last_read_at` carried onto it) and adds `uq_conv_participants_membership` over
+`(conversation_id, user_id) WHERE deleted = FALSE`, so a soft-deleted membership never blocks
+a fresh one. `ensure_participant` inserts inside a savepoint and, on `IntegrityError`,
+returns the winner's row.
+
+### Rationale
+A membership is an identity, not an event; the constraint states that and makes every reader
+correct at once.
+
+### Tradeoffs
+The downgrade drops the index but does not restore the merged duplicates (they were redundant).
+Any new membership writer must go through `ensure_participant` rather than inserting directly.
+
+### Revisit
+If memberships ever need history (a member leaves and rejoins with separate windows), model it
+as a new row on a soft-deleted predecessor rather than relaxing the index.

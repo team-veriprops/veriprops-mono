@@ -37,6 +37,7 @@ export default function AgentMessagesContainer({ taskId }: { taskId: string }) {
         <ChatThread
           conversationId={convo?.id ?? null}
           readOnly={readOnly}
+          readOnlyNotice="This task is approved — its thread is now read-only."
           onSend={(body) => send.mutateAsync({ verificationId, body, taskId })}
         />
       )}

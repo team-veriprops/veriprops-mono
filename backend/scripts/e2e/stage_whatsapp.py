@@ -223,11 +223,9 @@ def _run_console_checks(ctx: Ctx) -> None:
     root, admin = ctx.root, ctx.admin
 
     # Exactly one console message for the redelivered wamid (the dedup, proved end to end).
-    threads = admin.get("/chat/conversations").json()["data"]
     # Selected by this run's own number: a WhatsApp thread from an earlier run would
     # otherwise be picked up and asserted against.
-    wa_threads = [t for t in threads if t.get("channel") == "WHATSAPP"
-                  and str(t.get("externalRef", "")).endswith(_CUSTOMER_PHONE[-10:])]
+    wa_threads = _console_threads(admin, _CUSTOMER_PHONE)
     check("a WhatsApp enquiry opens a thread in the admin console (Decision K)",
           len(wa_threads) >= 1, f"threads={len(wa_threads)}")
 
@@ -354,6 +352,12 @@ def _run_linking_checks(ctx: Ctx) -> None:
     check("a fresh account starts with no WhatsApp link (§26.4.4)",
           link.get("status") != "ACTIVE" and not link.get("phoneE164"), f"link={link}")
 
+    # Said on this number before it belongs to the account: once linked, the customer must
+    # not be able to read it — a recycled number's thread may hold a previous holder's words.
+    before_link_marker = f"before-link {uuid.uuid4().hex[:8]}"
+    root.post("/dev/whatsapp/inbound",
+              json={"fromPhone": _CUSTOMER_PHONE, "text": before_link_marker}).raise_for_status()
+
     root.delete("/dev/whatsapp/outbox")
     r = customer.post("/channel/whatsapp/link/me/start",
                       json={"phoneE164": f"+{_CUSTOMER_PHONE}"})
@@ -412,11 +416,15 @@ def _run_linking_checks(ctx: Ctx) -> None:
               _CUSTOMER_PHONE[-10:]), f"link={linked}")
 
     # §26.8: one conversation object per person — the *existing* thread gains an owner.
-    threads = admin.get("/chat/conversations").json()["data"]
-    wa_threads = [t for t in threads if t.get("channel") == "WHATSAPP"
-                  and str(t.get("externalRef", "")).endswith(_CUSTOMER_PHONE[-10:])]
+    wa_threads = _console_threads(admin, _CUSTOMER_PHONE)
     check("linking adopts the existing thread instead of opening a second one (§26.8)",
           len(wa_threads) == 1, f"threads={len(wa_threads)}")
+    wa_id = wa_threads[0]["id"] if wa_threads else None
+    check("the console names a linked number's thread by its owner (§16.5)",
+          bool(wa_threads) and wa_threads[0].get("ownerEmail") == ctx.customer_email,
+          f"owner={wa_threads[0].get('ownerEmail') if wa_threads else None}")
+    if wa_id:
+        _run_customer_thread_visibility_checks(ctx, wa_id, before_link_marker)
 
     # WA-25: unlinking releases the number and the thread goes cold.
     r = customer.delete("/channel/whatsapp/link/me")
@@ -426,6 +434,8 @@ def _run_linking_checks(ctx: Ctx) -> None:
     check("an unlinked account holds no number at all — a retained one would lock that "
           "number out of every other account forever",
           after.get("status") != "ACTIVE" and not after.get("phoneE164"), f"link={after}")
+    if wa_id:
+        _run_released_thread_checks(ctx, wa_id)
 
     # An unlinked account can start over. Deliberately a *different* number: the OTP
     # service caps resends per number, so re-sending to the one just used would be
@@ -436,6 +446,168 @@ def _run_linking_checks(ctx: Ctx) -> None:
     check("an unlinked account can start a fresh link (WA-25)", r.status_code == 200,
           f"http {r.status_code}: {r.text[:200]}")
     customer.delete("/channel/whatsapp/link/me")
+
+
+_LINKED_MARKER = "linked now — any news?"
+
+
+def _customer_feed(ctx: Ctx, conversation_id: str) -> list[dict]:
+    return ctx.customer.get(
+        f"/chat/conversations/{conversation_id}/messages", params={"pageSize": 100}
+    ).json()["data"]["items"]
+
+
+def _run_customer_thread_visibility_checks(ctx: Ctx, wa_id: str, before_link_marker: str) -> None:
+    """§26.8 from the customer's side: linking must make the thread theirs to see, from the
+    moment of linking — a thread the console could show and the portal could not was the
+    gap, because the portal list is membership-driven."""
+    root, customer = ctx.root, ctx.customer
+
+    mine = [t for t in customer.get("/chat/conversations").json()["data"] if t.get("id") == wa_id]
+    check("a linked customer sees their WhatsApp thread in the portal (§26.8)",
+          len(mine) == 1 and mine[0].get("channel") == "WHATSAPP" and not mine[0].get("readOnly"),
+          f"mine={mine}")
+
+    support = customer.get("/support/chat").json()["data"]
+    check("their web support thread stays a separate WEB thread (D89)",
+          support.get("id") != wa_id and support.get("channel") == "WEB",
+          f"support={support.get('id')} channel={support.get('channel')} wa={wa_id}")
+
+    check("messages from before the number was linked are hidden from the customer (§26.8)",
+          not any(before_link_marker in m["body"] for m in _customer_feed(ctx, wa_id)))
+
+    root.post("/dev/whatsapp/inbound",
+              json={"fromPhone": _CUSTOMER_PHONE, "text": _LINKED_MARKER}).raise_for_status()
+    check("messages after linking reach the customer's portal thread",
+          any(_LINKED_MARKER in m["body"] for m in _customer_feed(ctx, wa_id)))
+
+    sent = customer.post(f"/chat/conversations/{wa_id}/messages",
+                         json={"body": "Replying from the website"})
+    check("the customer can reply in-app on their WhatsApp thread, labelled as web",
+          sent.status_code == 200 and sent.json()["data"].get("source") == "WEB",
+          f"http {sent.status_code}: {sent.text[:160]}")
+
+    _run_receipt_checks(ctx, wa_id)
+
+
+def _customer_unread(ctx: Ctx, conversation_id: str):
+    mine = [t for t in ctx.customer.get("/chat/conversations").json()["data"] if t.get("id") == conversation_id]
+    return mine[0].get("unread") if mine else None
+
+
+def _console_message(ctx: Ctx, conversation_id: str, fragment: str) -> dict:
+    msgs = ctx.admin.get(f"/chat/conversations/{conversation_id}/messages",
+                         params={"pageSize": 100}).json()["data"]["items"]
+    return next((m for m in msgs if fragment in m["body"]), {})
+
+
+def _run_receipt_checks(ctx: Ctx, wa_id: str) -> None:
+    """D92 — Meta's receipts, end to end on a linked number: ticks in the console, a read on
+    the phone clearing the portal badge, "seen by support", writing back as the fallback when
+    receipts are off, and a queued reply read in the portal never reaching the phone."""
+    root, admin, customer = ctx.root, ctx.admin, ctx.customer
+
+    def receipt(wamid: str, status: str) -> None:
+        root.post("/dev/whatsapp/status", json={"wamid": wamid, "status": status}).raise_for_status()
+
+    root.delete("/dev/whatsapp/outbox").raise_for_status()
+    first = "Receipts check: the survey is booked for Friday."
+    admin.post(f"/chat/conversations/{wa_id}/messages", json={"body": first}).raise_for_status()
+    sent = next((m for m in _outbound_to(ctx, _CUSTOMER_PHONE) if first in str(m.get("text", ""))), None)
+    check("an agent's reply over WhatsApp keeps Meta's id for its receipts", bool(sent and sent.get("wamid")),
+          f"outbound={sent}")
+    if not sent:
+        return
+    wamid = sent["wamid"]
+    check("the console shows a sent reply as SENT (D92)",
+          _console_message(ctx, wa_id, first).get("channelStatus") == "SENT",
+          f"status={_console_message(ctx, wa_id, first).get('channelStatus')}")
+    check("the reply is unread for the customer until they see it", _customer_unread(ctx, wa_id) == 1,
+          f"unread={_customer_unread(ctx, wa_id)}")
+
+    receipt(wamid, "delivered")
+    check("a delivered receipt moves the tick forward",
+          _console_message(ctx, wa_id, first).get("channelStatus") == "DELIVERED")
+    check("delivered is not read — the portal badge stays", _customer_unread(ctx, wa_id) == 1,
+          f"unread={_customer_unread(ctx, wa_id)}")
+
+    receipt(wamid, "read")
+    check("a read receipt shows READ in the console",
+          _console_message(ctx, wa_id, first).get("channelStatus") == "READ")
+    check("reading on WhatsApp clears the customer's portal badge (D92)", _customer_unread(ctx, wa_id) == 0,
+          f"unread={_customer_unread(ctx, wa_id)}")
+    receipt(wamid, "delivered")
+    check("a late delivered receipt never moves READ back",
+          _console_message(ctx, wa_id, first).get("channelStatus") == "READ")
+    customer_view = next((m for m in _customer_feed(ctx, wa_id) if first in m["body"]), {})
+    check("delivery ticks are for the console only", customer_view.get("channelStatus") is None,
+          f"status={customer_view.get('channelStatus')}")
+
+    def own_web_reply() -> dict:
+        return next((m for m in _customer_feed(ctx, wa_id) if "Replying from the website" in m["body"]), {})
+
+    check("the customer's message is not seen until an admin reads the thread",
+          own_web_reply().get("seenBySupport") is False, f"seen={own_web_reply().get('seenBySupport')}")
+    admin.post(f"/chat/conversations/{wa_id}/read").raise_for_status()
+    check("an admin reading the thread shows 'seen by support' to the customer (D92)",
+          own_web_reply().get("seenBySupport") is True, f"seen={own_web_reply().get('seenBySupport')}")
+
+    admin.post(f"/chat/conversations/{wa_id}/messages",
+               json={"body": "Receipts check: any questions before Friday?"}).raise_for_status()
+    check("a second reply is unread again", _customer_unread(ctx, wa_id) == 1,
+          f"unread={_customer_unread(ctx, wa_id)}")
+    root.post("/dev/whatsapp/inbound",
+              json={"fromPhone": _CUSTOMER_PHONE, "text": "No questions, thanks"}).raise_for_status()
+    check("writing back on WhatsApp counts as reading, when receipts are off (D92)",
+          _customer_unread(ctx, wa_id) == 0, f"unread={_customer_unread(ctx, wa_id)}")
+
+    rewound = root.post("/dev/whatsapp/rewind-window", params={"phone": _CUSTOMER_PHONE, "hours": 25})
+    if rewound.status_code == 200:
+        late = "Receipts check: the report is ready on the website."
+        admin.post(f"/chat/conversations/{wa_id}/messages", json={"body": late}).raise_for_status()
+        check("a reply outside Meta's window waits for the customer",
+              _console_message(ctx, wa_id, late).get("pendingChannelDelivery") is True)
+        customer.post(f"/chat/conversations/{wa_id}/read").raise_for_status()
+        cancelled = _console_message(ctx, wa_id, late)
+        check("reading it in the portal cancels the phone delivery (D92)",
+              cancelled.get("channelStatus") == "CANCELLED" and not cancelled.get("pendingChannelDelivery"),
+              f"status={cancelled.get('channelStatus')} pending={cancelled.get('pendingChannelDelivery')}")
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        root.post("/dev/whatsapp/inbound",
+                  json={"fromPhone": _CUSTOMER_PHONE, "text": "Back on WhatsApp"}).raise_for_status()
+        check("a cancelled reply is not sent when the window reopens",
+              not any(late in str(m.get("text", "")) for m in _outbound_to(ctx, _CUSTOMER_PHONE)))
+    else:
+        warn("cancel-on-read check skipped", f"/dev/whatsapp/rewind-window answered http {rewound.status_code}")
+
+    # Replying took the number off the assistant (D57); later checks expect it answering.
+    admin.post(f"/admin/assistant/sessions/{wa_id}/hand-back")
+
+
+def _run_released_thread_checks(ctx: Ctx, wa_id: str) -> None:
+    """§26.4.4 after unlinking: history up to the release stays readable, nothing after it
+    is visible, and the thread cannot be written to — refused without a 403, which the web
+    client would turn into a /forbidden redirect."""
+    root, customer = ctx.root, ctx.customer
+
+    mine = [t for t in customer.get("/chat/conversations").json()["data"] if t.get("id") == wa_id]
+    check("an unlinked number's thread stays in the customer's list, read-only (§26.4.4)",
+          len(mine) == 1 and mine[0].get("readOnly") is True
+          and mine[0].get("readOnlyReason") == "NUMBER_UNLINKED", f"mine={mine}")
+
+    refused = customer.post(f"/chat/conversations/{wa_id}/messages", json={"body": "still there?"})
+    check("a read-only thread refuses a new message, without a 403",
+          400 <= refused.status_code < 500 and refused.status_code != 403,
+          f"http {refused.status_code}")
+
+    after_release_marker = f"after-release {uuid.uuid4().hex[:8]}"
+    root.post("/dev/whatsapp/inbound",
+              json={"fromPhone": _CUSTOMER_PHONE, "text": after_release_marker}).raise_for_status()
+    feed = _customer_feed(ctx, wa_id)
+    check("history up to unlinking stays readable",
+          any(_LINKED_MARKER in m["body"] for m in feed))
+    check("messages after unlinking are hidden from the former owner",
+          not any(after_release_marker in m["body"] for m in feed))
 
 
 _PRD_TEMPLATES = {
@@ -552,15 +724,15 @@ def _run_bot_checks(ctx: Ctx) -> None:
     check("a voice note is acknowledged and handed to a person (§26.6.3)",
           "listen" in audio, audio[:160])
 
-    # D57 — the console is what silences the bot, and the only way back.
-    session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
-    check("the console can read a thread's bot mode (D57)",
-          session.get("mode") == "BOT", f"mode={session.get('mode')}")
-
-    threads = admin.get("/chat/conversations").json()["data"]
-    thread = next((t for t in threads if str(t.get("externalRef", "")).endswith(phone[-10:])), None)
+    # D57 — the console is what silences the bot, and the only way back. Keyed by
+    # conversation now (D93), so the thread has to be found before its session can be read.
+    thread = next(iter(_console_threads(admin, phone)), None)
     check("the bot's own replies are in the console thread (Decision K)", thread is not None)
     if thread:
+        session = admin.get(f"/admin/assistant/sessions/{thread['id']}").json()["data"]
+        check("the console can read a thread's assistant mode (D57)",
+              session.get("mode") == "BOT", f"mode={session.get('mode')}")
+
         msgs = admin.get(f"/chat/conversations/{thread['id']}/messages").json()["data"]["items"]
         check("the console shows what the bot said, as platform copy",
               any(m.get("sender", {}).get("kind") == "SYSTEM" for m in msgs),
@@ -577,8 +749,8 @@ def _run_bot_checks(ctx: Ctx) -> None:
               any("I'll take this one" in str(m.get("text", "")) for m in outbound),
               f"outbound={[str(m.get('text'))[:40] for m in outbound]}")
 
-        session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
-        check("an agent's reply takes the thread off the bot (D57)",
+        session = admin.get(f"/admin/assistant/sessions/{thread['id']}").json()["data"]
+        check("an agent's reply takes the thread off the assistant (D57)",
               session.get("mode") == "HUMAN", f"mode={session.get('mode')}")
         check("the console can see that Meta's reply window is open (§26.7)",
               session.get("windowOpen") is True, f"windowOpen={session.get('windowOpen')}")
@@ -590,15 +762,15 @@ def _run_bot_checks(ctx: Ctx) -> None:
         check("the bot stays silent while a human owns the thread (D57)",
               len(replies) == 0, f"outbound={len(replies)}")
 
-        admin.post(f"/admin/whatsapp/bot/sessions/{phone}/hand-back").raise_for_status()
-        session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
-        check("hand-back returns the thread to the bot (D57)",
+        admin.post(f"/admin/assistant/sessions/{thread['id']}/hand-back").raise_for_status()
+        session = admin.get(f"/admin/assistant/sessions/{thread['id']}").json()["data"]
+        check("hand-back returns the thread to the assistant (D57)",
               session.get("mode") == "BOT", f"mode={session.get('mode')}")
         replies = say("how much?")
         check("the bot answers again once it is handed back",
               len(replies) == 1, f"outbound={len(replies)}")
 
-    readiness = admin.get("/admin/whatsapp/bot/readiness").json()["data"]
+    readiness = admin.get("/admin/assistant/readiness").json()["data"]
     check("the launch gate can read the channel's configuration (§26.11)",
           readiness.get("whatsappProvider") == "stub"
           and readiness.get("intentProvider") == "stub",
@@ -606,6 +778,18 @@ def _run_bot_checks(ctx: Ctx) -> None:
     check("readiness never carries a credential",
           not any("key" in k.lower() and "configured" not in k.lower() for k in readiness),
           f"keys={list(readiness)}")
+
+
+def _console_threads(admin, phone: str) -> list[dict]:
+    """The number's thread as the admin Conversations inbox finds it (§16.5): the WhatsApp
+    facet searched by the number, so the lookup exercises the console's own server-side
+    filter rather than scanning an unpaged list."""
+    r = admin.get("/admin/conversations",
+                  params={"filter": "WHATSAPP", "query": phone[-10:], "page_size": 100})
+    if r.status_code != 200:
+        return []
+    return [t for t in r.json()["data"]["items"]
+            if t.get("channel") == "WHATSAPP" and str(t.get("externalRef", "")).endswith(phone[-10:])]
 
 
 def _outbound_to(ctx: Ctx, phone: str) -> list[dict]:
@@ -636,7 +820,7 @@ def _run_window_checks(ctx: Ctx, phone: str, conversation_id: str) -> None:
         warn("WhatsApp 24-hour window checks skipped",
              f"/dev/whatsapp/rewind-window answered http {rewound.status_code}")
         return
-    session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
+    session = admin.get(f"/admin/assistant/sessions/{conversation_id}").json()["data"]
     check("an aged conversation reads as outside Meta's window (§26.7)",
           session.get("windowOpen") is False, f"windowOpen={session.get('windowOpen')}")
 
@@ -729,10 +913,15 @@ def _run_media_checks(ctx: Ctx) -> None:
     voice = send("AUDIO")
     check("a voice note is promised a person who will listen (§26.6.3)",
           "listen" in voice, voice[:200])
-    session = admin.get(f"/admin/whatsapp/bot/sessions/{phone}").json()["data"]
-    check("a voice note is counted under its own escalation reason (§26.10)",
-          session.get("lastEscalationReason") == "VOICE_NOTE",
-          f"reason={session.get('lastEscalationReason')}")
+    # Keyed by conversation now (D93) — the thread has to exist by this point (the welcome
+    # opened it), so it is safe to look up before the console-view section below reuses it.
+    thread = next(iter(_console_threads(admin, phone)), None)
+    check("the media thread is in the console", thread is not None)
+    if thread:
+        session = admin.get(f"/admin/assistant/sessions/{thread['id']}").json()["data"]
+        check("a voice note is counted under its own escalation reason (§26.10)",
+              session.get("lastEscalationReason") == "VOICE_NOTE",
+              f"reason={session.get('lastEscalationReason')}")
 
     # §26.6.3 row three — a pin goes to a person.
     pin = send("LOCATION")
@@ -740,9 +929,6 @@ def _run_media_checks(ctx: Ctx) -> None:
           bool(pin) and "team member" in pin, pin[:200])
 
     # The console's own view: labelled, and labelled as not-evidence.
-    threads = admin.get("/chat/conversations").json()["data"]
-    thread = next((t for t in threads if str(t.get("externalRef", "")).endswith(phone[-10:])), None)
-    check("the media thread is in the console", thread is not None)
     if thread:
         msgs = admin.get(f"/chat/conversations/{thread['id']}/messages").json()["data"]["items"]
         media = [m for m in msgs if m.get("mediaKind")]
@@ -1123,7 +1309,7 @@ def _drive_tasks_to_submitted(ctx: Ctx, case_id: str, roles: list) -> None:
     admin = ctx.admin
     for role in roles:
         admin.post(f"/admin/verifications/{case_id}/tasks/{role}/assign",
-                   json={"agentId": ctx.seed["agents"][role]}).raise_for_status()
+                   json={"agentId": ctx.seed["agents"][role]["id"]}).raise_for_status()
         agent = ctx.agent(role)
         tasks = agent.get("/agents/tasks").json()["data"]["items"]
         mine = next((t for t in tasks if t["verificationId"] == case_id), None)
@@ -1498,8 +1684,10 @@ def _run_failure_drill_checks(ctx: Ctx) -> None:
     # hours a person is joining now, outside them a stated number of hours. Asserting only
     # the window would fail every run made during business hours — and "joining now" is the
     # stronger of the two promises, not a weaker one.
+    promise = failed_turn.lower()
     check("...and a concrete human promise, in whichever shape Decision G's coverage gives",
-          "team member" in failed_turn.lower(), failed_turn[:200])
+          "team member is joining" in promise or "someone will reply here within" in promise,
+          failed_turn[:200])
 
     after = admin.get("/notifications?page=0&page_size=1").json()["data"]["meta"]["total"]
     check("an admin is alerted that the bot pipeline failed (§26.6.5)",
@@ -1624,7 +1812,7 @@ def _run_channel_erasure_checks(ctx: Ctx) -> None:
     surfaces = (audit_row or {}).get("details", {}).get("surfaces", [])
     # Named individually because a partial scrub is the failure mode that looks like
     # success: the account is gone, and the number is still readable.
-    for table in ("whatsapp_links", "whatsapp_bot_sessions", "whatsapp_inbound_messages"):
+    for table in ("whatsapp_links", "chat_bot_sessions", "whatsapp_inbound_messages"):
         check(f"erasure reaches {table} (§26.8, WA-42)", table in surfaces, f"surfaces={surfaces}")
 
     # ── The proof that matters: what the bot does on the next message ─────────────

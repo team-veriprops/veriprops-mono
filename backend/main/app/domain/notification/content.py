@@ -9,11 +9,12 @@ from __future__ import annotations
 from typing import Any, Dict, Optional, Tuple
 
 from main.app.core.events.events import DomainEvent, EventType
+from main.app.core.links.portal import verification_path
 from main.appodus_utils.integrations.messaging.models import MessageContext
 
 
 def _portal_link(vid: Optional[str]) -> Optional[str]:
-    return f"/portal/verifications/{vid}" if vid else None
+    return verification_path(vid) if vid else None
 
 
 def _admin_link(vid: Optional[str]) -> Optional[str]:
@@ -47,7 +48,7 @@ _CONTENT = {
     EventType.CONFLICT_FLAGGED: ("Conflict detected", "A conflict was flagged on a verification.", _admin_link),
     EventType.AGENT_NO_SHOW: ("Agent no-show", "An assigned agent did not accept in time.", _admin_link),
     EventType.FRAUD_FLAGGED_MESSAGE: ("Message held for review", "A message was flagged and is awaiting review.", lambda _v: "/admin/messages"),
-    EventType.BOT_PIPELINE_FAILED: ("WhatsApp bot needs a human", "The bot could not answer a customer and handed the conversation over.", lambda _v: "/admin/messages"),
+    EventType.BOT_PIPELINE_FAILED: ("Assistant needs a human", "The assistant could not answer a customer and handed the conversation over.", lambda _v: "/admin/messages?tab=conversations"),
     EventType.DISPUTE_OPENED: ("Dispute opened", "A dispute was opened on a verification.", _admin_link),
     EventType.DISPUTE_RESOLVED: ("Dispute resolved", "A dispute has been resolved.", _admin_link),
     EventType.PAYMENT_SETTLED: ("Payment settled", "A payment has settled.", _admin_link),

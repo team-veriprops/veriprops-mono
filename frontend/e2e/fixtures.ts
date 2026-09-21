@@ -67,6 +67,8 @@ export interface WaDriver {
   inbound(message: WaInbound): Promise<unknown>;
   outbox<T = unknown>(recipient?: string): Promise<T>;
   clearOutbox(): Promise<void>;
+  /** Apply a Meta delivery/read receipt to an outbound message by the wamid in the outbox. */
+  status(wamid: string, status: "sent" | "delivered" | "read" | "failed"): Promise<unknown>;
   /** Age a number's inbound journal so Meta's 24-hour service window reads as closed. */
   rewindWindow(phone: string, hours?: number): Promise<void>;
   mintHandoff(caseId: string, customerId: string, intent: HandoffIntent): Promise<string>;
@@ -181,6 +183,7 @@ export const test = base.extend<UatFixtures>({
     await provide({
       inbound: (message) => dev.post("/dev/whatsapp/inbound", message),
       outbox: (recipient) => dev.get("/dev/whatsapp/outbox", recipient ? { recipient } : undefined),
+      status: (wamid, status) => dev.post("/dev/whatsapp/status", { wamid, status }),
       clearOutbox: async () => {
         await dev.delete("/dev/whatsapp/outbox");
       },

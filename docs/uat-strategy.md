@@ -119,7 +119,7 @@ The codebase has **no general business clock**. Time-dependent state is producib
 8. **Review / Trust / Release (§13, P0)** — read-only review + gallery; reject→reason+revision auto-posts to admin↔agent thread; approve records quality score but doesn't move state; conflict resolve; **Release Report** atomic flip; **negative:** no report reaches customer pre-release; Request-Changes reopen banner; FAILED (reason+evidence, irreversible, stub refund).
 9. **Customer Tracking & Evidence (§14, P1)** — tracking SLA card, progress, agents show **role+first-name+badge only** (negative: no contact details), state-label mapping assertions, milestones surface only post-approval, evidence gallery approved-only tagged by role.
 10. **Report Experience (§15, P1)** — disclaimer-gated unblur, header actions, radial gauge, tier-dependent sections, PDF (fpdf2 + QR), superseded watermark. **EXCLUDE:** Legal Opinion (`LEGAL_OPINION_ENABLED=False`).
-11. **Communication / Chat (§16, P1)** — CUSTOMER_ADMIN + system breadcrumbs, ADMIN_AGENT read-only-once-approved, GENERAL_SUPPORT; **negative: no customer↔agent chat anywhere**; fraud-scan HELD → admin queue approve/reject; clarifications OPEN→ANSWERED; shared-inbox unread per `last_read_at`. **EXCLUDE:** attachments.
+11. **Communication / Chat (§16, P1)** — CUSTOMER_ADMIN + system breadcrumbs, ADMIN_AGENT read-only-once-approved, GENERAL_SUPPORT; **negative: no customer↔agent chat anywhere**; fraud-scan HELD → admin queue approve/reject; shared-inbox unread per `last_read_at`. **EXCLUDE:** attachments. Browser coverage: `frontend/e2e/specs/chat.spec.ts` (UAT-CHAT-01..07 — assistant turn, WhatsApp thread visibility/read-only, Seen, delivery ticks, admin Conversations facets, hand-back).
 12. **Notifications (§17, P1)** — bell/unread; in-app always-on (can't disable); email/SMS per-event opt-outs; representative triggers assert in-app + Mailpit. **EXCLUDE:** push/WhatsApp.
 13. **Public Lookup & Sharing (§18, P0)** — see worked example B; sharing modes Private/Public/`LINK_SUMMARY`/`NAMED_FULL`, expiry + immediate revoke.
 14. **Re-check / Upgrade / Disputes (§19, P0 disputes / P1 re-check)** — re-check request→approve+scope→pay secondary→reopen→v2.0; upgrade higher-tier only, price delta, idempotent, v3.0; dispute 30-char/typed/window, freeze commissions, 48h agent defence (never learns identity), outcomes REJECTED/FULL_REFUND/PARTIAL_RECHECK.
@@ -207,7 +207,10 @@ Named because they are the "will this actually automate?" risks; each becomes a 
 
    Use the committed [Caddyfile](../frontend/e2e/tls/Caddyfile), not the `caddy reverse-proxy` one-liner. The one-liner cannot shorten upstream keep-alive, so Caddy can reuse a socket Node's 5 s `keepAliveTimeout` has already closed. A POST sent on that socket (sign-in) then fails as a bare 502 ("An error occurred" on the form). This was observed on UAT-AUTH-05. The same file also retries failed dials (`lb_try_duration`), because Docker Desktop's container→host hop can stall a new connection for a few seconds; that was observed on UAT-WAH-01 as a bare 502. A dial that failed was never sent, so the retry is safe for POST.
 
-   Keep `pnpm dev:https` for authoring a spec; judge green/red only against the build.
+   Keep `pnpm dev:https` for authoring a spec; judge green/red only against the build. This is not a formality:
+   against the dev server WebKit loses the first field of a form (login, signup, set-password) to the hydration
+   reset and reports failures the build does not have. Every form fill is preceded by `waitForHydration`, which
+   makes both stacks deterministic, but the build remains the verdict.
 3. `pnpm e2e` (parallel workers, `UAT_WORKERS` overrides; `@serial` specs then run one at a time) — `globalSetup` reset+seeds once; `--grep @P0` or `--grep UAT-PAY` to scope; `UAT_ENGINES=chromium-desktop` (or `--project=…`) to run one engine/device of the six-permutation matrix (§7). `UAT_BASE_URL` overrides the origin.
 4. Debug failures with the Playwright trace viewer (`pnpm e2e:report`) and the `playwright-cli` skill for ad-hoc UI investigation.
 

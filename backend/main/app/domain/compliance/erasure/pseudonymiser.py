@@ -20,11 +20,13 @@ import hashlib
 from typing import List
 
 from kink import inject
-from sqlalchemy import or_, select, update
+from sqlalchemy import String, case, cast, func, or_, select, update
 
 from main.app.config.settings import settings
 from main.app.domain.audit.models import AuditLog
-from main.app.domain.channel.whatsapp.bot.session.models import WhatsAppBotSession
+from main.app.domain.communication.assistant.session.models import AssistantSession, BotMode
+from main.app.domain.communication.conversation.models import Conversation
+from main.app.domain.verification.models import Verification
 from main.app.domain.channel.whatsapp.handoff.models import HandoffTokenRedemption
 from main.app.domain.channel.whatsapp.inbound.models import WhatsAppInboundMessage
 from main.app.domain.channel.whatsapp.link.models import (
@@ -149,7 +151,7 @@ class PiiPseudonymiser:
         )
         surfaces.append("agent_bank_accounts")
 
-        # 9-13) The WhatsApp channel (§26.8).
+        # 9-13) The assistant's conversation state and the WhatsApp channel (§26.8).
         surfaces += await self._pseudonymise_whatsapp(session, subject_user_id, token)
 
         return surfaces
@@ -182,7 +184,50 @@ class PiiPseudonymiser:
         )
         phones = [phone for (phone,) in rows.all() if phone]
 
-        # 9) The link itself. The number is cleared to NULL rather than tokenised, because
+        # 9) Assistant sessions (D93) — on the subject's numbers and on their own web threads.
+        # `context` is dropped outright rather than tokenised: it holds the free-text answers
+        # of a half-finished intake (a property address, a landmark), personal data that never
+        # became a business record. One statement covers both surfaces; only a row on one of
+        # the subject's numbers has a number to replace.
+        #
+        # The rest of the session's memory is reset to a blank slate, not just the number:
+        # sessions are keyed by *conversation* now, and a WhatsApp conversation's row is never
+        # deleted by erasure (§26.8 retains the content) — so the next message from this
+        # number would otherwise find the old, already-welcomed session and pick up the old
+        # conversation exactly where it left off. Resetting `welcomed_at` etc. is what makes
+        # the bot treat that number as a stranger again, matching a subject who never wrote.
+        await session.execute(
+            update(AssistantSession)
+            .where(
+                or_(
+                    AssistantSession.phone_e164.in_(phones),
+                    AssistantSession.conversation_id.in_(_subject_conversation_refs(subject_user_id)),
+                )
+            )
+            .values(
+                phone_e164=case(
+                    (AssistantSession.phone_e164.in_(phones), token),
+                    else_=AssistantSession.phone_e164,
+                ),
+                mode=BotMode.BOT.value,
+                mode_changed_at=None,
+                current_flow=None,
+                step=0,
+                context=None,
+                last_inbound_at=None,
+                welcomed_at=None,
+                unmatched_count=0,
+                last_escalation_reason=None,
+                last_escalated_at=None,
+                pending_turn_message_id=None,
+                pending_turn_at=None,
+                turn_claimed_at=None,
+            ),
+            execution_options={"synchronize_session": False},
+        )
+        surfaces.append("chat_bot_sessions")
+
+        # 10) The link itself. The number is cleared to NULL rather than tokenised, because
         # `phone_e164` is uniquely constrained and a retained value would hold that
         # constraint forever — locking a real number out of every future account. This is
         # the same reasoning as `WhatsAppLinkRepo.release_number`.
@@ -201,17 +246,6 @@ class PiiPseudonymiser:
         if not phones:
             # Never linked a number: nothing downstream keys on this subject.
             return surfaces
-
-        # 10) Bot session. `context` is dropped outright rather than tokenised — it holds
-        # the free-text answers of a half-finished chat intake (a property address, a
-        # landmark), which is personal data that never became a business record because the
-        # case was never created.
-        await session.execute(
-            update(WhatsAppBotSession)
-            .where(WhatsAppBotSession.phone_e164.in_(phones))
-            .values(phone_e164=token, context=None)
-        )
-        surfaces.append("whatsapp_bot_sessions")
 
         # 11) The inbound journal. `from_phone` is 20 characters and the subject token is
         # 23, so it takes the flat redaction; re-identification still works through
@@ -258,3 +292,21 @@ class PiiPseudonymiser:
         surfaces.append("handoff_token_redemptions")
 
         return surfaces
+
+
+def _hex_ref(column):
+    """A UUID column in the 32-char form reference columns store."""
+    return func.replace(cast(column, String), "-", "")
+
+
+def _subject_conversation_refs(subject_user_id: str):
+    """The subject's own threads, as stored conversation refs: the ones they opened (web
+    support, an owned WhatsApp thread) and their cases' customer threads, whose opener may
+    have been an admin."""
+    own_cases = select(_hex_ref(Verification.id)).where(Verification.customer_id == subject_user_id)
+    return select(_hex_ref(Conversation.id)).where(
+        or_(
+            Conversation.created_by == subject_user_id,
+            Conversation.verification_id.in_(own_cases),
+        )
+    )

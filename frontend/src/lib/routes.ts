@@ -73,7 +73,9 @@ export const ROUTES = {
     VERIFICATIONS: '/admin/verifications',
     VERIFICATION_DETAIL: (vid: string) => `/admin/verifications/${vid}`,
     VERIFICATION_MESSAGES: (vid: string) => `/admin/verifications/${vid}/messages`,
-    HELD_MESSAGES: '/admin/messages',
+    // The messaging console: the hold-review queue and the Conversations inbox (§16.5).
+    MESSAGES: '/admin/messages',
+    MESSAGES_TAB: (tab: string) => `/admin/messages?tab=${encodeURIComponent(tab)}`,
     REPORT_REVIEW: (vid: string) => `/admin/verifications/${vid}/report-review`,
     // TODO(gap): route declared, page not built — PRD "Known Gaps & Roadmap".
     TASK_REVIEW: (taskId: string) => `/admin/tasks/${taskId}/review`,
@@ -137,6 +139,8 @@ export const ROUTES = {
     PAYMENTS: '/portal/account/payments',
     SUPPORT: '/portal/support',
     CHAT: '/portal/chat',
+    // A thread with no case or support page of its own — a customer's WhatsApp thread (§26.8).
+    CHAT_THREAD: (conversationId: string) => `/portal/chat/${conversationId}`,
   },
 
   // WhatsApp -> website handoff landings (PRD §26.4.2). Each consumes a signed

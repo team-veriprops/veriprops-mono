@@ -78,6 +78,21 @@ class MessageService:
 
         return True
 
+    async def mark_delivered_by_provider_id(self, provider_id: str, delivered_at: datetime) -> bool:
+        """Record a provider's delivery receipt on the send it names. Unknown ids are ignored:
+        receipts can cite sends from before the row existed. Returns whether a row moved."""
+        message = await self._message_repo.get_by_provider_id(provider_id)
+        if message is None or message.delivered_at is not None:
+            return False
+        return await self.update_message_delivered(str(message.id), delivered_at)
+
+    async def mark_failed_by_provider_id(self, provider_id: str, error: str) -> bool:
+        """Record a provider's failure receipt on a send that has not been delivered."""
+        message = await self._message_repo.get_by_provider_id(provider_id)
+        if message is None or message.delivered_at is not None:
+            return False
+        return await self.update_message_status(str(message.id), MessageStatus.FAILED, error)
+
     async def schedule_message_retry(self, message_id: str, retry_count: int,
                                      next_retry_at: datetime, error: str) -> bool:
         """Mark a failed dispatch as awaiting re-dispatch by the retry sweep."""

@@ -8,7 +8,7 @@ from main.app.domain.config.controller import config_router
 # also keeps every channel model reachable for Alembic.
 from main.app.domain import channel  # noqa: F401
 from main.app.domain.channel.whatsapp.bot.intake_controller import whatsapp_intake_router
-from main.app.domain.channel.whatsapp.bot.session.controller import whatsapp_bot_router
+from main.app.domain.communication.assistant.controller import assistant_router
 from main.app.domain.channel.whatsapp.consent.controller import whatsapp_consent_router
 from main.app.domain.channel.whatsapp.handoff.controller import handoff_router
 from main.app.domain.channel.whatsapp.link.controller import whatsapp_link_router
@@ -64,7 +64,7 @@ from main.appodus_utils.config.settings import Environment
 
 router = APIRouter()
 router.include_router(config_router)
-router.include_router(whatsapp_bot_router)
+router.include_router(assistant_router)
 router.include_router(whatsapp_intake_router)
 router.include_router(handoff_router)
 router.include_router(whatsapp_consent_router)

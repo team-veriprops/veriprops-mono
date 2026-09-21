@@ -26,12 +26,12 @@ export default function SupportContainer() {
           <h1 className="text-xl font-semibold text-brand-navy">
             Support
           </h1>
-          <p className="text-sm text-gray-500">Find an answer, or start a conversation with our team.</p>
+          <p className="text-sm text-gray-600">Find an answer, or start a conversation with our team.</p>
         </div>
       </div>
 
       <section>
-        <h2 className="text-sm font-semibold mb-3 text-gray-500 uppercase tracking-wide">
+        <h2 className="text-sm font-semibold mb-3 text-gray-600 uppercase tracking-wide">
           Frequently asked
         </h2>
         <div className="space-y-2">
@@ -55,21 +55,22 @@ export default function SupportContainer() {
       </section>
 
       <section>
-        <h2 className="text-sm font-semibold mb-3 text-gray-500 uppercase tracking-wide">
+        <h2 className="text-sm font-semibold mb-3 text-gray-600 uppercase tracking-wide">
           Still need help?
         </h2>
-        <p className="text-xs text-gray-400 mb-2">
+        <p className="text-xs text-gray-600 mb-2">
           For help with a specific verification, open its own Messages thread. For account or
           billing questions, message us here.
         </p>
         {isLoading ? (
-          <p className="text-sm text-gray-400">Opening support chat…</p>
+          <p className="text-sm text-gray-600">Opening support chat…</p>
         ) : (
           <div className="h-[50vh]">
             <ChatThread
               conversationId={convo?.id ?? null}
               onSend={(body) => send.mutateAsync({ verificationId: "", body })}
               emptyHint="How can we help? Send us a message."
+              assistantPending={convo?.assistantPending}
             />
           </div>
         )}

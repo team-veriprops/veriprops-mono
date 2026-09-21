@@ -3,22 +3,27 @@
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import { ROUTES } from "@lib/routes";
+import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
+import { UserType } from "@components/website/auth/models";
+import { AdminMessagesTab } from "./libs/adminMessagesTab";
 import { useChatRealtime, useChatUnreadQuery } from "./libs/useChatQueries";
 import { cn } from "@lib/utils";
 
 /**
  * Chat entry in the top nav (PRD §N). Shows a counter of conversations with unread
- * messages (numeric, capped at "9+", hidden at zero) and opens the conversation list.
- * Mounts the per-user SSE subscription so the counter stays live app-wide (§4.9).
+ * messages (numeric, capped at "9+", hidden at zero) and opens the conversation list —
+ * for an admin, the console's Conversations inbox, which lists exactly what their counter
+ * counts (§16.5). Mounts the per-user SSE subscription so the counter stays live (§4.9).
  */
 export default function ChatButton({ dark = false }: { dark?: boolean }) {
   useChatRealtime();
   const { data: count = 0 } = useChatUnreadQuery();
+  const isAdmin = useAuthStore((s) => s.session?.user?.userType === UserType.ADMIN);
   const badge = count > 9 ? "9+" : String(count);
 
   return (
     <Link
-      href={ROUTES.PORTAL.CHAT}
+      href={isAdmin ? ROUTES.ADMIN.MESSAGES_TAB(AdminMessagesTab.CONVERSATIONS) : ROUTES.PORTAL.CHAT}
       aria-label="Chat"
       data-testid="chat-button"
       className={cn(

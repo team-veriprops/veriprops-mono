@@ -15,7 +15,7 @@ import pytest
 
 from main.app.domain.channel.whatsapp.analytics.models import WhatsAppChannelEventType
 from main.app.domain.channel.whatsapp.analytics.recorder import ChannelEventRecorder
-from main.app.domain.channel.whatsapp.bot.session.models import EscalationReason
+from main.app.domain.communication.assistant.session.models import EscalationReason
 from main.appodus_utils.db.session import db_session_ctx
 
 

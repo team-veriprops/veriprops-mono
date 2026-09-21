@@ -19,7 +19,7 @@ import { ROUTES } from "@lib/routes";
 
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
-import { goto, waitReady } from "../helpers/app";
+import { goto, waitForHydration, waitReady } from "../helpers/app";
 import { ScenarioStage } from "../helpers/scenario";
 import { signOut } from "../helpers/ui";
 
@@ -79,6 +79,7 @@ test.describe("UAT-SESS — session lifecycle @P0", () => {
     await page.goto(ROUTES.ACCOUNT.DEVICES, { waitUntil: "domcontentloaded" });
     await expectLoginReturningTo(page, ROUTES.ACCOUNT.DEVICES);
     await waitReady(page);
+    await waitForHydration(page, "login-email");
 
     // Sign in on the form the guard landed on, so its redirect is the one honoured.
     await page.getByTestId("login-email").fill(customer.email);
