@@ -10,6 +10,7 @@ the false-positive rate can be instrumented from day one (§4.7).
 """
 from __future__ import annotations
 
+from datetime import datetime
 from logging import Logger
 from typing import Optional
 
@@ -22,10 +23,10 @@ from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.communication.chat_message.models import (
     BODY_MAX_LENGTH,
+    ChannelDeliveryStatus,
     ChatMessage,
     ChatMessageDto,
     ChatSenderDto,
-    ClarificationStatus,
     CreateChatMessageDto,
     HeldMessageDto,
     MessageKind,
@@ -86,8 +87,23 @@ def _is_pending_channel_delivery(message: ChatMessage, channel: Optional[str]) -
         return False
     return (
         message.channel_delivered_at is None
+        and message.channel_status != ChannelDeliveryStatus.CANCELLED.value
         and message.state == ChatMessageState.DELIVERED.value
         and message.sender_kind in (SenderKind.ADMIN.value, SenderKind.AGENT.value)
+    )
+
+
+def _is_seen_by_support(message: ChatMessage, support_read_at: Optional[datetime]) -> bool:
+    """A customer's own message that an admin has read the thread past (§16.6).
+
+    Compared on ``delivered_at`` — when the message reached the thread an admin reads — so
+    a message still held for review is never "seen".
+    """
+    return (
+        support_read_at is not None
+        and message.sender_kind == SenderKind.CUSTOMER.value
+        and message.delivered_at is not None
+        and message.delivered_at <= support_read_at
     )
 
 
@@ -150,10 +166,6 @@ class ChatMessageService:
         now = Utils.datetime_now()
         held = bool(categories)
 
-        clarification_status = (
-            ClarificationStatus.OPEN if kind == MessageKind.CLARIFICATION_REQUEST else None
-        )
-
         message = await self._chat_message_repo.create_return_model(
             CreateChatMessageDto(
                 conversation_id=Utils.uuid_to_hex(conversation.id),
@@ -165,7 +177,6 @@ class ChatMessageService:
                 task_id=task_id,
                 state=ChatMessageState.HELD if held else ChatMessageState.DELIVERED,
                 message_kind=kind,
-                clarification_status=clarification_status,
                 flagged_categories=[c.value for c in categories] or None,
                 media_kind=media_kind,
                 held_at=now if held else None,
@@ -250,15 +261,65 @@ class ChatMessageService:
     # ── Feeds & projections ───────────────────────────────────────────
 
     async def list_messages(
-        self, conversation_id: str, viewer_id: Optional[str], page: int, page_size: int
+        self,
+        conversation_id: str,
+        viewer_id: Optional[str],
+        page: int,
+        page_size: int,
+        *,
+        visible_from: Optional[datetime] = None,
+        visible_until: Optional[datetime] = None,
+        viewer_is_admin: bool = False,
     ) -> Page[ChatMessageDto]:
-        rows, total = await self._chat_message_repo.list_delivered_page(conversation_id, viewer_id, page, page_size)
+        """The feed for one viewer. An admin sees how far each message got on the customer's
+        phone; a member sees which of their own messages support has read."""
+        rows, total = await self._chat_message_repo.list_delivered_page(
+            conversation_id, viewer_id, page, page_size,
+            visible_from=visible_from, visible_until=visible_until,
+        )
         # Fetched once for the page rather than per row: the thread's channel decides
-        # whether a message can even be pending outbound delivery (§26.7).
+        # whether a message can even be pending outbound delivery (§26.7), and one read time
+        # answers "seen by support" for every message on the page.
         conversation = await self._conversations._conversation_repo.get_model(conversation_id)
         channel = conversation.channel if conversation else None
-        dtos = [await self._to_dto(m, viewer_id, channel) for m in rows]
+        support_read_at = (
+            None if viewer_is_admin
+            else await self._participants._participant_repo.latest_admin_read_at(conversation_id)
+        )
+        dtos = [
+            await self._to_dto(
+                m, viewer_id, channel,
+                viewer_is_admin=viewer_is_admin, support_read_at=support_read_at,
+            )
+            for m in rows
+        ]
         return self._chat_message_repo._db_utils.build_page(dtos, total, page, page_size)
+
+    async def cancel_pending_channel_delivery(
+        self,
+        conversation_id: str,
+        *,
+        read_at: datetime,
+        visible_from: Optional[datetime] = None,
+    ) -> int:
+        """Stop queued WhatsApp replies the customer has now read in the portal (§26.7, D92).
+
+        A reply typed outside Meta's window waits for the customer's next message. If they
+        read it on the website first, sending it to their phone later would repeat an answer
+        they already have, out of context. Only replies that reached the thread by
+        *read_at*, and inside the reader's window, count as read. Returns how many stopped.
+        """
+        cancelled = 0
+        for queued in await self._chat_message_repo.list_pending_channel_delivery(conversation_id):
+            if queued.delivered_at is None or queued.delivered_at > read_at:
+                continue
+            if visible_from is not None and queued.date_created < visible_from:
+                continue
+            queued.channel_status = ChannelDeliveryStatus.CANCELLED.value
+            queued.channel_status_at = read_at
+            self._chat_message_repo._session.add(queued)
+            cancelled += 1
+        return cancelled
 
     async def held_queue(self, page: int, page_size: int) -> Page[HeldMessageDto]:
         rows, total = await self._chat_message_repo.list_held_page(page, page_size)
@@ -287,7 +348,13 @@ class ChatMessageService:
         await self._conversations.touch(conversation, message.delivered_at or Utils.datetime_now())
         await self._deliver_over_channel(conversation, message)
         participants = await self._participants._participant_repo.list_for_conversation(conversation.id)
-        recipients = tuple(p.user_id for p in participants if p.user_id != sender_user_id)
+        # A member whose window has closed (a released WhatsApp number) cannot read what is
+        # being said now, so pushing them a message or an unread nudge would badge a thread
+        # they cannot open.
+        recipients = tuple(
+            p.user_id for p in participants
+            if p.user_id != sender_user_id and not p.is_read_only
+        )
         await publish_domain_event(DomainEvent(
             type=EventType.MESSAGE_SENT,
             verification_id=conversation.verification_id,
@@ -319,7 +386,13 @@ class ChatMessageService:
             logger.error(f"Console reply not delivered on {conversation.external_ref}: {exc}")
 
     async def _to_dto(
-        self, message: ChatMessage, viewer_id: Optional[str], channel: Optional[str] = None
+        self,
+        message: ChatMessage,
+        viewer_id: Optional[str],
+        channel: Optional[str] = None,
+        *,
+        viewer_is_admin: bool = False,
+        support_read_at: Optional[datetime] = None,
     ) -> ChatMessageDto:
         held_notice = None
         if (
@@ -336,11 +409,6 @@ class ChatMessageService:
             state=ChatMessageState(message.state),
             message_kind=MessageKind(message.message_kind),
             source=MessageSource(message.source or MessageSource.WEB.value),
-            clarification_status=(
-                ClarificationStatus(message.clarification_status)
-                if message.clarification_status
-                else None
-            ),
             sender=await self._sender_dto(message),
             held_notice=held_notice,
             date_created=message.date_created,
@@ -348,6 +416,11 @@ class ChatMessageService:
             media_kind=InboundKind(message.media_kind) if message.media_kind else None,
             unofficial_media=_is_unofficial_media(message),
             pending_channel_delivery=_is_pending_channel_delivery(message, channel),
+            channel_status=(
+                ChannelDeliveryStatus(message.channel_status)
+                if viewer_is_admin and message.channel_status else None
+            ),
+            seen_by_support=not viewer_is_admin and _is_seen_by_support(message, support_read_at),
         )
 
     async def _sender_dto(self, message: ChatMessage) -> ChatSenderDto:

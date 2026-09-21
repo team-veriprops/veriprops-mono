@@ -135,6 +135,7 @@ function SidebarNav({
           <button
             onClick={onClose}
             aria-label="Close menu"
+            data-testid="sidebar-close"
             className="p-1.5 rounded-lg text-sidebar-foreground hover:text-sidebar-foreground-active hover:bg-white/5 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -223,6 +224,7 @@ function SidebarNav({
           <button
             onClick={onLogout}
             disabled={isLoggingOut}
+            data-testid="sidebar-signout"
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:text-sidebar-foreground-active hover:bg-white/5 transition-colors duration-150"
           >
             <LogOut className="w-4 h-4" strokeWidth={1.75} />
@@ -307,8 +309,11 @@ export default function AppShell({ navItems, children }: AppShellProps) {
         />
       )}
 
-      {/* Mobile sidebar drawer — includes user section, never collapses */}
+      {/* Mobile sidebar drawer — includes user section, never collapses. It stays mounted and slides
+          off-screen, so while closed it is `inert`: its links and sign-out would otherwise remain
+          focusable and clickable outside the viewport, reachable by keyboard and screen readers. */}
       <aside
+        inert={!sidebarOpen}
         className="lg:hidden fixed inset-y-0 left-0 z-50 w-64 flex flex-col bg-sidebar border-r border-sidebar-border transform transition-transform duration-300"
         style={{ transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)" }}
       >
@@ -347,6 +352,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
           <button
             onClick={() => setSidebarOpen(true)}
             aria-label="Open menu"
+            data-testid="sidebar-open"
             className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-brand-navy"
           >
             <Menu className="w-5 h-5" />

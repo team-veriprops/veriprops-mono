@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
-import { Button } from "@3rdparty/ui/button";
+import { SubmitButton } from "@components/ui/form/SubmitButton";
 import VerifiedInput, { VerifiedInputType } from "@components/ui/verified_input/VerifiedInput";
 import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
 import { profileCompletionSchema, type ProfileCompletionValues } from "../schemas";
@@ -16,6 +16,7 @@ import {
   suggestTimezoneForCountry,
 } from "@components/website/auth/libs/auth/locale";
 import { CURRENCY_NAMES, TransactionCurrency } from "@/types/models";
+import { Field, FieldGroup } from "@components/ui/form/Field";
 import { OtpChannel, AuthUser, AuthIntent } from "@components/website/auth/models";
 import {
   useCompleteProfileMutation,
@@ -23,6 +24,7 @@ import {
   useVerifyOtpMutation,
   usePublicConfigQuery,
 } from "../libs/useAuthQueries";
+import { otpDeliveryError } from "../libs/otpDelivery";
 import { getErrorMessage, cn } from "@lib/utils";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 
@@ -33,14 +35,10 @@ interface Props {
   onComplete: () => void;
 }
 
-// Mirrors the `phone` field constraints in verifyFormSchema. Also rejects the
-// synthetic placeholder AuthService.find_or_create_oauth_user seeds new OAuth
-// signups with ("0000000000") — it's shaped like a valid number, so it must
-// be excluded explicitly or a user could complete their profile without ever
-// entering a real one.
-const OAUTH_PLACEHOLDER_PHONE = "0000000000";
-const isValidPhoneNumber = (phone: string) =>
-  /^\d{7,15}$/.test(phone) && phone !== OAUTH_PLACEHOLDER_PHONE;
+// Mirrors the `phone` field constraints in verifyFormSchema. A new OAuth account's
+// synthetic number never reaches this form: the session exposes it as an empty phone,
+// so the customer always has to enter a real one.
+const isValidPhoneNumber = (phone: string) => /^\d{7,15}$/.test(phone);
 
 export default function ProfileCompletionModal({ open, user, onComplete }: Props) {
   const browserTz = useMemo(() => detectBrowserTimezone(), []);
@@ -132,7 +130,14 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
           We need a few more details before you can use Veriprops.
         </p>
 
-        <form className="space-y-5 mt-4" onSubmit={form.handleSubmit(onSubmit as never)} noValidate>
+        {/* method="post" so that a submit landing before hydration cannot put the phone number
+            in the URL — see SubmitButton. */}
+        <form
+          className="space-y-5 mt-4"
+          method="post"
+          onSubmit={form.handleSubmit(onSubmit as never)}
+          noValidate
+        >
           {phoneVerificationEnabled ? (
             <VerifiedInput
               form={form as never}
@@ -150,7 +155,12 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
                     phone: v.phone,
                   },
                   {
-                    onSuccess: () => onSuccess(),
+                    // A 2xx only means the code was issued — `delivered` says whether it was sent.
+                    onSuccess: (res) => {
+                      const undelivered = otpDeliveryError(res.data);
+                      if (undelivered) onError(undelivered);
+                      else onSuccess();
+                    },
                     onError: (err) =>
                       onError(getErrorMessage(err as Error, "Could not send code.")),
                   },
@@ -199,40 +209,50 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
           )}
 
           <Field label="Country of residence" error={form.formState.errors.countryOfResidence?.message}>
-            <select
-              {...form.register("countryOfResidence")}
-              className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40"
-            >
-              <option value="">Select your country</option>
-              {RESIDENCE_COUNTRIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.flag} {c.name}
-                </option>
-              ))}
-            </select>
+            {(id) => (
+              <select
+                id={id}
+                {...form.register("countryOfResidence")}
+                className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40"
+              >
+                <option value="">Select your country</option>
+                {RESIDENCE_COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.flag} {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </Field>
 
           <Field label="Timezone" error={form.formState.errors.timezone?.message}>
-            <select
-              {...form.register("timezone")}
-              className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40"
-            >
-              {COMMON_TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
+            {(id) => (
+              <select
+                id={id}
+                {...form.register("timezone")}
+                className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40"
+              >
+                {COMMON_TIMEZONES.map((tz) => (
+                  <option key={tz} value={tz}>
+                    {tz}
+                  </option>
+                ))}
+              </select>
+            )}
           </Field>
 
-          <Field label="Preferred currency" error={form.formState.errors.preferredCurrency?.message}>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <FieldGroup
+            label="Preferred currency"
+            error={form.formState.errors.preferredCurrency?.message}
+            className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+          >
               {SUPPORTED_CURRENCIES.map((c) => {
                 const selected = preferredCurrency === c;
                 return (
                   <button
                     key={c}
                     type="button"
+                    aria-pressed={selected}
                     onClick={() => form.setValue("preferredCurrency", c, { shouldValidate: true })}
                     className={cn(
                       "px-3 py-2 rounded-md text-sm font-semibold transition-all",
@@ -253,8 +273,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
                   </button>
                 );
               })}
-            </div>
-          </Field>
+          </FieldGroup>
 
           {form.formState.errors.root && (
             <p className="text-sm text-danger">
@@ -262,35 +281,11 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
             </p>
           )}
 
-          <Button type="submit" className="w-full" size="lg" disabled={completeMutation.isPending}>
+          <SubmitButton className="w-full" size="lg" disabled={completeMutation.isPending}>
             {completeMutation.isPending ? "Saving…" : "Continue"}
-          </Button>
+          </SubmitButton>
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({
-  label,
-  children,
-  error,
-}: {
-  label: string;
-  children: React.ReactNode;
-  error?: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-sm font-semibold text-brand-navy">
-        {label}
-      </label>
-      {children}
-      {error && (
-        <p className="text-xs text-danger">
-          {error}
-        </p>
-      )}
-    </div>
   );
 }

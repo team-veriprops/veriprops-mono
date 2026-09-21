@@ -11,6 +11,8 @@ export const PERSONAS = {
   CUSTOMER: "customer",
   ERASABLE: "erasable",
   ADMIN: "admin",
+  ADMIN_OPERATIONS: "admin-operations",
+  ADMIN_FINANCE: "admin-finance",
   AGENT_REGISTRY: "agent-registry",
   AGENT_FIELD: "agent-field",
   AGENT_SURVEYOR: "agent-surveyor",
@@ -30,4 +32,10 @@ export const AGENT_PERSONA_BY_ROLE: Record<string, Persona> = {
   FIELD: PERSONAS.AGENT_FIELD,
   SURVEYOR: PERSONAS.AGENT_SURVEYOR,
   LAWYER: PERSONAS.AGENT_LAWYER,
+};
+
+/** Restricted-admin personas keyed by the `AdminSubRole` value the backend uses. */
+export const ADMIN_PERSONA_BY_SUB_ROLE: Record<string, Persona> = {
+  OPERATIONS: PERSONAS.ADMIN_OPERATIONS,
+  FINANCE: PERSONAS.ADMIN_FINANCE,
 };

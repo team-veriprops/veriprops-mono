@@ -34,6 +34,16 @@ export interface A11yOptions {
  * Call it on every page state a scenario visits.
  */
 export async function expectNoA11yViolations(page: Page, options: A11yOptions = {}): Promise<void> {
+  // Axe reads computed colours, so a scan taken mid-transition (a disabled button fading in
+  // over 200ms, a dialog easing open) reports blended, failing contrast that neither the start
+  // nor the end state has. Wait for finite animations and transitions to finish; endless ones
+  // (a spinner) are left running.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every((a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity),
+  );
+
   let builder = new AxeBuilder({ page }).withTags(RULESET);
   if (options.include) builder = builder.include(options.include);
 

@@ -7,7 +7,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, ShieldCheck, AlertTriangle } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
-import { Button } from "@3rdparty/ui/button";
+import { SubmitButton } from "@components/ui/form/SubmitButton";
 import AuthShell from "../AuthShell";
 import AuthHeading from "../AuthHeading";
 import PasswordStrengthMeter from "../PasswordStrengthMeter";
@@ -73,7 +73,15 @@ export default function ResetPasswordContainer({ token }: Props) {
         </p>
       </div>
 
-      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="reset-password-form">
+      {/* method="post" so that a submit landing before hydration cannot put the new password
+          in the URL — see SubmitButton. */}
+      <form
+        className="space-y-5"
+        method="post"
+        onSubmit={form.handleSubmit(onSubmit)}
+        noValidate
+        data-testid="reset-password-form"
+      >
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-brand-navy">
             New password
@@ -136,15 +144,14 @@ export default function ResetPasswordContainer({ token }: Props) {
           </div>
         )}
 
-        <Button
-          type="submit"
+        <SubmitButton
           className="w-full"
           size="lg"
           data-testid="reset-password-submit"
           disabled={resetMutation.isPending}
         >
           {resetMutation.isPending ? "Updating…" : "Reset password"}
-        </Button>
+        </SubmitButton>
 
         <p className="text-sm text-center text-brand-on-surface-variant">
           <Link

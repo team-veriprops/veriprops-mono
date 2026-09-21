@@ -1,10 +1,14 @@
 import { AuthIntent } from "./auth/models";
 import { ROUTES, buildAuthUrl } from "@lib/routes";
+import type { PublicPricingTier } from "@/types/models";
+import { VerificationTier } from "@/types/verification";
 
+/** Marketing copy for a verification tier. Its price is deliberately absent: the backend owns
+ * prices, and the home page reads them from the public config (see withLivePrices). */
 export interface PricingTier {
+  /** The backend tier this card markets — the key its live price is looked up by. */
+  tier: VerificationTier;
   name: string;
-  priceNGN: number;
-  priceDisplay: string;
   sla: string;
   description: string;
   features: string[];
@@ -164,14 +168,12 @@ export const agentTypes: AgentType[] = [
   },
 ];
 
-// Fallback marketing copy — PricingSection.tsx overlays the live price from
-// `pricing_tier_config` (via /config/public) on top of these figures, and only
-// falls back to these static values per-tier when the backend price is unavailable.
+// Tier marketing copy. PricingSection pairs each tier with its live price from
+// `pricing_tier_config` (via /config/public, read by the server page).
 export const pricingTiers: PricingTier[] = [
   {
+    tier: VerificationTier.BASIC,
     name: "Basic",
-    priceNGN: 150000,
-    priceDisplay: "₦150k",
     sla: "3–5 business days",
     description: "Document and registry verification. Ideal for preliminary due diligence.",
     features: [
@@ -183,9 +185,8 @@ export const pricingTiers: PricingTier[] = [
     ctaStyle: "default",
   },
   {
+    tier: VerificationTier.STANDARD,
     name: "Standard",
-    priceNGN: 350000,
-    priceDisplay: "₦350k",
     sla: "5–7 business days",
     description: "Full on-the-ground verification. The recommended tier for serious buyers.",
     features: [
@@ -199,9 +200,8 @@ export const pricingTiers: PricingTier[] = [
     ctaStyle: "gradient",
   },
   {
+    tier: VerificationTier.PREMIUM,
     name: "Premium",
-    priceNGN: 750000,
-    priceDisplay: "₦750k",
     sla: "7–10 business days",
     description: "Complete verification with legal opinion. For high-value transactions.",
     features: [
@@ -214,6 +214,22 @@ export const pricingTiers: PricingTier[] = [
     ctaStyle: "outline-gold",
   },
 ];
+
+/** A tier's marketing copy paired with its live price in whole naira; null when the backend has
+ * no price for it (the tier then shows no figure — there is no hardcoded fallback). */
+export type PricedTier = PricingTier & { priceNGN: number | null };
+
+/**
+ * Pair every marketed tier with its price from the backend's public config. Shared by the pricing
+ * section and the home page's pricing structured data, so the two can never disagree.
+ */
+export function withLivePrices(prices: PublicPricingTier[]): PricedTier[] {
+  return pricingTiers.map((tier) => {
+    const priceNgnMinor = prices.find((p) => p.tier === tier.tier)?.priceNgnMinor;
+    // Backend prices are in kobo (minor units); display prices are whole naira.
+    return { ...tier, priceNGN: priceNgnMinor != null ? priceNgnMinor / 100 : null };
+  });
+}
 
 export const testimonials: Testimonial[] = [
   {

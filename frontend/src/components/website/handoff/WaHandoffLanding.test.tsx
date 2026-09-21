@@ -23,7 +23,14 @@ vi.mock("@components/website/auth/libs/useAuthQueries", () => ({
   usePublicConfigQuery: () => ({ data: { whatsappNumber: "2349167624347" } }),
 }));
 
-import WaHandoffLanding, { ExpiredLink, OriginBanner, PaymentPledge } from "./WaHandoffLanding";
+import WaHandoffLanding, {
+  ExpiredLink,
+  OriginBanner,
+  PaySection,
+  PaymentPledge,
+} from "./WaHandoffLanding";
+import { NO_WHATSAPP_CONSENT } from "@/types/whatsappConsent";
+import { ROUTES } from "@lib/routes";
 
 const context = {
   intent: HandoffIntent.PAY,
@@ -83,6 +90,33 @@ describe("WaHandoffLanding · states", () => {
     const html = renderToStaticMarkup(<ExpiredLink number="2349167624347" />);
     expect(html).toContain("expired");
     expect(html).toContain("https://wa.me/2349167624347");
+  });
+
+  const paySection = (phoneVerificationRequired: boolean) =>
+    renderToStaticMarkup(
+      <PaySection
+        context={{ ...context, phoneVerificationRequired }}
+        payment={null}
+        paying={false}
+        onPay={() => {}}
+        consent={NO_WHATSAPP_CONSENT}
+        onConsentChange={() => {}}
+      />,
+    );
+
+  it("offers payment on the landing once the customer's phone is verified", () => {
+    const html = paySection(false);
+    expect(html).toContain('data-testid="wa-handoff-pay"');
+    expect(html).not.toContain('data-testid="wa-handoff-continue"');
+  });
+
+  it("hands an unverified phone into the portal pay page instead of a payment that would fail", () => {
+    // §10.5: the phone gate needs a login, so "Pay now" here could only fail — and a
+    // failure on this page reads as an expired link.
+    const html = paySection(true);
+    expect(html).not.toContain('data-testid="wa-handoff-pay"');
+    expect(html).toContain(`href="${ROUTES.PORTAL.VERIFICATION_PAY("case-1")}"`);
+    expect(html).toContain("Verify your phone to pay");
   });
 
   it("never explains why a link failed", () => {

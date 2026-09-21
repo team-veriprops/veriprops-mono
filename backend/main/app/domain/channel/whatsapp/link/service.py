@@ -38,7 +38,7 @@ from main.app.domain.channel.whatsapp.link.models import (
 )
 from main.app.domain.channel.whatsapp.link.repo import WhatsAppLinkRepo
 from main.app.domain.communication.conversation.service import ConversationService
-from main.app.domain.user.auth.models import OtpChannel
+from main.app.domain.user.auth.models import OtpChannel, OtpSendResultDto
 from main.app.domain.user.auth.otp_service import OtpService
 from main.appodus_utils import Utils
 from main.appodus_utils.db.types.phone import PhoneNumber
@@ -154,9 +154,11 @@ class WhatsAppLinkService:
                 await self._release(link, reason="number_change")
             self._whatsapp_link_repo.claim_number(link, normalized, to_wa_recipient(normalized))
 
+        sent = await self._send_code(normalized, user_id)
         return WhatsAppLinkChallengeDto(
             phone_e164=normalized,
-            resend_after_seconds=await self._send_code(normalized, user_id),
+            resend_after_seconds=sent.resend_in,
+            delivered=sent.delivered,
         )
 
     async def confirm_link(self, user_id: str, phone_e164: str, code: str) -> WhatsAppLink:
@@ -173,8 +175,9 @@ class WhatsAppLinkService:
         )
         self._whatsapp_link_repo.activate(link, Utils.datetime_now())
         # §26.8: one conversation object per person. The thread this number has been
-        # talking in gains an owner rather than a second thread being opened.
-        await self._conversations.set_whatsapp_thread_owner(normalized, user_id)
+        # talking in gains an owner rather than a second thread being opened, and the owner
+        # sees it from the moment of linking — earlier messages may be a previous holder's.
+        await self._conversations.set_whatsapp_thread_owner(normalized, user_id, link.linked_at)
         self._audit.schedule(
             AuditActionType.WHATSAPP_NUMBER_LINKED,
             resource_type=_AUDIT_RESOURCE,
@@ -215,18 +218,20 @@ class WhatsAppLinkService:
 
     # ── Internals ─────────────────────────────────────────────────
 
-    async def _send_code(self, phone_e164: str, user_id: str) -> int:
+    async def _send_code(self, phone_e164: str, user_id: str) -> OtpSendResultDto:
         return await self._otp.send_otp(
             OtpChannel.WHATSAPP, PhoneNumber.from_e164(phone_e164), user_id=user_id
         )
 
     async def _release(self, link: WhatsAppLink, reason: str) -> None:
         released = link.phone_e164
-        self._whatsapp_link_repo.release_number(link, reason, Utils.datetime_now())
+        released_at = Utils.datetime_now()
+        self._whatsapp_link_repo.release_number(link, reason, released_at)
         if released:
             # The thread stays in the console for the agents; it just stops belonging to
-            # an account, so nothing will read case data into it again (§26.4.4).
-            await self._conversations.set_whatsapp_thread_owner(released, None)
+            # an account, so nothing will read case data into it again (§26.4.4). The
+            # former owner keeps read-only history up to this moment.
+            await self._conversations.release_whatsapp_thread(released, link.user_id, released_at)
         self._audit.schedule(
             AuditActionType.WHATSAPP_NUMBER_UNLINKED,
             resource_type=_AUDIT_RESOURCE,

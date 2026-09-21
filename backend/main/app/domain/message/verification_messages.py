@@ -8,7 +8,6 @@ from main.app.domain.message.message_sender import BaseMessageSender
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.integrations.messaging.models import (
-    EmailRecipient,
     MessageCategory,
     MessageChannel,
     MessageContext,
@@ -130,9 +129,7 @@ class VerificationMessages(BaseMessageSender):
     async def send_report_share(self, recipient_email: str, vid: str, share_url: str) -> None:
         """Email a tokenised report link to a named recipient (§13.2). The recipient need
         not be a registered user, so the message goes to a raw email address."""
-        recipient = MessageRequestRecipient(
-            email=EmailRecipient(email=recipient_email),
-        )
+        recipient = MessageRequestRecipient(email=recipient_email)
         await self._send_direct_message(
             recipient=recipient,
             template=AvailableTemplate.VERIFICATION_REPORT_SHARE,

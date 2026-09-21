@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, Mail } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
 import { Button } from "@3rdparty/ui/button";
+import { SubmitButton } from "@components/ui/form/SubmitButton";
 import AuthShell from "../AuthShell";
 import AuthHeading from "../AuthHeading";
 import { useForgotPasswordMutation } from "../libs/useAuthQueries";
@@ -83,7 +84,15 @@ export default function ForgotPasswordContainer() {
           </div>
         </div>
       ) : (
-        <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="forgot-form">
+        <form
+          className="space-y-5"
+          method="post"
+          onSubmit={form.handleSubmit(onSubmit)}
+          noValidate
+          data-testid="forgot-form"
+        >
+          {/* method="post" so that a submit landing before hydration cannot put the email
+              address in the URL — see SubmitButton. */}
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-brand-navy">
               Email
@@ -108,15 +117,14 @@ export default function ForgotPasswordContainer() {
             )}
           </div>
 
-          <Button
-            type="submit"
+          <SubmitButton
             className="w-full"
             size="lg"
             disabled={forgotMutation.isPending}
             data-testid="forgot-submit"
           >
             {forgotMutation.isPending ? "Sending…" : "Send reset link"}
-          </Button>
+          </SubmitButton>
 
           <p className="text-sm text-center text-brand-on-surface-variant">
             Remembered it?{" "}

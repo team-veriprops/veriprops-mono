@@ -50,6 +50,7 @@ def handler(monkeypatch):
     h = WhatsAppWebhookHandler()
     h.platform_secret = APP_SECRET
     h._inbound_service = AsyncMock()
+    h._status_service = AsyncMock()
     return h
 
 
@@ -139,11 +140,26 @@ class TestDelivery:
         assert message.wamid == "wamid.A1"
         assert message.from_phone == "+2348012345678"
 
-    async def test_acknowledges_a_delivery_receipt_without_ingesting(self, handler):
+    async def test_a_delivery_receipt_is_applied_not_ingested(self, handler):
+        # A receipt is about a message we sent, so it is never a new customer turn.
         body = json.dumps({"entry": [{"changes": [{"field": "messages", "value": {
             "statuses": [{"id": "wamid.OUT", "status": "read"}]}}]}]}).encode()
         await handler.handle_webhook(body, {"x-hub-signature-256": sign(body)})
         handler._inbound_service.ingest.assert_not_awaited()
+        [status] = handler._status_service.apply.await_args.args
+        assert status.wamid == "wamid.OUT"
+
+    async def test_a_failing_receipt_still_acknowledges_and_does_not_block_messages(self, handler):
+        payload = json.loads(BODY)
+        payload["entry"][0]["changes"][0]["value"]["statuses"] = [
+            {"id": "wamid.OUT", "status": "delivered"},
+        ]
+        body = json.dumps(payload).encode()
+        handler._status_service.apply.side_effect = RuntimeError("db down")
+
+        await handler.handle_webhook(body, {"x-hub-signature-256": sign(body)})
+
+        handler._inbound_service.ingest.assert_awaited_once()
 
     async def test_a_downstream_failure_still_acknowledges_the_delivery(self, handler):
         # Meta retries — then throttles, then disables the subscription — on a non-2xx.

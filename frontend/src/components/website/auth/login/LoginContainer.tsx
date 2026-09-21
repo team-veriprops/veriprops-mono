@@ -7,7 +7,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, AlertTriangle, Lock, ShieldAlert } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
-import { Button } from "@3rdparty/ui/button";
+import { SubmitButton } from "@components/ui/form/SubmitButton";
 import { Checkbox } from "@3rdparty/ui/checkbox";
 import AuthShell from "../AuthShell";
 import AuthHeading from "../AuthHeading";
@@ -192,7 +192,15 @@ export default function LoginContainer() {
         </div>
       )}
 
-      <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate data-testid="login-form">
+      {/* method="post" so that a submit landing before hydration cannot put the password in
+          the URL — see SubmitButton. */}
+      <form
+        className="space-y-5"
+        method="post"
+        onSubmit={form.handleSubmit(onSubmit)}
+        noValidate
+        data-testid="login-form"
+      >
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-brand-navy">
             Email
@@ -268,6 +276,8 @@ export default function LoginContainer() {
 
         {errorMessage && !isLockedNow && (
           <div
+            role="alert"
+            data-testid="login-error"
             className="p-3 rounded-lg text-sm flex items-start gap-2 bg-danger/6 text-danger border border-danger/18"
           >
             <Lock className="w-4 h-4 shrink-0 mt-0.5" />
@@ -275,15 +285,14 @@ export default function LoginContainer() {
           </div>
         )}
 
-        <Button
-          type="submit"
+        <SubmitButton
           className="w-full"
           size="lg"
           disabled={isLockedNow || loginMutation.isPending}
           data-testid="login-submit"
         >
           {loginMutation.isPending ? "Signing in…" : "Sign in"}
-        </Button>
+        </SubmitButton>
       </form>
 
       <AuthDivider />

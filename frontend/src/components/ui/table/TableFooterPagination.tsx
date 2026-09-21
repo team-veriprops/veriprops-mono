@@ -9,6 +9,7 @@ import {
 } from "@3rdparty/ui/select";
 import { Button } from "@3rdparty/ui/button";
 import { useGlobalSettings } from "@stores/useGlobalSettings";
+import { DATATABLE_TEST_IDS } from "./testIds";
 
 interface TableFooterPaginationProps {
   page: number;
@@ -64,6 +65,7 @@ export default function TableFooterPagination({
           size="sm"
           disabled={page <= settings.firstPage}
           onClick={onPreviousPage}
+          data-testid={DATATABLE_TEST_IDS.PREV}
         >
           Prev
         </Button>
@@ -72,6 +74,7 @@ export default function TableFooterPagination({
           size="sm"
           disabled={adjustedPage >= totalPages}
           onClick={onNextPage}
+          data-testid={DATATABLE_TEST_IDS.NEXT}
         >
           Next
         </Button>

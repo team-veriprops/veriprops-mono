@@ -7,7 +7,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 import { Input } from "@3rdparty/ui/input";
-import { Button } from "@3rdparty/ui/button";
+import { SubmitButton } from "@components/ui/form/SubmitButton";
 import PasswordStrengthMeter from "@components/website/auth/PasswordStrengthMeter";
 import { useSetPasswordMutation } from "@components/website/auth/libs/useAuthQueries";
 import { resetPasswordSchema, type ResetPasswordValues } from "@components/website/auth/schemas";
@@ -45,8 +45,11 @@ export default function AccountPasswordPage() {
         </p>
       </header>
 
+      {/* method="post" so that a submit landing before hydration cannot put the new password
+          in the URL — see SubmitButton. */}
       <form
         className="space-y-5"
+        method="post"
         onSubmit={form.handleSubmit(onSubmit)}
         noValidate
         data-testid="account-password-form"
@@ -96,14 +99,13 @@ export default function AccountPasswordPage() {
           )}
         </div>
 
-        <Button
-          type="submit"
+        <SubmitButton
           disabled={setPassword.isPending}
           data-testid="account-password-submit"
           className="w-full"
         >
           {setPassword.isPending ? "Saving…" : "Save password"}
-        </Button>
+        </SubmitButton>
       </form>
     </div>
   );

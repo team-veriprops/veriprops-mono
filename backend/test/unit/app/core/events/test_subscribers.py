@@ -91,3 +91,21 @@ async def test_chat_autopost_ignores_non_status_events():
         spy.auto_post_customer.assert_not_called()
     finally:
         di[CommunicationService] = original
+
+
+
+async def test_a_whatsapp_receipt_refreshes_the_thread_and_counter():
+    """D92 — ticks and a cleared unread badge are what a receipt changes, so it rides the
+    same two streams as a new message."""
+    original = di[UserEventEmitter]
+    spy = MagicMock()
+    di[UserEventEmitter] = spy
+    try:
+        await chat_counter_subscriber(DomainEvent(
+            type=EventType.MESSAGE_STATUS_CHANGED, recipient_user_ids=("u-1",),
+            data={"conversation_id": "c-1"},
+        ))
+        events = [c.args[1] for c in spy.publish.call_args_list]
+        assert events == [UserEventType.CHAT_MESSAGE, UserEventType.CHAT_UNREAD]
+    finally:
+        di[UserEventEmitter] = original

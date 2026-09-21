@@ -321,6 +321,47 @@ describe("loginRedirectUrl", () => {
   });
 });
 
+describe("a 401 with no session to recover surfaces the original rejection", () => {
+  const invalidCredentials = () =>
+    res(401, { error: { code: "INVALID_CREDENTIALS", message: "Invalid username or password" } });
+
+  afterEach(() => {
+    window.history.pushState({}, "", "/");
+  });
+
+  it("a wrong-password sign-in (no session cookies) never refreshes and keeps the backend's message", async () => {
+    window.history.pushState({}, "", "/auth/login");
+    vi.spyOn(document, "cookie", "get").mockReturnValue("");
+    stubFetch({ original: [invalidCredentials], refresh: [refreshOk] });
+
+    const error = await client.post("/users/auth/sessions", { email: "a@b.c" }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(HttpError);
+    expect((error as HttpError).message).toBe("Invalid username or password");
+    expect(refreshCalls()).toHaveLength(0);
+    expect(phase()).toBe("idle"); // the auth surface has no login handoff to make
+  });
+
+  it("a protected page whose session cookies are gone still hands off to login, without a refresh call", async () => {
+    vi.spyOn(document, "cookie", "get").mockReturnValue("");
+    stubFetch({ original: [() => unauthorized()], refresh: [refreshOk] });
+
+    await expect(client.get("/things")).rejects.toBeInstanceOf(HttpError);
+    expect(refreshCalls()).toHaveLength(0);
+    expect(phase()).toBe("expired");
+  });
+
+  it("a refresh that definitively fails rejects with the original request's error, not the refresh's", async () => {
+    stubFetch({ original: [invalidCredentials], refresh: [() => res(401)] });
+
+    const error = await client.post("/users/auth/sessions", { email: "a@b.c" }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(HttpError);
+    expect((error as HttpError).message).toBe("Invalid username or password");
+    expect(refreshCalls()).toHaveLength(1);
+  });
+});
+
 describe("non-401 statuses are untouched by the refresh path", () => {
   it("403 → access-denied redirect, no refresh attempt", async () => {
     stubFetch({ original: [() => res(403, { error: { code: "403", message: "Forbidden" } })], refresh: [] });

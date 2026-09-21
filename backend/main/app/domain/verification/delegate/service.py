@@ -118,11 +118,13 @@ class CaseDelegateService:
             resource_type=_AUDIT_RESOURCE, resource_id=verification_id, actor_id=customer_id,
             details={"phone_e164": normalized, "name": name.strip()},
         )
+        sent = await self._otp.send_otp(
+            OtpChannel.WHATSAPP, PhoneNumber.from_e164(normalized), user_id=customer_id
+        )
         return CaseDelegateChallengeDto(
             phone_e164=normalized,
-            resend_after_seconds=await self._otp.send_otp(
-                OtpChannel.WHATSAPP, PhoneNumber.from_e164(normalized), user_id=customer_id
-            ),
+            resend_after_seconds=sent.resend_in,
+            delivered=sent.delivered,
         )
 
     async def confirm(

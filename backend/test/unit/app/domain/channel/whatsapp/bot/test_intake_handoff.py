@@ -21,7 +21,8 @@ import pytest
 from main.app.domain.channel.whatsapp.bot.intake_handoff import (
     WhatsAppIntakeHandoffService,
 )
-from main.app.domain.channel.whatsapp.bot.session.models import WhatsAppBotSession
+from main.app.domain.communication.assistant.intake_seeder import IntakeDraftSeeder
+from main.app.domain.communication.assistant.session.models import AssistantSession
 from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
@@ -59,8 +60,8 @@ def mock_db_session():
     db_session_ctx.reset(token)
 
 
-def _bot_session(context) -> WhatsAppBotSession:
-    row = WhatsAppBotSession()
+def _bot_session(context) -> AssistantSession:
+    row = AssistantSession()
     row.phone_e164 = PHONE
     row.context = context
     row.current_flow = "INTAKE"
@@ -72,10 +73,12 @@ def _service(bot_session):
     service = object.__new__(WhatsAppIntakeHandoffService)
 
     sessions = MagicMock()
-    sessions.get = AsyncMock(return_value=bot_session)
+    sessions.get_by_phone = AsyncMock(return_value=bot_session)
     sessions.clear_flow = AsyncMock()
-    service._whatsapp_bot_session_service = sessions
+    service._assistant_session_service = sessions
 
+    # The real seeder over a fake verification service: the draft-writing rules it owns are
+    # exactly what this seam has to keep.
     draft = MagicMock()
     draft.id = Utils.generate_uuid()
     verifications = MagicMock()
@@ -83,6 +86,9 @@ def _service(bot_session):
     # AsyncMock, matching the real method: `decorate_all_methods(transactional())`
     # makes every public method on the service a coroutine function.
     verifications.seed_draft_payload = AsyncMock(return_value=draft)
+    seeder = object.__new__(IntakeDraftSeeder)
+    seeder._verification_service = verifications
+    service._intake_draft_seeder = seeder
     service._verification_service = verifications
 
     return service, draft
@@ -118,7 +124,7 @@ async def test_the_answers_are_forgotten_once_they_are_a_draft():
 
     await service.seed_draft(PHONE, CUSTOMER)
 
-    service._whatsapp_bot_session_service.clear_flow.assert_awaited_once()
+    service._assistant_session_service.clear_flow.assert_awaited_once()
 
 
 @pytest.mark.parametrize(
@@ -150,4 +156,4 @@ async def test_the_answers_are_read_for_the_tokens_number():
 
     await service.seed_draft(PHONE, CUSTOMER)
 
-    service._whatsapp_bot_session_service.get.assert_any_await(PHONE)
+    service._assistant_session_service.get_by_phone.assert_any_await(PHONE)

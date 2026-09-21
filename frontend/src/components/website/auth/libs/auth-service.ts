@@ -34,6 +34,9 @@ export interface LoginRequest {
   deviceFingerprint?: string;
 }
 
+export type { OtpSendResult } from "./otpDelivery";
+import type { OtpSendResult } from "./otpDelivery";
+
 export interface OtpSendRequest {
   channel: OtpChannel;
   email?: string;
@@ -43,6 +46,18 @@ export interface OtpSendRequest {
 }
 
 export interface OtpVerifyRequest extends OtpSendRequest {
+  code: string;
+}
+
+/** Pay-step phone verification (§10.5): omit the number to confirm the one on the profile. */
+export interface PhoneOtpRequest {
+  countryCode?: string;
+  dialCode?: string;
+  phone?: string;
+}
+
+/** The OTP plus the same number it was sent to — saved to the profile once verified. */
+export interface VerifyPhoneRequest extends PhoneOtpRequest {
   code: string;
 }
 
@@ -89,7 +104,7 @@ export class AuthService {
     return this.http.get(`${this.base}/sessions/current`);
   }
 
-  sendOtp(payload: OtpSendRequest): Promise<SuccessResponse<{ resendIn: number }>> {
+  sendOtp(payload: OtpSendRequest): Promise<SuccessResponse<OtpSendResult>> {
     return this.http.post(`${this.base}/otp/send`, payload);
   }
 
@@ -97,15 +112,17 @@ export class AuthService {
     return this.http.post(`${this.base}/otp/verify`, payload);
   }
 
-  /** Phase-5 phone verification for the logged-in user: sends an OTP to their profile phone.
-   *  Unlike sendOtp, the backend reads the phone from the session, not the request (§5). */
-  sendPhoneOtp(): Promise<SuccessResponse<{ resendIn: number }>> {
-    return this.http.post(`${this.base}/phone/otp/send`, {});
+  /** Pay-step phone gate (§10.5): sends an OTP to the logged-in user's confirmed or corrected
+   *  number. Unlike sendOtp, the account is the session's, and a number another account holds
+   *  is refused. */
+  sendPhoneOtp(payload: PhoneOtpRequest): Promise<SuccessResponse<OtpSendResult>> {
+    return this.http.post(`${this.base}/phone/otp/send`, payload);
   }
 
-  /** Verifies the logged-in user's phone and flips phoneVerified so payment can proceed (§5). */
-  verifyPhone(code: string): Promise<SuccessResponse<{ verified: true }>> {
-    return this.http.post(`${this.base}/phone/verify`, { code });
+  /** Verifies the code, saves that number to the profile and flips phoneVerified so payment
+   *  can proceed (§10.5). */
+  verifyPhone(payload: VerifyPhoneRequest): Promise<SuccessResponse<{ verified: true }>> {
+    return this.http.post(`${this.base}/phone/verify`, payload);
   }
 
   forgotPassword(payload: ForgotPasswordRequest): Promise<SuccessResponse<null>> {

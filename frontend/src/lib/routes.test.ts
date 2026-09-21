@@ -13,6 +13,16 @@ describe("ROUTES", () => {
     expect(ROUTES.AUTH.OAUTH_CALLBACK("google")).toBe("/auth/oauth/google/callback");
   });
 
+  it("exposes a portal thread by conversation id", () => {
+    expect(ROUTES.PORTAL.CHAT).toBe("/portal/chat");
+    expect(ROUTES.PORTAL.CHAT_THREAD("conv-1")).toBe("/portal/chat/conv-1");
+  });
+
+  it("deep-links a tab of the admin messaging console", () => {
+    expect(ROUTES.ADMIN.MESSAGES).toBe("/admin/messages");
+    expect(ROUTES.ADMIN.MESSAGES_TAB("conversations")).toBe("/admin/messages?tab=conversations");
+  });
+
   it("exposes account routes", () => {
     expect(ROUTES.ACCOUNT.SECURITY).toBe("/account/security");
     expect(ROUTES.ACCOUNT.DEVICES).toBe("/account/devices");

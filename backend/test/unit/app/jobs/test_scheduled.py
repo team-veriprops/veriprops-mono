@@ -18,6 +18,7 @@ EXPECTED_JOBS = {
     "referral_credit_check": 180,
     "scheduled_broadcast_check": 5,
     "message_retry_check": 1,
+    "assistant_pending_turn_check": 1,
 }
 
 

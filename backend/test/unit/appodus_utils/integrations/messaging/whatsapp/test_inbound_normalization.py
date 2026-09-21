@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
     InboundKind,
+    WhatsAppDeliveryStatus,
+    normalize_statuses,
     normalize_webhook,
 )
 
@@ -134,3 +136,46 @@ class TestNonMessagePayloads:
     def test_a_message_without_an_id_is_skipped(self):
         # The wamid is the dedup key; without it a redelivery would double-post.
         assert normalize_webhook(envelope({**TEXT, "id": ""})) == []
+
+
+class TestStatusCallbacks:
+    """Meta's delivery/read receipts for messages *we* sent (§26.3.3) — the other half of
+    the same envelope, normalized so the status service never reads Meta's JSON."""
+
+    def test_normalizes_each_receipt_in_order(self):
+        statuses = [
+            {"id": "wamid.OUT1", "status": "delivered", "timestamp": "1756600000", "recipient_id": "2348012345678"},
+            {"id": "wamid.OUT1", "status": "read", "timestamp": "1756600060", "recipient_id": "2348012345678"},
+        ]
+
+        delivered, read = normalize_statuses(envelope(statuses=statuses))
+
+        assert (delivered.wamid, delivered.status) == ("wamid.OUT1", WhatsAppDeliveryStatus.DELIVERED)
+        assert read.status == WhatsAppDeliveryStatus.READ
+        assert read.recipient_phone == "+2348012345678"
+        assert read.timestamp is not None and read.timestamp > delivered.timestamp
+
+    def test_a_failure_carries_metas_error_codes(self):
+        statuses = [{"id": "wamid.OUT2", "status": "failed", "timestamp": "1756600000",
+                     "recipient_id": "234801", "errors": [{"code": 131047, "title": "Re-engagement message"}]}]
+
+        [failed] = normalize_statuses(envelope(statuses=statuses))
+
+        assert failed.status == WhatsAppDeliveryStatus.FAILED
+        assert failed.error_codes == [131047]
+
+    def test_an_unknown_status_or_a_receipt_without_an_id_is_skipped(self):
+        # A status Meta adds later must not be guessed at, and without the wamid there is
+        # no message to attach it to.
+        statuses = [
+            {"id": "wamid.OUT3", "status": "some_future_status"},
+            {"status": "read"},
+        ]
+        assert normalize_statuses(envelope(statuses=statuses)) == []
+
+    def test_a_customer_message_is_not_a_status(self):
+        assert normalize_statuses(envelope(TEXT)) == []
+
+    def test_a_malformed_envelope_yields_nothing(self):
+        assert normalize_statuses({"entry": "not-a-list"}) == []
+        assert normalize_statuses(envelope(statuses="not-a-list")) == []

@@ -23,7 +23,8 @@ from main.app.domain.channel.whatsapp.console_sender import (
     WhatsAppConsoleSender,
 )
 from main.app.core.state.status import ChatMessageState
-from main.app.domain.communication.chat_message.models import SenderKind
+from main.app.domain.communication.chat_message.models import ChannelDeliveryStatus, SenderKind
+from main.app.domain.communication.chat_message.repo import ChatMessageRepo
 from main.app.domain.communication.conversation.models import ConversationChannel
 from main.appodus_utils.db.session import db_session_ctx
 
@@ -78,6 +79,7 @@ def _message(
     sender_kind=SenderKind.ADMIN,
     channel_delivered_at=None,
     message_id="msg-1",
+    channel_status=None,
 ):
     return SimpleNamespace(
         id=message_id,
@@ -85,12 +87,17 @@ def _message(
         sender_kind=sender_kind.value,
         state=ChatMessageState.DELIVERED.value,
         channel_delivered_at=channel_delivered_at,
+        channel_status=channel_status,
+        external_message_id=None,
     )
 
 
 def _sender(*, window_open: bool, queued=(), user_id=None, first_name=None):
     svc = object.__new__(WhatsAppConsoleSender)
-    svc._messaging_service = MagicMock(send_message=AsyncMock())
+    # The transport returns Meta's id for what it sent; receipts will cite it.
+    svc._messaging_service = MagicMock(
+        send_message=AsyncMock(return_value=SimpleNamespace(provider_id="wamid.OUT1"))
+    )
     svc._whatsapp_window_service = MagicMock(is_open=AsyncMock(return_value=window_open))
     svc._whatsapp_link_service = MagicMock(
         resolve_user_for_phone=AsyncMock(return_value=user_id)
@@ -98,6 +105,10 @@ def _sender(*, window_open: bool, queued=(), user_id=None, first_name=None):
     svc._chat_message_repo = MagicMock(
         list_pending_channel_delivery=AsyncMock(return_value=list(queued)),
         _session=MagicMock(),
+    )
+    # The real stamping, so assertions read the row the way the database would.
+    svc._chat_message_repo.mark_channel_sent = (
+        lambda message, wamid, at: ChatMessageRepo.mark_channel_sent(svc._chat_message_repo, message, wamid, at)
     )
     svc._user_repo = MagicMock(
         get_model=AsyncMock(
@@ -130,6 +141,15 @@ class TestInsideTheWindow:
         await svc.deliver(_conversation(), message)
 
         assert message.channel_delivered_at is not None
+
+    async def test_the_sent_reply_keeps_metas_id_so_receipts_can_find_it(self):
+        svc = _sender(window_open=True)
+        message = _message()
+
+        await svc.deliver(_conversation(), message)
+
+        assert message.external_message_id == "wamid.OUT1"
+        assert message.channel_status == ChannelDeliveryStatus.SENT.value
 
     async def test_a_transport_failure_leaves_the_message_queued_rather_than_raising(self):
         # The reply is already in the thread and the agent has been told it sent. Raising
@@ -221,6 +241,17 @@ class TestWhatNeverGoesOut:
         svc = _sender(window_open=True)
 
         await svc.deliver(_conversation(external_ref=None), _message())
+
+        assert _sent_texts(svc) == []
+
+    async def test_a_reply_already_read_in_the_portal_is_not_sent(self):
+        # Cancelled because the customer read it on the website; a re-entrant approve must
+        # not resurrect it on their phone.
+        svc = _sender(window_open=True)
+
+        await svc.deliver(
+            _conversation(), _message(channel_status=ChannelDeliveryStatus.CANCELLED.value)
+        )
 
         assert _sent_texts(svc) == []
 

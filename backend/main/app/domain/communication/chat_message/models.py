@@ -2,8 +2,8 @@
 
 A message in a thread. Carries the §4.7 fraud-hold state (``ChatMessageState``), an optional
 ``task_id`` tag (Admin↔Agent messages about a specific role), a ``message_kind`` that
-distinguishes ordinary chat from system auto-posts and the structured clarification
-request/response flow (§11.1), and the fraud categories that held it (for instrumentation).
+distinguishes ordinary chat from platform auto-posts, and the fraud categories that held it
+(for instrumentation).
 """
 from __future__ import annotations
 
@@ -25,19 +25,16 @@ BODY_MAX_LENGTH = settings.CHAT_MESSAGE_MAX_LENGTH
 
 
 class MessageKind(str, enum.Enum):
-    """What a message is (PRD §11.1)."""
+    """What a message is (PRD §11.1).
 
+    Server-owned: every human message is ``CHAT``, and only platform callers write
+    ``SYSTEM_AUTO`` — which is what exempts their copy from the §4.7 fraud scan.
+    """
+
+    # TODO(gap): structured customer↔agent clarifications — relay a customer's question to
+    # the assigned agent, carry the answer back, track OPEN→ANSWERED — PRD "Known Gaps & Roadmap".
     CHAT = "CHAT"                                # ordinary person-to-person message
-    SYSTEM_AUTO = "SYSTEM_AUTO"                  # auto-posted status change / rejection reason
-    CLARIFICATION_REQUEST = "CLARIFICATION_REQUEST"   # structured clarification ask (§11.1)
-    CLARIFICATION_RESPONSE = "CLARIFICATION_RESPONSE"  # structured clarification answer
-
-
-class ClarificationStatus(str, enum.Enum):
-    """Lifecycle of a structured clarification request (§11.1)."""
-
-    OPEN = "OPEN"
-    ANSWERED = "ANSWERED"
+    SYSTEM_AUTO = "SYSTEM_AUTO"                  # auto-posted status change / rejection reason / bot reply
 
 
 class MessageSource(str, enum.Enum):
@@ -49,6 +46,47 @@ class MessageSource(str, enum.Enum):
 
     WEB = "WEB"
     WHATSAPP = "WHATSAPP"
+
+
+class ChannelDeliveryStatus(str, enum.Enum):
+    """How far a message has travelled over its conversation's own channel (§26.3.3, D92).
+
+    Only a message that leaves over WhatsApp has one. The first three come from Meta's
+    receipts; ``CANCELLED`` is ours — a queued reply the customer already read in the portal,
+    which therefore never goes to their phone.
+    """
+
+    SENT = "SENT"
+    DELIVERED = "DELIVERED"
+    READ = "READ"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
+_STATUS_PROGRESS = {
+    ChannelDeliveryStatus.SENT.value: 1,
+    ChannelDeliveryStatus.DELIVERED.value: 2,
+    ChannelDeliveryStatus.READ.value: 3,
+}
+
+
+def advance_channel_status(current: Optional[str], new: ChannelDeliveryStatus) -> bool:
+    """Whether a receipt for *new* should replace the stored *current* status.
+
+    Meta delivers receipts out of order and redelivers them, so a status only moves forward:
+    a late ``DELIVERED`` never undoes ``READ``. ``FAILED`` is recorded only over nothing or
+    ``SENT`` — a message that arrived stays arrived — and is itself superseded by proof of
+    arrival. A ``CANCELLED`` message was never sent, so nothing can follow it.
+    """
+    if current == ChannelDeliveryStatus.CANCELLED.value:
+        return False
+    if new == ChannelDeliveryStatus.CANCELLED:
+        return current is None
+    if new == ChannelDeliveryStatus.FAILED:
+        return current in (None, ChannelDeliveryStatus.SENT.value)
+    if current == ChannelDeliveryStatus.FAILED.value:
+        return new in (ChannelDeliveryStatus.DELIVERED, ChannelDeliveryStatus.READ)
+    return _STATUS_PROGRESS[new.value] > _STATUS_PROGRESS.get(current or "", 0)
 
 
 class SenderKind(str, enum.Enum):
@@ -77,7 +115,6 @@ class ChatMessage(BaseEntity):
     task_id = Column(String(36), nullable=True, index=True)
     state = Column(String(20), nullable=False, server_default=ChatMessageState.PENDING_SCAN.value)
     message_kind = Column(String(24), nullable=False, server_default=MessageKind.CHAT.value)
-    clarification_status = Column(String(16), nullable=True)
     # §4.7 fraud categories that held the message (empty for a clean fast-lane message).
     flagged_categories = Column(JSONB_VARIANT, nullable=True)
     # Attachment storage refs — column kept forward-compat; no upload wired this slice (D22).
@@ -90,6 +127,9 @@ class ChatMessage(BaseEntity):
     # typed outside Meta's 24-hour window is DELIVERED in the thread and still queued
     # here, and that is exactly the state the console has to be able to show.
     channel_delivered_at = Column(UTCDateTime, nullable=True)
+    # A `ChannelDeliveryStatus`, moved forward by Meta's receipts, and when it last moved.
+    channel_status = Column(String(12), nullable=True)
+    channel_status_at = Column(UTCDateTime, nullable=True)
     # What a non-text WhatsApp inbound actually was (§26.6.3) — the console reads it to
     # flag an image as unofficial and a voice note as audio.
     media_kind = Column(String(16), nullable=True)
@@ -102,6 +142,8 @@ class ChatMessage(BaseEntity):
         Index("ix_chat_messages_state", "state"),
         # The queue read is "this thread's undelivered agent replies" (§26.7 flush).
         Index("ix_chat_messages_channel_pending", "conversation_id", "channel_delivered_at"),
+        # A receipt finds its message by the wamid Meta returned when we sent it.
+        Index("ix_chat_messages_external_message_id", "external_message_id"),
     )
 
 
@@ -117,7 +159,6 @@ class CreateChatMessageDto(Object):
     task_id: Optional[str] = None
     state: ChatMessageState = ChatMessageState.PENDING_SCAN
     message_kind: MessageKind = MessageKind.CHAT
-    clarification_status: Optional[ClarificationStatus] = None
     flagged_categories: Optional[List[str]] = None
     media_kind: Optional[InboundKind] = None
     delivered_at: Optional[datetime] = None
@@ -126,7 +167,6 @@ class CreateChatMessageDto(Object):
 
 class UpdateChatMessageDto(Object):
     state: Optional[str] = None
-    clarification_status: Optional[str] = None
     reviewed_by: Optional[str] = None
 
 
@@ -141,16 +181,7 @@ class SearchChatMessageDto(InternalPageRequest, BaseQueryDto):
     state: Optional[str] = None
 
 
-# ─── API request/response DTOs ────────────────────────────────────
-
-class SendMessageDto(Object):
-    """Send a message into a thread (HTTP POST, §4.9). ``task_id`` tags an Admin↔Agent
-    message to a role; ``kind`` selects the structured-clarification variants (§11.1)."""
-
-    body: str
-    task_id: Optional[str] = None
-    kind: MessageKind = MessageKind.CHAT
-
+# ─── API response DTOs ────────────────────────────────────────────
 
 class ChatSenderDto(Object):
     """Customer-safe sender identity (§11.3). For an agent this is first name + role only —
@@ -171,7 +202,6 @@ class ChatMessageDto(Object):
     state: ChatMessageState
     message_kind: MessageKind
     source: MessageSource = MessageSource.WEB
-    clarification_status: Optional[ClarificationStatus] = None
     sender: ChatSenderDto
     held_notice: Optional[str] = None  # sender-facing "being checked" copy while HELD (§11.2)
     date_created: datetime
@@ -185,6 +215,17 @@ class ChatMessageDto(Object):
     # was typed outside Meta's 24-hour window (§26.7). It goes out on the customer's next
     # message; until then the console has to say so, or the agent believes it sent.
     pending_channel_delivery: bool = False
+    # Console only: how far the message got on the customer's phone (sent/delivered/read).
+    channel_status: Optional[ChannelDeliveryStatus] = None
+    # Customer only: an admin has read the thread past this message of theirs.
+    seen_by_support: bool = False
+    # On a send's response only (D93): the assistant's inline answer to this message, or
+    # that one is still coming because it needs the intent model.
+    assistant_reply: Optional["ChatMessageDto"] = None
+    assistant_pending: bool = False
+
+
+ChatMessageDto.model_rebuild()
 
 
 class HeldMessageDto(Object):

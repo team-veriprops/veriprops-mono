@@ -8,7 +8,7 @@ export const adminNavItems: NavItem[] = [
   { title: "Verifications", href: ROUTES.ADMIN.VERIFICATIONS, icon: "fileCheck", section: "Operations" },
   { title: "Disputes", href: ROUTES.ADMIN.DISPUTES, icon: "alertTriangle" },
   { title: "Re-checks", href: ROUTES.ADMIN.RECHECKS, icon: "activity" },
-  { title: "Message Review", href: ROUTES.ADMIN.HELD_MESSAGES, icon: "messageSquare" },
+  { title: "Messages", href: ROUTES.ADMIN.MESSAGES, icon: "messageSquare" },
   { title: "Broadcasts", href: ROUTES.ADMIN.BROADCASTS, icon: "megaphone" },
   { title: "Users", href: ROUTES.ADMIN.USERS, icon: "users", section: "People" },
   { title: "Agent Applications", href: ROUTES.ADMIN.AGENT_APPLICATIONS, icon: "userRoundKey" },

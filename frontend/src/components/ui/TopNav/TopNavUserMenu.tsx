@@ -36,6 +36,7 @@ export default function TopNavUserMenu({
         <button
           className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           aria-label="User menu"
+          data-testid="user-menu"
         >
           <Avatar className="size-8 cursor-pointer">
             {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={`${user.firstName} ${user.lastName}`} />}
@@ -96,6 +97,7 @@ export default function TopNavUserMenu({
         <DropdownMenuItem
           onClick={onLogout}
           disabled={isLoggingOut}
+          data-testid="user-menu-signout"
           className="text-destructive focus:text-destructive cursor-pointer"
         >
           <LogOut className="size-4" />

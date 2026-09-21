@@ -106,10 +106,23 @@ export class ApiClient {
   }
 }
 
+/**
+ * Precondition calls can be slow on a cold stack: `/dev/seed` hashes a password per seeded
+ * account, and the first request through the Next proxy compiles its route. Playwright's
+ * 30s default aborts that legitimately-slow first seed, so the client allows longer.
+ */
+const API_TIMEOUT_MS = 120_000;
+
 /** An unauthenticated client — public endpoints, signup funnels, `/dev/*`. */
 export async function anonymousApi(): Promise<ApiClient> {
   // ignoreHTTPSErrors: the local dev server's TLS cert is self-signed (see env.ts).
-  return new ApiClient(await request.newContext({ baseURL: BASE_URL, ignoreHTTPSErrors: true }));
+  return new ApiClient(
+    await request.newContext({
+      baseURL: BASE_URL,
+      ignoreHTTPSErrors: true,
+      timeout: API_TIMEOUT_MS,
+    }),
+  );
 }
 
 /** A client authenticated as *email* by driving the real login endpoint. */

@@ -10,6 +10,7 @@ import { Label } from "@3rdparty/ui/label";
 import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
 import { DEFAULT_COUNTRY_CODE, DEFAULT_DIAL_CODE } from "@lib/config/app";
 import { getErrorMessage } from "@lib/utils";
+import { otpDeliveryError } from "@components/website/auth/libs/otpDelivery";
 import { CaseDelegate } from "@/types/delegate";
 import {
   useAuthorizeDelegateMutation,
@@ -49,7 +50,12 @@ export default function DelegatePanel({ verificationId }: { verificationId: stri
 
   const onAuthorize = async () => {
     try {
-      await authorize.mutateAsync({ name, phoneE164: toE164(dialCode, phone) });
+      const challenge = await authorize.mutateAsync({ name, phoneE164: toE164(dialCode, phone) });
+      const notSent = otpDeliveryError(challenge);
+      if (notSent) {
+        toast.error(notSent);
+        return;
+      }
       toast.success("We sent them a code on WhatsApp. Ask them to read it to you.");
     } catch (err) {
       toast.error(getErrorMessage(err as Error, "Could not authorize that delegate."));

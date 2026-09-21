@@ -282,8 +282,8 @@ All refunds compute from the contractual NGN figure in kobo and are issued in NG
 
 #### Communication boundaries
 
-- ❌ No direct Customer ↔ Agent chat. Routine coordination flows as **structured, fraud-scanned
-  clarification requests** through the verification thread (§16.3).
+- ❌ No direct Customer ↔ Agent chat. Routine coordination is **admin-mediated**: the customer writes in
+  the Customer ↔ Admin thread and the admin relays to the agent (§16.3).
 - ✅ Customer ↔ Admin and Admin ↔ Agent — one thread each per verification.
 - ⚠️ Agent first name + role + verified badge visible to customers; contact details never (§5, enforced at
   the API layer).
@@ -434,7 +434,6 @@ Not part of the shared `StateMachine`; transitions are guarded in their services
 | `AgentApplicationStatus` | `PENDING / APPROVED / REJECTED` | `user/agent/profile/models.py` |
 | `AvailabilityStatus` | `GREEN / AMBER / RED` (forced `RED` at capacity) | `user/agent/profile/models.py` |
 | `CredentialStatus` | `PENDING / VERIFIED / EXPIRED / SUSPENDED` | `user/agent/credential/models.py` |
-| `ClarificationStatus` | `OPEN / ANSWERED` | `communication/chat_message/models.py` |
 | `PublicLookupState` | `SHARED / PRIVATE / IN_PROGRESS / DISPUTED / NOT_FOUND` | `verification/share/models.py` |
 | `ShareType` | `LINK_SUMMARY / NAMED_FULL` | `core/state/status.py` |
 
@@ -837,7 +836,11 @@ amount.
 ### 10.5 Payment
 
 - **Phone-verification gate:** because phone OTP is deferred from signup (§7.1), the customer's phone must
-  be verified here before payment proceeds.
+  be verified here before payment proceeds — in practice on their first verification, since a verified
+  phone stays verified. The gate shows the number on file and lets the customer correct it before the
+  OTP is sent; the profile only takes a number once its code verifies, and a number another account
+  holds is refused. The WhatsApp pay landing (§26.4.2) cannot run this gate without a login, so for an
+  unverified customer it continues into the portal pay page instead of offering payment.
 - Gateway-mediated (§4.4): card (`PaymentMethodKind.CARD`) returns a hosted `checkoutUrl` on live gateways;
   under `PAYMENT_STUB_MODE` a deterministic stub-confirm path stands in (§25.2). NGN bank transfer via
   gateway-issued virtual account is modelled (`PENDING_TRANSFER`). No direct SWIFT/IBAN wire.
@@ -1070,7 +1073,9 @@ at `/admin/messages`.
 | `GENERAL_SUPPORT` | One per user, account/billing/general — the Support page routes here. |
 
 There is deliberately **no direct customer↔agent channel** and no WebSocket/presence layer (§4.9).
-`sender_kind` (`CUSTOMER / ADMIN / AGENT / SYSTEM`) is **derived server-side, never client-claimed**.
+`sender_kind` (`CUSTOMER / ADMIN / AGENT / SYSTEM`) is **derived server-side, never client-claimed**, and so
+is `message_kind`: every human message is `CHAT`, and only platform callers (status auto-posts, bot replies)
+write `SYSTEM_AUTO` — the kind that exempts platform copy from the fraud scan. Send endpoints accept no kind.
 Ownership gates: a customer must own the verification; an agent must be assigned. Message sends are HTTP
 POST; delivery rides the per-user SSE stream. Chat is **text-only** today — the `attachments` column is
 reserved for a follow-up (§G).
@@ -1082,17 +1087,82 @@ Send-time synchronous scan per §4.7 / §3.4: unflagged messages deliver immedia
 (`/admin/messages`) for approve (deliver) or reject (block + warn). Single hold behaviour; severity tiers
 are a data-informed fast-follow (§G). All decisions are audit-logged.
 
-### 16.3 Structured clarifications
+### 16.3 Customer ↔ agent coordination
 
-Routine customer↔agent coordination flows as `CLARIFICATION_REQUEST` / `CLARIFICATION_RESPONSE` message
-kinds with a `ClarificationStatus` (`OPEN → ANSWERED`), running the same fraud scan — no admin keystroke
-needed per exchange, no direct contact, no separate pipeline.
+Admin-mediated: a customer's question for the field agent goes into the Customer ↔ Admin thread, and the admin
+carries it into the Admin ↔ Agent thread. Structured clarifications (a request relayed to the assigned agent,
+the answer carried back, `OPEN → ANSWERED`) were withdrawn in D89 — only the label had shipped — and are a
+§G deferred feature.
 
-### 16.4 Admin shared inbox
+### 16.4 Visibility windows
+
+A membership may carry a window (`visible_from` / `visible_until`) bounding what that member reads; web
+memberships never set one. It exists for the customer's WhatsApp thread (§26.8, D90): the feed, the unread
+badge and the Chat counter all respect it, a closed window makes the thread read-only (`ConversationDto.
+readOnly` + `readOnlyReason`), and a member whose window is closed receives no pushes for the thread. The
+portal opens a thread with no case or support page of its own at `/portal/chat/[conversationId]`.
+
+### 16.5 Admin shared inbox
 
 Admins are not enrolled per-thread; `CommunicationService` treats `user_type == ADMIN` as a shared inbox
-over **all** verification threads, with unread computed from each admin's own `last_read_at`. Admin counter
-freshness rides the 60-second poll rather than per-message fan-out (bounded by design).
+over **every thread with a message**: both verification threads, web support and WhatsApp. Unread is computed
+from each admin's own `last_read_at`. The console's **Conversations** tab (`/admin/messages?tab=conversations`,
+D91) lists them server-paged through `GET /admin/conversations`:
+- an enum `filter` (`SUPPORT` · `WHATSAPP` · `CASES`);
+- a search over the number, the subject and the owner;
+- each support thread named by the account it belongs to (`ownerName` / `ownerEmail`).
+
+The page, the unpaged admin `/chat/conversations` list and the admin Chat counter read one scope with one
+unread rule, so they cannot disagree. An admin's Chat button opens this tab. Admin counter freshness rides the
+60-second poll rather than per-message fan-out (bounded by design).
+
+### 16.6 Delivery and read receipts
+
+On a WhatsApp thread every outbound text (an agent's reply, a bot reply) keeps the wamid Meta returned, and
+Meta's receipts move `chat_messages.channel_status` forward only: `SENT → DELIVERED → READ`, or `FAILED`
+(D92). Receipts arrive late, out of order and more than once, so a late one never moves a status back.
+- **Console:** ticks under each outbound message (`ChatMessageDto.channelStatus`, admin viewers only).
+- **Portal:** a read receipt counts as the owner reading the thread up to that message, so the unread badge
+  clears. With receipts off on the phone, the customer writing back does the same.
+- **"Seen by support":** a member's own message shows "Seen" once any admin has read the thread past it
+  (`seenBySupport`, non-admin viewers only).
+- **Cancelled phone delivery:** a reply queued outside Meta's window that the customer reads in the portal
+  first becomes `CANCELLED` and is not sent when the window reopens. The `window_reopen` nudge has already
+  gone by then.
+
+### 16.7 The assistant, surface-neutral (D93)
+
+One engine (`communication/assistant/`, moved from the WhatsApp package) answers on every customer-facing
+surface: a WhatsApp number, a customer's web support thread, and a case's customer↔admin thread — never an
+admin↔agent thread, which is staff talking to staff. Identity, links, delivery and channel analytics are
+each surface's own; the dispatch order, the guardrails, the FAQ/pricing/status wording and the §26.6.1
+welcome disclosure are shared, so the two surfaces never describe the product differently.
+
+- **Two phases, split at the intent model.** Everything deterministic — menu numbers, opt-out keywords on
+  WhatsApp, a quoted case reference, the guardrails on the customer's own words — answers inline, in the
+  same request that carried the message. Only a turn the deterministic steps cannot resolve needs the model,
+  and that is where the two surfaces differ in *when*, not *what*: WhatsApp runs both phases back to back
+  inside the webhook (Meta has already decoupled the customer from the wait); the portal runs phase one
+  inline and defers phase two.
+- **The deferred web turn.** A send that needs the model marks the session `assistant_pending` and returns
+  immediately; the client calls `POST /chat/conversations/{id}/assistant/turn`, which claims the turn with
+  one atomic conditional update (so a second call, another tab, or the sweep can never answer it twice) and
+  runs phase two in that request. `ConversationDto.assistantPending` drives a typing indicator, so a page
+  reloaded mid-turn asks again rather than waiting silently. `check_pending_assistant_turns` (a 1-minute
+  sweep) is the backstop for once environments stop being serverless-only — not relied on today.
+- **Per-case pinning.** On a case's own customer thread, "my status" or "how do I pay?" never asks which
+  case — the party is pinned to that verification, read from the thread itself, never from the request.
+- **Console parity.** The take-over rule (D57) generalises to any thread the assistant answers: a person
+  replying silences it, and hand-back is the only way out, from `/admin/assistant/sessions/{conversationId}`
+  (`MANAGE_VERIFICATIONS` — the same permission that lets an admin reply). `/admin/assistant/readiness`
+  (§26.11 launch gate) stays `CONFIGURE_SYSTEM`.
+- **WhatsApp keeps its own adapter** (`channel/whatsapp/bot/surface.py`): the number→account→delegate→
+  stranger identity order (D67), `/wa/*` single-use links, delivery over Meta with a console mirror,
+  STOP/START (§26.4.6), non-text media (§26.6.3), and the §26.10 channel facts. A web turn counts as none
+  of those — a web enquiry is not WhatsApp traffic.
+- **Memberships are unique (D94).** A member has one live membership per thread, enforced by a partial
+  unique index; `ensure_participant` is the only writer and is safe against a concurrent first open, so the
+  admin inbox, unread counts and "Seen by support" can never double-count a member.
 
 ---
 
@@ -1639,6 +1709,8 @@ Marketing templates: none at v1. Drafted only when a consented campaign is plann
 - **NDPA:** Privacy policy discloses the WhatsApp channel, cross-border transit via Meta infrastructure, consent basis for utility and marketing messages, and (at v1.1) third-party STT processing of voice notes. Consent records timestamped and exportable.
 - **Terms of service:** Explicitly cover WhatsApp as a communication surface under the §3.5 liability framework (1× fees-paid cap). Chat logs are retained business records; retention **duration** is a §B counsel sign-off item.
 - **Chat logs:** Retained, exportable, and covered by the same access controls as case data. Conversation log is complete across both surfaces (one conversation object).
+- **Customer view of a WhatsApp thread (D90):** linking a number makes its owner a member of that number's thread, visible **from the moment of linking** — earlier messages may belong to a previous holder of the number. Unlinking or releasing the number closes the window: the history up to then stays readable in the portal, later messages are hidden, and the thread is read-only for them. Admins always see the whole thread.
+- **Receipts (D92, §16.6):** Meta's delivery/read receipts for our own sends drive the console's ticks and clear the owner's portal badge; a queued reply the customer reads in the portal is never sent to the phone.
 - **Evidence chain:** Only portal uploads and structured intake are canonical (M1). Voice-note and chat-image content never enters the verification file.
 
 ---
@@ -1815,6 +1887,7 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Offline evidence upload queue + client compression (not built — evidence capture is a plain file input) & server-side image derivatives / progressive viewing | `frontend/src/components/agents/tasks/AgentTaskDetail.tsx` |
 | Chat attachments (JSONB column reserved; no upload UI/endpoint) | `backend/main/app/domain/communication/chat_message/models.py` |
 | Message-hold severity tiers (single hold behaviour; tune from false-positive data) | `backend/main/app/domain/communication/fraud_scan.py` |
+| Structured customer↔agent clarifications (withdrawn in D89 — relay a customer's question to the assigned agent, carry the answer back, track `OPEN → ANSWERED`) | `backend/main/app/domain/communication/chat_message/models.py` |
 | Chargeback rebuttal-pack placeholder fields (`report`, `evidence_hashes`) | `backend/main/app/domain/payment/chargeback/service.py` |
 | Redis multi-instance SSE fan-out (in-process emitter today; poll fallback keeps correctness) | `backend/main/app/core/realtime/emitter.py` |
 | Per-agent pool-feed visibility reduction (ranking-only today; pool is untargeted accept-by-id) | `backend/main/app/domain/user/agent/reputation/service.py` |

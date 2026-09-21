@@ -23,7 +23,7 @@ from main.app.domain.channel.whatsapp.link.service import (
     NUMBER_UNAVAILABLE_MESSAGE,
     WhatsAppLinkService,
 )
-from main.app.domain.user.auth.models import OtpChannel
+from main.app.domain.user.auth.models import OtpChannel, OtpSendResultDto
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
@@ -107,9 +107,10 @@ def _service(*, own_link=None, phone_holder=None, active_holder=None):
     repo.activate = MagicMock(side_effect=_activate)
     repo.release_number = MagicMock(side_effect=_release)
 
-    svc._otp.send_otp = AsyncMock(return_value=600)
+    svc._otp.send_otp = AsyncMock(return_value=OtpSendResultDto(resend_in=600, delivered=True))
     svc._otp.verify_otp = AsyncMock(return_value=None)
     svc._conversations.set_whatsapp_thread_owner = AsyncMock(return_value=None)
+    svc._conversations.release_whatsapp_thread = AsyncMock(return_value=None)
     svc._audit.schedule = MagicMock()
     return svc
 
@@ -147,6 +148,14 @@ class TestStartLink:
 
         assert challenge.phone_e164 == PHONE
         assert challenge.resend_after_seconds == 600
+        assert challenge.delivered is True
+
+    async def test_reports_when_the_code_was_not_delivered(self):
+        svc = _service(own_link=None)
+        svc._otp.send_otp = AsyncMock(return_value=OtpSendResultDto(resend_in=600, delivered=False))
+        challenge = await svc.start_link(USER_ID, PHONE)
+
+        assert challenge.delivered is False
         created = svc._whatsapp_link_repo.create_return_model.await_args.args[0]
         assert created.status == WhatsAppLinkStatus.PENDING
 
@@ -199,7 +208,9 @@ class TestNumberChange:
         svc = _service(own_link=link_row(), phone_holder=None)
         await svc.start_link(USER_ID, OTHER_PHONE)
         # Detached first, so there is no window in which both numbers resolve.
-        assert (PHONE, None) == svc._conversations.set_whatsapp_thread_owner.await_args_list[0].args
+        phone, user_id, _at = svc._conversations.release_whatsapp_thread.await_args.args
+        assert (phone, user_id) == (PHONE, USER_ID)
+        svc._conversations.set_whatsapp_thread_owner.assert_not_awaited()
 
     async def test_the_new_number_is_not_live_until_its_code_is_confirmed(self):
         active = link_row()
@@ -215,8 +226,11 @@ class TestConfirmLink:
         await svc.confirm_link(USER_ID, PHONE, "654123")
 
         assert pending.status == WhatsAppLinkStatus.ACTIVE.value
-        # §26.8 — one conversation object per person, not one per surface.
-        svc._conversations.set_whatsapp_thread_owner.assert_awaited_once_with(PHONE, USER_ID)
+        # §26.8 — one conversation object per person, not one per surface. The owner sees
+        # the thread from the moment of linking, which is when the link went ACTIVE.
+        svc._conversations.set_whatsapp_thread_owner.assert_awaited_once_with(
+            PHONE, USER_ID, pending.linked_at
+        )
 
     async def test_verifies_the_code_on_the_whatsapp_channel(self):
         # Namespacing matters: a code sent over WhatsApp must not be spendable as the
@@ -262,7 +276,10 @@ class TestUnlink:
     async def test_the_thread_goes_cold(self):
         svc = _service(own_link=link_row())
         await svc.unlink(USER_ID)
-        svc._conversations.set_whatsapp_thread_owner.assert_awaited_once_with(PHONE, None)
+        phone, user_id, released_at = svc._conversations.release_whatsapp_thread.await_args.args
+        # The former owner keeps read-only history up to the release.
+        assert (phone, user_id) == (PHONE, USER_ID)
+        assert released_at is not None
 
     async def test_the_released_number_is_still_traceable(self):
         # The row stops holding it, so the audit detail is the only remaining record.

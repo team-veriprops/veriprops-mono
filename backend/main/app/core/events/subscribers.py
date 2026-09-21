@@ -42,9 +42,17 @@ async def notification_subscriber(event: DomainEvent) -> None:
     await service.create_for_event(event)
 
 
+# Chat events that change what a member's thread or Chat counter shows.
+_CHAT_REFRESH_EVENTS = frozenset({EventType.MESSAGE_SENT, EventType.MESSAGE_STATUS_CHANGED})
+
+
 async def chat_counter_subscriber(event: DomainEvent) -> None:
-    """Push the per-user Chat counter for chat events (§12.3 — counter only, no notification)."""
-    if event.type != EventType.MESSAGE_SENT:
+    """Push the per-user Chat counter for chat events (§12.3 — counter only, no notification).
+
+    A new message and a WhatsApp receipt both change what a member sees — the message list,
+    its ticks, the unread badge — so both refresh the same two streams.
+    """
+    if event.type not in _CHAT_REFRESH_EVENTS:
         return
     try:
         emitter = di[UserEventEmitter]

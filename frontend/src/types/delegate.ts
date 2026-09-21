@@ -29,4 +29,6 @@ export interface AuthorizeCaseDelegate {
 export interface CaseDelegateChallenge {
   phoneE164: string;
   resendAfterSeconds: number;
+  /** False when the code was stored but its dispatch did not complete. */
+  delivered: boolean;
 }

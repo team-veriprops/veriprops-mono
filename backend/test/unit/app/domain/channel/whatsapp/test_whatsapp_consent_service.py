@@ -161,6 +161,20 @@ class TestStopAndStart:
         assert await svc.utility_granted(USER) is True
         assert await svc.marketing_granted(USER) is False
 
+    async def test_the_later_decision_wins_even_within_the_same_clock_tick(self, monkeypatch):
+        """STOP then START can land on one clock reading (coarse on Windows). Equal stamps
+        would read as "revoked" and silently undo the START, so the later decision is
+        stamped strictly after the one it overrides."""
+        frozen = Utils.datetime_now()
+        monkeypatch.setattr(Utils, "datetime_now", staticmethod(lambda: frozen))
+        svc = _service(_row())
+        await svc.set_consents(USER, True, True, WhatsAppConsentSource.PAY_SCREEN)
+        await svc.revoke_all(USER, WhatsAppConsentSource.STOP_KEYWORD)
+        assert await svc.utility_granted(USER) is False
+        await svc.grant_utility(USER, WhatsAppConsentSource.START_KEYWORD)
+        assert await svc.utility_granted(USER) is True
+        assert await svc.marketing_granted(USER) is False
+
     async def test_stop_from_a_customer_who_never_opted_in_is_still_recorded(self):
         """A STOP is evidence in its own right — it is what makes a later send a mistake
         we can see, rather than one we have to reason about."""

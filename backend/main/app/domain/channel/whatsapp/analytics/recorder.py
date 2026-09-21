@@ -28,7 +28,7 @@ from main.app.domain.channel.whatsapp.analytics.models import (
     WhatsAppChannelEventType,
 )
 from main.app.domain.channel.whatsapp.analytics.repo import WhatsAppChannelEventRepo
-from main.app.domain.channel.whatsapp.bot.session.models import EscalationReason
+from main.app.domain.communication.assistant.session.models import EscalationReason
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger

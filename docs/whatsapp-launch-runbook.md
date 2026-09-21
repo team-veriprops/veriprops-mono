@@ -130,7 +130,7 @@ From a real handset, in this order — each step depends on the last:
 | # | Do | Expect |
 |---|---|---|
 | 1 | Message the number from the website widget | §26.6.1 welcome: bot disclosure, payment pledge, five-item menu |
-| 2 | Check `/admin/messages` → WhatsApp | The thread is there, `ChannelBadge` says WhatsApp, and §26.10 counted an enquiry with the widget's page code |
+| 2 | Check `/admin/messages` → Conversations, WhatsApp filter | The thread is there, `ChannelBadge` says WhatsApp, and §26.10 counted an enquiry with the widget's page code |
 | 3 | Reply from the console | It arrives on the handset; the thread goes sticky-`HUMAN` and the banner says so |
 | 4 | Hand back, then ask "what does it cost?" | Bot answers with live pricing (never a literal) |
 | 5 | Ask "is this property genuine?" | Refused and routed to a person — the §26.6.4 guardrail, on the live classifier |

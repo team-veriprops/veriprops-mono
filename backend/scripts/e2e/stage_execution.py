@@ -30,7 +30,7 @@ def run(ctx: Ctx) -> None:
     roles = list(ctx.seed["tasks"].keys())
 
     for role in roles:
-        agent_id = ctx.seed["agents"][role]
+        agent_id = ctx.seed["agents"][role]["id"]
 
         # Admin: ranked suggestions include the seeded agent, then manual assignment (§6.3).
         suggested = admin.get(

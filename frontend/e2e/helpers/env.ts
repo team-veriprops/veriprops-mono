@@ -29,9 +29,6 @@ export const MAILPIT_URL = process.env.UAT_MAILPIT_URL ?? "http://localhost:8025
  *  runs `OTP_MODE=deterministic`. The suite never reads an inbox for a code. */
 export const TEST_OTP = "654123";
 
-/** The password `/dev/seed` assigns to every seeded account. */
-export const QA_PASSWORD = "Test1234!";
-
 /* Consent versions are deliberately NOT pinned here. They differ per document type and move
  * independently — migration 0011 took PLATFORM_TERMS, PRIVACY_POLICY and
  * COMMUNICATION_RECORDING to 1.1.0 while the rest stayed at 1.0.0 — so any literal is wrong

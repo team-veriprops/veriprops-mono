@@ -1,14 +1,16 @@
 """Chat message data access."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import List, Optional, Tuple, Type
 
 from kink import inject
-from sqlalchemy import and_, asc, desc, func, select
+from sqlalchemy import and_, asc, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.core.state.status import ChatMessageState
 from main.app.domain.communication.chat_message.models import (
+    ChannelDeliveryStatus,
     ChatMessage,
     CreateChatMessageDto,
     QueryChatMessageDto,
@@ -40,10 +42,22 @@ class ChatMessageRepo(
         self.db = db
 
     async def list_delivered_page(
-        self, conversation_id: str, viewer_id: Optional[str], page: int, page_size: int
+        self,
+        conversation_id: str,
+        viewer_id: Optional[str],
+        page: int,
+        page_size: int,
+        *,
+        visible_from: Optional[datetime] = None,
+        visible_until: Optional[datetime] = None,
     ) -> Tuple[List[ChatMessage], int]:
         """Thread messages a viewer may see: everything DELIVERED, plus the viewer's own
         still-HELD messages (so a sender sees their message pending review, §11.2).
+
+        *visible_from* / *visible_until* are the viewer's membership window (§26.8): a
+        customer reading a WhatsApp thread sees only what was said while the number was
+        theirs. Bounded on ``date_created`` — when the words were written, not when a fraud
+        hold released them.
 
         Returns ``(rows, total)`` — the service converts rows to DTOs before paginating, so
         ORM models never reach ``build_page`` (which validates its items as DTOs)."""
@@ -54,6 +68,10 @@ class ChatMessageRepo(
             ChatMessage.deleted.is_(False),
             ChatMessage.conversation_id == conversation_id,
         )
+        if visible_from is not None:
+            base = and_(base, ChatMessage.date_created >= visible_from)
+        if visible_until is not None:
+            base = and_(base, ChatMessage.date_created <= visible_until)
         if viewer_id is not None:
             visible = ChatMessage.state == ChatMessageState.DELIVERED.value
             own_held = and_(
@@ -126,6 +144,11 @@ class ChatMessageRepo(
                     ChatMessage.conversation_id == Utils.uuid_to_hex(conversation_id),
                     ChatMessage.state == ChatMessageState.DELIVERED.value,
                     ChatMessage.channel_delivered_at.is_(None),
+                    # Read in the portal first, so it is not going to the phone at all.
+                    or_(
+                        ChatMessage.channel_status.is_(None),
+                        ChatMessage.channel_status != ChannelDeliveryStatus.CANCELLED.value,
+                    ),
                     ChatMessage.sender_kind.in_(
                         [SenderKind.ADMIN.value, SenderKind.AGENT.value]
                     ),
@@ -134,6 +157,34 @@ class ChatMessageRepo(
             .order_by(asc(ChatMessage.date_created))
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def get_outbound_by_external_id(self, external_message_id: str) -> Optional[ChatMessage]:
+        """The message we sent that Meta knows by *external_message_id* — what a receipt is
+        about. A customer's inbound message carries its own wamid and is never a receipt's
+        subject, so it is excluded."""
+        stmt = select(ChatMessage).where(
+            and_(
+                ChatMessage.deleted.is_(False),
+                ChatMessage.external_message_id == external_message_id,
+                ChatMessage.sender_kind != SenderKind.CUSTOMER.value,
+            )
+        )
+        return (await self._session.execute(stmt)).scalars().first()
+
+    def mark_channel_sent(
+        self, message: ChatMessage, external_message_id: Optional[str], at: datetime
+    ) -> None:
+        """Stamp a message as handed to its channel, keeping the wamid its receipts will cite.
+
+        Set on the attached row, never re-fetched: the sender created or loaded it in this
+        same uncommitted transaction, where a re-fetch can return ``None``.
+        """
+        message.channel_delivered_at = at
+        if external_message_id:
+            message.external_message_id = external_message_id
+        message.channel_status = ChannelDeliveryStatus.SENT.value
+        message.channel_status_at = at
+        self._session.add(message)
 
     async def latest_delivered(self, conversation_id: str) -> Optional[ChatMessage]:
         stmt = (

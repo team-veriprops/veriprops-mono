@@ -8,15 +8,20 @@ import { Page, expect } from "@playwright/test";
 
 import { ROUTES } from "@lib/routes";
 
-import { goto } from "./app";
+import { goto, waitForHydration, waitReady } from "./app";
 
 /**
- * Sign *page* in as *email* through the real login form and wait until the app reports an
- * authenticated session. Returns once `__auth_snapshot__.isAuthenticated` is true, so the
- * caller can immediately persist `storageState` or navigate on.
+ * Sign *page* in as *email* through the real login form and wait until the sign-in has fully
+ * settled, so the caller can immediately persist `storageState` or navigate on.
+ *
+ * "Settled" is more than an authenticated snapshot: after a successful sign-in the login form
+ * redirects into the user's portal. A caller that navigates before that redirect lands races it —
+ * Firefox cancels the caller's navigation (`NS_BINDING_ABORTED`) — so this also waits for the page
+ * to leave the auth surface and for the destination to report ready.
  */
 export async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
   await goto(page, ROUTES.AUTH.LOGIN);
+  await waitForHydration(page, "login-email");
 
   await page.getByTestId("login-email").fill(email);
   await page.getByTestId("login-password").fill(password);
@@ -26,6 +31,9 @@ export async function loginViaUi(page: Page, email: string, password: string): P
     timeout: 30_000,
   });
   expect(await page.evaluate(() => window.__auth_snapshot__?.userId)).toBeTruthy();
+
+  await page.waitForURL((url) => !url.pathname.startsWith(ROUTES.AUTH.GATE), { timeout: 30_000 });
+  await waitReady(page);
 }
 
 /**

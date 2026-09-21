@@ -14,9 +14,10 @@ agent/owner identities are never exposed on a public surface.
 from __future__ import annotations
 
 from datetime import timedelta
+from logging import Logger
 from typing import List, Optional
 
-from kink import inject
+from kink import di, inject
 
 from main.app.config.settings import settings
 from main.app.core.state.status import ShareType, VerificationStatus, VerificationTier
@@ -50,6 +51,8 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+
+logger: Logger = di["logger"]
 
 _PRIVATE_MESSAGE = "Public sharing is not enabled for this verification."
 _IN_PROGRESS_MESSAGE = "This verification is still in progress."
@@ -277,8 +280,10 @@ class ShareService:
             await self._messages.send_report_share(
                 recipient_email=share.recipient_email, vid=vid, share_url=self._share_url(share.token),
             )
-        except Exception:  # noqa: BLE001 — share invite is best-effort
-            pass
+        except Exception as exc:  # noqa: BLE001 — share invite is best-effort
+            # Logged, not raised: the share row is already valid, but a silent failure here
+            # leaves the recipient without the link while the customer sees success.
+            logger.error(f"Named share invite for {vid} not sent: {exc}")
 
     def _share_url(self, token: str) -> str:
         return f"{settings.PUBLIC_APP_BASE_URL.rstrip('/')}/shared/{token}"

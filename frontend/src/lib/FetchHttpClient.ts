@@ -122,8 +122,16 @@ export class FetchHttpClient implements HttpClient {
       });
 
       if (!response.ok) {
+        const errorBody = await this.safeJson(response);
+        const httpError = new HttpError(
+          errorBody?.error?.message || `An error occurred`,
+          url,
+          errorBody?.error?.code,
+          errorBody
+        );
+
         if (response.status === 401 && !options._retry) {
-          return this.handle401<T>(url, options);
+          return this.handle401<T>(url, options, httpError);
         }
         if (response.status === 403) {
           this.redirectToAccessDenied();
@@ -134,14 +142,7 @@ export class FetchHttpClient implements HttpClient {
           this.publishSessionExpired();
         }
 
-        const errorBody = await this.safeJson(response);
-
-        throw new HttpError(
-          errorBody?.error?.message || `An error occurred`,
-          url,
-          errorBody?.error?.code,
-          errorBody
-        );
+        throw httpError;
       }
 
       if (options._responseType === 'blob') {
@@ -162,15 +163,29 @@ export class FetchHttpClient implements HttpClient {
     }
   }
 
+  /**
+   * Recover from a 401 by refreshing the session, then retry the request once.
+   *
+   * Callers always receive the *original* rejection when recovery is impossible, so a
+   * form shows the backend's own explanation (e.g. "Invalid username or password" on a
+   * wrong-password sign-in) rather than the refresh machinery's failure.
+   */
   private async handle401<T>(
     url: string,
-    options: RequestInit & { _retry?: boolean }
+    options: RequestInit & { _retry?: boolean },
+    originalError: HttpError
   ): Promise<T> {
-    options._retry = true;
+    // No refresh cookie ⇒ no session to recover: a signed-out form, or cookies that have
+    // lapsed. A refresh call could only fail, so hand off to login directly (suppressed
+    // on the auth surface itself, see loginRedirectUrl).
+    if (!this.getCookie("__Host-refresh_csrf_token")) {
+      this.publishSessionExpired();
+      throw originalError;
+    }
 
+    options._retry = true;
     try {
       await this.refreshSession();
-      return this.request<T>(url, options);
     } catch (err) {
       // Status only — never log response bodies (may carry PII/internal detail).
       // Navigation is owned by SessionRecoveryOverlay via the expired phase
@@ -179,8 +194,10 @@ export class FetchHttpClient implements HttpClient {
         "Session refresh failed",
         err instanceof HttpError ? `(status ${err.status})` : ""
       );
-      return Promise.reject(err);
+      throw originalError;
     }
+    // The retried request's own failure surfaces as itself.
+    return this.request<T>(url, options);
   }
 
   /**

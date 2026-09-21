@@ -76,7 +76,7 @@ class AccountSecurityMessages(BaseMessageSender):
 
     async def send_direct_email_verification_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any],
                                                      expires_at: Optional[datetime] = None):
-        await self._send_direct_message(
+        return await self._send_direct_message(
             recipient=recipient,
             template=AvailableTemplate.EMAIL_VERIFICATION,
             context=context,
@@ -103,7 +103,7 @@ class AccountSecurityMessages(BaseMessageSender):
 
     async def send_direct_phone_verification_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any],
                                                      expires_at: Optional[datetime] = None):
-        await self._send_direct_message(
+        return await self._send_direct_message(
             recipient=recipient,
             template=AvailableTemplate.PHONE_VERIFICATION,
             context=context,
@@ -122,7 +122,7 @@ class AccountSecurityMessages(BaseMessageSender):
         WhatsApp-only on purpose: the code proves control of *this* WhatsApp number, so
         delivering it anywhere else would prove something different.
         """
-        await self._send_direct_message(
+        return await self._send_direct_message(
             recipient=recipient,
             template=AvailableTemplate.WHATSAPP_OTP_AUTH,
             context=context,

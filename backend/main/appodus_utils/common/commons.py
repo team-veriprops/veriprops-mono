@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import enum
 import hashlib
@@ -390,7 +391,20 @@ class Utils:
 
     @staticmethod
     def get_password_hash(password: str) -> str:
+        """Synchronous Argon2 hash — for contexts with no event loop (migrations, fixtures).
+        Request handlers use `hash_password`, which does not block the loop."""
         return Utils.pwd_context.hash(secret=password)
+
+    @staticmethod
+    async def hash_password(password: str) -> str:
+        """Argon2-hash *password* off the event loop. Hashing is deliberately CPU-heavy; run inline in
+        an async handler it would stall every other request the process is serving meanwhile."""
+        return await asyncio.to_thread(Utils.get_password_hash, password)
+
+    @staticmethod
+    async def check_password(plain_password: str, hashed_password: str) -> bool:
+        """Verify *plain_password* against *hashed_password* off the event loop (see `hash_password`)."""
+        return await asyncio.to_thread(Utils.verify_password, plain_password, hashed_password)
 
     @staticmethod
     def get_otp_code(prefix: str = None, suffix: str = None):

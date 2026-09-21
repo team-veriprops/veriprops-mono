@@ -27,6 +27,9 @@ import { useGlobalSettings } from "@stores/useGlobalSettings";
 import { Card, CardContent } from "@components/3rdparty/ui/card";
 import { TableToolbar } from "./TableToolbar";
 import { AnimatedTableRow } from "../AnimatedTableRow";
+import { DATATABLE_TEST_IDS, datatableActionTestId } from "./testIds";
+
+export { datatableActionTestId };
 
 export interface Column<T> {
   key: keyof T | string;
@@ -256,6 +259,7 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
                 <AnimatedTableRow
                   key={item.id}
                   id={item.id}
+                  testId={DATATABLE_TEST_IDS.ROW}
                   index={index}
                   isClickable={isRowClickable}
                   onClick={() => onRowClick && onRowClick(item)}
@@ -282,7 +286,12 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Row actions"
+                            data-testid={DATATABLE_TEST_IDS.ROW_ACTIONS}
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -292,6 +301,7 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
                             .map((action, actionIndex) => (
                               <DropdownMenuItem
                                 key={actionIndex}
+                                data-testid={datatableActionTestId(action.label)}
                                 onClick={() => action.onClick(item)}
                                 className={
                                   action.variant === "destructive"

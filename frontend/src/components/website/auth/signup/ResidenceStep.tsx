@@ -13,6 +13,7 @@ import {
   suggestTimezoneForCountry,
 } from "@components/website/auth/libs/auth/locale";
 import { CURRENCY_NAMES, TransactionCurrency } from "@/types/models";
+import { Field, FieldGroup } from "@components/ui/form/Field";
 import { cn } from "@lib/utils";
 
 interface Props {
@@ -50,49 +51,69 @@ export default function ResidenceStep({ defaultValues, onSubmit, onBack }: Props
   }, [country, browserTz, form]);
 
   return (
-    <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+    <form
+      className="space-y-5"
+      onSubmit={form.handleSubmit(onSubmit)}
+      noValidate
+      data-testid="signup-residence-form"
+    >
       <p className="text-sm leading-relaxed text-brand-on-surface-variant">
         Tells us where you are so we can show prices in your currency and time things in your timezone.
       </p>
 
       <Field label="Country of residence" error={form.formState.errors.countryOfResidence?.message}>
-        <select
-          {...form.register("countryOfResidence")}
-          className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="">Select your country</option>
-          {RESIDENCE_COUNTRIES.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.flag} {c.name}
-            </option>
-          ))}
-        </select>
+        {(id) => (
+          <select
+            id={id}
+            {...form.register("countryOfResidence")}
+            data-testid="signup-country"
+            className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Select your country</option>
+            {RESIDENCE_COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.flag} {c.name}
+              </option>
+            ))}
+          </select>
+        )}
       </Field>
 
       <Field label="Timezone" error={form.formState.errors.timezone?.message}>
-        <select
-          {...form.register("timezone")}
-          className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          {COMMON_TIMEZONES.map((tz) => (
-            <option key={tz} value={tz}>
-              {tz}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs mt-1 text-brand-on-surface-variant">
-          Auto-suggested from your country. Adjust if needed.
-        </p>
+        {(id) => (
+          <>
+            <select
+              id={id}
+              {...form.register("timezone")}
+              data-testid="signup-timezone"
+              className="w-full h-11 px-3 rounded-md text-sm bg-brand-surface-card border border-brand-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {COMMON_TIMEZONES.map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs mt-1 text-brand-on-surface-variant">
+              Auto-suggested from your country. Adjust if needed.
+            </p>
+          </>
+        )}
       </Field>
 
-      <Field label="Preferred currency" error={form.formState.errors.preferredCurrency?.message}>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {SUPPORTED_CURRENCIES.map((c) => {
+      <FieldGroup
+        label="Preferred currency"
+        error={form.formState.errors.preferredCurrency?.message}
+        className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+      >
+        {SUPPORTED_CURRENCIES.map((c) => {
             const selected = preferredCurrency === c;
             return (
               <button
                 key={c}
                 type="button"
+                data-testid={`signup-currency-${c}`}
+                aria-pressed={selected}
                 onClick={() =>
                   form.setValue("preferredCurrency", c, { shouldValidate: true })
                 }
@@ -115,33 +136,23 @@ export default function ResidenceStep({ defaultValues, onSubmit, onBack }: Props
               </button>
             );
           })}
-        </div>
-      </Field>
+      </FieldGroup>
 
       <div className="flex gap-3 pt-2">
-        <Button type="button" variant="outline" className="flex-1" onClick={onBack} size="lg">
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={onBack}
+          size="lg"
+          data-testid="signup-residence-back"
+        >
           Back
         </Button>
-        <Button type="submit" className="flex-1" size="lg">
+        <Button type="submit" className="flex-1" size="lg" data-testid="signup-residence-submit">
           Continue
         </Button>
       </div>
     </form>
-  );
-}
-
-function Field({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-sm font-semibold text-brand-navy">
-        {label}
-      </label>
-      {children}
-      {error && (
-        <p className="text-xs text-danger">
-          {error}
-        </p>
-      )}
-    </div>
   );
 }

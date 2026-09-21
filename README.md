@@ -26,3 +26,9 @@ claude mcp add next-devtools -- npx -y next-devtools-mcp@latest
 `
 claude mcp add github -- npx -y @modelcontextprotocol/server-github
 `
+
+## TODO
+
+1. Centralize chats, and synchronize a user's chats from WhatsApp and in-app
+2. Validate Users e2e flow, and implement missing/failing features
+3. Implement complete frontend e2e tests with playwright

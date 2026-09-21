@@ -14,7 +14,8 @@ const personSchema = z.object({
   lastName: z.string().min(1, "Last name is required").max(60),
 });
 
-const phoneFields = z.object({
+/** A phone number as every phone form collects it: signup, profile completion, the pay-step gate. */
+export const phoneFields = z.object({
   countryCode: z.string().min(2, "Select a country"),
   dialCode: z.string().min(1, "Select a dial code"),
   phone: z
@@ -23,6 +24,8 @@ const phoneFields = z.object({
     .min(7, "Phone is too short")
     .max(15, "Phone is too long"),
 });
+
+export type PhoneFieldsValues = z.infer<typeof phoneFields>;
 
 // ─── Signup ─────────────────────────────────────────────────────
 export const signupStep1Schema = personSchema.extend({

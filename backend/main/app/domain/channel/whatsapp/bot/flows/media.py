@@ -31,10 +31,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
-from main.app.domain.channel.whatsapp.bot.flows import status as status_flow
-from main.app.domain.channel.whatsapp.bot.flows.status import CaseSummary
-from main.app.domain.channel.whatsapp.bot.projection import ChannelState
-from main.app.domain.channel.whatsapp.bot.session.models import EscalationReason
+from main.app.domain.communication.assistant.flows import status as status_flow
+from main.app.domain.communication.assistant.flows.status import CaseSummary
+from main.app.domain.communication.assistant.projection import ChannelState
+from main.app.domain.communication.assistant.session.models import EscalationReason
 from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import InboundKind
 
 # What the bot can turn into an upload link. Everything else non-text goes to a person.
@@ -111,7 +111,7 @@ def render(
     actually receive an upload are selected here rather than by the caller, so the rule
     lives with the flow that depends on it.
     """
-    from main.app.domain.channel.whatsapp.bot import content
+    from main.app.domain.communication.assistant import content
 
     escalation_reason = _ESCALATING_KINDS.get(kind)
     if escalation_reason:
