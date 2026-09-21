@@ -20,6 +20,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
+from main.alembic.utils import AlembicUtils
+
 # revision identifiers, used by Alembic.
 revision: str = "0016_participant_unique"
 down_revision: Union[str, None] = "0015_assistant_sessions"
@@ -71,6 +73,22 @@ def _enforce_one_membership() -> None:
 
 
 def upgrade() -> None:
+    # Duplicates are merged: the earliest row survives with the latest `last_read_at`. That is
+    # lossless only while the rows agree on everything else, so disagreeing ones stop the upgrade.
+    AlembicUtils.refuse_if_rows(
+        """
+        SELECT count(*) FROM (
+            SELECT 1 FROM conversation_participants WHERE deleted = FALSE
+            GROUP BY conversation_id, user_id
+            HAVING count(*) > 1 AND (
+                count(DISTINCT coalesce(role, '')) > 1
+                OR count(DISTINCT coalesce(CAST(visible_from AS text), '')) > 1
+                OR count(DISTINCT coalesce(CAST(visible_until AS text), '')) > 1
+            )
+        ) conflicting
+        """,
+        "duplicate memberships that disagree on role or visibility window",
+    )
     _merge_duplicate_memberships()
     _enforce_one_membership()
 

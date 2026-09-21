@@ -26,6 +26,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from main.alembic.utils import AlembicUtils
+
 from main.appodus_utils.db.models import UTCDateTime
 
 # revision identifiers, used by Alembic.
@@ -56,6 +58,13 @@ def _key_by_conversation() -> None:
         WHERE c.channel = 'WHATSAPP' AND c.external_ref = s.phone_e164 AND c.deleted = FALSE
         """
     ))
+    # A session that no WhatsApp thread claims has nowhere to live once sessions are keyed by
+    # conversation. Deleting one would forget a human takeover or a half-finished intake, so the
+    # delete runs only when there is none.
+    AlembicUtils.refuse_if_rows(
+        "SELECT count(*) FROM chat_bot_sessions WHERE conversation_id IS NULL",
+        "bot sessions with no WhatsApp conversation to key them to",
+    )
     conn.execute(sa.text("DELETE FROM chat_bot_sessions WHERE conversation_id IS NULL"))
     op.alter_column("chat_bot_sessions", "conversation_id", nullable=False)
     op.create_unique_constraint(

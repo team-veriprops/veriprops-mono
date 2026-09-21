@@ -31,6 +31,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from main.alembic.utils import AlembicUtils
+
 from main.appodus_utils import Utils
 from main.appodus_utils.db.models import UTCDateTime
 
@@ -117,6 +119,17 @@ def _close_unowned_customer_memberships() -> None:
 
 def upgrade() -> None:
     _add_visibility_window()
+    # Enrolment rewrites `created_by`; it must never replace a different, existing owner.
+    AlembicUtils.refuse_if_rows(
+        """
+        SELECT count(*) FROM whatsapp_links l
+        JOIN conversations c
+          ON c.channel = 'WHATSAPP' AND c.external_ref = l.phone_e164 AND c.deleted = FALSE
+        WHERE l.status = 'ACTIVE' AND l.phone_e164 IS NOT NULL AND l.deleted = FALSE
+          AND c.created_by IS NOT NULL AND c.created_by <> l.user_id
+        """,
+        "WhatsApp threads whose existing owner enrolment would overwrite",
+    )
     _enrol_linked_owners()
     _close_unowned_customer_memberships()
 

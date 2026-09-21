@@ -88,6 +88,7 @@ A domain is **not considered complete** until:
 * No ON DELETE / ON UPDATE constraints
 * Use application-enforced references
 * Reference IDs are normal indexed columns
+* **A migration that would destroy data refuses instead** (`AlembicUtils.refuse_if_rows`). Put it immediately before any statement that deletes rows, drops a populated column, or overwrites a value, with a count of what that statement would lose. `env.py` runs every pending revision inside **one** transaction, and Postgres DDL is transactional, so a refusal anywhere rolls the whole `upgrade head` back — the database stays on the revision it started from and `deploy.yml` stops before the new code ships. That is what makes a release safe without a snapshot: it either loses nothing or changes nothing. Guard only real loss — merging exact duplicates (keeping the latest read state) is not loss; merging duplicates that disagree is.
 * Alembic migrations must never emit ALTER TABLE ... ADD FOREIGN KEY
 * Don't create duplicate indexes, prefer UniqueConstraint to create_index. Declare a column's index **once** — either inline (`Column(..., index=True)`, which auto-names `ix_<table>_<col>`) or in `__table_args__`, never both. If you use `__table_args__`, the `Index(name, ...)` name must match the migration's `create_index` name exactly (a mismatch produces two indexes on autogenerate).
 * When mapping date/datetime, don't use DateTime or TIMESTAMP directly, instead use UTCDateTime in the file `backend/main/appodus_utils/db/models.py`

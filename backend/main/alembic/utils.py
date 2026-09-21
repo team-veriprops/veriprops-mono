@@ -26,3 +26,21 @@ class AlembicUtils:
     def table_exists(name: str) -> bool:
         bind = op.get_bind()
         return name in sa_inspect(bind).get_table_names()
+
+    @staticmethod
+    def refuse_if_rows(count_sql: str, what: str) -> None:
+        """Abort the upgrade instead of destroying data a step would otherwise lose.
+
+        *count_sql* counts the rows the next step would delete, overwrite or strip of a value.
+        A non-zero count raises, and because `env.py` runs every pending revision inside one
+        transaction, Postgres rolls the whole upgrade back: the database stays at the revision
+        it started on and the deploy stops before new code ships. Put it immediately before the
+        lossy statement it protects. On a fresh or already-clean database it is a no-op.
+        """
+        rows = op.get_bind().execute(sa.text(count_sql)).scalar() or 0
+        if rows:
+            raise RuntimeError(
+                f"Refusing to migrate: {rows} row(s) would lose data ({what}). "
+                "Nothing has been changed. Preserve or reconcile these rows first, then re-run."
+            )
+

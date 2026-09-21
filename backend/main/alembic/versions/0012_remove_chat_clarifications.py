@@ -23,6 +23,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from main.alembic.utils import AlembicUtils
+
 # revision identifiers, used by Alembic.
 revision: str = "0012_remove_chat_clarifications"
 down_revision: Union[str, None] = "0011_whatsapp_legal_copy"
@@ -50,6 +52,14 @@ def _restore_clarification_status() -> None:
 
 
 def upgrade() -> None:
+    # Both steps below discard information — which messages were clarifications, and their
+    # status — so they run only where there is nothing to discard.
+    AlembicUtils.refuse_if_rows(
+        "SELECT count(*) FROM chat_messages "
+        "WHERE message_kind IN ('CLARIFICATION_REQUEST', 'CLARIFICATION_RESPONSE') "
+        "OR clarification_status IS NOT NULL",
+        "clarification messages whose kind or status the conversion would erase",
+    )
     _convert_clarification_messages_to_chat()
     _drop_clarification_status()
 
