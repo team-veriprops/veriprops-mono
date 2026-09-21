@@ -3,6 +3,15 @@
 # scenario over HTTP (signup → verification → payment → review → release →
 # disputes → payouts → messaging retries → …).
 #
+# Then the browser suite (frontend/e2e) against that same stack. It runs here
+# rather than in frontend-ci because it needs the real backend, and it reuses
+# this job's Postgres/Mailpit/backend instead of standing up a second copy —
+# its globalSetup resets and re-seeds, so the drive-through's data is no
+# obstacle. Two engines (docs/uat-strategy.md §7's `@P1` pair) rather than the
+# full six-permutation matrix, which stays a local/nightly concern: one desktop
+# and one mobile engine from different rendering families is what catches the
+# engine-specific breakage that lint, types and unit tests cannot see.
+#
 # Slow and stateful, so it never triggers on PRs directly: pull_requests.yml
 # calls it (path-gated) as a blocking gate on every code PR, deploy.yml calls
 # it as the release gate for every push to dev/staging/master, and it also
@@ -89,10 +98,84 @@ jobs:
       - name: Run drive-through
         run: python scripts/e2e_drive_through.py
 
-      - name: Upload backend log
+      # ── Browser suite (docs/uat-strategy.md) ──────────────────────────────
+      # Reads the pinned version from frontend/package.json's packageManager field.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # matches frontend/Dockerfile
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      # `NEXT_PUBLIC_ENVIRONMENT=test` is what turns on the automation window hooks
+      # the suite waits on (`isAutomationEnvironment()`); without it every spec
+      # hangs on `__app_ready__`.
+      - name: Build the frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_ENVIRONMENT: test
+          API_BASE_URL: http://localhost:8000
+          BACKEND_SECRET_KEY: ci-build-placeholder
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm build
+
+      # §9's stack: the standalone server on :3001 behind a TLS front on :3000.
+      # `next start` does not serve the standalone output, and the static assets
+      # are not copied into it by the build.
+      - name: Serve the build
+        working-directory: frontend
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+          cd .next/standalone
+          API_BASE_URL=http://localhost:8000 PORT=3001 HOSTNAME=0.0.0.0             nohup node server.js > /tmp/frontend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:3001 > /dev/null && exit 0
+            sleep 2
+          done
+          echo "::error::the standalone frontend never came up"
+          tail -100 /tmp/frontend.log
+          exit 1
+
+      # The session cookies are `__Host-`/Secure, and WebKit drops them over plain
+      # http — so the suite is served over TLS even locally. `host-gateway` is how
+      # the container reaches the host's :3001 on a Linux runner.
+      - name: Start the TLS front
+        working-directory: frontend
+        run: |
+          docker run -d --name veriprops-uat-tls -p 3000:3000             --add-host=host.docker.internal:host-gateway             -v "$PWD/e2e/tls/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine
+          for i in $(seq 1 30); do
+            curl -fsSk https://localhost:3000 > /dev/null && exit 0
+            sleep 2
+          done
+          echo "::error::the TLS front never came up"
+          docker logs veriprops-uat-tls
+          exit 1
+
+      - name: Install browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium webkit
+
+      - name: Run the browser suite
+        working-directory: frontend
+        env:
+          UAT_ENGINES: chromium-desktop,webkit-mobile
+        run: node e2e/run-lanes.mjs
+
+      - name: Upload logs and the Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-backend-log
-          path: /tmp/backend.log
+          name: e2e-logs
+          path: |
+            /tmp/backend.log
+            /tmp/frontend.log
+            frontend/e2e/playwright-report
+            frontend/e2e/test-results
           retention-days: 7

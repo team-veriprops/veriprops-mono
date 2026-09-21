@@ -3,9 +3,17 @@
 This single migration is a squash of the original 20-file chain
 (fdd959a2cfda … f3a4b5c6d7e8), later re-squashed to fold in
 0002_user_account_status (users.account_status/suspended_*) and
-0003_user_verify_started (users.has_started_verification), and re-squashed
+0003_user_verify_started (users.has_started_verification), re-squashed
 again to fold in the ten-file WhatsApp cycle (0002_whatsapp_channel …
-0011_whatsapp_legal_copy) once every environment had been migrated past it.
+0011_whatsapp_legal_copy), and re-squashed once more to fold in the
+unified-chat cycle (0012_remove_chat_clarifications … 0017_session_pkey_name)
+— each time only once every environment had been migrated past that head.
+The table each cycle builds is created in the shape the cycle *ended* in, so
+``chat_bot_sessions`` is built under that name with the primary key
+0017_session_pkey_name renamed on already-migrated databases: a database that
+came through the chain and one built here are then the same schema, down to
+constraint names (only the column *order* of that one table differs, which no
+DDL addresses by name and nothing reads positionally).
 Every table is created once in its final shape: later add_column /
 alter_column steps are folded into the relevant CREATE TABLE, and JSON
 columns are declared with ``JSONB_VARIANT`` so the former Postgres-only
@@ -30,9 +38,9 @@ weights, D30), and pricing tiers + line items (``TIER_PRICE_NGN_KOBO``).
 Enum members are reduced to their raw ``.value`` strings at row-build time,
 keeping the emitted SQL decoupled from app enums.
 
-Revision ID: 0011_whatsapp_legal_copy
+Revision ID: 0017_session_pkey_name
 Revises:
-Create Date: 2026-06-26 00:00:00.000000
+Create Date: 2026-09-21 00:00:00.000000
 """
 import json
 from datetime import datetime, timezone
@@ -55,7 +63,7 @@ from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 # filename: a database already stamped at that revision is left alone by this squash, which
 # is what makes re-squashing safe on live environments (the previous squash kept
 # `0003_user_verify_started` for the same reason).
-revision: str = "0011_whatsapp_legal_copy"
+revision: str = "0017_session_pkey_name"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -289,6 +297,8 @@ def _create_messages():
     op.create_index(op.f("ix_messages_id"), "messages", ["id"], unique=True)
     # Retry-sweep hot path — name must match the model's __table_args__ Index exactly.
     op.create_index("ix_messages_status_next_retry_at", "messages", ["status", "next_retry_at"], unique=False)
+    # folded from 0014_chat_channel_status — a delivery receipt carries the provider's id.
+    op.create_index("ix_messages_provider_id", "messages", ["provider_id"], unique=False)
 
 
 def _create_callbacks():
@@ -762,11 +772,29 @@ def _create_conversation_participants():
         sa.Column("role", sa.String(length=20), nullable=True),
         sa.Column("last_read_at", UTCDateTime, nullable=True),
         *AlembicUtils.base_audit_columns(),
+        # folded from 0013_chat_thread_visibility — the window a membership may read (§26.8).
+        # A WhatsApp thread is keyed on a phone number, so messages from before the customer
+        # linked it may be a previous holder's, and it keeps moving for the agents after they
+        # unlink; `visible_until` set is what leaves them read-only history. Null on both ends
+        # (every web membership) means the whole thread.
+        sa.Column("visible_from", UTCDateTime, nullable=True),
+        sa.Column("visible_until", UTCDateTime, nullable=True),
     )
     op.create_index("ix_conv_participants_id", "conversation_participants", ["id"], unique=True)
     op.create_index("ix_conv_participants_user", "conversation_participants", ["user_id"], unique=False)
     op.create_index(
         "ix_conv_participants_conversation", "conversation_participants", ["conversation_id"], unique=False
+    )
+    # folded from 0016_participant_unique (D94) — one live membership per member. Opening a
+    # thread fires mark-read and the reply that follows it together; a check-then-insert let
+    # both win, and the duplicate doubled that member's row in every list joining memberships.
+    # Over live rows only, so a soft-deleted membership never blocks a fresh one.
+    op.create_index(
+        "uq_conv_participants_membership",
+        "conversation_participants",
+        ["conversation_id", "user_id"],
+        unique=True,
+        postgresql_where=sa.text("deleted = FALSE"),
     )
 
 
@@ -781,7 +809,6 @@ def _create_chat_messages():
         sa.Column("task_id", sa.String(length=36), nullable=True),
         sa.Column("state", sa.String(length=20), nullable=False, server_default="PENDING_SCAN"),
         sa.Column("message_kind", sa.String(length=24), nullable=False, server_default="CHAT"),
-        sa.Column("clarification_status", sa.String(length=16), nullable=True),
         sa.Column("flagged_categories", JSONB_VARIANT, nullable=True),
         sa.Column("attachments", JSONB_VARIANT, nullable=True),
         sa.Column("delivered_at", UTCDateTime, nullable=True),
@@ -803,6 +830,11 @@ def _create_chat_messages():
         # unofficial and a voice note as audio without joining back to
         # ``whatsapp_inbound_messages`` for every row it renders.
         sa.Column("media_kind", sa.String(length=16), nullable=True),
+        # folded from 0014_chat_channel_status (D92) — how far an outbound message got on the
+        # customer's WhatsApp: SENT -> DELIVERED -> READ, FAILED, or CANCELLED (a queued reply
+        # the customer read in the portal first, so it was never sent to their phone).
+        sa.Column("channel_status", sa.String(length=12), nullable=True),
+        sa.Column("channel_status_at", UTCDateTime, nullable=True),
     )
     op.create_index("ix_chat_messages_id", "chat_messages", ["id"], unique=True)
     op.create_index("ix_chat_messages_conversation", "chat_messages", ["conversation_id"], unique=False)
@@ -812,6 +844,10 @@ def _create_chat_messages():
     # pair rather than on the timestamp alone.
     op.create_index(
         "ix_chat_messages_channel_pending", "chat_messages", ["conversation_id", "channel_delivered_at"]
+    )
+    # A Meta receipt arrives with a wamid and nothing else, so it finds its message by this.
+    op.create_index(
+        "ix_chat_messages_external_message_id", "chat_messages", ["external_message_id"], unique=False
     )
 
 
@@ -1212,14 +1248,17 @@ def _create_whatsapp_templates():
     op.create_unique_constraint("uq_whatsapp_templates_name", "whatsapp_templates", ["name"])
 
 
-def _create_whatsapp_bot_sessions():
-    # One row per number: where the conversation is, whether a human has taken it over, and
-    # how many turns in a row the bot has failed to understand (§26.3.3, §26.6).
+def _create_chat_bot_sessions():
+    # One row per *conversation* (D93): where the assistant is in that thread, whether a human
+    # has taken it over, and how many turns in a row it has failed to understand (§16.7, §26.6).
+    # Keyed by conversation rather than by number since the same engine answers a WhatsApp
+    # thread, a web support thread and a case's customer thread.
     op.create_table(
-        "whatsapp_bot_sessions",
+        "chat_bot_sessions",
+        sa.Column("conversation_id", sa.String(length=36), nullable=False),
         # E.164 with the leading '+', matching `whatsapp_links.phone_e164` and the
-        # conversation's `external_ref`.
-        sa.Column("phone_e164", sa.String(length=32), nullable=False),
+        # conversation's `external_ref`. Null on a web thread, which has no number.
+        sa.Column("phone_e164", sa.String(length=32), nullable=True),
         sa.Column("mode", sa.String(length=10), nullable=False, server_default=_MODE_BOT),
         sa.Column("mode_changed_at", UTCDateTime, nullable=True),
         sa.Column("current_flow", sa.String(length=24), nullable=True),
@@ -1231,13 +1270,22 @@ def _create_whatsapp_bot_sessions():
         sa.Column("last_escalation_reason", sa.String(length=32), nullable=True),
         sa.Column("last_escalated_at", UTCDateTime, nullable=True),
         *AlembicUtils.base_audit_columns(),
+        # The turn a web send left for the intent model, and the claim that makes exactly one
+        # request answer it (D93). Every environment is serverless, so a turn cannot be left to
+        # finish after the response: the client asks for it, and this conditional claim is what
+        # stops a second tab, a retry or the sweep answering the same turn twice.
+        sa.Column("pending_turn_message_id", sa.String(length=36), nullable=True),
+        sa.Column("pending_turn_at", UTCDateTime, nullable=True),
+        sa.Column("turn_claimed_at", UTCDateTime, nullable=True),
     )
-    op.create_index("ix_whatsapp_bot_sessions_id", "whatsapp_bot_sessions", ["id"], unique=True)
-    # One session per number: two rows would mean two half-remembered conversations
-    # with one person, and the sticky-HUMAN rule would hold on only one of them.
+    op.create_index("ix_chat_bot_sessions_id", "chat_bot_sessions", ["id"], unique=True)
+    # One session per conversation: two rows would mean two half-remembered conversations with
+    # one person, and the sticky-HUMAN rule would hold on only one of them.
     op.create_unique_constraint(
-        "uq_whatsapp_bot_sessions_phone_e164", "whatsapp_bot_sessions", ["phone_e164"]
+        "uq_chat_bot_sessions_conversation_id", "chat_bot_sessions", ["conversation_id"]
     )
+    # The WhatsApp adapter and the §4.11 erasure both still reach a session by number.
+    op.create_index("ix_chat_bot_sessions_phone_e164", "chat_bot_sessions", ["phone_e164"], unique=False)
 
 
 def _create_whatsapp_consents():
@@ -1725,7 +1773,7 @@ _TABLE_BUILDERS = [
     ("handoff_token_redemptions", _create_handoff_token_redemptions),
     ("whatsapp_links", _create_whatsapp_links),
     ("whatsapp_templates", _create_whatsapp_templates),
-    ("whatsapp_bot_sessions", _create_whatsapp_bot_sessions),
+    ("chat_bot_sessions", _create_chat_bot_sessions),
     ("whatsapp_consents", _create_whatsapp_consents),
     ("case_delegates", _create_case_delegates),
     ("whatsapp_channel_events", _create_whatsapp_channel_events),

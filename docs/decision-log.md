@@ -2755,3 +2755,56 @@ Any new membership writer must go through `ensure_participant` rather than inser
 ### Revisit
 If memberships ever need history (a member leaves and rejoins with separate windows), model it
 as a new row on a soft-deleted predecessor rather than relaxing the index.
+
+
+## Decision: D95 — the unified-chat cycle is folded back into `0001_initial_schema`
+
+### Context
+D49 reopened the migration chain because cycle 2 added columns to existing tables, and `0001`
+builds a table only when it is absent. That chain is now six revisions long
+(`0012_remove_chat_clarifications` … `0017_session_pkey_name`) and every environment has been
+migrated to its head, which is the condition `0001`'s own docstring sets for folding it back in.
+
+### Options Considered
+1. **Fold 0012–0017 into `0001` and delete them**, with `0001`'s `revision` becoming the folded
+   head, so a migrated database matches it and does nothing while a fresh one builds the final
+   schema in one step.
+2. **Leave the chain.** Nothing breaks, but every fresh database replays a table rename, a
+   backfill and a de-duplication that can no longer apply to it, and the chain only grows.
+
+### Chosen
+Option 1. `revision = "0017_session_pkey_name"`, `down_revision = None`. Each change is folded
+into the `_create_<table>()` helper it belongs to, in the shape the cycle ended in:
+`chat_bot_sessions` is created under that name, `chat_messages` never gets
+`clarification_status`, `conversation_participants` is born with its visibility window and its
+live-membership index. The **data** steps are dropped — a fresh database has no rows to convert,
+enrol, backfill or de-duplicate, and every existing one is already stamped at this head.
+
+### Rationale
+The squash is only honest if the two paths agree, so it was proved rather than assumed: one
+database migrated through the full chain, one built from the squashed file, `pg_dump
+--schema-only` diffed, and seeded row counts compared. They match exactly, and the drive-through
+(541 checks) passes against a database built from the squashed file alone.
+
+That proof is also what produced `0017_session_pkey_name`: Postgres keeps a constraint's name
+through `ALTER TABLE ... RENAME`, so `0015`'s rename left migrated databases calling the primary
+key `whatsapp_bot_sessions_pkey` while fresh ones called it `chat_bot_sessions_pkey`. Normalising
+that *before* folding is what makes the claim true.
+
+The precondition was then met without a database snapshot: every lossy step in the chain was
+guarded with `AlembicUtils.refuse_if_rows`, so production could only lose nothing or change
+nothing (a read-only audit found zero affected rows; `veriprops_prod` migrated `0011 -> 0017`
+cleanly). dev, staging and production were each confirmed at `0017_session_pkey_name` before
+this was committed.
+
+### Tradeoffs
+- The column *order* of `chat_bot_sessions` still differs between a migrated and a fresh
+  database (`conversation_id` was appended by an `ALTER`). No DDL addresses a column by position
+  and the ORM names every column, so this is left as-is rather than rebuilt.
+- One-way, as every squash is: the folded revisions no longer exist, so a database behind
+  `0017_session_pkey_name` cannot upgrade and must be stamped (`alembic stamp`) or rebuilt.
+- D49's posture resumes immediately: `0001` is frozen again, and the next schema change is an
+  additive revision.
+
+### Revisit
+At the next cycle boundary, under the same precondition — every live database at the head first.

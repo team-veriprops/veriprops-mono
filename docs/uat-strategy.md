@@ -211,8 +211,9 @@ Named because they are the "will this actually automate?" risks; each becomes a 
    against the dev server WebKit loses the first field of a form (login, signup, set-password) to the hydration
    reset and reports failures the build does not have. Every form fill is preceded by `waitForHydration`, which
    makes both stacks deterministic, but the build remains the verdict.
-3. `pnpm e2e` (parallel workers, `UAT_WORKERS` overrides; `@serial` specs then run one at a time) — `globalSetup` reset+seeds once; `--grep @P0` or `--grep UAT-PAY` to scope; `UAT_ENGINES=chromium-desktop` (or `--project=…`) to run one engine/device of the six-permutation matrix (§7). `UAT_BASE_URL` overrides the origin.
-4. Debug failures with the Playwright trace viewer (`pnpm e2e:report`) and the `playwright-cli` skill for ad-hoc UI investigation.
+3. **CI runs this suite too** — `e2e.yml` builds the frontend, serves the standalone output behind the same TLS front, and runs `chromium-desktop,webkit-mobile` against the same backend the drive-through just used (its `globalSetup` resets and re-seeds first). A red browser suite blocks the PR and the release. The other four engine permutations stay local/nightly.
+4. `pnpm e2e` (parallel workers, `UAT_WORKERS` overrides; `@serial` specs then run one at a time) — `globalSetup` reset+seeds once; `--grep @P0` or `--grep UAT-PAY` to scope; `UAT_ENGINES=chromium-desktop` (or `--project=…`) to run one engine/device of the six-permutation matrix (§7). `UAT_BASE_URL` overrides the origin.
+5. Debug failures with the Playwright trace viewer (`pnpm e2e:report`) and the `playwright-cli` skill for ad-hoc UI investigation.
 
 ## 10. Out of scope
 
