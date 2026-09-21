@@ -24,6 +24,22 @@ export async function waitReady(page: Page): Promise<void> {
 }
 
 /**
+ * Block until React has hydrated the element behind *testId*.
+ *
+ * `waitReady` only says the root provider has mounted. A form below a `Suspense` boundary can
+ * still be server-rendered HTML with no handlers: text typed into it is either never seen by
+ * the form library or wiped when hydration resets the input to its default (observed on WebKit,
+ * where the email box came back empty and the sign-in never submitted). React marks a hydrated
+ * DOM node with a `__reactProps$…` key, which is a deterministic signal — no fixed sleep.
+ */
+export async function waitForHydration(page: Page, testId: string): Promise<void> {
+  await page.waitForFunction((id) => {
+    const el = document.querySelector(`[data-testid="${id}"]`);
+    return !!el && Object.keys(el).some((key) => key.startsWith("__reactProps"));
+  }, testId);
+}
+
+/**
  * Navigate to *path* on the app origin and wait for the ready gate.
  *
  * Waits for `domcontentloaded`, not `load`: the app's readiness signal is `__app_ready__`, and

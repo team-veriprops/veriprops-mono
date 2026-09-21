@@ -15,7 +15,7 @@ import { UserPersona } from "@components/website/auth/models";
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
 import { api } from "../helpers/api";
-import { goto, waitReady } from "../helpers/app";
+import { goto, waitForHydration, waitReady } from "../helpers/app";
 import { loginViaUi } from "../helpers/auth";
 import { TEST_OTP } from "../helpers/env";
 import { clearMailbox, extractLinkFromEmail } from "../helpers/mailpit";
@@ -52,6 +52,7 @@ test.describe("UAT-AUTH — signed-out access @P0", () => {
     const seed = readSeed();
     await goto(page, ROUTES.AUTH.LOGIN);
 
+    await waitForHydration(page, "login-email");
     await page.getByTestId("login-email").fill(seed.customer.email);
     await page.getByTestId("login-password").fill("WrongPassword123!");
     await page.getByTestId("login-submit").click();
@@ -91,6 +92,7 @@ test.describe("UAT-AUTH — password recovery @P0 @serial", () => {
     await clearMailbox();
 
     await goto(page, ROUTES.AUTH.FORGOT_PASSWORD);
+    await waitForHydration(page, "forgot-email");
     await page.getByTestId("forgot-email").fill(email);
     await page.getByTestId("forgot-submit").click();
 
@@ -102,6 +104,7 @@ test.describe("UAT-AUTH — password recovery @P0 @serial", () => {
 
     const newPassword = "Reset1234!";
     await expect(page.getByTestId("reset-password-form")).toBeVisible();
+    await waitForHydration(page, "reset-password-password");
     await page.getByTestId("reset-password-password").fill(newPassword);
     await page.getByTestId("reset-password-confirm").fill(newPassword);
     await page.getByTestId("reset-password-submit").click();
@@ -192,6 +195,7 @@ function newAccount(): NewAccount {
 /** Step 1 — account basics. */
 async function fillAccountStep(page: Page, account: NewAccount): Promise<void> {
   await expect(page.getByTestId("signup-basics-form")).toBeVisible();
+  await waitForHydration(page, "signup-first-name");
   await page.getByTestId("signup-first-name").fill(account.firstName);
   await page.getByTestId("signup-last-name").fill(account.lastName);
   await page.getByTestId("signup-email").fill(account.email);
@@ -419,6 +423,7 @@ test.describe("UAT-AUTH — set a password @P1", () => {
     await expect(page.getByTestId("set-password-form")).toBeVisible();
 
     const chosen = "Chosen1234!";
+    await waitForHydration(page, "set-password-input");
     await page.getByTestId("set-password-input").fill(chosen);
     await page.getByTestId("set-password-confirm-input").fill(chosen);
     await page.getByTestId("set-password-submit").click();

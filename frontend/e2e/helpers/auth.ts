@@ -8,7 +8,7 @@ import { Page, expect } from "@playwright/test";
 
 import { ROUTES } from "@lib/routes";
 
-import { goto, waitReady } from "./app";
+import { goto, waitForHydration, waitReady } from "./app";
 
 /**
  * Sign *page* in as *email* through the real login form and wait until the sign-in has fully
@@ -21,6 +21,7 @@ import { goto, waitReady } from "./app";
  */
 export async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
   await goto(page, ROUTES.AUTH.LOGIN);
+  await waitForHydration(page, "login-email");
 
   await page.getByTestId("login-email").fill(email);
   await page.getByTestId("login-password").fill(password);

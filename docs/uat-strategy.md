@@ -207,7 +207,10 @@ Named because they are the "will this actually automate?" risks; each becomes a 
 
    Use the committed [Caddyfile](../frontend/e2e/tls/Caddyfile), not the `caddy reverse-proxy` one-liner. The one-liner cannot shorten upstream keep-alive, so Caddy can reuse a socket Node's 5 s `keepAliveTimeout` has already closed. A POST sent on that socket (sign-in) then fails as a bare 502 ("An error occurred" on the form). This was observed on UAT-AUTH-05. The same file also retries failed dials (`lb_try_duration`), because Docker Desktop's container→host hop can stall a new connection for a few seconds; that was observed on UAT-WAH-01 as a bare 502. A dial that failed was never sent, so the retry is safe for POST.
 
-   Keep `pnpm dev:https` for authoring a spec; judge green/red only against the build.
+   Keep `pnpm dev:https` for authoring a spec; judge green/red only against the build. This is not a formality:
+   against the dev server WebKit loses the first field of a form (login, signup, set-password) to the hydration
+   reset and reports failures the build does not have. Every form fill is preceded by `waitForHydration`, which
+   makes both stacks deterministic, but the build remains the verdict.
 3. `pnpm e2e` (parallel workers, `UAT_WORKERS` overrides; `@serial` specs then run one at a time) — `globalSetup` reset+seeds once; `--grep @P0` or `--grep UAT-PAY` to scope; `UAT_ENGINES=chromium-desktop` (or `--project=…`) to run one engine/device of the six-permutation matrix (§7). `UAT_BASE_URL` overrides the origin.
 4. Debug failures with the Playwright trace viewer (`pnpm e2e:report`) and the `playwright-cli` skill for ad-hoc UI investigation.
 

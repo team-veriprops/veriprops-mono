@@ -112,10 +112,16 @@ export default function ChatThread({
     const trimmed = body.trim();
     if (!trimmed || sending) return;
     setSending(true);
+    // Cleared up front, not after the request: the reply can land (live push) before the send
+    // resolves, and the sender may already be typing the next message — clearing afterwards
+    // would wipe it. A failed send puts the text back unless something newer replaced it.
+    setBody("");
     try {
       const result = await onSend(trimmed);
-      setBody("");
       if (result?.data?.assistantPending) setJustSentPending(true);
+    } catch (error) {
+      setBody((current) => current || trimmed);
+      throw error;
     } finally {
       setSending(false);
     }
@@ -123,7 +129,15 @@ export default function ChatThread({
 
   return (
     <div className="flex flex-col h-full min-h-96 rounded-xl border border-black/5 bg-white overflow-hidden">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+      {/* Focusable so a keyboard user can scroll a long thread (axe: scrollable-region-focusable);
+          `log` is the chat-transcript role, named because it is now a focus stop. */}
+      <div
+        ref={scrollRef}
+        role="log"
+        aria-label="Messages"
+        tabIndex={0}
+        className="flex-1 overflow-y-auto p-4 space-y-3"
+      >
         {isLoading && <p className="text-sm text-gray-600">Loading…</p>}
         {!isLoading && messages.length === 0 && (
           <p className="text-sm text-gray-600 text-center py-8">{emptyHint}</p>
