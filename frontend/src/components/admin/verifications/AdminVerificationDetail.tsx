@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@3rdparty/ui/badge";
 import { Button } from "@3rdparty/ui/button";
@@ -113,7 +113,12 @@ function TaskRow({
               onChange={(e) => setAgentId(e.target.value)}
               data-testid={`assign-agent-${task.role}`}
             />
-            <Button size="sm" onClick={() => doAssign(agentId)} disabled={assign.isPending || !agentId}>
+            <Button
+              size="sm"
+              onClick={() => doAssign(agentId)}
+              disabled={assign.isPending || !agentId}
+              data-testid={`assign-submit-${task.role}`}
+            >
               {task.assignedAgentId ? "Reassign" : "Assign"}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setShowSuggested((v) => !v)}
@@ -130,6 +135,8 @@ function TaskRow({
               ) : (
                 (suggested.data ?? []).map((a) => (
                   <button key={a.userId} onClick={() => doAssign(a.userId)}
+                    data-testid={`suggested-agent-${task.role}`}
+                    data-agent-id={a.userId}
                     className="flex w-full items-center justify-between gap-2 rounded-md border p-2 text-left text-sm hover:bg-muted/50">
                     <span className="flex items-center gap-2">
                       <span className="font-medium">{a.name || a.userId.slice(0, 8)}</span>
@@ -230,6 +237,7 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
   const [delayDays, setDelayDays] = useState(1);
   const [noteBody, setNoteBody] = useState("");
   const [noteCategory, setNoteCategory] = useState<AdminNoteCategory>(AdminNoteCategory.OPERATIONAL);
+  const delayFieldId = useId();
 
   if (isLoading) {
     return (
@@ -314,7 +322,13 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
             </span>
             <span className="text-muted-foreground">{detail.progressPercent}%</span>
           </div>
-          <Progress value={detail.progressPercent} />
+          {/* The surrounding text reads "0/3 approved", but the bar is its own node to
+              assistive tech and has to say what it is measuring. */}
+          <Progress
+            value={detail.progressPercent}
+            data-testid="task-progress"
+            aria-label={`Task progress: ${detail.approvedTaskCount} of ${detail.requiredTaskCount} tasks approved`}
+          />
         </CardContent>
       </Card>
 
@@ -425,7 +439,8 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
                 value={noteCategory}
                 onValueChange={(v) => setNoteCategory(v as AdminNoteCategory)}
               >
-                <SelectTrigger className="w-44" data-testid="note-category">
+                {/* A Radix trigger is a <button> with no text of its own, so it carries the name. */}
+                <SelectTrigger className="w-44" aria-label="Note category" data-testid="note-category">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -470,9 +485,10 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
-            <Label>Extend SLA (business days)</Label>
+            <Label htmlFor={delayFieldId}>Extend SLA (business days)</Label>
             <div className="flex gap-2">
               <Input
+                id={delayFieldId}
                 type="number"
                 min={1}
                 value={delayDays}

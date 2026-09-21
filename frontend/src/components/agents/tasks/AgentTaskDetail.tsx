@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Badge } from "@3rdparty/ui/badge";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
@@ -55,6 +55,9 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
 
   const [kind, setKind] = useState<EvidenceKind>(EvidenceKind.PHOTO);
   const [form, setForm] = useState<Record<string, string>>({});
+  // One prefix for this screen's controls; each field appends its own key so every label
+  // points at exactly the input beneath it.
+  const fieldIdPrefix = useId();
 
   if (isLoading) {
     return (
@@ -101,7 +104,11 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
           <Button asChild variant="outline" data-testid="detail-history">
             <Link href={ROUTES.AGENT.TASK_HISTORY(task.id)}>History</Link>
           </Button>
-          {(task.state === TaskState.PENDING || task.inPool) && (
+          {/* ASSIGNED is the manual-assign path (§2.2): an admin picked this agent, and the
+              task has already left the pool, so accepting it is their next step. */}
+          {(task.state === TaskState.PENDING ||
+            task.state === TaskState.ASSIGNED ||
+            task.inPool) && (
             <Button
               onClick={async () => {
                 await accept.mutateAsync(task.id);
@@ -113,23 +120,26 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
               Accept
             </Button>
           )}
-          {task.state === TaskState.ACCEPTED && (
+          {/* A returned task reopens the same way work begins: REJECTED → IN_PROGRESS is the
+              rework path (§8.1), so the agent needs the control here or the reason they were
+              given is all they can do anything about. */}
+          {(task.state === TaskState.ACCEPTED || task.state === TaskState.REJECTED) && (
             <Button
               onClick={async () => {
                 await start.mutateAsync(task.id);
-                toast({ title: "Work started" });
+                toast({ title: task.state === TaskState.REJECTED ? "Rework started" : "Work started" });
               }}
               disabled={start.isPending}
               data-testid="detail-start"
             >
-              Start work
+              {task.state === TaskState.REJECTED ? "Resume work" : "Start work"}
             </Button>
           )}
         </div>
       </div>
 
       {task.rejectionReason && (
-        <Card className="border-destructive/40">
+        <Card className="border-destructive/40" data-testid="detail-rejection-reason">
           <CardContent className="p-4 text-sm">
             <span className="font-medium text-destructive">Returned for rework: </span>
             {task.rejectionReason}
@@ -152,7 +162,7 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
                 <div className="space-y-1">
                   <Label>Kind</Label>
                   <Select value={kind} onValueChange={(v) => setKind(v as EvidenceKind)}>
-                    <SelectTrigger className="w-40" data-testid="evidence-kind">
+                    <SelectTrigger className="w-40" aria-label="Evidence kind" data-testid="evidence-kind">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -164,12 +174,16 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
                     </SelectContent>
                   </Select>
                 </div>
-                <Input
-                  type="file"
-                  onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
-                  disabled={upload.isPending}
-                  data-testid="evidence-file"
-                />
+                <div className="space-y-1">
+                  <Label htmlFor={`${fieldIdPrefix}-evidence-file`}>File</Label>
+                  <Input
+                    id={`${fieldIdPrefix}-evidence-file`}
+                    type="file"
+                    onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
+                    disabled={upload.isPending}
+                    data-testid="evidence-file"
+                  />
+                </div>
               </div>
               <div className="space-y-1">
                 {(evidence ?? []).map((e) => (
@@ -198,11 +212,12 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
             <CardContent className="space-y-4">
               {fields.map((f) => (
                 <div key={f.key} className="space-y-1">
-                  <Label>
+                  <Label htmlFor={`${fieldIdPrefix}-${f.key}`}>
                     {f.label}
                     {f.required && <span className="text-destructive"> *</span>}
                   </Label>
                   <Input
+                    id={`${fieldIdPrefix}-${f.key}`}
                     value={form[f.key] ?? ""}
                     onChange={(e) => setForm((s) => ({ ...s, [f.key]: e.target.value }))}
                     data-testid={`field-${f.key}`}

@@ -85,7 +85,12 @@ export default function AgentTaskList() {
             <>
               <div className="grid gap-3">
                 {pageData.items.map((task) => {
-                  const canAccept = task.state === TaskState.PENDING || task.inPool;
+                  // ASSIGNED too: an admin handed this agent the task directly (§2.2), which
+                  // takes it out of the pool but still waits on them to accept it.
+                  const canAccept =
+                    task.state === TaskState.PENDING ||
+                    task.state === TaskState.ASSIGNED ||
+                    task.inPool;
                   const canDecline =
                     task.state === TaskState.ASSIGNED || task.state === TaskState.ACCEPTED;
                   return (
@@ -155,6 +160,7 @@ export default function AgentTaskList() {
                             variant="secondary"
                             className="gap-1"
                             onClick={() => router.push(ROUTES.AGENT.TASK_DETAIL(task.id))}
+                            data-testid={`open-task-${task.id}`}
                           >
                             Open <ArrowRight className="size-3.5" />
                           </Button>

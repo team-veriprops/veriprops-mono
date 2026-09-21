@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Badge } from "@3rdparty/ui/badge";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
@@ -9,8 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
 import { toast } from "@components/3rdparty/ui/use-toast";
 import { Loader2 } from "lucide-react";
 import { humanizeEnumLabel } from "@lib/utils";
-import { AgentRole } from "@/types/agent";
-import { TaskState } from "@/types/adminVerification";
+import { ReviewDecision, TaskDto, TaskState } from "@/types/adminVerification";
 import { ReviewState } from "@/types/adminReview";
 import {
   useApproveTaskMutation,
@@ -23,7 +22,7 @@ import {
 
 function ReviewTaskRow({ verificationId, task, findings }: {
   verificationId: string;
-  task: { id: string; role: AgentRole; state: TaskState; reviewDecision?: string };
+  task: TaskDto;
   findings?: Record<string, unknown> | null;
 }) {
   const approve = useApproveTaskMutation(verificationId);
@@ -31,8 +30,9 @@ function ReviewTaskRow({ verificationId, task, findings }: {
   const reopen = useReopenTaskMutation(verificationId);
   const [quality, setQuality] = useState(100);
   const [reason, setReason] = useState("");
+  const qualityFieldId = useId();
 
-  const reviewed = (task as { reviewDecision?: string }).reviewDecision;
+  const reviewed = task.reviewDecision;
 
   return (
     <div className="rounded-lg border border-border p-3" data-testid={`review-task-${task.role}`}>
@@ -41,7 +41,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
         <span className="flex items-center gap-2">
           <Badge variant="outline">{humanizeEnumLabel(task.state)}</Badge>
           {reviewed && (
-            <Badge variant={reviewed === TaskState.APPROVED ? "secondary" : "destructive"}>
+            <Badge variant={reviewed === ReviewDecision.APPROVED ? "secondary" : "destructive"}>
               {humanizeEnumLabel(reviewed)}
             </Badge>
           )}
@@ -57,8 +57,9 @@ function ReviewTaskRow({ verificationId, task, findings }: {
       {task.state === TaskState.SUBMITTED && (
         <div className="mt-2 flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <Label className="text-xs">Quality (0–100)</Label>
+            <Label className="text-xs" htmlFor={qualityFieldId}>Quality (0–100)</Label>
             <Input
+              id={qualityFieldId}
               type="number"
               min={0}
               max={100}
@@ -181,7 +182,7 @@ export default function AdminReportReview({ verificationId }: { verificationId: 
             <ReviewTaskRow
               key={t.id}
               verificationId={verificationId}
-              task={t as { id: string; role: AgentRole; state: TaskState; reviewDecision?: string }}
+              task={t}
               findings={review.findings?.[t.role]}
             />
           ))}

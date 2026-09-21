@@ -54,6 +54,17 @@ describe("AgentTaskList", () => {
     expect(html).not.toContain(">FIELD<");
   });
 
+  /**
+   * A manually assigned task is out of the pool and sitting in ASSIGNED, waiting for this
+   * agent to take it (§2.2). The list is where they see it first, so the accept control
+   * belongs here too — not only on open-pool tasks.
+   */
+  it("offers accept on an admin-assigned task, not only on open-pool tasks", () => {
+    listResult.data = pageOf([{ ...task, state: TaskState.ASSIGNED }]);
+    const html = renderToStaticMarkup(<AgentTaskList />);
+    expect(html).toContain("accept-task-1");
+  });
+
   it("renders a friendly empty state when there are no tasks", () => {
     listResult.data = pageOf([]);
     const html = renderToStaticMarkup(<AgentTaskList />);

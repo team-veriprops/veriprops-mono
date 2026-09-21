@@ -104,12 +104,23 @@ interface UatFixtures {
  * Open a page in a new context, tracked for teardown. Contexts created from the `browser`
  * fixture inherit the project's `use` options (device, base URL, TLS handling).
  */
+/**
+ * Lagos, where every scenario's property sits. Evidence capture asks the browser for a GPS
+ * hint (§12.3), so a context that can answer exercises the real capture path instead of
+ * waiting out a permission prompt for a position it will never get.
+ */
+const CAPTURE_POSITION = { latitude: 6.4478, longitude: 3.4723 };
+
 async function openPage(
   browser: Browser,
   contexts: BrowserContext[],
   storageState?: string,
 ): Promise<Page> {
-  const context = await browser.newContext(storageState ? { storageState } : {});
+  const context = await browser.newContext({
+    ...(storageState ? { storageState } : {}),
+    permissions: ["geolocation"],
+    geolocation: CAPTURE_POSITION,
+  });
   contexts.push(context);
   return context.newPage();
 }
