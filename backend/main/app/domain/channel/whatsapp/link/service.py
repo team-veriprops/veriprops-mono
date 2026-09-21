@@ -38,7 +38,7 @@ from main.app.domain.channel.whatsapp.link.models import (
 )
 from main.app.domain.channel.whatsapp.link.repo import WhatsAppLinkRepo
 from main.app.domain.communication.conversation.service import ConversationService
-from main.app.domain.user.auth.models import OtpChannel
+from main.app.domain.user.auth.models import OtpChannel, OtpSendResultDto
 from main.app.domain.user.auth.otp_service import OtpService
 from main.appodus_utils import Utils
 from main.appodus_utils.db.types.phone import PhoneNumber
@@ -154,9 +154,11 @@ class WhatsAppLinkService:
                 await self._release(link, reason="number_change")
             self._whatsapp_link_repo.claim_number(link, normalized, to_wa_recipient(normalized))
 
+        sent = await self._send_code(normalized, user_id)
         return WhatsAppLinkChallengeDto(
             phone_e164=normalized,
-            resend_after_seconds=await self._send_code(normalized, user_id),
+            resend_after_seconds=sent.resend_in,
+            delivered=sent.delivered,
         )
 
     async def confirm_link(self, user_id: str, phone_e164: str, code: str) -> WhatsAppLink:
@@ -216,7 +218,7 @@ class WhatsAppLinkService:
 
     # ── Internals ─────────────────────────────────────────────────
 
-    async def _send_code(self, phone_e164: str, user_id: str) -> int:
+    async def _send_code(self, phone_e164: str, user_id: str) -> OtpSendResultDto:
         return await self._otp.send_otp(
             OtpChannel.WHATSAPP, PhoneNumber.from_e164(phone_e164), user_id=user_id
         )

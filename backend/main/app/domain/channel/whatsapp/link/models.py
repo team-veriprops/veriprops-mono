@@ -134,7 +134,11 @@ class WhatsAppLinkDto(Object):
 
 
 class WhatsAppLinkChallengeDto(Object):
-    """The result of starting a link: how long the code lasts, and where it went."""
+    """The result of starting a link: how long the code lasts, and where it went.
+
+    ``delivered`` is False when the code was stored but its dispatch did not complete, so the
+    page can say so instead of presenting an entry box for a code that may never arrive."""
 
     phone_e164: str
     resend_after_seconds: int
+    delivered: bool

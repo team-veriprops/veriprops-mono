@@ -21,6 +21,6 @@ export const OTP_NOT_DELIVERED_MESSAGE =
   "We couldn't send your code just now. Please try again in a moment.";
 
 /** The message to show for *result*, or null when the code is genuinely on its way. */
-export function otpDeliveryError(result?: OtpSendResult | null): string | null {
+export function otpDeliveryError(result?: Partial<OtpSendResult> | null): string | null {
   return result?.delivered ? null : OTP_NOT_DELIVERED_MESSAGE;
 }

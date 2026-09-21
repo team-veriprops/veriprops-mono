@@ -2717,3 +2717,41 @@ answering a turn twice.
 ### Revisit
 Once staging/prod run on Docker, the sweep can be trusted as the primary recovery path rather
 than a backstop, and the client-triggered second request could become optional.
+
+
+## Decision: D94 — one live membership per (conversation, user) is enforced by the database
+
+### Context
+`conversation_participants` had no uniqueness. `ensure_participant` checked for a membership
+and then inserted, and a browser opening a thread fires mark-read and (for an admin replying)
+the send together, so two requests both saw "not a member yet" and both inserted. The
+duplicate row doubled that member's line in every list that joins memberships — the admin
+Conversations inbox (D91) listed the thread twice and its `count` exceeded its `total`.
+The browser suite (UAT-CHAT-05/06) exposed it.
+
+### Options Considered
+1. **Partial unique index over live rows plus a race-safe insert** — the database is the only
+   place a concurrent check-then-insert can be made safe.
+2. **`DISTINCT` in the inbox query** — hides the symptom in one list; every other join over
+   memberships (unread counts, "Seen by support") would still double-count.
+3. **An advisory lock around the insert** — serialises correctly but adds a lock to a hot path
+   for something a constraint already expresses.
+
+### Chosen
+Option 1: migration `0016_participant_unique` merges existing duplicates (earliest row kept,
+latest `last_read_at` carried onto it) and adds `uq_conv_participants_membership` over
+`(conversation_id, user_id) WHERE deleted = FALSE`, so a soft-deleted membership never blocks
+a fresh one. `ensure_participant` inserts inside a savepoint and, on `IntegrityError`,
+returns the winner's row.
+
+### Rationale
+A membership is an identity, not an event; the constraint states that and makes every reader
+correct at once.
+
+### Tradeoffs
+The downgrade drops the index but does not restore the merged duplicates (they were redundant).
+Any new membership writer must go through `ensure_participant` rather than inserting directly.
+
+### Revisit
+If memberships ever need history (a member leaves and rejoins with separate windows), model it
+as a new row on a soft-deleted predecessor rather than relaxing the index.

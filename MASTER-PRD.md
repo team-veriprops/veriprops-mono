@@ -1160,6 +1160,9 @@ welcome disclosure are shared, so the two surfaces never describe the product di
   stranger identity order (D67), `/wa/*` single-use links, delivery over Meta with a console mirror,
   STOP/START (§26.4.6), non-text media (§26.6.3), and the §26.10 channel facts. A web turn counts as none
   of those — a web enquiry is not WhatsApp traffic.
+- **Memberships are unique (D94).** A member has one live membership per thread, enforced by a partial
+  unique index; `ensure_participant` is the only writer and is safe against a concurrent first open, so the
+  admin inbox, unread counts and "Seen by support" can never double-count a member.
 
 ---
 

@@ -116,7 +116,10 @@ class CaseDelegateDto(Object):
 
 
 class CaseDelegateChallengeDto(Object):
-    """The result of authorizing: where the code went, and for how long."""
+    """The result of authorizing: where the code went, and for how long.
+
+    ``delivered`` is False when the code was stored but its dispatch did not complete."""
 
     phone_e164: str
     resend_after_seconds: int
+    delivered: bool

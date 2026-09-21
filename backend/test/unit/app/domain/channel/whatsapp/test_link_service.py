@@ -23,7 +23,7 @@ from main.app.domain.channel.whatsapp.link.service import (
     NUMBER_UNAVAILABLE_MESSAGE,
     WhatsAppLinkService,
 )
-from main.app.domain.user.auth.models import OtpChannel
+from main.app.domain.user.auth.models import OtpChannel, OtpSendResultDto
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
@@ -107,7 +107,7 @@ def _service(*, own_link=None, phone_holder=None, active_holder=None):
     repo.activate = MagicMock(side_effect=_activate)
     repo.release_number = MagicMock(side_effect=_release)
 
-    svc._otp.send_otp = AsyncMock(return_value=600)
+    svc._otp.send_otp = AsyncMock(return_value=OtpSendResultDto(resend_in=600, delivered=True))
     svc._otp.verify_otp = AsyncMock(return_value=None)
     svc._conversations.set_whatsapp_thread_owner = AsyncMock(return_value=None)
     svc._conversations.release_whatsapp_thread = AsyncMock(return_value=None)
@@ -148,6 +148,14 @@ class TestStartLink:
 
         assert challenge.phone_e164 == PHONE
         assert challenge.resend_after_seconds == 600
+        assert challenge.delivered is True
+
+    async def test_reports_when_the_code_was_not_delivered(self):
+        svc = _service(own_link=None)
+        svc._otp.send_otp = AsyncMock(return_value=OtpSendResultDto(resend_in=600, delivered=False))
+        challenge = await svc.start_link(USER_ID, PHONE)
+
+        assert challenge.delivered is False
         created = svc._whatsapp_link_repo.create_return_model.await_args.args[0]
         assert created.status == WhatsAppLinkStatus.PENDING
 
