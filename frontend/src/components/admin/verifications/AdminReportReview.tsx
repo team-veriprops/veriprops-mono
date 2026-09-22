@@ -49,7 +49,14 @@ function ReviewTaskRow({ verificationId, task, findings }: {
       </div>
 
       {findings && (
-        <pre className="mt-2 max-h-32 overflow-auto rounded bg-muted p-2 text-xs">
+        // Capped in height and scrolling its overflow, so it has to be reachable by keyboard:
+        // a scrollable region with nothing focusable inside it can never be scrolled without
+        // a mouse (axe `scrollable-region-focusable`).
+        <pre
+          tabIndex={0}
+          aria-label={`${humanizeEnumLabel(task.role)} findings`}
+          className="mt-2 max-h-32 overflow-auto rounded bg-muted p-2 text-xs"
+        >
           {JSON.stringify(findings, null, 2)}
         </pre>
       )}

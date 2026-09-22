@@ -171,9 +171,13 @@ async function fillFindings(page: Page, role: AgentRole): Promise<void> {
 }
 
 test.describe("UAT-GP — golden path, legs 2-5: assignment, execution, review & report @P0 @serial", () => {
-  // Three agents, a rework round-trip and a release: a long journey by construction, not a
-  // slow one by accident.
-  test.slow();
+  /*
+   * A long journey by construction, not a slow one by accident: three agents each signing in
+   * through the real form, an evidence upload apiece, a rework round-trip, a release, and four
+   * accessibility scans. WebKit runs it several times slower than Chromium on a developer box,
+   * so the budget is stated outright rather than left at `test.slow()`'s 270s.
+   */
+  test.setTimeout(600_000);
 
   test("UAT-GP-03 · a paid verification is assigned, worked, reviewed and released to the customer", async ({
     scenario,
@@ -220,9 +224,13 @@ test.describe("UAT-GP — golden path, legs 2-5: assignment, execution, review &
       await page.getByTestId("detail-accept").click();
       await page.getByTestId("detail-start").click();
 
-      // Proof-of-work first: a task cannot be submitted without it.
+      // Proof-of-work first: a task cannot be submitted without it. The capture waits on the
+      // browser's GPS hint (§12.3), posts a multipart body and re-reads the list, so it gets its
+      // own budget rather than the 15s default that suits an ordinary re-render.
       await page.getByTestId("evidence-file").setInputFiles(EVIDENCE_PHOTO);
-      await expect(page.getByTestId("agent-task-detail")).toContainText("Evidence (1)");
+      await expect(page.getByTestId("agent-task-detail")).toContainText("Evidence (1)", {
+        timeout: 60_000,
+      });
 
       await fillFindings(page, role);
       await page.getByTestId("detail-submit").click();
@@ -262,15 +270,22 @@ test.describe("UAT-GP — golden path, legs 2-5: assignment, execution, review &
 
     await adminPage.getByTestId("release-reason").fill("All three checks agree.");
     await adminPage.getByTestId("release-submit").click();
-    await expect(adminPage.getByTestId("admin-report-review")).toContainText("Released report v1");
+    // Release is the heaviest single action in the journey — composite score, commissions, the
+    // versioned report and the event fan-out — so it gets its own budget rather than the 15s
+    // default that suits an ordinary re-render.
+    await expect(adminPage.getByTestId("admin-report-review")).toContainText("Released report v1", {
+      timeout: 60_000,
+    });
 
     // ── Leg 5: the customer is told, and reads what they paid for (§10.1) ────
     const customerPage = await pageFor(journey.customer);
     await goto(customerPage, ROUTES.PORTAL.DASHBOARD);
 
-    // The shell keeps a bell per breakpoint in the DOM and hides all but one in CSS, so these
-    // scope to the one the customer can actually see — as `signOut` does for the same reason.
-    const onScreen = (testId: string) => customerPage.getByTestId(testId).filter({ visible: true });
+    // The shell keeps a bell per breakpoint in the DOM, and the off-canvas drawer's copy still
+    // reads as "visible" while parked off-screen (the same trap `signOut` documents). Scoping to
+    // the page header picks out the one bell the customer is actually looking at, on any viewport.
+    const header = customerPage.getByRole("banner");
+    const onScreen = (testId: string) => header.getByTestId(testId).filter({ visible: true });
     await expect(onScreen("notification-unread-badge")).toBeVisible();
     await onScreen("notification-bell").click();
     await expect(onScreen("notification-dropdown")).toContainText("Report ready");

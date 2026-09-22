@@ -64,6 +64,23 @@ describe("AdminReportReview", () => {
     expect(html).toContain("Submitted");
   });
 
+  /**
+   * The findings block is capped in height and scrolls its overflow, which a phone viewport
+   * reaches long before a desktop one. A scrollable region with nothing focusable inside it
+   * is unreachable by keyboard (axe `scrollable-region-focusable`), so it takes focus itself.
+   */
+  it("lets a keyboard reach the findings it has to scroll", () => {
+    reviewResult.data = {
+      ...review,
+      findings: { [AgentRole.FIELD]: { occupancy_status: "VACANT" } },
+    };
+    const html = renderToStaticMarkup(<AdminReportReview verificationId="v1" />);
+
+    expect(html).toContain("occupancy_status");
+    expect(html).toMatch(/<pre[^>]*tabindex="0"/i);
+    expect(html).toMatch(/<pre[^>]*aria-label="[^"]+"/i);
+  });
+
   it("binds the quality score to its label", () => {
     // "Quality (0-100)" sits above the box but named nothing: the number an admin types here
     // feeds the composite trust score, so the field has to say what it is.

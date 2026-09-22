@@ -157,6 +157,129 @@ Both fixes came from reading the OTP path while chasing a latency problem that t
 
 ---
 
+## Slice 4 — golden path legs 2-5 (`golden-path.spec.ts`, P0, `@serial`)
+
+**UAT-GP-03**, one ordered journey through the browser: an admin opens the ranked-suggestions
+panel and assigns all three STANDARD roles → each agent accepts, starts, captures evidence and
+submits their findings → the admin returns the FIELD task with a reason → that agent reads it,
+resumes the work and resubmits → the admin approves each role with a quality score and releases →
+the customer is notified, clears the disclaimer gate, reads the trust gauge and VID, and downloads
+the branded PDF (asserted on the bytes: `%PDF` magic plus the VID). Four a11y scans en route.
+
+### Six defects it exposed, each fixed test-first
+1. **An admin-assigned task could not be accepted.** `assign()` moves a task to ASSIGNED and out
+   of the pool, but both agent surfaces gated Accept on `state === PENDING || inPool`. The
+   manual-assign path (§2.2) therefore dead-ended in the UI while the backend's machine allowed
+   ASSIGNED → ACCEPTED all along. (`AgentTaskList`, `AgentTaskDetail`.)
+2. **A returned task could not be reworked.** `reject_task` lands the task in REJECTED, and
+   `TASK_TRANSITIONS[REJECTED] = {IN_PROGRESS}` — which is exactly what `start()` performs. But the
+   screen offered Start only for ACCEPTED, so the agent saw the reason their work came back and had
+   no way to act on it. Now REJECTED offers "Resume work", and the reason card carries an anchor.
+3. **Three unnamed or unbound controls on the admin console**, all blocking axe: `delay-days` had a
+   `<Label>` bound to nothing, the `note-category` Radix trigger had no accessible name, and the
+   task-progress bar was an unnamed progressbar. Inputs bound with `useId()`; Radix triggers named
+   with `aria-label`, following the Slice 3 `AdminPayouts` precedent (a `<label for>` pointing at a
+   `<button role="combobox">` names nothing).
+4. **The review decision never reached the browser.** `approve_task` deliberately leaves the task
+   SUBMITTED and records `review_decision` (§8.3) — but both hand-written mappers
+   (`review/controller.py:_task_dto` and `admin/service.py:_task_dto`) omitted it, and the read
+   `TaskDto` never declared it. An admin approving a task got no confirmation their review had
+   registered. The service test passes because it stops short of the mapper; the new
+   `test_review_task_dto.py` covers both mappers and the camelCase wire key. Frontend `TaskDto`
+   gained the field, so `AdminReportReview` dropped the `as { reviewDecision?: string }` cast it
+   had been reading through.
+5. **The trust band failed WCAG AA on every band** — measured 3.50:1 (Safe), 2.83:1 (Caution) and
+   4.48:1 (High Risk) against the tinted panel, where AA needs 4.5:1. The scan only caught Safe,
+   because that is the band this scenario happened to produce. Fixed as one shared
+   `lib/trust-band.ts` expressed in the theme's semantic tokens (5.06 / 5.23 / 6.07), which also
+   removed the duplicate band→colour tables that `ReportView` and `PublicSummaryCard` each kept
+   privately — two surfaces required to stay in §10.2 parity and free to drift.
+6. **The findings block was unreachable by keyboard** (`max-h-32 overflow-auto` with nothing
+   focusable inside). Only chromium-mobile exposed it: on a desktop viewport the same JSON fits and
+   nothing scrolls. This is the clearest argument this cycle for the engine matrix being a gate
+   rather than a formality.
+
+### Misjudgements of mine, recorded so they are not repeated
+- **I traded one strict-mode violation for another.** After the bell resolved to three elements I
+  scoped it with `filter({ visible: true })`, which passed on desktop and broke on mobile: the
+  off-canvas drawer's copy still reads as *visible* while parked off-screen. `helpers/ui.ts:signOut`
+  documents that exact trap in a comment I had already read. The locators now scope to the page
+  header, which holds the one bell the customer is looking at on any viewport.
+- **I nearly went hunting for a backend defect that did not exist.** When the bell assertion failed
+  I suspected `REPORT_READY` had no in-app rule, since the rule row declares only email/SMS/WhatsApp.
+  `NotificationRule.in_app` defaults to `True`; the notification was always being created, and the
+  page snapshot showed the badge reading 7. The failure was entirely my locator.
+
+### Folded in
+- Assign/suggest anchors (`assign-submit-{role}`, `suggested-agent-{role}` + `data-agent-id`),
+  `open-task-{id}`, `detail-rejection-reason`, `task-progress`, `report-trust-score`.
+- The deferred evidence fixtures now exist and are used: `e2e/fixtures/evidence-photo.jpg` (a real
+  JPEG; the backend hashes and stores bytes without validating mime or size) and `evidence-doc.pdf`.
+- `src/test-utils/markup.ts` — testid-anchored markup assertions shared by the new component tests.
+  `Field.test.tsx` keeps its own local helper: it reads the first attribute in the document, which
+  is right for a single-control render and wrong for a page.
+- Fixture contexts now grant geolocation, so evidence capture exercises the real §12.3 GPS path
+  instead of waiting out a prompt for a position it would never get.
+
+### Verification
+- **Gates:** backend ruff + mypy clean, unit **2260**; frontend Vitest **684** across 106 files,
+  tsc + eslint clean.
+- **chromium-desktop + chromium-mobile:** green on both `auth.spec.ts` and `golden-path.spec.ts`
+  (24/24 parallel lane, 6/6 serial lane), first attempt.
+- **webkit:** parallel lane 24/24 in 2.9 min; serial lane **timed out on UAT-GP-03** (both engines,
+  attempt and retry) and took 21 min. Classified **environment, not defect**: the captured page
+  shows all three tasks Approved with a projected score of 95 and *no* "approve every task to
+  enable release" hint, so `releasable` was true and the button live — the release round-trip
+  simply had not finished inside the 15s assertion default. WebKit runs this journey several times
+  slower than Chromium here, and release is its heaviest action (composite score, commissions, the
+  versioned report, event fan-out). The budget is now stated outright: `test.setTimeout(600_000)`
+  for the journey and 60s for the release assertion, replacing `test.slow()`'s 270s.
+- **firefox:** parallel lane **20/20** in 9.3 min. Serial lane 5/6 — firefox-desktop UAT-GP-03
+  failed waiting on `Evidence (1)`: 15s after the file was set the screen still read `Evidence (0)`,
+  i.e. the upload had not landed. **Timing, not incompatibility** — firefox-mobile is the same Gecko
+  engine and passed the identical flow. Evidence capture waits on the browser's GPS hint (§12.3),
+  posts a multipart body and re-reads the list, so that assertion now carries a 60s budget like
+  release. This box ran the Firefox serial lane in **1.4 hours**, ~9x Chromium per test.
+- Both widened budgets are about this machine, not the product: every assertion still fails loudly
+  if the outcome never arrives; it simply waits long enough for a slow engine to get there.
+- **Re-verified against the new budgets:** webkit-mobile green on the first attempt (5.8 min);
+  webkit-desktop and firefox-desktop green **on retry** (8.3 min / 3.5 min), their first attempts
+  exceeding even the 600s budget. Those three tests alone took 1.7 hours here.
+
+### Matrix result
+| engine | `auth.spec.ts` + `golden-path.spec.ts` |
+|---|---|
+| chromium-desktop | green, first attempt |
+| chromium-mobile | green, first attempt |
+| webkit-mobile | green, first attempt |
+| firefox-mobile | green, first attempt |
+| webkit-desktop | green; UAT-GP-03 needed a retry |
+| firefox-desktop | green; UAT-GP-03 needed a retry |
+
+**All six engines pass UAT-GP-03; two need a retry.** That is short of this plan's "no unexplained
+retries" bar, and the explanation is machine speed rather than product behaviour — the evidence for
+that reading is recorded above (the release button live with `releasable` true, and firefox-mobile
+passing the identical flow on the same Gecko engine). **User decision, 2026-09-22: this stands as
+it is** — the journey is not made cheaper, the budget is not raised again, and GP-03 is not
+re-tagged to fewer engines. CI hardware is unmeasured, so if the retries survive there the
+classification deserves re-testing rather than restating.
+- A full six-engine matrix in one invocation exceeds the per-call budget here, so it is chunked by
+  engine pair.
+
+### Stack notes for the next session
+- **The local database was rebuilt as `veriprops_uat`.** After the squash that folded the
+  unified-chat chain into `0001_initial_schema`, `veriprops_local` was left stamped at
+  `0011_whatsapp_legal_copy` — a revision that no longer exists, so alembic could not resolve it.
+  The migration's own docstring states the invariant: a squash is only safe once every live database
+  is stamped at the head being folded in. Rather than drop anything, a fresh database was created
+  and migrated to `0017_session_pkey_name`; `veriprops_local` is untouched. The backend is started
+  with `DB_NAME=veriprops_uat`, which takes precedence over the env file, so no config was edited.
+- The backend does not hot-reload, and the standalone frontend serves a built bundle: after any
+  source change both must be restarted (and the frontend rebuilt + restaged) before a browser run
+  means anything.
+
+---
+
 # Progress Tracker — WhatsApp Channel (cycle 2)
 
 status: **cycle complete** — S1–S11 delivered (+ S4.1 template registry, + S10.0 handoffs)
