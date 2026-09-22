@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
 import { SubmitButton } from "@components/ui/form/SubmitButton";
 import VerifiedInput, { VerifiedInputType } from "@components/ui/verified_input/VerifiedInput";
 import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
@@ -126,9 +126,9 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Complete your profile</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-brand-on-surface-variant">
+        <DialogDescription className="text-sm text-brand-on-surface-variant">
           We need a few more details before you can use Veriprops.
-        </p>
+        </DialogDescription>
 
         {/* method="post" so that a submit landing before hydration cannot put the phone number
             in the URL — see SubmitButton. */}

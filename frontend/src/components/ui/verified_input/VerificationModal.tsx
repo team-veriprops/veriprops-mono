@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
 import { Button } from "@3rdparty/ui/button";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -166,9 +166,9 @@ const VerificationModal = ({ open, onClose, onVerified, type, onSendVerification
             <span className="sr-only">Close</span>
           </button>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">
+        <DialogDescription className="text-sm text-muted-foreground">
           Enter the 6-digit code sent to your {type.toLowerCase()}.
-        </p>
+        </DialogDescription>
 
         <div className="flex justify-center gap-2 my-4" onPaste={handlePaste}>
           {otp.map((digit, i) => (
