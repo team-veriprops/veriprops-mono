@@ -1,19 +1,19 @@
 import Link from 'next/link'
+import { Button } from '@3rdparty/ui/button'
+import StatusPage from '@components/ui/StatusPage'
 import { ROUTES } from '@lib/routes'
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 px-4">
-      <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">404 – Page Not Found</h1>
-      <p className="text-gray-600 dark:text-gray-300 mb-6 max-w-md text-center">
-        Sorry, the page you are looking for doesn’t exist or has been moved.
-      </p>
-      <Link
-        href={ROUTES.HOME}
-        className="inline-block bg-brand text-white px-6 py-3 rounded-md hover:bg-brand-dark transition"
-      >
-        Go back home
-      </Link>
-    </div>
+    <StatusPage
+      code={404}
+      title="Page not found"
+      message="Sorry, the page you are looking for doesn’t exist or has been moved."
+      actions={
+        <Button asChild>
+          <Link href={ROUTES.HOME}>Go back home</Link>
+        </Button>
+      }
+    />
   )
 }
