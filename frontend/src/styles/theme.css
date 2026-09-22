@@ -288,6 +288,7 @@
   --color-brand-surface-high:      var(--brand-surface-high);
   --color-brand-surface-highest:   var(--brand-surface-highest);
   --color-brand-surface-card:      var(--brand-surface-card);
+  --color-brand-surface-dim:       var(--brand-surface-dim);
   --color-brand-on-surface:        var(--brand-on-surface);
   --color-brand-on-surface-variant: var(--brand-on-surface-variant);
   --color-brand-outline:           var(--brand-outline);
