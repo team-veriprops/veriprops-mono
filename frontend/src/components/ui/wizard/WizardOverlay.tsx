@@ -29,6 +29,14 @@ interface WizardOverlayProps {
  * above the AppShell chrome so the flow "covers everywhere" while the route stays
  * deep-linkable, back-button-safe and refresh-resumable. Reused by agent
  * onboarding, property submission, and payment.
+ *
+ * Layering: `z-45` sits above persistent chrome (AppShell mobile scrim, WhatsApp
+ * widget — `z-40`) and **below** every portaled layer (Radix dialogs, selects,
+ * popovers, tooltips, `DetailDrawer` — `z-50`; toasts — `z-100`). A global
+ * mandatory modal (updated-terms re-acceptance, session recovery) can open while a
+ * wizard is up, and an open Radix modal disables pointer events everywhere else —
+ * so if the wizard painted above it, the user would see a form they cannot use.
+ * Never raise this above `z-50`.
  */
 export default function WizardOverlay({
   steps,
@@ -44,7 +52,7 @@ export default function WizardOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-70 flex flex-col bg-background"
+      className="fixed inset-0 z-45 flex flex-col bg-background"
       role="dialog"
       aria-modal="true"
       aria-label={title}
