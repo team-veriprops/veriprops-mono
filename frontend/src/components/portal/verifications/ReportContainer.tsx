@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { BadgeCheck, Download, Share2 } from "lucide-react";
 import { Button } from "@3rdparty/ui/button";
 import { Card, CardContent } from "@3rdparty/ui/card";
 import { CopyText } from "@components/ui/CopyText";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
+import { PAGE_OVERLAY_LAYER } from "@components/ui/layers";
 import { usePublicConfigQuery } from "@components/website/auth/libs/useAuthQueries";
 import {
   useAcknowledgeReportMutation,
@@ -60,11 +61,17 @@ export default function ReportContainer({ verificationId }: { verificationId: st
 }
 
 function AccessGate({ onAccept, pending }: { onAccept: () => void; pending: boolean }) {
+  const titleId = useId();
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
+    <div
+      className={cn("fixed inset-0 flex items-center justify-center bg-black/60 p-4", PAGE_OVERLAY_LAYER)}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+    >
       <Card className="max-w-md">
         <CardContent className="space-y-4 pt-6 text-sm">
-          <h2 className="text-base font-semibold">Before you view your report</h2>
+          <h2 id={titleId} className="text-base font-semibold">Before you view your report</h2>
           <p className="text-muted-foreground">
             This report is a professional opinion based on the information available at the time of
             verification. It reduces uncertainty — it does not eliminate it. By continuing you

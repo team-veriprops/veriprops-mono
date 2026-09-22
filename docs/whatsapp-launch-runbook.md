@@ -17,7 +17,7 @@ the ⊘ items depend on assets Meta or a human has to provide.
   staging is a defect to fix before cutover, not during it. Dev and test stay stubbed;
   `ENVIRONMENT=test` **requires** the stub and `prod` requires `meta`, enforced at boot, so
   CI can never reach Meta and production can never launch onto the stub.
-- The Doppler keys the live path needs, in the `prd` config of `veriprops-backend`:
+- The Doppler keys the live path needs, in the `prd` config of `veriprops-verf-backend`:
   `WHATSAPP_BUSINESS_ACCESS_TOKEN`, `WHATSAPP_BUSINESS_ACCOUNT_ID`,
   `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET_KEY`,
   `WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN`, the §26.5 RS256 keypair

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolvePostAuthRedirect, isSafeRedirectPath } from "./redirect";
+import { dashboardFor, resolvePostAuthRedirect, isSafeRedirectPath } from "./redirect";
 import { TransactionCurrency } from "@/types/models";
 import { AccountStatus, AuthUser, AuthIntent, TrustStatus, UserPersona, UserType } from "@components/website/auth/models";
 const baseUser: AuthUser = {
@@ -114,6 +114,31 @@ describe("resolvePostAuthRedirect", () => {
       const dest = resolvePostAuthRedirect(baseUser, { redirect: payload });
       expect(dest).toBe("/portal/dashboard");
     }
+  });
+});
+
+describe("dashboardFor", () => {
+  it("sends an admin to /admin whatever other personas they hold", () => {
+    expect(dashboardFor({ ...baseUser, userType: UserType.ADMIN, personas: [] })).toBe("/admin/dashboard");
+    expect(
+      dashboardFor({ ...baseUser, userType: UserType.ADMIN, personas: [UserPersona.AGENT, UserPersona.CUSTOMER] }),
+    ).toBe("/admin/dashboard");
+  });
+
+  it("prefers the agent dashboard for an agent who is also a customer", () => {
+    expect(dashboardFor({ ...baseUser, personas: [UserPersona.AGENT, UserPersona.CUSTOMER] })).toBe(
+      "/agents/dashboard",
+    );
+  });
+
+  it("sends a customer to /portal, even one who has never started a verification", () => {
+    expect(dashboardFor(baseUser)).toBe("/portal/dashboard");
+    const neverStarted: AuthUser = { ...baseUser, hasStartedVerification: false };
+    expect(dashboardFor(neverStarted)).toBe("/portal/dashboard");
+  });
+
+  it("defaults a user with no persona yet to the customer portal", () => {
+    expect(dashboardFor({ ...baseUser, personas: [] })).toBe("/portal/dashboard");
   });
 });
 

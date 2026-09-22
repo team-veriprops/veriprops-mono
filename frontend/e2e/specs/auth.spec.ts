@@ -205,10 +205,23 @@ async function fillAccountStep(page: Page, account: NewAccount): Promise<void> {
 
 /** Ask for a code on *field* and wait until the dialog is ready to be typed into. */
 async function openOtpDialog(page: Page, field: "email" | "phone"): Promise<void> {
-  await page.getByTestId(`verify-${field}-send`).click();
-
+  const send = page.getByTestId(`verify-${field}-send`);
   const modal = page.getByTestId("verify-otp-modal");
   const sendError = page.getByTestId(`verify-${field}-error`);
+  const sending = send.getByText("Sending code…");
+
+  // WebKit occasionally drops a click on this button just after the step swaps in: nothing is
+  // sent and the button never enters its sending state — observed in CI and locally, with the
+  // click passing every actionability check. A user simply taps again; a test would otherwise
+  // wait out the whole budget below. So a click is repeated only while it has provably had no
+  // effect. Any effect at all — the button sending, an error, the dialog — ends the retrying and
+  // is left to decide the outcome, so a send that fails or hangs still fails this helper.
+  await expect(async () => {
+    const registered = (await modal.isVisible()) || (await sendError.isVisible()) || (await sending.isVisible());
+    if (!registered) await send.click();
+    await expect(modal.or(sendError).or(sending).first()).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 20_000 });
+
   // The endpoint itself is quick (~0.15s measured), but this whole step is generously budgeted
   // because the browser gets starved when several workers share one machine, and that is where
   // this wait has actually failed. The form's own error is watched alongside, so a refused send

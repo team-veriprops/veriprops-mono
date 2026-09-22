@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
 import { Button } from "@3rdparty/ui/button";
 import { Checkbox } from "@3rdparty/ui/checkbox";
 import LegalDocument from "@components/website/legal/LegalDocument";
@@ -65,10 +65,10 @@ export default function ConsentReacceptanceModal() {
           </DialogTitle>
         </DialogHeader>
 
-        <p className="text-sm leading-relaxed mt-2 text-brand-on-surface-variant">
+        <DialogDescription className="text-sm leading-relaxed mt-2 text-brand-on-surface-variant">
           We&apos;ve published new versions of the documents below. Please review and accept to continue
           using Veriprops. Your previous acceptance is on record and remains audit-logged.
-        </p>
+        </DialogDescription>
 
         <div className="space-y-3 mt-4">
           {documents.map((doc) => {
@@ -126,7 +126,9 @@ export default function ConsentReacceptanceModal() {
     </Dialog>
 
     <Dialog open={!!viewingSlug} onOpenChange={(o) => !o && setViewingSlug(null)}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      {/* The legal document is the dialog's whole content, so there is no separate summary to
+          point aria-describedby at. */}
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto" aria-describedby={undefined}>
         {/* LegalDocument renders its own visible heading; this satisfies Radix's
             accessible-name requirement without duplicating it on screen. */}
         <DialogTitle className="sr-only">{viewingDoc?.title ?? "Legal document"}</DialogTitle>

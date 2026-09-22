@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { PAGE_OVERLAY_LAYER } from "@components/ui/layers";
 import WizardOverlay from "./WizardOverlay";
 
 function render(closable?: boolean): string {
@@ -31,5 +32,12 @@ describe("WizardOverlay closable", () => {
   it("hides the close control when closable=false (compulsory flow)", () => {
     const html = render(false);
     expect(html).not.toContain("test-wizard-close");
+  });
+});
+
+// The stacking contract itself is pinned in components/ui/layers.test.tsx.
+describe("WizardOverlay layering", () => {
+  it("renders on the shared page overlay layer", () => {
+    expect(render()).toMatch(new RegExp(`class="[^"]*\\b${PAGE_OVERLAY_LAYER}\\b`));
   });
 });

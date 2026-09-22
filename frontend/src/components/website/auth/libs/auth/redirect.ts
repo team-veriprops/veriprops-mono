@@ -25,6 +25,17 @@ export function isSafeRedirectPath(value: string | null | undefined): value is s
   );
 }
 
+/**
+ * The home dashboard for a signed-in user, by highest privilege: admin, then agent, then
+ * customer. A user with no persona yet belongs to the customer journey. Used wherever the app
+ * sends someone "back to their dashboard" — the post-auth fallback and the 403 page.
+ */
+export function dashboardFor(user: Pick<AuthUser, "userType" | "personas">): string {
+  if (user.userType === UserType.ADMIN) return ROUTES.ADMIN.DASHBOARD;
+  if (user.personas.includes(UserPersona.AGENT)) return ROUTES.AGENT.DASHBOARD;
+  return ROUTES.PORTAL.DASHBOARD;
+}
+
 export function resolvePostAuthRedirect(
   user: AuthUser,
   options: { intent?: AuthIntent | null; redirect?: string | null } = {},
@@ -34,7 +45,7 @@ export function resolvePostAuthRedirect(
   }
 
   if (user.userType === UserType.ADMIN) {
-    return ROUTES.ADMIN.DASHBOARD;
+    return dashboardFor(user);
   }
 
   const isAgent = user.personas.includes(UserPersona.AGENT);
@@ -50,9 +61,5 @@ export function resolvePostAuthRedirect(
     return ROUTES.PORTAL.VERIFICATIONS_NEW;
   }
 
-  if (isAgent) return ROUTES.AGENT.DASHBOARD;
-  if (isCustomer) return ROUTES.PORTAL.DASHBOARD;
-
-  // No persona yet — default Customer journey.
-  return ROUTES.PORTAL.DASHBOARD;
+  return dashboardFor(user);
 }

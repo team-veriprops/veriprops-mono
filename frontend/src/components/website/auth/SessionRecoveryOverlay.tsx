@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "zustand";
 import { RefreshCw, ShieldAlert } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
 import { Button } from "@3rdparty/ui/button";
 import { cn } from "@lib/utils";
 import { SESSION_EXPIRED_REDIRECT_DELAY_MS } from "@lib/config/app";
@@ -89,20 +89,20 @@ export default function SessionRecoveryOverlay() {
 
         {expired ? (
           <>
-            <p className="text-sm leading-relaxed text-brand-on-surface-variant">
+            <DialogDescription className="text-sm leading-relaxed text-brand-on-surface-variant">
               For your security, you&apos;ve been signed out. We&apos;re taking you to sign
               in — you&apos;ll come right back to where you left off.
-            </p>
+            </DialogDescription>
             <Button className="w-full" onClick={signInNow} data-testid="session-signin-now">
               Sign in now
             </Button>
           </>
         ) : (
           <>
-            <p className="text-sm leading-relaxed text-brand-on-surface-variant">
+            <DialogDescription className="text-sm leading-relaxed text-brand-on-surface-variant">
               Your connection was interrupted — we&apos;re retrying automatically. Your
               work stays right where it is.
-            </p>
+            </DialogDescription>
             <p
               aria-live="polite"
               data-testid="session-recovery-attempt"
