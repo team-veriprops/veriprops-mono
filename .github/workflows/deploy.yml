@@ -14,7 +14,7 @@
 #
 # Env vars & secrets — Doppler is the single source, injected HERE (no
 # Doppler→Vercel sync, no dashboard env vars):
-#   - Each app has its own Doppler project (veriprops-backend / veriprops-frontend)
+#   - Each app has its own Doppler project (veriprops-verf-backend / veriprops-verf-frontend)
 #     with configs prd/stg/dev. Each GitHub Environment (production/staging/dev)
 #     holds two config-scoped read-only service tokens: DOPPLER_TOKEN_BACKEND and
 #     DOPPLER_TOKEN_FRONTEND (a service token pins project+config, so no
