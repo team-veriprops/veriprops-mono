@@ -1,11 +1,7 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Dialog, DialogContent, DialogTitle } from "@3rdparty/ui/dialog";
+import { PAGE_OVERLAY_LAYER } from "@components/ui/layers";
 import WizardOverlay from "./WizardOverlay";
-
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function render(closable?: boolean): string {
   return renderToStaticMarkup(
@@ -39,53 +35,9 @@ describe("WizardOverlay closable", () => {
   });
 });
 
-/** Reads the Tailwind `z-N` utility off an element's class list. */
-function zIndexOf(el: Element | null): number {
-  const match = el?.className.match(/(?:^|\s)z-(\d+)(?:\s|$)/);
-  if (!match) throw new Error(`no z-N class on ${el?.outerHTML.slice(0, 120)}`);
-  return Number(match[1]);
-}
-
-describe("WizardOverlay stacking", () => {
-  let root: Root | null = null;
-  let host: HTMLElement | null = null;
-
-  afterEach(() => {
-    act(() => root?.unmount());
-    host?.remove();
-    root = null;
-    host = null;
-  });
-
-  // A global modal (updated-terms re-acceptance, session recovery) can open while a wizard is up.
-  // Radix disables pointer events outside an open modal, so if the wizard painted above it the
-  // user would see the form but be unable to use either surface.
-  it("sits below portaled dialogs so a modal opened over a wizard stays visible and usable", () => {
-    host = document.createElement("div");
-    document.body.appendChild(host);
-    root = createRoot(host);
-    act(() =>
-      root!.render(
-        <>
-          <WizardOverlay
-            steps={["One"]}
-            current={0}
-            onClose={() => {}}
-            testIdPrefix="test-wizard"
-          >
-            <div>content</div>
-          </WizardOverlay>
-          <Dialog open>
-            <DialogContent aria-describedby={undefined}>
-              <DialogTitle>Mandatory</DialogTitle>
-            </DialogContent>
-          </Dialog>
-        </>,
-      ),
-    );
-
-    const wizard = zIndexOf(document.querySelector('[data-testid="test-wizard-overlay"]'));
-    expect(wizard).toBeLessThan(zIndexOf(document.querySelector('[data-slot="dialog-overlay"]')));
-    expect(wizard).toBeLessThan(zIndexOf(document.querySelector('[data-slot="dialog-content"]')));
+// The stacking contract itself is pinned in components/ui/layers.test.tsx.
+describe("WizardOverlay layering", () => {
+  it("renders on the shared page overlay layer", () => {
+    expect(render()).toMatch(new RegExp(`class="[^"]*\\b${PAGE_OVERLAY_LAYER}\\b`));
   });
 });

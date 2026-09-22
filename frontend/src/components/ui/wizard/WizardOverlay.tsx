@@ -6,6 +6,8 @@ import Stepper from "@components/website/auth/signup/Stepper";
 import { Button } from "@3rdparty/ui/button";
 import { useBodyOverflowHidden } from "@hooks/useBodyOverflowHidden";
 import BrandLogo from "@components/ui/BrandLogo";
+import { PAGE_OVERLAY_LAYER } from "@components/ui/layers";
+import { cn } from "@lib/utils";
 
 interface WizardOverlayProps {
   /** Step titles for the progress indicator. */
@@ -30,13 +32,8 @@ interface WizardOverlayProps {
  * deep-linkable, back-button-safe and refresh-resumable. Reused by agent
  * onboarding, property submission, and payment.
  *
- * Layering: `z-45` sits above persistent chrome (AppShell mobile scrim, WhatsApp
- * widget — `z-40`) and **below** every portaled layer (Radix dialogs, selects,
- * popovers, tooltips, `DetailDrawer` — `z-50`; toasts — `z-100`). A global
- * mandatory modal (updated-terms re-acceptance, session recovery) can open while a
- * wizard is up, and an open Radix modal disables pointer events everywhere else —
- * so if the wizard painted above it, the user would see a form they cannot use.
- * Never raise this above `z-50`.
+ * It sits on {@link PAGE_OVERLAY_LAYER} — above the chrome, below every portaled
+ * dialog and picker — so a global modal or a step's own Select stays usable over it.
  */
 export default function WizardOverlay({
   steps,
@@ -52,7 +49,7 @@ export default function WizardOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-45 flex flex-col bg-background"
+      className={cn("fixed inset-0 flex flex-col bg-background", PAGE_OVERLAY_LAYER)}
       role="dialog"
       aria-modal="true"
       aria-label={title}
