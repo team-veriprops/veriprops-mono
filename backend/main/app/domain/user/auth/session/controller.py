@@ -97,11 +97,22 @@ async def refresh_session(request: Request, authorize: AuthJWT = Depends()):
         authorize.unset_jwt_cookies(response)
         return response
 
-    await JwtAuthUtils.refresh_access_token(authorize=authorize)
+    # Load the user before minting: the new access token's personas are read from the record, so a
+    # persona granted or withdrawn mid-session takes effect on the next refresh rather than
+    # persisting for the life of the refresh token. The token is verified first because `AuthJWT`
+    # has no subject until a `*_required()` call has checked one — reading it earlier yields `None`
+    # and fails every refresh.
+    await authorize.jwt_refresh_token_required()
+    user = await user_service.get_user_model(str(authorize.get_jwt_subject()))
+    await JwtAuthUtils.refresh_access_token(
+        authorize=authorize,
+        user_type=user.user_type,
+        user_personas=user.personas,
+        admin_sub_role=str(user.admin_sub_role) if getattr(user, "admin_sub_role", None) else None,
+    )
     await session_service.touch_device_session(token_hash)
     # Return the full session DTO (not a bare bool): the frontend keep-alive
     # uses accessTokenExpiresAt to schedule the next proactive refresh.
-    user = await user_service.get_user_model(str(authorize.get_jwt_subject()))
     session = await session_service.build_session_dto(user)
     return SuccessResponse[AuthSessionDto](data=session)
 

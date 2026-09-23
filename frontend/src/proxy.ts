@@ -59,6 +59,17 @@ const isProtected = (pathname: string) =>
 
 const isGuestOnly = (pathname: string) => GUEST_ONLY_PATHS.has(pathname);
 
+/**
+ * The one `/agents/*` route a non-agent must be able to open. Applying is what grants the AGENT
+ * persona (PRD §3.2, additive — it never removes CUSTOMER), so gating the application behind that
+ * persona makes it unreachable for an existing customer: the persona is granted by applying, and
+ * applying required the persona. It stays inside `PROTECTED_PREFIXES`, so a session is still
+ * required — and only this route is exempt, because the wider `/agents/*` area answers a non-agent
+ * with a non-dismissible onboarding wizard.
+ */
+const isAgentApplication = (pathname: string) =>
+  pathname === ROUTES.AGENT.APPLY || pathname.startsWith(`${ROUTES.AGENT.APPLY}/`);
+
 
 /**
  * Expiry validation
@@ -171,7 +182,7 @@ export function proxy(req: NextRequest) {
     return redirect(req, redirectToDashboard(decodedJwt));
   }
 
-  if (isOnAgent && !isAdmin && !isAgent) {
+  if (isOnAgent && !isAdmin && !isAgent && !isAgentApplication(pathname)) {
     return redirect(req, redirectToDashboard(decodedJwt));
   }
 

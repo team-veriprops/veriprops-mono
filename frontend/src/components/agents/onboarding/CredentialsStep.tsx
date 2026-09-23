@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { BadgeCheck } from "lucide-react";
 import {
   AgentCredentialInput,
@@ -19,6 +19,10 @@ interface Props {
 }
 
 export default function CredentialsStep({ state, update }: Props) {
+  // One prefix for this step's controls; each field appends its own key so every label points
+  // at exactly the input beneath it.
+  const fieldIdPrefix = useId();
+
   // Roles that need a professional licence drive the credential rows.
   const requiredRoles = state.roles.filter((r) => ROLE_REQUIRED_CREDENTIAL[r]);
 
@@ -63,16 +67,18 @@ export default function CredentialsStep({ state, update }: Props) {
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Licence number</Label>
+                    <Label htmlFor={`${fieldIdPrefix}-licence-${role}`}>Licence number</Label>
                     <Input
+                      id={`${fieldIdPrefix}-licence-${role}`}
                       value={cred?.licenceNumber ?? ""}
                       onChange={(e) => setCredential(role, { licenceNumber: e.target.value })}
                       data-testid={`agent-apply-licence-${role.toLowerCase()}`}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Expiry date</Label>
+                    <Label htmlFor={`${fieldIdPrefix}-expiry-${role}`}>Expiry date</Label>
                     <Input
+                      id={`${fieldIdPrefix}-expiry-${role}`}
                       type="date"
                       value={cred?.expiryDate ?? ""}
                       onChange={(e) => setCredential(role, { expiryDate: e.target.value })}
@@ -88,8 +94,10 @@ export default function CredentialsStep({ state, update }: Props) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>Years of experience (optional)</Label>
+          <Label htmlFor={`${fieldIdPrefix}-experience`}>Years of experience (optional)</Label>
           <Input
+            id={`${fieldIdPrefix}-experience`}
+            data-testid="agent-apply-experience"
             type="number"
             min={0}
             value={state.yearsExperience ?? ""}
@@ -99,8 +107,10 @@ export default function CredentialsStep({ state, update }: Props) {
           />
         </div>
         <div className="space-y-2">
-          <Label>Primary coverage state (optional)</Label>
+          <Label htmlFor={`${fieldIdPrefix}-coverage`}>Primary coverage state (optional)</Label>
           <Input
+            id={`${fieldIdPrefix}-coverage`}
+            data-testid="agent-apply-coverage"
             value={state.coverage[0]?.state ?? ""}
             onChange={(e) =>
               update({ coverage: e.target.value ? [{ state: e.target.value }] : [] })
@@ -111,8 +121,10 @@ export default function CredentialsStep({ state, update }: Props) {
       </div>
 
       <div className="space-y-2">
-        <Label>Short bio (optional, 300 chars)</Label>
+        <Label htmlFor={`${fieldIdPrefix}-bio`}>Short bio (optional, 300 chars)</Label>
         <Textarea
+          id={`${fieldIdPrefix}-bio`}
+          data-testid="agent-apply-bio"
           maxLength={300}
           value={state.bio ?? ""}
           onChange={(e) => update({ bio: e.target.value })}

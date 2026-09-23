@@ -278,6 +278,143 @@ classification deserves re-testing rather than restating.
   source change both must be restarted (and the frontend rebuilt + restaged) before a browser run
   means anything.
 
+## Slice 5 — agent onboarding + both persona doors (`agent-onboarding.spec.ts`, P1)
+
+**UAT-AGENT-01…05.** The compulsory §3.1 gate and the application wizard (roles → KYC → credentials
+→ review), an admin approving in the drawer, a failed BVN rejected *with its reason shown to the
+applicant*, and — the slice's substance — the two §3.2 persona doors: a customer becomes an agent
+from inside their portal, and an agent takes up the customer hat and reaches the verification
+wizard. Both must work **in the session the person is already in**.
+
+### The live P0 this slice started from
+**Every new signup was blocked by the consent re-acceptance modal.** `libs/auth/consent.ts`
+hardcoded every consent version at `1.0.0` while the backend publishes `1.1.0` for Platform Terms
+and Privacy, so an account was created having "accepted" versions that were already superseded and
+met the non-dismissible re-acceptance modal on its first screen. `auth.spec.ts` never caught it
+because it signs up, asserts a URL and stops — the modal opens over the page it asserted. The
+registry no longer states versions: it names which consent *types* signup asks for, and
+`ConsentStep` reads the published list through `authService.listConsentDocuments()`, recording the
+version it actually displayed. That is what prevents a recurrence — there is no longer a second
+place for a version to be written down. The `signup-consent-terms`/`-privacy` anchors are kept:
+auth testids are contract.
+
+### Defects it exposed, each fixed test-first
+1. **A granted persona could not take effect until the next sign-in.** Claims were already read
+   from the user record at each mint, but a refresh re-mints only the *access* token while the route
+   guard decides from the **refresh** token — and nothing re-minted that. So applying granted AGENT
+   and then bounced the applicant out of the agent area with no explanation, and an agent-path
+   signup could never reach `/portal/*` at all. `SessionService.rotate_current_session` re-mints
+   both and **moves the `device_sessions` row onto the new refresh hash** (the row is keyed by it;
+   one left behind reads as revoked on the next refresh). Called by the new
+   `POST /users/auth/personas/customer` and, best-effort, by the application submit.
+2. **The client replayed a pre-grant routing verdict.** With the cookies correct, the browser still
+   landed back on the portal. The trace showed *no request at all* for the agent dashboard: Next had
+   prefetched the shell's links while the account still lacked the hat, the guard redirected every
+   one of those prefetches, and `router.push` replayed the cached redirect. Fixed with
+   `navigateAfterPersonaChange` — a full document load — used by both doors. **No unit test can see
+   this**; it took a Playwright trace to find, which is the argument for the browser suite in one
+   defect.
+3. **The persisted session outlived the grant.** `useAuthStore` is `persist`ed to localStorage, so
+   the reload rehydrated the pre-grant personas and `PortalSwitcher` never appeared. The grant
+   endpoint's own response is a session and handles itself; the application submit answers with the
+   application's status, so it now calls the new `useRefreshSession()` first.
+4. **An existing customer could not become an agent at all** (found 2026-09-22): the persona was
+   granted *by applying*, and applying *required* the persona. `proxy.ts` now exempts
+   `/agents/apply` and only that route; `BecomeAnAgentLink` resolves the marketing CTA by session;
+   a portal nav entry exists for someone who never revisits the marketing pages.
+5. **The §3.1 gate had no exit for someone with somewhere to go.** The layout covered
+   `/agents/apply` too, so a customer who followed the new link and changed their mind was held
+   behind a layer that covers the nav. The gate is now scoped to the agent *area*; the application
+   route renders its own wizard, whose close control appears only for someone holding CUSTOMER.
+6. **Four unnamed/unbound controls**, all blocking axe: `CredentialsStep`'s licence, expiry,
+   experience and bio inputs carried labels bound to nothing; `KycStep`'s ID-type Radix trigger and
+   both DataTable `Select` triggers (the status filter and rows-per-page) were unnamed buttons.
+   Bound with `useId()`, named with `aria-label` — the Slice 3/4 precedent.
+7. **A rejected applicant was never told why.** `rejectionReason` rode on the status DTO and was
+   rendered nowhere agent-facing, while the layout forced them back into a blank wizard — so the
+   only move left was to resubmit the identical application and be refused again.
+8. **`AsyncStateComponent` failed WCAG AA in its loading and empty states** (`text-gray-500`,
+   4.39:1 on the app's surfaces; the error state used `text-red-500`). This is the component every
+   surface renders while it waits, so the failure was everywhere and intermittent — the scan only
+   catches it if it lands before the data does.
+9. **Every admin table's horizontal scroll was keyboard-unreachable** (`overflow-x-auto` with no
+   focusable ancestor). Only a phone engine exposes it, because only there do the tables overflow —
+   the same lesson as Slice 4's findings block.
+10. **A pending applicant's dashboard raised `ResourceNotFoundException` on every load**, because
+    `useAgentProfileQuery()` was called unconditionally while its sibling was already gated on
+    approval.
+11. **Silent session recovery was dead — every refresh answered 500** (a regression inside this
+    slice, from the refresh-reads-personas fix). Loading the user before minting moved
+    `get_jwt_subject()` ahead of the `jwt_refresh_token_required()` that used to run inside
+    `refresh_access_token`; `AuthJWT` has no subject until a token is verified, so it read `None`,
+    looked up user `"None"` and raised `badly formed hexadecimal UUID string`. 17 refreshes, 17
+    500s, and anyone whose access token lapsed was thrown to the login page. **Only
+    `session.spec.ts` UAT-SESS-01 caught it** — the unit tests mocked `get_user_model`, so any
+    subject passed. The controller now verifies first, and the refresh tests use a double that
+    behaves like the library (no subject until verified), including one that pins the ordering.
+    This is exactly why the plan re-runs `session.spec.ts` whenever refresh is touched.
+
+### Misjudgements of mine, recorded so they are not repeated
+- **I decoded the wrong cookie and nearly blamed the backend.** Checking whether the rotated token
+  carried both personas, I read curl's jar after a request I had given `-b` but not `-c` — so I was
+  reading the *login-time* token and concluded the grant had not reached the mint. The backend was
+  correct all along. Decode the response's `Set-Cookie`, not the jar you sent.
+- **I got `expectBothHats` backwards in both scenarios**, passing "the hat they just took up" when
+  the switcher offers the hat they are *not* currently viewing. The helper now reads the direction
+  off the URL, exactly as `PortalSwitcher` does, so the mistake is not available to make.
+- **I asserted the portal switcher while a full-screen wizard covered it.** The trigger still reads
+  as visible under a page-layer overlay; the click simply goes to the overlay.
+
+### Folded in
+- `POST /users/auth/personas/customer` — grants CUSTOMER and *only* CUSTOMER, so no client can
+  claim a hat; `/agents/verify-property` is its UI, a route rather than a nav action so the grant
+  completes before the navigation the guard would otherwise refuse.
+- `NavItem.hiddenForCustomers` beside `hiddenForAgents`, applied by one shared `visibleNavItems`.
+- `helpers/ui.ts:openNavItem` — layout-aware sidebar navigation, shared by both doors.
+- `DATATABLE_TEST_IDS.SEARCH`, so the spec and the toolbar share one derivation.
+- Anchors: `agent-apply-coverage/-experience/-bio/-rejection-reason`, `agent-verify-property*`.
+
+### Verification
+- **Gates:** backend ruff + mypy clean, unit **2273**; frontend Vitest **713** across 114 files,
+  tsc + eslint clean.
+- **Regression specs on chromium-desktop:** `auth.spec.ts` 13/13 and `session.spec.ts` 4/4, both
+  first attempt, after the refresh fix. UAT-SESS-03 had a pre-existing check-then-read race on the
+  recovery dialog (visible at the check, handed off to login before the read); it now reads the
+  wording in the same step it finds the dialog.
+- Two failures in the first matrix run were *my spec's* faults, not the product's: the admin search
+  was typed before hydration (the repo's own documented trap — a half-written address matches
+  nobody, which reads as a missing application), and the switcher assertion above.
+- **A third spec fault, found by the chromium retry:** the open-drawer axe scan raced
+  `DetailDrawer`'s framer-motion slide-in, a JS-driven animation the helper's `getAnimations()`
+  wait cannot see, and read the sidebar through a half-faded backdrop (1.03:1). The drawer is
+  `aria-modal`, so the scan is now scoped to it; the queue behind it is scanned uncovered first,
+  in `openApplication`, so the table fixes above keep their coverage.
+
+### Matrix result (`@P1`: chromium-desktop + webkit-mobile, single worker)
+| engine | UAT-AGENT-01…05 |
+|---|---|
+| chromium-desktop | **5/5, first attempt** |
+| webkit-mobile | **5/5, first attempt** |
+
+**Final run: 10/10 on the first attempt, no retries** (7.2 min, single worker), after the refresh
+fix and after UAT-AGENT-05 stopped asserting the "Verify a property" interstitial — on a fast stack
+the grant lands before a check can see it, which is the right outcome; its wording is now pinned by
+`VerifyPropertyContainer.test.tsx`.
+
+**One earlier retry is explained, and it is not this slice's code.** Signup step 1's Continue button
+was filled, enabled and visible, but never *stable* for 20s: it sits directly under the
+password-strength meter, which animates in on a phone viewport and keeps pushing it. That is the
+shared signup funnel (`helpers/signup.ts`, which `auth.spec.ts` drives identically), untouched
+here; UAT-AGENT-01 passed first-attempt on webkit in the preceding run. Flagged for the auth
+slice rather than widened now — a click that waits longer would hide the layout shift, not fix it.
+
+**Environment, recorded so it is not misread later.** Two earlier multi-worker matrix runs
+collapsed on this box: Docker Desktop's host↔Postgres path stalled under bursts of new connections
+(`ConnectionResetError: [WinError 64]`, 356 in one run, requests reaching 144s), so OTP sends
+timed out and every signup-based scenario failed while UAT-AGENT-04/05 still passed. Restarting
+the Postgres container cleared it, and a single worker avoids the bursts. The machine also rebooted
+mid-run once, which reads as 0 ms "failures" for everything after it — those tests never ran.
+
 ---
 
 # Progress Tracker — WhatsApp Channel (cycle 2)

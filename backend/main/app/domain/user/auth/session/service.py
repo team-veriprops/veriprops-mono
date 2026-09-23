@@ -222,6 +222,50 @@ class SessionService:
 
         return await self.build_session_dto(user=user)
 
+    async def rotate_current_session(
+                self,
+                user: User,
+                authorize: AuthJWT,
+                current_token_hash: Optional[str],
+        ) -> AuthSessionDto:
+        """Re-mint this caller's tokens from the user record, in place.
+
+        A persona granted mid-session (§3.2 — applying grants AGENT, taking up the customer hat
+        grants CUSTOMER) reaches the database immediately but not the caller's tokens, and the
+        frontend route guard reads the *refresh* token, which a plain refresh does not re-mint. So
+        the newly granted area stays shut until the next sign-in unless the session is rotated here.
+
+        The device-session row moves onto the new refresh hash: it is keyed by that hash, so a row
+        left behind makes the session read as revoked on its next refresh. When no live row matches
+        the caller's current hash the session is already over (`get_by_token_hash` excludes revoked
+        rows) — minting then would hand them a refresh cookie nothing backs, so nothing is minted
+        and the grant takes effect when they sign in again.
+        """
+        device = (
+            await self._device_repo.get_by_token_hash(current_token_hash)
+            if current_token_hash
+            else None
+        )
+        if device:
+            from typing import cast, Any
+            sub_role_value: Any = cast(Any, user).admin_sub_role
+            token_hash = JwtAuthUtils.set_access_token(
+                    user_id=str(user.id),
+                    user_type=user.user_type,
+                    user_personas=user.personas,
+                    authorize=authorize,
+                    admin_sub_role=str(sub_role_value) if sub_role_value else None,
+                )
+            await self._device_repo.update(
+                    str(device.id),
+                    UpdateDeviceSessionDto(
+                        refresh_token_hash=token_hash,
+                        last_active_at=Utils.datetime_now(),
+                    ),
+                )
+
+        return await self.build_session_dto(user=user)
+
     async def build_session_dto(self, user: User) -> AuthSessionDto:
 
             from main.app.domain.user.auth.oauth.service import OAuthIdentityService

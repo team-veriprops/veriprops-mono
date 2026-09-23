@@ -38,6 +38,7 @@ import { useLogoutMutation } from "@components/website/auth/libs/useAuthQueries"
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { UserType, UserPersona, type AuthUser } from "@components/website/auth/models";
 import { groupNavItems, NavItem } from "@/components/nav/MenuSidebar";
+import { visibleNavItems } from "@/components/nav/visibility";
 import { ROUTES } from "@lib/routes";
 import TopNavBreadcrumb from "@components/ui/TopNav/TopNavBreadcrumb";
 import TopNavUserMenu from "@components/ui/TopNav/TopNavUserMenu";
@@ -244,6 +245,9 @@ export default function AppShell({ navItems, children }: AppShellProps) {
 
   const session = useAuthStore((s) => s.session);
   const user = session?.user;
+  // Some items address people who do not hold a persona yet — "become an agent" is noise for
+  // someone who already is one, and `PortalSwitcher` is their way across.
+  const shellNavItems = visibleNavItems(navItems, (user?.personas ?? []) as UserPersona[]);
   const initials = user
     ? `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() || "U"
     : "U";
@@ -265,7 +269,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
         : ROUTES.PORTAL.NOTIFICATION_PREFERENCES;
 
   const sidebarNavProps: Omit<SidebarNavProps, "showUserSection"> = {
-    navItems,
+    navItems: shellNavItems,
     pathname,
     onNavItemClick: () => setSidebarOpen(false),
     user,

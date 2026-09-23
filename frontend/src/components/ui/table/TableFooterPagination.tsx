@@ -42,7 +42,9 @@ export default function TableFooterPagination({
             onResetPage();
           }}
         >
-          <SelectTrigger className="w-17.5">
+          {/* The visible "Rows per page:" text is a sibling, not a label, so the trigger carries
+              its own name rather than being announced as an unnamed button showing a number. */}
+          <SelectTrigger className="w-17.5" aria-label="Rows per page">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

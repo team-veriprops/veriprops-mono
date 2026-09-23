@@ -112,6 +112,10 @@ class UpdateDeviceSessionDto(Object):
     last_active_at: Optional[datetime] = None
     revoked: Optional[bool] = None
     revoked_at: Optional[datetime] = None
+    # Set only by in-place session rotation (§3.2 persona grants): the row is keyed by the hash of
+    # the refresh token it belongs to, so re-minting that token has to move the row with it or the
+    # session is orphaned and reads as revoked on its next refresh.
+    refresh_token_hash: Optional[str] = None
 
 
 class SearchDeviceSessionDto(InternalPageRequest, BaseQueryDto):

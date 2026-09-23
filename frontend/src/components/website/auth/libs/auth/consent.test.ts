@@ -1,55 +1,80 @@
-import { describe, it, expect } from "vitest";
-import {
-  CONSENT_REGISTRY,
-  getCurrentConsent,
-  SIGNUP_CONSENT_DOCUMENTS,
-} from "./consent";
-import { ConsentDocumentType } from "@components/website/auth/models";
-describe("CONSENT_REGISTRY", () => {
-  it("is frozen (immutable)", () => {
-    expect(Object.isFrozen(CONSENT_REGISTRY)).toBe(true);
+import { describe, expect, it } from "vitest";
+import { ConsentDocument, ConsentDocumentType } from "@components/website/auth/models";
+
+import { consentsFor, signupConsentDocuments, SIGNUP_CONSENT_TYPES } from "./consent";
+
+/** The published list as the backend serves it — Platform Terms and Privacy at 1.1.0. */
+const published: ConsentDocument[] = [
+  {
+    type: ConsentDocumentType.PLATFORM_TERMS,
+    consentVersion: "1.1.0",
+    effectiveAt: "2026-09-03T00:00:00Z",
+    title: "Platform Terms of Service",
+    href: "/legal/terms",
+  },
+  {
+    type: ConsentDocumentType.PRIVACY_POLICY,
+    consentVersion: "1.1.0",
+    effectiveAt: "2026-09-03T00:00:00Z",
+    title: "Privacy Policy",
+    href: "/legal/privacy",
+  },
+  {
+    type: ConsentDocumentType.AGENT_TERMS,
+    consentVersion: "1.0.0",
+    effectiveAt: "2026-01-15T00:00:00Z",
+    title: "Agent Terms",
+    href: "/legal/agent-terms",
+  },
+];
+
+describe("signupConsentDocuments", () => {
+  it("picks the two documents signup asks for, in the order it shows them", () => {
+    const documents = signupConsentDocuments(published);
+
+    expect(documents.map((d) => d.type)).toEqual([...SIGNUP_CONSENT_TYPES]);
   });
 
-  it("covers all required document types from PRD §3.2", () => {
-    const types = new Set(CONSENT_REGISTRY.map((d) => d.type));
-    expect(types.has(ConsentDocumentType.PLATFORM_TERMS)).toBe(true);
-    expect(types.has(ConsentDocumentType.PRIVACY_POLICY)).toBe(true);
-    expect(types.has(ConsentDocumentType.AGENT_TERMS)).toBe(true);
-    expect(types.has(ConsentDocumentType.VERIFICATION_TERMS)).toBe(true);
-    expect(types.has(ConsentDocumentType.REPORT_DISCLAIMER)).toBe(true);
+  it("takes the version from the published list rather than from anything local", () => {
+    const [terms, privacy] = signupConsentDocuments(published);
+
+    expect(terms.consentVersion).toBe("1.1.0");
+    expect(privacy.consentVersion).toBe("1.1.0");
   });
 
-  it("every entry has a semver-style version", () => {
-    for (const doc of CONSENT_REGISTRY) {
-      expect(doc.consentVersion).toMatch(/^\d+\.\d+\.\d+$/);
-    }
-  });
+  it("leaves out a document the backend has not published", () => {
+    const documents = signupConsentDocuments([published[0]]);
 
-  it("every entry has a valid effectiveAt date", () => {
-    for (const doc of CONSENT_REGISTRY) {
-      expect(Number.isFinite(new Date(doc.effectiveAt).getTime())).toBe(true);
-    }
+    expect(documents.map((d) => d.type)).toEqual([ConsentDocumentType.PLATFORM_TERMS]);
   });
 });
 
-describe("getCurrentConsent", () => {
-  it("returns the latest version per type", () => {
-    const platform = getCurrentConsent(ConsentDocumentType.PLATFORM_TERMS);
-    expect(platform.type).toBe(ConsentDocumentType.PLATFORM_TERMS);
-    expect(platform.consentVersion).toBeTruthy();
+describe("consentsFor", () => {
+  it("records each acceptance against the exact version shown", () => {
+    const acceptedAt = "2026-09-22T10:00:00.000Z";
+
+    expect(consentsFor(signupConsentDocuments(published), acceptedAt)).toEqual([
+      {
+        documentType: ConsentDocumentType.PLATFORM_TERMS,
+        consentVersion: "1.1.0",
+        acceptedAt,
+      },
+      { documentType: ConsentDocumentType.PRIVACY_POLICY, consentVersion: "1.1.0", acceptedAt },
+    ]);
   });
 });
 
-describe("SIGNUP_CONSENT_DOCUMENTS", () => {
-  it("includes platform terms and privacy policy", () => {
-    const types = SIGNUP_CONSENT_DOCUMENTS.map((d) => d.type);
-    expect(types).toContain(ConsentDocumentType.PLATFORM_TERMS);
-    expect(types).toContain(ConsentDocumentType.PRIVACY_POLICY);
-  });
+/**
+ * The defect this module was rewritten for: a hardcoded version here sat at 1.0.0 while the
+ * backend published 1.1.0, so every new account was immediately blocked by the re-acceptance
+ * modal. Handing back the published document itself — rather than a local copy of it — is what
+ * makes a stale version impossible to reintroduce.
+ */
+describe("the published document is what signup uses", () => {
+  it("hands back the backend's own documents, not local substitutes", () => {
+    const documents = signupConsentDocuments(published);
 
-  it("does not include verification or report consents (those are gated later)", () => {
-    const types = SIGNUP_CONSENT_DOCUMENTS.map((d) => d.type);
-    expect(types).not.toContain(ConsentDocumentType.VERIFICATION_TERMS);
-    expect(types).not.toContain(ConsentDocumentType.REPORT_DISCLAIMER);
+    expect(documents[0]).toBe(published[0]);
+    expect(documents[1]).toBe(published[1]);
   });
 });

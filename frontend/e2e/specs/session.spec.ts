@@ -113,13 +113,15 @@ test.describe("UAT-SESS — session lifecycle @P0", () => {
     // The dialog tells the user why, then hands off to login on its own after ~1.5s. Catching it is
     // inherently racy — on a fast machine the redirect can win — so the handoff below is the
     // assertion that must hold, and the dialog's wording is checked whenever it is still on screen.
-    const overlay = revokedDevice.getByTestId("session-recovery-overlay");
-    const overlayShown = await overlay
-      .waitFor({ state: "visible", timeout: 10_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (overlayShown) {
-      await expect(overlay).toContainText("Your session has expired");
+    // Read the wording in the same step that finds the dialog: checking it is visible and then
+    // asserting on it separately left a gap the ~1.5s handoff could fall into, failing on
+    // "element not found" even though the product did exactly the right thing.
+    const overlayText = await revokedDevice
+      .getByTestId("session-recovery-overlay")
+      .textContent({ timeout: 10_000 })
+      .catch(() => null);
+    if (overlayText !== null) {
+      expect(overlayText).toContain("Your session has expired");
     }
 
     await expectLoginReturningTo(revokedDevice, ROUTES.ACCOUNT.DEVICES);

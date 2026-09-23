@@ -92,9 +92,15 @@ describe("resolvePostAuthRedirect", () => {
     expect(dest).toBe("/portal/verifications/new");
   });
 
-  it("intent=agent for non-agent customer routes to agents dashboard (modal handles onboarding)", () => {
+  /**
+   * The dashboard was chosen on the assumption that its onboarding modal would take over — but
+   * `proxy.ts` refuses `/agents/*` to anyone without the AGENT persona, and the persona is only
+   * granted by applying. A customer answering the "Become an Agent" call was bounced straight back
+   * to their portal. The application itself is the one agent route they may reach.
+   */
+  it("intent=agent for a non-agent sends them to the application they can actually open", () => {
     const dest = resolvePostAuthRedirect(baseUser, { intent: AuthIntent.AGENT });
-    expect(dest).toBe("/agents/dashboard");
+    expect(dest).toBe("/agents/apply");
   });
 
   it("explicit redirect param overrides defaults", () => {

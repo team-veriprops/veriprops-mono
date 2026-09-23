@@ -88,6 +88,34 @@ export async function signOut(page: Page): Promise<void> {
   await page.waitForURL((url) => url.pathname === ROUTES.AUTH.LOGIN);
 }
 
+/**
+ * Follow a sidebar entry by its label, whichever layout is on screen.
+ *
+ * The shell renders one nav for the desktop rail and one inside the mobile drawer, so a bare
+ * `getByRole("link")` matches twice and the mobile copy is parked off-screen until the drawer is
+ * opened. Layout detection mirrors {@link signOut}: both entry points are always in the DOM and
+ * CSS hides one per breakpoint.
+ */
+export async function openNavItem(page: Page, title: string): Promise<void> {
+  const userMenu = page.getByTestId("user-menu");
+  const drawerToggle = page.getByTestId("sidebar-open");
+  await expect(userMenu.or(drawerToggle).filter({ visible: true })).toBeVisible();
+
+  const item = page.getByRole("link", { name: title, exact: true }).filter({ visible: true });
+
+  if (await drawerToggle.isVisible()) {
+    // The drawer stays mounted and slides in, so its contents read as "visible" even while parked
+    // off-screen — being *in the viewport* is what says it is open. The toggle only ever opens, so
+    // retrying the click is safe: one that lands before hydration does nothing at all.
+    await expect(async () => {
+      await drawerToggle.click();
+      await expect(item.first()).toBeInViewport({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+  }
+
+  await item.first().click();
+}
+
 /** Run *trigger*, capture the download it starts, and return the file's bytes (PDF/CSV). */
 export async function downloadAndRead(page: Page, trigger: () => Promise<void>): Promise<Buffer> {
   const [download] = await Promise.all([page.waitForEvent("download"), trigger()]);

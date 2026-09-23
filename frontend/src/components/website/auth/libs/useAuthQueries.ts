@@ -73,6 +73,42 @@ export function useLoginMutation() {
   });
 }
 
+/**
+ * Re-read the session after the server changed who this account is.
+ *
+ * `useAuthStore` is persisted to localStorage, so a stale copy survives a reload and keeps deciding
+ * what the shell shows — the portal switcher, which sidebar entries are offered, where "back to
+ * your dashboard" goes. A persona grant whose response is not itself a session (submitting an agent
+ * application answers with the application's status) has to refresh that copy explicitly, or the
+ * account holds a hat the browser will not admit to for the rest of the session.
+ */
+export function useRefreshSession() {
+  const setSession = useAuthStore((s) => s.setSession);
+  const qc = useQueryClient();
+  return async () => {
+    const res = await authService.currentSession();
+    if (res.data) setSession(res.data);
+    qc.setQueryData(authKeys.session, res.data ?? null);
+  };
+}
+
+/**
+ * Take up the customer hat (§3.2). The response carries a rotated session, so the granted persona
+ * is live in this browser immediately — the route guard reads the refresh token, which only a
+ * rotation re-mints.
+ */
+export function useGrantCustomerPersonaMutation() {
+  const setSession = useAuthStore((s) => s.setSession);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => authService.grantCustomerPersona(),
+    onSuccess: (res) => {
+      if (res.data) setSession(res.data);
+      qc.invalidateQueries({ queryKey: authKeys.session });
+    },
+  });
+}
+
 export function useLogoutMutation() {
   const clear = useAuthStore((s) => s.clear);
   const setPendingLogout = useAuthStore((s) => s.setPendingLogout);
@@ -191,9 +227,19 @@ export function useUnlinkProviderMutation() {
 }
 
 export const authConsentKeys = {
+  documents: ["auth", "consents", "documents"] as const,
   missing: ["auth", "consents", "missing"] as const,
   document: (slug: string | null) => ["auth", "consents", "document", slug] as const,
 };
+
+/** The published documents and their current versions — the source signup records against. */
+export function useConsentDocumentsQuery() {
+  return useQuery({
+    queryKey: authConsentKeys.documents,
+    queryFn: async () => (await authService.listConsentDocuments()).data?.documents ?? [],
+    staleTime: STALE_TIME_MS,
+  });
+}
 
 export function useMissingConsentsQuery(enabled = true) {
   return useQuery({

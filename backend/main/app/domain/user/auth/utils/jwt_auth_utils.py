@@ -116,18 +116,24 @@ class JwtAuthUtils:
             raise
 
     @staticmethod
-    async def refresh_access_token(authorize: AuthJWT) :
+    async def refresh_access_token(
+            authorize: AuthJWT,
+            *,
+            user_type: UserType,
+            user_personas: List[UserPersona],
+            admin_sub_role: str | None = None,
+    ) -> None:
 
         await authorize.jwt_refresh_token_required()
         user_id = str(authorize.get_jwt_subject())
 
-        raw_jwt = authorize.get_raw_jwt() or {}
+        # Claims come from the user record, never from the expiring token. Copying them forward
+        # meant a persona granted mid-session never took effect, and one withdrawn mid-session
+        # never bit — both surviving for the whole life of the refresh token.
         user_claims = {
-            "user_type": raw_jwt.get('user_type'),
-            # Claim is stored under 'personas' (see set_access_token); reading
-            # 'user_personas' here silently dropped persona-based authz on refresh.
-            "personas": raw_jwt.get('personas', []),
-            "admin_sub_role": raw_jwt.get('admin_sub_role'),
+            "user_type": user_type,
+            "personas": list(user_personas or []),
+            "admin_sub_role": admin_sub_role,
         }
 
         try:

@@ -65,6 +65,16 @@ Non-env client tuning that would otherwise be duplicated as magic numbers lives 
 
 `FetchHttpClient` auto-refreshes the session (401-triggered and proactively via `useProactiveSessionRefresh`, mounted in `ClientWrapperProvider`, ~60s before `accessTokenExpiresAt`). The refresh has a **transient-only retry budget**: network/5xx failures retry up to `SESSION_REFRESH_MAX_ATTEMPTS` with doubling backoff; a definitive rejection (401/403/419 from the refresh endpoint) short-circuits. The plain-TS client talks to React through the vanilla Zustand bridge [src/lib/sessionRecovery.ts](src/lib/sessionRecovery.ts) (`idle`/`reconnecting`/`expired` — attempt 1 stays silent so routine refreshes never flash UI), rendered by the globally-mounted [SessionRecoveryOverlay](src/components/website/auth/SessionRecoveryOverlay.tsx) (testids `session-recovery-overlay`/`session-recovery-attempt`/`session-signin-now`). On `expired` the overlay clears `useAuthStore` and hands off to `loginRedirectUrl(...)` (loop-guarded on `/auth*`) after a brief pause. The refresh endpoint returns the full `AuthSession` DTO; the overlay pipes it into `useAuthStore` so expiry timestamps stay fresh — `src/lib` must never import components, so that wiring lives on the React side. Tuning constants live in [src/lib/config/app.ts](src/lib/config/app.ts); the client is unit-tested in [FetchHttpClient.test.ts](src/lib/FetchHttpClient.test.ts) and the HTTP contract is pinned by the backend e2e stage `session_refresh`.
 
+### Taking up a persona (§3.2) — three client copies go stale at once
+
+Personas are additive and granted from inside the product: a customer applies to become an agent (`/agents/apply`), an agent takes up the customer hat (`/agents/verify-property` → `useGrantCustomerPersonaMutation`). The backend rotates the session so the new hat works immediately (see the backend's rotation note). **The client is the hard part** — three separate copies of "who this browser belongs to" survive the grant, and all three must be dealt with or the account holds a hat the app refuses to admit to:
+
+1. **The router cache.** The whole time the wizard was on screen, Next prefetched the shell's links — and the guard answered every prefetch of the area they could not yet enter with a redirect, which the client cached. A `router.push` there afterwards replays that cached verdict *without asking the guard again*: no request is made, and the user lands back where they started. So navigate with `navigateAfterPersonaChange` ([lib/session-navigation.ts](src/lib/session-navigation.ts)), a full document load, never `router.push`/`replace`. This is invisible in any unit test and reproduces only in a browser.
+2. **The persisted auth store.** `useAuthStore` is `persist`ed to localStorage, so the reload rehydrates the *pre-grant* session and `PortalSwitcher`, the sidebar's `hiddenForAgents`/`hiddenForCustomers` filtering and `dashboardFor` all keep deciding from it. A grant whose response is not itself a session — submitting an application answers with the application's status — must call `useRefreshSession()` before navigating.
+3. **The cookies**, which the backend has already rotated; nothing to do, but they are why a hard navigation is enough.
+
+The pair UAT-AGENT-04/05 in `agent-onboarding.spec.ts` exists to catch all three: each direction is taken up from inside the product and must end with both hats switchable, in the same session.
+
 ## Route Definition
 * All routes in the application should be declared in `frontend\src\lib\routes.ts` grouped by their surface.
 * All Portal Menu Sidebars are grouped and maintained here `frontend\src\components\portal\nav.ts`,
@@ -230,7 +240,7 @@ pnpm e2e:report                           # open the HTML report
   - `api()`/`anonymousApi()`: CSRF-aware HTTP for preconditions **only** — never for assertions;
   - `loginViaUi`; `goto`/`waitReady`/`expectAuthenticated` (window hooks); `readSeed`;
   - `waitForEmail`/`extractLinkFromEmail` (Mailpit); `expectNoA11yViolations`;
-  - [helpers/ui.ts](e2e/helpers/ui.ts): `tableRow`, `rowAction`, `drawer`/`closeDrawer`, `expectForbidden`, `stubPay`, `downloadAndRead`.
+  - [helpers/ui.ts](e2e/helpers/ui.ts): `tableRow`, `rowAction`, `drawer`/`closeDrawer`, `expectForbidden`, `stubPay`, `downloadAndRead`, and the two layout-aware shell helpers `signOut` / `openNavItem` (the shell renders one nav for the desktop rail and one in the mobile drawer, so a bare `getByRole("link")` matches twice and the mobile copy is parked off-screen until opened).
 
   `helpers/ui.ts` imports DataTable anchors from `components/ui/table/testIds.ts`, the same module the component renders from, so selectors never drift.
 - **Deterministic waits only.** `waitReady(page)` (`__app_ready__`) and web-first assertions — never `waitForTimeout`.

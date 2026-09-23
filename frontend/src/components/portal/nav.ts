@@ -11,4 +11,13 @@ export const portalNavItems: NavItem[] = [
   { title: "Messages", href: ROUTES.PORTAL.CHAT, icon: "messageSquare" },
   // { title: "Refer & earn", href: ROUTES.PORTAL.REFERRALS, icon: "gift" },
   { title: "Support", href: ROUTES.PORTAL.SUPPORT, icon: "helpCircle", section: "Help" },
+  // Applying is what grants the agent persona (PRD §3.2, additive — the customer keeps their own
+  // portal). Until this existed there was no way in from inside the portal at all: the marketing
+  // call to action points at a guest-only gate, which turns a signed-in customer away.
+  {
+    title: "Become an Agent",
+    href: ROUTES.AGENT.APPLY,
+    icon: "userCog",
+    hiddenForAgents: true,
+  },
 ];

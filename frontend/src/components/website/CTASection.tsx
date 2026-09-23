@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Shield, Users } from "lucide-react";
-import { CTA_VERIFY_HREF, CTA_AGENT_HREF } from "./home.data";
+import { CTA_VERIFY_HREF } from "./home.data";
+import BecomeAnAgentLink from "./BecomeAnAgentLink";
 
 export default function CTASection() {
   return (
@@ -62,12 +63,9 @@ export default function CTASection() {
                   Verify a Property Now
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
-                <Link
-                  href={CTA_AGENT_HREF}
-                  className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:bg-white/10 text-white border border-white/20"
-                >
+                <BecomeAnAgentLink className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:bg-white/10 text-white border border-white/20">
                   Become an Agent
-                </Link>
+                </BecomeAnAgentLink>
               </div>
             </div>
 

@@ -51,8 +51,10 @@ export function resolvePostAuthRedirect(
   const isAgent = user.personas.includes(UserPersona.AGENT);
   const isCustomer = user.personas.includes(UserPersona.CUSTOMER);
 
+  // The application, not the dashboard: applying is what grants the AGENT persona (PRD §3.2), and
+  // `proxy.ts` keeps every other `/agents/*` route shut until they have it.
   if (options.intent === AuthIntent.AGENT && !isAgent) {
-    return ROUTES.AGENT.DASHBOARD;
+    return ROUTES.AGENT.APPLY;
   }
   // Explicit verify intent, or a customer who has never started a verification
   // (first login after signup, or any later login before their first start) —

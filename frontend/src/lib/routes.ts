@@ -51,6 +51,9 @@ export const ROUTES = {
     GATE: '/agents',
     DASHBOARD: '/agents/dashboard',
     APPLY: '/agents/apply',
+    // Where an agent takes up the customer hat (§3.2) — the mirror of APPLY. It lives under
+    // /agents/* so the route guard admits an account that holds no customer persona yet.
+    VERIFY_PROPERTY: '/agents/verify-property',
     TASKS: '/agents/tasks',
     TASK_DETAIL: (taskId: string) => `/agents/tasks/${taskId}`,
     TASK_HISTORY: (taskId: string) => `/agents/tasks/${taskId}/history`,
