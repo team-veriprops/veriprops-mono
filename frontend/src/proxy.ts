@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtDecode } from "jwt-decode";
-import { ROUTES, WA_INTAKE_PREFIX, WA_LINK_PREFIX } from "./lib/routes";
+import { ROUTES, WA_INTAKE_PREFIX, WA_LINK_PREFIX, isSignedOutHandoff } from "./lib/routes";
 import { EDGE_AUTH_HEADER, isEdgeAuthorized } from "./lib/edgeAuth";
 import { JwtPayload, UserPersona, UserType } from "./components/website/auth/models";
 import { dashboardFor } from "./components/website/auth/libs/auth/redirect";
@@ -56,6 +56,15 @@ const isProtected = (pathname: string) =>
   );
 
 const isGuestOnly = (pathname: string) => GUEST_ONLY_PATHS.has(pathname);
+
+/**
+ * The login page a sign-out leaves for (`SIGNED_OUT_LOGIN_URL`) is never bounced. Sign-out can
+ * leave before its logout call answered, while the session cookie is still here; treating it as a
+ * live session would send the person straight back into the app they just left. Showing a login
+ * form to someone still signed in is harmless — signing in again simply re-issues the session.
+ */
+const isSignedOutLanding = (pathname: string, searchParams: URLSearchParams) =>
+  pathname === LOGIN_PATH && isSignedOutHandoff(searchParams);
 
 /**
  * The one `/agents/*` route a non-agent must be able to open. Applying is what grants the AGENT
@@ -126,7 +135,7 @@ export function proxy(req: NextRequest) {
     );
   }
 
-  const { pathname, search } = req.nextUrl;
+  const { pathname, search, searchParams } = req.nextUrl;
   const jwtToken = req.cookies.get(ACCESS_COOKIE_KEY)?.value;
 
   // 1. No token → short-circuit
@@ -168,7 +177,7 @@ export function proxy(req: NextRequest) {
   const isOnPortal = pathname.startsWith(ROUTES.PORTAL.GATE);
 
   // 3. Guest-only routes
-  if (isGuestOnly(pathname)) {
+  if (isGuestOnly(pathname) && !isSignedOutLanding(pathname, searchParams)) {
     return redirect(req, redirectToDashboard(decodedJwt));
   }
 

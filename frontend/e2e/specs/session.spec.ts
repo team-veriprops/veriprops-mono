@@ -8,7 +8,8 @@
  * - the device is revoked elsewhere → refresh dies at once, so when the access token lapses the
  *   user is told their session expired and handed to login (access tokens live out their TTL,
  *   PRD §3/§7.2).
- * And signing out through the UI must actually end the session.
+ * And signing out through the UI must actually end the session — even when the logout call never
+ * answers and the page leaves on its failsafe.
  *
  * Every test builds its own customer (`scenario`), so revoking or signing out never touches a
  * session another spec depends on.
@@ -27,6 +28,8 @@ import { signOut } from "../helpers/ui";
 const ACCESS_COOKIES = ["__Host-access_token", "__Host-access_csrf_token"];
 /** Every session cookie — clearing them all is a session that no longer exists. */
 const SESSION_COOKIES = [...ACCESS_COOKIES, "__Host-refresh_token", "__Host-refresh_csrf_token"];
+/** The logout call (`authService.logout`) as the browser sends it, through the `/api` rewrite. */
+const LOGOUT_PATH = "/users/auth/sessions/current";
 
 async function clearCookies(context: BrowserContext, names: string[]): Promise<void> {
   for (const name of names) {
@@ -138,6 +141,38 @@ test.describe("UAT-SESS — session lifecycle @P0", () => {
     await signOut(page);
 
     // The session is really gone: a protected page now sends the user to sign in.
+    await page.goto(ROUTES.PORTAL.DASHBOARD, { waitUntil: "domcontentloaded" });
+    await expectLoginReturningTo(page, ROUTES.PORTAL.DASHBOARD);
+  });
+
+  test("UAT-SESS-05 · a sign-out whose call never answers still ends on login, and still ends the session", async ({
+    scenario,
+    pageFor,
+  }) => {
+    const { customer } = await scenario(ScenarioStage.DRAFT);
+    const page = await pageFor(customer);
+    await goto(page, ROUTES.PORTAL.DASHBOARD);
+
+    // Hold the first logout call forever, so sign-out leaves on its failsafe while the session
+    // cookies are still in the browser. Any later call — the queued retry — goes through.
+    let held = false;
+    await page.route(`**${LOGOUT_PATH}`, async (route) => {
+      if (route.request().method() !== "DELETE" || held) return route.continue();
+      held = true;
+    });
+    const retried = page.waitForResponse(
+      (r) => r.url().endsWith(LOGOUT_PATH) && r.request().method() === "DELETE" && r.ok(),
+    );
+
+    await signOut(page);
+
+    // On the login form, not bounced back into the app by the surviving cookie.
+    await expect(page.getByTestId("login-form")).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe(ROUTES.AUTH.LOGIN);
+
+    // The login page re-sent the queued logout, and it ended the session.
+    await retried;
+    await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.goto(ROUTES.PORTAL.DASHBOARD, { waitUntil: "domcontentloaded" });
     await expectLoginReturningTo(page, ROUTES.PORTAL.DASHBOARD);
   });

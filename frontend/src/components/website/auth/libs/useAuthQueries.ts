@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_HISTORY_PAGE_SIZE, STALE_TIME_MS, SHORT_STALE_TIME_MS, LONG_STALE_TIME_MS } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { publishAuthSnapshot } from "@lib/automation";
-import { isNetworkError } from "@lib/FetchHttpClient";
+import { logoutLifecycle } from "./logoutLifecycle";
 import { AuthService } from "./auth-service";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import type {
@@ -115,19 +115,13 @@ export function useLogoutMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => authService.logout(),
-    // A network-level failure (request never reached the backend) queues a
-    // retry; any real response — success or not — means the backend was
-    // reached, so there's nothing left to retry.
-    onError: (error) => {
-      if (isNetworkError(error)) setPendingLogout(true);
-    },
-    onSuccess: () => setPendingLogout(false),
-    // Local state must clear regardless of outcome — the user should never
-    // appear logged in just because the backend call failed.
-    onSettled: () => {
-      clear();
-      qc.removeQueries({ queryKey: authKeys.session });
-    },
+    ...logoutLifecycle({
+      setPendingLogout,
+      clearSession: () => {
+        clear();
+        qc.removeQueries({ queryKey: authKeys.session });
+      },
+    }),
   });
 }
 

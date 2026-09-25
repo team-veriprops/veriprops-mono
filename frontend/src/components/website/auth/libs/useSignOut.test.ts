@@ -15,12 +15,13 @@ function harness(initiallySigningOut = false) {
   let signingOut = initiallySigningOut;
   const { logout, settle } = fakeLogout();
   const leave = vi.fn();
+  const clearSession = vi.fn();
   const setSigningOut = vi.fn((value: boolean) => {
     signingOut = value;
   });
   const run = () =>
-    runSignOut({ isSigningOut: () => signingOut, setSigningOut, logout, leave });
-  return { run, logout, settle, leave, setSigningOut };
+    runSignOut({ isSigningOut: () => signingOut, setSigningOut, logout, clearSession, leave });
+  return { run, logout, settle, leave, clearSession, setSigningOut };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -65,6 +66,17 @@ describe("runSignOut", () => {
     vi.advanceTimersByTime(SIGN_OUT_MAX_WAIT_MS);
 
     expect(leave).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the local session before leaving on the failsafe, where the mutation never got to", () => {
+    // A persisted session left behind would be rehydrated by the login page as if still signed in.
+    const { run, clearSession, leave } = harness();
+
+    run();
+    vi.advanceTimersByTime(SIGN_OUT_MAX_WAIT_MS);
+
+    expect(clearSession).toHaveBeenCalledTimes(1);
+    expect(clearSession.mock.invocationCallOrder[0]).toBeLessThan(leave.mock.invocationCallOrder[0]);
   });
 
   it("does not navigate twice when the failsafe and the response race", () => {

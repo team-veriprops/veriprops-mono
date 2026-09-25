@@ -587,6 +587,115 @@ the stop.
   "Unverified" note above.
 - The toast-placement screenshots and other scratch files are outside the repo, so there's nothing to clean.
 
+## Closeout — the open items above, dependencies, and a complete matrix (2026-09-25)
+
+Every "Act on these first" item from the sign-out track is closed, and so are the earlier pending
+list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user decision and stays open.
+
+### Fixed
+- **UAT-WA-04 (webkit-mobile), spec bug.** The at-rest toast scan now hovers the toast first:
+  Sonner pauses dismissal while its toaster is hovered. The overlap is measured before the hover,
+  because hovering expands the stack. No timeout changed.
+- **Sign-out could bounce back into the app, a real defect.** Under load the
+  `SIGN_OUT_MAX_WAIT_MS` failsafe left before the logout answered. The HttpOnly refresh cookie
+  survived, and `proxy.ts` treats `/auth/login` as guest-only, so it redirected to the dashboard.
+  - Sign-out now lands on `SIGNED_OUT_LOGIN_URL` (`lib/routes.ts`), which the guard never
+    bounces. The marker is honoured on the login page only.
+  - `logoutLifecycle` queues the logout (`pendingLogout`, persisted) *before* the request goes
+    out and dequeues it only on a real response. The login page's `usePendingLogoutRetry`
+    therefore re-sends a logout that the page left behind. `runSignOut` also clears the
+    persisted session on the failsafe path.
+- **Backend gap found by the fix: a late logout never revoked the session.** A logout arriving
+  after the access token lapsed hit `AuthJWTException` and cleared the cookies, but never revoked
+  the device, although the refresh cookie was on the request. That is exactly when a queued
+  logout arrives. It now revokes through the refresh cookie, which is the same check that
+  `refresh_session` trusts. **This reverses a behaviour that a unit test had pinned**
+  (`test_nothing_valid_to_revoke_is_a_plain_sign_out` now sends no refresh cookie).
+- **`status-pages.spec.ts`**: both bare `waitForURL` calls now use `waitForPage`.
+- **`run-lanes.mjs` could not filter by engine.** `--project=chromium-desktop` went to both
+  lanes, but the serial projects are `<engine>-serial`, so every engine-filtered run failed its
+  serial lane with "project not found". That includes the "chunk by engine pair" runs above. The
+  runner now renames the filter for the serial lane.
+- **UAT-AGENT-01/-05 (webkit-mobile): not a regression, and not reproduced.** The `waitForPage`
+  conversion in `77aa592` is behaviour-identical: same predicate, `domcontentloaded`,
+  `waitReady` and 30 s. Both tests pass first-attempt alone and in the full matrix below. The
+  earlier failures sat in the interrupted run and read as load.
+
+### Dependencies (the Dependabot alerts)
+- **Frontend: `pnpm audit` went from 36 to 0** (it had 2 critical Next.js RCEs).
+  - `next` and `eslint-config-next` are at 16.3.6.
+  - `pdfjs-dist` is removed, because nothing imported it.
+  - `vitest` is at ^4.1.11.
+  - Per-major `pnpm.overrides` cover brace-expansion, nanoid, postcss, undici, js-yaml,
+    browserslist and baseline-browser-mapping. Every fix stays within its current major.
+- **Backend: `pip-audit` finds only `ecdsa` (PYSEC-2026-1325), which has no fixed release.** It
+  arrives only through `python-jose`, and it is not exploitable here: `python-jose[cryptography]`
+  is now pinned, so every sign and verify goes through `cryptography`. That covers the RS256
+  handoff/OAuth tokens and Apple's ES256 client secret, confirmed at runtime. The alert stays
+  open until the five `from jose import` sites move to PyJWT. That is recorded as a `TODO(gap)`
+  in `requirements.txt` and paired with a MASTER-PRD §G.2 row. `gh` isn't installed here, so
+  GitHub's own alert list was not read. Check it after the push.
+
+### Tests added
+- **Backend unit tests:**
+  - A late logout revokes through the refresh cookie.
+  - A failure in that revoke is reported with the cookies still cleared.
+- **Drive-through** (`stage_session_refresh.py`, +4 checks):
+  - A logout carrying only the refresh cookie succeeds and clears it.
+  - That session can no longer refresh.
+  - A cookieless logout is a plain success.
+- **Vitest:**
+  - `logoutLifecycle.test.ts`: queued before the request; kept on a network error or timeout;
+    cleared on any response.
+  - A new `proxy.test.ts`, the first for the guard: the handoff passes, `/auth/login` and signup
+    still bounce, and role rules hold.
+  - Routes tests for the handoff marker.
+  - A `useSignOut` test that the failsafe clears the session before leaving.
+- **Playwright: UAT-SESS-05.** It holds the first logout call forever, then asserts that the
+  user lands on and stays on the login form, that the queued logout is re-sent from there, and
+  that the dashboard then demands sign-in.
+
+### Verification
+- **Backend:** ruff and mypy clean; unit **2596/2596**.
+- **Frontend:** tsc and eslint clean; Vitest **776/776** (122 files); `pnpm build` clean on
+  Next 16.3.6. `routes-manifest.json` targets the local backend only.
+- **Drive-through: 554/554, no WARN** (550 plus the 4 new checks). The first run reported "ALL
+  PASSED, 545" because the harness *skips* the 9 webhook-signature checks when the secrets are
+  `CHANGE_ME`. With the same throwaway non-placeholder values in both processes, all of them ran.
+  Compare the check count, not just the verdict.
+- **Full six-engine matrix, complete and uninterrupted.** Run by engine pair, 2 workers, both
+  lanes: **parallel 214/214, serial 24/24, all first-attempt, 0 retries, 0 flaky.**
+
+  | pair | parallel | serial | wall time |
+  |---|---|---|---|
+  | chromium desktop + mobile | 80/80 | 8/8 | 4 min |
+  | webkit desktop + mobile | 80/80 | 8/8 | 10 min |
+  | firefox desktop + mobile | 54/54 | 8/8 | 4 min |
+
+  This clears the "no unexplained retries" bar Slice 4 fell short of. UAT-GP-03 passes on every
+  engine without a retry, and none of the flaky set from the sign-out track recurred.
+- **18 min against the previous 2.2 h is observed, not explained.** This run had a freshly
+  created `veriprops_e2e`, a Postgres container restarted an hour earlier, and a new Caddy
+  container, with nothing else loading the machine. Any of those could account for it. The
+  pending item 1 below explains the earlier flakes as "a slow stretch of the run", and this is
+  consistent with that, but it doesn't prove it.
+
+### Still open
+- Native Caddy (pending item 5): skipped by user decision. Given the timing above, re-measure
+  before investing in it.
+- `python-jose` → PyJWT (MASTER-PRD §G.2).
+- CI hardware is still unmeasured against these budgets.
+
+### Runtime state left behind
+- **`veriprops_e2e` and `veriprops_uat` had been dropped** from the same Postgres container.
+  `veriprops_e2e` was recreated and migrated to `0019`. `veriprops_uat` was not recreated, and
+  `veriprops_local` was not touched.
+- The e2e env needs `DB_PASSWORD=postgres` (the compose value); the `.env.dev_personal` password
+  is rejected under `APPODUS_ACTIVE_ENV=test`.
+- `veriprops-uat-tls` was missing and has been recreated with `--restart unless-stopped`.
+- The e2e backend (:8000) and the standalone frontend (:3001) are running from this session. The
+  standalone bundle is current (built after all app changes).
+
 ---
 
 # Progress Tracker — WhatsApp Channel (cycle 2)

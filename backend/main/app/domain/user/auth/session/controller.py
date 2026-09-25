@@ -63,22 +63,29 @@ async def login(
 @session_router.delete("/current", response_model=SuccessResponse[bool])
 async def logout(request: Request, authorize: AuthJWT = Depends()):
     # The cookies are HttpOnly, so this response is the client's only way to clear them: every
-    # outcome clears them. With nothing valid left to revoke (an expired or missing token) this
-    # is a plain sign-out. If revoking fails (the device row, or the denylist — including a store
-    # outage that makes the token check itself fail), the token would stay usable elsewhere until
-    # it expires, so the client is told with the standard safe 5xx rather than a false success.
-    # That response is returned, not raised: a raised one is rendered fresh and would drop the
-    # cookie deletions.
+    # outcome clears them. The device session is ended through the refresh cookie whenever one is
+    # sent — holding the refresh token is the authority to end the session it names, and it
+    # outlives the access token, so a sign-out retried after the access token lapsed must still
+    # revoke it. With neither token valid this is a plain sign-out. If revoking fails (the device
+    # row, or the denylist — including a store outage that makes the token check itself fail),
+    # the token would stay usable elsewhere until it expires, so the client is told with the
+    # standard safe 5xx rather than a false success. That response is returned, not raised: a
+    # raised one is rendered fresh and would drop the cookie deletions.
+    refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
     try:
         await authorize.jwt_required()
     except AuthJWTException:
+        try:
+            if refresh_cookie:
+                await session_service.revoke_current_device(refresh_cookie)
+        except Exception:  # noqa: BLE001 — reported below, with the cookies still cleared
+            return _revocation_failed(request, authorize)
         authorize.unset_jwt_cookies()
         return SuccessResponse[bool](data=True)
     except Exception:  # noqa: BLE001 — the denylist could not be read
         return _revocation_failed(request, authorize)
 
     try:
-        refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
         if refresh_cookie:
             await session_service.revoke_current_device(refresh_cookie)
 

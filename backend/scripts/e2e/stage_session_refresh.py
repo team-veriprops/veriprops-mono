@@ -96,3 +96,30 @@ def run(ctx: Ctx) -> None:
     })
     check("a revoked device session cannot refresh (revocation enforced on refresh)",
           r.status_code in (401, 403) and not r.cookies.get(ACCESS), f"http {r.status_code}")
+
+    # A sign-out that reaches the backend only after the access token lapsed — the queued logout
+    # the browser re-sends from the login page when its sign-out redirect left before the first
+    # call answered. It carries the refresh cookie alone, and must still end that session.
+    late = client()
+    late.post("/users/auth/sessions", json={
+        "email": ctx.seed["customer"]["email"],
+        "password": ctx.seed["customer"]["password"],
+    }).raise_for_status()
+    late_jar = {k: v for k, v in late.cookies.items()}
+    r = probe.delete(SESSION_PATH, headers={"Cookie": _cookies(late_jar, REFRESH, REFRESH_CSRF)})
+    check("a logout carrying only the refresh cookie succeeds",
+          r.status_code == 200, f"http {r.status_code}")
+    check("that logout clears the refresh cookie",
+          any(h.startswith(f"{REFRESH}=") for h in r.headers.get_list("set-cookie")),
+          "no Set-Cookie for the refresh token")
+    r = probe.post(SESSION_PATH, headers={
+        "Cookie": _cookies(late_jar, REFRESH, REFRESH_CSRF),
+        "X-CSRF-Token": late_jar[REFRESH_CSRF],
+    })
+    check("a session signed out after its access token lapsed cannot refresh",
+          r.status_code in (401, 403) and not r.cookies.get(ACCESS), f"http {r.status_code}")
+
+    # A repeated sign-out (the queued retry after the first one did land) is harmless.
+    r = probe.delete(SESSION_PATH)
+    check("a logout with no session cookies at all is a plain success",
+          r.status_code == 200, f"http {r.status_code}")

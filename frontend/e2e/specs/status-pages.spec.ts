@@ -12,7 +12,7 @@ import { ROUTES } from "@lib/routes";
 
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
-import { goto } from "../helpers/app";
+import { goto, waitForPage } from "../helpers/app";
 
 const DEAD_URL = "/this-page-does-not-exist";
 
@@ -28,7 +28,7 @@ test.describe("UAT-STATUS — not found @P1", () => {
     // The way out must be a real control, not a label the theme failed to paint: clicking it
     // has to land on the home page.
     await page.getByRole("link", { name: "Go back home" }).click();
-    await page.waitForURL((url) => url.pathname === ROUTES.HOME);
+    await waitForPage(page, (url) => url.pathname === ROUTES.HOME);
   });
 
   test("UAT-STATUS-02 · the not-found page is accessible", async ({ page }) => {
@@ -70,7 +70,7 @@ test.describe("UAT-STATUS — forbidden @P1", () => {
       const dashboardLink = page.getByRole("link", { name: "Go to your dashboard" });
       await expect(dashboardLink).toBeVisible();
       await dashboardLink.click();
-      await page.waitForURL((url) => url.pathname.startsWith(dashboard));
+      await waitForPage(page, (url) => url.pathname.startsWith(dashboard));
     });
   }
 });

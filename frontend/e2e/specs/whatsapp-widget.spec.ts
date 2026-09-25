@@ -109,6 +109,10 @@ test.describe("UAT-WA — never covered by a toast @P1", () => {
 
     // The suite's one accessibility check on a toast: page scans leave toasts out because one can
     // fade mid-scan, so it is checked here, at rest. Every toast shares this style.
+    // Hovering holds it there: Sonner pauses dismissal while the toaster is hovered, and the scan's
+    // wait for the page's animations can otherwise outlast the toast's ~4 s life on a slow engine.
+    // The overlap was measured first because hovering expands the stack.
+    await toast.hover();
     await expectNoA11yViolations(page, { include: TOASTER_SELECTOR });
   });
 });
