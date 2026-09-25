@@ -33,6 +33,7 @@ def mock_db_session():
 
     session.begin = _begin
     session.flush = AsyncMock()
+    session.execute = AsyncMock()  # advisory locks (`advisory_xact_lock`) run a statement
     token = db_session_ctx.set(session)
     yield session
     db_session_ctx.reset(token)

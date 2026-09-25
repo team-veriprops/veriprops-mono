@@ -3,13 +3,14 @@ from datetime import datetime
 from typing import Optional, Type
 
 from kink import inject
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.message.models import Message, SearchMessageDto, \
     QueryMessageDto, UpsertMessageDto
 from main.appodus_utils import Utils
 from main.appodus_utils.db.repo import GenericRepo
+from main.appodus_utils.integrations.messaging.models import MessageStatus
 
 # Timestamp columns that must be bound as datetimes, not the ISO strings a JSON-mode
 # dump produces.
@@ -28,6 +29,27 @@ class MessageRepo(GenericRepo[Message, UpsertMessageDto, UpsertMessageDto, Query
             and_(Message.deleted.is_(False), Message.provider_id == provider_id)
         )
         return (await self._session.execute(stmt)).scalars().first()
+
+    async def lease_retry(self, message_id: str, now: datetime, until: datetime) -> bool:
+        """Take a due retry for this run: push its `next_retry_at` to *until*, only while it
+        is still RETRYING and due. Whether this run got it.
+
+        Two overlapping retry sweeps (another worker, the admin endpoint) list the same due
+        rows; only the one whose update lands re-sends. A run that dies mid-send leaves the
+        row due again once *until* passes, so the message is not stranded.
+        """
+        stmt = (
+            update(Message)
+            .where(
+                Message.id == self._ensure_uuid(message_id),
+                Message.deleted.is_(False),
+                Message.status == MessageStatus.RETRYING.value,
+                Message.next_retry_at <= now,
+            )
+            .values(next_retry_at=until)
+            .returning(Message.id)
+        )
+        return (await self._session.execute(stmt)).scalar() is not None
 
     async def create_from_upsert(self, dto: UpsertMessageDto) -> Message:
         """Persist the bookkeeping row for a dispatch, keeping only real columns.

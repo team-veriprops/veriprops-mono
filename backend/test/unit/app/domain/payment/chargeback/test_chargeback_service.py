@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from test.utils.repo_fakes import fake_insert_or_get
+
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.payment.chargeback.models import (
     ChargebackStatus,
@@ -19,6 +21,7 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ResourceNotFoundException,
 )
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -67,15 +70,20 @@ def _make_service(*, existing_cb=None, payment=None, chargebacks=None):
     svc._payment_repo.get_by_tx_ref = AsyncMock(return_value=payment)
     svc._payment_repo.update = AsyncMock()
 
-    async def _create(dto):
+    def _create(values):
         cb = _chargeback()
-        cb.status = dto.status.value if hasattr(dto.status, "value") else dto.status
-        cb.rebuttal_pack = dto.rebuttal_pack
+        cb.status = values["status"].value if hasattr(values["status"], "value") else values["status"]
+        cb.rebuttal_pack = values["rebuttal_pack"]
         state["rows"].append(cb)
         return cb
 
     async def _get_model(cbid):
         return next((c for c in state["rows"] if c.id == cbid), None)
+
+    # Rebuttal and resolution are claims on the rows held here.
+    svc._chargeback_repo.claim_transition = fake_claim_transition(
+        lambda cbid: next((c for c in state["rows"] if c.id == cbid), None)
+    )
 
     async def _update(cbid, dto):
         c = next((c for c in state["rows"] if c.id == cbid), None)
@@ -84,7 +92,8 @@ def _make_service(*, existing_cb=None, payment=None, chargebacks=None):
                 setattr(c, f, v)
         return c
 
-    svc._chargeback_repo.create_return_model = AsyncMock(side_effect=_create)
+    # Keyed on the gateway event (uq_chargebacks_gateway_event), as the real insert is.
+    svc._chargeback_repo.insert_or_get = fake_insert_or_get(lambda values: state.get("raced"), _create)
     svc._chargeback_repo.get_model = AsyncMock(side_effect=_get_model)
     svc._chargeback_repo.update = AsyncMock(side_effect=_update)
     svc._commissions.freeze_for_verification = AsyncMock(return_value=2)
@@ -111,6 +120,19 @@ class TestHandleWebhook:
         cb = await svc.handle_webhook(ChargebackWebhookDto(event_id="evt-1", tx_ref="TX-1"))
         assert cb is existing
         svc._commissions.freeze_for_verification.assert_not_awaited()
+
+    async def test_a_concurrent_redelivery_neither_freezes_nor_flags_twice(self):
+        """The first check missed it, but the event row was written meanwhile: the insert
+        returns that row, and this delivery leaves the side effects to the one that won."""
+        winner = _chargeback()
+        svc = _make_service(payment=_payment())
+        svc._state["raced"] = winner
+
+        cb = await svc.handle_webhook(ChargebackWebhookDto(event_id="evt-1", tx_ref="TX-1"))
+
+        assert cb is winner
+        svc._commissions.freeze_for_verification.assert_not_awaited()
+        svc._payment_repo.update.assert_not_awaited()
 
     async def test_missing_payment_raises(self):
         svc = _make_service(payment=None)

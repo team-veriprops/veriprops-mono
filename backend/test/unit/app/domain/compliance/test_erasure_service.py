@@ -16,6 +16,7 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ResourceNotFoundException,
 )
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -29,6 +30,7 @@ def mock_db_session():
 
     session.begin = _begin
     session.flush = AsyncMock()
+    session.execute = AsyncMock()  # advisory locks (`advisory_xact_lock`) run a statement
     token = db_session_ctx.set(session)
     yield session
     db_session_ctx.reset(token)
@@ -52,6 +54,8 @@ def _make_svc(*, get_open=None, get_model=None, create=None, pseudonymise_surfac
     repo = MagicMock()
     repo.get_open_for_user = get_open or AsyncMock(return_value=None)
     repo.get_model = get_model or AsyncMock(return_value=None)
+    # Decisions and execution are claims on the row get_model serves.
+    repo.claim_transition = fake_claim_transition(lambda _id: repo.get_model.return_value)
     repo.create_return_model = create or AsyncMock(return_value=_row())
     repo.page_by_status = AsyncMock(return_value=([], 0))
     repo.list_for_user = AsyncMock(return_value=[])

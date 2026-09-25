@@ -11,6 +11,7 @@ from main.app.domain.audit.models import AuditActionType
 from main.app.domain.commission.models import CommissionStatus
 from main.app.domain.commission.service import CommissionService
 from main.appodus_utils.db.session import db_session_ctx
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -57,6 +58,10 @@ def _make_service(commissions):
     svc._commission_repo.list_for_verification_in_status = AsyncMock(side_effect=_list_in_status)
     svc._commission_repo.list_for_verification = AsyncMock(side_effect=lambda vid: list(state["rows"]))
     svc._commission_repo.update = AsyncMock(side_effect=_update)
+    # Freeze, unfreeze and reverse are per-row claims on the rows held here.
+    svc._commission_repo.claim_transition = fake_claim_transition(
+        lambda cid: next((c for c in state["rows"] if c.id == cid), None)
+    )
     svc._state = state
     return svc
 

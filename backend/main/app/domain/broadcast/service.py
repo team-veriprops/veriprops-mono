@@ -21,7 +21,6 @@ from main.app.domain.broadcast.models import (
     BroadcastStatus,
     ComposeBroadcastDto,
     CreateBroadcastDto,
-    UpdateBroadcastDto,
 )
 from main.app.domain.broadcast.repo import BroadcastRepo
 from main.app.domain.user.auth.session.models import UserPersona, UserType
@@ -34,6 +33,9 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ResourceNotFoundException,
 )
+
+# A broadcast that can still be sent or cancelled.
+_UNSENT = [BroadcastStatus.DRAFT, BroadcastStatus.SCHEDULED]
 
 
 @inject
@@ -69,7 +71,12 @@ class BroadcastService:
             return broadcast  # idempotent — never re-fan-out a sent broadcast
         if broadcast.status == BroadcastStatus.CANCELLED.value:
             raise InvalidResourceStateException(resource="broadcast", message="This broadcast was cancelled.")
-        await self._dispatch(broadcast)
+        if not await self._dispatch(broadcast):
+            # The scheduled sweep (or another send) got there first, or it was cancelled.
+            current = await self._broadcast_repo.get_model(broadcast_id)
+            if current.status == BroadcastStatus.CANCELLED.value:
+                raise InvalidResourceStateException(resource="broadcast", message="This broadcast was cancelled.")
+            return current
         self._audit.schedule(
             action=AuditActionType.ADMIN_CONFIG_CHANGED,
             resource_type="broadcast", resource_id=broadcast.id, actor_id=admin_id,
@@ -83,8 +90,15 @@ class BroadcastService:
             raise ResourceNotFoundException(resource="broadcast")
         if broadcast.status == BroadcastStatus.SENT.value:
             raise InvalidResourceStateException(resource="broadcast", message="A sent broadcast cannot be cancelled.")
-        await self._broadcast_repo.update(broadcast_id, UpdateBroadcastDto(status=BroadcastStatus.CANCELLED.value))
-        return await self._broadcast_repo.get_model(broadcast_id)
+        cancelled = await self._broadcast_repo.claim_transition(
+            broadcast.id, _UNSENT, BroadcastStatus.CANCELLED,
+        )
+        if cancelled is not None:
+            return cancelled
+        current = await self._broadcast_repo.get_model(broadcast_id)
+        if current.status == BroadcastStatus.SENT.value:
+            raise InvalidResourceStateException(resource="broadcast", message="A sent broadcast cannot be cancelled.")
+        return current
 
     async def list_page(self, page: int, page_size: int, status: str | None = None) -> Tuple[List[Broadcast], int]:
         return await self._broadcast_repo.page_all(page, page_size, status)
@@ -101,16 +115,20 @@ class BroadcastService:
         now = Utils.datetime_now()
         sent = 0
         for broadcast in await self._broadcast_repo.list_due_scheduled(now):
-            row = await self._broadcast_repo.get_model(broadcast.id)
-            if row is None or row.status != BroadcastStatus.SCHEDULED.value:
-                continue
-            await self._dispatch(row)
-            sent += 1
+            if await self._dispatch(broadcast, from_statuses=[BroadcastStatus.SCHEDULED]):
+                sent += 1
         return sent
 
     # ── helpers ───────────────────────────────────────────────────
 
-    async def _dispatch(self, broadcast: Broadcast) -> None:
+    async def _dispatch(self, broadcast: Broadcast, from_statuses=None) -> bool:
+        """Send the broadcast, once: claimed as SENT before the fan-out, so a sweep and a
+        "send now" (or two overlapping sweeps) cannot both announce it. Whether this call sent it."""
+        sent = await self._broadcast_repo.claim_transition(
+            broadcast.id, from_statuses or _UNSENT, BroadcastStatus.SENT, sent_at=Utils.datetime_now(),
+        )
+        if sent is None:
+            return False
         recipients = await self._resolve_recipients(BroadcastAudience(broadcast.audience))
         # One event carrying every recipient — the notification subscriber creates the
         # per-user in-app + email (§4.8 fan-out). Best-effort per subscriber.
@@ -119,10 +137,8 @@ class BroadcastService:
             recipient_user_ids=tuple(recipients),
             data={"subject": broadcast.subject, "body": broadcast.body},
         ))
-        row = await self._broadcast_repo.get_model(broadcast.id)
-        row.status = BroadcastStatus.SENT.value
-        row.sent_at = Utils.datetime_now()
-        row.recipient_count = len(recipients)
+        sent.recipient_count = len(recipients)
+        return True
 
     async def _resolve_recipients(self, audience: BroadcastAudience) -> List[str]:
         rows = await self._users.list_recipient_rows()

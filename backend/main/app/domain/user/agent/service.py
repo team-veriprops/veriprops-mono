@@ -42,7 +42,6 @@ from main.app.domain.user.agent.profile.models import (
     AgentProfile,
     AvailabilityStatus,
     CreateAgentProfileDto,
-    UpdateAgentProfileDto,
 )
 from main.app.domain.user.agent.profile.repo import AgentProfileRepo
 from main.app.domain.user.agent.validator import AgentApplicationValidator
@@ -55,7 +54,11 @@ from main.appodus_utils.db.models import Page, PaginationMeta
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
-from main.appodus_utils.exception.exceptions import ResourceNotFoundException
+from main.appodus_utils.db.locks import advisory_xact_lock
+from main.appodus_utils.exception.exceptions import InvalidResourceStateException, ResourceNotFoundException
+
+# Advisory-lock namespace: one agent application write per account at a time.
+_APPLICATION_LOCK = "agent_application"
 
 
 @inject
@@ -89,7 +92,28 @@ class AgentService:
     async def submit_application(
         self, user_id: str, dto: SubmitAgentApplicationDto, ip_address: Optional[str] = None
     ) -> AgentApplicationStatusDto:
+        """Apply to become an agent (§3.1), or apply again after a rejection.
+
+        One application per account: a pending or approved one refuses a second submit
+        (before the KYC call, so a double-click never pays for two checks). A rejected
+        applicant reapplies on the same profile row, reset to PENDING with the new roles,
+        credentials and coverage. The previous ones are soft-deleted, so the review reads only
+        what was submitted this time.
+        """
         self._agent_validator.validate_submission(dto)
+        # Concurrent submissions from one account take turns, so the second finds the first's
+        # profile rather than creating another.
+        await advisory_xact_lock(f"{_APPLICATION_LOCK}:{user_id}")
+        previous = await self._profile_repo.get_by_user_id(user_id)
+        if previous is not None and previous.status != AgentApplicationStatus.REJECTED.value:
+            raise InvalidResourceStateException(
+                resource="agent_application",
+                message=(
+                    "You're already an approved agent."
+                    if previous.status == AgentApplicationStatus.APPROVED.value
+                    else "You've already applied. We'll let you know once it has been reviewed."
+                ),
+            )
         user = await self._user_service.get_user_model(user_id)
 
         # KYC first — persists the provider result (no raw biometrics).
@@ -97,14 +121,17 @@ class AgentService:
             user_id, user.first_name, user.last_name, dto.kyc
         )
 
-        profile = await self._profile_repo.create_return_model(CreateAgentProfileDto(
-            user_id=user_id,
-            roles=dto.roles,
-            status=AgentApplicationStatus.PENDING,
-            bio=dto.bio,
-            years_experience=dto.years_experience,
-            submitted_at=Utils.datetime_now(),
-        ))
+        if previous is None:
+            profile = await self._profile_repo.create_return_model(CreateAgentProfileDto(
+                user_id=user_id,
+                roles=dto.roles,
+                status=AgentApplicationStatus.PENDING,
+                bio=dto.bio,
+                years_experience=dto.years_experience,
+                submitted_at=Utils.datetime_now(),
+            ))
+        else:
+            profile = await self._reopen_rejected(previous, dto)
 
         for cred in dto.credentials:
             await self._credential_repo.create(CreateAgentCredentialDto(
@@ -145,11 +172,29 @@ class AgentService:
             resource_id=profile.id,
             actor_id=user_id,
             to_state=AgentApplicationStatus.PENDING.value,
-            details={"roles": [r.value for r in dto.roles]},
+            details={"roles": [r.value for r in dto.roles], "reapplication": previous is not None},
             ip_address=ip_address,
         )
 
         return await self._status_dto(profile)
+
+    async def _reopen_rejected(self, profile: AgentProfile, dto: SubmitAgentApplicationDto) -> AgentProfile:
+        """Reset a rejected profile to a fresh PENDING application and retire what it held."""
+        profile.roles = [role.value for role in dto.roles]
+        profile.approved_roles = []
+        profile.status = AgentApplicationStatus.PENDING.value
+        profile.rejection_reason = None
+        profile.bio = dto.bio
+        profile.years_experience = dto.years_experience
+        profile.submitted_at = Utils.datetime_now()
+        profile.reviewed_at = None
+        profile.reviewed_by = None
+        self._profile_repo._session.add(profile)
+        for credential in await self._credential_repo.list_for_user(profile.user_id):
+            await self._credential_repo.soft_delete(credential.id)
+        for area in await self._coverage_repo.list_for_user(profile.user_id):
+            await self._coverage_repo.soft_delete(area.id)
+        return profile
 
     # ── Applicant status view ─────────────────────────────────────
 
@@ -263,12 +308,10 @@ class AgentService:
         # Never approve a role the applicant did not apply for.
         approved = [r for r in approved if r in applied]
 
-        await self._profile_repo.update(profile_id, UpdateAgentProfileDto(
-            status=AgentApplicationStatus.APPROVED.value,
-            approved_roles=[r.value for r in approved],
-            reviewed_by=admin_id,
-        ))
-        await self._mark_reviewed(profile_id)
+        await self._decide(
+            profile, AgentApplicationStatus.APPROVED,
+            approved_roles=[r.value for r in approved], reviewed_by=admin_id,
+        )
 
         # Clear pending credentials for the approved roles.
         for cred in await self._credential_repo.list_for_user(profile.user_id):
@@ -295,12 +338,9 @@ class AgentService:
         if not profile:
             raise ResourceNotFoundException(resource="agent application")
 
-        await self._profile_repo.update(profile_id, UpdateAgentProfileDto(
-            status=AgentApplicationStatus.REJECTED.value,
-            rejection_reason=dto.reason,
-            reviewed_by=admin_id,
-        ))
-        await self._mark_reviewed(profile_id)
+        await self._decide(
+            profile, AgentApplicationStatus.REJECTED, rejection_reason=dto.reason, reviewed_by=admin_id,
+        )
 
         self._audit_service.schedule(
             action=AuditActionType.AGENT_APPLICATION_REJECTED,
@@ -313,11 +353,17 @@ class AgentService:
         )
         return await self.get_application_detail(profile_id)
 
-    async def _mark_reviewed(self, profile_id: str) -> None:
-        # reviewed_at is a datetime → set directly on the model (the update DTO
-        # path json-encodes datetimes; see CLAUDE.md GenericRepo note).
-        profile = await self._profile_repo.get_model(profile_id)
-        profile.reviewed_at = Utils.datetime_now()
+    async def _decide(self, profile: AgentProfile, to_status: AgentApplicationStatus, **values) -> None:
+        """Decide a PENDING application, once. Of two admins deciding at the same moment
+        (or one double-clicking), the second is refused before it verifies credentials or
+        audits a decision that did not stand."""
+        decided = await self._profile_repo.claim_transition(
+            profile.id, [AgentApplicationStatus.PENDING], to_status, reviewed_at=Utils.datetime_now(), **values,
+        )
+        if decided is None:
+            raise InvalidResourceStateException(
+                resource="agent application", message="This application has already been decided."
+            )
 
     # ── Role-level credential-expiry suspension (§3.3a) ───────────
 

@@ -29,6 +29,7 @@ from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.db.types.money import TransactionCurrency
 from main.appodus_utils.exception.exceptions import IllegalStateTransitionException
+from test.utils.repo_fakes import fake_claim_transition
 
 # System-config defaults the discount math reads (§17.1).
 _CONFIG_VALUES = {
@@ -200,12 +201,11 @@ class TestSubmit:
 class TestMarkPaid:
     async def test_payment_pending_to_paid(self):
         svc = _make_service()
-        svc._verification_repo.get_model = AsyncMock(
-            return_value=_verification(status=VerificationStatus.PAYMENT_PENDING.value, tier="STANDARD")
-        )
+        verification = _verification(status=VerificationStatus.PAYMENT_PENDING.value, tier="STANDARD")
+        svc._verification_repo.get_model = AsyncMock(return_value=verification)
+        svc._verification_repo.claim_transition = fake_claim_transition(lambda _id: verification)
         await svc.mark_paid("ver-1")
-        update_dto = svc._verification_repo.update.call_args_list[0].args[1]
-        assert update_dto.status == VerificationStatus.PAID.value
+        assert verification.status == VerificationStatus.PAID.value
 
     async def test_idempotent_when_already_paid(self):
         svc = _make_service()
@@ -221,14 +221,16 @@ class TestMarkPaid:
 
     async def test_debits_applied_referral_credit_on_paid(self):
         svc = _make_service(credit_balance_kobo=800_000)
-        svc._verification_repo.get_model = AsyncMock(return_value=_verification(
+        verification = _verification(
             status=VerificationStatus.PAYMENT_PENDING.value, tier="STANDARD",
             referral_credit_applied_minor=500_000,
-        ))
+        )
+        svc._verification_repo.get_model = AsyncMock(return_value=verification)
+        svc._verification_repo.claim_transition = fake_claim_transition(lambda _id: verification)
+        svc._users.spend_credit_balance = AsyncMock()
         await svc.mark_paid("ver-1")
-        # Balance debited by the amount actually applied to this verification.
-        dto = svc._users.update_user.call_args.args[1]
-        assert dto.credit_balance_kobo == 300_000
+        # Debited by the amount applied to this verification; the clamp at zero is in SQL.
+        svc._users.spend_credit_balance.assert_awaited_once_with(verification.customer_id, 500_000)
 
 
 class TestQuoteDiscount:
@@ -271,7 +273,7 @@ class TestAbandonmentSweep:
         svc = _make_service()
         draft = _verification(status=VerificationStatus.PAYMENT_PENDING.value)
         svc._verification_repo.list_abandoned_drafts = AsyncMock(return_value=[draft])
-        svc._verification_repo.get_model = AsyncMock(return_value=draft)
+        svc._verification_repo.claim_transition = fake_claim_transition({draft.id: draft})
         reminded = await svc.sweep_abandoned_drafts()
         assert reminded == 1
         assert draft.recovery_reminded_at is not None
@@ -282,7 +284,7 @@ class TestAbandonmentSweep:
         svc = _make_service()
         draft = _verification(recovery_reminded_at=Utils.datetime_now())
         svc._verification_repo.list_abandoned_drafts = AsyncMock(return_value=[draft])
-        svc._verification_repo.get_model = AsyncMock(return_value=draft)
+        svc._verification_repo.claim_transition = fake_claim_transition({draft.id: draft})
         assert await svc.sweep_abandoned_drafts() == 0
 
 

@@ -8,10 +8,11 @@ call ``sweep_cleared`` directly.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from kink import di, inject
 
+from main.app.jobs.exclusive import exclusive_job
 from main.app.domain.earnings.service import EarningsService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.transactional import transactional, TransactionSessionPolicy
@@ -32,7 +33,8 @@ class EarningsSweepJobs:
     def __init__(self, earnings_service: EarningsService):
         self._earnings = earnings_service
 
-    async def run_commission_clearance_sweep(self) -> int:
+    @exclusive_job("commission_clearance")
+    async def run_commission_clearance_sweep(self) -> Optional[int]:
         return await self._earnings.sweep_cleared()
 
 

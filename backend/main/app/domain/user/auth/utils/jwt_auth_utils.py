@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+import time
 from datetime import timedelta
 from typing import TYPE_CHECKING, List
 
@@ -25,6 +26,12 @@ from main.appodus_utils.db.redis_utils import RedisUtils
 logger = di['logger']
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auths/access-token", auto_error=False)
+
+# Revoked access tokens, keyed by jti, kept until the token would have expired anyway.
+_DENYLIST_PREFIX = "token_jti"
+_REVOKED = "true"
+# A token revoked at (or after) its expiry is still recorded, briefly.
+_MIN_DENYLIST_TTL_SECONDS = 1
 
 
 class _JwtSettings(BaseModel):
@@ -53,24 +60,29 @@ class JwtAuthUtils:
         return _JwtSettings()
 
     @staticmethod
-    @AuthJWT.token_in_denylist_loader
     async def check_if_token_in_denylist(decrypted_token) -> bool:
+        """Whether the token was revoked (signed out). Fails closed: if the store cannot be
+        read, the error propagates and the request gets the standard safe 5xx, rather than an
+        unreadable denylist letting a revoked token through."""
         token_jti = decrypted_token['jti']
 
-        jti_key = f"token_jti:{token_jti}"
-        entry = await RedisUtils.get_redis(jti_key)
-        return entry and entry == 'true'
+        jti_key = f"{_DENYLIST_PREFIX}:{token_jti}"
+        entry = await RedisUtils.get_redis(jti_key, strict=True)
+        return entry == _REVOKED
 
     @staticmethod
     async def revoke_token(authorize: AuthJWT) -> bool:
+        """Deny the current access token for the rest of its life. Raises if the denylist
+        write fails, so a caller never reports a sign-out the server did not record."""
         await authorize.jwt_required()
-        token_jti = authorize.get_raw_jwt()['jti']
-
         raw_jwt = authorize.get_raw_jwt() or {}
-        exp_time_secs=int(raw_jwt.get("exp", 0))
-        time_to_live = timedelta(seconds=exp_time_secs)
+        token_jti = raw_jwt['jti']
 
-        await RedisUtils.set_redis(f"token_jti:{token_jti}", 'true', time_to_live)  # Store until token expires
+        # `exp` is a unix timestamp; the entry only needs to outlive the token itself.
+        remaining = int(raw_jwt.get("exp", 0)) - int(time.time())
+        time_to_live = timedelta(seconds=max(remaining, _MIN_DENYLIST_TTL_SECONDS))
+
+        await RedisUtils.set_redis(f"{_DENYLIST_PREFIX}:{token_jti}", _REVOKED, time_to_live, strict=True)
 
         authorize.unset_jwt_cookies()
 
@@ -141,8 +153,8 @@ class JwtAuthUtils:
             new_access_token = JwtAuthUtils._create_access_token(user_id=user_id, user_claims=user_claims,
                                                                  authorize=authorize)
             authorize.set_access_cookies(new_access_token)
-        except Exception as exc:
-            print(exc)
+        except Exception:
+            logger.exception("Failed to refresh the access token")
             raise
 
     @staticmethod
@@ -170,3 +182,8 @@ class JwtAuthUtils:
             user_claims=user_claims,
             expires_time=access_token_expires,
         )
+
+
+# Registered here rather than as a decorator: the loader returns None, which would leave the
+# method itself unreachable (and untestable) on the class.
+AuthJWT.token_in_denylist_loader(JwtAuthUtils.check_if_token_in_denylist)

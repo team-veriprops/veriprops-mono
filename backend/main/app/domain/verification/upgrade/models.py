@@ -7,6 +7,8 @@ from typing import Optional
 
 from sqlalchemy import BigInteger, Column, Index, String
 
+from main.appodus_utils.db.models import live_unique_index
+
 from main.app.core.state.status import VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
@@ -33,10 +35,15 @@ class UpgradeRequest(BaseEntity):
     status = Column(String(16), nullable=False, default=UpgradeStatus.PENDING.value, index=True)
     payment_id = Column(String(36), nullable=True, index=True)
     # Idempotency guard for resubmit (§14.2): {verification_id}:{to_tier}.
-    idempotency_key = Column(String(80), nullable=False, unique=True, index=True)
+    idempotency_key = Column(String(80), nullable=False, index=True)
 
     __table_args__ = (
         Index("ix_upgrade_verification", "verification_id"),
+        # One pending upgrade per verification + target tier. A cancelled one must not block
+        # its retry, so only PENDING rows are held unique.
+        live_unique_index(
+            "uq_upgrade_requests_key", "idempotency_key", where="deleted = false AND status = 'PENDING'",
+        ),
     )
 
 

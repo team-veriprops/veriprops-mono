@@ -108,13 +108,13 @@ async def signup(
             },
         )
     except Exception:
-        logger.warning("Could not send welcome message after signup", exc_info=True)
+        logger.opt(exception=True).warning("Could not send welcome message after signup")
 
     # Server-side signup draft is no longer needed once the account is created.
     try:
         await signup_draft_service.discard(req.email)
     except Exception:
-        logger.warning("Could not discard signup draft after successful signup", exc_info=True)
+        logger.opt(exception=True).warning("Could not discard signup draft after successful signup")
     return SuccessResponse[AuthSessionDto](data=session)
 
 
@@ -243,7 +243,7 @@ async def forgot_password(req: ForgotPasswordDto, request: Request, _: None = De
                 expires_at=Utils.datetime_now_plus(seconds=settings.PASSWORD_RESET_TTL_SECONDS)
             )
         except Exception as e:
-            logger.warning("Could not send password reset email: {}", e, exc_info=True)
+            logger.opt(exception=True).warning("Could not send password reset email: {}", e)
     return SuccessResponse[bool](data=True)
 
 

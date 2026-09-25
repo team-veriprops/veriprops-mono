@@ -16,7 +16,6 @@ from main.app.domain.user.admin_invitation.models import (
     CreateAdminInvitationDto,
     InviteAcceptScenario,
     InvitePreviewDto,
-    UpdateAdminInvitationDto,
 )
 from main.app.domain.user.admin_invitation.repo import AdminInvitationRepo
 from main.app.domain.user.models import AdminSubRole, UpdateUserDto
@@ -29,6 +28,7 @@ from main.appodus_utils.decorators.method_trace_logger import method_trace_logge
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import (
     ForbiddenException,
+    InvalidResourceStateException,
     InvalidTokenException,
     ResourceNotFoundException,
 )
@@ -109,17 +109,21 @@ class AdminInvitationService:
         if (user.email or "").strip().lower() != invitation.email_normalized:
             raise ForbiddenException(message="This invitation was issued for a different email.")
 
+        # Claimed before anyone is elevated: an invitation revoked (or accepted) a moment ago
+        # is no longer PENDING, so this request elevates no one.
+        claimed = await self._invitation_repo.claim_transition(
+            invitation.id, [AdminInvitationStatus.PENDING], AdminInvitationStatus.ACCEPTED,
+            accepted_by=current_user_id, accepted_at=Utils.datetime_now(),
+        )
+        if claimed is None:
+            raise InvalidTokenException(message="This invitation is no longer valid.")
+
         sub_role = AdminSubRole(invitation.sub_role)
         from_type = user.user_type
         await self._user_service.update_user(current_user_id, UpdateUserDto(
             user_type=UserType.ADMIN.value,
             admin_sub_role=sub_role.value,
         ))
-        await self._invitation_repo.update(invitation.id, UpdateAdminInvitationDto(
-            status=AdminInvitationStatus.ACCEPTED.value,
-            accepted_by=current_user_id,
-        ))
-        await self._mark_accepted_at(invitation.id)
 
         self._audit_service.schedule(
             action=AuditActionType.ADMIN_INVITE_ACCEPTED,
@@ -160,12 +164,21 @@ class AdminInvitationService:
         )
 
     async def revoke(self, invitation_id: str, admin_id: str) -> None:
+        """Withdraw a pending invitation. Revoking twice is harmless; an invitation already
+        accepted cannot be revoked — the invitee is an admin, and demotion is its own action."""
         invitation = await self._invitation_repo.get_model(invitation_id)
         if not invitation:
             raise ResourceNotFoundException(resource="admin invitation")
-        await self._invitation_repo.update(
-            invitation_id, UpdateAdminInvitationDto(status=AdminInvitationStatus.REVOKED.value)
+        claimed = await self._invitation_repo.claim_transition(
+            invitation.id, [AdminInvitationStatus.PENDING], AdminInvitationStatus.REVOKED,
         )
+        if claimed is not None:
+            return
+        current = await self._invitation_repo.get_model(invitation_id)
+        if current is not None and current.status != AdminInvitationStatus.REVOKED.value:
+            raise InvalidResourceStateException(
+                resource="admin invitation", message="This invitation has already been accepted.",
+            )
 
     # ── helpers ───────────────────────────────────────────────────
     async def _require_invitation(self, raw_token: str) -> AdminInvitation:
@@ -179,7 +192,3 @@ class AdminInvitationService:
             raise InvalidTokenException(message="This invitation is no longer valid.")
         if invitation.expires_at < Utils.datetime_now():
             raise InvalidTokenException(message="This invitation has expired.")
-
-    async def _mark_accepted_at(self, invitation_id: str) -> None:
-        invitation = await self._invitation_repo.get_model(invitation_id)
-        invitation.accepted_at = Utils.datetime_now()

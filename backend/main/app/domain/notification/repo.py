@@ -14,7 +14,6 @@ from main.app.domain.notification.models import (
     SearchNotificationDto,
     UpdateNotificationDto,
 )
-from main.appodus_utils import Utils
 from main.appodus_utils.db.repo import GenericRepo
 
 
@@ -56,19 +55,6 @@ class NotificationRepo(
         )
         items = list((await self._session.execute(stmt)).scalars().all())
         return items, total
-
-    async def exists_for_ref(self, notification_type: str, event_ref: str) -> bool:
-        """True if a notification of this type already exists for this reference — used to
-        keep the SLA-breach sweep firing at most once per verification (§12.2)."""
-        where = and_(
-            Notification.deleted.is_(False),
-            Notification.type == notification_type,
-            Notification.event_ref == Utils.uuid_to_hex(event_ref),
-        )
-        count = int((await self._session.execute(
-            select(func.count(Notification.id)).where(where)
-        )).scalar() or 0)
-        return count > 0
 
     async def unread_count(self, user_id: str) -> int:
         where = and_(

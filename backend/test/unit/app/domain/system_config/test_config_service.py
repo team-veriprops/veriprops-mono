@@ -37,6 +37,8 @@ def _service(stored=None):
     svc._config_repo.create_return_model = AsyncMock(
         return_value=SimpleNamespace(id="c-1", value_json=30)
     )
+    svc._config_repo.upsert = AsyncMock(side_effect=lambda values, update_columns, **kw: SimpleNamespace(
+        id="c-1", **values))
     svc._config_repo.update = AsyncMock()
     svc._config_repo.get_model = AsyncMock(return_value=SimpleNamespace(id="c-1", value_json=45))
     return svc, rows
@@ -56,9 +58,11 @@ class TestSet:
     async def test_set_coerces_to_int(self):
         svc, _ = _service()
         await svc.set(ConfigKey.DISPUTE_WINDOW_DAYS, "45", "admin-1")
-        # create_return_model called with a coerced int value
-        dto = svc._config_repo.create_return_model.await_args.args[0]
-        assert dto.value_json == 45 and isinstance(dto.value_json, int)
+        # One upsert on the live key, with the value coerced to the default's type.
+        values, update_columns = svc._config_repo.upsert.await_args.args
+        assert values["value_json"] == 45 and isinstance(values["value_json"], int)
+        assert update_columns == ["value_json"]
+        assert svc._config_repo.upsert.await_args.kwargs == {"unique_index": "uq_system_config_key"}
 
     async def test_set_audits(self):
         svc, _ = _service()

@@ -19,6 +19,8 @@ EXPECTED_JOBS = {
     "scheduled_broadcast_check": 5,
     "message_retry_check": 1,
     "assistant_pending_turn_check": 1,
+    "expired_key_value_cleanup": 60,
+    "unprocessed_whatsapp_inbound_check": 5,
 }
 
 

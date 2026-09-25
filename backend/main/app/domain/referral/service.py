@@ -20,7 +20,6 @@ from main.app.domain.referral.credit.models import (
     ReferralCredit,
     ReferralCreditDto,
     ReferralCreditStatus,
-    UpdateReferralCreditDto,
 )
 from main.app.domain.referral.credit.repo import ReferralCreditRepo
 from main.app.domain.referral.models import (
@@ -31,7 +30,6 @@ from main.app.domain.referral.models import (
 from main.app.domain.referral.repo import ReferralRepo
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.system_config.service import ConfigService
-from main.app.domain.user.models import UpdateUserDto
 from main.app.domain.user.service import UserService
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -63,12 +61,16 @@ class ReferralService:
     # ── Link ──────────────────────────────────────────────────────
 
     async def get_or_create_link(self, user_id: str) -> Referral:
+        """The user's referral link, created on first use. Runs on a page load, so two tabs
+        opening at once must converge on one link rather than race into the constraint."""
         existing = await self._referrals.get_for_referrer(user_id)
         if existing is not None:
             return existing
-        return await self._referrals.create_return_model(CreateReferralDto(
-            referrer_user_id=user_id, code=await self._unique_code(),
-        ))
+        link, _ = await self._referrals.insert_or_get(
+            CreateReferralDto(referrer_user_id=user_id, code=await self._unique_code()).model_dump(by_alias=False),
+            ["referrer_user_id"],
+        )
+        return link
 
     async def resolve_referrer_id(self, code: str) -> Optional[str]:
         """The referrer's user id for a referral code, or None if the code is unknown
@@ -118,16 +120,21 @@ class ReferralService:
         window_days = await self._config.get_int(ConfigKey.CHARGEBACK_WINDOW_DAYS)
         clearing_until = Utils.datetime_now() + timedelta(days=window_days)
 
-        credit = await self._credits.create_return_model(CreateReferralCreditDto(
-            referrer_user_id=referrer_id,
-            invitee_user_id=Utils.uuid_to_hex(invitee.id),
-            verification_id=payment.verification_id,
-            amount_minor=amount_minor,
-            status=ReferralCreditStatus.VOID if void_reason else ReferralCreditStatus.PENDING,
-            clearing_until=None if void_reason else clearing_until,
-            void_reason=void_reason,
-        ))
-        return credit
+        # One credit per invitee, enforced by the insert: a concurrent payment webhook for the
+        # same invitee can't mint a second.
+        credit, created = await self._credits.insert_or_get(
+            CreateReferralCreditDto(
+                referrer_user_id=referrer_id,
+                invitee_user_id=Utils.uuid_to_hex(invitee.id),
+                verification_id=payment.verification_id,
+                amount_minor=amount_minor,
+                status=ReferralCreditStatus.VOID if void_reason else ReferralCreditStatus.PENDING,
+                clearing_until=None if void_reason else clearing_until,
+                void_reason=void_reason,
+            ).model_dump(by_alias=False),
+            unique_index="uq_referral_credits_invitee",
+        )
+        return credit if created else None
 
     async def sweep_referral_credits(self) -> int:
         """Clear PENDING credits whose chargeback window has passed (§17.1): add the amount
@@ -136,19 +143,14 @@ class ReferralService:
         now = Utils.datetime_now()
         cleared = 0
         for credit in await self._credits.list_pending_due(now):
-            row = await self._credits.get_model(credit.id)
-            if row is None or row.status != ReferralCreditStatus.PENDING.value:
-                continue
-            referrer = await self._users.get_user_model(row.referrer_user_id)
-            new_balance = (referrer.credit_balance_kobo or 0) + row.amount_minor
-            await self._users.update_user(
-                row.referrer_user_id, UpdateUserDto(credit_balance_kobo=new_balance)
+            # Claimed first: an overlapping sweep that listed the same credit finds it
+            # CLEARED and skips it, so the balance is credited once.
+            row = await self._credits.claim_transition(
+                credit.id, [ReferralCreditStatus.PENDING], ReferralCreditStatus.CLEARED, cleared_at=now,
             )
-            await self._credits.update(row.id, UpdateReferralCreditDto(
-                status=ReferralCreditStatus.CLEARED.value,
-            ))
-            fresh = await self._credits.get_model(row.id)
-            fresh.cleared_at = now
+            if row is None:
+                continue
+            await self._users.add_credit_balance(row.referrer_user_id, row.amount_minor)
             cleared += 1
             await publish_domain_event(DomainEvent(
                 type=EventType.REFERRAL_CREDIT_EARNED,

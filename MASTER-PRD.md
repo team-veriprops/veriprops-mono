@@ -543,6 +543,18 @@ uploads for little real gain).
   (draft, re-check, dispute, payout) use the same client-key mechanism.
 - **Optimistic locking for updates.** The `version` column on `BaseEntity` guards mutations of existing rows
   — a double-tapped "Submit" loses the stale write.
+- **Claimed transitions.** A status change with consequences is one conditional update, made before the
+  consequences: of two concurrent requests exactly one moves the row, and the other is refused (or, for a
+  webhook or sweep, stands down) before any money moves or any notification goes out. This covers payouts,
+  payments and refunds, PAID, review release and failure, re-checks, tier upgrades, disputes, chargebacks,
+  commission freezes and reversals, task accepts and declines, and agent-application, admin-invitation and
+  erasure decisions. A second success event for a settled charge settles nothing, and a late failure event
+  never undoes a success.
+- **Serialised checks.** A check over many rows takes a per-owner lock first, so two requests cannot both
+  pass it: a withdrawal against the agent's balance, a task against the agent's active-task cap, and
+  device-session rotation against "sign out other devices". Counters and balances (failed logins, payment
+  failures, declines, referral credit, read markers) are computed in the database, so concurrent updates
+  all count.
 
 ### 4.7 Chat message lifecycle & fraud holds
 
@@ -583,7 +595,8 @@ reconnection.
 `app/core/vid.py` generates `VP-YYYY-XXXXXX` with a **high-entropy, non-sequential** Crockford-alphabet
 suffix — the ID space cannot be walked. The unauthenticated lookup (§18.1) returns **indistinguishable
 response shapes** for not-found / private / in-progress states so a prober cannot confirm which IDs exist.
-(A per-route rate limit on the public lookup endpoint is not yet attached — §G.)
+The lookup endpoint is also rate-limited per IP (20 lookups a minute, the `public_vid_lookup` scope), so
+even a guessable space could not be walked quickly.
 
 ### 4.11 SLA business-day calendar
 
@@ -744,6 +757,14 @@ The application enters `PENDING` (`AgentApplicationStatus`) and blocks job recei
 (per-role scoping) or rejects with a reason (§11.5). Credentialed roles require a `VERIFIED`, unexpired
 licence to be (and stay) active — see role-level suspension, §2.4.
 
+One application per account. While it is `PENDING` or `APPROVED`, a second submit is refused before any
+KYC call. A `REJECTED` applicant may apply again: the same profile returns to `PENDING` with the new roles,
+credentials and coverage, and the previous ones are retired. KYC runs again, and the audit trail records
+it as a reapplication.
+
+An admin decides a `PENDING` application once. A second decision (another admin, a double click) is refused
+before it verifies credentials or records anything, so a decided application changes only by reapplication.
+
 ---
 
 <a id="9-admin-rbac"></a>
@@ -757,6 +778,10 @@ licence to be (and stay) active — see role-level suspension, §2.4.
 Super Admin sends an invite with a sub-role; the token is hashed, valid `ADMIN_INVITE_TTL_HOURS` (72).
 Acceptance handles three cases: new user → pre-filled signup; existing user → authenticated accept (email
 must match); already admin → friendly message.
+
+An invitation is used once. Acceptance and revocation both start from `PENDING`, so if they land together
+exactly one stands: a revoked invitation elevates no one, and an accepted one cannot be revoked (removing an
+admin is its own action). Revoking an already-revoked invitation is harmless.
 
 ### 9.2 The sanctioned elevation path
 
@@ -887,7 +912,10 @@ Idempotent, claim-based background jobs (APScheduler; disabled under `ENVIRONMEN
 triggerable via a dev/admin endpoint for deterministic tests): **no-show timeout** (accepted but idle →
 back to `PENDING`, admin alerted, logged against performance), **pool timeout / starvation backstop**
 (unclaimed broadcasts escalate to targeted assignment), **SLA-breach detection** (publishes `SLA_BREACHED`
-once per verification), plus the clearance/broadcast/retry sweeps of later modules.
+once per verification — the verification is claimed via `sla_breach_notified_at` before the event goes
+out, so a scheduled run and an admin-triggered one landing together announce it once), plus the
+clearance/broadcast/retry sweeps of later modules. Every job runs on one worker at a time (a per-job
+lock), and each sweep claims the rows it acts on, so runs that overlap never repeat an effect.
 
 ### 11.5 Agent approval queue & admin notes
 
@@ -1216,8 +1244,8 @@ Unauthenticated, summary-only, allow-listed fields: VID, ✅ badge, trust **band
 report date, property type, state & LGA, version. Never: full address, agent or owner names, documents,
 numeric score. `PublicLookupState` drives the render: `SHARED` (summary) / `PRIVATE` ("not enabled") /
 `IN_PROGRESS` / `DISPUTED` / `NOT_FOUND` — non-shared states return indistinguishable shapes (§4.10).
-`noindex` unless `SHARED`. CTA: "Start a verification →". (Per-route rate limiting is not yet attached —
-§G.)
+`noindex` unless `SHARED`. CTA: "Start a verification →". The endpoint allows 20 lookups per IP per minute
+(`public_vid_lookup`); like every limiter it is off where `DISABLE_RATE_LIMITING` is set for automation.
 
 ### 18.2 Sharing modes
 

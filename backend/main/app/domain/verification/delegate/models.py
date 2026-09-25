@@ -28,6 +28,8 @@ from typing import Optional
 
 from sqlalchemy import Column, Index, String
 
+from main.appodus_utils.db.models import live_unique_index
+
 from main.appodus_utils import BaseEntity, BaseQueryDto, InternalPageRequest, Object
 from main.appodus_utils.db.models import UTCDateTime
 
@@ -52,6 +54,12 @@ class CaseDelegate(BaseEntity):
     __table_args__ = (
         Index("ix_case_delegates_verification", "verification_id"),
         Index("ix_case_delegates_phone", "phone_e164"),
+        # §26.4.5's one live delegate per case (built by migration 0001). Declared here so
+        # `insert_or_get` can target it by name.
+        live_unique_index(
+            "uq_case_delegates_live_per_case", "verification_id",
+            where="revoked_at IS NULL AND deleted = false",
+        ),
     )
 
     @property

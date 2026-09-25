@@ -100,7 +100,7 @@ class VerificationService:
             status=VerificationStatus.DRAFT,
         ))
         if idempotency_key:
-            await self._idempotency.complete(idempotency_key, resource_id=verification.id)
+            await self._idempotency.complete(idempotency_key, _CREATE_SCOPE, resource_id=verification.id)
         # First verification this customer has ever started (§ auto-launch the
         # new-verification wizard once, on the login before this moment).
         await self._users.update_user(customer_id, UpdateUserDto(has_started_verification=True))
@@ -258,13 +258,20 @@ class VerificationService:
         if verification.status == VerificationStatus.PAID.value:
             return verification
         self._assert_transition(verification.status, VerificationStatus.PAID)
-        tier = VerificationTier(verification.tier) if verification.tier else VerificationTier.BASIC
-        await self._verification_repo.update(
-            verification_id, UpdateVerificationDto(status=VerificationStatus.PAID.value)
+        # Claimed, so a confirmation racing this one (it read the same unpaid row) finds the
+        # move made and stands down: one PAID transition, one debit, one notification.
+        paid = await self._verification_repo.claim_transition(
+            verification_id, verification_state_machine.sources_of(VerificationStatus.PAID.value),
+            VerificationStatus.PAID,
         )
+        if paid is None:
+            current = await self._verification_repo.get_model(verification_id)
+            self._assert_transition(current.status, VerificationStatus.PAID)
+            return current
+        tier = VerificationTier(verification.tier) if verification.tier else VerificationTier.BASIC
         await self._set_paid_timestamps(verification_id, tier)
         # Debit any referral credit spent on this verification from the customer's balance
-        # (§17.1). mark_paid is idempotent (early-returns when already PAID), so this fires once.
+        # (§17.1). Only the confirmation that made the move gets here, so it fires once.
         await self._debit_applied_referral_credit(verification)
         # PAID is the payment-confirmed moment (§12.2): SSE re-emit (status_changed) + the
         # customer payment-confirmed notification + email/SMS, one publish (§4.8, D20).
@@ -332,10 +339,12 @@ class VerificationService:
         cutoff = Utils.datetime_now() - timedelta(hours=settings.VERIFICATION_ABANDONMENT_AGE_HOURS)
         reminded = 0
         for verification in await self._verification_repo.list_abandoned_drafts(cutoff):
-            row = await self._verification_repo.get_model(verification.id)
-            if row is None or row.recovery_reminded_at is not None:
+            # Stamped before the email: an overlapping run finds it reminded and skips it.
+            if await self._verification_repo.claim_transition(
+                verification.id, [verification.status], expect={"recovery_reminded_at": None},
+                recovery_reminded_at=Utils.datetime_now(),
+            ) is None:
                 continue
-            row.recovery_reminded_at = Utils.datetime_now()
             reminded += 1
             await publish_domain_event(DomainEvent(
                 type=EventType.ABANDONMENT_RECOVERY,
@@ -351,15 +360,8 @@ class VerificationService:
         applied = verification.referral_credit_applied_minor or 0
         if applied <= 0:
             return
-        user = await self._users.get_user_model(verification.customer_id)
-        # Clamp: never drive the balance negative if credit was spent elsewhere meanwhile.
-        debit = min(applied, user.credit_balance_kobo or 0)
-        if debit <= 0:
-            return
-        await self._users.update_user(
-            verification.customer_id,
-            UpdateUserDto(credit_balance_kobo=(user.credit_balance_kobo or 0) - debit),
-        )
+        # Clamped at zero in SQL, in case the credit was spent elsewhere meanwhile.
+        await self._users.spend_credit_balance(verification.customer_id, applied)
 
     async def _require_owned(self, verification_id: str, customer_id: str) -> Verification:
         verification = await self._verification_repo.get_model(verification_id)

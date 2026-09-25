@@ -24,7 +24,9 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, String, UniqueConstraint
+from sqlalchemy import Column, String
+
+from main.appodus_utils.db.models import live_unique_index
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, InternalPageRequest, Object
 from main.appodus_utils.db.models import UTCDateTime
@@ -63,8 +65,9 @@ class WhatsAppLink(BaseEntity):
     revoked_reason = Column(String(120), nullable=True)
 
     __table_args__ = (
-        UniqueConstraint("user_id", name="uq_whatsapp_links_user_id"),
-        UniqueConstraint("phone_e164", name="uq_whatsapp_links_phone_e164"),
+        # One live link per account and per number; a replaced link never blocks the next.
+        live_unique_index("uq_whatsapp_links_user_id", "user_id"),
+        live_unique_index("uq_whatsapp_links_phone_e164", "phone_e164"),
     )
 
 

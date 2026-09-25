@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import Column, Integer, String
+
+from main.appodus_utils.db.models import live_unique_index
 from sqlalchemy.ext.mutable import MutableList
 
 from main.app.core.state.status import AgentRole
@@ -55,6 +57,12 @@ class AgentProfile(BaseEntity):
     reviewed_at = Column(UTCDateTime, nullable=True)
     reviewed_by = Column(String(36), nullable=True)
     # status index is declared inline (index=True) → ix_agent_profiles_status, matching the migration.
+
+    __table_args__ = (
+        # One live profile per account: lookups read a single row, so a second one (a
+        # double-submitted application) would make every later read fail.
+        live_unique_index("uq_agent_profiles_user_id", "user_id"),
+    )
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────

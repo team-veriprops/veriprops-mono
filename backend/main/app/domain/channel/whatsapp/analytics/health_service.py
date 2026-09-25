@@ -59,11 +59,10 @@ class WhatsAppNumberHealthService:
         rendering is "here is what we last knew, and we have not been able to ask since".
         """
         phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID or _UNCONFIGURED
-        row = await self._health.get_by_phone_number_id(phone_number_id)
-        if row is None:
-            row = await self._health.create_return_model(
-                CreateWhatsAppNumberHealthDto(phone_number_id=phone_number_id)
-            )
+        row, _ = await self._health.insert_or_get(
+            CreateWhatsAppNumberHealthDto(phone_number_id=phone_number_id).model_dump(by_alias=False),
+            unique_index="uq_whatsapp_number_health_phone_number_id",
+        )
 
         try:
             remote = await whatsapp_number_directory().fetch_number_health()

@@ -80,10 +80,14 @@ class OauthUtils:
         # RedisUtils persists UTF-8 text only (no pickle), so serialize the state
         # to JSON here and rehydrate it in consume_state — storing the model object
         # would come back as a bare string and break attribute access downstream.
+        # Strict: a state that was never stored would fail at the provider's callback as an
+        # "invalid state", after the user has already signed in with the provider. Failing
+        # here, before the redirect, is the honest error.
         await RedisUtils.set_redis(
             f"oauth:state:{state}",
             oauth_request_payload.model_dump_json(),
             time_to_live=timedelta(seconds=settings.OAUTH_STATE_TTL_SECONDS),
+            strict=True,
         )
 
         query_string = urllib.parse.urlencode(params)
@@ -133,13 +137,11 @@ class OauthUtils:
 
     @staticmethod
     async def consume_state(state: Optional[str]) -> Optional[OAuthRequestStoredState]:
-        """Atomically pop a stored OAuth state. Single-use: if we successfully
-        delete the key, we own the value; concurrent callers see None."""
+        """Atomically pop a stored OAuth state. Single-use: the read and delete are one
+        step, so of two racing callbacks exactly one gets the value; the other sees None."""
         if not state:
             return None
-        key = f"oauth:state:{state}"
-        stored = await RedisUtils.get_redis(key)
-        await RedisUtils.delete(key)
+        stored = await RedisUtils.pop(f"oauth:state:{state}")
         if not stored:
             return None
         # RedisUtils returns decoded UTF-8 text, so rehydrate the JSON back into the

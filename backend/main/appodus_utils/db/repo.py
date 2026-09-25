@@ -1,6 +1,7 @@
+import enum
 import re
 import uuid
-from typing import Any, Dict, Generic, List, Optional, Type, Union
+from typing import Any, Dict, Generic, Iterable, List, Optional, Tuple, Type, Union
 
 
 from main.appodus_utils import Utils
@@ -11,12 +12,18 @@ from main.appodus_utils.decorators.method_trace_logger import method_trace_logge
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import InvalidResourceStateException
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import literal, select, func, update
+from sqlalchemy import ColumnElement, Index, literal, select, func, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from main.appodus_utils.db.models import (
     Page, ModelType, CreateSchemaType, UpdateSchemaType,
     QuerySchemaType, SearchSchemaType, SuccessResponse
 )
+
+
+def _plain(value: Any) -> Any:
+    """An enum member as the value its column stores; anything else unchanged."""
+    return value.value if isinstance(value, enum.Enum) else value
 
 
 @decorate_all_methods(method_trace_logger)
@@ -36,6 +43,15 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
     @property
     def _session(self) -> AsyncSession:
         return get_db_session_from_context()
+
+    async def _flush_pending(self) -> None:
+        """Write the session's pending edits before a statement that reloads rows.
+
+        Sessions run with autoflush off, and `populate_existing` replaces a loaded row with the
+        database's copy — so an edit made in memory just before (a status set on the same row a
+        moment earlier) would be silently discarded. Flushing first keeps it.
+        """
+        await self._session.flush()
 
     async def exists_by_id(self, _id: str) -> bool:
         _id: uuid.UUID = self._ensure_uuid(_id)
@@ -100,6 +116,174 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
         db_obj.date_created = Utils.datetime_now()
         self._session.add(db_obj)
         return db_obj
+
+    def _unique_index_target(self, name: str) -> Tuple[List[str], Optional[ColumnElement[bool]]]:
+        """Columns and predicate of the model's unique index *name*, for an ON CONFLICT target.
+
+        Read off the model's own declaration (`live_unique_index`), which the migration is
+        pinned to, so the target always matches the index Postgres holds. Postgres only accepts
+        a partial-index target whose predicate it can prove matches, and a hand-written
+        equivalent (`deleted IS false` for `deleted = false`) fails that proof.
+        """
+        for index in self._model.__table__.indexes:
+            if isinstance(index, Index) and index.name == name and index.unique:
+                return [c.name for c in index.columns], index.dialect_options["postgresql"]["where"]
+        raise ValueError(f"{self._table_name} declares no unique index named {name!r}")
+
+    async def insert_or_get(
+            self,
+            values: Dict[str, Any],
+            conflict_columns: Optional[List[str]] = None,
+            *,
+            unique_index: Optional[str] = None,
+    ) -> Tuple[ModelType, bool]:
+        """Create the row, or return the one already holding its unique key — race-free.
+
+        Select-then-insert lets two concurrent requests both find nothing and both insert,
+        and the loser's commit then violates the unique constraint (a 500). Here the insert
+        is `INSERT … ON CONFLICT DO NOTHING RETURNING`: Postgres makes a concurrent attempt
+        wait for the winner and then yield, and the winner's row is read back.
+
+        Name the key either by *conflict_columns* (a full unique constraint or primary key)
+        or by *unique_index* (a partial unique index declared on the model, e.g. one over
+        live rows). Returns ``(row, created)``.
+        """
+        conflict_columns, conflict_where = self._conflict_target(conflict_columns, unique_index)
+        stmt = (
+            pg_insert(self._model)
+            .values(**self._new_row(values))
+            .on_conflict_do_nothing(index_elements=conflict_columns, index_where=conflict_where)
+            .returning(self._model)
+        )
+        created = (await self._session.execute(stmt)).scalar_one_or_none()
+        if created is not None:
+            return created, True
+
+        existing = select(self._model).where(
+            *[getattr(self._model, column) == values[column] for column in conflict_columns]
+        )
+        if conflict_where is not None:
+            existing = existing.where(conflict_where)
+        return (await self._session.execute(existing)).scalars().first(), False
+
+    async def upsert(
+            self,
+            values: Dict[str, Any],
+            update_columns: List[str],
+            conflict_columns: Optional[List[str]] = None,
+            *,
+            unique_index: Optional[str] = None,
+    ) -> ModelType:
+        """Create the row, or overwrite *update_columns* on the one holding its key, in one statement.
+
+        `INSERT … ON CONFLICT DO UPDATE … RETURNING`. Unlike read-then-write, there is no
+        window in which two concurrent requests both find nothing and both insert. The key
+        is named as in `insert_or_get`. The row's version and `date_updated` move on update,
+        and an instance of it already loaded in this session is refreshed.
+        """
+        conflict_columns, conflict_where = self._conflict_target(conflict_columns, unique_index)
+        await self._flush_pending()
+        stmt = pg_insert(self._model).values(**self._new_row(values))
+        set_: Dict[str, Any] = {column: stmt.excluded[column] for column in update_columns}
+        set_["date_updated"] = Utils.datetime_now()
+        set_["version"] = self._model.version + 1
+        stmt = (
+            stmt.on_conflict_do_update(
+                index_elements=conflict_columns, index_where=conflict_where, set_=set_,
+            )
+            .returning(self._model)
+            .execution_options(populate_existing=True)
+        )
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def claim_transition(
+            self,
+            _id: Union[str, uuid.UUID],
+            from_statuses: Iterable[Any],
+            to_status: Any = None,
+            *,
+            status_column: str = "status",
+            expect: Optional[Dict[str, Any]] = None,
+            increments: Optional[Dict[str, int]] = None,
+            **values: Any,
+    ) -> Optional[ModelType]:
+        """Move the row out of one of *from_statuses*, only if it is still there — race-free.
+
+        Read-check-write lets two concurrent requests both see REQUESTED and both approve,
+        refund or pay out. Here the check is the `WHERE` of one `UPDATE … RETURNING`:
+        Postgres makes a concurrent claim wait for the winner and then re-check the row, so
+        exactly one caller gets the row back. The others get None and must not repeat what
+        follows the move (money, events, notifications).
+
+        *to_status* may be omitted to update the row only while it is still in a status
+        (an adjustment allowed on an undecided payout). *expect* pins other columns the
+        decision was made on (`None` means IS NULL). *increments* add to counters in SQL.
+        *values* are written as given. Enum members are stored as their values.
+        """
+        column = getattr(self._model, status_column)
+        conditions = [
+            self._model.id == self._ensure_uuid(_id),
+            self._model.deleted.is_(False),
+            column.in_([_plain(status) for status in from_statuses]),
+        ]
+        for name, expected in (expect or {}).items():
+            attribute = getattr(self._model, name)
+            conditions.append(attribute.is_(None) if expected is None else attribute == _plain(expected))
+
+        set_: Dict[str, Any] = {name: _plain(value) for name, value in values.items()}
+        for name, step in (increments or {}).items():
+            set_[name] = func.coalesce(getattr(self._model, name), 0) + step
+        if to_status is not None:
+            set_[status_column] = _plain(to_status)
+        set_["version"] = self._model.version + 1
+        set_["date_updated"] = Utils.datetime_now()
+
+        await self._flush_pending()
+        stmt = (
+            update(self._model)
+            .where(*conditions)
+            .values(**set_)
+            .returning(self._model)
+            .execution_options(populate_existing=True, synchronize_session=False)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def lock_model(self, _id: Union[str, uuid.UUID]) -> Optional[ModelType]:
+        """The live row, locked `FOR UPDATE` until this transaction ends.
+
+        For a decision taken over several steps whose end state is derived, not known up
+        front (a release computes COMPLETED from its tasks), so no single claim can express
+        it. A concurrent decision on the same row waits here, then reads what the first one
+        committed.
+        """
+        await self._flush_pending()
+        stmt = (
+            select(self._model)
+            .where(self._model.id == self._ensure_uuid(_id), self._model.deleted.is_(False))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    def _conflict_target(
+            self, conflict_columns: Optional[List[str]], unique_index: Optional[str],
+    ) -> Tuple[List[str], Optional[ColumnElement[bool]]]:
+        if unique_index is not None:
+            return self._unique_index_target(unique_index)
+        if not conflict_columns:
+            raise ValueError("A conflict target needs conflict_columns or unique_index")
+        return conflict_columns, None
+
+    @staticmethod
+    def _new_row(values: Dict[str, Any]) -> Dict[str, Any]:
+        """*values* plus the base columns a plain create would set."""
+        return {
+            "id": Utils.generate_uuid(),
+            "version": 1,
+            "date_created": Utils.datetime_now(),
+            "deleted": False,
+            **values,
+        }
 
     # @handle_exceptions
     @transactional()

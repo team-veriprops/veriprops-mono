@@ -12,10 +12,11 @@ endpoint) directly for determinism.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from kink import di, inject
 
+from main.app.jobs.exclusive import exclusive_job
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.transactional import transactional, TransactionSessionPolicy
@@ -37,10 +38,12 @@ class TaskSweepJobs:
     def __init__(self, task_service: VerificationTaskService):
         self._task_service = task_service
 
-    async def run_no_show_sweep(self) -> int:
+    @exclusive_job("task_no_show")
+    async def run_no_show_sweep(self) -> Optional[int]:
         return await self._task_service.sweep_no_show()
 
-    async def run_pool_starvation_sweep(self) -> int:
+    @exclusive_job("task_pool_starvation")
+    async def run_pool_starvation_sweep(self) -> Optional[int]:
         return await self._task_service.sweep_pool_starvation()
 
 

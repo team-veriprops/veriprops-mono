@@ -118,9 +118,7 @@ class RecheckService:
             )
 
         if not dto.approve:
-            await self._recheck_repo.update(recheck.id, UpdateRecheckDto(
-                status=RecheckStatus.REJECTED.value, decision_note=dto.note,
-            ))
+            await self._claim_decision(recheck, RecheckStatus.REJECTED, decision_note=dto.note)
             await self._notify_decision(recheck, approved=False)
             self._audit.schedule(
                 action=AuditActionType.RECHECK_REJECTED,
@@ -133,15 +131,14 @@ class RecheckService:
         if not roles:
             raise ValidationException(message="Select at least one role to re-check.")
 
+        # Decided before the customer is charged, so a second approval charges nothing.
+        await self._claim_decision(recheck, RecheckStatus.APPROVED, scope_roles=roles, decision_note=dto.note)
         payment = await self._payments.initiate_secondary(
             verification_id=recheck.verification_id, customer_id=recheck.customer_id,
             amount_minor=recheck.price_minor, purpose=PaymentPurpose.RECHECK,
         )
         payment_ref = Utils.uuid_to_hex(payment.id)  # entity ref → .hex (32-char)
-        await self._recheck_repo.update(recheck.id, UpdateRecheckDto(
-            status=RecheckStatus.APPROVED.value, scope_roles=roles,
-            payment_id=payment_ref, decision_note=dto.note,
-        ))
+        await self._recheck_repo.update(recheck.id, UpdateRecheckDto(payment_id=payment_ref))
         await self._notify_decision(recheck, approved=True)
         self._audit.schedule(
             action=AuditActionType.RECHECK_APPROVED,
@@ -157,6 +154,12 @@ class RecheckService:
         recheck = await self._recheck_repo.get_by_payment(Utils.uuid_to_hex(payment_id))
         if recheck is None or recheck.status != RecheckStatus.APPROVED.value:
             return
+        # A replayed confirmation racing this one finds the re-check already STARTED.
+        started = await self._recheck_repo.claim_transition(
+            recheck.id, [RecheckStatus.APPROVED], RecheckStatus.STARTED,
+        )
+        if started is None:
+            return
         # Record the version-bump reason so the next release becomes v2.0.
         await self._verification_repo.update(
             recheck.verification_id,
@@ -166,7 +169,6 @@ class RecheckService:
             await self._reviews.reopen_task(
                 recheck.verification_id, AgentRole(role_value), recheck.customer_id
             )
-        await self._recheck_repo.update(recheck.id, UpdateRecheckDto(status=RecheckStatus.STARTED.value))
         self._audit.schedule(
             action=AuditActionType.RECHECK_STARTED,
             resource_type="recheck", resource_id=recheck.id, actor_id=recheck.customer_id,
@@ -192,6 +194,15 @@ class RecheckService:
         return self._recheck_repo._db_utils.build_page(dtos, total, page, page_size)
 
     # ── helpers ───────────────────────────────────────────────────
+
+    async def _claim_decision(self, recheck: RecheckRequest, to_status: RecheckStatus, **values) -> None:
+        decided = await self._recheck_repo.claim_transition(
+            recheck.id, [RecheckStatus.PENDING], to_status, **values,
+        )
+        if decided is None:
+            raise InvalidResourceStateException(
+                resource="recheck", message="This re-check has already been decided."
+            )
 
     async def _get(self, recheck_id: str) -> RecheckRequest:
         recheck = await self._recheck_repo.get_model(recheck_id)

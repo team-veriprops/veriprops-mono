@@ -85,7 +85,15 @@ export async function signOut(page: Page): Promise<void> {
     }).toPass({ timeout: 15_000 });
     await signOutItem.click();
   }
-  await page.waitForURL((url) => url.pathname === ROUTES.AUTH.LOGIN);
+  // The press must be acknowledged before the redirect lands, on either layout — the desktop
+  // menu item unmounts as the menu closes, so the overlay is the only thing that can say so.
+  await expect(page.getByTestId("signout-overlay")).toBeVisible();
+  // Arriving at the login page is the outcome; its images and fonts finishing (`load`) is not,
+  // and under a busy run that wait alone can outlast the budget after the redirect has landed.
+  await page.waitForURL((url) => url.pathname === ROUTES.AUTH.LOGIN, {
+    timeout: 30_000,
+    waitUntil: "domcontentloaded",
+  });
 }
 
 /**

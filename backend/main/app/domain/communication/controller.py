@@ -14,7 +14,6 @@ Frontend service: frontend/src/components/chat/libs/chat-service.
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -23,6 +22,7 @@ from kink import di
 from libre_fastapi_jwt import AuthJWT
 
 from main.app.config.settings import settings
+from main.app.core.realtime.frames import sse_frame
 from main.app.core.realtime.user_emitter import UserEventEmitter, UserEventType
 from main.app.domain.communication.chat_message.models import (
     ChatMessage,
@@ -76,10 +76,6 @@ class SendToConversationDto(Object):
     # Neither sender_kind nor the message kind is accepted from the client — both are
     # derived server-side (see post_message).
     task_id: str | None = None
-
-
-def _sse_frame(event: str, data: dict) -> str:
-    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
 class AssistantTurnDto(Object):
@@ -208,15 +204,15 @@ async def stream(request: Request, authorize: AuthJWT = Depends()):
 
     async def _events():
         async with emitter.subscribe(user_id) as queue:
-            yield _sse_frame(UserEventType.HEARTBEAT.value, {})
+            yield sse_frame(UserEventType.HEARTBEAT.value, {})
             while True:
                 if await request.is_disconnected():
                     break
                 try:
                     payload = await asyncio.wait_for(queue.get(), timeout=_HEARTBEAT_SECONDS)
-                    yield _sse_frame(payload["event"], payload["data"])
+                    yield sse_frame(payload["event"], payload["data"])
                 except asyncio.TimeoutError:
-                    yield _sse_frame(UserEventType.HEARTBEAT.value, {})
+                    yield sse_frame(UserEventType.HEARTBEAT.value, {})
 
     return StreamingResponse(
         _events(),

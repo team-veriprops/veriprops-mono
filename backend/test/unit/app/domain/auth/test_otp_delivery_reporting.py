@@ -75,6 +75,8 @@ class TestSendOtpResult:
         svc = object.__new__(OtpService)
         svc._kv = AsyncMock()
         svc._kv.get = AsyncMock(return_value=None)
+        # First send in the window: the atomic resend counter reserves slot 1.
+        svc._kv.incr = AsyncMock(return_value=1)
         svc._session_service = AsyncMock()
         return svc
 

@@ -155,12 +155,14 @@ class VerificationRepo(
         return int(await self._session.scalar(stmt) or 0)
 
     async def list_active_overdue(self, active_statuses: List[str], today: date) -> List[Verification]:
-        """Active verifications past their SLA due date — the SLA-breach sweep source (§12.2)."""
+        """Active verifications past their SLA due date and not yet announced — the SLA-breach
+        sweep source (§12.2)."""
         stmt = select(Verification).where(
             Verification.deleted.is_(False),
             Verification.status.in_(active_statuses),
             Verification.sla_due_date.is_not(None),
             Verification.sla_due_date < today,
+            Verification.sla_breach_notified_at.is_(None),
         )
         return list((await self._session.execute(stmt)).scalars().all())
 

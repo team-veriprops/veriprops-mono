@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from test.utils.repo_fakes import fake_claim_transition, fake_insert_or_get
+
 from main.app.config.settings import settings
 from main.app.core.state.status import AgentRole, TaskState, VerificationStatus, VerificationTier
 from main.app.domain.audit.models import AuditActionType
@@ -29,6 +31,7 @@ def mock_db_session():
 
     session.begin = _begin
     session.flush = AsyncMock()
+    session.execute = AsyncMock()  # the per-agent capacity advisory lock
     token = db_session_ctx.set(session)
     yield session
     db_session_ctx.reset(token)
@@ -96,8 +99,22 @@ def _make_service(verification, tasks):
 
     svc._task_repo.get_by_role = AsyncMock(side_effect=_get_by_role)
     svc._task_repo.create_return_model = AsyncMock(side_effect=_create)
+
+    def _create_from(values):
+        t = _task(values["role"], state=values["state"], tier=values["tier"].value)
+        state["tasks"].append(t)
+        return t
+
+    # Keyed on (verification, role) (uq_verification_tasks_role), as the real insert is.
+    svc._task_repo.insert_or_get = fake_insert_or_get(
+        lambda values: next((t for t in state["tasks"] if t.role == values["role"]), None), _create_from,
+    )
     svc._task_repo.update = AsyncMock(side_effect=_update)
     svc._task_repo.get_model = AsyncMock(side_effect=_get_model)
+    # Agent moves (accept, decline, no-show) are claims on the task rows held here.
+    svc._task_repo.claim_transition = fake_claim_transition(
+        lambda task_id: next((t for t in state["tasks"] if t.id == task_id), None)
+    )
     svc._task_repo.count_active_for_agent = AsyncMock(return_value=0)
     svc._task_repo.list_accept_deadline_expired = AsyncMock(return_value=[])
     svc._task_repo.list_pool_expired = AsyncMock(return_value=[])

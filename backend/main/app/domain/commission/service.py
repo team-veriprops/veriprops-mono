@@ -20,7 +20,6 @@ from main.app.domain.commission.models import (
     Commission,
     CommissionStatus,
     CreateCommissionDto,
-    UpdateCommissionDto,
 )
 from main.app.domain.commission.repo import CommissionRepo
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -29,6 +28,8 @@ from main.appodus_utils.decorators.transactional import transactional
 
 # Commissions still exposed to a chargeback clawback (not yet paid out).
 _FREEZABLE = [CommissionStatus.CLEARING.value, CommissionStatus.AVAILABLE.value]
+# Money still exposed to a claw-back: frozen, or not yet paid out.
+_REVERSIBLE = [CommissionStatus.FROZEN.value, *_FREEZABLE]
 
 
 @inject
@@ -56,29 +57,38 @@ class CommissionService:
         """Freeze every freezable commission on a verification (§6a.2). Idempotent:
         already-frozen/reversed commissions are skipped. Returns the count frozen."""
         commissions = await self._commission_repo.list_for_verification_in_status(verification_id, _FREEZABLE)
+        frozen = 0
         for c in commissions:
-            await self._commission_repo.update(c.id, UpdateCommissionDto(
-                status=CommissionStatus.FROZEN.value,
-                frozen_from_status=c.status,
-            ))
+            # The status to restore is copied from the row in the same statement, so a
+            # clearing sweep that moved it on since it was listed is recorded correctly.
+            row = await self._commission_repo.claim_transition(
+                c.id, _FREEZABLE, CommissionStatus.FROZEN, frozen_from_status=Commission.status,
+            )
+            if row is None:
+                continue
+            frozen += 1
             self._audit.schedule(
                 action=AuditActionType.COMMISSION_FROZEN,
                 resource_type="commission",
                 resource_id=c.id,
                 actor_id=actor_id,
-                from_state=c.status,
+                from_state=row.frozen_from_status,
                 to_state=CommissionStatus.FROZEN.value,
             )
-        return len(commissions)
+        return frozen
 
     async def unfreeze_for_verification(self, verification_id: str, actor_id: str) -> int:
         """Restore frozen commissions to their pre-freeze status (chargeback won)."""
         frozen = await self._commission_repo.list_for_verification_in_status(
             verification_id, [CommissionStatus.FROZEN.value]
         )
+        restored = 0
         for c in frozen:
             restore = c.frozen_from_status or CommissionStatus.CLEARING.value
-            await self._commission_repo.update(c.id, UpdateCommissionDto(status=restore))
+            # Only a commission still FROZEN is restored: one reversed meanwhile stays reversed.
+            if await self._commission_repo.claim_transition(c.id, [CommissionStatus.FROZEN], restore) is None:
+                continue
+            restored += 1
             self._audit.schedule(
                 action=AuditActionType.COMMISSION_UNFROZEN,
                 resource_type="commission",
@@ -87,16 +97,16 @@ class CommissionService:
                 from_state=CommissionStatus.FROZEN.value,
                 to_state=restore,
             )
-        return len(frozen)
+        return restored
 
     async def reverse_for_verification(self, verification_id: str, actor_id: str) -> int:
         """Claw back frozen/clearing/available commissions (chargeback lost)."""
-        exposed = await self._commission_repo.list_for_verification_in_status(
-            verification_id,
-            [CommissionStatus.FROZEN.value, *_FREEZABLE],
-        )
+        exposed = await self._commission_repo.list_for_verification_in_status(verification_id, _REVERSIBLE)
+        reversed_count = 0
         for c in exposed:
-            await self._commission_repo.update(c.id, UpdateCommissionDto(status=CommissionStatus.REVERSED.value))
+            if await self._commission_repo.claim_transition(c.id, _REVERSIBLE, CommissionStatus.REVERSED) is None:
+                continue
+            reversed_count += 1
             self._audit.schedule(
                 action=AuditActionType.COMMISSION_REVERSED,
                 resource_type="commission",
@@ -105,7 +115,7 @@ class CommissionService:
                 from_state=c.status,
                 to_state=CommissionStatus.REVERSED.value,
             )
-        return len(exposed)
+        return reversed_count
 
     async def list_for_verification(self, verification_id: str) -> List[Commission]:
         return await self._commission_repo.list_for_verification(verification_id)

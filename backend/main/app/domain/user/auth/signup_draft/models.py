@@ -11,6 +11,8 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy import Column, Index, Integer, String, Text
 
+from main.appodus_utils.db.models import live_unique_index
+
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
@@ -20,7 +22,7 @@ class SignupDraft(BaseEntity):
 
     # Email is the natural key for an unauthenticated draft. Stored normalised
     # (lowercased) — service layer enforces.
-    email = Column(String(254), nullable=False, unique=True, index=True)
+    email = Column(String(254), nullable=False, index=True)
     step = Column(Integer, nullable=False, default=0)
     # JSON-encoded payload — opaque to the backend; the frontend wizard owns
     # the schema. Storing as TEXT keeps us DB-portable.
@@ -29,6 +31,8 @@ class SignupDraft(BaseEntity):
 
     __table_args__ = (
         Index("ix_signup_drafts_email_active", "email", "expires_at"),
+        # One live draft per email; a discarded (soft-deleted) one never blocks a new signup.
+        live_unique_index("uq_signup_drafts_email", "email"),
     )
 
 

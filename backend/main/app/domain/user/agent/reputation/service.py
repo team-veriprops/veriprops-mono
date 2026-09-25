@@ -47,6 +47,10 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+from main.appodus_utils.db.locks import advisory_xact_lock
+
+# Advisory-lock namespace: one replacement of an agent's coverage at a time.
+_COVERAGE_LOCK = "agent_coverage"
 
 # Roles that are genuinely location-bound (§16.1): coverage must match the property area.
 # Registry / Lawyer work is effectively remote, so coverage does not gate their matching.
@@ -139,6 +143,9 @@ class AgentReputationService:
         for area in areas:
             if not is_valid_state(area.state):
                 raise ValidationException(message=f"Unknown state: {area.state}")
+        # Replacements for one agent take turns: interleaved, two saves would each clear the
+        # old set and leave both new sets live.
+        await advisory_xact_lock(f"{_COVERAGE_LOCK}:{agent_id}")
         for existing in await self._coverage.list_for_user(agent_id):
             await self._coverage.soft_delete(existing.id)
         saved: List[AgentCoverageInputDto] = []

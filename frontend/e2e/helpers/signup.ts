@@ -76,12 +76,16 @@ export async function openOtpDialog(page: Page, field: "email" | "phone"): Promi
   // because the browser gets starved when several workers share one machine, and that is where
   // this wait has actually failed. The form's own error is watched alongside, so a refused send
   // is reported in the app's words rather than as a bare "element not found" on the dialog.
-  const opened = await Promise.race([
-    modal.waitFor({ state: "visible", timeout: 90_000 }).then(() => true),
-    sendError.waitFor({ state: "visible", timeout: 90_000 }).then(() => false),
-  ]).catch(() => {
-    throw new Error(`The ${field} code dialog never opened, and no error was shown.`);
-  });
+  // One wait on either outcome — not a race of two waits, whose loser would linger to its own
+  // timeout long after the step had moved on.
+  await modal
+    .or(sendError)
+    .first()
+    .waitFor({ state: "visible", timeout: 90_000 })
+    .catch(() => {
+      throw new Error(`The ${field} code dialog never opened, and no error was shown.`);
+    });
+  const opened = await modal.isVisible();
 
   if (!opened) {
     throw new Error(`Sending the ${field} code failed: ${(await sendError.innerText()).trim()}`);
@@ -119,7 +123,11 @@ export async function fillVerifyStep(page: Page, account: NewAccount): Promise<v
   await expect(page.getByTestId("verify-form")).toBeVisible();
   await verifyWithOtp(page, "email");
   await page.getByTestId("verify-phone-input").fill(account.phone);
-  await page.getByTestId("verify-submit").click();
+  // Asserted apart from the click: a button still disabled (the number not accepted) then reads
+  // as that, not as a click that timed out — which is what an engine starved of CPU looks like.
+  const submit = page.getByTestId("verify-submit");
+  await expect(submit).toBeEnabled();
+  await submit.click();
 }
 
 /** Step 3 — residence. The country is what drives currency and timezone. */

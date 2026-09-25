@@ -103,9 +103,14 @@ class DisputeService:
         verification_state_machine.assert_can_transition(
             v.status, VerificationStatus.DISPUTED.value, resource="Verification"
         )
-        await self._verification_repo.update(
-            verification_id, UpdateVerificationDto(status=VerificationStatus.DISPUTED.value)
+        # Claimed, so two concurrent disputes of one report open one, freezing once.
+        disputed = await self._verification_repo.claim_transition(
+            verification_id, [VerificationStatus.COMPLETED], VerificationStatus.DISPUTED,
         )
+        if disputed is None:
+            raise InvalidResourceStateException(
+                resource="verification", message="Only a completed verification can be disputed."
+            )
         # High-stakes: freeze related clearing commissions until resolution (§15.2).
         await self._commissions.freeze_for_verification(verification_id, customer_id)
 
@@ -178,6 +183,21 @@ class DisputeService:
                 resource="verification", message="The verification is not under dispute."
             )
 
+        roles = [r.value for r in (dto.scope_roles or [])]
+        if dto.outcome == DisputeOutcome.PARTIAL_RECHECK and not roles:
+            raise ValidationException(message="Select at least one role for the free re-check.")
+        # Resolved before any outcome is applied: a second resolution (a double click, two
+        # admins) is refused before it can refund or reverse commissions again.
+        resolved = await self._dispute_repo.claim_transition(
+            dispute.id, [DisputeStatus.OPEN], DisputeStatus.RESOLVED,
+            resolution_outcome=dto.outcome, resolution_note=dto.note.strip(),
+            resolved_by=admin_id, resolved_at=Utils.datetime_now(),
+        )
+        if resolved is None:
+            raise InvalidResourceStateException(
+                resource="dispute", message="This dispute has already been resolved."
+            )
+
         if dto.outcome == DisputeOutcome.REJECTED:
             await self._transition(vid, verification.status, VerificationStatus.COMPLETED)
             await self._commissions.unfreeze_for_verification(vid, admin_id)
@@ -186,9 +206,6 @@ class DisputeService:
             await self._payments.refund(vid, admin_id, reason="dispute_upheld_full_refund")
             await self._commissions.reverse_for_verification(vid, admin_id)
         else:  # PARTIAL_RECHECK
-            roles = [r.value for r in (dto.scope_roles or [])]
-            if not roles:
-                raise ValidationException(message="Select at least one role for the free re-check.")
             # The re-checked release becomes v2.0.
             await self._verification_repo.update(
                 vid, UpdateVerificationDto(
@@ -200,11 +217,6 @@ class DisputeService:
                 await self._reviews.reopen_task(vid, AgentRole(role_value), admin_id)
             await self._commissions.unfreeze_for_verification(vid, admin_id)
 
-        await self._dispute_repo.update(dispute.id, UpdateDisputeDto(
-            status=DisputeStatus.RESOLVED.value, resolution_outcome=dto.outcome.value,
-            resolution_note=dto.note.strip(), resolved_by=admin_id,
-        ))
-        await self._set_resolved_at(dispute.id)
         self._audit.schedule(
             action=AuditActionType.DISPUTE_RESOLVED,
             resource_type="dispute", resource_id=dispute.id, actor_id=admin_id,
@@ -216,7 +228,7 @@ class DisputeService:
             recipient_user_ids=(dispute.customer_id,),
             data={"outcome": dto.outcome.value, "note": dto.note.strip()},
         ))
-        return await self._dispute_repo.get_model(dispute.id)
+        return resolved
 
     async def list_for_verification(self, verification_id: str, customer_id: str) -> List[Dispute]:
         v = await self._verifications.get_owned(verification_id, customer_id)
@@ -278,6 +290,3 @@ class DisputeService:
         dispute = await self._dispute_repo.get_model(dispute_id)
         dispute.agent_defence_at = Utils.datetime_now()
 
-    async def _set_resolved_at(self, dispute_id: str) -> None:
-        dispute = await self._dispute_repo.get_model(dispute_id)
-        dispute.resolved_at = Utils.datetime_now()

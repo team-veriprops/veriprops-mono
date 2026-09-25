@@ -18,19 +18,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from kink import inject
 
 from main.app.config.settings import settings
 from main.app.core.idempotency.models import (
-    CreateIdempotencyKeyDto,
+    IdempotencyKey,
     IdempotencyStatus,
     UpdateIdempotencyKeyDto,
 )
 from main.app.core.idempotency.repo import IdempotencyKeyRepo
 from main.appodus_utils import Utils
-from main.appodus_utils.db.session import get_db_session_from_context
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -64,52 +63,39 @@ class IdempotencyService:
     ) -> IdempotencyOutcome:
         """Reserve ``key`` for ``scope`` or signal a replay of a prior call.
 
-        Raises ``ResourceConflictException`` if the same key is reused with a
-        different ``request_hash`` (a client bug or collision — never silently
-        served the wrong response).
+        One `INSERT … ON CONFLICT DO NOTHING` on the per-scope live key: a concurrent
+        duplicate waits for the first request's transaction and then replays its result,
+        instead of failing on the unique constraint. Raises ``ResourceConflictException`` if
+        the same key is reused with a different ``request_hash`` (a client bug or collision —
+        never silently served the wrong response).
         """
-        existing = await self._idempotency_repo.get_by_key(key)
-        if existing is not None:
-            if (
-                request_hash is not None
-                and existing.request_hash is not None
-                and existing.request_hash != request_hash
-            ):
-                raise ResourceConflictException(
-                    resource="IdempotencyKey",
-                    message=f"Idempotency key {key!r} reused with a different request payload",
-                )
-            return IdempotencyOutcome(
-                is_replay=True,
-                resource_id=existing.resource_id,
-                response_snapshot=existing.response_snapshot,
+        existing, created = await self._reserve(key, scope, IdempotencyStatus.PENDING, request_hash, ttl_hours)
+        if created:
+            return IdempotencyOutcome(is_replay=False)
+        if (
+            request_hash is not None
+            and existing.request_hash is not None
+            and existing.request_hash != request_hash
+        ):
+            raise ResourceConflictException(
+                resource="IdempotencyKey",
+                message=f"Idempotency key {key!r} reused with a different request payload",
             )
-
-        await self._idempotency_repo.create_return_model(
-            CreateIdempotencyKeyDto(
-                key=key,
-                scope=scope,
-                status=IdempotencyStatus.PENDING,
-                request_hash=request_hash,
-                expires_at=Utils.datetime_now() + timedelta(
-                    hours=ttl_hours if ttl_hours is not None else settings.IDEMPOTENCY_KEY_TTL_HOURS
-                ),
-            )
+        return IdempotencyOutcome(
+            is_replay=True,
+            resource_id=existing.resource_id,
+            response_snapshot=existing.response_snapshot,
         )
-        # The session runs with autoflush=False, so flush the reservation now — otherwise the
-        # matching `complete(key, ...)` later in the same transaction can't see this row via
-        # get_by_key and raises "unknown idempotency key" (breaks every idempotent create).
-        await get_db_session_from_context().flush()
-        return IdempotencyOutcome(is_replay=False)
 
     async def complete(
         self,
         key: str,
+        scope: str,
         resource_id: Optional[str] = None,
         response_snapshot: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Mark a reserved key COMPLETED and store its replayable result."""
-        existing = await self._idempotency_repo.get_by_key(key)
+        existing = await self._idempotency_repo.get_by_key(key, scope)
         if existing is None:
             raise ResourceNotFoundException(
                 resource="IdempotencyKey",
@@ -131,17 +117,31 @@ class IdempotencyService:
         ttl_hours: Optional[int] = None,
     ) -> bool:
         """One-shot dedup for webhooks: True if newly claimed, False if already seen."""
-        existing = await self._idempotency_repo.get_by_key(key)
-        if existing is not None:
-            return False
-        await self._idempotency_repo.create_return_model(
-            CreateIdempotencyKeyDto(
-                key=key,
-                scope=scope,
-                status=IdempotencyStatus.COMPLETED,
-                expires_at=Utils.datetime_now() + timedelta(
+        _, created = await self._reserve(key, scope, IdempotencyStatus.COMPLETED, None, ttl_hours)
+        return created
+
+    async def _reserve(
+        self,
+        key: str,
+        scope: str,
+        status: IdempotencyStatus,
+        request_hash: Optional[str],
+        ttl_hours: Optional[int],
+    ) -> Tuple[IdempotencyKey, bool]:
+        """Insert the key, or return the live one already holding it (``created`` False).
+
+        An expired key is retired first, so its value can be reserved again.
+        """
+        await self._idempotency_repo.retire_expired(key, scope)
+        return await self._idempotency_repo.insert_or_get(
+            {
+                "key": key,
+                "scope": scope,
+                "status": status,
+                "request_hash": request_hash,
+                "expires_at": Utils.datetime_now() + timedelta(
                     hours=ttl_hours if ttl_hours is not None else settings.IDEMPOTENCY_KEY_TTL_HOURS
                 ),
-            )
+            },
+            unique_index="uq_idempotency_scope_key",
         )
-        return True

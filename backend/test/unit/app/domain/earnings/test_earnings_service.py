@@ -13,6 +13,7 @@ from main.app.domain.earnings.service import EarningsService
 from main.app.domain.payout.models import PayoutStatus
 from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
+from test.utils.repo_fakes import fake_claim_transition
 
 NOW = Utils.datetime_now()
 PAST = NOW - timedelta(days=1)
@@ -88,29 +89,29 @@ class TestSweep:
         c = _commission("c-1", status=CommissionStatus.CLEARING)
         svc._commissions.list_clearing_due = AsyncMock(return_value=[c])
         svc._commissions.list_reserve_due = AsyncMock(return_value=[])
-        svc._commissions.update = AsyncMock()
+        svc._commissions.claim_transition = fake_claim_transition({"c-1": c})
         advanced = await svc.sweep_cleared()
         assert advanced == 1
-        _, dto = svc._commissions.update.call_args[0]
-        assert dto.status == CommissionStatus.AVAILABLE.value
+        assert c.status == CommissionStatus.AVAILABLE.value
 
     async def test_pass2_releases_reserve_once(self):
         svc = _make_service()
         row = _commission("c-1", status=CommissionStatus.AVAILABLE, reserve_released_at=None)
         svc._commissions.list_clearing_due = AsyncMock(return_value=[])
         svc._commissions.list_reserve_due = AsyncMock(return_value=[row])
-        svc._commissions.get_model = AsyncMock(return_value=row)
+        svc._commissions.claim_transition = fake_claim_transition({"c-1": row})
         advanced = await svc.sweep_cleared()
         assert advanced == 1
         assert row.reserve_released_at is not None
+        # A second pass finds the reserve already released.
+        assert await svc.sweep_cleared() == 0
 
     async def test_notifies_once_per_agent(self, stub_publish):
         svc = _make_service()
-        svc._commissions.list_clearing_due = AsyncMock(return_value=[
-            _commission("c-1", agent="a-1"), _commission("c-2", agent="a-1"),
-        ])
+        rows = [_commission("c-1", agent="a-1"), _commission("c-2", agent="a-1")]
+        svc._commissions.list_clearing_due = AsyncMock(return_value=rows)
         svc._commissions.list_reserve_due = AsyncMock(return_value=[])
-        svc._commissions.update = AsyncMock()
+        svc._commissions.claim_transition = fake_claim_transition({r.id: r for r in rows})
         await svc.sweep_cleared()
         assert len(stub_publish) == 1  # deduped per agent
         assert stub_publish[0].type == EventType.COMMISSION_CLEARED

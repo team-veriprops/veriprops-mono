@@ -13,6 +13,7 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ValidationException,
 )
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -88,6 +89,9 @@ def _make_service(verification, tasks):
     svc._tasks.update = AsyncMock(side_effect=_update)
 
     svc._verification_repo.get_model = AsyncMock(return_value=verification)
+    # Review decisions lock the verification row, and a failure is a claim on it.
+    svc._verification_repo.lock_model = AsyncMock(return_value=verification)
+    svc._verification_repo.claim_transition = fake_claim_transition(lambda _id: verification)
     svc._verification_repo.update = AsyncMock()
 
     svc._weights.compute_composite = AsyncMock(return_value=95)
@@ -325,8 +329,8 @@ class TestReopenFail:
         assert svc._verification_repo.update.await_args.args[1].status == VerificationStatus.IN_PROGRESS.value
 
     async def test_fail_marks_failed_and_refunds(self):
-        svc = _make_service(_verification(status=VerificationStatus.UNDER_REVIEW), _standard_tasks())
+        verification = _verification(status=VerificationStatus.UNDER_REVIEW)
+        svc = _make_service(verification, _standard_tasks())
         await svc.fail("v-1", "fraud detected", "admin-1")
         svc._payments.refund.assert_awaited_once()
-        statuses = [c.args[1].status for c in svc._verification_repo.update.call_args_list]
-        assert VerificationStatus.FAILED.value in statuses
+        assert verification.status == VerificationStatus.FAILED.value

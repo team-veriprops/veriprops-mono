@@ -34,6 +34,20 @@ class SignupDraftRepo(
         super().__init__(db, model, query_dto)
         self.db = db
 
+    async def upsert_active(
+            self, *, email: str, step: int, payload: str, expires_at: datetime,
+    ) -> SignupDraft:
+        """Save the live draft for *email* in one statement, creating or overwriting it.
+
+        Keyed on the partial unique index over live rows, so an expired draft is overwritten
+        rather than blocking a new one, and two concurrent saves can't both insert.
+        """
+        return await self.upsert(
+            {"email": email, "step": step, "payload": payload, "expires_at": expires_at},
+            ["step", "payload", "expires_at"],
+            unique_index="uq_signup_drafts_email",
+        )
+
     async def get_active_by_email(self, email: str) -> Optional[SignupDraft]:
         now = datetime.now(timezone.utc)
         stmt = (

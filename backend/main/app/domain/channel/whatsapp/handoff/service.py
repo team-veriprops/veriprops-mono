@@ -114,7 +114,9 @@ class HandoffTokenService:
                 return claims
             raise HandoffTokenError()
 
-        await self._handoff_token_redemption_repo.create_return_model(
+        # Spending the nonce is the insert itself, so of two concurrent first redemptions
+        # exactly one wins; the other is answered like any replay.
+        _, spent_now = await self._handoff_token_redemption_repo.insert_or_get(
             CreateHandoffTokenRedemptionDto(
                 jti=claims.jti,
                 intent=claims.intent,
@@ -123,8 +125,11 @@ class HandoffTokenService:
                 phone_e164=claims.phone,
                 redeemed_at=Utils.datetime_now(),
                 redeemed_ip=redeemed_ip,
-            )
+            ).model_dump(by_alias=False),
+            ["jti"],
         )
+        if not spent_now and holder_jti != claims.jti:
+            raise HandoffTokenError()
         return claims
 
     async def decode_link(self, token: str) -> HandoffClaims:

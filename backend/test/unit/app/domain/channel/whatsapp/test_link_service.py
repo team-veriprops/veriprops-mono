@@ -15,6 +15,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from test.utils.repo_fakes import fake_insert_or_get
+
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
 from main.app.domain.channel.whatsapp.handoff.tokens import HandoffTokenError
@@ -77,13 +79,20 @@ def _service(*, own_link=None, phone_holder=None, active_holder=None):
     repo.get_active_by_phone = AsyncMock(return_value=active_holder)
     repo._session = MagicMock()
 
-    async def _create(dto):
-        return link_row(
-            user_id=dto.user_id, phone_e164=dto.phone_e164, wa_id=dto.wa_id,
-            status=dto.status.value, linked_at=None,
-        )
+    created_rows = []
 
-    repo.create_return_model = AsyncMock(side_effect=_create)
+    def _create(values):
+        row = link_row(
+            user_id=values["user_id"], phone_e164=values["phone_e164"], wa_id=values["wa_id"],
+            status=values["status"].value, linked_at=None,
+        )
+        created_rows.append(row)
+        return row
+
+    # Keyed on the account (uq_whatsapp_links_user_id): the account's own link comes back
+    # instead of a second row.
+    repo.insert_or_get = fake_insert_or_get(lambda values: own_link, _create)
+    svc._created_links = created_rows
 
     # The mutation helpers are synchronous and act on the attached row, so the fakes
     # apply the same field changes the real ones do — the tests assert on the row.
@@ -156,8 +165,8 @@ class TestStartLink:
         challenge = await svc.start_link(USER_ID, PHONE)
 
         assert challenge.delivered is False
-        created = svc._whatsapp_link_repo.create_return_model.await_args.args[0]
-        assert created.status == WhatsAppLinkStatus.PENDING
+        [created] = svc._created_links
+        assert created.status == WhatsAppLinkStatus.PENDING.value
 
         channel, recipient = svc._otp.send_otp.await_args.args
         assert channel == OtpChannel.WHATSAPP
@@ -188,8 +197,24 @@ class TestStartLink:
         existing = link_row(status=WhatsAppLinkStatus.PENDING.value, linked_at=None)
         svc = _service(own_link=existing, phone_holder=existing)
         await svc.start_link(USER_ID, PHONE)
-        svc._whatsapp_link_repo.create_return_model.assert_not_awaited()
+        assert svc._created_links == []
         assert existing.status == WhatsAppLinkStatus.PENDING.value
+
+    async def test_a_number_taken_by_a_concurrent_request_gets_the_same_answer(self, mock_db_session):
+        """Between the holder check and the write, another account can claim the number;
+        its unique index then answers exactly as the check would have."""
+        from sqlalchemy.exc import IntegrityError
+
+        orig = Exception("dup")
+        orig.constraint_name = "uq_whatsapp_links_phone_e164"
+        mock_db_session.flush = AsyncMock(side_effect=IntegrityError("INSERT", {}, orig))
+        svc = _service(own_link=None)
+
+        with pytest.raises(ValidationException) as err:
+            await svc.start_link(USER_ID, PHONE)
+
+        assert NUMBER_UNAVAILABLE_MESSAGE in str(err.value)
+        svc._otp.send_otp.assert_not_awaited()
 
 
 class TestNumberChange:

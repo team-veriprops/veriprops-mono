@@ -54,6 +54,9 @@ class Verification(BaseEntity):
     # Abandoned-draft recovery (§17.1): set the first time a recovery reminder fires so the
     # email is sent exactly once per abandoned draft; also flips the customer-facing banner.
     recovery_reminded_at = Column(UTCDateTime, nullable=True)
+    # SLA breach (§12.2): claimed by the sweep before it announces the breach, so the customer
+    # and ops hear "taking longer than planned" exactly once per verification.
+    sla_breach_notified_at = Column(UTCDateTime, nullable=True)
 
     # Admin operational hold (§26.5) — a flag, NOT a state: the derived status is
     # unaffected so work resumes cleanly. Set/cleared by the admin control panel.

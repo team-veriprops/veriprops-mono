@@ -130,6 +130,17 @@ async function openApplication(adminPage: Page, email: string): Promise<void> {
   await expect(adminPage.getByTestId("admin-agent-detail")).toBeVisible();
 }
 
+/**
+ * Record the admin's decision and wait until the server has accepted it. The drawer closes only
+ * once the decision is saved, so that is the point after which the applicant's page can be
+ * reloaded to see the outcome — reloading straight after the click can read the application
+ * before the decision lands, and the page then shows "Pending review" with nothing to refresh it.
+ */
+async function decideApplication(adminPage: Page, decisionTestId: string): Promise<void> {
+  await adminPage.getByTestId(decisionTestId).click();
+  await expect(adminPage.getByTestId("admin-agent-detail")).toBeHidden();
+}
+
 test.describe("UAT-AGENT — agent onboarding @P1", () => {
   // Signing up is a signed-out journey, so these must not inherit a session.
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -196,7 +207,7 @@ test.describe("UAT-AGENT — agent onboarding @P1", () => {
     // cannot see — axe then read the sidebar under a half-faded backdrop (1.03:1). The queue
     // behind it was already scanned uncovered, in `openApplication`.
     await expectNoA11yViolations(adminPage, { include: '[data-testid="detail-drawer"]' });
-    await adminPage.getByTestId("admin-agent-approve").click();
+    await decideApplication(adminPage, "admin-agent-approve");
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitReady(page);
@@ -222,7 +233,7 @@ test.describe("UAT-AGENT — agent onboarding @P1", () => {
 
     const reason = "The BVN check did not pass, so we could not confirm your identity.";
     await adminPage.getByTestId("admin-agent-reject-reason").fill(reason);
-    await adminPage.getByTestId("admin-agent-reject").click();
+    await decideApplication(adminPage, "admin-agent-reject");
 
     // ── Outcome: rejection sends the applicant back through the gate (§3.1) ──
     await page.reload({ waitUntil: "domcontentloaded" });

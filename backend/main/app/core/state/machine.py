@@ -51,6 +51,13 @@ class StateMachine:
     def is_terminal(self, state: str) -> bool:
         return state in self._terminal
 
+    def sources_of(self, target: str) -> Set[str]:
+        """Every state that may move to *target* — the `from` set of a claim on that move."""
+        return {
+            state for state, allowed in self._transitions.items()
+            if target in allowed and state not in self._terminal
+        }
+
     def allowed_transitions(self, current: str) -> Set[str]:
         """Return the set of valid next states from *current* (empty for terminal states)."""
         if current in self._terminal:

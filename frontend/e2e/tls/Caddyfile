@@ -9,20 +9,33 @@
 #
 # Docker Desktop's container→host hop (host.docker.internal) can stall a new connection for a
 # few seconds under load. A failed dial means the request was never sent, so retrying it is safe
-# even for POST: `lb_try_duration` keeps re-dialling within the window, and `dial_timeout` gives
-# each attempt room, instead of answering the browser with a bare 502.
+# even for POST: `lb_try_duration` keeps re-dialling within the window, and a short
+# `dial_timeout` fits several attempts into it, instead of answering the browser with a bare 502.
 #
-# Run from frontend/:
+# The same hop has also dropped out for most of a minute, cutting off requests already sent
+# (EOF) as well as new dials. A request that failed after it was sent is retried only when
+# repeating it is harmless (`lb_retry_match`: GET, HEAD and the idempotent PUT); a POST is never
+# resent, since it may already have reached the app (an OTP could go out twice).
+#
+# The upstream defaults to the Docker host; set UAT_UPSTREAM to bypass that hop entirely with a
+# Caddy running on the host itself.
+#
+# Run from frontend/ — in Docker (as CI does):
 #   docker run -d --name veriprops-uat-tls -p 3000:3000 \
 #     -v "$(pwd)/e2e/tls/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine
+# or natively, with no container→host hop:
+#   UAT_UPSTREAM=localhost:3001 caddy run --config e2e/tls/Caddyfile
 
 localhost:3000 {
 	tls internal
-	reverse_proxy host.docker.internal:3001 {
+	reverse_proxy {$UAT_UPSTREAM:host.docker.internal:3001} {
 		lb_try_duration 15s
 		lb_try_interval 250ms
+		lb_retry_match {
+			method GET HEAD PUT
+		}
 		transport http {
-			dial_timeout 10s
+			dial_timeout 3s
 			keepalive 2s
 		}
 	}

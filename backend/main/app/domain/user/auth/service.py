@@ -171,11 +171,17 @@ class AuthService:
             referred_by=referred_by,
         ))
 
-        # Verified markers are single-use — drop them so a future signup attempt
-        # with the same recipient must re-verify.
-        await self._otp_service.consume_verified_marker(OtpChannel.EMAIL, email_recipient.email)
-        if phone_required:
+        # Verified markers are single-use: consuming one is atomic, so of two concurrent
+        # signups on one verification only one proceeds; the other is refused here and its
+        # user row rolls back with this transaction.
+        email_consumed = await self._otp_service.consume_verified_marker(OtpChannel.EMAIL, email_recipient.email)
+        phone_consumed = (
             await self._otp_service.consume_verified_marker(OtpChannel.PHONE, phone_recipient.international_number)
+            if phone_required
+            else True
+        )
+        if not (email_consumed and phone_consumed):
+            raise ValidationException(message="This verification was already used. Please verify again.")
 
         for consent in req.consents:
             await self._consent_service.record_user_consent(
@@ -217,7 +223,30 @@ class AuthService:
             raw_profile: dict,
             intent: Optional[AuthIntent],
     ) -> tuple[User, bool]:
-        """Returns (user, is_new). Raises if email collision with password account."""
+        """Returns (user, is_new). Raises if email collision with password account.
+
+        A double-fired popup delivers two callbacks for one sign-in. The loser's account
+        creation reports the email taken, and by then the winner's account and identity are
+        committed, so one more lookup signs the loser in as that account. A real clash with a
+        password account raises again on the second pass, as it did on the first.
+        """
+        args = (provider, subject, email, first_name, last_name, avatar_url, raw_profile, intent)
+        try:
+            return await self._find_or_create_oauth_user(*args)
+        except UserAlreadyExistsException:
+            return await self._find_or_create_oauth_user(*args)
+
+    async def _find_or_create_oauth_user(
+            self,
+            provider: SocialAuthProvider,
+            subject: str,
+            email: str,
+            first_name: str,
+            last_name: str,
+            avatar_url: Optional[str],
+            raw_profile: dict,
+            intent: Optional[AuthIntent],
+    ) -> tuple[User, bool]:
         existing_identity = await self._oauth_identity_service.get_oauth_identity(provider, subject)
         if existing_identity:
             user = await self._user_service.get_user_model(existing_identity.user_id)

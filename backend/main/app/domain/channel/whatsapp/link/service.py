@@ -41,6 +41,7 @@ from main.app.domain.communication.conversation.service import ConversationServi
 from main.app.domain.user.auth.models import OtpChannel, OtpSendResultDto
 from main.app.domain.user.auth.otp_service import OtpService
 from main.appodus_utils import Utils
+from main.appodus_utils.db.integrity import unique_violation_as
 from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
@@ -138,21 +139,27 @@ class WhatsAppLinkService:
         if holder is not None and holder.user_id != user_id:
             raise ValidationException(message=NUMBER_UNAVAILABLE_MESSAGE)
 
-        link = await self._whatsapp_link_repo.get_by_user_id(user_id)
-        if link is None:
-            link = await self._whatsapp_link_repo.create_return_model(CreateWhatsAppLinkDto(
-                user_id=user_id,
-                phone_e164=normalized,
-                wa_id=to_wa_recipient(normalized),
-                status=WhatsAppLinkStatus.PENDING,
-            ))
-        else:
-            if link.status == WhatsAppLinkStatus.ACTIVE.value and link.phone_e164 != normalized:
-                # A number change is a re-verification: release the old number (and its
-                # thread) before the new attempt begins, so there is no window in which
-                # both numbers resolve to this account.
-                await self._release(link, reason="number_change")
-            self._whatsapp_link_repo.claim_number(link, normalized, to_wa_recipient(normalized))
+        # The number can be taken between the check above and the write below by a
+        # concurrent request; its unique index then answers the same way the check does.
+        async with unique_violation_as(
+            "uq_whatsapp_links_phone_e164", lambda: ValidationException(message=NUMBER_UNAVAILABLE_MESSAGE),
+        ):
+            link, created = await self._whatsapp_link_repo.insert_or_get(
+                CreateWhatsAppLinkDto(
+                    user_id=user_id,
+                    phone_e164=normalized,
+                    wa_id=to_wa_recipient(normalized),
+                    status=WhatsAppLinkStatus.PENDING,
+                ).model_dump(by_alias=False),
+                unique_index="uq_whatsapp_links_user_id",
+            )
+            if not created:
+                if link.status == WhatsAppLinkStatus.ACTIVE.value and link.phone_e164 != normalized:
+                    # A number change is a re-verification: release the old number (and its
+                    # thread) before the new attempt begins, so there is no window in which
+                    # both numbers resolve to this account.
+                    await self._release(link, reason="number_change")
+                self._whatsapp_link_repo.claim_number(link, normalized, to_wa_recipient(normalized))
 
         sent = await self._send_code(normalized, user_id)
         return WhatsAppLinkChallengeDto(

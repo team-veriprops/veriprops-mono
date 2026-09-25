@@ -19,7 +19,6 @@ from main.app.domain.system_config.models import (
     CreateSystemConfigDto,
     SystemConfig,
     SystemConfigDto,
-    UpdateSystemConfigDto,
 )
 from main.app.domain.system_config.repo import SystemConfigRepo
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -50,14 +49,13 @@ class ConfigService:
     async def set(self, key: ConfigKey, value: Any, admin_id: str) -> SystemConfig:
         """Update (or create) a config value, coercing to the default's type."""
         coerced = self._coerce(key, value)
-        existing = await self._config_repo.get_by_key(key.value)
-        if existing is None:
-            row = await self._config_repo.create_return_model(CreateSystemConfigDto(
+        row = await self._config_repo.upsert(
+            CreateSystemConfigDto(
                 key=key.value, value_json=coerced, description=CONFIG_DESCRIPTIONS.get(key),
-            ))
-        else:
-            await self._config_repo.update(existing.id, UpdateSystemConfigDto(value_json=coerced))
-            row = await self._config_repo.get_model(existing.id)
+            ).model_dump(by_alias=False),
+            ["value_json"],
+            unique_index="uq_system_config_key",
+        )
         self._audit.schedule(
             action=AuditActionType.ADMIN_CONFIG_CHANGED,
             resource_type="system_config", resource_id=row.id, actor_id=admin_id,

@@ -33,21 +33,17 @@ class NotificationPreferenceService:
         ]
 
     async def set(self, user_id: str, dto: SetPreferenceDto) -> PreferenceDto:
-        existing = await self._preference_repo.get_one(user_id, dto.event_type)
-        if existing:
-            existing.email_enabled = dto.email_enabled
-            existing.sms_enabled = dto.sms_enabled
-            self._preference_repo._session.add(existing)
-            row = existing
-        else:
-            row = await self._preference_repo.create_return_model(
-                CreateNotificationPreferenceDto(
-                    user_id=user_id,
-                    event_type=dto.event_type,
-                    email_enabled=dto.email_enabled,
-                    sms_enabled=dto.sms_enabled,
-                )
-            )
+        # One statement on the live (user, event) key, so concurrent saves can't create twins.
+        row = await self._preference_repo.upsert(
+            CreateNotificationPreferenceDto(
+                user_id=user_id,
+                event_type=dto.event_type,
+                email_enabled=dto.email_enabled,
+                sms_enabled=dto.sms_enabled,
+            ).model_dump(by_alias=False),
+            ["email_enabled", "sms_enabled"],
+            unique_index="uq_notif_prefs_user_event",
+        )
         return PreferenceDto(
             event_type=row.event_type, email_enabled=row.email_enabled, sms_enabled=row.sms_enabled
         )

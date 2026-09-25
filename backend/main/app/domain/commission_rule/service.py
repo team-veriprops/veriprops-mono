@@ -18,7 +18,6 @@ from main.app.domain.audit.service import AuditLogService
 from main.app.domain.commission_rule.models import (
     CommissionRule,
     CreateCommissionRuleDto,
-    UpdateCommissionRuleDto,
     FULL_BPS,
 )
 from main.app.domain.commission_rule.repo import CommissionRuleRepo
@@ -62,14 +61,11 @@ class CommissionRuleService:
             raise ValidationException(
                 message=f"Rate must be between 0 and {FULL_BPS} basis points."
             )
-        existing = await self._rule_repo.get_for_role_tier(role.value, tier.value)
-        if existing is None:
-            row = await self._rule_repo.create_return_model(CreateCommissionRuleDto(
-                role=role, tier=tier, rate_bps=rate_bps,
-            ))
-        else:
-            await self._rule_repo.update(existing.id, UpdateCommissionRuleDto(rate_bps=rate_bps))
-            row = await self._rule_repo.get_model(existing.id)
+        row = await self._rule_repo.upsert(
+            CreateCommissionRuleDto(role=role, tier=tier, rate_bps=rate_bps).model_dump(by_alias=False),
+            ["rate_bps"],
+            unique_index="uq_commission_rule_role_tier",
+        )
         self._audit.schedule(
             action=AuditActionType.ADMIN_CONFIG_CHANGED,
             resource_type="commission_rule", resource_id=row.id, actor_id=admin_id,

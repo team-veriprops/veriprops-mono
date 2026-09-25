@@ -161,10 +161,8 @@ class MessageDispatcher:
                 requests.append(request)
             except Exception as e:
                 failed_channels.append(channel.value)
-                logger.error(
-                    "Failed to build request for channel '{}': {}", channel.value, e,
-                    exc_info=True
-                )
+                logger.opt(exception=True).error(
+                    "Failed to build request for channel '{}': {}", channel.value, e)
 
         if failed_channels and not requests:
             raise RuntimeError(
@@ -277,7 +275,7 @@ class MessageChannelHandler(ABC):
             logger.warning(f"Validation error: {e}")
             return False
         except Exception as e:
-            logger.error(f"Send failed: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"Send failed: {e}")
             return False
 
     async def send_bulk(self,

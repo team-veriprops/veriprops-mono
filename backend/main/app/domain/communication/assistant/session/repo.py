@@ -7,6 +7,7 @@ from typing import List, Optional, Type
 from kink import inject
 from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from main.app.domain.communication.assistant.session.models import (
     AssistantSession,
@@ -129,6 +130,24 @@ class AssistantSessionRepo(
             .limit(limit)
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def count_unmatched(self, session: AssistantSession) -> int:
+        """Count one missed turn in SQL and return the new run length.
+
+        Two messages landing together are each a miss; counting them on the loaded row
+        would let both write back the same total and the escalation would come a turn
+        late. The loaded row is refreshed without being marked changed, so a later flush
+        cannot write a stale count back.
+        """
+        stmt = (
+            update(AssistantSession)
+            .where(AssistantSession.id == self._ensure_uuid(session.id))
+            .values(unmatched_count=func.coalesce(AssistantSession.unmatched_count, 0) + 1)
+            .returning(AssistantSession.unmatched_count)
+        )
+        count = int((await self._session.execute(stmt)).scalar_one())
+        set_committed_value(session, "unmatched_count", count)
+        return count
 
     async def count_in_human_mode(self) -> int:
         """How many threads the assistant is currently silent on (D57).

@@ -28,15 +28,20 @@ from main.app.domain.channel.whatsapp.consent.repo import WhatsAppConsentRepo
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
-from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.decorators.transactional import TransactionSessionPolicy, transactional
 
 # Keyed on the account rather than the consent row, so the trail survives the row and
 # reads as one history per customer.
 _AUDIT_RESOURCE = "whatsapp_consent"
 
 
+# STOP/START typed in chat, handled inside the bot turn. They commit on their own (see
+# `revoke_all`), so they take a method-level policy instead of the class default.
+_KEYWORD_DECISIONS = ["revoke_all", "grant_utility"]
+
+
 @inject
-@decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
+@decorate_all_methods(transactional(), exclude=["__init__", *_KEYWORD_DECISIONS], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class WhatsAppConsentService:
     def __init__(
@@ -92,12 +97,17 @@ class WhatsAppConsentService:
         self._record(user_id, source, utility=utility, marketing=marketing)
         return self._to_dto(consent)
 
+    @transactional(session_policy=TransactionSessionPolicy.INDEPENDENT)
     async def revoke_all(self, user_id: str, source: WhatsAppConsentSource) -> None:
         """STOP and its synonyms end both consents (D64).
 
         Utility and marketing go together here because the customer said "stop", not
         "stop some" — reading a blunt opt-out narrowly is how a channel earns a Meta
         quality-rating complaint.
+
+        Committed on its own (`INDEPENDENT`): it runs inside the bot turn, whose savepoint a
+        later failure rolls back, and a STOP we record and then lose means we keep messaging
+        someone who asked us to stop.
         """
         consent = await self._get_or_open(user_id)
         now = Utils.datetime_now()
@@ -105,6 +115,7 @@ class WhatsAppConsentService:
         self._apply(consent, WhatsAppConsentKind.MARKETING, False, source, now)
         self._record(user_id, source, utility=False, marketing=False)
 
+    @transactional(session_policy=TransactionSessionPolicy.INDEPENDENT)
     async def grant_utility(self, user_id: str, source: WhatsAppConsentSource) -> None:
         """START restores progress updates **only** (D64).
 
@@ -120,12 +131,18 @@ class WhatsAppConsentService:
     # ── Internals ─────────────────────────────────────────────────
 
     async def _get_or_open(self, user_id: str) -> WhatsAppConsent:
-        consent = await self._whatsapp_consent_repo.get_by_user_id(user_id)
-        if consent is None:
-            consent = await self._whatsapp_consent_repo.create_return_model(
-                CreateWhatsAppConsentDto(user_id=user_id)
-            )
-        return consent
+        """The customer's consent row, created on first use and locked for this decision.
+
+        Created race-free, so two concurrent decisions (a STOP and a pay-screen save) can't
+        both try to create it. Locked because each decision is stamped *later* than the
+        opposite one it overrides: the second of two concurrent decisions waits here and
+        stamps against what the first wrote, so the one that arrives last is the one that
+        holds.
+        """
+        consent, _ = await self._whatsapp_consent_repo.insert_or_get(
+            CreateWhatsAppConsentDto(user_id=user_id).model_dump(by_alias=False), ["user_id"],
+        )
+        return await self._whatsapp_consent_repo.lock_model(consent.id) or consent
 
     def _apply(self, consent, kind, granted: bool, source, at) -> None:
         self._whatsapp_consent_repo.apply(consent, kind, granted, source, at)

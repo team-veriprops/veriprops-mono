@@ -23,6 +23,7 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ValidationException,
 )
+from test.utils.repo_fakes import fake_claim_transition
 
 _LONG = "x" * 120  # ≥ 100-char description
 
@@ -84,7 +85,11 @@ def _service(verification=None, report=None, dispute=None, window_days=30):
     svc._config.get_int = AsyncMock(return_value=window_days)
     svc._tasks.get_by_role = AsyncMock(return_value=SimpleNamespace(assigned_agent_id="agent-1"))
     svc._dispute_repo.create_return_model = AsyncMock(return_value=_dispute())
-    svc._dispute_repo.get_model = AsyncMock(return_value=dispute or _dispute())
+    held = dispute or _dispute()
+    svc._dispute_repo.get_model = AsyncMock(return_value=held)
+    # Status moves are claims on the rows this service reads.
+    svc._verification_repo.claim_transition = fake_claim_transition(lambda _id: v)
+    svc._dispute_repo.claim_transition = fake_claim_transition(lambda _id: held)
     svc._dispute_repo.get_open_for_agent = AsyncMock(return_value=dispute)
     svc._dispute_repo.update = AsyncMock()
     svc._commissions.freeze_for_verification = AsyncMock()
@@ -104,10 +109,10 @@ class TestOpen:
     async def test_open_transitions_and_freezes(self, monkeypatch):
         import main.app.domain.verification.dispute.service as mod
         monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
-        svc = _service()
+        v = _verification()
+        svc = _service(verification=v)
         await svc.open("v-1", "cust-1", _open_dto())
-        upd = svc._verification_repo.update.await_args.args[1]
-        assert upd.status == VerificationStatus.DISPUTED.value
+        assert v.status == VerificationStatus.DISPUTED.value
         svc._commissions.freeze_for_verification.assert_awaited_once()
 
     async def test_open_requires_100_chars(self, monkeypatch):
@@ -151,8 +156,12 @@ class TestResolve:
         import main.app.domain.verification.dispute.service as mod
         monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
         v = _verification(status=VerificationStatus.DISPUTED)
-        svc = _service(verification=v, dispute=_dispute(status=DisputeStatus.OPEN))
+        dispute = _dispute(status=DisputeStatus.OPEN)
+        svc = _service(verification=v, dispute=dispute)
         await svc.resolve("d-1", ResolveDisputeDto(outcome=outcome, note="admin decision", **kwargs), "admin-1")
+        # The resolution itself is the claim, recorded with its outcome and who decided.
+        assert dispute.status == DisputeStatus.RESOLVED.value
+        assert (dispute.resolution_outcome, dispute.resolved_by) == (outcome.value, "admin-1")
         return svc
 
     async def test_reject_back_to_completed(self, monkeypatch):

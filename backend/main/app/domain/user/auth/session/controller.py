@@ -3,6 +3,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, Query
 from kink import di
 from libre_fastapi_jwt import AuthJWT
+from libre_fastapi_jwt.exceptions import AuthJWTException
 from starlette.requests import Request
 
 from main.app.domain.user.auth.session.models import DeviceSessionDto, SecurityEventDto, AuthSessionDto, LoginRequestDto
@@ -15,7 +16,8 @@ from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.common.rate_limit import RateLimiter
 from main.appodus_utils.db.models import Page, SuccessResponse
 from main.appodus_utils.exception.exception_handlers import exception_json_response
-from main.appodus_utils.exception.exceptions import UnauthorizedException
+from main.appodus_utils.exception.exceptions import InternalServerException, UnauthorizedException
+from main.appodus_utils.middleware.request_logging_middleware import request_reference
 
 session_router = APIRouter(prefix="/sessions", tags=["Sessions"])
 
@@ -60,23 +62,41 @@ async def login(
 
 @session_router.delete("/current", response_model=SuccessResponse[bool])
 async def logout(request: Request, authorize: AuthJWT = Depends()):
-    # Best-effort: logout must end the session client-side even when there is
-    # nothing valid left to revoke (expired/missing token) or a revoke write
-    # fails (DB/Redis error) — the cookies are HttpOnly, so this response is
-    # the client's only way to actually clear them.
+    # The cookies are HttpOnly, so this response is the client's only way to clear them: every
+    # outcome clears them. With nothing valid left to revoke (an expired or missing token) this
+    # is a plain sign-out. If revoking fails (the device row, or the denylist — including a store
+    # outage that makes the token check itself fail), the token would stay usable elsewhere until
+    # it expires, so the client is told with the standard safe 5xx rather than a false success.
+    # That response is returned, not raised: a raised one is rendered fresh and would drop the
+    # cookie deletions.
     try:
         await authorize.jwt_required()
+    except AuthJWTException:
+        authorize.unset_jwt_cookies()
+        return SuccessResponse[bool](data=True)
+    except Exception:  # noqa: BLE001 — the denylist could not be read
+        return _revocation_failed(request, authorize)
+
+    try:
         refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
         if refresh_cookie:
             await session_service.revoke_current_device(refresh_cookie)
 
         await JwtAuthUtils.revoke_token(authorize=authorize)
-    except Exception:  # noqa: BLE001 — logout must clear cookies even if revocation fails
-        logger.exception("Logout revocation failed; clearing session cookies anyway")
-    finally:
-        authorize.unset_jwt_cookies()
+    except Exception:  # noqa: BLE001 — reported below, with the cookies still cleared
+        return _revocation_failed(request, authorize)
 
+    authorize.unset_jwt_cookies()
     return SuccessResponse[bool](data=True)
+
+
+def _revocation_failed(request: Request, authorize: AuthJWT):
+    """The safe 5xx for a sign-out the server could not record, clearing the cookies on it."""
+    reference = request_reference(request)
+    logger.exception(f"[{reference}] Logout could not revoke the session; clearing its cookies anyway")
+    response = exception_json_response(InternalServerException(), reference)
+    authorize.unset_jwt_cookies(response)
+    return response
 
 
 @session_router.post("/current", response_model=SuccessResponse[AuthSessionDto])

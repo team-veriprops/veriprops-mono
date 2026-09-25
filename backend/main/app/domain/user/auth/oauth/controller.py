@@ -196,7 +196,7 @@ async def auth_callback(
                     },
                 )
             except Exception:
-                logger.warning("Could not send welcome message after OAuth signup", exc_info=True)
+                logger.opt(exception=True).warning("Could not send welcome message after OAuth signup")
     except UserAlreadyExistsException:
         # Email exists with a password account, no link yet → REJECT per spec.
         return await OauthUtils.popup_response(

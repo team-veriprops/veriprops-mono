@@ -27,6 +27,7 @@ from main.app.config.settings import settings
 from main.app.domain.channel.whatsapp.handoff.models import ACTION_INTENTS, HandoffIntent
 from main.appodus_utils import Utils
 from main.appodus_utils.config.settings import SECRET_PLACEHOLDER, Environment
+from main.appodus_utils.exception.exceptions import ExpectedDomainError
 
 # §26.5 pins the algorithm. Never widen this, and never let a token's own header choose.
 HANDOFF_ALGORITHM = "RS256"
@@ -39,7 +40,7 @@ HANDOFF_TOKEN_TTL = timedelta(minutes=15)
 TOKEN_REJECTED_MESSAGE = "This link is no longer valid."
 
 
-class HandoffTokenError(Exception):
+class HandoffTokenError(ExpectedDomainError):
     """A token that cannot be trusted, for any reason.
 
     Deliberately undifferentiated: the reason is logged, never returned. Raise it without

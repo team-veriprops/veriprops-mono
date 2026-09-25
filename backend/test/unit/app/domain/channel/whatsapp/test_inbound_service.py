@@ -54,7 +54,27 @@ def stub_console_sender(monkeypatch):
     return sender
 
 
+def journal_row(dto, **over) -> SimpleNamespace:
+    """A journal row as the journal would hold it for *dto*."""
+    row = SimpleNamespace(
+        id=Utils.generate_uuid(), wamid=dto.wamid, from_phone=dto.from_phone,
+        kind=getattr(dto.kind, "value", dto.kind), text=dto.text, page_code=dto.page_code,
+        interactive_id=dto.interactive_id, media_id=dto.media_id,
+        media_mime_type=dto.media_mime_type, sender_name=dto.sender_name,
+        payload=dto.payload, received_at=dto.received_at,
+        chat_message_id=None, processed_at=None, deleted=False,
+    )
+    for key, value in over.items():
+        setattr(row, key, value)
+    return row
+
+
 def _service(existing=None, linked_user_id=None):
+    """The service over an in-memory journal.
+
+    `svc._journal.record` behaves like the real one (a first write wins, a repeat wamid is
+    refused) and `claim_unprocessed` hands back the number's rows not yet surfaced.
+    """
     svc = object.__new__(WhatsAppInboundService)
     svc._whatsapp_inbound_message_repo = MagicMock()
     svc._conversations = MagicMock()
@@ -62,15 +82,22 @@ def _service(existing=None, linked_user_id=None):
     svc._whatsapp_link_service = MagicMock()
     svc._whatsapp_link_service.resolve_user_for_phone = AsyncMock(return_value=linked_user_id)
 
-    async def _create(dto):
-        return SimpleNamespace(
-            id=Utils.generate_uuid(), wamid=dto.wamid, from_phone=dto.from_phone,
-            kind=dto.kind.value, text=dto.text, payload=dto.payload,
-            chat_message_id=None, processed_at=None, deleted=False,
-        )
+    journal = {}
+    if existing is not None:
+        journal[existing.wamid] = existing
 
-    svc._whatsapp_inbound_message_repo.create_return_model = AsyncMock(side_effect=_create)
-    svc._whatsapp_inbound_message_repo.get_by_wamid = AsyncMock(return_value=existing)
+    async def _record(dto):
+        if dto.wamid in journal:
+            return False
+        journal[dto.wamid] = journal_row(dto)
+        return True
+
+    async def _claim(phone):
+        return [r for r in journal.values() if r.from_phone == phone and r.processed_at is None]
+
+    svc._journal = MagicMock(record=AsyncMock(side_effect=_record))
+    svc._journalled = journal
+    svc._whatsapp_inbound_message_repo.claim_unprocessed = AsyncMock(side_effect=_claim)
     svc._whatsapp_inbound_message_repo._session = MagicMock()
     svc._conversations.get_or_create_whatsapp_thread = AsyncMock(
         return_value=SimpleNamespace(
@@ -150,12 +177,14 @@ class TestIngest:
 
 class TestRedelivery:
     async def test_a_repeat_wamid_produces_no_second_message(self):
-        # Meta retries until it gets a 2xx; the webhook always gives one, so repeats are
-        # expected traffic rather than an error path.
-        svc = _service(existing=SimpleNamespace(id="already", wamid="wamid.A1"))
+        # Meta retries until it gets a 2xx, so repeats are expected traffic rather than
+        # an error path.
+        svc = _service(existing=SimpleNamespace(
+            id="already", wamid="wamid.A1", from_phone="+2348012345678",
+            processed_at=Utils.datetime_now(),
+        ))
         assert await svc.ingest(inbound()) is None
         svc._chat.send.assert_not_awaited()
-        svc._whatsapp_inbound_message_repo.create_return_model.assert_not_awaited()
 
 
 class TestNonTextInbound:
@@ -218,7 +247,7 @@ class TestWidgetAttribution:
 
         await svc.ingest(inbound(text="Hi Veriprops! [ref: web-pricing]"))
 
-        written = svc._whatsapp_inbound_message_repo.create_return_model.await_args.args[0]
+        written = svc._journal.record.await_args.args[0]
         assert written.page_code == "web-pricing"
 
     async def test_the_marker_never_reaches_the_console_or_the_classifier(self):
@@ -236,7 +265,7 @@ class TestWidgetAttribution:
 
         await svc.ingest(inbound(text="How much for a Lagos land check?"))
 
-        written = svc._whatsapp_inbound_message_repo.create_return_model.await_args.args[0]
+        written = svc._journal.record.await_args.args[0]
         assert written.page_code is None
         assert written.text == "How much for a Lagos land check?"
 
@@ -248,7 +277,7 @@ class TestWidgetAttribution:
         record = await svc.ingest(inbound(text="[ref: web-home]"))
 
         assert record is not None
-        written = svc._whatsapp_inbound_message_repo.create_return_model.await_args.args[0]
+        written = svc._journal.record.await_args.args[0]
         assert written.page_code == "web-home"
         assert written.text is None
 

@@ -10,6 +10,8 @@ from typing import List, Optional
 
 from sqlalchemy import BigInteger, Column, String
 
+from main.appodus_utils.db.models import live_unique_index
+
 from main.app.core.state.status import VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
@@ -19,9 +21,13 @@ from main.app.domain.verification.pricing_config.line_item.models import Pricing
 class PricingTierConfig(BaseEntity):
     __tablename__ = "pricing_tier_config"
 
-    tier = Column(String(16), nullable=False, unique=True, index=True)
+    tier = Column(String(16), nullable=False, index=True)
     price_ngn_kobo = Column(BigInteger, nullable=False)
-    # tier index is declared inline (unique=True, index=True) → ix_pricing_tier_config_tier, matching the migration.
+    # tier index is declared inline (index=True) → ix_pricing_tier_config_tier, matching the migration.
+
+    __table_args__ = (
+        live_unique_index("uq_pricing_tier_config_tier", "tier"),
+    )
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────

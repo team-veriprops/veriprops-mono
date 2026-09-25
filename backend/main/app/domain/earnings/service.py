@@ -13,7 +13,7 @@ from kink import inject
 
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.status import AgentRole, VerificationTier
-from main.app.domain.commission.models import Commission, CommissionStatus, UpdateCommissionDto
+from main.app.domain.commission.models import Commission, CommissionStatus
 from main.app.domain.commission.repo import CommissionRepo
 from main.app.domain.earnings.calc import derive_balance
 from main.app.domain.earnings.models import EarningJobDto, EarningsSummaryDto
@@ -70,17 +70,24 @@ class EarningsService:
         advanced = 0
         notify: Set[str] = set()
 
+        # Each row is claimed, so an overlapping run clears it once, and a commission
+        # frozen since it was listed (a dispute, a chargeback) stays frozen.
         for c in await self._commissions.list_clearing_due(now):
-            await self._commissions.update(c.id, UpdateCommissionDto(status=CommissionStatus.AVAILABLE.value))
+            if await self._commissions.claim_transition(
+                c.id, [CommissionStatus.CLEARING], CommissionStatus.AVAILABLE,
+            ) is None:
+                continue
             notify.add(c.agent_id)
             advanced += 1
 
         for c in await self._commissions.list_reserve_due(now):
-            row = await self._commissions.get_model(c.id)
-            if row is not None and row.reserve_released_at is None:
-                row.reserve_released_at = now
-                notify.add(c.agent_id)
-                advanced += 1
+            if await self._commissions.claim_transition(
+                c.id, [CommissionStatus.AVAILABLE], expect={"reserve_released_at": None},
+                reserve_released_at=now,
+            ) is None:
+                continue
+            notify.add(c.agent_id)
+            advanced += 1
 
         for agent_id in notify:
             await publish_domain_event(DomainEvent(

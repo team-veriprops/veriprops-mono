@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loguru import Logger
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional
 
 from libre_fastapi_jwt import AuthJWT
@@ -20,25 +20,29 @@ from kink import di, inject
 from main.app.domain.user.auth.session.models import (
     CreateDeviceSessionDto,
     CreatePasswordResetTokenDto,
-    CreateSecurityEventDto,
     DeviceSession,
     PasswordResetToken,
     SecurityEvent,
     SecurityEventType,
     UpdateDeviceSessionDto,
-    UpdatePasswordResetTokenDto, LoginRequestDto, AuthSessionDto, SessionUserDto, UserType, UserPersona,
+    LoginRequestDto, AuthSessionDto, SessionUserDto, UserType, UserPersona,
 )
+from main.app.domain.user.auth.session.failure_recorder import AuthFailureRecorder, security_event
 from main.app.domain.user.auth.session.repo import (
     DeviceSessionRepo,
     PasswordResetTokenRepo,
     SecurityEventRepo,
 )
 from main.appodus_utils import Utils
+from main.appodus_utils.db.locks import advisory_xact_lock
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 
 logger: Logger = di["logger"]
+
+# One user's device sessions: rotation and "sign out other devices" take turns on it.
+_DEVICE_SESSIONS_LOCK = "device_sessions"
 
 
 def _user_to_session_dto(user: User, has_password: bool, linked: List[str]) -> SessionUserDto:
@@ -78,11 +82,15 @@ class SessionService:
             self,
             device_repo: DeviceSessionRepo,
             event_repo: SecurityEventRepo,
-            reset_repo: PasswordResetTokenRepo
+            reset_repo: PasswordResetTokenRepo,
+            failure_recorder: AuthFailureRecorder,
     ):
         self._device_repo = device_repo
         self._event_repo = event_repo
         self._reset_repo = reset_repo
+        # Every failed attempt is recorded here, never in this transaction: login raises right
+        # after, and the raise would roll the record back.
+        self._failures = failure_recorder
 
     # ── Login ─────────────────────────────────────────────────────
     async def login(
@@ -100,7 +108,7 @@ class SessionService:
         now = Utils.datetime_now()
 
         if user and user.locked_until and user.locked_until > now:
-            await self.record_event(
+            await self._failures.record_event(
                 SecurityEventType.LOGIN_FAILURE,
                 "Login attempted on locked account",
                 user_id=str(user.id),
@@ -118,39 +126,12 @@ class SessionService:
         )
         if not valid:
             if user:
-                count = await user_service.increment_failed_login(user)
-                # Two attempts before lockout (5 of 7 by default) trigger a
-                # WARNING event so the Security Activity Log can highlight an
-                # in-progress brute-force attempt.
-                warn_at = max(1, settings.AUTH_LOCKOUT_THRESHOLD - 2)
-                if count >= settings.AUTH_LOCKOUT_THRESHOLD:
-                    until = now + timedelta(minutes=settings.AUTH_LOCKOUT_MINUTES)
-                    await user_service.lock_user_until(user, until)
-                    await self.record_event(
-                        SecurityEventType.ACCOUNT_LOCKED,
-                        f"Account locked for {settings.AUTH_LOCKOUT_MINUTES} minutes",
-                        user_id=str(user.id),
-                        ip_address=ip_address,
-                    )
-                elif count >= warn_at:
-                    await self.record_event(
-                        SecurityEventType.LOGIN_FAILURE_WARNING,
-                        f"Repeated invalid credentials ({count}/{settings.AUTH_LOCKOUT_THRESHOLD})",
-                        user_id=str(user.id),
-                        ip_address=ip_address,
-                        device_fingerprint=req.device_fingerprint,
-                    )
-                else:
-                    await self.record_event(
-                        SecurityEventType.LOGIN_FAILURE,
-                        "Invalid credentials",
-                        user_id=str(user.id),
-                        ip_address=ip_address,
-                        device_fingerprint=req.device_fingerprint,
-                    )
+                await self._failures.record_failed_login(
+                    str(user.id), ip_address=ip_address, device_fingerprint=req.device_fingerprint,
+                )
             else:
                 # Don't disclose whether the email exists.
-                await self.record_event(
+                await self._failures.record_event(
                     SecurityEventType.LOGIN_FAILURE,
                     f"Invalid credentials (unknown email: {req.email})",
                     ip_address=ip_address,
@@ -161,7 +142,7 @@ class SessionService:
         # Admin suspension check (§4.2) — after credential verification so the account
         # state is only disclosed to the genuine credential holder.
         if user.account_status == AccountStatus.SUSPENDED.value:
-            await self.record_event(
+            await self._failures.record_event(
                 SecurityEventType.LOGIN_FAILURE,
                 "Login attempted on suspended account",
                 user_id=str(user.id),
@@ -241,6 +222,7 @@ class SessionService:
         rows) — minting then would hand them a refresh cookie nothing backs, so nothing is minted
         and the grant takes effect when they sign in again.
         """
+        await self._lock_devices(user.id)
         device = (
             await self._device_repo.get_by_token_hash(current_token_hash)
             if current_token_hash
@@ -298,6 +280,9 @@ class SessionService:
         )
 
     async def revoke_all_other_devices(self, user_id: str, current_token_hash: Optional[str]) -> int:
+        """Sign out every device but the caller's. Takes the user's device lock, so a rotation
+        in flight on another request cannot move the caller's row from under this comparison."""
+        await self._lock_devices(user_id)
         sessions = await self._device_repo.list_for_user(user_id)
         revoked = 0
         for s in sessions:
@@ -335,15 +320,12 @@ class SessionService:
             device: Optional[str] = None,
             device_fingerprint: Optional[str] = None,
     ) -> None:
-        await self._event_repo.create(CreateSecurityEventDto(
-            user_id=user_id,
-            type=type,
-            description=description,
-            ip_address=ip_address,
-            approx_location=approx_location,
-            device=device,
-            device_fingerprint=device_fingerprint,
-            occurred_at=Utils.datetime_now(),
+        """Log an event in the caller's transaction, so it rolls back with the change it
+        describes. A failed attempt that must outlive its error goes to `AuthFailureRecorder`."""
+        await self._event_repo.create(security_event(
+            type, description,
+            user_id=user_id, ip_address=ip_address, approx_location=approx_location,
+            device=device, device_fingerprint=device_fingerprint,
         ))
 
     async def list_recent_events(self, user_id: str, limit: int = 50) -> List[SecurityEvent]:
@@ -380,12 +362,14 @@ class SessionService:
         ))
 
     async def consume_password_reset_token(self, token_hash: str) -> Optional[PasswordResetToken]:
-        token = await self._reset_repo.get_by_token_hash(token_hash)
-        if not token:
-            return None
-        if token.expires_at and token.expires_at <= Utils.datetime_now():
-            return None
-        await self._reset_repo.update(
-            str(token.id), UpdatePasswordResetTokenDto(consumed_at=Utils.datetime_now()),
-        )
-        return token
+        """The reset link's token, used up — or None when it is unknown, spent or expired."""
+        return await self._reset_repo.consume(token_hash, Utils.datetime_now())
+
+    @staticmethod
+    async def _lock_devices(user_id) -> None:
+        """Serialise changes to one user's device sessions until the transaction ends.
+
+        Keyed on the id without dashes, so a caller holding the JWT's dashed form and one
+        holding the entity's UUID (or its hex) take the same lock.
+        """
+        await advisory_xact_lock(f"{_DEVICE_SESSIONS_LOCK}:{str(user_id).replace('-', '').lower()}")

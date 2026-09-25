@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from main.appodus_utils.exception.exceptions import InvalidResourceStateException
+
 from main.app.core.state.status import AgentRole
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.user.agent.kyc.models import KycSubmissionDto
@@ -34,6 +36,7 @@ def mock_db_session():
 
     session.begin = _begin
     session.flush = AsyncMock()
+    session.execute = AsyncMock()  # advisory locks (`advisory_xact_lock`) run a statement
     token = db_session_ctx.set(session)
     yield session
     db_session_ctx.reset(token)
@@ -57,6 +60,11 @@ def _make_service():
     svc._user_service.add_persona = AsyncMock()
     svc._kyc_service.run_verification = AsyncMock()
     svc._consent_service.record_user_consent = AsyncMock()
+    svc._profile_repo.get_by_user_id = AsyncMock(return_value=None)  # first application
+    svc._profile_repo._session = MagicMock()
+    svc._credential_repo.soft_delete = AsyncMock()
+    svc._coverage_repo.list_for_user = AsyncMock(return_value=[])
+    svc._coverage_repo.soft_delete = AsyncMock()
     svc._profile_repo.create_return_model = AsyncMock(return_value=SimpleNamespace(
         id="prof-1", user_id="u-1", roles=["FIELD"], approved_roles=[],
         status=AgentApplicationStatus.PENDING.value, submitted_at=None, rejection_reason=None,
@@ -115,6 +123,61 @@ class TestSubmit:
         svc = _make_service()
         await svc.submit_application("u-1", _valid_dto())
         svc._draft_service.discard.assert_awaited_once_with("u-1")
+
+
+class TestApplyingAgain:
+    """One application per account; a rejected applicant reapplies on the same profile."""
+
+    @staticmethod
+    def _previous(status: AgentApplicationStatus):
+        return SimpleNamespace(
+            id="prof-1", user_id="u-1", roles=["FIELD"], approved_roles=["FIELD"],
+            status=status.value, submitted_at=None, rejection_reason="Blurry ID",
+            bio="old", years_experience=1, reviewed_at="2026-01-01", reviewed_by="admin-1",
+        )
+
+    @pytest.mark.parametrize("status", [AgentApplicationStatus.PENDING, AgentApplicationStatus.APPROVED])
+    async def test_a_live_application_refuses_a_second_submit_before_kyc(self, status):
+        svc = _make_service()
+        svc._profile_repo.get_by_user_id = AsyncMock(return_value=self._previous(status))
+
+        with pytest.raises(InvalidResourceStateException):
+            await svc.submit_application("u-1", _valid_dto())
+
+        svc._kyc_service.run_verification.assert_not_awaited()
+        svc._profile_repo.create_return_model.assert_not_awaited()
+
+    async def test_a_rejected_applicant_reapplies_on_the_same_profile(self):
+        svc = _make_service()
+        previous = self._previous(AgentApplicationStatus.REJECTED)
+        svc._profile_repo.get_by_user_id = AsyncMock(return_value=previous)
+        # The old credential is listed to retire it; the status read afterwards sees none.
+        svc._credential_repo.list_for_user = AsyncMock(side_effect=[[SimpleNamespace(id="cred-old")], []])
+        svc._coverage_repo.list_for_user = AsyncMock(return_value=[SimpleNamespace(id="cov-old")])
+
+        await svc.submit_application("u-1", _valid_dto(bio="Back with a clear ID"))
+
+        svc._profile_repo.create_return_model.assert_not_awaited()
+        assert previous.status == AgentApplicationStatus.PENDING.value
+        assert previous.roles == [AgentRole.FIELD.value] and previous.approved_roles == []
+        assert previous.bio == "Back with a clear ID"
+        assert (previous.rejection_reason, previous.reviewed_at, previous.reviewed_by) == (None, None, None)
+        svc._kyc_service.run_verification.assert_awaited_once()
+        svc._credential_repo.soft_delete.assert_awaited_once_with("cred-old")
+        svc._coverage_repo.soft_delete.assert_awaited_once_with("cov-old")
+        details = svc._audit_service.schedule.call_args.kwargs["details"]
+        assert details["reapplication"] is True
+
+    async def test_concurrent_submissions_take_turns(self, monkeypatch):
+        import main.app.domain.user.agent.service as agent_module
+
+        lock = AsyncMock()
+        monkeypatch.setattr(agent_module, "advisory_xact_lock", lock)
+        svc = _make_service()
+
+        await svc.submit_application("u-1", _valid_dto())
+
+        lock.assert_awaited_once_with("agent_application:u-1")
 
 
 class TestStatus:

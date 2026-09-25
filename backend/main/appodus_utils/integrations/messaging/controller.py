@@ -41,12 +41,12 @@ async def handle_whatsapp_webhook(
 ):
     if content_length > 1_000_000:
         # To prevent memory allocation attacks
-        logger.error(f"Content too long ({content_length})")
+        logger.warning(f"Webhook rejected: content too long ({content_length})")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Content too long")
 
     # Validate X-Hub-Signature
     if not (await _validate_signature(request, x_hub_signature_256)):
-        logger.error("Invalid message signature")
+        logger.warning("Webhook rejected: invalid message signature")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid signature")
 
     logger.info("Message signature checked ok")

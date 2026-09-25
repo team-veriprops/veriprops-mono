@@ -10,10 +10,11 @@ sweep methods directly.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from kink import di, inject
 
+from main.app.jobs.exclusive import exclusive_job
 from main.app.domain.referral.service import ReferralService
 from main.app.domain.verification.service import VerificationService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -37,10 +38,12 @@ class GrowthSweepJobs:
         self._verification = verification_service
         self._referral = referral_service
 
-    async def run_abandonment_sweep(self) -> int:
+    @exclusive_job("abandonment_recovery")
+    async def run_abandonment_sweep(self) -> Optional[int]:
         return await self._verification.sweep_abandoned_drafts()
 
-    async def run_referral_credit_sweep(self) -> int:
+    @exclusive_job("referral_credits")
+    async def run_referral_credit_sweep(self) -> Optional[int]:
         return await self._referral.sweep_referral_credits()
 
 

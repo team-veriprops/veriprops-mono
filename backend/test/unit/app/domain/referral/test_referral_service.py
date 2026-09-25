@@ -11,12 +11,15 @@ from uuid import UUID
 
 import pytest
 
+from test.utils.repo_fakes import fake_insert_or_get
+
 from main.app.core.events import EventType
 from main.app.domain.referral import service as referral_module
 from main.app.domain.referral.credit.models import ReferralCreditStatus
 from main.app.domain.referral.service import ReferralService
 from main.app.domain.system_config.models import ConfigKey
 from main.appodus_utils.db.session import db_session_ctx
+from test.utils.repo_fakes import fake_claim_transition
 
 _CONFIG_VALUES = {ConfigKey.REFERRAL_CREDIT_NGN: 5_000, ConfigKey.CHARGEBACK_WINDOW_DAYS: 120}
 
@@ -75,8 +78,17 @@ def _make_service():
     svc._config = AsyncMock()
     svc._config.get_int = AsyncMock(side_effect=lambda key: _CONFIG_VALUES[key])
     svc._credits.get_for_invitee = AsyncMock(return_value=None)
-    svc._credits.create_return_model = AsyncMock(side_effect=lambda dto: SimpleNamespace(
-        id="rc-1", **dto.model_dump()))
+    minted = []
+
+    def _mint(values):
+        credit = SimpleNamespace(id="rc-1", **values)
+        minted.append(credit)
+        return credit
+
+    # One credit per invitee (uq_referral_credits_invitee), as the real insert is.
+    svc._credits.insert_or_get = fake_insert_or_get(lambda values: svc._raced_credit, _mint)
+    svc._raced_credit = None
+    svc._minted = minted
     return svc
 
 
@@ -85,7 +97,7 @@ class TestOnInviteeFirstPayment:
         svc = _make_service()
         svc._users.get_user_model = AsyncMock(return_value=_invitee(referred_by=None))
         assert await svc.on_invitee_first_payment(_payment()) is None
-        svc._credits.create_return_model.assert_not_called()
+        assert svc._minted == []
 
     async def test_creates_pending_credit_for_distinct_human(self):
         svc = _make_service()
@@ -100,7 +112,15 @@ class TestOnInviteeFirstPayment:
         svc._credits.get_for_invitee = AsyncMock(return_value=SimpleNamespace(id="rc-existing"))
         svc._users.get_user_model = AsyncMock(return_value=_invitee())
         assert await svc.on_invitee_first_payment(_payment()) is None
-        svc._credits.create_return_model.assert_not_called()
+        assert svc._minted == []
+
+    async def test_a_concurrent_payment_for_the_same_invitee_mints_no_second_credit(self):
+        svc = _make_service()
+        svc._users.get_user_model = AsyncMock(side_effect=[_invitee(), _referrer()])
+        svc._raced_credit = SimpleNamespace(id="rc-winner")  # written after the first check
+
+        assert await svc.on_invitee_first_payment(_payment()) is None
+        assert svc._minted == []
 
     async def test_voids_on_shared_verified_phone(self):
         svc = _make_service()
@@ -128,13 +148,13 @@ class TestSweepReferralCredits:
         due = SimpleNamespace(id="rc-1", referrer_user_id=REFERRER.hex, amount_minor=500_000,
                               status=ReferralCreditStatus.PENDING.value, cleared_at=None)
         svc._credits.list_pending_due = AsyncMock(return_value=[due])
-        svc._credits.get_model = AsyncMock(return_value=due)
-        svc._credits.update = AsyncMock()
-        svc._users.get_user_model = AsyncMock(return_value=_referrer(credit_balance_kobo=100_000))
+        svc._credits.claim_transition = fake_claim_transition({"rc-1": due})
+        svc._users.add_credit_balance = AsyncMock()
         cleared = await svc.sweep_referral_credits()
         assert cleared == 1
-        dto = svc._users.update_user.call_args.args[1]
-        assert dto.credit_balance_kobo == 600_000  # 100k + 500k
+        # Added in SQL, so an overlapping credit to the same referrer is not lost.
+        svc._users.add_credit_balance.assert_awaited_once_with(REFERRER.hex, 500_000)
+        assert due.status == ReferralCreditStatus.CLEARED.value
         assert due.cleared_at is not None
         assert stub_publish[0].type == EventType.REFERRAL_CREDIT_EARNED
 
