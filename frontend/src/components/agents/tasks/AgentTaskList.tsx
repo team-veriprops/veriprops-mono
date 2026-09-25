@@ -15,7 +15,7 @@ import {
 } from "@3rdparty/ui/select";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { StatusPill } from "@components/ui/StatusPill";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { ROUTES } from "@/lib/routes";
 import { TaskState } from "@/types/adminVerification";
 import { AgentTask } from "@/types/agentTask";
@@ -133,7 +133,7 @@ export default function AgentTaskList() {
                               size="sm"
                               onClick={async () => {
                                 await accept.mutateAsync(task.id);
-                                toast({ title: "Task accepted" });
+                                toast.success("Task accepted");
                               }}
                               disabled={accept.isPending}
                               data-testid={`accept-${task.id}`}
@@ -147,7 +147,7 @@ export default function AgentTaskList() {
                               variant="ghost"
                               onClick={async () => {
                                 await decline.mutateAsync({ taskId: task.id });
-                                toast({ title: "Task declined" });
+                                toast.success("Task declined");
                               }}
                               disabled={decline.isPending}
                               data-testid={`decline-${task.id}`}

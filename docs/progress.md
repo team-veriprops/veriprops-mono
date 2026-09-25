@@ -415,6 +415,178 @@ timed out and every signup-based scenario failed while UAT-AGENT-04/05 still pas
 the Postgres container cleared it, and a single worker avoids the bursts. The machine also rebooted
 mid-run once, which reads as 0 ms "failures" for everything after it — those tests never ran.
 
+## Side track — concurrency hardening, fault logging, sweep claims (2026-09-24 → 25)
+
+**Shipped as `c8bed19` on `dev` (pushed).** It started from "the local backend hangs ~30 s then
+answers 500 under concurrent requests" and grew, by user decision, into a sweep of every
+read-then-write race and every place that logged a handled outcome as an ERROR. The commit
+message is the full inventory; the design rules it introduced are recorded in
+[backend/CLAUDE.md](../backend/CLAUDE.md) (race-free writes, `INDEPENDENT` sessions, flush before
+reload, one ERROR per real fault, rebuild-don't-stamp) and MASTER-PRD §11.4 (SLA-breach claim).
+
+### What exists now, in one line each
+- Race-free writes on `GenericRepo`: `claim_transition`, `lock_model`, `insert_or_get`/`upsert`,
+  advisory transaction locks (`db/locks.py`). `_flush_pending()` runs before any of them reloads a
+  row — sessions are `autoflush=False` and `populate_existing` would silently discard an edit.
+- Writes that must survive a failing request commit on `TransactionSessionPolicy.INDEPENDENT`
+  (sign-in failure recorder, WhatsApp inbound journal, consent, assistant session, messages). No
+  nested second-connection sessions remain.
+- Migration **0018** narrows unique constraints to live rows and adds the partial unique indexes
+  the code assumed; **0019** adds `verifications.sla_breach_notified_at`, which the SLA sweep claims
+  before announcing a breach. All four local DBs (`veriprops_test|local|e2e|uat`) are at `0019`.
+- Sweeps run under `app/jobs/exclusive.py` and claim each row before acting on it.
+- `exception/faults.py:log_fault_once` — one ERROR, with traceback and request reference, per real
+  fault; handled outcomes stay DEBUG/WARNING. Stdlib loggers route into loguru.
+- `app/core/realtime/frames.py:sse_frame` — the one SSE encoder (UUIDs as hex).
+- `backend/scripts/rebuild_local_db.py` — rebuilds a local DB a squash stranded.
+- E2E: CHAT-06 builds its threads over the API (66 s → 22 s); local default is **2 workers**;
+  `e2e/tls/Caddyfile` upstream is overridable via `UAT_UPSTREAM` and retries GET/HEAD/PUT only.
+
+### Verification at the commit
+Backend unit **2594**, ruff + mypy clean; frontend Vitest **748**, tsc + eslint clean;
+drive-through **550/550**; full six-engine Playwright, both lanes. The parallel lane was 181 passed,
+12 flaky, 3 failed (2.2 h, 2 workers). All three failures and the flaky set passed when re-run
+alone. The four with a found cause were fixed (below) and pass **12/12 first attempt, no
+retries**. The serial lane passed 24/24, split across two runs because a Docker Desktop restart
+cut the first one short.
+
+### Spec faults fixed in this pass (not product defects)
+- **AGENT-02/03** reloaded the applicant's page straight after the admin's click, racing the save.
+  `decideApplication` now waits for the drawer to close, which happens only once the decision is
+  saved.
+- **CHAT-04** typed into the admin inbox search before hydration (the Slice 5 trap again).
+  `findAdminRow` now calls `waitForHydration` first.
+- **SESS-04**: `signOut` waited for `load` (images and fonts) after the redirect had landed; it
+  now waits for `domcontentloaded`.
+
+### Blockers — act on these first
+1. **`dev` CI/e2e is expected red until the sign-out/error-message work is committed.** Another
+   session's work is still **uncommitted in the working tree, 76 files**: the sign-out busy
+   overlay (`SignOutOverlay.tsx`, `useSignOut.ts`), the toast removal (`3rdparty/ui/toast*`,
+   `hooks/use-toast.ts` deleted), the safe error messages (`lib/errors.ts`, `FetchHttpClient`,
+   `login/lockout.ts`, ~40 components), `package.json`/`pnpm-lock.yaml`, and its backend tests
+   `test_error_envelope.py` and `test_session_errors.py`. The user asked for only this track to be
+   committed, but `c8bed19` still depends on that work:
+   `e2e/helpers/ui.ts:signOut` waits for `signout-overlay`, which exists only in the uncommitted
+   `SignOutOverlay.tsx`. Five files hold edits from both tracks (`backend/CLAUDE.md`,
+   `db/session.py`, `request_logging_middleware.py`, `exception_handlers.py`,
+   `e2e/helpers/ui.ts`). **Review it, run its gates, then commit and push it.** That session's
+   own record is its transcript; its user asks were the logout busy state, and "the login form
+   shows raw backend errors — fix everywhere".
+2. **Push-to-`dev` deploys.** `deploy.yml` runs the full gate and then deploys the dev alias, so
+   nothing reaches dev until blocker 1 is resolved.
+
+### Pending, in priority order
+1. **The same `load` wait behind SESS-04 exists at 9 more sites.** Each should wait for
+   `domcontentloaded` (then `waitReady`) like `goto` does:
+   `helpers/auth.ts:35`, `helpers/ui.ts:38,50`, `specs/auth.spec.ts:117,161`,
+   `specs/chat.spec.ts:183`, `specs/golden-path.spec.ts:64`, `specs/session.spec.ts:49,89`.
+2. **Flaky tests with no cause found yet.** Each passed on retry and again alone:
+   AUTH-09 (firefox-mobile, webkit-desktop), GP-02 (firefox-desktop, webkit-desktop), AUTH-02/03
+   (firefox-mobile), AUTH-12, SESS-03, WAH-03 and AGENT-01 (chromium-desktop). Chromium-desktop
+   took 8 of the 12 and all 3 failures in one window, which points at a slow stretch of the run,
+   not at the specs. Item 1 may clear some of them.
+3. **GP-01 on webkit-mobile-serial hung once, for 21 min.** It timed out waiting for
+   `verify-new-continue` to become *stable*, then WebKit hung tearing down the context. That was
+   under CPU contention (backend pytest running alongside), and the retry passed in 18 s. Compare
+   Slice 5's note: a Continue button that never settles under an animating element above it. If it
+   recurs, look for a layout shift above that button rather than widening the timeout.
+4. **Re-run the full matrix** (`node e2e/run-lanes.mjs`) once blockers 1–2 and item 1 are done.
+   The drive-through was last run before the final log-level demotions (router/controller
+   ERROR → WARNING); re-run it too.
+5. **2.2 h for the parallel lane is slow.** Try the native Caddy path
+   (`UAT_UPSTREAM=localhost:3001 caddy run --config e2e/tls/Caddyfile`, see
+   `docs/uat-strategy.md`), which skips Docker Desktop's container→host hop — the likely cost.
+6. Outside this track: GitHub reports 44 Dependabot alerts (4 critical) on the default branch.
+
+### Runtime state left behind
+- The user's own backend is **stopped at their request — do not restart it**. The e2e servers
+  (backend on :8000 against `veriprops_e2e`, standalone frontend on :3001) are stopped.
+  `veriprops-uat-tls` (Caddy) is up; Docker restarts it automatically.
+- Run the e2e backend with `APPODUS_ACTIVE_ENV=test DB_NAME=veriprops_e2e DB_SERVER=127.0.0.1
+  SMTP_HOST=127.0.0.1 ENABLE_OUT_MESSAGING=True MAILPIT_CONTAINER=veriprops-mono-mailpit-1
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8`. Take `DB_PASSWORD` from `backend/.env.dev_personal`.
+  The WhatsApp secret keys in `backend/main/app/config/settings.py` must also be set to non-empty
+  values: `WHATSAPP_APP_SECRET_KEY`, `WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN`,
+  `WHATSAPP_BUSINESS_ACCESS_TOKEN` and `WHATSAPP_HANDOFF_PRIVATE_KEY`/`_PUBLIC_KEY`.
+  Throwaway placeholders set in the shell are enough, because `WHATSAPP_PROVIDER=stub` never
+  sends them anywhere. *Unverified:* whether the handoff pair must be a real RS256 key pair for
+  the `/wa/*` specs. If handoff links fail to sign, generate a throwaway pair. Never put real
+  values in this file. On Windows, use `127.0.0.1`, never `localhost`: WSL's relay owns `::1`
+  for 5432/1025/3000.
+- **Never `/dev/reset` the user's dev database** — use `veriprops_e2e`.
+- The standalone bundle in `frontend/.next/standalone` was built before `c8bed19`. That commit
+  changes no app source (only e2e specs and helpers), so the bundle still matches it. Rebuild it
+  (`pnpm build`, then restage the standalone output) once blocker 1's 76 files are committed,
+  because those do change app source.
+
+## Side track — sign-out busy state, Sonner-only toasts, safe server errors (2026-09-22 → 25)
+
+**Pushed on `dev` in the commit after `c8bed19`. This resolves the blocker above:
+`signout-overlay` now exists.** It covers the user's asks: a busy state on logout from any control,
+and "the login form shows raw backend errors — fix everywhere". It also includes the backlog above
+(the nine `load` waits). Stopped mid-verification at the user's request; what's unfinished is below.
+
+### What exists now
+- **Sign-out.** Every control goes through `useSignOut()`, which drives the global `SignOutOverlay`
+  (keyed on `useAuthStore.signingOut`, never on the mutation's pending state), a double-press guard, and
+  a full-document redirect (`navigateAfterSignOut`). A failsafe (`SIGN_OUT_MAX_WAIT_MS`) redirects
+  anyway if the request never settles. `/account/devices` revoke controls show per-row spinners.
+- **Toasts: Sonner only.** The mounted Radix toaster was deleted (`hooks/use-toast.ts`,
+  `3rdparty/ui/toast*`, `@radix-ui/react-toast`). Before, 127 Sonner calls (54 errors) rendered
+  nothing. The toaster sits above the WhatsApp button (`WHATSAPP_WIDGET_CLEARANCE_PX`).
+- **Safe errors.** Backend: every 5xx answers `SERVER_ERROR_MESSAGE` plus a `reference`, and 4xx messages
+  are never built from library/DB/provider text (template renderers, Google Drive client/webhooks,
+  messaging-model file path). Frontend: `lib/errors.ts:getErrorMessage` is the one render policy.
+  `HttpError` carries `kind`/`httpStatus`/`code`/`reference`, and the sign-in lockout counts only a 401
+  (`login/lockout.ts`).
+- **E2E.** `waitForPage` replaces every bare `page.waitForURL` (17 sites). Page axe scans exclude the
+  Sonner toaster (`TOASTER_SELECTOR`), and `UAT-WA-04` checks a toast at rest. New: `UAT-AUTH-15`
+  (a sign-in outage shows the safe message and reference, and doesn't lock the user out) and `UAT-WA-04`
+  (a toast never covers the WhatsApp button).
+
+### Verification at the commit
+Backend unit **2594**, ruff + mypy clean. Frontend Vitest **748**, tsc + eslint clean, `pnpm build` clean.
+Drive-through **550/550**. Full six-engine matrix: **interrupted by the user**. The parallel lane finished:
+188 passed, 4 flaky, 4 failed (52 min). The serial lane got 18 passed, 4 failed, 1 flaky, 1 not run before
+the stop.
+
+### Act on these first
+1. **`UAT-WA-04` fails on webkit-mobile, and it's this track's own bug.** The overlap assertion
+   passes, but the at-rest scan (`expectNoA11yViolations(page, { include: TOASTER_SELECTOR })`)
+   throws "No elements found for include". The toast's ~4 s timer runs out while the helper waits for
+   animations. Fix: hover the toast first (Sonner pauses dismissal while hovered), or scan straight
+   after the settle. Don't widen timeouts. Chromium-desktop passed.
+2. **Sign-out can bounce back into the app: a real edge case.** In one `UAT-SESS-04` attempt
+   (webkit-desktop, passed on retry), the redirect after sign-out landed on `/portal/dashboard`, not
+   `/auth/login`. Likely cause: `useSignOut` also redirects when the logout call fails, and on the
+   `SIGN_OUT_MAX_WAIT_MS` failsafe. If the backend never cleared the cookies, `proxy.ts` treats the
+   user as signed in and bounces them away from the guest-only login page. The same was true of the
+   old `router.push`. Decide the intended behaviour (e.g. a login URL the guard always lets through
+   after sign-out, or clearing the client-visible cookies first), and add a unit test for it.
+3. **`UAT-AGENT-01`/`-05` failed on webkit-mobile.** AGENT-01 never showed `agent-status-card`
+   (spec line 178). AGENT-05 never showed `signup-consent-form` (`helpers/signup.ts:144`).
+   `agent-onboarding.spec.ts` had its post-navigation waits moved to `waitForPage` in this track,
+   so check that first. `waitForPage` adds `waitReady`, which the old code already called at those
+   sites, so a regression from it is unlikely. `UAT-AGENT-02` timed out (270 s).
+4. **`e2e/specs/status-pages.spec.ts:31,73` still use bare `page.waitForURL`.** It arrived in a
+   concurrent commit (`011a296`) after the 17-site sweep. Move both to `waitForPage` (frontend
+   CLAUDE.md, "Deterministic waits only"), then run that spec.
+5. **Re-run the matrix to completion.** Mobile Safari's serial `AUTH-05`, `DEV-04` and `GP-01` failures
+   are artifacts of the stop (worker exit `0xC0000142`, killed), not results. `GP-03` (webkit-desktop-serial)
+   timed out and needs a real run. The flaky set was all webkit-desktop: DEV-06, SESS-03, SESS-04 and WAH-01,
+   each a 90 s timeout.
+
+### Runtime state left behind
+- All e2e processes stopped; ports 8000/3001 free. `veriprops-uat-tls` is still up, as found.
+- `veriprops_local` was **rebuilt** earlier in this track, with the user's go-ahead, because it was
+  stranded at `0011` behind the squash. The other session has since brought it to `0019`.
+- The e2e run used `veriprops_e2e` with the environment recorded above. The handoff keys were **left
+  unset** on purpose. Outside prod/staging, `handoff/tokens.py` generates an ephemeral RS256 pair.
+  A non-empty placeholder counts as "configured" and breaks link signing. That answers the
+  "Unverified" note above.
+- The toast-placement screenshots and other scratch files are outside the repo, so there's nothing to clean.
+
 ---
 
 # Progress Tracker — WhatsApp Channel (cycle 2)

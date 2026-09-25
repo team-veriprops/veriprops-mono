@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@3rdparty/ui/button";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import WizardOverlay from "@components/ui/wizard/WizardOverlay";
 import { ROUTES } from "@lib/routes";
 import { AgentApplicationStatus, AgentRole, SubmitAgentApplicationRequest } from "@/types/agent";
@@ -91,7 +91,7 @@ export default function AgentOnboardingContainer({ closable = true }: AgentOnboa
     };
     try {
       await submit.mutateAsync(payload);
-      toast({ title: "Application submitted", description: "We'll review it and get back to you." });
+      toast.success("Application submitted", { description: "We'll review it and get back to you." });
       // Submitting granted the AGENT persona and the backend rotated the session with it, so this
       // browser's whole picture of who it belongs to is a step behind — including the router's
       // cached prefetches, every one of which the route guard turned away before the grant. The
@@ -100,7 +100,7 @@ export default function AgentOnboardingContainer({ closable = true }: AgentOnboa
       await refreshSession();
       navigateAfterPersonaChange(ROUTES.AGENT.DASHBOARD);
     } catch {
-      toast({ title: "Submission failed", description: "Please try again.", variant: "destructive" });
+      toast.error("Submission failed", { description: "Please try again." });
     }
   };
 

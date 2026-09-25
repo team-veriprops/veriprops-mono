@@ -382,13 +382,67 @@ describe("non-401 statuses are untouched by the refresh path", () => {
   });
 });
 
+describe("what a failed request reports", () => {
+  const rejectionOf = async (p: Promise<unknown>) => {
+    const settled = await Promise.allSettled([p]);
+    return (settled[0] as PromiseRejectedResult).reason as HttpError;
+  };
+
+  it("records the HTTP status apart from the backend's error code", async () => {
+    stubFetch({
+      original: [() => res(500, { error: { code: "INTERNAL_ERROR", message: "Something went wrong on our side. Please try again.", reference: "7F3K92QA" } })],
+      refresh: [],
+    });
+
+    const error = await rejectionOf(client.get("/things"));
+
+    expect(error.httpStatus).toBe(500);
+    expect(error.code).toBe("INTERNAL_ERROR");
+    expect(error.kind).toBe("response");
+  });
+
+  it("carries the reference the backend logged the failure under", async () => {
+    stubFetch({
+      original: [() => res(502, { error: { code: "INTEGRATION_ERROR", message: "x", reference: "7F3K92QA" } })],
+      refresh: [],
+    });
+
+    expect((await rejectionOf(client.get("/things"))).reference).toBe("7F3K92QA");
+  });
+
+  it("keeps a client error's message, which the backend wrote for the user", async () => {
+    stubFetch({
+      original: [() => res(409, { error: { code: "CONFLICT", message: "That email is already registered." } })],
+      refresh: [],
+    });
+
+    const error = await rejectionOf(client.get("/things"));
+
+    expect(error.httpStatus).toBe(409);
+    expect(error.message).toBe("That email is already registered.");
+  });
+
+  it("reports a request that never got a response as a network failure with no status", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
+
+    const error = await rejectionOf(client.get("/things"));
+
+    expect(error.kind).toBe("network");
+    expect(error.httpStatus).toBeUndefined();
+  });
+});
+
 describe("isNetworkError", () => {
   it("is true for the fetch-never-got-a-response path", () => {
-    expect(isNetworkError(new HttpError("Network error", "/things"))).toBe(true);
+    expect(isNetworkError(new HttpError("Network error", "/things", { kind: "network" }))).toBe(true);
   });
 
   it("is false for a parsed error-response HttpError", () => {
-    expect(isNetworkError(new HttpError("Forbidden", "/things", "403", { error: { code: "403" } }))).toBe(false);
+    expect(isNetworkError(new HttpError("Forbidden", "/things", { httpStatus: 403, code: "403" }))).toBe(false);
+  });
+
+  it("is false for a timeout, which did reach for the network but was cut off", () => {
+    expect(isNetworkError(new HttpError("Request timed out", "/things", { kind: "timeout" }))).toBe(false);
   });
 
   it("is false for a non-HttpError value", () => {

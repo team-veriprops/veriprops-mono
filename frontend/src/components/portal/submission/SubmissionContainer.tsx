@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@3rdparty/ui/button";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import WizardOverlay from "@components/ui/wizard/WizardOverlay";
 import { ROUTES } from "@lib/routes";
 import {
@@ -146,7 +146,7 @@ export default function SubmissionContainer() {
       await submit.mutateAsync({ id: verificationId, payload });
       router.push(ROUTES.PORTAL.VERIFICATION_PAY(verificationId));
     } catch {
-      toast({ title: "Could not submit", description: "Please try again.", variant: "destructive" });
+      toast.error("Could not submit", { description: "Please try again." });
     }
   };
 

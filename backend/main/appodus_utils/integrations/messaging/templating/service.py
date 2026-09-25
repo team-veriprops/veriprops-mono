@@ -1,13 +1,19 @@
+from __future__ import annotations
 from pathlib import Path
-from typing import Dict, Any
+from typing import TYPE_CHECKING, Dict, Any
 
-from kink import inject
+if TYPE_CHECKING:
+    from loguru import Logger
+
+from kink import di, inject
 
 from main.appodus_utils.exception.exceptions import TemplateRenderingException
 from main.appodus_utils.integrations.messaging.models import MessageChannel
 from main.appodus_utils.integrations.messaging.templating.engine import TemplateEngine
 from main.appodus_utils.integrations.messaging.templating.factory import get_template_engine_factory
 from main.appodus_utils.integrations.messaging.templating.models import AvailableTemplate
+
+logger: Logger = di["logger"]
 
 
 @inject
@@ -31,10 +37,14 @@ class TemplateService:
     ) -> str:
         full_template_path = Path(channel.value, f"{template_name.value}.{self.engine_factory.template_extension}").as_posix()
 
-        try:
-            if not self.engine.supports_template(full_template_path):
-                raise TemplateRenderingException(f"Template not found: {full_template_path}")
+        # A rendering failure is a 422, whose message reaches the client — so the template path
+        # and the engine's own error are logged here and the exception keeps its generic text.
+        if not self.engine.supports_template(full_template_path):
+            logger.error(f"Template not found: {full_template_path}")
+            raise TemplateRenderingException()
 
+        try:
             return self.engine.render(full_template_path, context)
         except ValueError as e:
-            raise TemplateRenderingException(str(e))
+            logger.error(f"Template {full_template_path} failed to render: {e}")
+            raise TemplateRenderingException() from e

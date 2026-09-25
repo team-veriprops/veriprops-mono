@@ -12,7 +12,7 @@ import {
   useMissingConsentsQuery,
 } from "./libs/useAuthQueries";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 
 /**
  * Mounted in the authenticated portal layout. If the backend reports any
@@ -49,7 +49,7 @@ export default function ConsentReacceptanceModal() {
       await refetch();
     } catch (err) {
       setErrorMessage(
-        getErrorMessage(err as Error, "Could not record your acceptance. Please try again."),
+        getErrorMessage(err, "Could not record your acceptance. Please try again."),
       );
     }
   };

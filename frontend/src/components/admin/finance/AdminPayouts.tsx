@@ -13,6 +13,7 @@ import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 import { Payout, PayoutStatus } from "@/types/payout";
 import { Page } from "@/types/models";
 import { useAdminPayoutsQuery, usePayoutDecisionMutation } from "./libs/useFinanceQueries";
+import { getErrorMessage } from "@lib/errors";
 
 const STATUSES = ["", PayoutStatus.REQUESTED, PayoutStatus.HELD, PayoutStatus.PAID, PayoutStatus.REJECTED];
 
@@ -97,7 +98,7 @@ function DecisionPanel({ payout, onDone }: { payout: Payout; onDone: () => void 
       { action, payoutId: payout.id, req },
       {
         onSuccess: () => { toast.success(`Payout ${action}ed.`); onDone(); },
-        onError: (e: unknown) => toast.error((e as Error)?.message ?? "Could not update the payout."),
+        onError: (e: unknown) => toast.error(getErrorMessage(e, "Could not update the payout.")),
       },
     );
   };

@@ -6,13 +6,17 @@
  * always through rendered UI state, never "no error thrown".
  */
 
+import type { Route } from "@playwright/test";
+
 import { ROUTES } from "@lib/routes";
+import { SERVER_ERROR_MESSAGE } from "@lib/errors";
 import { UserPersona } from "@components/website/auth/models";
+import { RATE_LIMIT_LOCKOUT_AT } from "@components/website/auth/schemas";
 
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
 import { api } from "../helpers/api";
-import { goto, waitForHydration, waitReady } from "../helpers/app";
+import { goto, waitForHydration, waitForPage, waitReady } from "../helpers/app";
 import { loginViaUi } from "../helpers/auth";
 import { clearMailbox, extractLinkFromEmail } from "../helpers/mailpit";
 import { PERSONAS, storageStatePath } from "../helpers/personas";
@@ -66,6 +70,53 @@ test.describe("UAT-AUTH — signed-out access @P0", () => {
     );
   });
 
+  test("UAT-AUTH-15 · a server failure during sign-in never shows internals or locks the user out", async ({
+    page,
+  }) => {
+    // What a database outage used to put on this form, verbatim. The mock stands in for the
+    // outage so the spec needs no broken backend; the backend's own half (it no longer sends
+    // this text at all) is pinned by its unit tests.
+    const raw = "Exception during DB session usage: [WinError 1225] The remote computer refused the network connection";
+    const reference = "7F3K92QA";
+    const outage = async (route: Route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        headers: { "X-Request-ID": reference },
+        body: JSON.stringify({ error: { code: "INTERNAL_ERROR", message: raw, reference } }),
+      });
+    };
+    const seed = readSeed();
+    await page.route("**/api/users/auth/sessions", outage);
+    await goto(page, ROUTES.AUTH.LOGIN);
+
+    await waitForHydration(page, "login-email");
+    await page.getByTestId("login-email").fill(seed.customer.email);
+    await page.getByTestId("login-password").fill(seed.customer.password);
+
+    // As many tries as would lock the form if they were wrong passwords.
+    for (let attempt = 0; attempt < RATE_LIMIT_LOCKOUT_AT; attempt++) {
+      const failed = page.waitForResponse((r) => r.url().endsWith("/api/users/auth/sessions") && r.status() === 500);
+      await page.getByTestId("login-submit").click();
+      await failed;
+
+      const error = page.getByTestId("login-error");
+      // Our fault, said plainly, with the reference support can look up — never the server's text,
+      // and never "your password is wrong".
+      await expect(error).toContainText(SERVER_ERROR_MESSAGE);
+      await expect(error).toContainText(reference);
+      await expect(error).not.toContainText("WinError");
+      await expect(error).not.toContainText(/incorrect/i);
+      await expect(page.getByTestId("login-submit")).toBeEnabled();
+    }
+
+    // Once the backend recovers, the same credentials still work: the outage cost no attempts.
+    await page.unroute("**/api/users/auth/sessions", outage);
+    await page.getByTestId("login-submit").click();
+    await waitForPage(page, (url) => !url.pathname.startsWith(ROUTES.AUTH.GATE), { timeout: 30_000 });
+  });
+
   test("UAT-AUTH-04 · a valid login lands the customer in their portal", async ({ page }) => {
     const seed = readSeed();
     await loginViaUi(page, seed.customer.email, seed.customer.password);
@@ -107,7 +158,7 @@ test.describe("UAT-AUTH — password recovery @P0 @serial", () => {
     await page.getByTestId("reset-password-submit").click();
     // The form moves on to login only once the backend has accepted the new password;
     // signing in any earlier races the reset request itself.
-    await page.waitForURL(/\/auth\/login\?reset=ok/);
+    await waitForPage(page, /\/auth\/login\?reset=ok/);
 
     // Acceptance is the business outcome: the new password signs in.
     await loginViaUi(page, email, newPassword);
@@ -189,11 +240,7 @@ test.describe("UAT-AUTH — signup funnel @P0", () => {
     // `domcontentloaded` rather than the default `load`, for the same reason `goto` uses it:
     // `load` additionally waits on every image and font, which this assertion does not care
     // about and which is what makes an otherwise-passing wait time out under parallel load.
-    await page.waitForURL((url) => url.pathname === ROUTES.PORTAL.VERIFICATIONS_NEW, {
-      timeout: 30_000,
-      waitUntil: "domcontentloaded",
-    });
-    await waitReady(page);
+    await waitForPage(page, (url) => url.pathname === ROUTES.PORTAL.VERIFICATIONS_NEW, { timeout: 30_000 });
 
     const snapshot = await page.evaluate(() => window.__auth_snapshot__);
     expect(snapshot?.isAuthenticated).toBe(true);
@@ -241,10 +288,7 @@ test.describe("UAT-AUTH — signup variants @P1", () => {
     // The referrer's reward only exists once this invitee's first payment clears the chargeback
     // window, so the credit itself belongs to the referral spec. What matters here is that
     // arriving through a referral link changes nothing about the invitee's own signup.
-    await page.waitForURL((url) => url.pathname === ROUTES.PORTAL.VERIFICATIONS_NEW, {
-      timeout: 30_000,
-      waitUntil: "domcontentloaded",
-    });
+    await waitForPage(page, (url) => url.pathname === ROUTES.PORTAL.VERIFICATIONS_NEW, { timeout: 30_000 });
   });
 
   test("UAT-AUTH-12 · signing up with agent intent lands in the agent portal", async ({ page }) => {
@@ -259,11 +303,7 @@ test.describe("UAT-AUTH — signup variants @P1", () => {
     await fillResidenceStep(page);
     await acceptConsentsAndSubmit(page);
 
-    await page.waitForURL((url) => url.pathname.startsWith(ROUTES.AGENT.GATE), {
-      timeout: 30_000,
-      waitUntil: "domcontentloaded",
-    });
-    await waitReady(page);
+    await waitForPage(page, (url) => url.pathname.startsWith(ROUTES.AGENT.GATE), { timeout: 30_000 });
 
     const snapshot = await page.evaluate(() => window.__auth_snapshot__);
     expect(snapshot?.personas).toContain(UserPersona.AGENT);
@@ -318,10 +358,11 @@ test.describe("UAT-AUTH — set a password @P1", () => {
     await page.getByTestId("set-password-confirm-input").fill(chosen);
     await page.getByTestId("set-password-submit").click();
 
-    await page.waitForURL(
+    await waitForPage(
+      page,
       (url) =>
         url.pathname === ROUTES.ACCOUNT.SECURITY && url.searchParams.get("password") === "ok",
-      { timeout: 30_000, waitUntil: "domcontentloaded" },
+      { timeout: 30_000 },
     );
 
     // Acceptance is the business outcome: the chosen password is the one that now signs in.

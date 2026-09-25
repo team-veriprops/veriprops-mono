@@ -29,7 +29,7 @@ import { ROUTES, isAuthIntent } from "@lib/routes";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 import { resolvePostAuthRedirect } from "@components/website/auth/libs/auth/redirect";
 import { getDeviceFingerprint } from "@components/website/auth/libs/auth/fingerprint";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import { findCountry } from "@components/website/auth/libs/auth/locale";
 
 const STEPS = ["Account", "Verify", "Residence", "Consent"];
@@ -219,7 +219,7 @@ export default function SignupContainer() {
     } catch (err) {
       setErrorMessage(
         getErrorMessage(
-          err as Error,
+          err,
           "We couldn't create your account. Please try again or contact support.",
         ),
       );

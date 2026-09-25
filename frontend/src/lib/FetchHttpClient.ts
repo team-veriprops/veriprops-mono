@@ -32,24 +32,60 @@ export interface HttpClient {
   delete<T = unknown>(url: string, config?: RequestInit & { timeout?: number; signal?: AbortSignal }): Promise<T>;
 }
 
-export class HttpError<T = unknown> extends Error {
-  status?: string;
-  url: string;
-  body?: T;
+/** The backend stamps every response with this header — the reference its logs file the request
+ * under (`REQUEST_ID_HEADER` in the backend's `request_logging_middleware.py`). */
+export const REQUEST_ID_HEADER = "X-Request-ID";
 
-  constructor(message: string, url: string, status?: string, body?: T) {
+/** An error response whose body carried no `error.message` (FastAPI's own `{"detail": …}`, say).
+ * It is a placeholder for logs, never shown: `getErrorMessage` falls back past it. */
+export const UNDESCRIBED_ERROR_MESSAGE = "An error occurred";
+
+/**
+ * How a request failed: the backend answered with an error (`response`), `fetch` never got an
+ * answer at all (`network` — offline, DNS), or the request was cut off by its timeout or a
+ * caller's abort (`timeout`).
+ */
+export type HttpErrorKind = "response" | "network" | "timeout";
+
+interface HttpErrorDetails<T> {
+  kind?: HttpErrorKind;
+  /** The HTTP status, when the backend answered. */
+  httpStatus?: number;
+  /** The backend's machine-readable `error.code` (e.g. `INVALID_CREDENTIALS`). */
+  code?: string;
+  /** The backend's `error.reference` — what it logged the failure under. */
+  reference?: string;
+  body?: T;
+}
+
+/**
+ * A failed request. Render it through `getErrorMessage` (`lib/errors.ts`), never through
+ * `.message` directly: only a client error's message is written for the user.
+ */
+export class HttpError<T = unknown> extends Error {
+  readonly kind: HttpErrorKind;
+  readonly httpStatus?: number;
+  readonly code?: string;
+  readonly reference?: string;
+  readonly url: string;
+  readonly body?: T;
+
+  constructor(message: string, url: string, details: HttpErrorDetails<T> = {}) {
     super(message);
     this.name = "HttpError";
     this.url = url;
-    this.status = status;
-    this.body = body;
+    this.kind = details.kind ?? "response";
+    this.httpStatus = details.httpStatus;
+    this.code = details.code;
+    this.reference = details.reference;
+    this.body = details.body;
   }
 }
 
 /** True when `fetch` itself never got a response (offline, DNS failure, etc.) —
  * as opposed to a real 4xx/5xx `HttpError` built from a parsed response body. */
 export function isNetworkError(error: unknown): boolean {
-  return error instanceof HttpError && error.status === undefined && error.message === "Network error";
+  return error instanceof HttpError && error.kind === "network";
 }
 
 /** Refresh-call failure, classified for the retry budget (transient vs definitive). */
@@ -57,7 +93,10 @@ class SessionRefreshError extends HttpError {
   readonly transient: boolean;
 
   constructor(url: string, status: number | undefined, transient: boolean) {
-    super("Session refresh failed", url, status === undefined ? undefined : String(status));
+    super("Session refresh failed", url, {
+      kind: status === undefined ? "network" : "response",
+      httpStatus: status,
+    });
     this.name = "SessionRefreshError";
     this.transient = transient;
   }
@@ -124,10 +163,14 @@ export class FetchHttpClient implements HttpClient {
       if (!response.ok) {
         const errorBody = await this.safeJson(response);
         const httpError = new HttpError(
-          errorBody?.error?.message || `An error occurred`,
+          errorBody?.error?.message || UNDESCRIBED_ERROR_MESSAGE,
           url,
-          errorBody?.error?.code,
-          errorBody
+          {
+            httpStatus: response.status,
+            code: errorBody?.error?.code,
+            reference: errorBody?.error?.reference ?? response.headers.get(REQUEST_ID_HEADER) ?? undefined,
+            body: errorBody,
+          }
         );
 
         if (response.status === 401 && !options._retry) {
@@ -151,11 +194,11 @@ export class FetchHttpClient implements HttpClient {
       return this.safeJson(response);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        throw new HttpError("Request aborted (timeout or manual cancel)", url);
+        throw new HttpError("Request aborted (timeout or manual cancel)", url, { kind: "timeout" });
       }
       if (error instanceof TypeError) {
         this.notifyNetworkError();
-        throw new HttpError("Network error", url);
+        throw new HttpError("Network error", url, { kind: "network" });
       }
       throw error;
     } finally {
@@ -192,7 +235,7 @@ export class FetchHttpClient implements HttpClient {
       // published inside the refresh loop.
       console.error(
         "Session refresh failed",
-        err instanceof HttpError ? `(status ${err.status})` : ""
+        err instanceof HttpError ? `(status ${err.httpStatus ?? err.kind})` : ""
       );
       throw originalError;
     }

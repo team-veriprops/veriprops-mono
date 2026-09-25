@@ -19,7 +19,7 @@ import { ROUTES } from "@lib/routes";
 
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
-import { goto, waitForHydration, waitReady } from "../helpers/app";
+import { goto, waitForHydration, waitForPage, waitReady } from "../helpers/app";
 import { ScenarioStage } from "../helpers/scenario";
 import { signOut } from "../helpers/ui";
 
@@ -46,7 +46,7 @@ async function clearCookiesOffApp(page: Page, names: string[]): Promise<void> {
 
 /** The page is on the login form, carrying *returnTo* as its post-sign-in destination. */
 async function expectLoginReturningTo(page: Page, returnTo: string): Promise<void> {
-  await page.waitForURL((url) => url.pathname === ROUTES.AUTH.LOGIN, { timeout: 30_000 });
+  await waitForPage(page, (url) => url.pathname === ROUTES.AUTH.LOGIN, { timeout: 30_000 });
   expect(new URL(page.url()).searchParams.get("redirect")).toContain(returnTo);
 }
 
@@ -86,7 +86,7 @@ test.describe("UAT-SESS — session lifecycle @P0", () => {
     await page.getByTestId("login-password").fill(customer.password);
     await page.getByTestId("login-submit").click();
 
-    await page.waitForURL((url) => url.pathname === ROUTES.ACCOUNT.DEVICES, { timeout: 30_000 });
+    await waitForPage(page, (url) => url.pathname === ROUTES.ACCOUNT.DEVICES, { timeout: 30_000 });
     await expect(page.getByTestId("devices-list")).toBeVisible();
   });
 

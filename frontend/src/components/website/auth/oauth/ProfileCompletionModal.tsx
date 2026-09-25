@@ -25,7 +25,8 @@ import {
   usePublicConfigQuery,
 } from "../libs/useAuthQueries";
 import { otpDeliveryError } from "../libs/otpDelivery";
-import { getErrorMessage, cn } from "@lib/utils";
+import { cn } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 
 interface Props {
@@ -109,7 +110,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
     } catch (err) {
       form.setError("root", {
         message: getErrorMessage(
-          err as Error,
+          err,
           "Could not save your profile. Please try again.",
         ),
       });
@@ -162,7 +163,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
                       else onSuccess();
                     },
                     onError: (err) =>
-                      onError(getErrorMessage(err as Error, "Could not send code.")),
+                      onError(getErrorMessage(err, "Could not send code.")),
                   },
                 );
               }}
@@ -179,7 +180,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
                   {
                     onSuccess: () => onSuccess(),
                     onError: (err) =>
-                      onError(getErrorMessage(err as Error, "That code didn't match.")),
+                      onError(getErrorMessage(err, "That code didn't match.")),
                   },
                 );
               }}

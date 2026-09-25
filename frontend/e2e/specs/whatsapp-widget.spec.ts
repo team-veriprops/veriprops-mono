@@ -7,13 +7,14 @@
  * page, with the attribution code checked on the live href so the §26.10
  * "WhatsApp-attributed enquiries" metric cannot silently lose its input.
  */
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures";
 
 import { ROUTES } from "@lib/routes";
 
-import { expectNoA11yViolations } from "../helpers/a11y";
+import { expectNoA11yViolations, TOASTER_SELECTOR } from "../helpers/a11y";
 import { goto } from "../helpers/app";
 import { PERSONAS, storageStatePath } from "../helpers/personas";
+import { ScenarioStage } from "../helpers/scenario";
 import { readSeed } from "../helpers/seed";
 
 const WIDGET = "[data-testid=whatsapp-widget]";
@@ -67,5 +68,47 @@ test.describe("UAT-WA — payment-flow suppression @P1", () => {
     await expect(page.locator(WIDGET)).toHaveCount(0);
 
     await expectNoA11yViolations(page);
+  });
+});
+
+test.describe("UAT-WA — never covered by a toast @P1", () => {
+  // Toasts and the widget share the bottom-right corner on every page. A toast stacked over the
+  // button hides the one way to reach us — and a toast is often exactly when someone needs to.
+  test("UAT-WA-04 · a toast never covers the WhatsApp button", async ({ scenario, pageFor }) => {
+    const { customer } = await scenario(ScenarioStage.DRAFT);
+    const page = await pageFor(customer);
+    // A second signed-in device, so there is one to revoke — which raises a toast.
+    await pageFor(customer);
+
+    await goto(page, ROUTES.ACCOUNT.DEVICES);
+    await expect(page.getByTestId("device-row")).toHaveCount(2);
+    await page.getByTestId("device-revoke").click();
+
+    const toast = page.locator("[data-sonner-toast]").first();
+    const widget = page.locator(WIDGET);
+    await expect(toast).toBeVisible();
+    await expect(widget).toBeVisible();
+    // Measure where the toast comes to rest, not where it slides in from: mid-entrance it can be
+    // below the viewport, clear of the button whatever its final position.
+    await toast.evaluate((el) =>
+      Promise.all(el.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+    );
+
+    const toastBox = (await toast.boundingBox())!;
+    const widgetBox = (await widget.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    // On screen …
+    expect(toastBox.y + toastBox.height).toBeLessThanOrEqual(viewport.height);
+    // … and clear of the button.
+    const overlaps =
+      toastBox.x < widgetBox.x + widgetBox.width &&
+      toastBox.x + toastBox.width > widgetBox.x &&
+      toastBox.y < widgetBox.y + widgetBox.height &&
+      toastBox.y + toastBox.height > widgetBox.y;
+    expect(overlaps, "the toast overlaps the WhatsApp button").toBe(false);
+
+    // The suite's one accessibility check on a toast: page scans leave toasts out because one can
+    // fade mid-scan, so it is checked here, at rest. Every toast shares this style.
+    await expectNoA11yViolations(page, { include: TOASTER_SELECTOR });
   });
 });

@@ -6,7 +6,7 @@ import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import { Card } from "@3rdparty/ui/card";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { useBroadcastPreviewQuery, useComposeBroadcastMutation, useSendBroadcastMutation } from "./libs/useBroadcastQueries";
 import { BroadcastAudience } from "@/types/broadcast";
 import { ROUTES } from "@lib/routes";
@@ -41,9 +41,9 @@ export default function BroadcastCompose() {
     const id = res.data?.id;
     if (sendNow && id) {
       await send.mutateAsync(id);
-      toast({ title: "Broadcast sent" });
+      toast.success("Broadcast sent");
     } else {
-      toast({ title: scheduledAt ? "Broadcast scheduled" : "Draft saved" });
+      toast.success(scheduledAt ? "Broadcast scheduled" : "Draft saved");
     }
     router.push(ROUTES.ADMIN.BROADCASTS);
   };

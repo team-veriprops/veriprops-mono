@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Badge } from "@3rdparty/ui/badge";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import DetailDrawer, { DetailDrawerWidth } from "@components/ui/DetailDrawer";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
@@ -79,14 +79,14 @@ export default function AgentApplicationsAdmin() {
   const onApprove = async () => {
     if (!detail) return;
     await approve.mutateAsync({ id: detail.id });
-    toast({ title: "Application approved" });
+    toast.success("Application approved");
     setSelectedId(null);
   };
 
   const onReject = async () => {
     if (!detail || !rejectReason.trim()) return;
     await reject.mutateAsync({ id: detail.id, reason: rejectReason.trim() });
-    toast({ title: "Application rejected" });
+    toast.success("Application rejected");
     setRejectReason("");
     setSelectedId(null);
   };

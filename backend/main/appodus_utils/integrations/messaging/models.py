@@ -7,12 +7,15 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 
+from kink import di
 from pydantic import Field, field_validator, model_validator, HttpUrl, EmailStr, ConfigDict
 
 from main.appodus_utils import Object
 from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.integrations.exception.exceptions import IntegrationValidationException
 from main.appodus_utils.integrations.messaging.templating.models import AvailableTemplate
+
+logger = di['logger']
 
 class MessageContext(str, Enum):
     OTP = "OTP"
@@ -167,7 +170,9 @@ class AttachmentRequest(Object):
     def check_file_exists(cls, value: Path):
         """Ensure the file exists before processing."""
         if not value.exists():
-            raise IntegrationValidationException(f"File not found: {value}")
+            # A server-side path: logged, never put in a message that can reach a client.
+            logger.error(f"Attachment file not found: {value}")
+            raise IntegrationValidationException("Attachment file not found.")
         return value
 
 

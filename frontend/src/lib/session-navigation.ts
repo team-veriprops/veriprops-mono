@@ -13,5 +13,22 @@
  * the new session. This happens once when someone takes up a hat, so the cost is irrelevant.
  */
 export function navigateAfterPersonaChange(href: string): void {
+  hardNavigate(href);
+}
+
+/**
+ * Navigation after signing out — a full document load for its own reasons.
+ *
+ * Two of them. The TanStack cache survives a soft navigation, so the previous user's
+ * verifications, chat and admin rows would still be sitting in memory for whoever signs in next
+ * in the same tab. And `SignOutOverlay` has to stay up until the login page actually paints:
+ * tearing the document down ends it exactly then, where a `router.push` would drop it the moment
+ * the store cleared and flash the signed-in page on the way out.
+ */
+export function navigateAfterSignOut(href: string): void {
+  hardNavigate(href);
+}
+
+function hardNavigate(href: string): void {
   window.location.assign(href);
 }

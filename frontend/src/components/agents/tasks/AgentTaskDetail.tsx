@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@3rdparty/ui/select";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { ROUTES } from "@lib/routes";
@@ -77,14 +77,14 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
   const onUpload = async (file: File) => {
     const gps = await getGps();
     await upload.mutateAsync({ file, kind, gps });
-    toast({ title: "Evidence uploaded" });
+    toast.success("Evidence uploaded");
   };
 
   const onSubmit = async () => {
     const payload: Record<string, unknown> = {};
     for (const f of fields) if (form[f.key]?.trim()) payload[f.key] = form[f.key].trim();
     await submit.mutateAsync({ taskId, payload });
-    toast({ title: "Task submitted for review" });
+    toast.success("Task submitted for review");
   };
 
   return (
@@ -112,7 +112,7 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
             <Button
               onClick={async () => {
                 await accept.mutateAsync(task.id);
-                toast({ title: "Accepted" });
+                toast.success("Accepted");
               }}
               disabled={accept.isPending}
               data-testid="detail-accept"
@@ -127,7 +127,7 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
             <Button
               onClick={async () => {
                 await start.mutateAsync(task.id);
-                toast({ title: task.state === TaskState.REJECTED ? "Rework started" : "Work started" });
+                toast.success(task.state === TaskState.REJECTED ? "Rework started" : "Work started");
               }}
               disabled={start.isPending}
               data-testid="detail-start"

@@ -7,7 +7,7 @@ import { AgentTask } from "@/types/agentTask";
 import { Page } from "@/types/models";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
-vi.mock("@components/3rdparty/ui/use-toast", () => ({ toast: () => {} }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const noopMutation = { mutateAsync: vi.fn(), isPending: false };
 const listResult: { data: Page<AgentTask> | null; isLoading: boolean; isError: boolean } = {

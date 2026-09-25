@@ -119,6 +119,20 @@ async def test_a_missing_template_fails_loudly_rather_than_sending_an_empty_mess
         )
 
 
+async def test_a_rendering_failure_names_nothing_internal():
+    # A 422 passes its message to the client, so the template path and the engine's own error
+    # belong in the log, not in the exception.
+    from main.appodus_utils.exception.exceptions import TemplateRenderingException
+
+    with pytest.raises(TemplateRenderingException) as raised:
+        await di[ModelTemplateService].render_whatsapp_payload(
+            AvailableTemplate.PASSWORD_RESET_SUCCESS, _CONTEXT
+        )
+
+    assert "jinja2" not in raised.value.message
+    assert MessageChannel.WHATSAPP.value not in raised.value.message
+
+
 def test_the_whatsapp_channel_directory_is_where_the_renderer_looks():
     # The renderer builds `<channel>/<slug>.jinja2`; a template dropped elsewhere is
     # invisible to it, and the failure only shows at send time.

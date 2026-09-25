@@ -5,7 +5,7 @@ vi.mock("@components/website/auth/libs/useAuthQueries", () => ({
   useSendPhoneOtpMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useVerifyPhoneMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
-vi.mock("@components/3rdparty/ui/use-toast", () => ({ toast: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import PayPhoneGate, { phoneGateDefaults } from "./PayPhoneGate";
 

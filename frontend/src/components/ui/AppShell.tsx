@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Activity,
   Bell,
@@ -34,7 +34,7 @@ import {
 import NotificationBell from "@components/shared/notifications/NotificationBell";
 import ChatButton from "@components/chat/ChatButton";
 import PortalSwitcher from "@components/ui/PortalSwitcher";
-import { useLogoutMutation } from "@components/website/auth/libs/useAuthQueries";
+import { useSignOut } from "@components/website/auth/libs/useSignOut";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { UserType, UserPersona, type AuthUser } from "@components/website/auth/models";
 import { groupNavItems, NavItem } from "@/components/nav/MenuSidebar";
@@ -239,7 +239,6 @@ function SidebarNav({
 
 export default function AppShell({ navItems, children }: AppShellProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
 
@@ -252,13 +251,13 @@ export default function AppShell({ navItems, children }: AppShellProps) {
     ? `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() || "U"
     : "U";
 
-  const logout = useLogoutMutation();
+  // `useSignOut` owns the whole sequence — busy overlay, double-press guard and redirect —
+  // so both sign-out controls below behave identically and cannot drift apart.
+  const { signOut, isSigningOut } = useSignOut();
   const handleLogout = () => {
-    // Redirect regardless of outcome — local session state is already
-    // cleared by useLogoutMutation's onSettled even if the backend call failed.
-    logout.mutate(undefined, {
-      onSettled: () => router.push(ROUTES.AUTH.LOGIN),
-    });
+    // Close the drawer the press may have come from; the overlay takes the screen from here.
+    setSidebarOpen(false);
+    signOut();
   };
 
   const notificationPrefsHref =
@@ -275,7 +274,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
     user,
     initials,
     onLogout: handleLogout,
-    isLoggingOut: logout.isPending,
+    isLoggingOut: isSigningOut,
   };
 
   return (
@@ -343,7 +342,7 @@ export default function AppShell({ navItems, children }: AppShellProps) {
               user={user}
               initials={initials}
               onLogout={handleLogout}
-              isLoggingOut={logout.isPending}
+              isLoggingOut={isSigningOut}
               notificationPrefsHref={notificationPrefsHref}
             />
           </div>

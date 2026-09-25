@@ -5,7 +5,8 @@
  * - `z-45` — {@link PAGE_OVERLAY_LAYER}: full-screen page layers (wizards, the report access gate).
  * - `z-50` — {@link PORTAL_LAYER_Z}: everything Radix portals to `<body>` (dialogs, selects,
  *   popovers, tooltips, dropdowns) plus `DetailDrawer`.
- * - `z-100` — toasts.
+ * - above all of it — toasts, which Sonner stacks on its own (see `3rdparty/ui/sonner.tsx`);
+ *   nothing the app writes competes for that tier.
  *
  * Page layers must stay under the portal tier. A global mandatory modal (updated-terms
  * re-acceptance, session recovery) can open over any page, and an open Radix modal disables

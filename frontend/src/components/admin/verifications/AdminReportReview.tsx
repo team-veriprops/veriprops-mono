@@ -6,7 +6,7 @@ import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { humanizeEnumLabel } from "@lib/utils";
 import { ReviewDecision, TaskDto, TaskState } from "@/types/adminVerification";
@@ -80,7 +80,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
             size="sm"
             onClick={async () => {
               await approve.mutateAsync({ role: task.role, quality });
-              toast({ title: `${humanizeEnumLabel(task.role)} approved` });
+              toast.success(`${humanizeEnumLabel(task.role)} approved`);
             }}
             disabled={approve.isPending}
             data-testid={`approve-${task.role}`}
@@ -99,7 +99,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
             variant="destructive"
             onClick={async () => {
               await reject.mutateAsync({ role: task.role, reason });
-              toast({ title: `${humanizeEnumLabel(task.role)} sent to rework` });
+              toast.success(`${humanizeEnumLabel(task.role)} sent to rework`);
               setReason("");
             }}
             disabled={reject.isPending || !reason.trim()}
@@ -117,7 +117,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
           className="mt-2"
           onClick={async () => {
             await reopen.mutateAsync({ role: task.role });
-            toast({ title: `${humanizeEnumLabel(task.role)} reopened` });
+            toast.success(`${humanizeEnumLabel(task.role)} reopened`);
           }}
           disabled={reopen.isPending}
           data-testid={`reopen-${task.role}`}
@@ -221,7 +221,7 @@ export default function AdminReportReview({ verificationId }: { verificationId: 
             <Button
               onClick={async () => {
                 await release.mutateAsync({ reason: releaseReason || undefined });
-                toast({ title: "Report released" });
+                toast.success("Report released");
               }}
               disabled={release.isPending || !review.releasable}
               data-testid="release-submit"
@@ -247,7 +247,7 @@ export default function AdminReportReview({ verificationId }: { verificationId: 
               variant="destructive"
               onClick={async () => {
                 await fail.mutateAsync({ reason: failReason });
-                toast({ title: "Verification failed & refunded" });
+                toast.success("Verification failed & refunded");
                 setFailReason("");
               }}
               disabled={fail.isPending || !failReason.trim()}

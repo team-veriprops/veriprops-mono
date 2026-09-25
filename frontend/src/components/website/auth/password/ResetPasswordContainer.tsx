@@ -15,7 +15,7 @@ import { useResetPasswordMutation } from "../libs/useAuthQueries";
 import { resetPasswordSchema, type ResetPasswordValues } from "../schemas";
 import { ROUTES } from "@lib/routes";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 
 interface Props {
   token: string;
@@ -46,7 +46,7 @@ export default function ResetPasswordContainer({ token }: Props) {
     } catch (err) {
       setErrorMessage(
         getErrorMessage(
-          err as Error,
+          err,
           "This reset link is invalid or has expired. Please request a new one.",
         ),
       );

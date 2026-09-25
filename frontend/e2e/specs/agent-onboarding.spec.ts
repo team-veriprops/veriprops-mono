@@ -24,7 +24,7 @@ import { UserPersona } from "@components/website/auth/models";
 
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
-import { goto, waitForHydration, waitReady } from "../helpers/app";
+import { goto, waitForHydration, waitForPage, waitReady } from "../helpers/app";
 import { ScenarioStage } from "../helpers/scenario";
 import { NewAccount, signUpViaUi } from "../helpers/signup";
 import { openNavItem } from "../helpers/ui";
@@ -38,11 +38,7 @@ const SURVEYOR_LICENCE = "SURCON/2026/4471";
 async function arriveAtTheGate(page: Page): Promise<NewAccount> {
   const account = await signUpViaUi(page, { intent: "agent" });
 
-  await page.waitForURL((url) => url.pathname.startsWith(ROUTES.AGENT.GATE), {
-    timeout: 30_000,
-    waitUntil: "domcontentloaded",
-  });
-  await waitReady(page);
+  await waitForPage(page, (url) => url.pathname.startsWith(ROUTES.AGENT.GATE), { timeout: 30_000 });
   await expect(page.getByTestId("agent-apply-overlay")).toBeVisible();
 
   return account;
@@ -101,11 +97,7 @@ async function expectBothHats(page: Page): Promise<void> {
   }).toPass({ timeout: 15_000 });
   await crossing.click();
 
-  await page.waitForURL((url) => url.pathname.startsWith(destination), {
-    timeout: 30_000,
-    waitUntil: "domcontentloaded",
-  });
-  await waitReady(page);
+  await waitForPage(page, (url) => url.pathname.startsWith(destination), { timeout: 30_000 });
 }
 
 /** Find one applicant's application in the admin queue and open it. */
@@ -260,11 +252,7 @@ test.describe("UAT-AGENT — agent onboarding @P1", () => {
     // be able to find it, and the marketing call to action is guest-only.
     await openNavItem(page, "Become an Agent");
 
-    await page.waitForURL((url) => url.pathname === ROUTES.AGENT.APPLY, {
-      timeout: 30_000,
-      waitUntil: "domcontentloaded",
-    });
-    await waitReady(page);
+    await waitForPage(page, (url) => url.pathname === ROUTES.AGENT.APPLY, { timeout: 30_000 });
     await expect(page.getByTestId("agent-apply-overlay")).toBeVisible();
     // A way out. The overlay covers the nav, so a customer who changes their mind here would
     // otherwise be stuck with nothing but the URL bar — §3.1's compulsory gate binds the agent
@@ -301,11 +289,7 @@ test.describe("UAT-AGENT — agent onboarding @P1", () => {
     // The interstitial that acknowledges the wait is not asserted here: on a fast stack the grant
     // lands before a check could see it, which is the right outcome. Its wording is pinned by
     // `VerifyPropertyContainer.test.tsx` instead.
-    await page.waitForURL((url) => url.pathname === ROUTES.PORTAL.VERIFICATIONS_NEW, {
-      timeout: 30_000,
-      waitUntil: "domcontentloaded",
-    });
-    await waitReady(page);
+    await waitForPage(page, (url) => url.pathname === ROUTES.PORTAL.VERIFICATIONS_NEW, { timeout: 30_000 });
     await expect(page.getByTestId("verify-new-overlay")).toBeVisible();
     await expectNoA11yViolations(page);
 

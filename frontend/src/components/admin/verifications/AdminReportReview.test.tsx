@@ -6,7 +6,7 @@ import { ReviewDecision, TaskDto, TaskState } from "@/types/adminVerification";
 import { ReviewState } from "@/types/adminReview";
 import { isNamed } from "@/test-utils/markup";
 
-vi.mock("@components/3rdparty/ui/use-toast", () => ({ toast: () => {} }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const noopMutation = { mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false };
 const reviewResult: { data: ReviewState | null; isLoading: boolean; isError: boolean } = {

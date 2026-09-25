@@ -11,7 +11,7 @@ import { verifyFormSchema, type VerifyFormValues } from "@components/ui/verified
 import { useSendOtpMutation, useVerifyOtpMutation, usePublicConfigQuery } from "../libs/useAuthQueries";
 import { otpDeliveryError } from "../libs/otpDelivery";
 import { OtpChannel } from "@components/website/auth/models";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 
 export type VerifyStepValues = VerifyFormValues;
@@ -97,7 +97,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
                 else onSuccess();
               },
               onError: (err) =>
-                onError(getErrorMessage(err as Error, "Could not send code. Please try again.")),
+                onError(getErrorMessage(err, "Could not send code. Please try again.")),
             },
           );
         }}
@@ -107,7 +107,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
             {
               onSuccess: () => onSuccess(),
               onError: (err) =>
-                onError(getErrorMessage(err as Error, "That code didn't match. Try again.")),
+                onError(getErrorMessage(err, "That code didn't match. Try again.")),
             },
           );
         }}
@@ -136,7 +136,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
                   else onSuccess();
                 },
                 onError: (err) =>
-                  onError(getErrorMessage(err as Error, "Could not send code. Please try again.")),
+                  onError(getErrorMessage(err, "Could not send code. Please try again.")),
               },
             );
           }}
@@ -153,7 +153,7 @@ export default function VerifyEmailPhoneStep({ defaults, onSubmit, onBack }: Pro
               {
                 onSuccess: () => onSuccess(),
                 onError: (err) =>
-                  onError(getErrorMessage(err as Error, "That code didn't match. Try again.")),
+                  onError(getErrorMessage(err, "That code didn't match. Try again.")),
               },
             );
           }}

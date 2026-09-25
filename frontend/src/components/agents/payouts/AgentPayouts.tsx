@@ -19,6 +19,7 @@ import {
   useRemoveBankAccountMutation,
   useRequestPayoutMutation,
 } from "./libs/usePayoutQueries";
+import { getErrorMessage } from "@lib/errors";
 
 const STATUS_TONE: Record<PayoutStatus, string> = {
   [PayoutStatus.REQUESTED]: "text-amber-600 dark:text-amber-400",
@@ -68,7 +69,7 @@ function RequestWithdrawal() {
           toast.success("Withdrawal requested.");
           setAmount("");
         },
-        onError: (e: unknown) => toast.error((e as Error)?.message ?? "Could not request the withdrawal."),
+        onError: (e: unknown) => toast.error(getErrorMessage(e, "Could not request the withdrawal.")),
       },
     );
   };

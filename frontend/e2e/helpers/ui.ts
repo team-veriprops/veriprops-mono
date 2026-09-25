@@ -9,7 +9,7 @@ import { Locator, Page, expect } from "@playwright/test";
 import { ROUTES } from "@lib/routes";
 import { DATATABLE_TEST_IDS, datatableActionTestId } from "@components/ui/table/testIds";
 
-import { waitReady } from "./app";
+import { waitForPage } from "./app";
 
 /** The DataTable row for the record with *rowId*. */
 export function tableRow(page: Page, rowId: string): Locator {
@@ -35,7 +35,7 @@ export async function closeDrawer(page: Page): Promise<void> {
 
 /** A 403 navigates the whole page to the access-denied screen (frontend CLAUDE.md). */
 export async function expectForbidden(page: Page): Promise<void> {
-  await page.waitForURL((url) => url.pathname === ROUTES.FORBIDDEN);
+  await waitForPage(page, (url) => url.pathname === ROUTES.FORBIDDEN);
 }
 
 /**
@@ -47,8 +47,7 @@ export async function stubPay(page: Page): Promise<void> {
   await page.getByTestId("verify-pay-initiate").click();
   await expect(page.getByTestId("verify-pay-checkout")).toBeVisible();
   await page.getByTestId("verify-pay-confirm").click();
-  await page.waitForURL(/\/portal\/verifications\/[^/]+\/confirmed/, { timeout: 30_000 });
-  await waitReady(page);
+  await waitForPage(page, /\/portal\/verifications\/[^/]+\/confirmed/, { timeout: 30_000 });
 }
 
 /**
@@ -88,12 +87,7 @@ export async function signOut(page: Page): Promise<void> {
   // The press must be acknowledged before the redirect lands, on either layout — the desktop
   // menu item unmounts as the menu closes, so the overlay is the only thing that can say so.
   await expect(page.getByTestId("signout-overlay")).toBeVisible();
-  // Arriving at the login page is the outcome; its images and fonts finishing (`load`) is not,
-  // and under a busy run that wait alone can outlast the budget after the redirect has landed.
-  await page.waitForURL((url) => url.pathname === ROUTES.AUTH.LOGIN, {
-    timeout: 30_000,
-    waitUntil: "domcontentloaded",
-  });
+  await waitForPage(page, (url) => url.pathname === ROUTES.AUTH.LOGIN, { timeout: 30_000 });
 }
 
 /**

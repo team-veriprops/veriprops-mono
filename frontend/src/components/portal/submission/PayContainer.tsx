@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@3rdparty/ui/button";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import WizardOverlay from "@components/ui/wizard/WizardOverlay";
 import { ROUTES } from "@lib/routes";
 import { getCurrencySymbol, TransactionCurrency } from "@/types/models";
@@ -73,10 +73,7 @@ export default function PayContainer({ verificationId }: { verificationId: strin
         marketing: next.marketing,
       });
     } catch {
-      toast({
-        title: "Preference not saved",
-        description: "You can set this later under WhatsApp in your account settings.",
-      });
+      toast.success("Preference not saved", { description: "You can set this later under WhatsApp in your account settings." });
     }
   };
 

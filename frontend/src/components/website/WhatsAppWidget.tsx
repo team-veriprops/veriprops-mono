@@ -8,6 +8,14 @@ import { cn } from "@lib/utils";
 import { isPaymentFlowPath, pageCodeFor, waMeUrl } from "@lib/whatsapp";
 
 /**
+ * How far above the bottom edge anything else anchored to the bottom-right corner must sit to
+ * clear this button: its `bottom-5` inset (20px) plus its `h-14` height (56px), plus a 12px gap.
+ * The toaster uses it, since both live in that corner on every page. Keep it in step with the
+ * classes below.
+ */
+export const WHATSAPP_WIDGET_CLEARANCE_PX = 20 + 56 + 12;
+
+/**
  * Floating WhatsApp entry point (PRD §26.4.1).
  *
  * WhatsApp is the conversational front door; this button is the door handle. It rides on

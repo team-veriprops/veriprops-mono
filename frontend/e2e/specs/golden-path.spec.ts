@@ -21,7 +21,7 @@ import { VerificationTier } from "@/types/verification";
 
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
-import { goto, waitReady } from "../helpers/app";
+import { goto, waitForPage, waitReady } from "../helpers/app";
 import { loginViaUi } from "../helpers/auth";
 import { TEST_OTP } from "../helpers/env";
 import { PERSONAS, storageStatePath } from "../helpers/personas";
@@ -61,8 +61,7 @@ test.describe("UAT-GP — golden path, leg 1: submission & payment @P0 @serial",
 
     // ── Step 4: Payment ─────────────────────────────────────────────────────
     // Submitting routes to the pay page for the newly created verification.
-    await page.waitForURL(/\/portal\/verifications\/[^/]+\/pay/, { timeout: 30_000 });
-    await waitReady(page);
+    await waitForPage(page, /\/portal\/verifications\/[^/]+\/pay/, { timeout: 30_000 });
     await expect(page.getByTestId("verify-pay")).toBeVisible();
     await expectNoA11yViolations(page);
 

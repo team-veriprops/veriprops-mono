@@ -5,7 +5,7 @@ import { AgentApplicationStatus, AgentApplicationStatusView } from "@/types/agen
 import { UserPersona } from "@components/website/auth/models";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
-vi.mock("@components/3rdparty/ui/use-toast", () => ({ toast: () => {} }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@components/website/auth/libs/useAuthQueries", () => ({
   authKeys: { session: ["auth", "session"] },
   useRefreshSession: () => async () => {},

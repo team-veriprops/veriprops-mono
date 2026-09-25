@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@3rdparty/ui/select";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
 import { humanizeEnumLabel } from "@lib/utils";
@@ -86,7 +86,7 @@ function TaskRow({
   const doAssign = async (id: string) => {
     if (!id) return;
     await assign.mutateAsync({ role: task.role, agentId: id });
-    toast({ title: `${humanizeEnumLabel(task.role)} assigned` });
+    toast.success(`${humanizeEnumLabel(task.role)} assigned`);
     setAgentId("");
     setShowSuggested(false);
   };
@@ -182,7 +182,7 @@ function ChargebackCard({
             size="sm"
             onClick={async () => {
               await rebuttal.mutateAsync(chargeback.id);
-              toast({ title: "Rebuttal pack submitted" });
+              toast.success("Rebuttal pack submitted");
             }}
             disabled={rebuttal.isPending}
             data-testid="chargeback-rebuttal"
@@ -198,7 +198,7 @@ function ChargebackCard({
               variant="secondary"
               onClick={async () => {
                 await resolve.mutateAsync({ chargebackId: chargeback.id, won: true });
-                toast({ title: "Marked won" });
+                toast.success("Marked won");
               }}
               disabled={resolve.isPending}
               data-testid="chargeback-won"
@@ -210,7 +210,7 @@ function ChargebackCard({
               variant="destructive"
               onClick={async () => {
                 await resolve.mutateAsync({ chargebackId: chargeback.id, won: false });
-                toast({ title: "Marked lost" });
+                toast.success("Marked lost");
               }}
               disabled={resolve.isPending}
               data-testid="chargeback-lost"
@@ -256,7 +256,7 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
   const onAddNote = async () => {
     if (!noteBody.trim()) return;
     await addNote.mutateAsync({ category: noteCategory, body: noteBody.trim() });
-    toast({ title: "Note added" });
+    toast.success("Note added");
     setNoteBody("");
   };
 
@@ -500,7 +500,7 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
                 variant="secondary"
                 onClick={async () => {
                   await setDelay.mutateAsync({ extraBusinessDays: delayDays });
-                  toast({ title: "SLA extended" });
+                  toast.success("SLA extended");
                 }}
                 disabled={setDelay.isPending || !summary.slaDueDate}
               >
@@ -525,7 +525,7 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
                 variant="destructive"
                 onClick={async () => {
                   await cancel.mutateAsync({ reason: cancelReason });
-                  toast({ title: "Verification cancelled" });
+                  toast.success("Verification cancelled");
                   setCancelReason("");
                 }}
                 disabled={cancel.isPending || !cancelReason.trim()}

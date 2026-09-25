@@ -27,7 +27,7 @@ import { ROUTES } from "@lib/routes";
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
 import { api } from "../helpers/api";
-import { goto, waitForHydration, waitReady } from "../helpers/app";
+import { goto, waitForHydration, waitForPage, waitReady } from "../helpers/app";
 import { TEST_OTP } from "../helpers/env";
 import { ScenarioAccount, ScenarioStage } from "../helpers/scenario";
 
@@ -180,7 +180,7 @@ test.describe("UAT-CHAT — unified chat & the surface-neutral assistant @P1", (
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.click();
 
-    await page.waitForURL((url) => url.pathname.startsWith(`${ROUTES.PORTAL.CHAT}/`));
+    await waitForPage(page, (url) => url.pathname.startsWith(`${ROUTES.PORTAL.CHAT}/`));
     await expect(page.getByText("Hi", { exact: true })).toBeVisible();
     await expect(page.getByText("What would you like to do?")).toBeVisible();
     await expect(page.getByTitle("Received on WhatsApp").first()).toBeVisible();
