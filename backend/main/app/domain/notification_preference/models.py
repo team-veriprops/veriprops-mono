@@ -9,6 +9,8 @@ from typing import Optional
 
 from sqlalchemy import Boolean, Column, Index, String
 
+from main.appodus_utils.db.models import live_unique_index
+
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 
 
@@ -22,6 +24,8 @@ class NotificationPreference(BaseEntity):
 
     __table_args__ = (
         Index("ix_notif_prefs_user", "user_id"),
+        # One live preference per user and event, so an opt-out can't be shadowed by a twin.
+        live_unique_index("uq_notif_prefs_user_event", "user_id", "event_type"),
     )
 
 

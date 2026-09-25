@@ -6,8 +6,13 @@ import { cn } from "@lib/utils"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
+    // `tabIndex` makes the horizontal scroll reachable by keyboard: a table wider than its
+    // container scrolls, and without a focusable ancestor there is no way to reach the columns
+    // past the edge without a pointer. It only bites at narrow viewports, where every admin table
+    // overflows — which is why a phone engine is the one that catches it.
     <div
       data-slot="table-container"
+      tabIndex={0}
       className="relative w-full overflow-x-auto"
     >
       <table

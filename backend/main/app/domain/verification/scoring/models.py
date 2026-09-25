@@ -10,7 +10,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, UniqueConstraint
+from sqlalchemy import Column, Integer, String
+
+from main.appodus_utils.db.models import live_unique_index
 
 from main.app.core.state.status import AgentRole, VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
@@ -40,7 +42,7 @@ class TrustScoreWeight(BaseEntity):
     weight_percent = Column(Integer, nullable=False, default=0)
 
     __table_args__ = (
-        UniqueConstraint("tier", "role", name="uq_trust_weight_tier_role"),
+        live_unique_index("uq_trust_weight_tier_role", "tier", "role"),
     )
 
 

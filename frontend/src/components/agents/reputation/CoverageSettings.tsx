@@ -14,6 +14,7 @@ import {
   useNigeriaLocationsQuery,
   useSetCoverageMutation,
 } from "./libs/useReputationQueries";
+import { getErrorMessage } from "@lib/errors";
 
 /**
  * Agent coverage settings (§16.1): declare the states you cover on an interactive map, with an
@@ -73,7 +74,7 @@ function CoverageForm({ states, initial }: { states: NigerianState[]; initial: C
     const areas = [...selected].map((state) => ({ state, travelRadiusKm: km }));
     save.mutate(areas, {
       onSuccess: () => toast.success("Coverage updated."),
-      onError: (e: unknown) => toast.error((e as Error)?.message ?? "Could not update coverage."),
+      onError: (e: unknown) => toast.error(getErrorMessage(e, "Could not update coverage.")),
     });
   };
 

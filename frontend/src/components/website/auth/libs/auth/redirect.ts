@@ -25,6 +25,25 @@ export function isSafeRedirectPath(value: string | null | undefined): value is s
   );
 }
 
+/**
+ * The home dashboard for a signed-in user, by highest privilege: admin, then agent, then
+ * customer. Used wherever the app sends someone "back to their dashboard" — the post-auth
+ * landing, the 403 page, and the proxy's role guards.
+ *
+ * `fallback` is where a user with no persona yet goes; it defaults to the customer journey.
+ * The proxy overrides it with the home page, because routing a personaless session to `/portal`
+ * would bounce off the portal guard back into this same call — an infinite redirect.
+ */
+export function dashboardFor(
+  user: Pick<AuthUser, "userType" | "personas">,
+  options: { fallback?: string } = {},
+): string {
+  if (user.userType === UserType.ADMIN) return ROUTES.ADMIN.DASHBOARD;
+  if (user.personas.includes(UserPersona.AGENT)) return ROUTES.AGENT.DASHBOARD;
+  if (user.personas.includes(UserPersona.CUSTOMER)) return ROUTES.PORTAL.DASHBOARD;
+  return options.fallback ?? ROUTES.PORTAL.DASHBOARD;
+}
+
 export function resolvePostAuthRedirect(
   user: AuthUser,
   options: { intent?: AuthIntent | null; redirect?: string | null } = {},
@@ -34,14 +53,16 @@ export function resolvePostAuthRedirect(
   }
 
   if (user.userType === UserType.ADMIN) {
-    return ROUTES.ADMIN.DASHBOARD;
+    return dashboardFor(user);
   }
 
   const isAgent = user.personas.includes(UserPersona.AGENT);
   const isCustomer = user.personas.includes(UserPersona.CUSTOMER);
 
+  // The application, not the dashboard: applying is what grants the AGENT persona (PRD §3.2), and
+  // `proxy.ts` keeps every other `/agents/*` route shut until they have it.
   if (options.intent === AuthIntent.AGENT && !isAgent) {
-    return ROUTES.AGENT.DASHBOARD;
+    return ROUTES.AGENT.APPLY;
   }
   // Explicit verify intent, or a customer who has never started a verification
   // (first login after signup, or any later login before their first start) —
@@ -50,9 +71,5 @@ export function resolvePostAuthRedirect(
     return ROUTES.PORTAL.VERIFICATIONS_NEW;
   }
 
-  if (isAgent) return ROUTES.AGENT.DASHBOARD;
-  if (isCustomer) return ROUTES.PORTAL.DASHBOARD;
-
-  // No persona yet — default Customer journey.
-  return ROUTES.PORTAL.DASHBOARD;
+  return dashboardFor(user);
 }

@@ -2,11 +2,12 @@ from datetime import datetime
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import String, cast, desc, select, func, or_, update as sa_update
+from sqlalchemy import String, cast, desc, literal, select, func, or_, type_coerce, update as sa_update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.user.auth.session.device.models import Device
-from main.app.domain.user.auth.session.models import UserType
+from main.app.domain.user.auth.session.models import UserPersona, UserType
 from main.app.domain.user.models import (
     AccountStatus,
     AdminSubRole,
@@ -15,6 +16,7 @@ from main.app.domain.user.models import (
     UpdateUserDto,
     User, _CreateUserDto,
 )
+from main.appodus_utils import Utils
 from main.appodus_utils.db.repo import GenericRepo
 from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.integrations.messaging.models import UserContactDto, PushToken, EmailRecipient
@@ -138,6 +140,81 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
                 suspension_reason=None,
                 suspended_by=None,
             )
+        )
+        await self._session.execute(stmt)
+
+    async def increment_failed_login(self, user_id: str) -> int:
+        """Count one failed password attempt and return the new total, in one statement.
+
+        Computed in SQL so concurrent wrong passwords each count; a read-add-write would let
+        a burst of attempts share one increment and never reach the lockout threshold.
+        """
+        stmt = (
+            sa_update(User)
+            .where(User.id == self._ensure_uuid(user_id))
+            .values(failed_login_count=func.coalesce(User.failed_login_count, 0) + 1)
+            .returning(User.failed_login_count)
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
+
+    async def lock_until(self, user_id: str, until: datetime) -> None:
+        stmt = sa_update(User).where(User.id == self._ensure_uuid(user_id)).values(locked_until=until)
+        await self._session.execute(stmt)
+
+    async def reset_failed_login(self, user_id: str) -> None:
+        """Clear the counter **and** the lock. A statement, because the model-update path
+        drops None values and so could never clear `locked_until`."""
+        stmt = (
+            sa_update(User)
+            .where(User.id == self._ensure_uuid(user_id))
+            .values(failed_login_count=0, locked_until=None)
+        )
+        await self._session.execute(stmt)
+
+    async def add_persona(self, user_id: str, persona: UserPersona) -> Optional[User]:
+        """Append *persona* in SQL, only when the user lacks it; the updated row, or None.
+
+        A grant read-modify-written in Python lets two concurrent grants (AGENT from an
+        application, CUSTOMER from the persona switch) each write back the list they read,
+        and one persona is silently lost — an authorization bug. Appending in the statement
+        works on the row as committed.
+        """
+        personas = type_coerce(User.personas, JSONB)
+        await self._flush_pending()
+        stmt = (
+            sa_update(User)
+            .where(User.id == self._ensure_uuid(user_id), ~personas.contains([persona.value]))
+            .values(
+                personas=personas.op("||")(literal([persona.value], JSONB)),
+                version=User.version + 1,
+                date_updated=Utils.datetime_now(),
+            )
+            .returning(User)
+            .execution_options(populate_existing=True, synchronize_session=False)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def add_credit_balance(self, user_id: str, amount_minor: int) -> None:
+        """Add to the spendable referral credit in SQL, so concurrent credits all land."""
+        stmt = (
+            sa_update(User)
+            .where(User.id == self._ensure_uuid(user_id))
+            .values(credit_balance_kobo=func.coalesce(User.credit_balance_kobo, 0) + amount_minor)
+        )
+        await self._session.execute(stmt)
+
+    async def spend_credit_balance(self, user_id: str, amount_minor: int) -> None:
+        """Take up to *amount_minor* off the credit balance in SQL, never below zero.
+
+        Clamped because the credit may have been spent elsewhere since it was applied to a
+        price; the statement reads the balance as committed, so two spends cannot both take
+        the same credit.
+        """
+        balance = func.coalesce(User.credit_balance_kobo, 0)
+        stmt = (
+            sa_update(User)
+            .where(User.id == self._ensure_uuid(user_id))
+            .values(credit_balance_kobo=balance - func.least(amount_minor, balance))
         )
         await self._session.execute(stmt)
 

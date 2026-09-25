@@ -1,7 +1,7 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { LegalDocument, Page, PublicConfig, SuccessResponse } from "@/types/models";
-import { AuthSession, CrossPortalSummary, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, AuthIntent, SocialProvider, UserConsent } from "@components/website/auth/models";
+import { AuthIntent, AuthSession, ConsentDocument, CrossPortalSummary, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, SocialProvider, UserConsent } from "@components/website/auth/models";
 /**
  * Frontend-facing auth API. Endpoint paths follow the convention used elsewhere
  * in the app (`/users/auth/...` — see FetchHttpClient.refreshToken). Backend is
@@ -104,6 +104,15 @@ export class AuthService {
     return this.http.get(`${this.base}/sessions/current`);
   }
 
+  /**
+   * Take up the customer hat (§3.2, additive) — how an account that signed up through the agent
+   * path gets a portal. The persona is not a parameter: the backend grants CUSTOMER and nothing
+   * else, and answers with a rotated session so the new hat works without signing in again.
+   */
+  grantCustomerPersona(): Promise<SuccessResponse<AuthSession>> {
+    return this.http.post(`${this.base}/personas/customer`, {});
+  }
+
   sendOtp(payload: OtpSendRequest): Promise<SuccessResponse<OtpSendResult>> {
     return this.http.post(`${this.base}/otp/send`, payload);
   }
@@ -197,6 +206,11 @@ export class AuthService {
     type: string; consentVersion: string; effectiveAt: string; title: string; href: string;
   }> }>> {
     return this.http.get(`${this.base}/consents/missing`);
+  }
+
+  /** The published legal documents, with the version each is currently on (PRD §3.2). */
+  listConsentDocuments(): Promise<SuccessResponse<{ documents: ConsentDocument[] }>> {
+    return this.http.get(`${this.base}/consents/documents`);
   }
 
   acceptConsents(consents: Array<{

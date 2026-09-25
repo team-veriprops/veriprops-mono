@@ -19,6 +19,7 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ValidationException,
 )
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -67,7 +68,10 @@ def _service(verification=None, recheck=None):
     svc._config.get_int = AsyncMock(return_value=30)
     svc._pricing.tier_price_kobo = AsyncMock(side_effect=lambda tier: TIER_PRICE_NGN_KOBO[tier])
     svc._recheck_repo.create_return_model = AsyncMock(return_value=_recheck())
-    svc._recheck_repo.get_model = AsyncMock(return_value=recheck or _recheck())
+    held = recheck or _recheck()
+    svc._recheck_repo.get_model = AsyncMock(return_value=held)
+    # Decisions and the start are claims on the row this service reads.
+    svc._recheck_repo.claim_transition = fake_claim_transition(lambda _id: held)
     svc._recheck_repo.get_by_payment = AsyncMock(return_value=recheck)
     svc._recheck_repo.update = AsyncMock()
     svc._verification_repo.update = AsyncMock()
@@ -99,22 +103,26 @@ class TestDecide:
     async def test_reject_sets_rejected(self, monkeypatch):
         import main.app.domain.verification.recheck.service as mod
         monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
-        svc = _service(recheck=_recheck())
+        recheck = _recheck()
+        svc = _service(recheck=recheck)
         await svc.admin_decide("rc-1", DecideRecheckDto(approve=False, note="unfounded"), "admin-1")
-        dto = svc._recheck_repo.update.await_args.args[1]
-        assert dto.status == RecheckStatus.REJECTED.value
+        assert recheck.status == RecheckStatus.REJECTED.value
+        assert recheck.decision_note == "unfounded"
 
     async def test_approve_scopes_and_charges(self, monkeypatch):
         import main.app.domain.verification.recheck.service as mod
         monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
-        svc = _service(recheck=_recheck())
+        recheck = _recheck()
+        svc = _service(recheck=recheck)
         await svc.admin_decide(
             "rc-1", DecideRecheckDto(approve=True, scope_roles=[AgentRole.SURVEYOR]), "admin-1"
         )
         svc._payments.initiate_secondary.assert_awaited_once()
+        assert recheck.status == RecheckStatus.APPROVED.value
+        assert recheck.scope_roles == [AgentRole.SURVEYOR.value]
+        # The charge created after the decision is linked to it.
         dto = svc._recheck_repo.update.await_args.args[1]
-        assert dto.status == RecheckStatus.APPROVED.value
-        assert dto.scope_roles == [AgentRole.SURVEYOR.value]
+        assert dto.payment_id == "pay-1"
 
     async def test_approve_requires_scope(self, monkeypatch):
         import main.app.domain.verification.recheck.service as mod
@@ -134,6 +142,7 @@ class TestOnPaymentConfirmed:
         assert upd.pending_revision_kind == ReportRevisionKind.RECHECK.value
         svc._reviews.reopen_task.assert_awaited_once()
         assert svc._reviews.reopen_task.await_args.args[1] == AgentRole.SURVEYOR
+        assert recheck.status == RecheckStatus.STARTED.value
 
     async def test_idempotent_when_not_approved(self):
         recheck = _recheck(status=RecheckStatus.STARTED, payment_id="pay-1")

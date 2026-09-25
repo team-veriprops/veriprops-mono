@@ -41,6 +41,7 @@ def _make_session_service():
     svc._device_repo = AsyncMock()
     svc._event_repo = AsyncMock()
     svc._reset_repo = AsyncMock()
+    svc._failures = AsyncMock()
     return svc
 
 
@@ -69,8 +70,9 @@ async def test_login_rejects_suspended_account_with_valid_credentials():
         svc = _make_session_service()
         with pytest.raises(UnauthorizedException):
             await svc.login(LoginRequestDto(email="s@example.com", password=password))
-        # The rejection is recorded in the user's security activity log.
-        svc._event_repo.create.assert_awaited()
+        # The rejection is recorded in the user's security activity log, by the recorder
+        # whose write survives the rejection.
+        svc._failures.record_event.assert_awaited()
     finally:
         di[UserService] = original
 

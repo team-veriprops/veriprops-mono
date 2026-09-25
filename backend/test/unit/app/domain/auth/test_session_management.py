@@ -26,6 +26,7 @@ def mock_db_session():
 
     session.begin = _begin
     session.flush = AsyncMock()
+    session.execute = AsyncMock()  # the per-user device-session advisory lock
     token = db_session_ctx.set(session)
     yield session
     db_session_ctx.reset(token)

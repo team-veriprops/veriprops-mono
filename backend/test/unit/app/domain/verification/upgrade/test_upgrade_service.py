@@ -15,6 +15,7 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ValidationException,
 )
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -60,10 +61,12 @@ def _service(verification=None, existing_key=None, upgrade=None):
     v = verification if verification is not None else _verification()
     svc._verifications.get_owned = AsyncMock(return_value=v)
     svc._pricing.tier_price_kobo = AsyncMock(side_effect=lambda tier: TIER_PRICE_NGN_KOBO[tier])
-    svc._upgrade_repo.get_by_key = AsyncMock(return_value=existing_key)
+    svc._upgrade_repo.get_pending_by_key = AsyncMock(return_value=existing_key)
     svc._upgrade_repo.get_by_payment = AsyncMock(return_value=upgrade)
     svc._upgrade_repo.create_return_model = AsyncMock(return_value=_upgrade())
-    svc._upgrade_repo.get_model = AsyncMock(return_value=upgrade or _upgrade())
+    held = upgrade or _upgrade()
+    svc._upgrade_repo.get_model = AsyncMock(return_value=held)
+    svc._upgrade_repo.claim_transition = fake_claim_transition(lambda _id: held)
     svc._upgrade_repo.update = AsyncMock()
     svc._verification_repo.update = AsyncMock()
     svc._verification_repo.get_model = AsyncMock(return_value=v)
@@ -101,8 +104,10 @@ class TestRequest:
 class TestOnPaymentConfirmed:
     async def test_applies_upgrade_from_completed(self):
         v = _verification(status=VerificationStatus.COMPLETED)
-        svc = _service(verification=v, upgrade=_upgrade(status=UpgradeStatus.PENDING))
+        upgrade = _upgrade(status=UpgradeStatus.PENDING)
+        svc = _service(verification=v, upgrade=upgrade)
         await svc.on_payment_confirmed("pay-1")
+        assert upgrade.status == UpgradeStatus.PAID.value
         upd = svc._verification_repo.update.await_args.args[1]
         assert upd.tier == VerificationTier.PREMIUM.value
         assert upd.status == VerificationStatus.IN_PROGRESS.value

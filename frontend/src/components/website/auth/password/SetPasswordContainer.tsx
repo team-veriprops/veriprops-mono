@@ -14,7 +14,7 @@ import PasswordStrengthMeter from "../PasswordStrengthMeter";
 import { useSetPasswordMutation } from "../libs/useAuthQueries";
 import { resetPasswordSchema, type ResetPasswordValues } from "../schemas";
 import { ROUTES } from "@lib/routes";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 
 export default function SetPasswordContainer() {
   const router = useRouter();
@@ -37,7 +37,7 @@ export default function SetPasswordContainer() {
       router.push(`${ROUTES.ACCOUNT.SECURITY}?password=ok`);
     } catch (err) {
       setErrorMessage(
-        getErrorMessage(err as Error, "Could not set your password. Please try again."),
+        getErrorMessage(err, "Could not set your password. Please try again."),
       );
     }
   };

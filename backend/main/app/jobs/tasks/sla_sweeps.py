@@ -9,10 +9,11 @@ test — tests call ``sweep_sla_breaches`` directly.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from kink import di, inject
 
+from main.app.jobs.exclusive import exclusive_job
 from main.app.domain.verification.sla_monitor import SlaMonitorService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.transactional import transactional, TransactionSessionPolicy
@@ -33,7 +34,8 @@ class SlaMonitorJobs:
     def __init__(self, sla_monitor: SlaMonitorService):
         self._sla_monitor = sla_monitor
 
-    async def run_sla_breach_sweep(self) -> int:
+    @exclusive_job("sla_breaches")
+    async def run_sla_breach_sweep(self) -> Optional[int]:
         return await self._sla_monitor.sweep_sla_breaches()
 
 

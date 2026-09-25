@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
 import { Card } from "@3rdparty/ui/card";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { usePricingQuery, useSetTierPriceMutation } from "./libs/usePricingQueries";
 import { PricingTier, TierPricingView } from "@/types/pricing";
@@ -58,11 +58,11 @@ function TierEditor({ tier }: { tier: PricingTier }) {
   const onSave = async () => {
     const major = Number(price);
     if (!Number.isFinite(major) || major < 0) {
-      toast({ title: "Invalid price", description: "Enter a non-negative amount.", variant: "destructive" });
+      toast.error("Invalid price", { description: "Enter a non-negative amount." });
       return;
     }
     await setPriceMutation.mutateAsync({ tier: tier.tier as VerificationTier, priceNgnMinor: Math.round(major * 100) });
-    toast({ title: "Price updated", description: `${humanizeEnumLabel(tier.tier)} now ${formatMinor(Math.round(major * 100))}.` });
+    toast.success("Price updated", { description: `${humanizeEnumLabel(tier.tier)} now ${formatMinor(Math.round(major * 100))}.` });
   };
 
   return (

@@ -19,6 +19,7 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ValidationException,
 )
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -32,6 +33,7 @@ def mock_db_session():
 
     session.begin = _begin
     session.flush = AsyncMock()
+    session.execute = AsyncMock()  # the per-agent payout advisory lock
     token = db_session_ctx.set(session)
     yield session
     db_session_ctx.reset(token)
@@ -66,6 +68,10 @@ def _make_service(available=100_000):
     svc._config = AsyncMock()
     svc._config.get_int = AsyncMock(return_value=2)  # PAYOUT_SLA_BUSINESS_DAYS default
     svc._earnings.available_minor = AsyncMock(return_value=available)
+    # Decisions are claims on the row the test's get_model serves.
+    svc._payout_repo.claim_transition = fake_claim_transition(
+        lambda _id: svc._payout_repo.get_model.return_value
+    )
     return svc
 
 
@@ -104,10 +110,9 @@ class TestFinanceDecisions:
         svc = _make_service()
         p = _payout(status=PayoutStatus.REQUESTED)
         svc._payout_repo.get_model = AsyncMock(return_value=p)
-        svc._payout_repo.update = AsyncMock()
         await svc.approve("p-1", "fin-1", PayoutDecisionDto())
-        _, dto = svc._payout_repo.update.call_args[0]
-        assert dto.status == PayoutStatus.PAID.value
+        assert p.status == PayoutStatus.PAID.value
+        assert p.decided_by == "fin-1"
         assert stub_publish[0].type == EventType.PAYOUT_APPROVED
 
     async def test_hold_fires_held_event_with_reason(self, stub_publish):
@@ -128,11 +133,10 @@ class TestFinanceDecisions:
 class TestCancel:
     async def test_owner_cancels_pending(self):
         svc = _make_service()
-        svc._payout_repo.get_model = AsyncMock(return_value=_payout(status=PayoutStatus.REQUESTED))
-        svc._payout_repo.update = AsyncMock()
+        p = _payout(status=PayoutStatus.REQUESTED)
+        svc._payout_repo.get_model = AsyncMock(return_value=p)
         await svc.cancel("a-1", "p-1")
-        _, dto = svc._payout_repo.update.call_args[0]
-        assert dto.status == PayoutStatus.CANCELLED.value
+        assert p.status == PayoutStatus.CANCELLED.value
 
     async def test_cannot_cancel_non_pending(self):
         svc = _make_service()

@@ -3,6 +3,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, Query
 from kink import di
 from libre_fastapi_jwt import AuthJWT
+from libre_fastapi_jwt.exceptions import AuthJWTException
 from starlette.requests import Request
 
 from main.app.domain.user.auth.session.models import DeviceSessionDto, SecurityEventDto, AuthSessionDto, LoginRequestDto
@@ -15,7 +16,8 @@ from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.common.rate_limit import RateLimiter
 from main.appodus_utils.db.models import Page, SuccessResponse
 from main.appodus_utils.exception.exception_handlers import exception_json_response
-from main.appodus_utils.exception.exceptions import UnauthorizedException
+from main.appodus_utils.exception.exceptions import InternalServerException, UnauthorizedException
+from main.appodus_utils.middleware.request_logging_middleware import request_reference
 
 session_router = APIRouter(prefix="/sessions", tags=["Sessions"])
 
@@ -60,23 +62,48 @@ async def login(
 
 @session_router.delete("/current", response_model=SuccessResponse[bool])
 async def logout(request: Request, authorize: AuthJWT = Depends()):
-    # Best-effort: logout must end the session client-side even when there is
-    # nothing valid left to revoke (expired/missing token) or a revoke write
-    # fails (DB/Redis error) — the cookies are HttpOnly, so this response is
-    # the client's only way to actually clear them.
+    # The cookies are HttpOnly, so this response is the client's only way to clear them: every
+    # outcome clears them. The device session is ended through the refresh cookie whenever one is
+    # sent — holding the refresh token is the authority to end the session it names, and it
+    # outlives the access token, so a sign-out retried after the access token lapsed must still
+    # revoke it. With neither token valid this is a plain sign-out. If revoking fails (the device
+    # row, or the denylist — including a store outage that makes the token check itself fail),
+    # the token would stay usable elsewhere until it expires, so the client is told with the
+    # standard safe 5xx rather than a false success. That response is returned, not raised: a
+    # raised one is rendered fresh and would drop the cookie deletions.
+    refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
     try:
         await authorize.jwt_required()
-        refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
+    except AuthJWTException:
+        try:
+            if refresh_cookie:
+                await session_service.revoke_current_device(refresh_cookie)
+        except Exception:  # noqa: BLE001 — reported below, with the cookies still cleared
+            return _revocation_failed(request, authorize)
+        authorize.unset_jwt_cookies()
+        return SuccessResponse[bool](data=True)
+    except Exception:  # noqa: BLE001 — the denylist could not be read
+        return _revocation_failed(request, authorize)
+
+    try:
         if refresh_cookie:
             await session_service.revoke_current_device(refresh_cookie)
 
         await JwtAuthUtils.revoke_token(authorize=authorize)
-    except Exception:  # noqa: BLE001 — logout must clear cookies even if revocation fails
-        logger.exception("Logout revocation failed; clearing session cookies anyway")
-    finally:
-        authorize.unset_jwt_cookies()
+    except Exception:  # noqa: BLE001 — reported below, with the cookies still cleared
+        return _revocation_failed(request, authorize)
 
+    authorize.unset_jwt_cookies()
     return SuccessResponse[bool](data=True)
+
+
+def _revocation_failed(request: Request, authorize: AuthJWT):
+    """The safe 5xx for a sign-out the server could not record, clearing the cookies on it."""
+    reference = request_reference(request)
+    logger.exception(f"[{reference}] Logout could not revoke the session; clearing its cookies anyway")
+    response = exception_json_response(InternalServerException(), reference)
+    authorize.unset_jwt_cookies(response)
+    return response
 
 
 @session_router.post("/current", response_model=SuccessResponse[AuthSessionDto])
@@ -97,11 +124,22 @@ async def refresh_session(request: Request, authorize: AuthJWT = Depends()):
         authorize.unset_jwt_cookies(response)
         return response
 
-    await JwtAuthUtils.refresh_access_token(authorize=authorize)
+    # Load the user before minting: the new access token's personas are read from the record, so a
+    # persona granted or withdrawn mid-session takes effect on the next refresh rather than
+    # persisting for the life of the refresh token. The token is verified first because `AuthJWT`
+    # has no subject until a `*_required()` call has checked one — reading it earlier yields `None`
+    # and fails every refresh.
+    await authorize.jwt_refresh_token_required()
+    user = await user_service.get_user_model(str(authorize.get_jwt_subject()))
+    await JwtAuthUtils.refresh_access_token(
+        authorize=authorize,
+        user_type=user.user_type,
+        user_personas=user.personas,
+        admin_sub_role=str(user.admin_sub_role) if getattr(user, "admin_sub_role", None) else None,
+    )
     await session_service.touch_device_session(token_hash)
     # Return the full session DTO (not a bare bool): the frontend keep-alive
     # uses accessTokenExpiresAt to schedule the next proactive refresh.
-    user = await user_service.get_user_model(str(authorize.get_jwt_subject()))
     session = await session_service.build_session_dto(user)
     return SuccessResponse[AuthSessionDto](data=session)
 

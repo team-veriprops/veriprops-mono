@@ -8,10 +8,11 @@ registered in ``app/jobs/scheduled.py``; disabled under test — tests call
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from kink import di, inject
 
+from main.app.jobs.exclusive import exclusive_job
 from main.app.domain.broadcast.service import BroadcastService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.transactional import transactional, TransactionSessionPolicy
@@ -32,7 +33,8 @@ class BroadcastSweepJobs:
     def __init__(self, broadcast_service: BroadcastService):
         self._broadcast = broadcast_service
 
-    async def run_scheduled_broadcast_sweep(self) -> int:
+    @exclusive_job("scheduled_broadcasts")
+    async def run_scheduled_broadcast_sweep(self) -> Optional[int]:
         return await self._broadcast.sweep_scheduled_broadcasts()
 
 

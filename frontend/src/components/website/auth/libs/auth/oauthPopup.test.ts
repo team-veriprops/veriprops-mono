@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startOauthPopup } from "./oauthPopup";
 import { OAuthFlowMode, SocialProvider } from "@components/website/auth/models";
+import { HttpError } from "@lib/FetchHttpClient";
+import { SERVER_ERROR_MESSAGE } from "@lib/errors";
 
 // ── Mock authService ──────────────────────────────────────────────────────────
 const { mockStartOauth } = vi.hoisted(() => ({ mockStartOauth: vi.fn() }));
@@ -207,6 +209,24 @@ describe("postMessage validation", () => {
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ code: "provider", message: "Account exists. Please log in and link this provider explicitly." }),
     );
+  });
+
+  it("hands the caller safe words when starting sign-in fails on the server", async () => {
+    // `onError`'s message is shown as-is by every caller, so a raw 500 must never reach it.
+    const popup = makePopup(false) as unknown as Window;
+    vi.spyOn(window, "open").mockReturnValue(popup);
+    mockStartOauth.mockRejectedValueOnce(
+      new HttpError("Exception during DB session usage: [WinError 1225]", "/start", { httpStatus: 500, reference: "7F3K92QA" }),
+    );
+
+    const onError = vi.fn();
+    startOauthPopup(SocialProvider.GOOGLE, { onSuccess: vi.fn(), onError });
+    await vi.runAllTimersAsync();
+
+    const { message } = onError.mock.calls[0][0];
+    expect(message).not.toContain("WinError");
+    expect(message).toContain(SERVER_ERROR_MESSAGE);
+    expect(message).toContain("7F3K92QA");
   });
 
   it("respects the mode parameter (LINK mode passes through)", async () => {

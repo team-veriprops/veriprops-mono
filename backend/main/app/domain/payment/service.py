@@ -23,7 +23,6 @@ from main.app.domain.payment.models import (
     PaymentPurpose,
     PaymentStatus,
     PaymentWebhookDto,
-    UpdatePaymentDto,
 )
 from main.app.domain.payment.repo import PaymentRepo
 from main.app.domain.user.auth.session.models import UserPersona
@@ -44,6 +43,11 @@ from main.appodus_utils.exception.exceptions import (
 _INITIATE_SCOPE = "payment.initiate"
 _WEBHOOK_SCOPE = "payment.webhook"
 _PAYABLE = {VerificationStatus.SUBMITTED.value, VerificationStatus.PAYMENT_PENDING.value}
+# A charge the gateway may still settle, one way or the other. SUCCEEDED and REFUNDED are
+# final: no later event moves a payment out of them.
+_OPEN_PAYMENT_STATUSES = [
+    PaymentStatus.INITIATED, PaymentStatus.PROCESSING, PaymentStatus.PENDING_TRANSFER, PaymentStatus.FAILED,
+]
 
 
 # TODO(gap): live Paystack/Flutterwave collection — checkout, webhook confirmation, and refunds
@@ -125,7 +129,7 @@ class PaymentService:
         )
 
         if idempotency_key:
-            await self._idempotency.complete(idempotency_key, resource_id=payment.id)
+            await self._idempotency.complete(idempotency_key, _INITIATE_SCOPE, resource_id=payment.id)
         return payment
 
     async def initiate_secondary(
@@ -175,10 +179,15 @@ class PaymentService:
         if not payment:
             raise ResourceNotFoundException(resource="payment")
 
-        await self._payment_repo.update(payment.id, UpdatePaymentDto(gateway_event_id=dto.event_id))
-
         if dto.succeeded:
-            await self._payment_repo.update(payment.id, UpdatePaymentDto(status=PaymentStatus.SUCCEEDED.value))
+            # The charge settles once. A second success event for it (a different event id,
+            # so the dedup above lets it through) finds it no longer open and stands down
+            # before paying the verification, its tasks or a referral credit a second time.
+            settled = await self._payment_repo.claim_transition(
+                payment.id, _OPEN_PAYMENT_STATUSES, PaymentStatus.SUCCEEDED, gateway_event_id=dto.event_id,
+            )
+            if settled is None:
+                return False
             self._audit.schedule(
                 action=AuditActionType.PAYMENT_SUCCEEDED,
                 resource_type="payment",
@@ -210,10 +219,14 @@ class PaymentService:
                     to_state=VerificationStatus.PAID.value,
                 )
         else:
-            await self._payment_repo.update(payment.id, UpdatePaymentDto(
-                status=PaymentStatus.FAILED.value,
-                failure_count=(payment.failure_count or 0) + 1,
-            ))
+            # A failure never lands on a settled payment (a late event must not undo a
+            # success), and the attempt is counted in SQL so concurrent failures all count.
+            failed = await self._payment_repo.claim_transition(
+                payment.id, _OPEN_PAYMENT_STATUSES, PaymentStatus.FAILED,
+                gateway_event_id=dto.event_id, increments={"failure_count": 1},
+            )
+            if failed is None:
+                return False
             self._audit.schedule(
                 action=AuditActionType.PAYMENT_FAILED,
                 resource_type="payment",
@@ -234,11 +247,15 @@ class PaymentService:
         for payment in await self._payment_repo.list_for_verification(verification_id):
             if payment.status != PaymentStatus.SUCCEEDED.value:
                 continue
-            # Live path issues the gateway refund here (facade); stub mode is a no-op call.
-            await self._payment_repo.update(payment.id, UpdatePaymentDto(
-                status=PaymentStatus.REFUNDED.value,
+            # Claimed before any money moves: a concurrent refund of the same verification
+            # finds the payment already REFUNDED and skips it.
+            refunded = await self._payment_repo.claim_transition(
+                payment.id, [PaymentStatus.SUCCEEDED], PaymentStatus.REFUNDED,
                 refunded_amount_minor=payment.amount_minor,
-            ))
+            )
+            if refunded is None:
+                continue
+            # Live path issues the gateway refund here (facade); stub mode is a no-op call.
             refunded_total += payment.amount_minor
             self._audit.schedule(
                 action=AuditActionType.PAYMENT_REFUNDED,

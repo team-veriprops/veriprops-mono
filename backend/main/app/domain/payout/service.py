@@ -26,13 +26,13 @@ from main.app.domain.payout.models import (
     PayoutDto,
     PayoutStatus,
     RequestPayoutDto,
-    UpdatePayoutDto,
     payout_to_dto,
 )
 from main.app.domain.payout.repo import PayoutRepo
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.system_config.service import ConfigService
 from main.appodus_utils import Utils
+from main.appodus_utils.db.locks import advisory_xact_lock
 from main.appodus_utils.db.models import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
@@ -42,6 +42,20 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+
+# One agent's withdrawals: the balance check and the reservation take turns on it.
+_PAYOUT_LOCK = "payout"
+# A payout finance may still decide or adjust: every status that still reserves funds.
+_UNDECIDED = LOCKING_STATUSES
+
+
+def _note(dto: PayoutDecisionDto) -> dict:
+    """The decision's note, when one was given; an absent note keeps the earlier one."""
+    return {} if dto.note is None else {"note": dto.note}
+
+
+def _already_finalised() -> InvalidResourceStateException:
+    return InvalidResourceStateException(resource="payout", message="This payout has already been finalised.")
 
 
 @inject
@@ -68,6 +82,9 @@ class PayoutService:
         """Withdraw ``amount_minor`` to a stored or one-time beneficiary (§15.1)."""
         if dto.amount_minor <= 0:
             raise ValidationException(message="Withdrawal amount must be positive.")
+        # Balance check and reservation take turns per agent: a second request waits here,
+        # then reads a balance that already nets out the first one's reservation.
+        await advisory_xact_lock(f"{_PAYOUT_LOCK}:{agent_id}")
         available = await self._earnings.available_minor(agent_id)
         if dto.amount_minor > available:
             raise ValidationException(
@@ -91,16 +108,18 @@ class PayoutService:
     async def cancel(self, agent_id: str, payout_id: str) -> Payout:
         """Agent withdraws a still-pending request (REQUESTED → CANCELLED); funds released."""
         payout = await self._get_owned(payout_id, agent_id)
-        if payout.status != PayoutStatus.REQUESTED.value:
+        cancelled = await self._payout_repo.claim_transition(
+            payout.id, [PayoutStatus.REQUESTED], PayoutStatus.CANCELLED,
+        )
+        if cancelled is None:
             raise InvalidResourceStateException(
                 resource="payout", message="Only a pending request can be cancelled."
             )
-        await self._payout_repo.update(payout.id, UpdatePayoutDto(status=PayoutStatus.CANCELLED.value))
         self._audit.schedule(
             action=AuditActionType.PAYOUT_CANCELLED,
             resource_type="payout", resource_id=payout.id, actor_id=agent_id,
         )
-        return await self._payout_repo.get_model(payout.id)
+        return cancelled
 
     async def list_bank_accounts(self, agent_id: str):
         return await self._banks.list_for_agent(agent_id)
@@ -122,42 +141,45 @@ class PayoutService:
         # TODO(gap): stub disbursement — approval marks PAID directly; wire a real transfer
         # gateway behind the payment facade — PRD "Known Gaps & Roadmap".
         payout = await self._get_decidable(payout_id)
-        await self._decide(payout, PayoutStatus.PAID, admin_id, dto,
-                            AuditActionType.PAYOUT_APPROVED)
+        decided = await self._decide(payout, PayoutStatus.PAID, admin_id, dto,
+                                     AuditActionType.PAYOUT_APPROVED)
         await publish_domain_event(DomainEvent(
             type=EventType.PAYOUT_APPROVED, recipient_user_ids=(payout.agent_id,),
         ))
-        return await self._payout_repo.get_model(payout.id)
+        return decided
 
     async def hold(self, payout_id: str, admin_id: str, dto: PayoutDecisionDto) -> Payout:
         """Hold pending review — REQUESTED → HELD; fires PAYOUT_HELD with the reason (§12.2)."""
         payout = await self._get_decidable(payout_id)
-        await self._decide(payout, PayoutStatus.HELD, admin_id, dto, AuditActionType.PAYOUT_HELD)
+        decided = await self._decide(payout, PayoutStatus.HELD, admin_id, dto, AuditActionType.PAYOUT_HELD)
         await publish_domain_event(DomainEvent(
             type=EventType.PAYOUT_HELD, recipient_user_ids=(payout.agent_id,),
             data={"reason": dto.note or "under review"},
         ))
-        return await self._payout_repo.get_model(payout.id)
+        return decided
 
     async def reject(self, payout_id: str, admin_id: str, dto: PayoutDecisionDto) -> Payout:
         """Decline — REQUESTED/HELD → REJECTED; funds released back to available."""
         payout = await self._get_decidable(payout_id)
-        await self._decide(payout, PayoutStatus.REJECTED, admin_id, dto,
-                           AuditActionType.PAYOUT_REJECTED)
-        return await self._payout_repo.get_model(payout.id)
+        return await self._decide(payout, PayoutStatus.REJECTED, admin_id, dto,
+                                  AuditActionType.PAYOUT_REJECTED)
 
     async def adjust(self, payout_id: str, admin_id: str, dto: PayoutDecisionDto) -> Payout:
         """Record a finance correction (an adjustment + note) without deciding the request."""
         payout = await self._get_decidable(payout_id)
-        await self._payout_repo.update(payout.id, UpdatePayoutDto(
-            adjustment_minor=dto.adjustment_minor or 0, note=dto.note,
-        ))
+        # Written only while the payout is still undecided: an adjustment landing after an
+        # approval would change a disbursement that has already gone out.
+        adjusted = await self._payout_repo.claim_transition(
+            payout.id, _UNDECIDED, adjustment_minor=dto.adjustment_minor or 0, **_note(dto),
+        )
+        if adjusted is None:
+            raise _already_finalised()
         self._audit.schedule(
             action=AuditActionType.PAYOUT_ADJUSTED,
             resource_type="payout", resource_id=payout.id, actor_id=admin_id,
             details={"adjustment_minor": dto.adjustment_minor or 0, "note": dto.note},
         )
-        return await self._payout_repo.get_model(payout.id)
+        return adjusted
 
     async def page_all(self, page: int, page_size: int, status: str | None = None) -> Page[PayoutDto]:
         rows, total = await self._payout_repo.page_all(page, page_size, status)
@@ -182,18 +204,22 @@ class PayoutService:
     async def _decide(
         self, payout: Payout, to_status: PayoutStatus, admin_id: str,
         dto: PayoutDecisionDto, action: AuditActionType,
-    ) -> None:
-        await self._payout_repo.update(payout.id, UpdatePayoutDto(
-            status=to_status.value, decided_by=admin_id, note=dto.note,
-            adjustment_minor=dto.adjustment_minor if dto.adjustment_minor is not None else None,
-        ))
-        row = await self._payout_repo.get_model(payout.id)
-        row.decided_at = Utils.datetime_now()
+    ) -> Payout:
+        """Claim the decision: exactly one of two concurrent finance decisions lands, and
+        the other is refused before it can notify or disburse."""
+        adjustment = {} if dto.adjustment_minor is None else {"adjustment_minor": dto.adjustment_minor}
+        decided = await self._payout_repo.claim_transition(
+            payout.id, _UNDECIDED, to_status,
+            decided_by=admin_id, decided_at=Utils.datetime_now(), **_note(dto), **adjustment,
+        )
+        if decided is None:
+            raise _already_finalised()
         self._audit.schedule(
             action=action, resource_type="payout", resource_id=payout.id, actor_id=admin_id,
             from_state=payout.status, to_state=to_status.value,
             details={"note": dto.note} if dto.note else None,
         )
+        return decided
 
     async def _get_owned(self, payout_id: str, agent_id: str) -> Payout:
         payout = await self._payout_repo.get_model(payout_id)
@@ -205,10 +231,8 @@ class PayoutService:
         payout = await self._payout_repo.get_model(payout_id)
         if payout is None or payout.deleted:
             raise ResourceNotFoundException(resource="payout")
-        if payout.status not in LOCKING_STATUSES:
-            raise InvalidResourceStateException(
-                resource="payout", message="This payout has already been finalised."
-            )
+        if payout.status not in _UNDECIDED:
+            raise _already_finalised()
         return payout
 
     async def _sla_due(self, now: datetime) -> datetime:

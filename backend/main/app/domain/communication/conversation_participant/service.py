@@ -81,11 +81,7 @@ class ConversationParticipantService:
             return False
         if membership.visible_from is not None and at < membership.visible_from:
             return False
-        if membership.last_read_at is not None and membership.last_read_at >= at:
-            return False
-        membership.last_read_at = at
-        self._participant_repo._session.add(membership)
-        return True
+        return await self._participant_repo.advance_read(membership, at)
 
     async def unread_conversation_count(self, user_id: str) -> int:
         """Number of the user's conversations with unread messages (Chat counter, §N.3)."""

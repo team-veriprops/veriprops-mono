@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolvePostAuthRedirect, isSafeRedirectPath } from "./redirect";
+import { dashboardFor, resolvePostAuthRedirect, isSafeRedirectPath } from "./redirect";
 import { TransactionCurrency } from "@/types/models";
 import { AccountStatus, AuthUser, AuthIntent, TrustStatus, UserPersona, UserType } from "@components/website/auth/models";
 const baseUser: AuthUser = {
@@ -92,9 +92,15 @@ describe("resolvePostAuthRedirect", () => {
     expect(dest).toBe("/portal/verifications/new");
   });
 
-  it("intent=agent for non-agent customer routes to agents dashboard (modal handles onboarding)", () => {
+  /**
+   * The dashboard was chosen on the assumption that its onboarding modal would take over — but
+   * `proxy.ts` refuses `/agents/*` to anyone without the AGENT persona, and the persona is only
+   * granted by applying. A customer answering the "Become an Agent" call was bounced straight back
+   * to their portal. The application itself is the one agent route they may reach.
+   */
+  it("intent=agent for a non-agent sends them to the application they can actually open", () => {
     const dest = resolvePostAuthRedirect(baseUser, { intent: AuthIntent.AGENT });
-    expect(dest).toBe("/agents/dashboard");
+    expect(dest).toBe("/agents/apply");
   });
 
   it("explicit redirect param overrides defaults", () => {
@@ -114,6 +120,40 @@ describe("resolvePostAuthRedirect", () => {
       const dest = resolvePostAuthRedirect(baseUser, { redirect: payload });
       expect(dest).toBe("/portal/dashboard");
     }
+  });
+});
+
+describe("dashboardFor", () => {
+  it("sends an admin to /admin whatever other personas they hold", () => {
+    expect(dashboardFor({ ...baseUser, userType: UserType.ADMIN, personas: [] })).toBe("/admin/dashboard");
+    expect(
+      dashboardFor({ ...baseUser, userType: UserType.ADMIN, personas: [UserPersona.AGENT, UserPersona.CUSTOMER] }),
+    ).toBe("/admin/dashboard");
+  });
+
+  it("prefers the agent dashboard for an agent who is also a customer", () => {
+    expect(dashboardFor({ ...baseUser, personas: [UserPersona.AGENT, UserPersona.CUSTOMER] })).toBe(
+      "/agents/dashboard",
+    );
+  });
+
+  it("sends a customer to /portal, even one who has never started a verification", () => {
+    expect(dashboardFor(baseUser)).toBe("/portal/dashboard");
+    const neverStarted: AuthUser = { ...baseUser, hasStartedVerification: false };
+    expect(dashboardFor(neverStarted)).toBe("/portal/dashboard");
+  });
+
+  it("defaults a user with no persona yet to the customer portal", () => {
+    expect(dashboardFor({ ...baseUser, personas: [] })).toBe("/portal/dashboard");
+  });
+
+  // The proxy overrides the fallback: routing a personaless session to /portal would bounce off
+  // the portal guard straight back here, which is an infinite redirect rather than a landing.
+  it("honours a caller's fallback for a user with no persona", () => {
+    expect(dashboardFor({ ...baseUser, personas: [] }, { fallback: "/" })).toBe("/");
+    expect(dashboardFor({ ...baseUser, userType: UserType.ADMIN, personas: [] }, { fallback: "/" })).toBe(
+      "/admin/dashboard",
+    );
   });
 });
 

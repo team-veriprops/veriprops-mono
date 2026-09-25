@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@3rdparty/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { CopyText } from "@components/ui/CopyText";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import DetailDrawer, { DetailDrawerWidth } from "@components/ui/DetailDrawer";
@@ -109,7 +109,7 @@ export default function AdminTeamManagement() {
     setInviteFirstName("");
     setInviteLastName("");
     setInviteEmail("");
-    toast({ title: "Invitation created", description: "Share the link with the invitee." });
+    toast.success("Invitation created", { description: "Share the link with the invitee." });
   };
 
   const closeInvite = () => {
@@ -120,7 +120,7 @@ export default function AdminTeamManagement() {
   const onChangeRole = async () => {
     if (!selected || !pendingRole) return;
     await changeRole.mutateAsync({ userId: selected.id, subRole: pendingRole });
-    toast({ title: "Role updated" });
+    toast.success("Role updated");
     setSelected(null);
     setPendingRole(undefined);
   };
@@ -128,7 +128,7 @@ export default function AdminTeamManagement() {
   const onDeactivate = async () => {
     if (!selected) return;
     await deactivate.mutateAsync(selected.id);
-    toast({ title: "Admin deactivated" });
+    toast.success("Admin deactivated");
     setSelected(null);
   };
 

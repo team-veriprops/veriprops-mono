@@ -20,6 +20,7 @@ from main.appodus_utils.exception.exceptions import (
     ForbiddenException,
     InvalidTokenException,
 )
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -112,7 +113,9 @@ class TestPreview:
 class TestAccept:
     async def test_elevates_matching_user_to_admin(self):
         svc = _make_service()
-        svc._invitation_repo.get_by_token_hash = AsyncMock(return_value=_invitation())
+        invitation = _invitation()
+        svc._invitation_repo.get_by_token_hash = AsyncMock(return_value=invitation)
+        svc._invitation_repo.claim_transition = fake_claim_transition(lambda _id: invitation)
         svc._user_service.get_user_model = AsyncMock(
             return_value=SimpleNamespace(email="new@example.com", user_type=UserType.USER.value)
         )
@@ -120,6 +123,10 @@ class TestAccept:
 
         sub_role = await svc.accept("raw", current_user_id="u-1")
         assert sub_role == AdminSubRole.OPERATIONS
+        # The invitation is claimed PENDING -> ACCEPTED, stamped with who took it and when.
+        assert invitation.status == AdminInvitationStatus.ACCEPTED.value
+        assert invitation.accepted_by == "u-1"
+        assert invitation.accepted_at is not None
         # Elevation: user_type -> ADMIN with the invited sub-role.
         update_dto = svc._user_service.update_user.call_args.args[1]
         assert update_dto.user_type == UserType.ADMIN.value

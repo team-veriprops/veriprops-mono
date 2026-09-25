@@ -28,7 +28,7 @@ from main.appodus_utils.integrations.messaging.models import (
 
 @pytest.fixture(autouse=True)
 def mock_db_session(monkeypatch):
-    """MessageService methods are ALWAYS_NEW-transactional — stub the session
+    """MessageService methods are INDEPENDENT-transactional — stub the session
     factory the decorator opens instead of the ambient context session."""
     session = MagicMock()
     session.in_transaction.return_value = False
@@ -44,7 +44,7 @@ def mock_db_session(monkeypatch):
     session.close = AsyncMock()
 
     @asynccontextmanager
-    async def _new_session():
+    async def _new_session(independent: bool = False):
         yield session
 
     monkeypatch.setattr(transactional_module, "create_new_db_session", _new_session)

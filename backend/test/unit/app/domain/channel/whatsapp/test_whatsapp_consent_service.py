@@ -63,13 +63,20 @@ def _service(row=None):
     async def _get_by_user_id(user_id):
         return held["row"]
 
-    async def _create(dto):
-        held["row"] = WhatsAppConsent(user_id=dto.user_id)
+    async def _insert_or_get(values, conflict_columns):
+        assert conflict_columns == ["user_id"]
+        if held["row"] is not None:
+            return held["row"], False
+        held["row"] = WhatsAppConsent(user_id=values["user_id"])
+        return held["row"], True
+
+    async def _lock_model(_id):
         return held["row"]
 
     repo = MagicMock(
         get_by_user_id=AsyncMock(side_effect=_get_by_user_id),
-        create_return_model=AsyncMock(side_effect=_create),
+        insert_or_get=AsyncMock(side_effect=_insert_or_get),
+        lock_model=AsyncMock(side_effect=_lock_model),
         _session=MagicMock(),
     )
     repo.apply = lambda *args, **kwargs: WhatsAppConsentRepo.apply(repo, *args, **kwargs)
@@ -142,6 +149,7 @@ class TestCapture:
         }
 
 
+@pytest.mark.usefixtures("independent_sessions")
 class TestStopAndStart:
     async def test_stop_revokes_both(self):
         """D64: the customer said "stop", not "stop some"."""
@@ -230,3 +238,38 @@ class TestModelProperties:
         )
         assert WhatsAppConsent.utility.fget(row) is True
         assert WhatsAppConsent.marketing.fget(row) is False
+
+
+class TestKeywordDecisionsSurviveTheTurn:
+    """A STOP or START typed in chat commits on its own (`INDEPENDENT`).
+
+    It is handled inside the bot turn, which runs in a savepoint so a failed reply cannot cost
+    the message. Riding in that savepoint, the opt-out would be undone by any failure after
+    it: the customer said STOP, and we would keep messaging them.
+    """
+
+    @pytest.mark.parametrize("decide", ["revoke_all", "grant_utility"])
+    async def test_a_keyword_decision_is_written_in_its_own_transaction(self, independent_sessions, decide):
+        from main.appodus_utils.db.session import is_independent_session
+
+        svc = _service(_row())
+        seen = []
+        original = svc._whatsapp_consent_repo.insert_or_get.side_effect
+
+        async def _spy(values, conflict_columns):
+            seen.append(db_session_ctx.get())
+            return await original(values, conflict_columns)
+
+        svc._whatsapp_consent_repo.insert_or_get.side_effect = _spy
+
+        await getattr(svc, decide)(USER, WhatsAppConsentSource.STOP_KEYWORD)
+
+        assert len(independent_sessions) == 1
+        assert is_independent_session(seen[0])
+
+    async def test_the_web_consent_form_stays_in_the_request_transaction(self, independent_sessions):
+        svc = _service(_row())
+
+        await svc.set_consents(USER, True, False, WhatsAppConsentSource.PAY_SCREEN)
+
+        assert independent_sessions == []

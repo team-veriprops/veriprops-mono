@@ -1,8 +1,8 @@
 """SLA-breach monitor (PRD §12.2, §6.4, D23).
 
 A periodic sweep that finds verifications past their SLA due date and publishes an
-``SlaBreached`` event **once** per verification (idempotent on an existing SLA-breach
-notification). Publishing goes through the §4.8 bus, so the customer gets the in-app +
+``SlaBreached`` event **once** per verification: each is claimed (``sla_breach_notified_at``)
+in one conditional update before the event goes out, so overlapping runs announce it once. Publishing goes through the §4.8 bus, so the customer gets the in-app +
 email/SMS "taking longer than planned" notification and the SSE nudge, with no source
 duplicated. Orchestration-only — no entity of its own.
 """
@@ -13,7 +13,6 @@ from kink import inject
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.realtime import VerificationEventType
 from main.app.core.sla import ACTIVE_SLA_STATES
-from main.app.domain.notification.repo import NotificationRepo
 from main.app.domain.user.repo import UserRepo
 from main.app.domain.verification.repo import VerificationRepo
 from main.appodus_utils import Utils
@@ -29,18 +28,17 @@ class SlaMonitorService:
     def __init__(
         self,
         verification_repo: VerificationRepo,
-        notification_repo: NotificationRepo,
         user_repo: UserRepo,
     ):
         self._verifications = verification_repo
-        self._notifications = notification_repo
         self._users = user_repo
 
     async def sweep_sla_breaches(self) -> int:
         """Publish ``SlaBreached`` for each newly-overdue verification. Returns the count
-        newly flagged. Idempotent: a verification already carrying an SLA-breach notification
-        is skipped, so a repeated sweep does not re-notify."""
-        today = Utils.datetime_now().date()
+        newly flagged. Each is claimed first, so a scheduled run and an admin-triggered one
+        landing together announce it once, and nothing re-announces it later."""
+        now = Utils.datetime_now()
+        today = now.date()
         overdue = await self._verifications.list_active_overdue(list(ACTIVE_SLA_STATES), today)
         if not overdue:
             return 0
@@ -50,9 +48,11 @@ class SlaMonitorService:
         flagged = 0
         for verification in overdue:
             vid = Utils.uuid_to_hex(verification.id)  # entity ref → wire (hex) form
-            already = await self._notifications.exists_for_ref(EventType.SLA_BREACHED.value, vid)
-            if already:
-                continue
+            if await self._verifications.claim_transition(
+                verification.id, [verification.status],
+                expect={"sla_breach_notified_at": None}, sla_breach_notified_at=now,
+            ) is None:
+                continue  # another run announced it
             await publish_domain_event(DomainEvent(
                 type=EventType.SLA_BREACHED,
                 verification_id=vid,

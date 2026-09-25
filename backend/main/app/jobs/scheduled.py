@@ -9,6 +9,10 @@ app lifespan.
 The scheduler is skipped under the test environment; tests invoke the sweep
 methods (or the admin dev sweep endpoint) directly for determinism (decision-log
 D12: sweeps are claim-based and idempotent, safe alongside request traffic).
+
+Every worker process starts this scheduler, so every job fires once per worker. Each
+job wrapper takes its own `job:<name>` lock first (`app/jobs/exclusive.py`) and skips
+the tick when another worker holds it, so a sweep runs once per tick.
 """
 from __future__ import annotations
 
@@ -21,6 +25,7 @@ from main.appodus_utils.config.settings import Environment
 from main.app.jobs.tasks import (
     check_abandoned_drafts,
     check_commission_clearance,
+    check_expired_key_values,
     check_message_retries,
     check_pending_assistant_turns,
     check_referral_credits,
@@ -28,6 +33,7 @@ from main.app.jobs.tasks import (
     check_sla_breaches,
     check_task_no_show_timeouts,
     check_task_pool_timeouts,
+    check_unprocessed_whatsapp_inbound,
 )
 
 if TYPE_CHECKING:
@@ -55,6 +61,13 @@ scheduler.add_job(check_message_retries, "interval", minutes=1, id="message_retr
 # Assistant turns left pending when a customer's tab closed before asking for them (D93).
 # The backstop, not the path: every environment is serverless today, where this cannot run.
 scheduler.add_job(check_pending_assistant_turns, "interval", minutes=1, id="assistant_pending_turn_check")
+# Expired OTP codes, rate-limit windows and OAuth states left in the SQL key/value store.
+scheduler.add_job(check_expired_key_values, "interval", minutes=60, id="expired_key_value_cleanup")
+# Inbound WhatsApp messages journalled but never surfaced (a failure after the journal write).
+# The backstop: the number's next message catches these up on its own.
+scheduler.add_job(
+    check_unprocessed_whatsapp_inbound, "interval", minutes=5, id="unprocessed_whatsapp_inbound_check"
+)
 
 
 def start_scheduler():

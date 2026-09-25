@@ -21,13 +21,14 @@ from main.appodus_utils.decorators.transactional import transactional, Transacti
 logger: Logger = di['logger']
 
 
-# ALWAYS_NEW: message rows record an external side effect that has already
+# INDEPENDENT: message rows record an external side effect that has already
 # happened (an email/SMS handed to a provider), so bookkeeping must commit
 # independently of the caller's transaction — a request rollback must not erase
 # the audit of a delivered message. It also keeps concurrent send_bulk branches
-# and post-request dispatch contexts off the shared request session.
+# and post-request dispatch contexts off the shared request session, and its
+# separate pool means a send never waits on the connection its caller holds.
 @inject
-@decorate_all_methods(transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW),
+@decorate_all_methods(transactional(session_policy=TransactionSessionPolicy.INDEPENDENT),
                       exclude=['__init__'], exclude_startswith='_')
 @decorate_all_methods(method_trace_logger, exclude=['__init__'], exclude_startswith='_')
 class MessageService:
@@ -102,6 +103,11 @@ class MessageService:
         await self._message_repo.update(message_id, obj_in.model_dump(exclude_none=True))
 
         return True
+
+    async def lease_retry(self, message_id: str, now: datetime, until: datetime) -> bool:
+        """Claim a due retry for this sweep run; committed at once, so an overlapping run
+        sees it before this one sends."""
+        return await self._message_repo.lease_retry(message_id, now, until)
 
     async def mark_message_failed(self, message_id: str, error: str) -> bool:
         """Permanent failure — the retry sweep never picks the message up again."""

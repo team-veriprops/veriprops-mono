@@ -30,6 +30,8 @@ from typing import Optional
 
 from sqlalchemy import Column, Index, String
 
+from main.appodus_utils.db.models import live_unique_index
+
 from main.appodus_utils import BaseEntity, BaseQueryDto, InternalPageRequest, Object
 from main.appodus_utils.db.models import UTCDateTime, jsonb_variant
 
@@ -187,6 +189,11 @@ class WhatsAppNumberHealth(BaseEntity):
     # Why the last sync failed, if it did. Kept rather than raised so the admin surface can
     # say "this number is showing GREEN, but we have not been able to ask since Tuesday".
     sync_error = Column(String(255), nullable=True)
+
+    __table_args__ = (
+        Index("ix_whatsapp_number_health_phone_number_id", "phone_number_id"),
+        live_unique_index("uq_whatsapp_number_health_phone_number_id", "phone_number_id"),
+    )
 
 
 class CreateWhatsAppNumberHealthDto(Object):

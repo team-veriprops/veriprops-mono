@@ -205,20 +205,20 @@ Named because they are the "will this actually automate?" risks; each becomes a 
      -v "$(pwd)/e2e/tls/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine
    ```
 
-   Use the committed [Caddyfile](../frontend/e2e/tls/Caddyfile), not the `caddy reverse-proxy` one-liner. The one-liner cannot shorten upstream keep-alive, so Caddy can reuse a socket Node's 5 s `keepAliveTimeout` has already closed. A POST sent on that socket (sign-in) then fails as a bare 502 ("An error occurred" on the form). This was observed on UAT-AUTH-05. The same file also retries failed dials (`lb_try_duration`), because Docker Desktop's container→host hop can stall a new connection for a few seconds; that was observed on UAT-WAH-01 as a bare 502. A dial that failed was never sent, so the retry is safe for POST.
+   Use the committed [Caddyfile](../frontend/e2e/tls/Caddyfile), not the `caddy reverse-proxy` one-liner. The one-liner cannot shorten upstream keep-alive, so Caddy can reuse a socket Node's 5 s `keepAliveTimeout` has already closed. A POST sent on that socket (sign-in) then fails as a bare 502 ("An error occurred" on the form). This was observed on UAT-AUTH-05. The same file also retries failed dials (`lb_try_duration`), because Docker Desktop's container→host hop can stall a new connection for a few seconds; that was observed on UAT-WAH-01 as a bare 502. A dial that failed was never sent, so the retry is safe for POST. The third failure mode is that hop dropping out for most of a minute. That was observed in a full local run: in-flight requests ended in EOF (`/otp/send`, `/signup/draft`) while new dials, even for static chunks, timed out. A request that failed after it was sent is retried only when repeating it is harmless: `lb_retry_match` covers GET, HEAD and the idempotent PUT. A POST may already have reached the app (an OTP could go out twice), so it is never resent. To remove the hop entirely, run Caddy on the host: `UAT_UPSTREAM=localhost:3001 caddy run --config e2e/tls/Caddyfile` from `frontend/`. CI keeps the container, because a Linux runner has no Docker Desktop hop.
 
    Keep `pnpm dev:https` for authoring a spec; judge green/red only against the build. This is not a formality:
    against the dev server WebKit loses the first field of a form (login, signup, set-password) to the hydration
    reset and reports failures the build does not have. Every form fill is preceded by `waitForHydration`, which
    makes both stacks deterministic, but the build remains the verdict.
 3. **CI runs this suite too** — `e2e.yml` builds the frontend, serves the standalone output behind the same TLS front, and runs `chromium-desktop,webkit-mobile` against the same backend the drive-through just used (its `globalSetup` resets and re-seeds first). A red browser suite blocks the PR and the release. The other four engine permutations stay local/nightly.
-4. `pnpm e2e` (parallel workers, `UAT_WORKERS` overrides; `@serial` specs then run one at a time) — `globalSetup` reset+seeds once; `--grep @P0` or `--grep UAT-PAY` to scope; `UAT_ENGINES=chromium-desktop` (or `--project=…`) to run one engine/device of the six-permutation matrix (§7). `UAT_BASE_URL` overrides the origin.
+4. `pnpm e2e` (two parallel workers by default, as on CI, since this machine also runs the stack; `UAT_WORKERS` overrides; `@serial` specs then run one at a time) — `globalSetup` reset+seeds once; `--grep @P0` or `--grep UAT-PAY` to scope; `UAT_ENGINES=chromium-desktop` (or `--project=…`) to run one engine/device of the six-permutation matrix (§7). `UAT_BASE_URL` overrides the origin.
 5. Debug failures with the Playwright trace viewer (`pnpm e2e:report`) and the `playwright-cli` skill for ad-hoc UI investigation.
 
 ## 10. Out of scope
 
 - No CI wiring (`pull_requests.yml`/`e2e.yml`) — local/manual only for now.
-- Load/performance and security **pen-testing** (the public-lookup rate-limit gap in PRD §G is a `security-review` item; UAT covers only *functional* authorization per §6a). Accessibility is **in scope** (§7), not deferred.
+- Load/performance and security **pen-testing** (UAT covers only *functional* authorization per §6a; rate limits, including the public lookup's, are off under `DISABLE_RATE_LIMITING` in automation). Accessibility is **in scope** (§7), not deferred.
 - Global PRD §G exclusions (live gateways/KYC/storage/FX/disbursement, offline upload, image derivatives, chat attachments, Legal Opinion flag-off, unbuilt `TODO(gap)` routes, all post-MVP) — asserted against stubs or skipped, never as real behaviour; launch-gate business/legal items flagged as go-live blockers, not UAT.
 
 ## 11. Validated against three in-repo sources of truth
@@ -236,7 +236,7 @@ Built and verified green against a live local stack — **78/78 across the full 
 
 | Piece | File | Notes |
 | --- | --- | --- |
-| Runner config + engine matrix | `playwright.config.ts` | Six projects (§7); `UAT_ENGINES` narrows for a local loop. Single worker, retries, trace/screenshot/video on failure. |
+| Runner config + engine matrix | `playwright.config.ts` | Six projects (§7); `UAT_ENGINES` narrows for a local loop. Two workers in the parallel lane (one in `@serial`; `UAT_WORKERS` overrides), retries, trace/screenshot/video on failure. |
 | One reset+seed + persona sessions | `global-setup.ts` | Seeds once, logs in 7 personas via the real login form, saves `storageState` + the run's seed payload. |
 | API bootstrap client | `helpers/api.ts` | CSRF-aware, envelope-unwrapping; **preconditions only**, never assertions. |
 | Readiness / auth hooks | `helpers/app.ts` | `waitReady`, `authSnapshot`, `expectAuthenticated` — no fixed timeouts anywhere. |

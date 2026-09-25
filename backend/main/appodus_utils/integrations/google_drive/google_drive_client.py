@@ -1,13 +1,29 @@
+from __future__ import annotations
 import asyncio
-from typing import Dict
+from typing import TYPE_CHECKING, Dict
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 from fastapi import HTTPException
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from kink import inject
+from kink import di, inject
 
 from main.app.config.settings import settings
+
+logger: Logger = di['logger']
+
+
+def _drive_failure(action: str, error: HttpError) -> HTTPException:
+    """The exception to raise when a Google call fails.
+
+    Google's error text names our service account, file ids and quota details; it goes to the
+    log, and the response says only which step failed. The status is Google's, as before.
+    """
+    logger.error(f"Google API call failed to {action}: {error}")
+    return HTTPException(status_code=error.status_code, detail=f"Could not {action} in Google Drive.")
 
 
 @inject
@@ -50,8 +66,7 @@ class GoogleDriveClient:
             return result
 
         except HttpError as error:
-            raise HTTPException(status_code=error.status_code,
-                                detail=f"Google Drive folder create/search error: {error}")
+            raise _drive_failure("create or find the folder", error) from error
 
     async def copy_file(self, file_id: str, new_name: str, parent_folder_id: str = None):
         body = {'name': new_name}
@@ -64,7 +79,7 @@ class GoogleDriveClient:
                                                          fields='id,name,webViewLink').execute())
             return result
         except HttpError as error:
-            raise HTTPException(status_code=error.status_code, detail=f"Google Drive error: {error}")
+            raise _drive_failure("copy the file", error) from error
 
     async def set_permissions(self, file_id: str, email: str, role: str = 'writer'):
         try:
@@ -74,7 +89,7 @@ class GoogleDriveClient:
                                                                  fields='id').execute())
             return result
         except HttpError as error:
-            raise HTTPException(status_code=error.status_code, detail=f"Google Drive permissions error: {error}")
+            raise _drive_failure("set file permissions", error) from error
 
     async def export_to_pdf(self, file_id: str, output_path: str):
         try:
@@ -83,7 +98,7 @@ class GoogleDriveClient:
                 f.write(request.execute())
             return output_path
         except HttpError as error:
-            raise HTTPException(status_code=error.status_code, detail=f"Google Drive export error: {error}")
+            raise _drive_failure("export the file", error) from error
 
     async def update_placeholders(self, file_id: str, replacements: Dict[str, str]):
         """
@@ -102,7 +117,7 @@ class GoogleDriveClient:
                                                                                                 body={'requests': requests}).execute())
             return result
         except HttpError as error:
-            raise HTTPException(status_code=error.status_code, detail=f"Google Docs API error: {error}")
+            raise _drive_failure("update the document", error) from error
 
     async def get_document_content(self, file_id: str):
         """Get structured content of a document"""
@@ -111,7 +126,7 @@ class GoogleDriveClient:
                 lambda: self._docs_service.documents().get(documentId=file_id).execute())
             return result
         except HttpError as error:
-            raise HTTPException(status_code=error.status_code, detail=f"Google Docs API error: {error}")
+            raise _drive_failure("read the document", error) from error
 
     async def watch_file_changes(self, file_id: str, channel_id: str, webhook_url: str):
         """Set up a webhook for file changes"""
@@ -123,7 +138,7 @@ class GoogleDriveClient:
                 lambda: self._drive_service.files().watch(fileId=file_id, body=channel).execute())
             return result
         except HttpError as error:
-            raise HTTPException(status_code=error.status_code, detail=f"Google Drive watch error: {error}")
+            raise _drive_failure("watch the file", error) from error
 
     async def stop_watching(self, channel_id: str, resource_id: str):
         """Stop receiving notifications"""
@@ -132,4 +147,4 @@ class GoogleDriveClient:
             result = await asyncio.to_thread(lambda: self._drive_service.channels().stop(body=channel).execute())
             return result
         except HttpError as error:
-            raise HTTPException(status_code=error.status_code, detail=f"Google Drive stop watch error: {error}")
+            raise _drive_failure("stop watching the file", error) from error

@@ -39,8 +39,9 @@ export default function InfiniteScrollTriggerComponent({
 
   return (
     <div ref={bottomRef} className="py-4">
+      {/* `gray-600`, not `gray-500`: 500 is 4.39:1 on the app's surfaces and fails WCAG AA. */}
       {isFetchingNextPage && (
-        <p className="text-center text-sm text-gray-500">Loading more...</p>
+        <p className="text-center text-sm text-gray-600">Loading more...</p>
       )}
     </div>
   );

@@ -9,6 +9,7 @@ from kink import inject, di
 from main.app.config.settings import settings
 from main.app.domain.message.models import UpsertMessageDto
 from main.app.domain.message.service import MessageService
+from main.appodus_utils.exception.faults import log_fault_once
 from main.appodus_utils.integrations.exception.exceptions import (
     IntegrationException,
     IntegrationValidationException,
@@ -25,6 +26,9 @@ from main.appodus_utils.integrations.messaging.services.rate_limiting import Rat
 logger: logging.Logger = di['logger']
 
 _EXPIRED_ERROR = "Expired before delivery (expires_at passed) — not re-dispatched"
+# How long a retry sweep holds a row it took. Far longer than one send, so an overlapping
+# run never re-sends it; short enough that a row whose sweep died is retried soon after.
+_RETRY_LEASE = timedelta(minutes=5)
 
 
 @dataclass()
@@ -98,7 +102,8 @@ class MessagingService:
             raise
 
         except Exception as e:
-            logger.error("Failed to send message: {}", e, exc_info=True)
+            # Logged once here; the IntegrationException raised from it is the same fault.
+            log_fault_once(e, "send_message")
             await self._record_failure(message, e, start_time)
             raise IntegrationException(f"Failed to send message: {e}") from e
 
@@ -148,6 +153,10 @@ class MessagingService:
         stats = {"processed": 0, "retried": 0, "permanent_failures": 0, "expired": 0}
 
         for message in ready.items:
+            # Leased first: a row an overlapping run already took is left to it, so no
+            # message is re-sent twice.
+            if not await self.message_service.lease_retry(message.id, now, now + _RETRY_LEASE):
+                continue
             if message.expires_at and message.expires_at <= datetime.now(timezone.utc):
                 await self.message_service.mark_message_failed(message.id, _EXPIRED_ERROR)
                 stats["expired"] += 1
@@ -290,8 +299,6 @@ class MessagingService:
                     message.id, retry_count=0, next_retry_at=next_retry_at, error=error_msg,
                 )
         except Exception as bookkeeping_error:
-            logger.error(
+            logger.opt(exception=True).error(
                 "Failed to record message failure {}: {}",
-                message.id, bookkeeping_error,
-                exc_info=True,
-            )
+                message.id, bookkeeping_error)

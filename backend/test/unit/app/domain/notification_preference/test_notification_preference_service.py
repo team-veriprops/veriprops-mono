@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
+
+from test.utils.repo_fakes import fake_upsert, first_matching
 from unittest.mock import AsyncMock, MagicMock
 
 from main.app.core.events.events import EventType
@@ -52,14 +54,18 @@ class TestChannelsEnabled:
 
 
 class TestSet:
+    @staticmethod
+    def _with_rows(svc, rows):
+        """One statement on the live (user, event) key: concurrent saves can't create twins."""
+        svc._preference_repo.upsert = fake_upsert(
+            lambda values: first_matching(rows, user_id=values["user_id"], event_type=values["event_type"]),
+            lambda values: rows.append(SimpleNamespace(deleted=False, **values)) or rows[-1],
+        )
+
     async def test_set_creates_when_absent(self):
         svc = _service()
-        svc._preference_repo.get_one = AsyncMock(return_value=None)
-        svc._preference_repo.create_return_model = AsyncMock(
-            return_value=SimpleNamespace(
-                event_type=EventType.STATUS_CHANGED.value, email_enabled=False, sms_enabled=True
-            )
-        )
+        rows = []
+        self._with_rows(svc, rows)
 
         dto = SetPreferenceDto(
             event_type=EventType.STATUS_CHANGED.value, email_enabled=False, sms_enabled=True
@@ -67,24 +73,23 @@ class TestSet:
         result = await svc.set("u-1", dto)
 
         assert (result.email_enabled, result.sms_enabled) == (False, True)
-        create_dto = svc._preference_repo.create_return_model.call_args.args[0]
-        assert create_dto.user_id == "u-1"
+        assert [r.user_id for r in rows] == ["u-1"]
+        assert svc._preference_repo.upsert.await_args.kwargs == {"unique_index": "uq_notif_prefs_user_event"}
 
     async def test_set_updates_existing_row_in_place(self):
         svc = _service()
         existing = SimpleNamespace(
-            event_type=EventType.STATUS_CHANGED.value, email_enabled=True, sms_enabled=True
+            user_id="u-1", event_type=EventType.STATUS_CHANGED.value, email_enabled=True,
+            sms_enabled=True, deleted=False,
         )
-        svc._preference_repo.get_one = AsyncMock(return_value=existing)
-        svc._preference_repo.create_return_model = AsyncMock()
+        rows = [existing]
+        self._with_rows(svc, rows)
 
         dto = SetPreferenceDto(
             event_type=EventType.STATUS_CHANGED.value, email_enabled=False, sms_enabled=False
         )
         result = await svc.set("u-1", dto)
 
-        # existing row mutated + re-added; no new row created.
         assert (existing.email_enabled, existing.sms_enabled) == (False, False)
         assert (result.email_enabled, result.sms_enabled) == (False, False)
-        svc._preference_repo.create_return_model.assert_not_called()
-        svc._preference_repo._session.add.assert_called_once_with(existing)
+        assert rows == [existing]  # no second row

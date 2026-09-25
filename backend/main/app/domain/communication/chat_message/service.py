@@ -359,7 +359,7 @@ class ChatMessageService:
             type=EventType.MESSAGE_SENT,
             verification_id=conversation.verification_id,
             recipient_user_ids=recipients,
-            data={"conversation_id": conversation.id},
+            data={"conversation_id": Utils.uuid_to_hex(conversation.id)},
         ))
 
     async def _deliver_over_channel(

@@ -9,14 +9,20 @@ import enum
 import functools
 from typing import Awaitable, TypeVar, Optional
 
-from main.appodus_utils.db.session import get_db_session_from_context, create_new_db_session
-from main.appodus_utils.decorators.audit_ctx import drain_audit_writes, reset_audit_ctx
+from main.appodus_utils.db.session import (
+    create_new_db_session,
+    get_db_session_from_context,
+    get_db_session_or_none,
+    is_independent_session,
+)
+from main.appodus_utils.decorators.audit_ctx import begin_audit_scope, drain_audit_writes, end_audit_scope
 from kink import di
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Callable, Concatenate, ParamSpec
 
 from main.appodus_utils.exception.exceptions import AppodusBaseException
+from main.appodus_utils.exception.faults import log_fault_once
 
 logger: Logger = di['logger']
 P = ParamSpec("P")
@@ -34,8 +40,20 @@ class TransactionSessionPolicy(str, enum.Enum):
 
     ALWAYS_NEW = "always_new"
     """
-    Always create a new session and manage the transaction lifecycle independently.
-    Use when you want isolation from any existing session context.
+    Always create a new session from the main pool and manage its transaction lifecycle.
+    For top-level units of work that own their transaction outside a request: scheduler job
+    wrappers, the dev scenario builder. Not for writes nested inside a request — use INDEPENDENT.
+    """
+
+    INDEPENDENT = "independent"
+    """
+    Commit in its own transaction, even if the caller's transaction later fails — for writes
+    that must survive the caller (an OTP failure count before the guess is rejected, the record
+    of a message already handed to a provider, a claim that must be visible before a slow call).
+    The session comes from a separate pool, so it never waits on the connection its caller
+    holds. Nested inside another independent write, it joins that one instead of opening a
+    third. Keep the scope a short leaf: no `asyncio.gather`/`create_task` inside it, since
+    everything nested shares the one session.
     """
 
     FALLBACK_NEW = "fallback_new"
@@ -51,7 +69,8 @@ def transactional(session_policy: TransactionSessionPolicy = TransactionSessionP
     Args:
         session_policy (TransactionSessionPolicy):
             - USE_IF_PRESENT: Uses existing session from context; raises if none exists.
-            - ALWAYS_NEW: Always creates a new session.
+            - ALWAYS_NEW: Always creates a new session (main pool) — top-level units of work.
+            - INDEPENDENT: Commits on its own even if the caller fails; separate pool.
             - FALLBACK_NEW: Tries context, creates new session if missing.
     """
     def decorator(func: Callable[Concatenate[P], Awaitable[R]]) -> Callable[P, Awaitable[R]]:
@@ -78,6 +97,13 @@ def transactional(session_policy: TransactionSessionPolicy = TransactionSessionP
                     async with create_new_db_session() as session:
                         return await execute(func, session, func_name, *args, **kwargs)
 
+                elif session_policy == TransactionSessionPolicy.INDEPENDENT:
+                    current = get_db_session_or_none()
+                    if is_independent_session(current):
+                        return await execute(func, current, func_name, *args, **kwargs)
+                    async with create_new_db_session(independent=True) as session:
+                        return await execute(func, session, func_name, *args, **kwargs)
+
                 elif session_policy == TransactionSessionPolicy.FALLBACK_NEW:
                     try:
                         db_session = get_db_session_from_context()
@@ -95,10 +121,9 @@ def transactional(session_policy: TransactionSessionPolicy = TransactionSessionP
                     raise AppodusBaseException(f"Unsupported transaction session policy: {session_policy}")
 
             except Exception as error:
-                    error_msg = f"Exception in @transactional(), {func_name}: {error}"
-                    logger.error(error_msg)
-                    # TimeoutError or
-                    raise
+                # Once per fault, whichever layer sees it first (see `log_fault_once`).
+                log_fault_once(error, func_name)
+                raise
 
         return _wrapper
 
@@ -114,17 +139,20 @@ async def execute(func, db_session: AsyncSession, func_name: str, *args: P.args,
         logger.debug(f"Arguments for {func_name}: args={args}, kwargs={kwargs}")
         return await func(*args, **kwargs)
 
-    # Outermost: owns begin/commit. Reset the audit queue for a clean slate, then drain
-    # after flush so audit rows are committed atomically with the business changes.
-    reset_audit_ctx()
+    # Outermost: owns begin/commit. Its own audit queue, drained after flush so audit rows
+    # commit atomically with the business changes; the caller's queue is restored afterwards.
+    audit_scope = begin_audit_scope()
     logger.debug(f"Starting transaction for {func_name}")
-    async with db_session.begin():
-        try:
-            logger.debug(f"Arguments for {func_name}: args={args}, kwargs={kwargs}")
-            call_response = await func(*args, **kwargs)
-            await db_session.flush()
-            await drain_audit_writes()
-            return call_response
-        except SQLAlchemyError as e:
-            logger.error(f"SQLAlchemy transaction failed in {func_name}: {e}")
-            raise
+    try:
+        async with db_session.begin():
+            try:
+                logger.debug(f"Arguments for {func_name}: args={args}, kwargs={kwargs}")
+                call_response = await func(*args, **kwargs)
+                await db_session.flush()
+                await drain_audit_writes()
+                return call_response
+            except SQLAlchemyError as e:
+                log_fault_once(e, f"transaction of {func_name}")
+                raise
+    finally:
+        end_audit_scope(audit_scope)

@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from test.utils.repo_fakes import fake_insert_or_get
+
 from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
 from main.app.domain.channel.whatsapp.handoff.service import HandoffTokenService
 from main.app.domain.channel.whatsapp.handoff.tokens import (
@@ -51,13 +53,15 @@ def _service():
     async def _get_by_jti(jti):
         return spent.get(jti)
 
-    async def _create(dto):
-        row = SimpleNamespace(**dto.model_dump())
-        spent[dto.jti] = row
+    def _create(values):
+        row = SimpleNamespace(**values)
+        spent[values["jti"]] = row
         return row
 
     svc._handoff_token_redemption_repo.get_by_jti = AsyncMock(side_effect=_get_by_jti)
-    svc._handoff_token_redemption_repo.create_return_model = AsyncMock(side_effect=_create)
+    svc._handoff_token_redemption_repo.insert_or_get = fake_insert_or_get(
+        lambda values: spent.get(values["jti"]), _create,
+    )
     return svc
 
 

@@ -34,6 +34,7 @@ from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 from main.appodus_utils.exception.exceptions import UnauthorizedException
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
 from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
+    INBOUND_NOT_JOURNALLED_CODE,
     normalize_statuses,
     normalize_webhook,
 )
@@ -155,15 +156,24 @@ class WhatsAppWebhookHandler(BaseWebhookHandler):
 
         service = self._resolve_inbound_service()
         ingested = 0
+        not_journalled = None
         for message in messages:
             try:
                 await service.ingest(message)
                 ingested += 1
-            except Exception:
+            except Exception as exc:
                 # Log the id, never the content: inbound bodies are customer PII.
                 logger.exception(
                     "Failed to ingest inbound WhatsApp message {}", message.wamid
                 )
+                if getattr(exc, "code", None) == INBOUND_NOT_JOURNALLED_CODE:
+                    not_journalled = exc
+        if not_journalled is not None:
+            # Nothing of that message was kept, so the only copy is Meta's: answer with a
+            # 5xx so Meta redelivers. Messages that *were* journalled are deduped by wamid
+            # on the redelivery, and one that failed after its journal write is retried
+            # from our side instead, which is why only this case refuses the batch.
+            raise not_journalled
         return {"ingested": ingested, "statuses": applied}
 
     def _resolve_status_service(self):

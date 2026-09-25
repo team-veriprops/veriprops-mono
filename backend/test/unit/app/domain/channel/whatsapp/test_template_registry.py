@@ -13,6 +13,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from test.utils.repo_fakes import fake_insert_or_get
+
 from main.app.domain.channel.whatsapp.template import service as template_service_module
 from main.app.domain.channel.whatsapp.template.models import WhatsAppTemplateStatus
 from main.app.domain.channel.whatsapp.template.service import WhatsAppTemplateService
@@ -54,13 +56,13 @@ def _service(existing=None):
     async def _list_all():
         return list(rows.values())
 
-    async def _create(dto):
+    def _create(values):
         row = SimpleNamespace(
-            name=dto.name, category=dto.category, language=dto.language,
-            status=dto.status.value, remote_id=dto.remote_id,
-            rejection_reason=dto.rejection_reason, last_synced_at=None, deleted=False,
+            name=values["name"], category=values["category"], language=values["language"],
+            status=values["status"].value, remote_id=values["remote_id"],
+            rejection_reason=values["rejection_reason"], last_synced_at=None, deleted=False,
         )
-        rows[dto.name] = row
+        rows[values["name"]] = row
         return row
 
     def _apply(row, status, remote_id, rejection_reason, at):
@@ -72,7 +74,8 @@ def _service(existing=None):
 
     svc._whatsapp_template_repo.get_by_name = AsyncMock(side_effect=_get_by_name)
     svc._whatsapp_template_repo.list_all = AsyncMock(side_effect=_list_all)
-    svc._whatsapp_template_repo.create_return_model = AsyncMock(side_effect=_create)
+    # Keyed on the template name (uq_whatsapp_templates_name), as the real insert is.
+    svc._whatsapp_template_repo.insert_or_get = fake_insert_or_get(lambda values: rows.get(values["name"]), _create)
     svc._whatsapp_template_repo.apply_remote_state = MagicMock(side_effect=_apply)
     svc._whatsapp_template_repo._session = MagicMock()
     return svc, rows

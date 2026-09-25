@@ -34,10 +34,11 @@ from main.app.domain.user.auth.models import (
 from main.app.domain.user.auth.oauth.controller import oauth_router
 from main.app.domain.user.auth.service import AuthService
 from main.app.domain.user.auth.session.controller import session_router
-from main.app.domain.user.auth.session.models import AuthSessionDto
+from main.app.domain.user.auth.session.models import AuthSessionDto, UserPersona
 from main.app.domain.user.auth.session.service import SessionService
 from main.app.domain.user.auth.signup_draft.controller import signup_draft_router
 from main.app.domain.user.auth.signup_draft.service import SignupDraftService
+from main.app.domain.user.service import UserService
 from main.appodus_utils import RouterUtils, Utils
 from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.common.rate_limit import RateLimiter
@@ -48,6 +49,7 @@ from main.appodus_utils.integrations.messaging.models import MessageRequestRecip
 auth_service: AuthService = di[AuthService]
 # consent_service: ConsentService = di[ConsentService]
 session_service: SessionService = di[SessionService]
+user_service: UserService = di[UserService]
 signup_draft_service: SignupDraftService = di[SignupDraftService]
 # otp_delivery: OtpDeliveryService = di[OtpDeliveryService]
 # kv: KeyValueService = di[KeyValueService]
@@ -106,13 +108,13 @@ async def signup(
             },
         )
     except Exception:
-        logger.warning("Could not send welcome message after signup", exc_info=True)
+        logger.opt(exception=True).warning("Could not send welcome message after signup")
 
     # Server-side signup draft is no longer needed once the account is created.
     try:
         await signup_draft_service.discard(req.email)
     except Exception:
-        logger.warning("Could not discard signup draft after successful signup", exc_info=True)
+        logger.opt(exception=True).warning("Could not discard signup draft after successful signup")
     return SuccessResponse[AuthSessionDto](data=session)
 
 
@@ -126,6 +128,29 @@ async def profile_complete(req: ProfileCompletionDto, authorize: AuthJWT = Depen
     # reached from the OAuth profile-completion modal) — sending it again here
     # would double-send.
     return SuccessResponse[AuthSessionDto](data=await session_service.build_session_dto(user))
+
+
+@auth_router.post("/personas/customer", response_model=SuccessResponse[AuthSessionDto])
+async def grant_customer_persona(request: Request, authorize: AuthJWT = Depends()):
+    """Take up the customer hat (§3.2, additive) — the mirror of applying to become an agent.
+
+    An account that signed up through the agent path holds `[AGENT]` alone and cannot open
+    `/portal/*`, so wanting a property verified has to be answerable from inside the product.
+
+    The persona is not a parameter: this route grants CUSTOMER and nothing else, keeping identity
+    server-derived — AGENT is reachable only by applying and being approved. The session is rotated
+    because the frontend route guard reads the refresh token, which a plain refresh does not
+    re-mint, so without it the portal stays shut until the next sign-in.
+    """
+    await authorize.jwt_required()
+    user_id = str(authorize.get_jwt_subject())
+    user = await user_service.add_persona(user_id, UserPersona.CUSTOMER)
+
+    refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
+    session = await session_service.rotate_current_session(
+        user, authorize, Utils.sha256(refresh_cookie) if refresh_cookie else None,
+    )
+    return SuccessResponse[AuthSessionDto](data=session)
 
 
 # ─── OTP ───────────────────────────────────────────────────────────
@@ -218,7 +243,7 @@ async def forgot_password(req: ForgotPasswordDto, request: Request, _: None = De
                 expires_at=Utils.datetime_now_plus(seconds=settings.PASSWORD_RESET_TTL_SECONDS)
             )
         except Exception as e:
-            logger.warning("Could not send password reset email: {}", e, exc_info=True)
+            logger.opt(exception=True).warning("Could not send password reset email: {}", e)
     return SuccessResponse[bool](data=True)
 
 

@@ -39,7 +39,7 @@ from main.appodus_utils import Utils
 from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
-from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.decorators.transactional import TransactionSessionPolicy, transactional
 from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
@@ -63,7 +63,7 @@ _AUDIT_RESOURCE = "case_delegate"
 
 
 @inject
-@decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
+@decorate_all_methods(transactional(), exclude=["__init__", "revoke_by_phone"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class CaseDelegateService:
     def __init__(
@@ -110,9 +110,16 @@ class CaseDelegateService:
         if await self._case_delegate_repo.get_live_for_case(verification_id) is not None:
             raise ValidationException(message=ALREADY_DELEGATED_MESSAGE)
 
-        await self._case_delegate_repo.create_return_model(CreateCaseDelegateDto(
-            verification_id=verification_id, name=name.strip(), phone_e164=normalized,
-        ))
+        # The one-per-case slot is taken by the insert itself: of two concurrent
+        # authorizations only one creates the row, and only that one sends a code.
+        _, created = await self._case_delegate_repo.insert_or_get(
+            CreateCaseDelegateDto(
+                verification_id=verification_id, name=name.strip(), phone_e164=normalized,
+            ).model_dump(by_alias=False),
+            unique_index="uq_case_delegates_live_per_case",
+        )
+        if not created:
+            raise ValidationException(message=ALREADY_DELEGATED_MESSAGE)
         self._audit.schedule(
             AuditActionType.CASE_DELEGATE_AUTHORIZED,
             resource_type=_AUDIT_RESOURCE, resource_id=verification_id, actor_id=customer_id,
@@ -205,6 +212,7 @@ class CaseDelegateService:
 
     # ── STOP from a delegate's number (D77) ───────────────────────
 
+    @transactional(session_policy=TransactionSessionPolicy.INDEPENDENT)
     async def revoke_by_phone(self, phone_e164: str) -> Optional[CaseDelegate]:
         """Honour an opt-out from a number that is a delegate and nothing else.
 
@@ -212,6 +220,9 @@ class CaseDelegateService:
         is the only lever that actually stops the messages — and continuing to message
         someone who typed STOP is what moves a Meta quality rating. The account holder is
         told, because the useful response is to authorize somebody else.
+
+        Committed on its own (`INDEPENDENT`): the STOP arrives inside the bot turn, and a
+        failure later in that turn must not quietly undo the opt-out.
         """
         delegate = await self._case_delegate_repo.get_active_by_phone(to_e164(phone_e164))
         if delegate is None:

@@ -47,7 +47,7 @@ from main.app.domain.verification.admin_note.models import AddAdminNoteDto, Admi
 from main.app.domain.verification.admin_note.service import AdminNoteService
 from main.app.domain.verification.models import Verification
 from main.app.domain.verification.repo import VerificationRepo
-from main.app.domain.verification.task.models import TaskAssignmentMode, TaskDto
+from main.app.domain.verification.task.models import ReviewDecision, TaskAssignmentMode, TaskDto
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.appodus_utils import Utils
 from main.appodus_utils.db.models import Page, PaginationMeta
@@ -297,6 +297,8 @@ class AdminVerificationService:
             accept_deadline_at=t.accept_deadline_at, decline_count=t.decline_count or 0,
             remote_bonus_minor=t.remote_bonus_minor, assigned_at=t.assigned_at,
             accepted_at=t.accepted_at, submitted_at=t.submitted_at, approved_at=t.approved_at,
+            review_decision=ReviewDecision(t.review_decision) if t.review_decision else None,
+            review_quality=t.review_quality, rejection_reason=t.rejection_reason,
         )
 
     def _note_dto(self, n) -> AdminNoteDto:

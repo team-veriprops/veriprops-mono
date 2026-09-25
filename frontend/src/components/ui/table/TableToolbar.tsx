@@ -12,6 +12,7 @@ import { Search } from "lucide-react";
 import { ReactNode, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import { useGlobalSettings } from "@stores/useGlobalSettings";
+import { DATATABLE_TEST_IDS } from "./testIds";
 import type { TableFilter } from "./DataTable";
 
 // Sentinel value for a filter's "no selection" option — Radix Select cannot use "".
@@ -66,7 +67,7 @@ export function TableToolbar({
               emitSearch(e.target.value);
             }}
             className="pl-10"
-            data-testid="datatable-search"
+            data-testid={DATATABLE_TEST_IDS.SEARCH}
           />
         </div>
 
@@ -77,7 +78,13 @@ export function TableToolbar({
             value={filter.value && filter.value !== "" ? filter.value : ALL}
             onValueChange={(v) => onFilterChange?.(filter.key, v === ALL ? "" : v)}
           >
-            <SelectTrigger className="w-44" data-testid={`datatable-filter-${filter.key}`}>
+            {/* Radix renders the trigger as a button whose only content is the chosen value, so
+                without this it is announced as an unnamed button and nothing says what it filters. */}
+            <SelectTrigger
+              className="w-44"
+              aria-label={`Filter by ${filter.label.toLowerCase()}`}
+              data-testid={`datatable-filter-${filter.key}`}
+            >
               <SelectValue placeholder={filter.label} />
             </SelectTrigger>
             <SelectContent>

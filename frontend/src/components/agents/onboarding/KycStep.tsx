@@ -94,7 +94,9 @@ export default function KycStep({ value, onChange }: Props) {
           <div className="space-y-2">
             <Label>ID type</Label>
             <Select value={value.idType} onValueChange={(v) => set({ idType: v as GovIdType })}>
-              <SelectTrigger data-testid="agent-apply-idtype">
+              {/* A Radix trigger is a <button> with no text of its own until a value is chosen,
+                  so it carries the name (axe `button-name`). */}
+              <SelectTrigger aria-label="ID type" data-testid="agent-apply-idtype">
                 <SelectValue placeholder="Select ID type" />
               </SelectTrigger>
               <SelectContent>

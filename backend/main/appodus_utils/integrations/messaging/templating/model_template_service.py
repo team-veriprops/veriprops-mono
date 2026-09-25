@@ -1,6 +1,10 @@
-from typing import Dict, Any, Type, TypeVar
+from __future__ import annotations
+from typing import TYPE_CHECKING, Dict, Any, Type, TypeVar
 
-from kink import inject
+if TYPE_CHECKING:
+    from loguru import Logger
+
+from kink import di, inject
 from pydantic import ValidationError
 
 from main.appodus_utils import Object
@@ -11,6 +15,8 @@ from main.appodus_utils.integrations.messaging.templating.models import Availabl
 from main.appodus_utils.integrations.messaging.templating.service import TemplateService
 
 T = TypeVar('T', bound=Object)
+
+logger: Logger = di["logger"]
 
 
 @inject
@@ -57,16 +63,18 @@ class ModelTemplateService:
             # Create and validate the model instance
             return model_class(**{**payload_data, **model_kwargs})
 
+        # Both exceptions are 4xx, whose message reaches the client — but a template that renders
+        # an invalid payload is our fault, not the caller's, and the parser's error names our
+        # models. The detail goes to the log; the exceptions keep generic text.
         except ValidationError as e:
-            raise ValidationException(
-                f"Invalid {model_class.__name__} payload: {str(e)}"
-            )
+            logger.error(f"Template {template.value} rendered an invalid {model_class.__name__}: {e}")
+            raise ValidationException("The message could not be prepared.") from e
         except ValueError as e:
-            raise ValidationException(f"Invalid content format: {str(e)}")
+            logger.error(f"Template {template.value} rendered unparseable content: {e}")
+            raise ValidationException("The message could not be prepared.") from e
         except Exception as e:
-            raise TemplateRenderingException(
-                f"Failed to render {template.value} template: {str(e)}"
-            )
+            logger.error(f"Template {template.value} failed to render: {e}")
+            raise TemplateRenderingException() from e
 
     def _parse_rendered_content(self, content: str) -> Dict[str, Any]:
         """

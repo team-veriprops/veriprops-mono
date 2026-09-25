@@ -11,10 +11,11 @@ tests use the admin ``POST /messages/sweeps/retries`` endpoint or call
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from kink import di, inject
 
+from main.app.jobs.exclusive import exclusive_job
 from main.appodus_utils.integrations.messaging.service import MessagingService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.transactional import transactional, TransactionSessionPolicy
@@ -37,11 +38,12 @@ class MessageRetrySweepJobs:
     def __init__(self, messaging_service: MessagingService):
         self._messaging_service = messaging_service
 
-    async def run_message_retry_sweep(self) -> dict:
+    @exclusive_job("message_retries")
+    async def run_message_retry_sweep(self) -> Optional[dict]:
         return await self._messaging_service.process_retries()
 
 
 async def check_message_retries() -> None:
     stats = await di[MessageRetrySweepJobs].run_message_retry_sweep()
-    if any(stats.values()):
+    if stats and any(stats.values()):
         logger.info("message-retry sweep: {}", stats)

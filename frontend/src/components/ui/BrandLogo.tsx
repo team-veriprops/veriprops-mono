@@ -1,3 +1,7 @@
+"use client";
+
+// Client component: framer-motion's hover/tap animation can't render on the server, and server
+// pages (404, 403, public VID lookup) render the logo directly.
 import { motion } from "framer-motion";
 import { Shield } from "lucide-react";
 import Link from "next/link";

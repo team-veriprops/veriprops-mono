@@ -14,7 +14,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, UniqueConstraint
+from sqlalchemy import Column, Integer, String
+
+from main.appodus_utils.db.models import live_unique_index
 
 from main.app.core.state.status import AgentRole, VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
@@ -35,7 +37,7 @@ class CommissionRule(BaseEntity):
     rate_bps = Column(Integer, nullable=False, default=0)
 
     __table_args__ = (
-        UniqueConstraint("role", "tier", name="uq_commission_rule_role_tier"),
+        live_unique_index("uq_commission_rule_role_tier", "role", "tier"),
     )
 
 

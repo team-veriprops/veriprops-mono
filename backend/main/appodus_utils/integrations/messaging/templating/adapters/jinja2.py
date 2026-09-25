@@ -1,11 +1,18 @@
-from typing import Dict, Any
+from __future__ import annotations
+from typing import TYPE_CHECKING, Dict, Any
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
+from kink import di
 
 from main.app.config.settings import settings
 from main.appodus_utils.exception.exceptions import TemplateRenderingException
 from main.appodus_utils.integrations.messaging.templating.engine import TemplateEngine, TemplateEngineFactory
+
+logger: Logger = di["logger"]
 
 
 class Jinja2TemplateEngine(TemplateEngine):
@@ -30,10 +37,14 @@ class Jinja2TemplateEngine(TemplateEngine):
         try:
             template = self.env.get_template(template_name)
             return template.render(**context)
-        except TemplateNotFound:
-            raise TemplateRenderingException(f"Template not found: {template_name}")
+        # The exception is a 422 whose message reaches the client: the template name and Jinja's
+        # own error go to the log, and the exception keeps its generic text.
+        except TemplateNotFound as e:
+            logger.error(f"Template not found: {template_name}")
+            raise TemplateRenderingException() from e
         except Exception as e:
-            raise TemplateRenderingException(f"Template rendering failed: {str(e)}")
+            logger.error(f"Template {template_name} failed to render: {e}")
+            raise TemplateRenderingException() from e
 
     def supports_template(self, template_name: str) -> bool:
         """

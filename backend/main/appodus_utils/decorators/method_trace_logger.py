@@ -5,9 +5,10 @@ if TYPE_CHECKING:
     from loguru import Logger
 import functools
 import inspect
-import traceback
 from typing import Callable, Awaitable, Any
 from kink import di
+
+from main.appodus_utils.exception.faults import log_fault_once
 
 AsyncCallable = Callable[..., Awaitable[Any]]
 logger: Logger = di['logger']
@@ -36,9 +37,9 @@ def method_trace_logger(func: AsyncCallable) -> AsyncCallable:
             logger.debug(f"Return value is {return_value}")
             return return_value
         except Exception as e:
-            logger.exception(
-                f"An error occurred: {''.join(traceback.format_exception(None, e, e.__traceback__))}"
-            )
+            # A real fault is logged once, here at the first layer it leaves; an expected
+            # outcome (a 4xx, a declared race) only at DEBUG. Outer layers skip both.
+            log_fault_once(e, real_func.__qualname__)
             raise
 
     return _wrapper

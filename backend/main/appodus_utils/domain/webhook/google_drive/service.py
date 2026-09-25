@@ -57,10 +57,12 @@ class GoogleDriveWebhookSubscriptionService:
             )
             return await self._g_drive_subscription_repo.create(obj_in)
         except Exception as e:
+            # A 400 passes its detail to the client; the underlying error goes to the log.
+            logger.error(f"Failed to create document change notification: {e}")
             raise HTTPException(
                 status_code=400,
-                detail=f"Failed to create document change notification: {str(e)}"
-            )
+                detail="Failed to create document change notification."
+            ) from e
 
     async def renew_webhook_subscription(self, g_drive_subscription_id: str) -> QueryGoogleDriveWebhookSubscriptionDto:
         """ Renew an expiring webhook subscription """
@@ -77,10 +79,12 @@ class GoogleDriveWebhookSubscriptionService:
             obj_in = _UpdateGoogleDriveWebhookSubscriptionDto(expiration=datetime.fromtimestamp(int(result['expiration']) / 1000))
             return await self._g_drive_subscription_repo.update(g_drive_subscription_id, obj_in.model_dump(exclude_none=True))
         except Exception as e:
+            # A 400 passes its detail to the client; the underlying error goes to the log.
+            logger.error(f"Failed to renew document change notification: {e}")
             raise HTTPException(
                 status_code=400,
-                detail=f"Failed to renew document change notification: {str(e)}"
-            )
+                detail="Failed to renew document change notification."
+            ) from e
 
     async def stop_webhook_subscription(self, g_drive_subscription_id: str) -> bool:
         """
@@ -96,10 +100,12 @@ class GoogleDriveWebhookSubscriptionService:
             return await self._g_drive_subscription_repo.hard_delete(subscription.id)
 
         except Exception as e:
+            # A 400 passes its detail to the client; the underlying error goes to the log.
+            logger.error(f"Failed to stop document change notification: {e}")
             raise HTTPException(
                 status_code=400,
-                detail=f"Failed to stop document change notification: {str(e)}"
-            )
+                detail="Failed to stop document change notification."
+            ) from e
 
     async def get_g_drive_subscription(self, g_drive_subscription_id: str) -> QueryGoogleDriveWebhookSubscriptionDto:
         await self._g_drive_subscription_validator.should_exist_by_id(g_drive_subscription_id)

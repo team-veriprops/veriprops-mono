@@ -11,7 +11,7 @@ from sqlalchemy.ext.mutable import MutableList
 
 from main.app.domain.user.auth.session.models import UserType, UserPersona
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
-from main.appodus_utils.db.models import UTCDateTime, jsonb_variant
+from main.appodus_utils.db.models import UTCDateTime, jsonb_variant, live_unique_index
 from main.appodus_utils.db.types.money import TransactionCurrency
 
 
@@ -97,6 +97,11 @@ class User(BaseEntity):
     # VerificationService.create_draft's "create new" branch — never unset.
     has_started_verification = Column(Boolean, nullable=False, default=False, server_default="false")
 
+    __table_args__ = (
+        # One live account per phone number. NULL (an OAuth signup's placeholder) is exempt.
+        live_unique_index("uq_users_phone_e164", "phone_e164", where="deleted = false AND phone_e164 IS NOT NULL"),
+    )
+
 
 # ─── DTOs ─────────────────────────────────────────────────────────
 
@@ -123,7 +128,8 @@ class CreateUserDto(UserBaseDto):
 
 class _CreateUserDto(CreateUserDto):
     user_type: UserType = UserType.USER
-    phone_e164: str
+    # None for an OAuth signup's placeholder phone, which is not a number anyone owns.
+    phone_e164: Optional[str] = None
     email_normalized: str
 
 

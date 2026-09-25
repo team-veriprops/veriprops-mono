@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
 import { phoneFields, type PhoneFieldsValues } from "@components/website/auth/schemas";
 import {
@@ -16,7 +16,7 @@ import {
 import { otpDeliveryError } from "@components/website/auth/libs/otpDelivery";
 import type { AuthUser } from "@components/website/auth/models";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 
 type SessionPhone = Pick<AuthUser, "phone" | "phoneCountryCode" | "phoneDialCode">;
 
@@ -72,9 +72,9 @@ export default function PayPhoneGate({ user, onVerified }: Props) {
       }
       setSentTo(values);
       setOtp("");
-      toast({ title: "Code sent", description: "Enter the code sent to your phone." });
+      toast.success("Code sent", { description: "Enter the code sent to your phone." });
     } catch (err) {
-      setError(getErrorMessage(err as Error, "Could not send code. Please try again."));
+      setError(getErrorMessage(err, "Could not send code. Please try again."));
     }
   });
 
@@ -84,9 +84,9 @@ export default function PayPhoneGate({ user, onVerified }: Props) {
     try {
       await verifyPhone.mutateAsync({ ...sentTo, code: otp });
       await onVerified();
-      toast({ title: "Phone verified" });
+      toast.success("Phone verified");
     } catch (err) {
-      setError(getErrorMessage(err as Error, "That code didn't match. Try again."));
+      setError(getErrorMessage(err, "That code didn't match. Try again."));
     }
   };
 

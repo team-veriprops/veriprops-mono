@@ -9,7 +9,7 @@ const FAKE_SESSION = {
 } as unknown as AuthSession;
 
 beforeEach(() => {
-  useAuthStore.setState({ session: null, pendingLogout: false, hydrated: false });
+  useAuthStore.setState({ session: null, pendingLogout: false, signingOut: false, hydrated: false });
 });
 
 describe("useAuthStore pendingLogout", () => {
@@ -39,5 +39,42 @@ describe("useAuthStore pendingLogout", () => {
 
     expect(useAuthStore.getState().session).toBeNull();
     expect(useAuthStore.getState().pendingLogout).toBe(true);
+  });
+});
+
+describe("useAuthStore signingOut", () => {
+  it("defaults to false", () => {
+    expect(useAuthStore.getState().signingOut).toBe(false);
+  });
+
+  it("setSigningOut raises the flag the sign-out overlay renders from", () => {
+    useAuthStore.getState().setSigningOut(true);
+    expect(useAuthStore.getState().signingOut).toBe(true);
+  });
+
+  it("clear() leaves signingOut raised — it runs before the redirect, and dropping the overlay there would flash the signed-in page", () => {
+    useAuthStore.getState().setSession(FAKE_SESSION);
+    useAuthStore.getState().setSigningOut(true);
+
+    useAuthStore.getState().clear();
+
+    expect(useAuthStore.getState().session).toBeNull();
+    expect(useAuthStore.getState().signingOut).toBe(true);
+  });
+
+  it("setSession lowers signingOut — a confirmed session is not a sign-out in progress", () => {
+    useAuthStore.getState().setSigningOut(true);
+
+    useAuthStore.getState().setSession(FAKE_SESSION);
+
+    expect(useAuthStore.getState().signingOut).toBe(false);
+  });
+
+  it("is not persisted — a tab killed mid-sign-out must not reopen stuck behind the overlay", () => {
+    const persisted = useAuthStore.persist.getOptions().partialize!({
+      ...useAuthStore.getState(),
+      signingOut: true,
+    });
+    expect(persisted).not.toHaveProperty("signingOut");
   });
 });

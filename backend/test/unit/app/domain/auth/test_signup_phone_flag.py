@@ -116,3 +116,28 @@ class TestSignupPhoneFlag:
 
         create_dto = user_service.create_user.await_args.args[0]
         assert create_dto.phone_verified is True
+
+
+class TestSignupConsumesItsVerification:
+    """One OTP verification backs one account: consuming the marker is atomic, and the signup
+    that finds it already consumed (a concurrent signup won) is refused."""
+
+    async def test_refused_when_the_email_marker_was_already_consumed(self, monkeypatch):
+        monkeypatch.setattr(settings, "PHONE_VERIFICATION_ENABLED", False)
+        svc, _, otp_service = _service()
+        otp_service.consume_verified_marker = AsyncMock(return_value=False)
+
+        with pytest.raises(ValidationException):
+            await svc.signup(_payload())
+
+    async def test_refused_when_the_phone_marker_was_already_consumed(self, monkeypatch):
+        monkeypatch.setattr(settings, "PHONE_VERIFICATION_ENABLED", True)
+        svc, _, otp_service = _service(phone_verified=True)
+
+        async def _consume(channel, _recipient):
+            return channel == OtpChannel.EMAIL
+
+        otp_service.consume_verified_marker = AsyncMock(side_effect=_consume)
+
+        with pytest.raises(ValidationException):
+            await svc.signup(_payload())

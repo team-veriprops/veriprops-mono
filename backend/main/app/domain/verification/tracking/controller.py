@@ -12,7 +12,6 @@ safe after the per-request session closes.
 from __future__ import annotations
 
 import asyncio
-import json
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
@@ -21,6 +20,7 @@ from libre_fastapi_jwt import AuthJWT
 
 from main.app.config.settings import settings
 from main.app.core.realtime import VerificationEventType
+from main.app.core.realtime.frames import sse_frame
 from main.app.core.realtime.emitter import VerificationEventEmitter
 from main.app.domain.audit.models import AuditActivityPageDto
 from main.app.domain.verification.service import VerificationService
@@ -39,10 +39,6 @@ verification_service: VerificationService = di[VerificationService]
 # Emit a heartbeat if no real event arrives within this window — keeps proxies/mobile
 # connections alive and confirms liveness to the client.
 _HEARTBEAT_SECONDS = settings.SSE_HEARTBEAT_SECONDS
-
-
-def _sse_frame(event: str, data: dict) -> str:
-    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
 @customer_tracking_router.get("", response_model=SuccessResponse[Page[VerificationListItemDto]])
@@ -111,15 +107,15 @@ async def stream(verification_id: str, request: Request, authorize: AuthJWT = De
     async def _events():
         async with emitter.subscribe(verification_id) as queue:
             # Nudge the client to pull the authoritative snapshot on connect.
-            yield _sse_frame(VerificationEventType.TASK_UPDATED.value, {})
+            yield sse_frame(VerificationEventType.TASK_UPDATED.value, {})
             while True:
                 if await request.is_disconnected():
                     break
                 try:
                     payload = await asyncio.wait_for(queue.get(), timeout=_HEARTBEAT_SECONDS)
-                    yield _sse_frame(payload["event"], payload["data"])
+                    yield sse_frame(payload["event"], payload["data"])
                 except asyncio.TimeoutError:
-                    yield _sse_frame(VerificationEventType.HEARTBEAT.value, {})
+                    yield sse_frame(VerificationEventType.HEARTBEAT.value, {})
 
     return StreamingResponse(
         _events(),

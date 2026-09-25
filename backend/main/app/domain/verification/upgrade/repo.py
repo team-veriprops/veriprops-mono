@@ -13,6 +13,7 @@ from main.app.domain.verification.upgrade.models import (
     SearchUpgradeDto,
     UpdateUpgradeDto,
     UpgradeRequest,
+    UpgradeStatus,
 )
 from main.appodus_utils.db.repo import GenericRepo
 
@@ -30,9 +31,13 @@ class UpgradeRepo(
         super().__init__(db, model, query_dto)
         self.db = db
 
-    async def get_by_key(self, idempotency_key: str) -> Optional[UpgradeRequest]:
+    async def get_pending_by_key(self, idempotency_key: str) -> Optional[UpgradeRequest]:
+        """The pending request for this key, if any. Keys are unique only among pending
+        requests, so a cancelled or paid one with the same key is never returned here."""
         stmt = select(UpgradeRequest).where(
-            UpgradeRequest.deleted.is_(False), UpgradeRequest.idempotency_key == idempotency_key
+            UpgradeRequest.deleted.is_(False),
+            UpgradeRequest.idempotency_key == idempotency_key,
+            UpgradeRequest.status == UpgradeStatus.PENDING.value,
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 

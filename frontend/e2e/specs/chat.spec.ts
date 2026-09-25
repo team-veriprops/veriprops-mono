@@ -26,9 +26,10 @@ import { ROUTES } from "@lib/routes";
 
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
-import { goto, waitReady } from "../helpers/app";
+import { api } from "../helpers/api";
+import { goto, waitForHydration, waitForPage, waitReady } from "../helpers/app";
 import { TEST_OTP } from "../helpers/env";
-import { ScenarioStage } from "../helpers/scenario";
+import { ScenarioAccount, ScenarioStage } from "../helpers/scenario";
 
 /**
  * A short, unique token safe to drop into a message body. Not `Date.now()`: the send-time
@@ -59,6 +60,29 @@ async function linkWhatsAppNumber(page: Page, national: string): Promise<void> {
   await expect(page.getByTestId("wa-link-linked")).toBeVisible();
 }
 
+/** Link *e164* to *account* through the endpoints the linking screen calls — for tests whose
+ * subject is what a linked number leads to, not the screen itself (UAT-CHAT-02/03 drive that). */
+async function linkWhatsAppNumberViaApi(account: ScenarioAccount, e164: string): Promise<void> {
+  const client = await api(account.email, account.password);
+  try {
+    await client.post("/channel/whatsapp/link/me/start", { phoneE164: e164 });
+    await client.post("/channel/whatsapp/link/me/confirm", { phoneE164: e164, code: TEST_OTP });
+  } finally {
+    await client.dispose();
+  }
+}
+
+/** Open *account*'s web support thread and post *body* to it, as the support page does. */
+async function sendWebSupportMessageViaApi(account: ScenarioAccount, body: string): Promise<void> {
+  const client = await api(account.email, account.password);
+  try {
+    await client.get("/support/chat");
+    await client.post("/support/chat/messages", { body });
+  } finally {
+    await client.dispose();
+  }
+}
+
 /**
  * Filter + search the admin Conversations tab down to the one row containing *hasText*,
  * and return it. The search box is debounced (300ms), so the list briefly reflects the
@@ -67,6 +91,10 @@ async function linkWhatsAppNumber(page: Page, national: string): Promise<void> {
  * locator by the identifying text (an email or a number, never the customer's name alone —
  * every scenario customer is named "Ada Scenario") makes Playwright's own retry absorb the
  * debounce instead of racing it.
+ *
+ * The search is a controlled input, so the inbox has to be hydrated before it is typed into:
+ * text that lands first is discarded when React takes over, the list stays unfiltered, and the
+ * row — off its first page — reads as missing. A filter click that lands first does nothing.
  */
 async function findAdminRow(
   admin: Page,
@@ -74,7 +102,9 @@ async function findAdminRow(
   search: string,
   hasText: string,
 ) {
-  await admin.getByTestId(`admin-conversations-filter-${filterId}`).click();
+  await waitForHydration(admin, "admin-conversations-search");
+  const filter = admin.getByTestId(`admin-conversations-filter-${filterId}`);
+  if ((await filter.getAttribute("aria-pressed")) !== "true") await filter.click();
   await admin.getByTestId("admin-conversations-search").fill(search);
   const row = admin.getByTestId("admin-conversation-row").filter({ hasText });
   await expect(row).toHaveCount(1, { timeout: 10_000 });
@@ -150,7 +180,7 @@ test.describe("UAT-CHAT — unified chat & the surface-neutral assistant @P1", (
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.click();
 
-    await page.waitForURL((url) => url.pathname.startsWith(`${ROUTES.PORTAL.CHAT}/`));
+    await waitForPage(page, (url) => url.pathname.startsWith(`${ROUTES.PORTAL.CHAT}/`));
     await expect(page.getByText("Hi", { exact: true })).toBeVisible();
     await expect(page.getByText("What would you like to do?")).toBeVisible();
     await expect(page.getByTitle("Received on WhatsApp").first()).toBeVisible();
@@ -262,22 +292,18 @@ test.describe("UAT-CHAT — unified chat & the surface-neutral assistant @P1", (
 
   test("UAT-CHAT-06 · the admin Conversations tab lists web support and WhatsApp threads, filterable", async ({
     scenario,
-    pageFor,
     adminPage,
     wa,
   }) => {
+    // The two threads are set up over the API: the support composer and the linking screen
+    // are UAT-CHAT-01/02's subjects, and driving them here (two sign-ins, the link flow) spent
+    // most of this test's budget before the inbox — what it is about — was even opened.
     const { customer: webCustomer } = await scenario(ScenarioStage.DRAFT);
-    const webPage = await pageFor(webCustomer);
-    const webText = `Hi, a web support question ${uniqueToken()}`;
-    await goto(webPage, ROUTES.PORTAL.SUPPORT);
-    await webPage.getByTestId("chat-composer").fill(webText);
-    await webPage.getByTestId("chat-send").click();
-    await expect(webPage.getByText(webText)).toBeVisible({ timeout: 10_000 });
+    await sendWebSupportMessageViaApi(webCustomer, `Hi, a web support question ${uniqueToken()}`);
 
     const { customer: waCustomer } = await scenario(ScenarioStage.DRAFT);
-    const waPage = await pageFor(waCustomer);
     const { national, e164 } = freshNigerianNumber();
-    await linkWhatsAppNumber(waPage, national);
+    await linkWhatsAppNumberViaApi(waCustomer, e164);
     await wa.inbound({ fromPhone: e164, text: "Hi from WhatsApp" });
 
     await goto(adminPage, ROUTES.ADMIN.MESSAGES_TAB("conversations"));

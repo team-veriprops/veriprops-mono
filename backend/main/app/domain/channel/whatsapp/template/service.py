@@ -91,18 +91,19 @@ class WhatsAppTemplateService:
             if match is None:
                 missing += 1
 
-            row = await self._whatsapp_template_repo.get_by_name(declaration.name)
-            if row is None:
-                row = await self._whatsapp_template_repo.create_return_model(
-                    CreateWhatsAppTemplateDto(
-                        name=declaration.name,
-                        category=declaration.category.value,
-                        language=declaration.language,
-                        status=status,
-                        remote_id=match.remote_id if match else None,
-                        rejection_reason=match.rejection_reason if match else None,
-                    )
-                )
+            # Keyed on the template name, so two concurrent syncs can't both insert it.
+            row, created = await self._whatsapp_template_repo.insert_or_get(
+                CreateWhatsAppTemplateDto(
+                    name=declaration.name,
+                    category=declaration.category.value,
+                    language=declaration.language,
+                    status=status,
+                    remote_id=match.remote_id if match else None,
+                    rejection_reason=match.rejection_reason if match else None,
+                ).model_dump(by_alias=False),
+                ["name"],
+            )
+            if created:
                 # `create` cannot carry the timestamp (the update path stringifies
                 # datetimes), so it is set on the attached row here.
                 row.last_synced_at = now

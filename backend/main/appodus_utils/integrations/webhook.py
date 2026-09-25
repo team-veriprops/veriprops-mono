@@ -12,6 +12,7 @@ from starlette.responses import Response
 
 from main.app.config.settings import settings, IntegratedPlatform
 from main.appodus_utils.exception.exceptions import UnauthorizedException
+from main.appodus_utils.exception.faults import log_fault_once
 from main.appodus_utils.integrations.factory import WebhookHandlerFactory
 
 logger: Logger = di['logger']
@@ -77,15 +78,15 @@ async def handle_webhook(platform: IntegratedPlatform, request: Request):
         raise
 
     except ValueError as e:
-        logger.error(f"Webhook processing failed: {str(e)}", exc_info=True)
+        logger.warning(f"Webhook rejected as malformed: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail={"error": str(e)})
 
     except UnauthorizedException as e:
-        logger.error(f"Webhook processing failed: {str(e)}", exc_info=True)
+        logger.warning(f"Webhook rejected: {e.message}")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail={"error": str(e.message)})
     except Exception as e:
-        logger.error(f"Webhook processing failed: {str(e)}", exc_info=True)
+        log_fault_once(e, f"webhook from {platform}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail={"error": "Internal server error"})
+                            detail={"error": "Internal server error"}) from e

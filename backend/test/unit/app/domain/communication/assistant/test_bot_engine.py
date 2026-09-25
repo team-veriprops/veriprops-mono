@@ -103,6 +103,11 @@ class _FakeSessionRepo:
     def save(self, session):
         return session
 
+    async def count_unmatched(self, session):
+        """The repo's `+ 1` in SQL, in memory."""
+        session.unmatched_count = (session.unmatched_count or 0) + 1
+        return session.unmatched_count
+
 
 def _session(**overrides) -> AssistantSession:
     """A session that has already been welcomed, unless a test says otherwise.

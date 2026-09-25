@@ -3,13 +3,8 @@ import Link from "next/link";
 import { PublicLookupState, PublicSummary } from "@/types/share";
 import { ROUTES, buildAuthUrl } from "@lib/routes";
 import { humanizeEnumLabel } from "@lib/utils";
+import { trustBandStyle } from "@lib/trust-band";
 import { AuthIntent } from "@components/website/auth/models";
-
-const BAND_CLASS: Record<string, string> = {
-  Safe: "text-emerald-600",
-  Caution: "text-amber-600",
-  "High Risk": "text-red-600",
-};
 
 /**
  * The unauthenticated proof summary (§13.1). Renders the summary allow-list only —
@@ -34,7 +29,7 @@ export function PublicSummaryCard({ summary }: { summary: PublicSummary }) {
 
       <dl className="mt-5 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
         <Field label="Verification ID" value={summary.vid} mono />
-        <Field label="Trust band" value={band} className={BAND_CLASS[band]} />
+        <Field label="Trust band" value={band} className={trustBandStyle(band).text} />
         <Field label="Tier" value={humanizeEnumLabel(summary.tier)} />
         <Field label="Property type" value={humanizeEnumLabel(summary.propertyType)} />
         <Field label="State" value={summary.stateRegion} />
