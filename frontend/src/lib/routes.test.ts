@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { PAYMENT_FLOW_PATH_PATTERNS, ROUTES, isAuthIntent, buildAuthUrl } from "./routes";
+import {
+  PAYMENT_FLOW_PATH_PATTERNS,
+  ROUTES,
+  isAuthIntent,
+  buildAuthUrl,
+  SIGNED_OUT_LOGIN_URL,
+  isSignedOutHandoff,
+} from "./routes";
 import { AuthIntent } from "@/components/website/auth/models";
 
 describe("ROUTES", () => {
@@ -84,6 +91,25 @@ describe("buildAuthUrl", () => {
       lastName: "",
     });
     expect(url).toBe("/auth/signup?email=ada%40example.com");
+  });
+});
+
+describe("signed-out login handoff", () => {
+  it("is the login page, marked so the route guard lets it through", () => {
+    const url = new URL(SIGNED_OUT_LOGIN_URL, "https://veriprops.test");
+    expect(url.pathname).toBe(ROUTES.AUTH.LOGIN);
+    expect(isSignedOutHandoff(url.searchParams)).toBe(true);
+  });
+
+  it("is built by buildAuthUrl, alongside the other auth params", () => {
+    const url = new URL(buildAuthUrl(ROUTES.AUTH.LOGIN, { signedOut: true, redirect: "/x" }), "https://v.test");
+    expect(isSignedOutHandoff(url.searchParams)).toBe(true);
+    expect(url.searchParams.get("redirect")).toBe("/x");
+  });
+
+  it("is absent from an ordinary login URL", () => {
+    expect(isSignedOutHandoff(new URLSearchParams())).toBe(false);
+    expect(isSignedOutHandoff(new URLSearchParams("redirect=%2Fportal"))).toBe(false);
   });
 });
 

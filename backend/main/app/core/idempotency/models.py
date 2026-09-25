@@ -11,7 +11,9 @@ import enum
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from sqlalchemy import Column, Index, String, UniqueConstraint
+from sqlalchemy import Column, Index, String
+
+from main.appodus_utils.db.models import live_unique_index
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object
 from main.appodus_utils.db.models import JSONB_VARIANT, UTCDateTime
@@ -43,7 +45,9 @@ class IdempotencyKey(BaseEntity):
     expires_at = Column(UTCDateTime, nullable=False)
 
     __table_args__ = (
-        UniqueConstraint("key", name="uq_idempotency_key"),
+        # Unique per scope among live keys; an expired key is retired (soft-deleted) and so
+        # frees its value for a new reservation.
+        live_unique_index("uq_idempotency_scope_key", "scope", "key"),
         Index("ix_idempotency_scope_expires", "scope", "expires_at"),
     )
 

@@ -101,8 +101,19 @@ class TestAdvanceRead:
             ConversationParticipantService,
         )
 
+        async def _advance_read(row, at):
+            # The repo's conditional UPDATE, in memory: only ever forward.
+            if row.last_read_at is not None and row.last_read_at >= at:
+                return False
+            row.last_read_at = at
+            return True
+
         svc = object.__new__(ConversationParticipantService)
-        svc._participant_repo = MagicMock(get_for=AsyncMock(return_value=membership), _session=MagicMock())
+        svc._participant_repo = MagicMock(
+            get_for=AsyncMock(return_value=membership),
+            advance_read=AsyncMock(side_effect=_advance_read),
+            _session=MagicMock(),
+        )
         return svc
 
     async def test_it_moves_the_read_time_forward(self):

@@ -3,7 +3,7 @@
 import { toast } from "sonner";
 
 import WhatsAppOptInControls from "@components/shared/whatsapp/WhatsAppOptInControls";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import {
   NO_WHATSAPP_CONSENT,
   WhatsAppConsent,
@@ -34,7 +34,7 @@ export default function WhatsAppConsentSettings() {
     try {
       await save.mutateAsync({ utility: next.utility, marketing: next.marketing });
     } catch (err) {
-      toast.error(getErrorMessage(err as Error, "Could not save that preference."));
+      toast.error(getErrorMessage(err, "Could not save that preference."));
     }
   };
 

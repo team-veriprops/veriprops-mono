@@ -1,6 +1,8 @@
 from typing import Optional
 
-from sqlalchemy import Column, String, UniqueConstraint, Index
+from sqlalchemy import Column, String, Index
+
+from main.appodus_utils.db.models import live_unique_index
 
 from main.app.domain.user.auth.oauth.providers.models import SocialAuthProvider
 from main.appodus_utils import InternalPageRequest, BaseQueryDto, Object, BaseEntity
@@ -16,7 +18,8 @@ class OAuthIdentity(BaseEntity):
     raw_profile = Column(String, nullable=True)  # JSON-encoded profile snapshot
 
     __table_args__ = (
-        UniqueConstraint("provider", "subject", name="uq_oauth_provider_subject"),
+        # Live identities only, so an unlinked provider account can be linked again.
+        live_unique_index("uq_oauth_provider_subject", "provider", "subject"),
         Index("ix_oauth_user", "user_id"),
     )
 

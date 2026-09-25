@@ -10,4 +10,13 @@ export const agentNavItems: NavItem[] = [
   { title: "Earnings", href: ROUTES.AGENT.EARNINGS, icon: "dollarSign", section: "Finance" },
   { title: "Payouts", href: ROUTES.AGENT.PAYOUTS, icon: "creditCard" },
   { title: "Profile", href: ROUTES.AGENT.PROFILE, icon: "user", section: "Account" },
+  // The mirror of the portal's "Become an Agent" (PRD §3.2, additive). An agent-path signup holds
+  // no customer persona, so without this there is no way for them to have a property verified —
+  // the marketing call to action is guest-only and /portal/* is shut to them.
+  {
+    title: "Verify a Property",
+    href: ROUTES.AGENT.VERIFY_PROPERTY,
+    icon: "fileCheck",
+    hiddenForCustomers: true,
+  },
 ];

@@ -20,8 +20,9 @@ data dependencies (each builds on the previous), so ``--stages`` subsets must be
 prefixes of the default order.
 
 How to run (non-prod only — uses /dev/reset + /dev/seed):
-    # 1. migrate the local DB (base→head recreates the current 0001 schema):
-    set APPODUS_ACTIVE_ENV=dev_personal && alembic downgrade base && alembic upgrade head
+    # 1. migrate the local DB to head (a DB a squash left behind can't be upgraded or
+    #    downgraded — rebuild it: python scripts/rebuild_local_db.py veriprops_local --yes):
+    set APPODUS_ACTIVE_ENV=dev_personal && alembic upgrade head
     # 2. Mailpit captures real SMTP so the email stage can assert delivery:
     docker compose up -d mailpit
     # 3. start the backend with outbound messaging ON (email → Mailpit, SMS → mock):

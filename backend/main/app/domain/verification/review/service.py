@@ -19,7 +19,7 @@ from main.app.core.realtime import VerificationEventType
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.dependencies import required_task_count
 from main.app.core.state.derive import derive_status
-from main.app.core.state.machine import task_state_machine
+from main.app.core.state.machine import task_state_machine, verification_state_machine
 from main.app.core.state.status import (
     AgentRole,
     ReportRevisionKind,
@@ -146,6 +146,7 @@ class ReviewService:
         self, verification_id: str, role: AgentRole, reason: str, admin_id: str
     ) -> VerificationTask:
         """Reject a submission → back to rework (SUBMITTED→REJECTED; derive → IN_PROGRESS)."""
+        await self._lock_verification(verification_id)
         task = await self._get_task(verification_id, role)
         task_state_machine.assert_can_transition(
             task.state, TaskState.REJECTED.value, resource="Task"
@@ -199,7 +200,9 @@ class ReviewService:
         """Explicit release (§8): all required tasks must be SUBMITTED + review-approved and
         free of unresolved HIGH conflicts. Flips them to APPROVED, accrues commissions, computes
         the composite score, and produces the versioned RELEASED report; derive → COMPLETED."""
-        verification = await self._get_verification(verification_id)
+        # A second release (or a rejection racing this one) waits here, then reads the
+        # status this one committed — so commissions and the report are produced once.
+        verification = await self._lock_verification(verification_id)
         if verification.status != VerificationStatus.UNDER_REVIEW.value:
             raise InvalidResourceStateException(
                 resource="verification", message="Only a verification under review can be released."
@@ -266,6 +269,7 @@ class ReviewService:
     ) -> VerificationTask:
         """Reopen an APPROVED task after release (§8.4): APPROVED→IN_PROGRESS. Supersedes the
         live report; derive → IN_PROGRESS."""
+        await self._lock_verification(verification_id)
         task = await self._get_task(verification_id, role)
         task_state_machine.assert_can_transition(
             task.state, TaskState.IN_PROGRESS.value, resource="Task"
@@ -286,13 +290,19 @@ class ReviewService:
     async def fail(self, verification_id: str, reason: str, admin_id: str) -> Verification:
         """Fail the verification and refund the customer (§8.5)."""
         verification = await self._get_verification(verification_id)
-        from main.app.core.state.machine import verification_state_machine
         verification_state_machine.assert_can_transition(
             verification.status, VerificationStatus.FAILED.value, resource="Verification"
         )
-        await self._verification_repo.update(
-            verification_id, UpdateVerificationDto(status=VerificationStatus.FAILED.value)
+        # Claimed before the refund: a release (or another failure) that got there first
+        # leaves nothing to fail, and the customer is refunded once.
+        failed = await self._verification_repo.claim_transition(
+            verification_id, verification_state_machine.sources_of(VerificationStatus.FAILED.value),
+            VerificationStatus.FAILED,
         )
+        if failed is None:
+            raise InvalidResourceStateException(
+                resource="verification", message="This verification has already moved on."
+            )
         self._audit.schedule(
             action=AuditActionType.VERIFICATION_FAILED,
             resource_type="verification", resource_id=verification_id, actor_id=admin_id,
@@ -382,6 +392,14 @@ class ReviewService:
         if task is None:
             raise ResourceNotFoundException(resource="task")
         return task
+
+    async def _lock_verification(self, verification_id: str) -> Verification:
+        """The verification, locked until this transaction ends: review decisions on one
+        case (release, reject, reopen) take turns, each reading what the last committed."""
+        verification = await self._verification_repo.lock_model(verification_id)
+        if not verification:
+            raise ResourceNotFoundException(resource="verification")
+        return verification
 
     async def _get_verification(self, verification_id: str) -> Verification:
         verification = await self._verification_repo.get_model(verification_id)

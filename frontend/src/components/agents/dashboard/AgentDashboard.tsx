@@ -24,7 +24,9 @@ export default function AgentDashboard() {
   const { data: status } = useAgentStatusQuery();
   const approved = status?.status === AgentApplicationStatus.APPROVED;
   const { data: summary } = useAgentDashboardQuery(approved);
-  const { data: profile } = useAgentProfileQuery();
+  // A profile only exists once the application is approved, so asking before then is a request
+  // that can only 404 — and it fired on every pending applicant's dashboard load.
+  const { data: profile } = useAgentProfileQuery(approved);
 
   return (
     <PageShell title="Agent" description="Your workload and reputation at a glance." width="narrow" data-testid="agent-dashboard">

@@ -12,10 +12,8 @@ from kink import di, inject
 
 from main.app.config.settings import settings
 from main.app.domain.user.auth.signup_draft.models import (
-    CreateSignupDraftDto,
     SignupDraft,
     SignupDraftDto,
-    UpdateSignupDraftDto,
 )
 from main.app.domain.user.auth.signup_draft.repo import SignupDraftRepo
 from main.appodus_utils import Utils
@@ -40,19 +38,11 @@ class SignupDraftService:
         encoded = json.dumps(payload)
         expires_at = Utils.datetime_now_plus(seconds=int(DRAFT_TTL.total_seconds()))
 
-        existing = await self._signup_draft_repo.get_active_by_email(normalised)
-        if existing:
-            await self._signup_draft_repo.update(
-                str(existing.id),
-                UpdateSignupDraftDto(step=step, payload=encoded, expires_at=expires_at),
-            )
-            row = await self._signup_draft_repo.get_active_by_email(normalised)
-        else:
-            await self._signup_draft_repo.create(CreateSignupDraftDto(
-                email=normalised, step=step, payload=encoded, expires_at=expires_at,
-            ))
-            row = await self._signup_draft_repo.get_active_by_email(normalised)
-
+        # One statement on the live email: an expired or concurrent draft is overwritten, and a
+        # discarded one no longer blocks a fresh signup.
+        row = await self._signup_draft_repo.upsert_active(
+            email=normalised, step=step, payload=encoded, expires_at=expires_at,
+        )
         return self._to_dto(row)
 
     async def get(self, email: str) -> Optional[SignupDraftDto]:

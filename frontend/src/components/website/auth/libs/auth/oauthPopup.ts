@@ -20,6 +20,7 @@ import { isAutomationEnvironment } from "@lib/automation";
 import { authService } from "@components/website/auth/libs/useAuthQueries";
 import { OAuthFlowMode, AuthIntent, SocialProvider } from "@components/website/auth/models";
 import { ROUTES } from "@lib/routes";
+import { getErrorMessage } from "@lib/errors";
 
 export interface OauthPopupOptions {
   intent?: AuthIntent;
@@ -32,12 +33,14 @@ export interface OauthPopupOptions {
   /** User closed the popup without finishing. No toast / log spam. */
   onCancel?: () => void;
   /** Provider or backend reported failure. `code === "popup_blocked"` on a
-   * blocked popup so the caller can offer a fallback redirect. */
+   * blocked popup so the caller can offer a fallback redirect. `message`, when present, is
+   * user-facing copy and safe to show as-is — callers render it directly. */
   onError: (err: { code: "popup_blocked" | "timeout" | "provider"; message?: string; authorizationUrl?: string }) => void;
 }
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5mins
 const DEFAULT_POLL_MS = 500;
+const START_FAILED_MESSAGE = "Could not start sign-in. Please try again.";
 const POPUP_NAME = "veriprops_oauth";
 
 function signalOauthComplete(status: "success" | "failed"): void {
@@ -151,7 +154,7 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
         resolved = true;
         cleanup();
         signalOauthComplete("failed");
-        onError({ code: "provider", message: "OAuth start did not return an authorization URL." });
+        onError({ code: "provider", message: START_FAILED_MESSAGE });
         return;
       }
       lastAuthorizationUrl = url;
@@ -166,7 +169,7 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
           resolved = true;
           cleanup();
           signalOauthComplete("failed");
-          onError({ code: "provider", message: "Could not navigate the popup window." });
+          onError({ code: "provider", message: START_FAILED_MESSAGE });
         }
       }
     })
@@ -182,7 +185,8 @@ export function startOauthPopup(provider: SocialProvider, opts: OauthPopupOption
         }
       } catch { /* ignore */ }
       signalOauthComplete("failed");
-      onError({ code: "provider", message: err?.message });
+      // A request error, possibly a raw 5xx: through the one policy, never its own text.
+      onError({ code: "provider", message: getErrorMessage(err, START_FAILED_MESSAGE) });
     });
 
   return { cancel };

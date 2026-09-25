@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import TypeVar, Optional, Generic, List, Union, Any
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
-from sqlalchemy import Column, Boolean, UUID, Integer, String, DateTime, TypeDecorator, JSON
+from sqlalchemy import Column, Boolean, UUID, Integer, String, DateTime, TypeDecorator, JSON, Index, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr, DeclarativeBase
@@ -215,6 +215,17 @@ def jsonb_variant():
 
 # Shared instance for PLAIN JSON columns and Alembic migrations. Never pass to as_mutable().
 JSONB_VARIANT = jsonb_variant()
+
+
+def live_unique_index(name: str, *columns: str, where: str = "deleted = false") -> Index:
+    """A unique index over **live** rows only (partial: `WHERE deleted = false` by default).
+
+    Lookups skip soft-deleted rows, so uniqueness must too: a full-table constraint lets a
+    soft-deleted row block re-creating it forever. Declares in the model exactly what the
+    migration builds, so `GenericRepo.insert_or_get` can target it by the same columns and
+    predicate.
+    """
+    return Index(name, *columns, unique=True, postgresql_where=text(where))
 
 
 class Base(DeclarativeBase):

@@ -12,6 +12,7 @@ from main.app.domain.broadcast.service import BroadcastService
 from main.app.domain.user.auth.session.models import UserPersona, UserType
 from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -54,6 +55,10 @@ def _make_service():
     svc._audit = MagicMock()
     svc._audit.schedule = MagicMock()
     svc._users.list_recipient_rows = AsyncMock(return_value=_USERS)
+    # Sending and cancelling are claims on the row the test's get_model serves.
+    svc._broadcast_repo.claim_transition = fake_claim_transition(
+        lambda _id: svc._broadcast_repo.get_model.return_value
+    )
     return svc
 
 

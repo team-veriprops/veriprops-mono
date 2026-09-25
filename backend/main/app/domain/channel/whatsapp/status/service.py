@@ -111,7 +111,7 @@ class WhatsAppStatusService:
         await publish_domain_event(DomainEvent(
             type=EventType.MESSAGE_STATUS_CHANGED,
             recipient_user_ids=tuple(m.user_id for m in members if not m.is_read_only),
-            data={"conversation_id": conversation.id},
+            data={"conversation_id": Utils.uuid_to_hex(conversation.id)},
         ))
 
     async def _record_bookkeeping(

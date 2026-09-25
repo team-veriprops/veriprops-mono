@@ -9,7 +9,7 @@ import {
   useConfirmWhatsAppLinkFromTokenMutation,
   useStartWhatsAppLinkFromTokenMutation,
 } from "@components/account/libs/useWhatsAppLinkQueries";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import { waMeUrl } from "@lib/whatsapp";
 
 /**
@@ -55,7 +55,7 @@ export default function WaLinkLanding({ token }: { token: string }) {
       await confirmLink.mutateAsync({ token, code });
       setLinked(true);
     } catch (err) {
-      setCodeError(getErrorMessage(err as Error, "That code didn't match. Try again."));
+      setCodeError(getErrorMessage(err, "That code didn't match. Try again."));
     }
   };
 

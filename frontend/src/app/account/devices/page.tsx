@@ -40,7 +40,12 @@ export default function ConnectedDevicesPage() {
               })
             }
           >
-            <LogOut className="w-4 h-4 mr-1.5" /> Log out all others
+            {revokeAllOthers.isPending ? (
+              <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+            ) : (
+              <LogOut className="w-4 h-4 mr-1.5" />
+            )}
+            {revokeAllOthers.isPending ? "Signing out others…" : "Log out all others"}
           </Button>
         )}
       </header>
@@ -87,7 +92,9 @@ export default function ConnectedDevicesPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={revoke.isPending}
+                  // Scoped to the row in flight: one shared `isPending` would dim every
+                  // other device's button for a revoke that has nothing to do with them.
+                  disabled={revoke.isPending && revoke.variables === d.id}
                   data-testid="device-revoke"
                   onClick={() =>
                     revoke.mutate(d.id, {
@@ -97,6 +104,9 @@ export default function ConnectedDevicesPage() {
                   }
                   className="text-danger"
                 >
+                  {revoke.isPending && revoke.variables === d.id && (
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  )}
                   Revoke
                 </Button>
               )}

@@ -8,7 +8,7 @@ import { Page, expect } from "@playwright/test";
 
 import { ROUTES } from "@lib/routes";
 
-import { goto, waitForHydration, waitReady } from "./app";
+import { goto, waitForHydration, waitForPage } from "./app";
 
 /**
  * Sign *page* in as *email* through the real login form and wait until the sign-in has fully
@@ -32,8 +32,7 @@ export async function loginViaUi(page: Page, email: string, password: string): P
   });
   expect(await page.evaluate(() => window.__auth_snapshot__?.userId)).toBeTruthy();
 
-  await page.waitForURL((url) => !url.pathname.startsWith(ROUTES.AUTH.GATE), { timeout: 30_000 });
-  await waitReady(page);
+  await waitForPage(page, (url) => !url.pathname.startsWith(ROUTES.AUTH.GATE), { timeout: 30_000 });
 }
 
 /**

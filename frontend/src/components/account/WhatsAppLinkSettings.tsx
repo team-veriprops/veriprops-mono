@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@3rdparty/ui/button";
 import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
 import { DEFAULT_COUNTRY_CODE, DEFAULT_DIAL_CODE } from "@lib/config/app";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import { otpDeliveryError } from "@components/website/auth/libs/otpDelivery";
 import { WhatsAppLinkStatus } from "@/types/whatsappLink";
 import {
@@ -61,7 +61,7 @@ export default function WhatsAppLinkSettings() {
       setPendingNumber(challenge?.phoneE164 ?? null);
       toast.success("We sent a code to that number on WhatsApp.");
     } catch (err) {
-      toast.error(getErrorMessage(err as Error, "Could not send the code."));
+      toast.error(getErrorMessage(err, "Could not send the code."));
     }
   };
 
@@ -74,7 +74,7 @@ export default function WhatsAppLinkSettings() {
       setChanging(false);
       toast.success("WhatsApp number linked.");
     } catch (err) {
-      toast.error(getErrorMessage(err as Error, "That code didn't match. Try again."));
+      toast.error(getErrorMessage(err, "That code didn't match. Try again."));
     }
   };
 
@@ -84,7 +84,7 @@ export default function WhatsAppLinkSettings() {
       setChanging(false);
       toast.success("WhatsApp number unlinked.");
     } catch (err) {
-      toast.error(getErrorMessage(err as Error, "Could not unlink that number."));
+      toast.error(getErrorMessage(err, "Could not unlink that number."));
     }
   };
 

@@ -38,6 +38,7 @@ from main.app.domain.verification.task.models import (
 from main.app.domain.verification.task.repo import VerificationTaskRepo
 from main.app.domain.verification.task.validator import validate_submission
 from main.appodus_utils import Utils
+from main.appodus_utils.db.locks import advisory_xact_lock
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -46,6 +47,11 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+
+# One agent's workload: taking a task (accept or assignment) checks the cap under it.
+_CAPACITY_LOCK = "agent_tasks"
+# Tasks keep their lifecycle in `state`, not `status`.
+_STATE = "state"
 
 
 @inject
@@ -85,13 +91,19 @@ class VerificationTaskService:
                 continue
             if not is_unlocked(tier, role, submitted_roles):
                 continue
-            task = await self._task_repo.create_return_model(CreateTaskDto(
-                verification_id=verification_id,
-                role=role,
-                tier=tier,
-                state=TaskState.PENDING,
-            ))
-            created.append(task)
+            # Keyed on (verification, role): two concurrent instantiations (a payment webhook
+            # and a retry, say) create each task once.
+            task, is_new = await self._task_repo.insert_or_get(
+                CreateTaskDto(
+                    verification_id=verification_id,
+                    role=role,
+                    tier=tier,
+                    state=TaskState.PENDING,
+                ).model_dump(by_alias=False),
+                ["verification_id", "role"],
+            )
+            if is_new:
+                created.append(task)
         return created
 
     async def broadcast_unassigned(self, verification_id: str) -> List[VerificationTask]:
@@ -157,9 +169,12 @@ class VerificationTaskService:
                     resource="task",
                     message=f"The {role.value} task is still locked by its dependencies.",
                 )
-            task = await self._task_repo.create_return_model(CreateTaskDto(
-                verification_id=verification_id, role=role, tier=tier, state=TaskState.PENDING,
-            ))
+            task, created_now = await self._task_repo.insert_or_get(
+                CreateTaskDto(
+                    verification_id=verification_id, role=role, tier=tier, state=TaskState.PENDING,
+                ).model_dump(by_alias=False),
+                ["verification_id", "role"],
+            )
 
         reassignment = task.assigned_agent_id is not None and task.assigned_agent_id != agent_id
         self._assert_task_transition(task.state, TaskState.ASSIGNED)
@@ -242,13 +257,18 @@ class VerificationTaskService:
 
         await self._assert_capacity(agent_id)
         self._assert_task_transition(task.state, TaskState.ACCEPTED)
-        await self._task_repo.update(task.id, UpdateTaskDto(
-            state=TaskState.ACCEPTED.value,
+        # Claimed on the state and ownership this decision was made on: of two agents
+        # accepting one pool task, the second finds it no longer unassigned PENDING.
+        accepted = await self._task_repo.claim_transition(
+            task.id, [task.state], TaskState.ACCEPTED, status_column=_STATE,
+            expect={"assigned_agent_id": task.assigned_agent_id, "in_pool": task.in_pool},
             assigned_agent_id=agent_id,
             assignment_mode=task.assignment_mode or TaskAssignmentMode.BROADCAST.value,
             in_pool=False,
-        ))
-        await self._set_accepted_timestamp(task.id)
+            accepted_at=Utils.datetime_now(),
+        )
+        if accepted is None:
+            raise InvalidResourceStateException(resource="task", message="This task has already been taken.")
         self._audit.schedule(
             action=AuditActionType.TASK_ACCEPTED,
             resource_type="verification_task", resource_id=task.id, actor_id=agent_id,
@@ -267,14 +287,13 @@ class VerificationTaskService:
                 resource="task", message="Only an assigned/accepted task can be declined."
             )
         self._assert_task_transition(task.state, TaskState.PENDING)
-        await self._task_repo.update(task.id, UpdateTaskDto(
-            state=TaskState.PENDING.value,
-            in_pool=True,
-            decline_count=(task.decline_count or 0) + 1,
-        ))
-        row = await self._task_repo.get_model(task.id)
-        if row is not None:
-            row.assigned_agent_id = None  # NULL — dropped by the exclude_none update path
+        declined = await self._task_repo.claim_transition(
+            task.id, [TaskState.ASSIGNED, TaskState.ACCEPTED], TaskState.PENDING, status_column=_STATE,
+            expect={"assigned_agent_id": agent_id}, increments={"decline_count": 1},
+            in_pool=True, assigned_agent_id=None,
+        )
+        if declined is None:
+            raise InvalidResourceStateException(resource="task", message="This task has already moved on.")
         self._audit.schedule(
             action=AuditActionType.TASK_DECLINED,
             resource_type="verification_task", resource_id=task.id, actor_id=agent_id,
@@ -363,8 +382,8 @@ class VerificationTaskService:
         now = Utils.datetime_now()
         count = 0
         for task in await self._task_repo.list_accept_deadline_expired(now):
-            await self._return_to_pending(task, reason="no_show_timeout")
-            count += 1
+            if await self._return_to_pending(task, reason="no_show_timeout"):
+                count += 1
         return count
 
     async def sweep_pool_starvation(self) -> int:
@@ -373,11 +392,17 @@ class VerificationTaskService:
         now = Utils.datetime_now()
         count = 0
         for task in await self._task_repo.list_pool_expired(now):
-            await self._task_repo.update(task.id, UpdateTaskDto(in_pool=False))
-            if settings.REMOTE_JOB_BONUS_MINOR > 0 and task.remote_bonus_minor is None:
-                await self._task_repo.update(task.id, UpdateTaskDto(
-                    remote_bonus_minor=settings.REMOTE_JOB_BONUS_MINOR
-                ))
+            bonus = (
+                {"remote_bonus_minor": settings.REMOTE_JOB_BONUS_MINOR}
+                if settings.REMOTE_JOB_BONUS_MINOR > 0 and task.remote_bonus_minor is None else {}
+            )
+            # Taken off the pool only while still on it and still PENDING: an agent who
+            # accepted it at the deadline keeps it, and an overlapping run escalates it once.
+            if await self._task_repo.claim_transition(
+                task.id, [TaskState.PENDING], status_column=_STATE, expect={"in_pool": True},
+                in_pool=False, **bonus,
+            ) is None:
+                continue
             self._audit.schedule(
                 action=AuditActionType.TASK_STATE_CHANGED,
                 resource_type="verification_task",
@@ -436,6 +461,12 @@ class VerificationTaskService:
         return [AgentRole(t.role) for t in tasks if t.state in settled]
 
     async def _assert_capacity(self, agent_id: str) -> None:
+        """Refuse a task beyond the agent's cap (§6.5).
+
+        Under the agent's lock, held to the end of the transaction: two tasks taken at once
+        each count the other, so neither can slip past the cap on a stale count.
+        """
+        await advisory_xact_lock(f"{_CAPACITY_LOCK}:{agent_id}")
         active = await self._task_repo.count_active_for_agent(agent_id)
         if active >= settings.AGENT_MAX_ACTIVE_TASKS:
             raise ValidationException(
@@ -445,18 +476,17 @@ class VerificationTaskService:
     def _assert_task_transition(self, current: str, target: TaskState) -> None:
         task_state_machine.assert_can_transition(current, target.value, resource="Task")
 
-    async def _return_to_pending(self, task: VerificationTask, reason: str) -> None:
+    async def _return_to_pending(self, task: VerificationTask, reason: str) -> bool:
+        """Take a task back from its agent; False when it moved on since it was listed
+        (the agent accepted it at the deadline), in which case it is left alone."""
         self._assert_task_transition(task.state, TaskState.PENDING)
-        await self._task_repo.update(task.id, UpdateTaskDto(
-            state=TaskState.PENDING.value,
-            in_pool=False,
-            decline_count=(task.decline_count or 0) + 1,
-        ))
-        # assigned_agent_id must be cleared to NULL — the update DTO path drops None
-        # fields (exclude_none), so set it on the model directly (CLAUDE.md GenericRepo note).
-        row = await self._task_repo.get_model(task.id)
-        if row is not None:
-            row.assigned_agent_id = None
+        reclaimed = await self._task_repo.claim_transition(
+            task.id, [task.state], TaskState.PENDING, status_column=_STATE,
+            expect={"assigned_agent_id": task.assigned_agent_id}, increments={"decline_count": 1},
+            in_pool=False, assigned_agent_id=None,
+        )
+        if reclaimed is None:
+            return False
         self._audit.schedule(
             action=AuditActionType.TASK_STATE_CHANGED,
             resource_type="verification_task",
@@ -467,6 +497,7 @@ class VerificationTaskService:
             details={"event": reason, "role": task.role},
         )
         await self._derive_and_persist(task.verification_id, actor_id=None)
+        return True
 
     async def _derive_and_persist(self, verification_id: str, actor_id: Optional[str]) -> None:
         """The §4.1 derivation-owner integration: recompute the global status from the
@@ -522,10 +553,6 @@ class VerificationTaskService:
         now = Utils.datetime_now()
         task.assigned_at = now
         task.accept_deadline_at = now + timedelta(hours=settings.TASK_NO_SHOW_TIMEOUT_HOURS)
-
-    async def _set_accepted_timestamp(self, task_id: str) -> None:
-        task = await self._task_repo.get_model(task_id)
-        task.accepted_at = Utils.datetime_now()
 
     async def _set_submitted_timestamp(self, task_id: str) -> None:
         task = await self._task_repo.get_model(task_id)

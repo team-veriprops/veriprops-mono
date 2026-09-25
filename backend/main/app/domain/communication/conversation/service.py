@@ -63,27 +63,31 @@ class ConversationService:
         existing = await self._conversation_repo.get_for_verification(verification_id, conversation_type)
         if existing:
             return existing
-        return await self._conversation_repo.create_return_model(
+        conversation, _ = await self._conversation_repo.insert_or_get(
             CreateConversationDto(
                 type=conversation_type,
                 verification_id=verification_id,
                 subject=subject,
                 created_by=created_by,
-            )
+            ).model_dump(by_alias=False),
+            unique_index="uq_conversations_verification_type",
         )
+        return conversation
 
     async def get_or_create_support_thread(self, user_id: str) -> Conversation:
         existing = await self._conversation_repo.get_general_support(user_id)
         if existing:
             return existing
-        return await self._conversation_repo.create_return_model(
+        conversation, _ = await self._conversation_repo.insert_or_get(
             CreateConversationDto(
                 type=ConversationType.GENERAL_SUPPORT,
                 verification_id=None,
                 subject="General support",
                 created_by=user_id,
-            )
+            ).model_dump(by_alias=False),
+            unique_index="uq_conversations_web_support_owner",
         )
+        return conversation
 
     async def get_or_create_whatsapp_thread(
         self, phone: str, user_id: Optional[str] = None, subject: Optional[str] = None
@@ -99,7 +103,7 @@ class ConversationService:
         existing = await self._conversation_repo.get_whatsapp_thread(phone)
         if existing:
             return existing
-        conversation = await self._conversation_repo.create_return_model(
+        conversation, created = await self._conversation_repo.insert_or_get(
             CreateConversationDto(
                 type=ConversationType.GENERAL_SUPPORT,
                 verification_id=None,
@@ -107,9 +111,10 @@ class ConversationService:
                 created_by=user_id,
                 channel=ConversationChannel.WHATSAPP,
                 external_ref=phone,
-            )
+            ).model_dump(by_alias=False),
+            unique_index="uq_conversations_whatsapp_number",
         )
-        if user_id:
+        if created and user_id:
             await self._open_window(conversation, user_id, Utils.datetime_now())
         return conversation
 
@@ -285,16 +290,16 @@ class ConversationService:
         number may have belonged to another account in between, and those messages are not
         this member's to read.
         """
-        membership = await self._participants.get_for(conversation.id, user_id)
-        if membership is None:
-            await self._participants.create_return_model(
-                CreateConversationParticipantDto(
-                    conversation_id=Utils.uuid_to_hex(conversation.id),
-                    user_id=str(user_id),
-                    role=SenderKind.CUSTOMER.value,
-                    visible_from=at,
-                )
-            )
+        membership, created = await self._participants.insert_or_get(
+            CreateConversationParticipantDto(
+                conversation_id=Utils.uuid_to_hex(conversation.id),
+                user_id=str(user_id),
+                role=SenderKind.CUSTOMER.value,
+                visible_from=at,
+            ).model_dump(by_alias=False),
+            unique_index="uq_conv_participants_membership",
+        )
+        if created:
             return
         membership.visible_from = at
         membership.visible_until = None

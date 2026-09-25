@@ -1,4 +1,10 @@
-"""OTP issuance & verification — uses KeyValueService (Redis-backed when configured)."""
+"""OTP issuance & verification.
+
+Codes, attempt counters and verified markers live in the SQL key/value store
+(`KeyValueService`), whose writes commit on their own: a wrong guess is counted even though
+the request then fails. Counters are reserved atomically before they are checked, and codes and
+markers are consumed atomically, so concurrent requests can't exceed a limit or reuse a code.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -15,6 +21,7 @@ from kink import di, inject
 
 from main.app.config.settings import settings
 from main.app.domain.user.auth.models import OtpChannel, OtpSendResultDto
+from main.app.domain.user.auth.session.failure_recorder import AuthFailureRecorder
 from main.app.domain.user.auth.session.models import SecurityEventType
 from main.app.domain.user.auth.session.service import SessionService
 from main.appodus_utils import Utils
@@ -82,9 +89,13 @@ class OtpService:
             self,
             kv: KeyValueService,
             session_service: SessionService,
+            failure_recorder: AuthFailureRecorder,
     ):
         self._kv = kv
         self._session_service = session_service
+        # A wrong guess is logged here, not in the caller's transaction: the rejection that
+        # follows would roll it back.
+        self._failures = failure_recorder
 
     async def send_otp(
             self,
@@ -100,15 +111,16 @@ class OtpService:
         best-effort — a failed send must not fail the request, because the code is stored and the
         retry ladder may still carry it — but the caller can now tell the user when a code is not
         on its way instead of presenting an entry box for it."""
-        r_key = _resend_key(channel, recipient)
-        recent = await self._kv.get(r_key)
-        attempts = int(recent or 0) + 1
-        if attempts > MAX_RESENDS:
+        # Reserve this send's slot atomically; at the limit nothing is written, so a refused
+        # resend neither counts nor extends the lockout.
+        attempt = await self._kv.incr(
+            _resend_key(channel, recipient), RESEND_LOCKOUT, sliding=True, limit=MAX_RESENDS,
+        )
+        if attempt is None:
             raise RateLimitException(service="otp", message="Too many resend attempts; try again later.")
 
         code = Utils.get_otp_code()
         await self._kv.set(_otp_key(channel, recipient), OTP_TTL, code)
-        await self._kv.set(r_key, RESEND_LOCKOUT, attempts)
 
         delivered = await send_verification_msg(recipient=recipient, code=code, channel=channel)
         await self._session_service.record_event(
@@ -131,15 +143,17 @@ class OtpService:
             ip_address: Optional[str] = None,
     ) -> None:
         f_key = _failure_key(channel, recipient)
-        failures = int(await self._kv.get(f_key) or 0)
-        if failures >= MAX_FAILURES:
+        # Reserve this attempt's slot before judging it, so parallel guesses can't all pass a
+        # stale count. Only a failed attempt keeps its slot: success deletes the counter.
+        attempt = await self._kv.incr(f_key, OTP_TTL, sliding=True, limit=MAX_FAILURES)
+        if attempt is None:
             raise RateLimitException(service="otp", message="Too many invalid attempts; request a new code.")
 
-        stored = await self._kv.get(_otp_key(channel, recipient))
-        stored_str = stored.decode("utf-8") if isinstance(stored, bytes) else stored
-        if not stored_str or str(stored_str) != str(code):
-            await self._kv.set(f_key, OTP_TTL, failures + 1)
-            await self._session_service.record_event(
+        otp_key = _otp_key(channel, recipient)
+        stored = await self._kv.get(otp_key)
+        # The pop decides between two concurrent correct guesses: only one consumes the code.
+        if not stored or str(stored) != str(code) or await self._kv.pop(otp_key) is None:
+            await self._failures.record_event(
                 SecurityEventType.OTP_FAILURE,
                 f"OTP verification failed via {channel.value.lower()}",
                 user_id=user_id,
@@ -147,9 +161,8 @@ class OtpService:
             )
             raise InvalidTokenException("Invalid or expired verification code.")
 
-        # Clear keys on success and mint a short-lived verified marker so the
+        # Clear the counter on success and mint a short-lived verified marker so the
         # signup endpoint can confirm the user actually completed this OTP.
-        await self._kv.delete(_otp_key(channel, recipient))
         await self._kv.delete(f_key)
         await self._kv.set(
             _verified_key(channel, _to_recipient_str(recipient)),
@@ -161,8 +174,9 @@ class OtpService:
         marker = await self._kv.get(_verified_key(channel, recipient_str))
         return bool(marker)
 
-    async def consume_verified_marker(self, channel: OtpChannel, recipient_str: str) -> None:
-        await self._kv.delete(_verified_key(channel, recipient_str))
+    async def consume_verified_marker(self, channel: OtpChannel, recipient_str: str) -> bool:
+        """Consume the marker; True for exactly one caller, so one OTP backs one signup."""
+        return await self._kv.pop(_verified_key(channel, recipient_str)) is not None
 
 
 def recipient_for(channel: OtpChannel, *, email: Optional[str], dial_code: Optional[str], phone: Optional[str],

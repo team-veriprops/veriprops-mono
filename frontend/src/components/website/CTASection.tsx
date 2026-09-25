@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Shield, Users } from "lucide-react";
-import { CTA_VERIFY_HREF, CTA_AGENT_HREF } from "./home.data";
+import { CTA_VERIFY_HREF } from "./home.data";
+import BecomeAnAgentLink from "./BecomeAnAgentLink";
+import BrandBackdrop from "@components/ui/BrandBackdrop";
 
 export default function CTASection() {
   return (
@@ -10,9 +12,7 @@ export default function CTASection() {
           className="relative rounded-3xl overflow-hidden px-10 py-16 md:px-20 md:py-24 bg-[linear-gradient(135deg,var(--brand-navy)_0%,var(--brand-navy-mid)_50%,var(--brand-navy-deep)_100%)]"
         >
           {/* Background grid pattern */}
-          <div
-            className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.04)_1px,transparent_0)] bg-size-[40px_40px]"
-          />
+          <BrandBackdrop tone="dark" />
 
           {/* Ambient glow */}
           <div
@@ -62,12 +62,9 @@ export default function CTASection() {
                   Verify a Property Now
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
-                <Link
-                  href={CTA_AGENT_HREF}
-                  className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:bg-white/10 text-white border border-white/20"
-                >
+                <BecomeAnAgentLink className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl font-bold text-base transition-all duration-200 hover:bg-white/10 text-white border border-white/20">
                   Become an Agent
-                </Link>
+                </BecomeAnAgentLink>
               </div>
             </div>
 

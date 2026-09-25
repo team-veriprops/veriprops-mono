@@ -9,7 +9,7 @@ import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
 import { DEFAULT_COUNTRY_CODE, DEFAULT_DIAL_CODE } from "@lib/config/app";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import { otpDeliveryError } from "@components/website/auth/libs/otpDelivery";
 import { CaseDelegate } from "@/types/delegate";
 import {
@@ -58,7 +58,7 @@ export default function DelegatePanel({ verificationId }: { verificationId: stri
       }
       toast.success("We sent them a code on WhatsApp. Ask them to read it to you.");
     } catch (err) {
-      toast.error(getErrorMessage(err as Error, "Could not authorize that delegate."));
+      toast.error(getErrorMessage(err, "Could not authorize that delegate."));
     }
   };
 
@@ -70,7 +70,7 @@ export default function DelegatePanel({ verificationId }: { verificationId: stri
       setPhone("");
       toast.success("Delegate confirmed — they'll get status updates from now on.");
     } catch (err) {
-      toast.error(getErrorMessage(err as Error, "That code didn't match. Try again."));
+      toast.error(getErrorMessage(err, "That code didn't match. Try again."));
     }
   };
 
@@ -79,7 +79,7 @@ export default function DelegatePanel({ verificationId }: { verificationId: stri
       await revoke.mutateAsync();
       toast.success("Delegate removed. They won't receive any further updates.");
     } catch (err) {
-      toast.error(getErrorMessage(err as Error, "Could not remove that delegate."));
+      toast.error(getErrorMessage(err, "Could not remove that delegate."));
     }
   };
 

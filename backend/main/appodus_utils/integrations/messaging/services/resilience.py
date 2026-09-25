@@ -55,7 +55,6 @@ from tenacity import (
 
 from main.appodus_utils import Utils
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])

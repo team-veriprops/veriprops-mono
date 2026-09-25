@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from test.utils.repo_fakes import fake_upsert, first_matching
+
 from main.app.core.state.status import VerificationTier
 from main.app.domain.verification.pricing import TIER_PRICE_NGN_KOBO
 from main.app.domain.verification.pricing_config.models import LineItemInputDto
@@ -24,6 +26,7 @@ def mock_db_session():
 
     session.begin = _begin
     session.flush = AsyncMock()
+    session.execute = AsyncMock()  # advisory locks (`advisory_xact_lock`) run a statement
     token = db_session_ctx.set(session)
     yield session
     db_session_ctx.reset(token)
@@ -53,12 +56,15 @@ class TestTierPriceResolution:
 class TestSetTierPrice:
     async def test_updates_existing_row(self):
         svc = _make_service()
-        svc._tiers.get_for_tier = AsyncMock(return_value=SimpleNamespace(id="pt-1"))
-        svc._tiers.update = AsyncMock()
-        svc._tiers.get_model = AsyncMock(return_value=SimpleNamespace(id="pt-1", price_ngn_kobo=7_000_000))
+        rows = [SimpleNamespace(id="pt-1", tier=VerificationTier.BASIC.value, price_ngn_kobo=5_000_000, deleted=False)]
+        svc._tiers.upsert = fake_upsert(
+            lambda values: first_matching(rows, tier=values["tier"]),
+            lambda values: rows.append(SimpleNamespace(id="pt-new", deleted=False, **values)) or rows[-1],
+        )
         row = await svc.set_tier_price(VerificationTier.BASIC, 7_000_000, "admin-1")
-        assert row.price_ngn_kobo == 7_000_000
-        svc._tiers.update.assert_awaited_once()
+        assert (row.id, row.price_ngn_kobo) == ("pt-1", 7_000_000)
+        # One statement on the live tier key, so a concurrent first save can't insert twice.
+        assert svc._tiers.upsert.await_args.kwargs == {"unique_index": "uq_pricing_tier_config_tier"}
         svc._audit.schedule.assert_called_once()
 
 

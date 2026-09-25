@@ -4,6 +4,7 @@
  */
 
 export const DATATABLE_TEST_IDS = {
+  SEARCH: "datatable-search",
   ROW: "datatable-row",
   ROW_ACTIONS: "datatable-row-actions",
   PREV: "datatable-prev",

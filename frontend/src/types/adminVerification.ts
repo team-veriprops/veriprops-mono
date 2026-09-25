@@ -26,6 +26,16 @@ export enum TaskAssignmentMode {
   BROADCAST = "BROADCAST",
 }
 
+/**
+ * The admin's verdict on a submitted task (§8.3) — distinct from `TaskState`, which tracks
+ * the task's lifecycle position. An approval deliberately leaves the task SUBMITTED until
+ * release, so this is what says the review happened.
+ */
+export enum ReviewDecision {
+  APPROVED = "APPROVED",
+  REJECTED = "REJECTED",
+}
+
 export enum SlaHealth {
   ON_TRACK = "ON_TRACK",
   AT_RISK = "AT_RISK",
@@ -110,6 +120,9 @@ export interface TaskDto {
   acceptedAt?: string;
   submittedAt?: string;
   approvedAt?: string;
+  reviewDecision?: ReviewDecision;
+  reviewQuality?: number;
+  rejectionReason?: string;
 }
 
 export interface AdminNoteDto {

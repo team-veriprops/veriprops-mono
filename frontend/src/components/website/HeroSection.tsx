@@ -3,21 +3,15 @@ import Link from "next/link";
 import { CheckCircle2, ArrowRight, TrendingUp } from "lucide-react";
 import { CTA_VERIFY_HREF } from "./home.data";
 import { ROUTES } from "@lib/routes";
+import BrandBackdrop from "@components/ui/BrandBackdrop";
 
 export default function HeroSection() {
   return (
     <section
       className="relative min-h-screen flex items-center overflow-hidden pt-20 bg-white"
     >
-      {/* Subtle background grid */}
-      <div
-        className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_1px_1px,rgba(0,13,34,0.04)_1px,transparent_0)] bg-size-[40px_40px]"
-      />
-
-      {/* Warm ambient glow — top right */}
-      <div
-        className="absolute -top-32 -right-32 w-150 h-150 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(63,102,83,0.06)_0%,transparent_70%)]"
-      />
+      {/* Subtle background grid + warm ambient glow, top right */}
+      <BrandBackdrop glow />
 
       <div className="relative max-w-7xl mx-auto px-6 lg:px-8 w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center py-16 lg:py-24">
         {/* Left — Copy */}

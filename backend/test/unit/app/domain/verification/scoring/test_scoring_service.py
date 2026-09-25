@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from test.utils.repo_fakes import fake_upsert, first_matching
+
 from main.app.core.state.status import AgentRole, VerificationTier
 from main.app.domain.verification.scoring.service import TrustScoreWeightService
 from main.appodus_utils.db.session import db_session_ctx
@@ -22,6 +24,7 @@ def mock_db_session():
 
     session.begin = _begin
     session.flush = AsyncMock()
+    session.execute = AsyncMock()  # advisory locks (`advisory_xact_lock`) run a statement
     token = db_session_ctx.set(session)
     yield session
     db_session_ctx.reset(token)
@@ -58,6 +61,16 @@ def _make_service(existing=None):
     svc._weight_repo.list_for_tier = AsyncMock(side_effect=_list_for_tier)
     svc._weight_repo.update = AsyncMock(side_effect=_update)
     svc._weight_repo.create_return_model = AsyncMock(side_effect=_create)
+
+    def _create_from(values):
+        w = _weight(values["tier"], values["role"], values["weight_percent"])
+        state["rows"].append(w)
+        return w
+
+    svc._weight_repo.upsert = fake_upsert(
+        lambda values: first_matching(state["rows"], tier=values["tier"], role=values["role"]),
+        _create_from,
+    )
     svc._state = state
     return svc
 

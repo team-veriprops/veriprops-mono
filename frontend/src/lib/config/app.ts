@@ -30,6 +30,12 @@ export const SESSION_REFRESH_BACKOFF_MS = 1_000; // doubles per retry (1s, 2s)
 export const SESSION_REFRESH_LEAD_MS = 60_000; // proactive refresh this long before expiry
 export const SESSION_EXPIRED_REDIRECT_DELAY_MS = 1_500; // expired-state handoff before login redirect
 
+// ── Sign-out (useSignOut + SignOutOverlay) ──
+// The overlay a sign-out raises cannot be dismissed, and the logout call sets no request
+// timeout — so leave for the login page anyway once this elapses, rather than trapping the
+// user behind a spinner on a request that never settles.
+export const SIGN_OUT_MAX_WAIT_MS = 8_000;
+
 // ── Phone / locale ──
 export const DEFAULT_DIAL_CODE = "+234";
 // The ISO country the dial code above belongs to. Kept beside it so a country selector

@@ -157,6 +157,547 @@ Both fixes came from reading the OTP path while chasing a latency problem that t
 
 ---
 
+## Slice 4 — golden path legs 2-5 (`golden-path.spec.ts`, P0, `@serial`)
+
+**UAT-GP-03**, one ordered journey through the browser: an admin opens the ranked-suggestions
+panel and assigns all three STANDARD roles → each agent accepts, starts, captures evidence and
+submits their findings → the admin returns the FIELD task with a reason → that agent reads it,
+resumes the work and resubmits → the admin approves each role with a quality score and releases →
+the customer is notified, clears the disclaimer gate, reads the trust gauge and VID, and downloads
+the branded PDF (asserted on the bytes: `%PDF` magic plus the VID). Four a11y scans en route.
+
+### Six defects it exposed, each fixed test-first
+1. **An admin-assigned task could not be accepted.** `assign()` moves a task to ASSIGNED and out
+   of the pool, but both agent surfaces gated Accept on `state === PENDING || inPool`. The
+   manual-assign path (§2.2) therefore dead-ended in the UI while the backend's machine allowed
+   ASSIGNED → ACCEPTED all along. (`AgentTaskList`, `AgentTaskDetail`.)
+2. **A returned task could not be reworked.** `reject_task` lands the task in REJECTED, and
+   `TASK_TRANSITIONS[REJECTED] = {IN_PROGRESS}` — which is exactly what `start()` performs. But the
+   screen offered Start only for ACCEPTED, so the agent saw the reason their work came back and had
+   no way to act on it. Now REJECTED offers "Resume work", and the reason card carries an anchor.
+3. **Three unnamed or unbound controls on the admin console**, all blocking axe: `delay-days` had a
+   `<Label>` bound to nothing, the `note-category` Radix trigger had no accessible name, and the
+   task-progress bar was an unnamed progressbar. Inputs bound with `useId()`; Radix triggers named
+   with `aria-label`, following the Slice 3 `AdminPayouts` precedent (a `<label for>` pointing at a
+   `<button role="combobox">` names nothing).
+4. **The review decision never reached the browser.** `approve_task` deliberately leaves the task
+   SUBMITTED and records `review_decision` (§8.3) — but both hand-written mappers
+   (`review/controller.py:_task_dto` and `admin/service.py:_task_dto`) omitted it, and the read
+   `TaskDto` never declared it. An admin approving a task got no confirmation their review had
+   registered. The service test passes because it stops short of the mapper; the new
+   `test_review_task_dto.py` covers both mappers and the camelCase wire key. Frontend `TaskDto`
+   gained the field, so `AdminReportReview` dropped the `as { reviewDecision?: string }` cast it
+   had been reading through.
+5. **The trust band failed WCAG AA on every band** — measured 3.50:1 (Safe), 2.83:1 (Caution) and
+   4.48:1 (High Risk) against the tinted panel, where AA needs 4.5:1. The scan only caught Safe,
+   because that is the band this scenario happened to produce. Fixed as one shared
+   `lib/trust-band.ts` expressed in the theme's semantic tokens (5.06 / 5.23 / 6.07), which also
+   removed the duplicate band→colour tables that `ReportView` and `PublicSummaryCard` each kept
+   privately — two surfaces required to stay in §10.2 parity and free to drift.
+6. **The findings block was unreachable by keyboard** (`max-h-32 overflow-auto` with nothing
+   focusable inside). Only chromium-mobile exposed it: on a desktop viewport the same JSON fits and
+   nothing scrolls. This is the clearest argument this cycle for the engine matrix being a gate
+   rather than a formality.
+
+### Misjudgements of mine, recorded so they are not repeated
+- **I traded one strict-mode violation for another.** After the bell resolved to three elements I
+  scoped it with `filter({ visible: true })`, which passed on desktop and broke on mobile: the
+  off-canvas drawer's copy still reads as *visible* while parked off-screen. `helpers/ui.ts:signOut`
+  documents that exact trap in a comment I had already read. The locators now scope to the page
+  header, which holds the one bell the customer is looking at on any viewport.
+- **I nearly went hunting for a backend defect that did not exist.** When the bell assertion failed
+  I suspected `REPORT_READY` had no in-app rule, since the rule row declares only email/SMS/WhatsApp.
+  `NotificationRule.in_app` defaults to `True`; the notification was always being created, and the
+  page snapshot showed the badge reading 7. The failure was entirely my locator.
+
+### Folded in
+- Assign/suggest anchors (`assign-submit-{role}`, `suggested-agent-{role}` + `data-agent-id`),
+  `open-task-{id}`, `detail-rejection-reason`, `task-progress`, `report-trust-score`.
+- The deferred evidence fixtures now exist and are used: `e2e/fixtures/evidence-photo.jpg` (a real
+  JPEG; the backend hashes and stores bytes without validating mime or size) and `evidence-doc.pdf`.
+- `src/test-utils/markup.ts` — testid-anchored markup assertions shared by the new component tests.
+  `Field.test.tsx` keeps its own local helper: it reads the first attribute in the document, which
+  is right for a single-control render and wrong for a page.
+- Fixture contexts now grant geolocation, so evidence capture exercises the real §12.3 GPS path
+  instead of waiting out a prompt for a position it would never get.
+
+### Verification
+- **Gates:** backend ruff + mypy clean, unit **2260**; frontend Vitest **684** across 106 files,
+  tsc + eslint clean.
+- **chromium-desktop + chromium-mobile:** green on both `auth.spec.ts` and `golden-path.spec.ts`
+  (24/24 parallel lane, 6/6 serial lane), first attempt.
+- **webkit:** parallel lane 24/24 in 2.9 min; serial lane **timed out on UAT-GP-03** (both engines,
+  attempt and retry) and took 21 min. Classified **environment, not defect**: the captured page
+  shows all three tasks Approved with a projected score of 95 and *no* "approve every task to
+  enable release" hint, so `releasable` was true and the button live — the release round-trip
+  simply had not finished inside the 15s assertion default. WebKit runs this journey several times
+  slower than Chromium here, and release is its heaviest action (composite score, commissions, the
+  versioned report, event fan-out). The budget is now stated outright: `test.setTimeout(600_000)`
+  for the journey and 60s for the release assertion, replacing `test.slow()`'s 270s.
+- **firefox:** parallel lane **20/20** in 9.3 min. Serial lane 5/6 — firefox-desktop UAT-GP-03
+  failed waiting on `Evidence (1)`: 15s after the file was set the screen still read `Evidence (0)`,
+  i.e. the upload had not landed. **Timing, not incompatibility** — firefox-mobile is the same Gecko
+  engine and passed the identical flow. Evidence capture waits on the browser's GPS hint (§12.3),
+  posts a multipart body and re-reads the list, so that assertion now carries a 60s budget like
+  release. This box ran the Firefox serial lane in **1.4 hours**, ~9x Chromium per test.
+- Both widened budgets are about this machine, not the product: every assertion still fails loudly
+  if the outcome never arrives; it simply waits long enough for a slow engine to get there.
+- **Re-verified against the new budgets:** webkit-mobile green on the first attempt (5.8 min);
+  webkit-desktop and firefox-desktop green **on retry** (8.3 min / 3.5 min), their first attempts
+  exceeding even the 600s budget. Those three tests alone took 1.7 hours here.
+
+### Matrix result
+| engine | `auth.spec.ts` + `golden-path.spec.ts` |
+|---|---|
+| chromium-desktop | green, first attempt |
+| chromium-mobile | green, first attempt |
+| webkit-mobile | green, first attempt |
+| firefox-mobile | green, first attempt |
+| webkit-desktop | green; UAT-GP-03 needed a retry |
+| firefox-desktop | green; UAT-GP-03 needed a retry |
+
+**All six engines pass UAT-GP-03; two need a retry.** That is short of this plan's "no unexplained
+retries" bar, and the explanation is machine speed rather than product behaviour — the evidence for
+that reading is recorded above (the release button live with `releasable` true, and firefox-mobile
+passing the identical flow on the same Gecko engine). **User decision, 2026-09-22: this stands as
+it is** — the journey is not made cheaper, the budget is not raised again, and GP-03 is not
+re-tagged to fewer engines. CI hardware is unmeasured, so if the retries survive there the
+classification deserves re-testing rather than restating.
+- A full six-engine matrix in one invocation exceeds the per-call budget here, so it is chunked by
+  engine pair.
+
+### Stack notes for the next session
+- **The local database was rebuilt as `veriprops_uat`.** After the squash that folded the
+  unified-chat chain into `0001_initial_schema`, `veriprops_local` was left stamped at
+  `0011_whatsapp_legal_copy` — a revision that no longer exists, so alembic could not resolve it.
+  The migration's own docstring states the invariant: a squash is only safe once every live database
+  is stamped at the head being folded in. Rather than drop anything, a fresh database was created
+  and migrated to `0017_session_pkey_name`; `veriprops_local` is untouched. The backend is started
+  with `DB_NAME=veriprops_uat`, which takes precedence over the env file, so no config was edited.
+- The backend does not hot-reload, and the standalone frontend serves a built bundle: after any
+  source change both must be restarted (and the frontend rebuilt + restaged) before a browser run
+  means anything.
+
+## Slice 5 — agent onboarding + both persona doors (`agent-onboarding.spec.ts`, P1)
+
+**UAT-AGENT-01…05.** The compulsory §3.1 gate and the application wizard (roles → KYC → credentials
+→ review), an admin approving in the drawer, a failed BVN rejected *with its reason shown to the
+applicant*, and — the slice's substance — the two §3.2 persona doors: a customer becomes an agent
+from inside their portal, and an agent takes up the customer hat and reaches the verification
+wizard. Both must work **in the session the person is already in**.
+
+### The live P0 this slice started from
+**Every new signup was blocked by the consent re-acceptance modal.** `libs/auth/consent.ts`
+hardcoded every consent version at `1.0.0` while the backend publishes `1.1.0` for Platform Terms
+and Privacy, so an account was created having "accepted" versions that were already superseded and
+met the non-dismissible re-acceptance modal on its first screen. `auth.spec.ts` never caught it
+because it signs up, asserts a URL and stops — the modal opens over the page it asserted. The
+registry no longer states versions: it names which consent *types* signup asks for, and
+`ConsentStep` reads the published list through `authService.listConsentDocuments()`, recording the
+version it actually displayed. That is what prevents a recurrence — there is no longer a second
+place for a version to be written down. The `signup-consent-terms`/`-privacy` anchors are kept:
+auth testids are contract.
+
+### Defects it exposed, each fixed test-first
+1. **A granted persona could not take effect until the next sign-in.** Claims were already read
+   from the user record at each mint, but a refresh re-mints only the *access* token while the route
+   guard decides from the **refresh** token — and nothing re-minted that. So applying granted AGENT
+   and then bounced the applicant out of the agent area with no explanation, and an agent-path
+   signup could never reach `/portal/*` at all. `SessionService.rotate_current_session` re-mints
+   both and **moves the `device_sessions` row onto the new refresh hash** (the row is keyed by it;
+   one left behind reads as revoked on the next refresh). Called by the new
+   `POST /users/auth/personas/customer` and, best-effort, by the application submit.
+2. **The client replayed a pre-grant routing verdict.** With the cookies correct, the browser still
+   landed back on the portal. The trace showed *no request at all* for the agent dashboard: Next had
+   prefetched the shell's links while the account still lacked the hat, the guard redirected every
+   one of those prefetches, and `router.push` replayed the cached redirect. Fixed with
+   `navigateAfterPersonaChange` — a full document load — used by both doors. **No unit test can see
+   this**; it took a Playwright trace to find, which is the argument for the browser suite in one
+   defect.
+3. **The persisted session outlived the grant.** `useAuthStore` is `persist`ed to localStorage, so
+   the reload rehydrated the pre-grant personas and `PortalSwitcher` never appeared. The grant
+   endpoint's own response is a session and handles itself; the application submit answers with the
+   application's status, so it now calls the new `useRefreshSession()` first.
+4. **An existing customer could not become an agent at all** (found 2026-09-22): the persona was
+   granted *by applying*, and applying *required* the persona. `proxy.ts` now exempts
+   `/agents/apply` and only that route; `BecomeAnAgentLink` resolves the marketing CTA by session;
+   a portal nav entry exists for someone who never revisits the marketing pages.
+5. **The §3.1 gate had no exit for someone with somewhere to go.** The layout covered
+   `/agents/apply` too, so a customer who followed the new link and changed their mind was held
+   behind a layer that covers the nav. The gate is now scoped to the agent *area*; the application
+   route renders its own wizard, whose close control appears only for someone holding CUSTOMER.
+6. **Four unnamed/unbound controls**, all blocking axe: `CredentialsStep`'s licence, expiry,
+   experience and bio inputs carried labels bound to nothing; `KycStep`'s ID-type Radix trigger and
+   both DataTable `Select` triggers (the status filter and rows-per-page) were unnamed buttons.
+   Bound with `useId()`, named with `aria-label` — the Slice 3/4 precedent.
+7. **A rejected applicant was never told why.** `rejectionReason` rode on the status DTO and was
+   rendered nowhere agent-facing, while the layout forced them back into a blank wizard — so the
+   only move left was to resubmit the identical application and be refused again.
+8. **`AsyncStateComponent` failed WCAG AA in its loading and empty states** (`text-gray-500`,
+   4.39:1 on the app's surfaces; the error state used `text-red-500`). This is the component every
+   surface renders while it waits, so the failure was everywhere and intermittent — the scan only
+   catches it if it lands before the data does.
+9. **Every admin table's horizontal scroll was keyboard-unreachable** (`overflow-x-auto` with no
+   focusable ancestor). Only a phone engine exposes it, because only there do the tables overflow —
+   the same lesson as Slice 4's findings block.
+10. **A pending applicant's dashboard raised `ResourceNotFoundException` on every load**, because
+    `useAgentProfileQuery()` was called unconditionally while its sibling was already gated on
+    approval.
+11. **Silent session recovery was dead — every refresh answered 500** (a regression inside this
+    slice, from the refresh-reads-personas fix). Loading the user before minting moved
+    `get_jwt_subject()` ahead of the `jwt_refresh_token_required()` that used to run inside
+    `refresh_access_token`; `AuthJWT` has no subject until a token is verified, so it read `None`,
+    looked up user `"None"` and raised `badly formed hexadecimal UUID string`. 17 refreshes, 17
+    500s, and anyone whose access token lapsed was thrown to the login page. **Only
+    `session.spec.ts` UAT-SESS-01 caught it** — the unit tests mocked `get_user_model`, so any
+    subject passed. The controller now verifies first, and the refresh tests use a double that
+    behaves like the library (no subject until verified), including one that pins the ordering.
+    This is exactly why the plan re-runs `session.spec.ts` whenever refresh is touched.
+
+### Misjudgements of mine, recorded so they are not repeated
+- **I decoded the wrong cookie and nearly blamed the backend.** Checking whether the rotated token
+  carried both personas, I read curl's jar after a request I had given `-b` but not `-c` — so I was
+  reading the *login-time* token and concluded the grant had not reached the mint. The backend was
+  correct all along. Decode the response's `Set-Cookie`, not the jar you sent.
+- **I got `expectBothHats` backwards in both scenarios**, passing "the hat they just took up" when
+  the switcher offers the hat they are *not* currently viewing. The helper now reads the direction
+  off the URL, exactly as `PortalSwitcher` does, so the mistake is not available to make.
+- **I asserted the portal switcher while a full-screen wizard covered it.** The trigger still reads
+  as visible under a page-layer overlay; the click simply goes to the overlay.
+
+### Folded in
+- `POST /users/auth/personas/customer` — grants CUSTOMER and *only* CUSTOMER, so no client can
+  claim a hat; `/agents/verify-property` is its UI, a route rather than a nav action so the grant
+  completes before the navigation the guard would otherwise refuse.
+- `NavItem.hiddenForCustomers` beside `hiddenForAgents`, applied by one shared `visibleNavItems`.
+- `helpers/ui.ts:openNavItem` — layout-aware sidebar navigation, shared by both doors.
+- `DATATABLE_TEST_IDS.SEARCH`, so the spec and the toolbar share one derivation.
+- Anchors: `agent-apply-coverage/-experience/-bio/-rejection-reason`, `agent-verify-property*`.
+
+### Verification
+- **Gates:** backend ruff + mypy clean, unit **2273**; frontend Vitest **713** across 114 files,
+  tsc + eslint clean.
+- **Regression specs on chromium-desktop:** `auth.spec.ts` 13/13 and `session.spec.ts` 4/4, both
+  first attempt, after the refresh fix. UAT-SESS-03 had a pre-existing check-then-read race on the
+  recovery dialog (visible at the check, handed off to login before the read); it now reads the
+  wording in the same step it finds the dialog.
+- Two failures in the first matrix run were *my spec's* faults, not the product's: the admin search
+  was typed before hydration (the repo's own documented trap — a half-written address matches
+  nobody, which reads as a missing application), and the switcher assertion above.
+- **A third spec fault, found by the chromium retry:** the open-drawer axe scan raced
+  `DetailDrawer`'s framer-motion slide-in, a JS-driven animation the helper's `getAnimations()`
+  wait cannot see, and read the sidebar through a half-faded backdrop (1.03:1). The drawer is
+  `aria-modal`, so the scan is now scoped to it; the queue behind it is scanned uncovered first,
+  in `openApplication`, so the table fixes above keep their coverage.
+
+### Matrix result (`@P1`: chromium-desktop + webkit-mobile, single worker)
+| engine | UAT-AGENT-01…05 |
+|---|---|
+| chromium-desktop | **5/5, first attempt** |
+| webkit-mobile | **5/5, first attempt** |
+
+**Final run: 10/10 on the first attempt, no retries** (7.2 min, single worker), after the refresh
+fix and after UAT-AGENT-05 stopped asserting the "Verify a property" interstitial — on a fast stack
+the grant lands before a check can see it, which is the right outcome; its wording is now pinned by
+`VerifyPropertyContainer.test.tsx`.
+
+**One earlier retry is explained, and it is not this slice's code.** Signup step 1's Continue button
+was filled, enabled and visible, but never *stable* for 20s: it sits directly under the
+password-strength meter, which animates in on a phone viewport and keeps pushing it. That is the
+shared signup funnel (`helpers/signup.ts`, which `auth.spec.ts` drives identically), untouched
+here; UAT-AGENT-01 passed first-attempt on webkit in the preceding run. Flagged for the auth
+slice rather than widened now — a click that waits longer would hide the layout shift, not fix it.
+
+**Environment, recorded so it is not misread later.** Two earlier multi-worker matrix runs
+collapsed on this box: Docker Desktop's host↔Postgres path stalled under bursts of new connections
+(`ConnectionResetError: [WinError 64]`, 356 in one run, requests reaching 144s), so OTP sends
+timed out and every signup-based scenario failed while UAT-AGENT-04/05 still passed. Restarting
+the Postgres container cleared it, and a single worker avoids the bursts. The machine also rebooted
+mid-run once, which reads as 0 ms "failures" for everything after it — those tests never ran.
+
+## Side track — concurrency hardening, fault logging, sweep claims (2026-09-24 → 25)
+
+**Shipped as `c8bed19` on `dev` (pushed).** It started from "the local backend hangs ~30 s then
+answers 500 under concurrent requests" and grew, by user decision, into a sweep of every
+read-then-write race and every place that logged a handled outcome as an ERROR. The commit
+message is the full inventory; the design rules it introduced are recorded in
+[backend/CLAUDE.md](../backend/CLAUDE.md) (race-free writes, `INDEPENDENT` sessions, flush before
+reload, one ERROR per real fault, rebuild-don't-stamp) and MASTER-PRD §11.4 (SLA-breach claim).
+
+### What exists now, in one line each
+- Race-free writes on `GenericRepo`: `claim_transition`, `lock_model`, `insert_or_get`/`upsert`,
+  advisory transaction locks (`db/locks.py`). `_flush_pending()` runs before any of them reloads a
+  row — sessions are `autoflush=False` and `populate_existing` would silently discard an edit.
+- Writes that must survive a failing request commit on `TransactionSessionPolicy.INDEPENDENT`
+  (sign-in failure recorder, WhatsApp inbound journal, consent, assistant session, messages). No
+  nested second-connection sessions remain.
+- Migration **0018** narrows unique constraints to live rows and adds the partial unique indexes
+  the code assumed; **0019** adds `verifications.sla_breach_notified_at`, which the SLA sweep claims
+  before announcing a breach. All four local DBs (`veriprops_test|local|e2e|uat`) are at `0019`.
+- Sweeps run under `app/jobs/exclusive.py` and claim each row before acting on it.
+- `exception/faults.py:log_fault_once` — one ERROR, with traceback and request reference, per real
+  fault; handled outcomes stay DEBUG/WARNING. Stdlib loggers route into loguru.
+- `app/core/realtime/frames.py:sse_frame` — the one SSE encoder (UUIDs as hex).
+- `backend/scripts/rebuild_local_db.py` — rebuilds a local DB a squash stranded.
+- E2E: CHAT-06 builds its threads over the API (66 s → 22 s); local default is **2 workers**;
+  `e2e/tls/Caddyfile` upstream is overridable via `UAT_UPSTREAM` and retries GET/HEAD/PUT only.
+
+### Verification at the commit
+Backend unit **2594**, ruff + mypy clean; frontend Vitest **748**, tsc + eslint clean;
+drive-through **550/550**; full six-engine Playwright, both lanes. The parallel lane was 181 passed,
+12 flaky, 3 failed (2.2 h, 2 workers). All three failures and the flaky set passed when re-run
+alone. The four with a found cause were fixed (below) and pass **12/12 first attempt, no
+retries**. The serial lane passed 24/24, split across two runs because a Docker Desktop restart
+cut the first one short.
+
+### Spec faults fixed in this pass (not product defects)
+- **AGENT-02/03** reloaded the applicant's page straight after the admin's click, racing the save.
+  `decideApplication` now waits for the drawer to close, which happens only once the decision is
+  saved.
+- **CHAT-04** typed into the admin inbox search before hydration (the Slice 5 trap again).
+  `findAdminRow` now calls `waitForHydration` first.
+- **SESS-04**: `signOut` waited for `load` (images and fonts) after the redirect had landed; it
+  now waits for `domcontentloaded`.
+
+### Blockers — act on these first
+1. **`dev` CI/e2e is expected red until the sign-out/error-message work is committed.** Another
+   session's work is still **uncommitted in the working tree, 76 files**: the sign-out busy
+   overlay (`SignOutOverlay.tsx`, `useSignOut.ts`), the toast removal (`3rdparty/ui/toast*`,
+   `hooks/use-toast.ts` deleted), the safe error messages (`lib/errors.ts`, `FetchHttpClient`,
+   `login/lockout.ts`, ~40 components), `package.json`/`pnpm-lock.yaml`, and its backend tests
+   `test_error_envelope.py` and `test_session_errors.py`. The user asked for only this track to be
+   committed, but `c8bed19` still depends on that work:
+   `e2e/helpers/ui.ts:signOut` waits for `signout-overlay`, which exists only in the uncommitted
+   `SignOutOverlay.tsx`. Five files hold edits from both tracks (`backend/CLAUDE.md`,
+   `db/session.py`, `request_logging_middleware.py`, `exception_handlers.py`,
+   `e2e/helpers/ui.ts`). **Review it, run its gates, then commit and push it.** That session's
+   own record is its transcript; its user asks were the logout busy state, and "the login form
+   shows raw backend errors — fix everywhere".
+2. **Push-to-`dev` deploys.** `deploy.yml` runs the full gate and then deploys the dev alias, so
+   nothing reaches dev until blocker 1 is resolved.
+
+### Pending, in priority order
+1. **The same `load` wait behind SESS-04 exists at 9 more sites.** Each should wait for
+   `domcontentloaded` (then `waitReady`) like `goto` does:
+   `helpers/auth.ts:35`, `helpers/ui.ts:38,50`, `specs/auth.spec.ts:117,161`,
+   `specs/chat.spec.ts:183`, `specs/golden-path.spec.ts:64`, `specs/session.spec.ts:49,89`.
+2. **Flaky tests with no cause found yet.** Each passed on retry and again alone:
+   AUTH-09 (firefox-mobile, webkit-desktop), GP-02 (firefox-desktop, webkit-desktop), AUTH-02/03
+   (firefox-mobile), AUTH-12, SESS-03, WAH-03 and AGENT-01 (chromium-desktop). Chromium-desktop
+   took 8 of the 12 and all 3 failures in one window, which points at a slow stretch of the run,
+   not at the specs. Item 1 may clear some of them.
+3. **GP-01 on webkit-mobile-serial hung once, for 21 min.** It timed out waiting for
+   `verify-new-continue` to become *stable*, then WebKit hung tearing down the context. That was
+   under CPU contention (backend pytest running alongside), and the retry passed in 18 s. Compare
+   Slice 5's note: a Continue button that never settles under an animating element above it. If it
+   recurs, look for a layout shift above that button rather than widening the timeout.
+4. **Re-run the full matrix** (`node e2e/run-lanes.mjs`) once blockers 1–2 and item 1 are done.
+   The drive-through was last run before the final log-level demotions (router/controller
+   ERROR → WARNING); re-run it too.
+5. **2.2 h for the parallel lane is slow.** Try the native Caddy path
+   (`UAT_UPSTREAM=localhost:3001 caddy run --config e2e/tls/Caddyfile`, see
+   `docs/uat-strategy.md`), which skips Docker Desktop's container→host hop — the likely cost.
+6. Outside this track: GitHub reports 44 Dependabot alerts (4 critical) on the default branch.
+
+### Runtime state left behind
+- The user's own backend is **stopped at their request — do not restart it**. The e2e servers
+  (backend on :8000 against `veriprops_e2e`, standalone frontend on :3001) are stopped.
+  `veriprops-uat-tls` (Caddy) is up; Docker restarts it automatically.
+- Run the e2e backend with `APPODUS_ACTIVE_ENV=test DB_NAME=veriprops_e2e DB_SERVER=127.0.0.1
+  SMTP_HOST=127.0.0.1 ENABLE_OUT_MESSAGING=True MAILPIT_CONTAINER=veriprops-mono-mailpit-1
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8`. Take `DB_PASSWORD` from `backend/.env.dev_personal`.
+  The WhatsApp secret keys in `backend/main/app/config/settings.py` must also be set to non-empty
+  values: `WHATSAPP_APP_SECRET_KEY`, `WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN`,
+  `WHATSAPP_BUSINESS_ACCESS_TOKEN` and `WHATSAPP_HANDOFF_PRIVATE_KEY`/`_PUBLIC_KEY`.
+  Throwaway placeholders set in the shell are enough, because `WHATSAPP_PROVIDER=stub` never
+  sends them anywhere. *Unverified:* whether the handoff pair must be a real RS256 key pair for
+  the `/wa/*` specs. If handoff links fail to sign, generate a throwaway pair. Never put real
+  values in this file. On Windows, use `127.0.0.1`, never `localhost`: WSL's relay owns `::1`
+  for 5432/1025/3000.
+- **Never `/dev/reset` the user's dev database** — use `veriprops_e2e`.
+- The standalone bundle in `frontend/.next/standalone` was built before `c8bed19`. That commit
+  changes no app source (only e2e specs and helpers), so the bundle still matches it. Rebuild it
+  (`pnpm build`, then restage the standalone output) once blocker 1's 76 files are committed,
+  because those do change app source.
+
+## Side track — sign-out busy state, Sonner-only toasts, safe server errors (2026-09-22 → 25)
+
+**Pushed on `dev` in the commit after `c8bed19`. This resolves the blocker above:
+`signout-overlay` now exists.** It covers the user's asks: a busy state on logout from any control,
+and "the login form shows raw backend errors — fix everywhere". It also includes the backlog above
+(the nine `load` waits). Stopped mid-verification at the user's request; what's unfinished is below.
+
+### What exists now
+- **Sign-out.** Every control goes through `useSignOut()`, which drives the global `SignOutOverlay`
+  (keyed on `useAuthStore.signingOut`, never on the mutation's pending state), a double-press guard, and
+  a full-document redirect (`navigateAfterSignOut`). A failsafe (`SIGN_OUT_MAX_WAIT_MS`) redirects
+  anyway if the request never settles. `/account/devices` revoke controls show per-row spinners.
+- **Toasts: Sonner only.** The mounted Radix toaster was deleted (`hooks/use-toast.ts`,
+  `3rdparty/ui/toast*`, `@radix-ui/react-toast`). Before, 127 Sonner calls (54 errors) rendered
+  nothing. The toaster sits above the WhatsApp button (`WHATSAPP_WIDGET_CLEARANCE_PX`).
+- **Safe errors.** Backend: every 5xx answers `SERVER_ERROR_MESSAGE` plus a `reference`, and 4xx messages
+  are never built from library/DB/provider text (template renderers, Google Drive client/webhooks,
+  messaging-model file path). Frontend: `lib/errors.ts:getErrorMessage` is the one render policy.
+  `HttpError` carries `kind`/`httpStatus`/`code`/`reference`, and the sign-in lockout counts only a 401
+  (`login/lockout.ts`).
+- **E2E.** `waitForPage` replaces every bare `page.waitForURL` (17 sites). Page axe scans exclude the
+  Sonner toaster (`TOASTER_SELECTOR`), and `UAT-WA-04` checks a toast at rest. New: `UAT-AUTH-15`
+  (a sign-in outage shows the safe message and reference, and doesn't lock the user out) and `UAT-WA-04`
+  (a toast never covers the WhatsApp button).
+
+### Verification at the commit
+Backend unit **2594**, ruff + mypy clean. Frontend Vitest **748**, tsc + eslint clean, `pnpm build` clean.
+Drive-through **550/550**. Full six-engine matrix: **interrupted by the user**. The parallel lane finished:
+188 passed, 4 flaky, 4 failed (52 min). The serial lane got 18 passed, 4 failed, 1 flaky, 1 not run before
+the stop.
+
+### Act on these first
+1. **`UAT-WA-04` fails on webkit-mobile, and it's this track's own bug.** The overlap assertion
+   passes, but the at-rest scan (`expectNoA11yViolations(page, { include: TOASTER_SELECTOR })`)
+   throws "No elements found for include". The toast's ~4 s timer runs out while the helper waits for
+   animations. Fix: hover the toast first (Sonner pauses dismissal while hovered), or scan straight
+   after the settle. Don't widen timeouts. Chromium-desktop passed.
+2. **Sign-out can bounce back into the app: a real edge case.** In one `UAT-SESS-04` attempt
+   (webkit-desktop, passed on retry), the redirect after sign-out landed on `/portal/dashboard`, not
+   `/auth/login`. Likely cause: `useSignOut` also redirects when the logout call fails, and on the
+   `SIGN_OUT_MAX_WAIT_MS` failsafe. If the backend never cleared the cookies, `proxy.ts` treats the
+   user as signed in and bounces them away from the guest-only login page. The same was true of the
+   old `router.push`. Decide the intended behaviour (e.g. a login URL the guard always lets through
+   after sign-out, or clearing the client-visible cookies first), and add a unit test for it.
+3. **`UAT-AGENT-01`/`-05` failed on webkit-mobile.** AGENT-01 never showed `agent-status-card`
+   (spec line 178). AGENT-05 never showed `signup-consent-form` (`helpers/signup.ts:144`).
+   `agent-onboarding.spec.ts` had its post-navigation waits moved to `waitForPage` in this track,
+   so check that first. `waitForPage` adds `waitReady`, which the old code already called at those
+   sites, so a regression from it is unlikely. `UAT-AGENT-02` timed out (270 s).
+4. **`e2e/specs/status-pages.spec.ts:31,73` still use bare `page.waitForURL`.** It arrived in a
+   concurrent commit (`011a296`) after the 17-site sweep. Move both to `waitForPage` (frontend
+   CLAUDE.md, "Deterministic waits only"), then run that spec.
+5. **Re-run the matrix to completion.** Mobile Safari's serial `AUTH-05`, `DEV-04` and `GP-01` failures
+   are artifacts of the stop (worker exit `0xC0000142`, killed), not results. `GP-03` (webkit-desktop-serial)
+   timed out and needs a real run. The flaky set was all webkit-desktop: DEV-06, SESS-03, SESS-04 and WAH-01,
+   each a 90 s timeout.
+
+### Runtime state left behind
+- All e2e processes stopped; ports 8000/3001 free. `veriprops-uat-tls` is still up, as found.
+- `veriprops_local` was **rebuilt** earlier in this track, with the user's go-ahead, because it was
+  stranded at `0011` behind the squash. The other session has since brought it to `0019`.
+- The e2e run used `veriprops_e2e` with the environment recorded above. The handoff keys were **left
+  unset** on purpose. Outside prod/staging, `handoff/tokens.py` generates an ephemeral RS256 pair.
+  A non-empty placeholder counts as "configured" and breaks link signing. That answers the
+  "Unverified" note above.
+- The toast-placement screenshots and other scratch files are outside the repo, so there's nothing to clean.
+
+## Closeout — the open items above, dependencies, and a complete matrix (2026-09-25)
+
+Every "Act on these first" item from the sign-out track is closed, and so are the earlier pending
+list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user decision and stays open.
+
+### Fixed
+- **UAT-WA-04 (webkit-mobile), spec bug.** The at-rest toast scan now hovers the toast first:
+  Sonner pauses dismissal while its toaster is hovered. The overlap is measured before the hover,
+  because hovering expands the stack. No timeout changed.
+- **Sign-out could bounce back into the app, a real defect.** Under load the
+  `SIGN_OUT_MAX_WAIT_MS` failsafe left before the logout answered. The HttpOnly refresh cookie
+  survived, and `proxy.ts` treats `/auth/login` as guest-only, so it redirected to the dashboard.
+  - Sign-out now lands on `SIGNED_OUT_LOGIN_URL` (`lib/routes.ts`), which the guard never
+    bounces. The marker is honoured on the login page only.
+  - `logoutLifecycle` queues the logout (`pendingLogout`, persisted) *before* the request goes
+    out and dequeues it only on a real response. The login page's `usePendingLogoutRetry`
+    therefore re-sends a logout that the page left behind. `runSignOut` also clears the
+    persisted session on the failsafe path.
+- **Backend gap found by the fix: a late logout never revoked the session.** A logout arriving
+  after the access token lapsed hit `AuthJWTException` and cleared the cookies, but never revoked
+  the device, although the refresh cookie was on the request. That is exactly when a queued
+  logout arrives. It now revokes through the refresh cookie, which is the same check that
+  `refresh_session` trusts. **This reverses a behaviour that a unit test had pinned**
+  (`test_nothing_valid_to_revoke_is_a_plain_sign_out` now sends no refresh cookie).
+- **`status-pages.spec.ts`**: both bare `waitForURL` calls now use `waitForPage`.
+- **`run-lanes.mjs` could not filter by engine.** `--project=chromium-desktop` went to both
+  lanes, but the serial projects are `<engine>-serial`, so every engine-filtered run failed its
+  serial lane with "project not found". That includes the "chunk by engine pair" runs above. The
+  runner now renames the filter for the serial lane.
+- **UAT-AGENT-01/-05 (webkit-mobile): not a regression, and not reproduced.** The `waitForPage`
+  conversion in `77aa592` is behaviour-identical: same predicate, `domcontentloaded`,
+  `waitReady` and 30 s. Both tests pass first-attempt alone and in the full matrix below. The
+  earlier failures sat in the interrupted run and read as load.
+
+### Dependencies (the Dependabot alerts)
+- **Frontend: `pnpm audit` went from 36 to 0** (it had 2 critical Next.js RCEs).
+  - `next` and `eslint-config-next` are at 16.3.6.
+  - `pdfjs-dist` is removed, because nothing imported it.
+  - `vitest` is at ^4.1.11.
+  - Per-major `pnpm.overrides` cover brace-expansion, nanoid, postcss, undici, js-yaml,
+    browserslist and baseline-browser-mapping. Every fix stays within its current major.
+- **Backend: `pip-audit` finds only `ecdsa` (PYSEC-2026-1325), which has no fixed release.** It
+  arrives only through `python-jose`, and it is not exploitable here: `python-jose[cryptography]`
+  is now pinned, so every sign and verify goes through `cryptography`. That covers the RS256
+  handoff/OAuth tokens and Apple's ES256 client secret, confirmed at runtime. The alert stays
+  open until the five `from jose import` sites move to PyJWT. That is recorded as a `TODO(gap)`
+  in `requirements.txt` and paired with a MASTER-PRD §G.2 row. `gh` isn't installed here, so
+  GitHub's own alert list was not read. Check it after the push.
+
+### Tests added
+- **Backend unit tests:**
+  - A late logout revokes through the refresh cookie.
+  - A failure in that revoke is reported with the cookies still cleared.
+- **Drive-through** (`stage_session_refresh.py`, +4 checks):
+  - A logout carrying only the refresh cookie succeeds and clears it.
+  - That session can no longer refresh.
+  - A cookieless logout is a plain success.
+- **Vitest:**
+  - `logoutLifecycle.test.ts`: queued before the request; kept on a network error or timeout;
+    cleared on any response.
+  - A new `proxy.test.ts`, the first for the guard: the handoff passes, `/auth/login` and signup
+    still bounce, and role rules hold.
+  - Routes tests for the handoff marker.
+  - A `useSignOut` test that the failsafe clears the session before leaving.
+- **Playwright: UAT-SESS-05.** It holds the first logout call forever, then asserts that the
+  user lands on and stays on the login form, that the queued logout is re-sent from there, and
+  that the dashboard then demands sign-in.
+
+### Verification
+- **Backend:** ruff and mypy clean; unit **2596/2596**.
+- **Frontend:** tsc and eslint clean; Vitest **776/776** (122 files); `pnpm build` clean on
+  Next 16.3.6. `routes-manifest.json` targets the local backend only.
+- **Drive-through: 554/554, no WARN** (550 plus the 4 new checks). The first run reported "ALL
+  PASSED, 545" because the harness *skips* the 9 webhook-signature checks when the secrets are
+  `CHANGE_ME`. With the same throwaway non-placeholder values in both processes, all of them ran.
+  Compare the check count, not just the verdict.
+- **Full six-engine matrix, complete and uninterrupted.** Run by engine pair, 2 workers, both
+  lanes: **parallel 214/214, serial 24/24, all first-attempt, 0 retries, 0 flaky.**
+
+  | pair | parallel | serial | wall time |
+  |---|---|---|---|
+  | chromium desktop + mobile | 80/80 | 8/8 | 4 min |
+  | webkit desktop + mobile | 80/80 | 8/8 | 10 min |
+  | firefox desktop + mobile | 54/54 | 8/8 | 4 min |
+
+  This clears the "no unexplained retries" bar Slice 4 fell short of. UAT-GP-03 passes on every
+  engine without a retry, and none of the flaky set from the sign-out track recurred.
+- **18 min against the previous 2.2 h is observed, not explained.** This run had a freshly
+  created `veriprops_e2e`, a Postgres container restarted an hour earlier, and a new Caddy
+  container, with nothing else loading the machine. Any of those could account for it. The
+  pending item 1 below explains the earlier flakes as "a slow stretch of the run", and this is
+  consistent with that, but it doesn't prove it.
+
+### Still open
+- Native Caddy (pending item 5): skipped by user decision. Given the timing above, re-measure
+  before investing in it.
+- `python-jose` → PyJWT (MASTER-PRD §G.2).
+- CI hardware is still unmeasured against these budgets.
+
+### Runtime state left behind
+- **`veriprops_e2e` and `veriprops_uat` had been dropped** from the same Postgres container.
+  `veriprops_e2e` was recreated and migrated to `0019`. `veriprops_uat` was not recreated, and
+  `veriprops_local` was not touched.
+- The e2e env needs `DB_PASSWORD=postgres` (the compose value); the `.env.dev_personal` password
+  is rejected under `APPODUS_ACTIVE_ENV=test`.
+- `veriprops-uat-tls` was missing and has been recreated with `--restart unless-stopped`.
+- The e2e backend (:8000) and the standalone frontend (:3001) are running from this session. The
+  standalone bundle is current (built after all app changes).
+
+---
+
 # Progress Tracker — WhatsApp Channel (cycle 2)
 
 status: **cycle complete** — S1–S11 delivered (+ S4.1 template registry, + S10.0 handoffs)

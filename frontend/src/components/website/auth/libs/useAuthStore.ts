@@ -18,10 +18,17 @@ interface AuthState {
    * `usePendingLogoutRetry` and cleared by any successful `setSession` (see
    * that hook for why a re-confirmed session always wins over a stale intent). */
   pendingLogout: boolean;
+  /** A sign-out the user actually asked for is in progress — what `SignOutOverlay`
+   * renders from. Deliberately *not* the logout mutation's pending state: the offline
+   * retry in `usePendingLogoutRetry` drives the same mutation in the background, and
+   * must never raise a full-screen overlay at a signed-in user. In-memory only (see
+   * `partialize`). */
+  signingOut: boolean;
   hydrated: boolean;
   setSession: (session: AuthSession | null) => void;
   setUser: (user: AuthUser) => void;
   setPendingLogout: (pending: boolean) => void;
+  setSigningOut: (signingOut: boolean) => void;
   clear: () => void;
   markHydrated: () => void;
 }
@@ -31,10 +38,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       session: null,
       pendingLogout: false,
+      signingOut: false,
       hydrated: false,
       setSession: (session) => {
         publishAuthSnapshot(session);
-        set({ session, pendingLogout: false });
+        set({ session, pendingLogout: false, signingOut: false });
       },
       setUser: (user) =>
         set((state) => {
@@ -44,6 +52,9 @@ export const useAuthStore = create<AuthState>()(
           return { session };
         }),
       setPendingLogout: (pending) => set({ pendingLogout: pending }),
+      setSigningOut: (signingOut) => set({ signingOut }),
+      // Runs in the logout mutation's `onSettled`, i.e. before the redirect — so it
+      // deliberately leaves both `pendingLogout` and `signingOut` alone.
       clear: () => {
         publishAuthSnapshot(null);
         set({ session: null });

@@ -85,8 +85,8 @@ class UpgradeService:
             raise ValidationException(message="The selected tier is not an upgrade.")
 
         key = f"{Utils.uuid_to_hex(v.id)}:{target.value}"
-        existing = await self._upgrade_repo.get_by_key(key)
-        if existing is not None and existing.status == UpgradeStatus.PENDING.value:
+        existing = await self._upgrade_repo.get_pending_by_key(key)
+        if existing is not None:
             return existing  # idempotent — reuse the pending request + its charge
 
         delta = upgrade_delta_kobo(
@@ -117,6 +117,10 @@ class UpgradeService:
         upgrade = await self._upgrade_repo.get_by_payment(Utils.uuid_to_hex(payment_id))
         if upgrade is None or upgrade.status != UpgradeStatus.PENDING.value:
             return
+        # A replayed confirmation racing this one finds the upgrade already PAID.
+        paid = await self._upgrade_repo.claim_transition(upgrade.id, [UpgradeStatus.PENDING], UpgradeStatus.PAID)
+        if paid is None:
+            return
         verification = await self._verification_repo.get_model(upgrade.verification_id)
         if verification is None:
             return
@@ -137,7 +141,6 @@ class UpgradeService:
         # roles already present). Broadcast to the pool when auto-assignment is enabled (§6.2).
         await self._tasks.prepare_for_paid(upgrade.verification_id)
 
-        await self._upgrade_repo.update(upgrade.id, UpdateUpgradeDto(status=UpgradeStatus.PAID.value))
         self._audit.schedule(
             action=AuditActionType.TIER_UPGRADE_APPLIED,
             resource_type="upgrade", resource_id=upgrade.id, actor_id=upgrade.customer_id,

@@ -159,6 +159,12 @@ class TaskDto(Object):
     accepted_at: Optional[datetime] = None
     submitted_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
+    # An approval is not a state change (§8.3): the task stays SUBMITTED until release, so
+    # the decision is the only thing that tells an admin their review registered — and the
+    # reason is what an admin sees when a task has been sent back.
+    review_decision: Optional[ReviewDecision] = None
+    review_quality: Optional[int] = None
+    rejection_reason: Optional[str] = None
 
 
 class AssignTaskDto(Object):

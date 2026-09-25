@@ -15,6 +15,8 @@ from typing import Optional
 
 from sqlalchemy import BigInteger, Column, Index, String
 
+from main.appodus_utils.db.models import live_unique_index
+
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
@@ -48,6 +50,8 @@ class ReferralCredit(BaseEntity):
     __table_args__ = (
         Index("ix_referral_credits_referrer", "referrer_user_id"),
         Index("ix_referral_credits_invitee", "invitee_user_id"),
+        # A credit is earned once per invitee (their first payment).
+        live_unique_index("uq_referral_credits_invitee", "invitee_user_id"),
         # status index is declared inline (index=True) → ix_referral_credits_status.
     )
 

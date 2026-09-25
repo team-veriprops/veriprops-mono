@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtDecode } from "jwt-decode";
-import { ROUTES, WA_INTAKE_PREFIX, WA_LINK_PREFIX } from "./lib/routes";
+import { ROUTES, WA_INTAKE_PREFIX, WA_LINK_PREFIX, isSignedOutHandoff } from "./lib/routes";
 import { EDGE_AUTH_HEADER, isEdgeAuthorized } from "./lib/edgeAuth";
 import { JwtPayload, UserPersona, UserType } from "./components/website/auth/models";
+import { dashboardFor } from "./components/website/auth/libs/auth/redirect";
 
 /**
  * Centralised auth guard (Next.js 16 Proxy).
@@ -27,9 +28,6 @@ const ACCESS_COOKIE_KEY = "__Host-refresh_token";
 const LOGIN_PATH = ROUTES.AUTH.LOGIN;
 const HOME_PATH = ROUTES.HOME ?? "/";
 
-const ADMIN_DASHBOARD = ROUTES.ADMIN.DASHBOARD;
-const PORTAL_DASHBOARD = ROUTES.PORTAL.DASHBOARD;
-const AGENT_DASHBOARD = ROUTES.AGENT.DASHBOARD;
 
 // Surfaces that require an authenticated session.
 const PROTECTED_PREFIXES = [
@@ -59,6 +57,26 @@ const isProtected = (pathname: string) =>
 
 const isGuestOnly = (pathname: string) => GUEST_ONLY_PATHS.has(pathname);
 
+/**
+ * The login page a sign-out leaves for (`SIGNED_OUT_LOGIN_URL`) is never bounced. Sign-out can
+ * leave before its logout call answered, while the session cookie is still here; treating it as a
+ * live session would send the person straight back into the app they just left. Showing a login
+ * form to someone still signed in is harmless — signing in again simply re-issues the session.
+ */
+const isSignedOutLanding = (pathname: string, searchParams: URLSearchParams) =>
+  pathname === LOGIN_PATH && isSignedOutHandoff(searchParams);
+
+/**
+ * The one `/agents/*` route a non-agent must be able to open. Applying is what grants the AGENT
+ * persona (PRD §3.2, additive — it never removes CUSTOMER), so gating the application behind that
+ * persona makes it unreachable for an existing customer: the persona is granted by applying, and
+ * applying required the persona. It stays inside `PROTECTED_PREFIXES`, so a session is still
+ * required — and only this route is exempt, because the wider `/agents/*` area answers a non-agent
+ * with a non-dismissible onboarding wizard.
+ */
+const isAgentApplication = (pathname: string) =>
+  pathname === ROUTES.AGENT.APPLY || pathname.startsWith(`${ROUTES.AGENT.APPLY}/`);
+
 
 /**
  * Expiry validation
@@ -81,16 +99,13 @@ function getPersonas(jwt?: JwtPayload): UserPersona[] {
 function redirectToDashboard(decodedJwt?: JwtPayload): string {
   if (!decodedJwt) return LOGIN_PATH;
 
-  if (decodedJwt.user_type === UserType.ADMIN) return ADMIN_DASHBOARD;
-
-  const personas = getPersonas(decodedJwt);
-
-  if (decodedJwt.user_type === UserType.USER){
-    if(personas?.includes(UserPersona.AGENT)) return AGENT_DASHBOARD;
-    if(personas?.includes(UserPersona.CUSTOMER)) return PORTAL_DASHBOARD;
-  }
-
-  return HOME_PATH;
+  // Same persona priority the app uses post-auth and on the 403 page — one rule, one place.
+  // The home-page fallback is load-bearing: a session with no persona sent to /portal would be
+  // bounced back by the portal guard below, looping forever.
+  return dashboardFor(
+    { userType: decodedJwt.user_type as UserType, personas: getPersonas(decodedJwt) },
+    { fallback: HOME_PATH },
+  );
 }
 
 /**
@@ -120,7 +135,7 @@ export function proxy(req: NextRequest) {
     );
   }
 
-  const { pathname, search } = req.nextUrl;
+  const { pathname, search, searchParams } = req.nextUrl;
   const jwtToken = req.cookies.get(ACCESS_COOKIE_KEY)?.value;
 
   // 1. No token → short-circuit
@@ -162,7 +177,7 @@ export function proxy(req: NextRequest) {
   const isOnPortal = pathname.startsWith(ROUTES.PORTAL.GATE);
 
   // 3. Guest-only routes
-  if (isGuestOnly(pathname)) {
+  if (isGuestOnly(pathname) && !isSignedOutLanding(pathname, searchParams)) {
     return redirect(req, redirectToDashboard(decodedJwt));
   }
 
@@ -171,7 +186,7 @@ export function proxy(req: NextRequest) {
     return redirect(req, redirectToDashboard(decodedJwt));
   }
 
-  if (isOnAgent && !isAdmin && !isAgent) {
+  if (isOnAgent && !isAdmin && !isAgent && !isAgentApplication(pathname)) {
     return redirect(req, redirectToDashboard(decodedJwt));
   }
 

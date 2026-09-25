@@ -27,13 +27,16 @@ from main.app.domain.verification.pricing_config.models import (
     PricingTierConfig,
     PricingTierDto,
     TierPricingViewDto,
-    UpdatePricingTierConfigDto,
     UpgradeDeltaDto,
 )
 from main.app.domain.verification.pricing_config.repo import PricingTierConfigRepo
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.db.locks import advisory_xact_lock
+
+# Advisory-lock namespace: one replacement of a tier's line items at a time.
+_LINE_ITEMS_LOCK = "pricing_line_items"
 
 
 @inject
@@ -70,14 +73,11 @@ class PricingConfigService:
         return TierPricingViewDto(tiers=tiers, upgrade_deltas=deltas)
 
     async def set_tier_price(self, tier: VerificationTier, price_minor: int, admin_id: str) -> PricingTierConfig:
-        existing = await self._tiers.get_for_tier(tier.value)
-        if existing is None:
-            row = await self._tiers.create_return_model(CreatePricingTierConfigDto(
-                tier=tier.value, price_ngn_kobo=price_minor,
-            ))
-        else:
-            await self._tiers.update(existing.id, UpdatePricingTierConfigDto(price_ngn_kobo=price_minor))
-            row = await self._tiers.get_model(existing.id)
+        row = await self._tiers.upsert(
+            CreatePricingTierConfigDto(tier=tier.value, price_ngn_kobo=price_minor).model_dump(by_alias=False),
+            ["price_ngn_kobo"],
+            unique_index="uq_pricing_tier_config_tier",
+        )
         self._audit.schedule(
             action=AuditActionType.ADMIN_CONFIG_CHANGED,
             resource_type="pricing_tier_config", resource_id=row.id, actor_id=admin_id,
@@ -88,7 +88,12 @@ class PricingConfigService:
     async def set_line_items(
         self, tier: VerificationTier, items: List[LineItemInputDto], admin_id: str
     ) -> List[PricingLineItem]:
-        """Replace a tier's line items (§18.1). Soft-deletes the old set, writes the new one."""
+        """Replace a tier's line items (§18.1). Soft-deletes the old set, writes the new one.
+
+        Replacements of one tier take turns: interleaved, two saves would each soft-delete
+        the old set and leave both new sets live.
+        """
+        await advisory_xact_lock(f"{_LINE_ITEMS_LOCK}:{tier.value}")
         for existing in await self._line_items.list_for_tier(tier.value):
             await self._line_items.soft_delete(existing.id)
         written: List[PricingLineItem] = []

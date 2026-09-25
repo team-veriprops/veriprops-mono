@@ -11,7 +11,7 @@ import { SubmitButton } from "@components/ui/form/SubmitButton";
 import PasswordStrengthMeter from "@components/website/auth/PasswordStrengthMeter";
 import { useSetPasswordMutation } from "@components/website/auth/libs/useAuthQueries";
 import { resetPasswordSchema, type ResetPasswordValues } from "@components/website/auth/schemas";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 
 export default function AccountPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +29,7 @@ export default function AccountPasswordPage() {
       form.reset();
       toast.success("Password updated.");
     } catch (err) {
-      toast.error(getErrorMessage(err as Error, "Could not set your password. Please try again."));
+      toast.error(getErrorMessage(err, "Could not set your password. Please try again."));
     }
   };
 

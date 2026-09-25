@@ -15,6 +15,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from test.utils.repo_fakes import fake_insert_or_get
+
 from main.app.domain.user.auth.models import OtpSendResultDto
 from main.app.domain.verification.delegate.models import CaseDelegate
 from main.app.domain.verification.delegate.service import (
@@ -87,18 +89,29 @@ def _service(rows=None, owner=OWNER):
             None,
         )
 
-    async def _create(dto):
+    def _create(values):
         row = CaseDelegate(
-            verification_id=dto.verification_id, name=dto.name, phone_e164=dto.phone_e164
+            verification_id=values["verification_id"], name=values["name"], phone_e164=values["phone_e164"]
         )
         held["rows"].append(row)
         return row
+
+    def _holder(values):
+        """The live delegate holding the case's slot (uq_case_delegates_live_per_case)."""
+        raced = held.get("raced")
+        if raced is not None:
+            return raced
+        return next(
+            (r for r in held["rows"]
+             if r.verification_id == values["verification_id"] and r.revoked_at is None),
+            None,
+        )
 
     repo = MagicMock(
         get_live_for_case=AsyncMock(side_effect=_live_for_case),
         get_active_for_case=AsyncMock(side_effect=_active_for_case),
         get_active_by_phone=AsyncMock(side_effect=_active_by_phone),
-        create_return_model=AsyncMock(side_effect=_create),
+        insert_or_get=fake_insert_or_get(_holder, _create),
         _session=MagicMock(),
     )
     repo.verify = lambda *a, **k: CaseDelegateRepo.verify(repo, *a, **k)
@@ -129,6 +142,19 @@ def _verified_row(phone=PHONE, case=CASE, name="Tunde"):
 
 
 class TestAuthorization:
+    async def test_a_concurrent_authorization_that_loses_the_slot_sends_no_code(self):
+        """Both requests passed the check; the slot's unique index lets only one create the
+        row, and the loser is answered as if it had seen the winner."""
+        svc = _service()
+        svc._held["raced"] = CaseDelegate(verification_id=CASE, name="Someone", phone_e164="+2348000000001")
+
+        with pytest.raises(ValidationException) as err:
+            await svc.authorize(CASE, OWNER, "Tunde", PHONE)
+
+        assert ALREADY_DELEGATED_MESSAGE in str(err.value)
+        svc._otp.send_otp.assert_not_awaited()
+        assert svc._held["rows"] == []
+
     async def test_the_owner_can_authorize_a_delegate(self):
         svc = _service()
         challenge = await svc.authorize(CASE, OWNER, "Tunde", PHONE)
@@ -238,8 +264,30 @@ class TestRevocation:
             await svc.revoke(CASE, OWNER)
 
 
+@pytest.mark.usefixtures("independent_sessions")
 class TestStopFromADelegate:
-    """D77 — a delegate has no consent row, so STOP ends the delegation itself."""
+    """D77 — a delegate has no consent row, so STOP ends the delegation itself.
+
+    The revocation commits on its own (`INDEPENDENT`): it happens inside the bot turn, and a
+    failure after it must not quietly keep messaging someone who typed STOP.
+    """
+
+    async def test_the_revocation_is_written_in_its_own_transaction(self, independent_sessions):
+        from main.appodus_utils.db.session import db_session_ctx, is_independent_session
+
+        svc = _service([_verified_row()])
+        seen = []
+        original = svc._case_delegate_repo.get_active_by_phone.side_effect
+
+        async def _spy(phone):
+            seen.append(db_session_ctx.get())
+            return await original(phone)
+
+        svc._case_delegate_repo.get_active_by_phone.side_effect = _spy
+
+        await svc.revoke_by_phone(PHONE)
+
+        assert is_independent_session(seen[0])
 
     async def test_stop_revokes_the_delegation(self):
         svc = _service([_verified_row()])

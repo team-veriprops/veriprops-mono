@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@3rdparty/ui/dialog";
 import { SubmitButton } from "@components/ui/form/SubmitButton";
 import VerifiedInput, { VerifiedInputType } from "@components/ui/verified_input/VerifiedInput";
 import PhoneInputWithCountry from "@components/ui/form/PhoneInputWithCountry";
@@ -25,7 +25,8 @@ import {
   usePublicConfigQuery,
 } from "../libs/useAuthQueries";
 import { otpDeliveryError } from "../libs/otpDelivery";
-import { getErrorMessage, cn } from "@lib/utils";
+import { cn } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 
 interface Props {
@@ -109,7 +110,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
     } catch (err) {
       form.setError("root", {
         message: getErrorMessage(
-          err as Error,
+          err,
           "Could not save your profile. Please try again.",
         ),
       });
@@ -126,9 +127,9 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Complete your profile</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-brand-on-surface-variant">
+        <DialogDescription className="text-sm text-brand-on-surface-variant">
           We need a few more details before you can use Veriprops.
-        </p>
+        </DialogDescription>
 
         {/* method="post" so that a submit landing before hydration cannot put the phone number
             in the URL — see SubmitButton. */}
@@ -162,7 +163,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
                       else onSuccess();
                     },
                     onError: (err) =>
-                      onError(getErrorMessage(err as Error, "Could not send code.")),
+                      onError(getErrorMessage(err, "Could not send code.")),
                   },
                 );
               }}
@@ -179,7 +180,7 @@ export default function ProfileCompletionModal({ open, user, onComplete }: Props
                   {
                     onSuccess: () => onSuccess(),
                     onError: (err) =>
-                      onError(getErrorMessage(err as Error, "That code didn't match.")),
+                      onError(getErrorMessage(err, "That code didn't match.")),
                   },
                 );
               }}

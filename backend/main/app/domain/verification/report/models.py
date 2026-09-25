@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import Column, Integer, String
 from sqlalchemy import Index
 
+from main.appodus_utils.db.models import live_unique_index
+
 from main.app.core.state.status import ReportRevisionKind, ReportState, VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
@@ -42,6 +44,8 @@ class Report(BaseEntity):
 
     __table_args__ = (
         Index("ix_reports_verification", "verification_id"),
+        # Each version number is issued once per verification.
+        live_unique_index("uq_reports_verification_version", "verification_id", "report_version"),
     )
 
 

@@ -395,7 +395,16 @@ class AppodusBaseSettings(BaseSettings):
     # SQL echo logs bound parameter values — keep off by default so PII/secrets in
     # query params are not written to logs. Enable explicitly per-env when debugging.
     DB_ENABLE_LOGS: Optional[bool] = False
-    DB_ENABLE_LOG_POOL: Optional[bool] = True
+    # Logs pool checkouts/returns — for diagnosing requests that queue on the pool.
+    DB_ENABLE_LOG_POOL: Optional[bool] = False
+    # Pooled-engine limits per process (ignored under DEPLOYMENT_IS_SERVERLESS, which uses NullPool).
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
+    # Separate pool for writes that commit on their own (TransactionSessionPolicy.INDEPENDENT),
+    # so they never wait on the connection their caller holds.
+    DB_INDEPENDENT_POOL_SIZE: int = 5
+    DB_INDEPENDENT_MAX_OVERFLOW: int = 5
     DB_MAIN_THREAD_CONTEXT_ID: int = 12345
     DEPLOYMENT_IS_SERVERLESS: Optional[bool] = False
 

@@ -8,7 +8,8 @@
  * - the device is revoked elsewhere → refresh dies at once, so when the access token lapses the
  *   user is told their session expired and handed to login (access tokens live out their TTL,
  *   PRD §3/§7.2).
- * And signing out through the UI must actually end the session.
+ * And signing out through the UI must actually end the session — even when the logout call never
+ * answers and the page leaves on its failsafe.
  *
  * Every test builds its own customer (`scenario`), so revoking or signing out never touches a
  * session another spec depends on.
@@ -19,7 +20,7 @@ import { ROUTES } from "@lib/routes";
 
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
-import { goto, waitForHydration, waitReady } from "../helpers/app";
+import { goto, waitForHydration, waitForPage, waitReady } from "../helpers/app";
 import { ScenarioStage } from "../helpers/scenario";
 import { signOut } from "../helpers/ui";
 
@@ -27,6 +28,8 @@ import { signOut } from "../helpers/ui";
 const ACCESS_COOKIES = ["__Host-access_token", "__Host-access_csrf_token"];
 /** Every session cookie — clearing them all is a session that no longer exists. */
 const SESSION_COOKIES = [...ACCESS_COOKIES, "__Host-refresh_token", "__Host-refresh_csrf_token"];
+/** The logout call (`authService.logout`) as the browser sends it, through the `/api` rewrite. */
+const LOGOUT_PATH = "/users/auth/sessions/current";
 
 async function clearCookies(context: BrowserContext, names: string[]): Promise<void> {
   for (const name of names) {
@@ -46,7 +49,7 @@ async function clearCookiesOffApp(page: Page, names: string[]): Promise<void> {
 
 /** The page is on the login form, carrying *returnTo* as its post-sign-in destination. */
 async function expectLoginReturningTo(page: Page, returnTo: string): Promise<void> {
-  await page.waitForURL((url) => url.pathname === ROUTES.AUTH.LOGIN, { timeout: 30_000 });
+  await waitForPage(page, (url) => url.pathname === ROUTES.AUTH.LOGIN, { timeout: 30_000 });
   expect(new URL(page.url()).searchParams.get("redirect")).toContain(returnTo);
 }
 
@@ -86,7 +89,7 @@ test.describe("UAT-SESS — session lifecycle @P0", () => {
     await page.getByTestId("login-password").fill(customer.password);
     await page.getByTestId("login-submit").click();
 
-    await page.waitForURL((url) => url.pathname === ROUTES.ACCOUNT.DEVICES, { timeout: 30_000 });
+    await waitForPage(page, (url) => url.pathname === ROUTES.ACCOUNT.DEVICES, { timeout: 30_000 });
     await expect(page.getByTestId("devices-list")).toBeVisible();
   });
 
@@ -113,13 +116,15 @@ test.describe("UAT-SESS — session lifecycle @P0", () => {
     // The dialog tells the user why, then hands off to login on its own after ~1.5s. Catching it is
     // inherently racy — on a fast machine the redirect can win — so the handoff below is the
     // assertion that must hold, and the dialog's wording is checked whenever it is still on screen.
-    const overlay = revokedDevice.getByTestId("session-recovery-overlay");
-    const overlayShown = await overlay
-      .waitFor({ state: "visible", timeout: 10_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (overlayShown) {
-      await expect(overlay).toContainText("Your session has expired");
+    // Read the wording in the same step that finds the dialog: checking it is visible and then
+    // asserting on it separately left a gap the ~1.5s handoff could fall into, failing on
+    // "element not found" even though the product did exactly the right thing.
+    const overlayText = await revokedDevice
+      .getByTestId("session-recovery-overlay")
+      .textContent({ timeout: 10_000 })
+      .catch(() => null);
+    if (overlayText !== null) {
+      expect(overlayText).toContain("Your session has expired");
     }
 
     await expectLoginReturningTo(revokedDevice, ROUTES.ACCOUNT.DEVICES);
@@ -136,6 +141,38 @@ test.describe("UAT-SESS — session lifecycle @P0", () => {
     await signOut(page);
 
     // The session is really gone: a protected page now sends the user to sign in.
+    await page.goto(ROUTES.PORTAL.DASHBOARD, { waitUntil: "domcontentloaded" });
+    await expectLoginReturningTo(page, ROUTES.PORTAL.DASHBOARD);
+  });
+
+  test("UAT-SESS-05 · a sign-out whose call never answers still ends on login, and still ends the session", async ({
+    scenario,
+    pageFor,
+  }) => {
+    const { customer } = await scenario(ScenarioStage.DRAFT);
+    const page = await pageFor(customer);
+    await goto(page, ROUTES.PORTAL.DASHBOARD);
+
+    // Hold the first logout call forever, so sign-out leaves on its failsafe while the session
+    // cookies are still in the browser. Any later call — the queued retry — goes through.
+    let held = false;
+    await page.route(`**${LOGOUT_PATH}`, async (route) => {
+      if (route.request().method() !== "DELETE" || held) return route.continue();
+      held = true;
+    });
+    const retried = page.waitForResponse(
+      (r) => r.url().endsWith(LOGOUT_PATH) && r.request().method() === "DELETE" && r.ok(),
+    );
+
+    await signOut(page);
+
+    // On the login form, not bounced back into the app by the surviving cookie.
+    await expect(page.getByTestId("login-form")).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe(ROUTES.AUTH.LOGIN);
+
+    // The login page re-sent the queued logout, and it ended the session.
+    await retried;
+    await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.goto(ROUTES.PORTAL.DASHBOARD, { waitUntil: "domcontentloaded" });
     await expectLoginReturningTo(page, ROUTES.PORTAL.DASHBOARD);
   });

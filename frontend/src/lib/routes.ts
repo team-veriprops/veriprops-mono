@@ -51,6 +51,9 @@ export const ROUTES = {
     GATE: '/agents',
     DASHBOARD: '/agents/dashboard',
     APPLY: '/agents/apply',
+    // Where an agent takes up the customer hat (§3.2) — the mirror of APPLY. It lives under
+    // /agents/* so the route guard admits an account that holds no customer persona yet.
+    VERIFY_PROPERTY: '/agents/verify-property',
     TASKS: '/agents/tasks',
     TASK_DETAIL: (taskId: string) => `/agents/tasks/${taskId}`,
     TASK_HISTORY: (taskId: string) => `/agents/tasks/${taskId}/history`,
@@ -219,6 +222,8 @@ export const buildAuthUrl = (
     email?: string | null;
     firstName?: string | null;
     lastName?: string | null;
+    /** Marks the landing a sign-out leaves for — see `SIGNED_OUT_LOGIN_URL`. */
+    signedOut?: boolean;
   } = {},
 ): string => {
   const search = new URLSearchParams();
@@ -228,6 +233,24 @@ export const buildAuthUrl = (
   if (params.email) search.set('email', params.email);
   if (params.firstName) search.set('firstName', params.firstName);
   if (params.lastName) search.set('lastName', params.lastName);
+  if (params.signedOut) search.set(SIGNED_OUT_PARAM, SIGNED_OUT_VALUE);
   const qs = search.toString();
   return qs ? `${base}?${qs}` : base;
 };
+
+const SIGNED_OUT_PARAM = 'signedOut';
+const SIGNED_OUT_VALUE = '1';
+
+/** Whether a request is the landing a sign-out leaves for. Read by the route guard. */
+export const isSignedOutHandoff = (searchParams: URLSearchParams): boolean =>
+  searchParams.get(SIGNED_OUT_PARAM) === SIGNED_OUT_VALUE;
+
+/**
+ * Where a sign-out leaves for: the login page, marked so the route guard always lets it through.
+ *
+ * Sign-out can leave before its logout call has answered (the failsafe in `useSignOut`), in which
+ * case the HttpOnly session cookie is still in the browser. An unmarked login URL is guest-only,
+ * so the guard would read that cookie as a live session and put the person straight back into the
+ * app they just left. The queued logout the login page re-sends is what then ends the session.
+ */
+export const SIGNED_OUT_LOGIN_URL = buildAuthUrl(ROUTES.AUTH.LOGIN, { signedOut: true });

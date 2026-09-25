@@ -224,7 +224,8 @@ class MessageRouter:
             return await route.sender(message)
 
         except CircuitBreakerError as e:
-            logger.error(
+            # A warning: the fallback may still deliver (see the retries-exhausted case below).
+            logger.warning(
                 "Circuit open for provider {}, using fallback: {}",
                 provider.name, e
             )
@@ -236,7 +237,9 @@ class MessageRouter:
             # error or an unrecoverable state that fallback cannot fix.
             if isinstance(e, IntegrationFatalException):
                 raise
-            logger.error(
+            # A warning, not an error: the fallback may still deliver, and if it cannot, the
+            # failure it raises is logged once as the fault it is (`log_fault_once`).
+            logger.warning(
                 "All retries exhausted for provider {}, using fallback: {}",
                 provider.name, e
             )

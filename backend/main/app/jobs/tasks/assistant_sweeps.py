@@ -10,10 +10,11 @@ use ``POST /dev/assistant/sweep``.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from kink import di, inject
 
+from main.app.jobs.exclusive import exclusive_job
 from main.app.domain.communication.assistant.web import WebAssistantService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.transactional import TransactionSessionPolicy, transactional
@@ -34,11 +35,12 @@ class AssistantSweepJobs:
     def __init__(self, web_assistant_service: WebAssistantService):
         self._web_assistant_service = web_assistant_service
 
-    async def run_pending_turn_sweep(self) -> dict:
+    @exclusive_job("assistant_pending_turns")
+    async def run_pending_turn_sweep(self) -> Optional[dict]:
         return await self._web_assistant_service.sweep()
 
 
 async def check_pending_assistant_turns() -> None:
     stats = await di[AssistantSweepJobs].run_pending_turn_sweep()
-    if any(stats.values()):
+    if stats and any(stats.values()):
         logger.info("assistant pending-turn sweep: {}", stats)

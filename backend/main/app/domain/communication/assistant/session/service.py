@@ -72,11 +72,13 @@ class AssistantSessionService:
         existing = await self._assistant_session_repo.get_by_conversation(conversation.id)
         if existing is not None:
             return existing
-        return await self._assistant_session_repo.create_return_model(
+        session, _ = await self._assistant_session_repo.insert_or_get(
             CreateAssistantSessionDto(
                 conversation_id=Utils.uuid_to_hex(conversation.id), phone_e164=phone_e164
-            )
+            ).model_dump(by_alias=False),
+            ["conversation_id"],
         )
+        return session
 
     async def get(self, conversation_id: str) -> Optional[AssistantSession]:
         """This conversation's session, or ``None`` if the assistant never took a turn."""
@@ -151,9 +153,8 @@ class AssistantSessionService:
         ``note_understood`` are a pair — either one alone would drift into "two misses
         ever", and a customer who once mistyped would be escalated forever after.
         """
-        session.unmatched_count = (session.unmatched_count or 0) + 1
-        self._assistant_session_repo.save(session)
-        return session.unmatched_count >= UNMATCHED_ESCALATION_THRESHOLD
+        misses = await self._assistant_session_repo.count_unmatched(session)
+        return misses >= UNMATCHED_ESCALATION_THRESHOLD
 
     async def enter_flow(
         self, session: AssistantSession, flow: BotFlow, step: int = 0, context: Optional[dict] = None
@@ -280,7 +281,7 @@ class AssistantSessionService:
 
 @inject
 @decorate_all_methods(
-    transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW),
+    transactional(session_policy=TransactionSessionPolicy.INDEPENDENT),
     exclude=["__init__"], exclude_startswith=["_"],
 )
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@3rdparty/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { ROUTES, buildAuthUrl } from "@lib/routes";
 import { AuthIntent } from "@components/website/auth/models";
 import { InviteAcceptScenario } from "@/types/admin";
@@ -36,10 +36,10 @@ export default function AdminInviteAcceptContainer({ token }: { token: string })
     try {
       await accept.mutateAsync(token);
       setAccepted(true);
-      toast({ title: "You're now an admin", description: `Role: ${preview.subRole}` });
+      toast.success("You're now an admin", { description: `Role: ${preview.subRole}` });
       router.push(ROUTES.ADMIN.DASHBOARD);
     } catch {
-      toast({ title: "Could not accept invitation", variant: "destructive" });
+      toast.error("Could not accept invitation");
     }
   };
 

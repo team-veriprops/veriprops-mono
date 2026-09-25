@@ -120,7 +120,7 @@ async def force_password_reset(
                 expires_at=Utils.datetime_now_plus(seconds=settings.PASSWORD_RESET_TTL_SECONDS),
             )
         except Exception as e:  # noqa: BLE001 — email delivery is best-effort
-            logger.warning("Could not send forced password reset email: {}", e, exc_info=True)
+            logger.opt(exception=True).warning("Could not send forced password reset email: {}", e)
     return SuccessResponse[bool](data=True)
 
 

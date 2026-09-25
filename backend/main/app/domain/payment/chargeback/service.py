@@ -22,7 +22,6 @@ from main.app.domain.payment.chargeback.models import (
     ChargebackStatus,
     ChargebackWebhookDto,
     CreateChargebackDto,
-    UpdateChargebackDto,
 )
 from main.app.domain.payment.chargeback.repo import ChargebackRepo
 from main.app.domain.payment.models import PaymentStatus, UpdatePaymentDto
@@ -40,6 +39,8 @@ from main.appodus_utils.exception.exceptions import (
 )
 
 _PACK_PAGE_SIZE = settings.CHARGEBACK_PACK_PAGE_SIZE
+# A chargeback the network has not decided yet; WON and LOST are final.
+_OPEN_CHARGEBACK_STATUSES = [ChargebackStatus.FLAGGED, ChargebackStatus.REBUTTAL_SUBMITTED]
 
 
 @inject
@@ -78,16 +79,23 @@ class ChargebackService:
             raise ResourceNotFoundException(resource="payment")
 
         pack = await self._assemble_rebuttal_pack(payment.verification_id, payment.customer_id)
-        chargeback = await self._chargeback_repo.create_return_model(CreateChargebackDto(
-            payment_id=payment.id,
-            verification_id=payment.verification_id,
-            gateway_event_id=dto.event_id,
-            status=ChargebackStatus.FLAGGED,
-            reason=dto.reason,
-            amount_minor=dto.amount_minor if dto.amount_minor is not None else payment.amount_minor,
-            currency=TransactionCurrency(payment.currency),
-            rebuttal_pack=pack,
-        ))
+        # Keyed on the gateway event: a concurrent redelivery gets the row the first delivery
+        # wrote, and only the delivery that created it flags the payment and freezes commissions.
+        chargeback, created = await self._chargeback_repo.insert_or_get(
+            CreateChargebackDto(
+                payment_id=payment.id,
+                verification_id=payment.verification_id,
+                gateway_event_id=dto.event_id,
+                status=ChargebackStatus.FLAGGED,
+                reason=dto.reason,
+                amount_minor=dto.amount_minor if dto.amount_minor is not None else payment.amount_minor,
+                currency=TransactionCurrency(payment.currency),
+                rebuttal_pack=pack,
+            ).model_dump(by_alias=False),
+            ["gateway_event_id"],
+        )
+        if not created:
+            return chargeback
 
         await self._payment_repo.update(payment.id, UpdatePaymentDto(
             chargeback_status=ChargebackStatus.FLAGGED.value
@@ -111,13 +119,13 @@ class ChargebackService:
 
     async def submit_rebuttal(self, chargeback_id: str, admin_id: str) -> Chargeback:
         chargeback = await self._get(chargeback_id)
-        if chargeback.status != ChargebackStatus.FLAGGED.value:
+        rebutted = await self._chargeback_repo.claim_transition(
+            chargeback.id, [ChargebackStatus.FLAGGED], ChargebackStatus.REBUTTAL_SUBMITTED,
+        )
+        if rebutted is None:
             raise InvalidResourceStateException(
                 resource="chargeback", message="Only a flagged chargeback can be rebutted."
             )
-        await self._chargeback_repo.update(chargeback_id, UpdateChargebackDto(
-            status=ChargebackStatus.REBUTTAL_SUBMITTED.value
-        ))
         self._audit.schedule(
             action=AuditActionType.CHARGEBACK_REBUTTAL_SUBMITTED,
             resource_type="chargeback",
@@ -128,13 +136,18 @@ class ChargebackService:
 
     async def resolve(self, chargeback_id: str, won: bool, admin_id: str) -> Chargeback:
         chargeback = await self._get(chargeback_id)
-        if chargeback.status in (ChargebackStatus.WON.value, ChargebackStatus.LOST.value):
+        # Resolved before any money moves: a second resolution (another admin, or the
+        # opposite outcome) is refused, so commissions are never both restored and reversed.
+        resolved = await self._chargeback_repo.claim_transition(
+            chargeback.id, _OPEN_CHARGEBACK_STATUSES,
+            ChargebackStatus.WON if won else ChargebackStatus.LOST, resolved_at=Utils.datetime_now(),
+        )
+        if resolved is None:
             raise InvalidResourceStateException(
                 resource="chargeback", message="This chargeback is already resolved."
             )
 
         if won:
-            await self._chargeback_repo.update(chargeback_id, UpdateChargebackDto(status=ChargebackStatus.WON.value))
             await self._payment_repo.update(chargeback.payment_id, UpdatePaymentDto(
                 chargeback_status=ChargebackStatus.WON.value
             ))
@@ -149,7 +162,6 @@ class ChargebackService:
                 details={"commissions_resumed": resumed},
             )
         else:
-            await self._chargeback_repo.update(chargeback_id, UpdateChargebackDto(status=ChargebackStatus.LOST.value))
             # Payment reversed by the bank — record the reversal on our side.
             await self._payment_repo.update(chargeback.payment_id, UpdatePaymentDto(
                 chargeback_status=ChargebackStatus.LOST.value,
@@ -167,8 +179,7 @@ class ChargebackService:
                 details={"commissions_reversed": reversed_count,
                          "repeat_offender_review": chargeback.verification_id},
             )
-        await self._set_resolved_at(chargeback_id)
-        return await self._chargeback_repo.get_model(chargeback_id)
+        return resolved
 
     async def list_for_verification(self, verification_id: str):
         return await self._chargeback_repo.list_for_verification(verification_id)
@@ -233,6 +244,3 @@ class ChargebackService:
             raise ResourceNotFoundException(resource="chargeback")
         return chargeback
 
-    async def _set_resolved_at(self, chargeback_id: str) -> None:
-        chargeback = await self._chargeback_repo.get_model(chargeback_id)
-        chargeback.resolved_at = Utils.datetime_now()

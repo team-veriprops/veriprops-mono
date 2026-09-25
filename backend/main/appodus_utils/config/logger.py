@@ -5,6 +5,7 @@ if TYPE_CHECKING:
     from loguru import Logger
 
 import enum
+import logging
 import os
 import sys
 
@@ -19,6 +20,40 @@ class LogLevel(str, enum.Enum):
     WARNING = 'WARNING'
     ERROR = 'ERROR'
     CRITICAL = 'CRITICAL'
+
+
+class _InterceptHandler(logging.Handler):
+    """Hands a stdlib record to loguru, keeping its level, caller and traceback."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            level: str | int = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+        frame, depth = logging.currentframe(), 2
+        while frame is not None and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
+
+# Libraries that log ordinary outcomes above their weight. The JWT library logs every 401
+# (an expired or revoked token) at ERROR before raising; the handler already records those at
+# WARNING, so its own lines are only noise.
+_QUIET_LIBRARIES = {"libre_fastapi_jwt": logging.CRITICAL}
+
+
+def route_stdlib_logging(level: str) -> None:
+    """Send every stdlib logger (APScheduler, httpx, the messaging resilience layer) to loguru's
+    sinks — the app's format and log file — at *level*, with the noisy libraries quieted.
+
+    SQLAlchemy's `echo` installs its own stdout handler, so it is kept from propagating as well,
+    or each statement would print twice.
+    """
+    logging.basicConfig(handlers=[_InterceptHandler()], level=level, force=True)
+    for name, library_level in _QUIET_LIBRARIES.items():
+        logging.getLogger(name).setLevel(library_level)
+    logging.getLogger("sqlalchemy").propagate = False
 
 
 class LoggerFactory:
@@ -76,6 +111,8 @@ class LoggerFactory:
             rotation="10 MB",
             retention="14 days",
         )
+
+        route_stdlib_logging(log_level)
 
         # # file rotation
         # logger.add(

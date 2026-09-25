@@ -1,16 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Badge } from "@3rdparty/ui/badge";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { humanizeEnumLabel } from "@lib/utils";
-import { AgentRole } from "@/types/agent";
-import { TaskState } from "@/types/adminVerification";
+import { ReviewDecision, TaskDto, TaskState } from "@/types/adminVerification";
 import { ReviewState } from "@/types/adminReview";
 import {
   useApproveTaskMutation,
@@ -23,7 +22,7 @@ import {
 
 function ReviewTaskRow({ verificationId, task, findings }: {
   verificationId: string;
-  task: { id: string; role: AgentRole; state: TaskState; reviewDecision?: string };
+  task: TaskDto;
   findings?: Record<string, unknown> | null;
 }) {
   const approve = useApproveTaskMutation(verificationId);
@@ -31,8 +30,9 @@ function ReviewTaskRow({ verificationId, task, findings }: {
   const reopen = useReopenTaskMutation(verificationId);
   const [quality, setQuality] = useState(100);
   const [reason, setReason] = useState("");
+  const qualityFieldId = useId();
 
-  const reviewed = (task as { reviewDecision?: string }).reviewDecision;
+  const reviewed = task.reviewDecision;
 
   return (
     <div className="rounded-lg border border-border p-3" data-testid={`review-task-${task.role}`}>
@@ -41,7 +41,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
         <span className="flex items-center gap-2">
           <Badge variant="outline">{humanizeEnumLabel(task.state)}</Badge>
           {reviewed && (
-            <Badge variant={reviewed === TaskState.APPROVED ? "secondary" : "destructive"}>
+            <Badge variant={reviewed === ReviewDecision.APPROVED ? "secondary" : "destructive"}>
               {humanizeEnumLabel(reviewed)}
             </Badge>
           )}
@@ -49,7 +49,14 @@ function ReviewTaskRow({ verificationId, task, findings }: {
       </div>
 
       {findings && (
-        <pre className="mt-2 max-h-32 overflow-auto rounded bg-muted p-2 text-xs">
+        // Capped in height and scrolling its overflow, so it has to be reachable by keyboard:
+        // a scrollable region with nothing focusable inside it can never be scrolled without
+        // a mouse (axe `scrollable-region-focusable`).
+        <pre
+          tabIndex={0}
+          aria-label={`${humanizeEnumLabel(task.role)} findings`}
+          className="mt-2 max-h-32 overflow-auto rounded bg-muted p-2 text-xs"
+        >
           {JSON.stringify(findings, null, 2)}
         </pre>
       )}
@@ -57,8 +64,9 @@ function ReviewTaskRow({ verificationId, task, findings }: {
       {task.state === TaskState.SUBMITTED && (
         <div className="mt-2 flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <Label className="text-xs">Quality (0–100)</Label>
+            <Label className="text-xs" htmlFor={qualityFieldId}>Quality (0–100)</Label>
             <Input
+              id={qualityFieldId}
               type="number"
               min={0}
               max={100}
@@ -72,7 +80,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
             size="sm"
             onClick={async () => {
               await approve.mutateAsync({ role: task.role, quality });
-              toast({ title: `${humanizeEnumLabel(task.role)} approved` });
+              toast.success(`${humanizeEnumLabel(task.role)} approved`);
             }}
             disabled={approve.isPending}
             data-testid={`approve-${task.role}`}
@@ -91,7 +99,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
             variant="destructive"
             onClick={async () => {
               await reject.mutateAsync({ role: task.role, reason });
-              toast({ title: `${humanizeEnumLabel(task.role)} sent to rework` });
+              toast.success(`${humanizeEnumLabel(task.role)} sent to rework`);
               setReason("");
             }}
             disabled={reject.isPending || !reason.trim()}
@@ -109,7 +117,7 @@ function ReviewTaskRow({ verificationId, task, findings }: {
           className="mt-2"
           onClick={async () => {
             await reopen.mutateAsync({ role: task.role });
-            toast({ title: `${humanizeEnumLabel(task.role)} reopened` });
+            toast.success(`${humanizeEnumLabel(task.role)} reopened`);
           }}
           disabled={reopen.isPending}
           data-testid={`reopen-${task.role}`}
@@ -181,7 +189,7 @@ export default function AdminReportReview({ verificationId }: { verificationId: 
             <ReviewTaskRow
               key={t.id}
               verificationId={verificationId}
-              task={t as { id: string; role: AgentRole; state: TaskState; reviewDecision?: string }}
+              task={t}
               findings={review.findings?.[t.role]}
             />
           ))}
@@ -213,7 +221,7 @@ export default function AdminReportReview({ verificationId }: { verificationId: 
             <Button
               onClick={async () => {
                 await release.mutateAsync({ reason: releaseReason || undefined });
-                toast({ title: "Report released" });
+                toast.success("Report released");
               }}
               disabled={release.isPending || !review.releasable}
               data-testid="release-submit"
@@ -239,7 +247,7 @@ export default function AdminReportReview({ verificationId }: { verificationId: 
               variant="destructive"
               onClick={async () => {
                 await fail.mutateAsync({ reason: failReason });
-                toast({ title: "Verification failed & refunded" });
+                toast.success("Verification failed & refunded");
                 setFailReason("");
               }}
               disabled={fail.isPending || !failReason.trim()}

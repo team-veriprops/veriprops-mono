@@ -52,6 +52,21 @@ export async function goto(page: Page, path: string): Promise<void> {
 }
 
 /**
+ * Wait for a navigation the page itself made — a redirect after sign-in, a form that moves on —
+ * to land on *url*, then for the ready gate. The counterpart of `goto` for navigations a spec
+ * didn't start, and for the same reason: `waitForURL` defaults to `load`, which also waits for
+ * every image and font, so a slow asset failed specs that never look at one (SESS-04).
+ */
+export async function waitForPage(
+  page: Page,
+  url: Parameters<Page["waitForURL"]>[0],
+  options: { timeout?: number } = {},
+): Promise<void> {
+  await page.waitForURL(url, { waitUntil: "domcontentloaded", ...options });
+  await waitReady(page);
+}
+
+/**
  * The app's current auth snapshot, once the session query has published one.
  * Returns `null` when the hook has not been written yet (no session query ran).
  */

@@ -7,6 +7,8 @@ from typing import Any, Optional
 
 from sqlalchemy import Column, String, Text
 
+from main.appodus_utils.db.models import live_unique_index
+
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import JSONB_VARIANT
 
@@ -119,9 +121,13 @@ CONFIG_DESCRIPTIONS: dict[ConfigKey, str] = {
 class SystemConfig(BaseEntity):
     __tablename__ = "system_config"
 
-    key = Column(String(64), nullable=False, unique=True, index=True)
+    key = Column(String(64), nullable=False, index=True)
     value_json = Column(JSONB_VARIANT, nullable=True)
     description = Column(Text, nullable=True)
+
+    __table_args__ = (
+        live_unique_index("uq_system_config_key", "key"),
+    )
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────

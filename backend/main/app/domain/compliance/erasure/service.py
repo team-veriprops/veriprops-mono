@@ -37,8 +37,16 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ResourceNotFoundException,
 )
+from main.appodus_utils.db.locks import advisory_xact_lock
+
+# Advisory-lock namespace: one erasure request per account at a time.
+_REQUEST_LOCK = "erasure_request"
 
 _RESOURCE = "data_erasure_request"
+
+
+def _already_decided() -> InvalidResourceStateException:
+    return InvalidResourceStateException(resource=_RESOURCE, message="This request has already been decided.")
 
 
 @inject
@@ -67,6 +75,9 @@ class ErasureService:
         subject = await self._users.get_model(subject_user_id)
         if not subject:
             raise ResourceNotFoundException(resource="user")
+        # One open request per account: concurrent requests take turns, so the second sees
+        # the first as already in progress.
+        await advisory_xact_lock(f"{_REQUEST_LOCK}:{subject_user_id}")
         if await self._erasure_repo.get_open_for_user(subject_user_id):
             raise InvalidResourceStateException(
                 resource=_RESOURCE,
@@ -115,10 +126,10 @@ class ErasureService:
         )
 
     async def approve(self, request_id: str, admin_id: str) -> DataErasureRequest:
-        row = await self.get(request_id)
-        self._transition(row, ErasureRequestState.APPROVED)
-        row.reviewed_by_user_id = admin_id
-        row.reviewed_at = Utils.datetime_now()
+        row = await self._decide(
+            await self.get(request_id), ErasureRequestState.APPROVED,
+            reviewed_by_user_id=admin_id, reviewed_at=Utils.datetime_now(),
+        )
         self._audit.schedule(
             action=AuditActionType.DATA_ERASURE_APPROVED,
             resource_type=_RESOURCE, resource_id=row.id, actor_id=admin_id,
@@ -130,11 +141,10 @@ class ErasureService:
         return row
 
     async def reject(self, request_id: str, admin_id: str, note: Optional[str]) -> DataErasureRequest:
-        row = await self.get(request_id)
-        self._transition(row, ErasureRequestState.REJECTED)
-        row.reviewed_by_user_id = admin_id
-        row.reviewed_at = Utils.datetime_now()
-        row.decision_note = note
+        row = await self._decide(
+            await self.get(request_id), ErasureRequestState.REJECTED,
+            reviewed_by_user_id=admin_id, reviewed_at=Utils.datetime_now(), decision_note=note,
+        )
         self._audit.schedule(
             action=AuditActionType.DATA_ERASURE_REJECTED,
             resource_type=_RESOURCE, resource_id=row.id, actor_id=admin_id,
@@ -150,13 +160,24 @@ class ErasureService:
         row = await self.get(request_id)
         if row.status == ErasureRequestState.EXECUTED.value:
             return row  # already carried out — no-op
-        self._transition(row, ErasureRequestState.EXECUTED)
-
         token = self._pseudonymiser.token_for(row.subject_user_id)
-        surfaces = await self._pseudonymiser.pseudonymise(row.subject_user_id, token)
+        # Claimed before any PII is touched. A concurrent execution that got there first
+        # has done the work, so this one returns its result rather than repeating it.
+        erasure_request_state_machine.assert_can_transition(
+            row.status, ErasureRequestState.EXECUTED.value, resource=_RESOURCE
+        )
+        executed = await self._erasure_repo.claim_transition(
+            row.id, [ErasureRequestState.APPROVED], ErasureRequestState.EXECUTED,
+            executed_at=Utils.datetime_now(), pseudonym_token=token,
+        )
+        if executed is None:
+            current = await self.get(request_id)
+            if current.status == ErasureRequestState.EXECUTED.value:
+                return current
+            raise _already_decided()
+        row = executed
 
-        row.executed_at = Utils.datetime_now()
-        row.pseudonym_token = token
+        surfaces = await self._pseudonymiser.pseudonymise(row.subject_user_id, token)
         self._audit.schedule(
             action=AuditActionType.DATA_ERASURE_EXECUTED,
             resource_type=_RESOURCE, resource_id=row.id, actor_id=admin_id,
@@ -167,11 +188,18 @@ class ErasureService:
 
     # ── helpers ───────────────────────────────────────────────────
 
-    def _transition(self, row: DataErasureRequest, target: ErasureRequestState) -> None:
-        erasure_request_state_machine.assert_can_transition(
-            row.status, target.value, resource=_RESOURCE
+    async def _decide(
+        self, row: DataErasureRequest, target: ErasureRequestState, **values
+    ) -> DataErasureRequest:
+        """Move a PENDING request to *target*, once: of an approval and a rejection landing
+        together, one stands and the other is refused before notifying the subject."""
+        erasure_request_state_machine.assert_can_transition(row.status, target.value, resource=_RESOURCE)
+        decided = await self._erasure_repo.claim_transition(
+            row.id, [ErasureRequestState.PENDING], target, **values,
         )
-        row.status = target.value
+        if decided is None:
+            raise _already_decided()
+        return decided
 
     async def _notify(self, subject_user_id: str, state: ErasureRequestState, message: str) -> None:
         await publish_domain_event(DomainEvent(

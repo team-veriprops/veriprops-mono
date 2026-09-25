@@ -6,7 +6,7 @@ import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
-import { toast } from "@components/3rdparty/ui/use-toast";
+import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { humanizeEnumLabel } from "@lib/utils";
 import { AgentRole } from "@/types/agent";
@@ -33,7 +33,7 @@ function TierCard({ tier }: { tier: TierWeights }) {
       tier: tier.tier as VerificationTier,
       weights: values as Record<AgentRole, number>,
     });
-    toast({ title: `${humanizeEnumLabel(tier.tier)} weights saved` });
+    toast.success(`${humanizeEnumLabel(tier.tier)} weights saved`);
   };
 
   return (

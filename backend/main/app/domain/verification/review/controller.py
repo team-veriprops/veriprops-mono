@@ -20,7 +20,12 @@ from main.app.domain.verification.review.models import (
     ReviewStateDto,
 )
 from main.app.domain.verification.review.service import ReviewContext, ReviewService
-from main.app.domain.verification.task.models import TaskAssignmentMode, TaskDto, TaskState
+from main.app.domain.verification.task.models import (
+    ReviewDecision,
+    TaskAssignmentMode,
+    TaskDto,
+    TaskState,
+)
 from main.appodus_utils.db.models import SuccessResponse
 
 review_router = APIRouter(prefix="/admin/review", tags=["Admin: Review & Release"])
@@ -35,6 +40,8 @@ def _task_dto(t) -> TaskDto:
         assignment_mode=TaskAssignmentMode(t.assignment_mode) if t.assignment_mode else None,
         in_pool=bool(t.in_pool), decline_count=t.decline_count or 0,
         submitted_at=t.submitted_at, approved_at=t.approved_at,
+        review_decision=ReviewDecision(t.review_decision) if t.review_decision else None,
+        review_quality=t.review_quality, rejection_reason=t.rejection_reason,
     )
 
 

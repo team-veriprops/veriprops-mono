@@ -23,9 +23,14 @@ export function useAgentMetricsQuery() {
   });
 }
 
-export function useAgentProfileQuery() {
+/**
+ * `enabled` exists for callers that render before an agent profile exists — a pending applicant's
+ * dashboard, where the endpoint can only answer "not found" and every load logged a traceback.
+ */
+export function useAgentProfileQuery(enabled = true) {
   return useQuery({
     queryKey: reputationKeys.profile(),
+    enabled,
     queryFn: async () => (await service.getProfile()).data ?? null,
   });
 }

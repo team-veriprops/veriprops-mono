@@ -58,6 +58,11 @@ _MEDIA_KINDS = {
 }
 
 
+# Error code for an inbound message that could not be journalled. The webhook answers Meta
+# with a 5xx for it (Meta redelivers); every other ingest failure is acknowledged.
+INBOUND_NOT_JOURNALLED_CODE = "WHATSAPP_INBOUND_NOT_RECORDED"
+
+
 class InboundWhatsAppMessage(Object):
     """One customer message, in the form the rest of the system understands."""
 

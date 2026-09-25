@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from test.utils.repo_fakes import fake_insert_or_get
+
 from main.app.domain.communication.conversation.models import (
     ConversationChannel,
     ConversationReadOnlyReason,
@@ -58,18 +60,26 @@ def _service(thread=None, membership=None):
     svc._conversation_repo = MagicMock()
     svc._conversation_repo._session = MagicMock()
     svc._conversation_repo.get_whatsapp_thread = AsyncMock(return_value=thread)
-    svc._conversation_repo.create_return_model = AsyncMock(side_effect=lambda dto: _thread(
-        created_by=dto.created_by, external_ref=dto.external_ref
-    ))
+    svc._conversation_repo.insert_or_get = fake_insert_or_get(
+        lambda values: thread,
+        lambda values: _thread(created_by=values["created_by"], external_ref=values["external_ref"]),
+    )
     svc._participants = MagicMock()
     svc._participants._session = MagicMock()
     svc._participants.get_for = AsyncMock(return_value=membership)
-    svc._participants.create_return_model = AsyncMock(
-        side_effect=lambda dto: ConversationParticipant(
-            conversation_id=dto.conversation_id, user_id=dto.user_id, role=dto.role,
-            visible_from=dto.visible_from,
+    created_memberships = []
+
+    def _join(values):
+        row = ConversationParticipant(
+            conversation_id=values["conversation_id"], user_id=values["user_id"], role=values["role"],
+            visible_from=values["visible_from"],
         )
-    )
+        created_memberships.append(row)
+        return row
+
+    # Keyed on the live membership (uq_conv_participants_membership), as the real insert is.
+    svc._participants.insert_or_get = fake_insert_or_get(lambda values: membership, _join)
+    svc._created_memberships = created_memberships
     return svc
 
 
@@ -81,7 +91,7 @@ class TestLinkingOpensTheWindow:
         await svc.set_whatsapp_thread_owner(PHONE, USER_ID, LINKED_AT)
 
         assert thread.created_by == USER_ID
-        created = svc._participants.create_return_model.await_args.args[0]
+        [created] = svc._created_memberships
         assert created.user_id == USER_ID
         assert created.visible_from == LINKED_AT
 
@@ -95,7 +105,7 @@ class TestLinkingOpensTheWindow:
 
         await svc.set_whatsapp_thread_owner(PHONE, USER_ID, relinked_at)
 
-        svc._participants.create_return_model.assert_not_awaited()
+        assert svc._created_memberships == []
         assert membership.visible_from == relinked_at
         assert membership.visible_until is None
 
@@ -103,7 +113,7 @@ class TestLinkingOpensTheWindow:
         svc = _service(thread=None)
 
         assert await svc.set_whatsapp_thread_owner(PHONE, USER_ID, LINKED_AT) is None
-        svc._participants.create_return_model.assert_not_awaited()
+        assert svc._created_memberships == []
 
 
 class TestReleaseClosesTheWindow:
@@ -138,7 +148,7 @@ class TestAThreadOpenedAfterLinking:
         thread = await svc.get_or_create_whatsapp_thread(PHONE, user_id=USER_ID)
 
         assert thread.created_by == USER_ID
-        created = svc._participants.create_return_model.await_args.args[0]
+        [created] = svc._created_memberships
         assert created.user_id == USER_ID
         assert created.visible_from is not None
 
@@ -147,7 +157,7 @@ class TestAThreadOpenedAfterLinking:
 
         await svc.get_or_create_whatsapp_thread(PHONE)
 
-        svc._participants.create_return_model.assert_not_awaited()
+        assert svc._created_memberships == []
 
 
 class TestDto:

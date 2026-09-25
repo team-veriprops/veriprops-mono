@@ -12,12 +12,17 @@ from main.app.jobs.tasks.growth_sweeps import (
     check_abandoned_drafts,
     check_referral_credits,
 )
+from main.app.jobs.tasks.key_value_sweeps import check_expired_key_values
 from main.app.jobs.tasks.message_retry_sweeps import MessageRetrySweepJobs, check_message_retries
 from main.app.jobs.tasks.sla_sweeps import SlaMonitorJobs, check_sla_breaches
 from main.app.jobs.tasks.verification_task_sweeps import (
     TaskSweepJobs,
     check_task_no_show_timeouts,
     check_task_pool_timeouts,
+)
+from main.app.jobs.tasks.whatsapp_inbound_sweeps import (
+    WhatsAppInboundSweepJobs,
+    check_unprocessed_whatsapp_inbound,
 )
 
 __all__ = [
@@ -28,8 +33,10 @@ __all__ = [
     "MessageRetrySweepJobs",
     "SlaMonitorJobs",
     "TaskSweepJobs",
+    "WhatsAppInboundSweepJobs",
     "check_abandoned_drafts",
     "check_commission_clearance",
+    "check_expired_key_values",
     "check_message_retries",
     "check_pending_assistant_turns",
     "check_referral_credits",
@@ -37,4 +44,5 @@ __all__ = [
     "check_sla_breaches",
     "check_task_no_show_timeouts",
     "check_task_pool_timeouts",
+    "check_unprocessed_whatsapp_inbound",
 ]

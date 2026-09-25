@@ -1,7 +1,8 @@
+from datetime import datetime
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import desc, select
+from sqlalchemy import desc, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.user.auth.session.models import (
@@ -132,11 +133,23 @@ class PasswordResetTokenRepo(
         super().__init__(db, model, query_dto)
         self.db = db
 
-    async def get_by_token_hash(self, token_hash: str) -> Optional[PasswordResetToken]:
-        stmt = select(PasswordResetToken).where(
-            PasswordResetToken.deleted.is_(False),
-            PasswordResetToken.token_hash == token_hash,
-            PasswordResetToken.consumed_at.is_(None),
+    async def consume(self, token_hash: str, now: datetime) -> Optional[PasswordResetToken]:
+        """Use the link once: the token, stamped consumed, or None if it is spent or expired.
+
+        One conditional UPDATE, so two submissions of the same link cannot both reset the
+        password — the second finds `consumed_at` already set.
+        """
+        await self._flush_pending()
+        stmt = (
+            update(PasswordResetToken)
+            .where(
+                PasswordResetToken.deleted.is_(False),
+                PasswordResetToken.token_hash == token_hash,
+                PasswordResetToken.consumed_at.is_(None),
+                or_(PasswordResetToken.expires_at.is_(None), PasswordResetToken.expires_at > now),
+            )
+            .values(consumed_at=now, version=PasswordResetToken.version + 1, date_updated=now)
+            .returning(PasswordResetToken)
+            .execution_options(populate_existing=True, synchronize_session=False)
         )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        return (await self._session.execute(stmt)).scalar_one_or_none()

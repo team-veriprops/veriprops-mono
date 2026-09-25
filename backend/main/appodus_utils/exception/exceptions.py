@@ -20,6 +20,14 @@ class ExceptionContext(TypedDict, total=False):
     reason: str
     resource: str
 
+class ExpectedDomainError(Exception):
+    """Marks an exception that is an ordinary answer, not a fault — a link refused, say.
+
+    For domain errors that are not `AppodusBaseException`s (their rendering is their own), so
+    the fault logger never records them at ERROR. A 4xx `AppodusBaseException` needs no marker.
+    """
+
+
 class AppodusBaseException(Exception):
     """
     Base class for all Appodus exceptions.

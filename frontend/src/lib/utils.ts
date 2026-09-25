@@ -299,10 +299,3 @@ export function humanizeEnumLabel(value: string | null | undefined): string {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
-
-export function getErrorMessage(error: Error, defaultMessage?: string): string {
-  return (
-    error?.message || defaultMessage ||
-    "Something went wrong"
-  );
-}

@@ -18,13 +18,16 @@ from main.app.domain.audit.service import AuditLogService
 from main.app.domain.verification.scoring.models import (
     CreateTrustWeightDto,
     TrustScoreWeight,
-    UpdateTrustWeightDto,
 )
 from main.app.domain.verification.scoring.repo import TrustScoreWeightRepo
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import ValidationException
+from main.appodus_utils.db.locks import advisory_xact_lock
+
+# Advisory-lock namespace: one replacement of a tier's weight map at a time.
+_WEIGHTS_LOCK = "trust_weights"
 
 _FULL_PERCENT = 100
 
@@ -59,16 +62,17 @@ class TrustScoreWeightService:
             raise ValidationException(
                 message=f"{tier.value} weights must sum to 100 (got {total})."
             )
+        if any(weight < 0 for weight in weights.values()):
+            raise ValidationException(message="Weights cannot be negative.")
+        # The map is only valid whole (it sums to 100), so two admins saving one tier take turns:
+        # interleaved per-role writes could leave a mix of both maps.
+        await advisory_xact_lock(f"{_WEIGHTS_LOCK}:{tier.value}")
         for role, weight in weights.items():
-            if weight < 0:
-                raise ValidationException(message="Weights cannot be negative.")
-            existing = await self._weight_repo.get_for_tier_role(tier.value, role.value)
-            if existing is None:
-                await self._weight_repo.create_return_model(CreateTrustWeightDto(
-                    tier=tier, role=role, weight_percent=weight,
-                ))
-            else:
-                await self._weight_repo.update(existing.id, UpdateTrustWeightDto(weight_percent=weight))
+            await self._weight_repo.upsert(
+                CreateTrustWeightDto(tier=tier, role=role, weight_percent=weight).model_dump(by_alias=False),
+                ["weight_percent"],
+                unique_index="uq_trust_weight_tier_role",
+            )
         self._audit.schedule(
             action=AuditActionType.ADMIN_CONFIG_CHANGED,
             resource_type="trust_score_weight_config", resource_id=tier.value, actor_id=admin_id,

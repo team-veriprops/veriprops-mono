@@ -70,7 +70,10 @@ const serialProjects: Project[] = engines.map((engine) => ({
   grep: FULL_MATRIX_ENGINES.has(engine.name) ? allTags(SERIAL) : allTags(SERIAL, P0),
 }));
 
-const DEFAULT_WORKERS = process.env.CI ? 2 : 4;
+// Two, locally as on CI: the same machine also runs the Next server, the backend, Caddy and
+// Postgres, and at four the browsers starved — tests timed out that pass in half their budget
+// alone. `UAT_WORKERS` still overrides.
+const DEFAULT_WORKERS = 2;
 
 export default defineConfig({
   testDir: "./specs",

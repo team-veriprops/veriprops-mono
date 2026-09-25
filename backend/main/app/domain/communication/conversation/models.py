@@ -12,6 +12,8 @@ from typing import Optional
 
 from sqlalchemy import Boolean, Column, Index, String
 
+from main.appodus_utils.db.models import live_unique_index
+
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
@@ -76,6 +78,20 @@ class Conversation(BaseEntity):
     __table_args__ = (
         Index("ix_conversations_verification", "verification_id"),
         Index("ix_conversations_external_ref", "external_ref"),
+        # One live thread per verification per type, one web support thread per user, and one
+        # thread per WhatsApp number (§11.1, §26.8) — so concurrent openers can't split a thread.
+        live_unique_index(
+            "uq_conversations_verification_type", "verification_id", "type",
+            where="deleted = false AND verification_id IS NOT NULL",
+        ),
+        live_unique_index(
+            "uq_conversations_web_support_owner", "created_by",
+            where="deleted = false AND type = 'GENERAL_SUPPORT' AND channel = 'WEB'",
+        ),
+        live_unique_index(
+            "uq_conversations_whatsapp_number", "external_ref",
+            where="deleted = false AND channel = 'WHATSAPP'",
+        ),
     )
 
 

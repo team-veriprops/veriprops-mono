@@ -7,7 +7,7 @@ import { Button } from "@3rdparty/ui/button";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { StatusPill } from "@components/ui/StatusPill";
 import { formatRelativeTime } from "@lib/time";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import { WhatsAppTemplate, WhatsAppTemplateStatus } from "@/types/whatsappTemplate";
 import {
   useSyncWhatsAppTemplatesMutation,
@@ -38,7 +38,7 @@ export default function WhatsAppTemplates() {
           : "Synced.",
       );
     } catch (err) {
-      toast.error(getErrorMessage(err as Error, "Could not reach the template directory."));
+      toast.error(getErrorMessage(err, "Could not reach the template directory."));
     }
   };
 

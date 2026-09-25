@@ -45,6 +45,8 @@ def _make_service(rows) -> MessagingService:
     svc.message_service = AsyncMock()
     svc.message_service.get_retry_ready_messages = AsyncMock(
         return_value=SimpleNamespace(items=rows))
+    # This run wins every lease; losing one is covered in test_sweep_claims.py.
+    svc.message_service.lease_retry = AsyncMock(return_value=True)
     svc.rate_limiter = AsyncMock()
     svc.throttler = Throttler(rps_limit=10_000)
     return svc

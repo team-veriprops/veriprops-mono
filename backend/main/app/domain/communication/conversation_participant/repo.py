@@ -5,8 +5,9 @@ from datetime import datetime
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import String, Uuid, and_, cast, func, or_, select
+from sqlalchemy import String, Uuid, and_, cast, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from main.app.domain.communication.conversation.models import Conversation
 from main.app.domain.communication.conversation_participant.models import (
@@ -69,6 +70,29 @@ class ConversationParticipantRepo(
     ):
         super().__init__(db, model, query_dto)
         self.db = db
+
+    async def advance_read(self, membership: ConversationParticipant, at: datetime) -> bool:
+        """Move `last_read_at` forward to *at* in SQL; whether it moved.
+
+        Receipts arrive late and out of order. The condition is on the row as committed, so
+        an older receipt racing a newer read can never pull the marker backwards.
+        """
+        stmt = (
+            update(ConversationParticipant)
+            .where(
+                ConversationParticipant.id == self._ensure_uuid(membership.id),
+                or_(
+                    ConversationParticipant.last_read_at.is_(None),
+                    ConversationParticipant.last_read_at < at,
+                ),
+            )
+            .values(last_read_at=at)
+            .returning(ConversationParticipant.id)
+        )
+        moved = (await self._session.execute(stmt)).scalar() is not None
+        if moved:
+            set_committed_value(membership, "last_read_at", at)
+        return moved
 
     async def get_for(self, conversation_id: str, user_id: str) -> Optional[ConversationParticipant]:
         # Reference columns are String(36). Entity ids travel as `.hex` (32-char, the DTO

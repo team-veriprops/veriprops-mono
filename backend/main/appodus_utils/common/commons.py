@@ -168,6 +168,23 @@ class Utils:
             raise ValueError(f"Invalid boolean value for env var {env_key}: {env_value!r}")
 
     @staticmethod
+    def get_int_from_env(env_key: str, default: int) -> int:
+        """
+        Reads an environment variable as an integer.
+
+        If the variable is not set, returns `default`.
+        If the value is not an integer, raises ValueError naming the key.
+        """
+        env_value = Utils.get_from_env(env_key=env_key)
+        if env_value is None:
+            return default
+
+        try:
+            return int(env_value.strip())
+        except ValueError:
+            raise ValueError(f"Invalid integer value for env var {env_key}: {env_value!r}") from None
+
+    @staticmethod
     def replace_case_insensitive(text: str, old: str, new: str):
         pattern = re.compile(old, re.IGNORECASE)
         new_text = pattern.sub(new, text)

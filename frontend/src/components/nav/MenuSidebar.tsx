@@ -27,6 +27,13 @@ export interface NavItem {
   icon: NavIconKey;
   /** Group label carried by the first item of a sidebar section; following items inherit it. */
   section?: string;
+  /**
+   * Drop this item for someone who already holds the agent persona — it addresses people who do
+   * not ("become an agent"). The shell applies it, so this module stays free of auth concerns.
+   */
+  hiddenForAgents?: boolean;
+  /** The mirror of {@link hiddenForAgents}: "verify a property", for an agent with no customer hat. */
+  hiddenForCustomers?: boolean;
 }
 
 export interface NavSection {

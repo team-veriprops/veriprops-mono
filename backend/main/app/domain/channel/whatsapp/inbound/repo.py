@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, Type
+from typing import List, Optional, Type
 
 from kink import inject
 from sqlalchemy import and_, func, select
@@ -46,6 +46,40 @@ class WhatsAppInboundMessageRepo(
         """
         stmt = select(WhatsAppInboundMessage).where(WhatsAppInboundMessage.wamid == wamid)
         return (await self._session.execute(stmt)).scalars().first()
+
+    async def claim_unprocessed(self, from_phone: str) -> List[WhatsAppInboundMessage]:
+        """Lock this number's journalled messages not yet shown in the console, oldest first.
+
+        `FOR UPDATE SKIP LOCKED` makes the claim exclusive without waiting: a concurrent
+        redelivery (or the sweep) handling the same rows gets nothing back, so a message is
+        surfaced once. The locks last until this transaction ends.
+        """
+        stmt = (
+            select(WhatsAppInboundMessage)
+            .where(
+                WhatsAppInboundMessage.deleted.is_(False),
+                WhatsAppInboundMessage.from_phone == from_phone,
+                WhatsAppInboundMessage.processed_at.is_(None),
+            )
+            .order_by(WhatsAppInboundMessage.received_at, WhatsAppInboundMessage.date_created)
+            .with_for_update(skip_locked=True)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def phones_with_stale_unprocessed(self, journalled_before: datetime, limit: int) -> List[str]:
+        """Numbers with a message journalled before *journalled_before* but never surfaced."""
+        stmt = (
+            select(WhatsAppInboundMessage.from_phone)
+            .where(
+                WhatsAppInboundMessage.deleted.is_(False),
+                WhatsAppInboundMessage.processed_at.is_(None),
+                WhatsAppInboundMessage.date_created < journalled_before,
+            )
+            .group_by(WhatsAppInboundMessage.from_phone)
+            .order_by(func.min(WhatsAppInboundMessage.date_created))
+            .limit(limit)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
 
     async def last_received_at(self, from_phone: str) -> Optional[datetime]:
         """When this number last messaged us — the basis of Meta's 24-hour window.

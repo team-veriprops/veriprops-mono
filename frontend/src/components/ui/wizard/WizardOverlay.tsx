@@ -6,6 +6,8 @@ import Stepper from "@components/website/auth/signup/Stepper";
 import { Button } from "@3rdparty/ui/button";
 import { useBodyOverflowHidden } from "@hooks/useBodyOverflowHidden";
 import BrandLogo from "@components/ui/BrandLogo";
+import { PAGE_OVERLAY_LAYER } from "@components/ui/layers";
+import { cn } from "@lib/utils";
 
 interface WizardOverlayProps {
   /** Step titles for the progress indicator. */
@@ -29,6 +31,9 @@ interface WizardOverlayProps {
  * above the AppShell chrome so the flow "covers everywhere" while the route stays
  * deep-linkable, back-button-safe and refresh-resumable. Reused by agent
  * onboarding, property submission, and payment.
+ *
+ * It sits on {@link PAGE_OVERLAY_LAYER} — above the chrome, below every portaled
+ * dialog and picker — so a global modal or a step's own Select stays usable over it.
  */
 export default function WizardOverlay({
   steps,
@@ -44,7 +49,7 @@ export default function WizardOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-70 flex flex-col bg-background"
+      className={cn("fixed inset-0 flex flex-col bg-background", PAGE_OVERLAY_LAYER)}
       role="dialog"
       aria-modal="true"
       aria-label={title}

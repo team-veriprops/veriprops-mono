@@ -45,18 +45,24 @@ _FAKE_APPLE_JWKS = {"keys": [{"kty": "RSA", "kid": "apple-key-1", "n": "n-value"
 
 # ── consume_state — replay protection ─────────────────────────────────────────
 
+_STORED_STATE = '{"code_verifier": "v", "intent": "default", "frontend_origin": "http://localhost:3000", "mode": "auth", "link_user_id": null}'
+
+
+def _atomic_pop_store(initial: dict):
+    """A store whose pop hands a value to exactly one caller, as GETDEL / DELETE … RETURNING do."""
+    kv = dict(initial)
+
+    async def fake_pop(key):
+        return kv.pop(key, None)
+
+    return fake_pop
+
+
 async def test_consume_state_is_single_use():
-    """State token is single-use: second consume returns None (key was deleted)."""
-    call_count = 0
-    stored_raw = '{"code_verifier": "v", "intent": "default", "frontend_origin": "http://localhost:3000", "mode": "auth", "link_user_id": null}'
+    """State token is single-use: second consume returns None (key was consumed)."""
+    fake_pop = _atomic_pop_store({"oauth:state:state-abc": _STORED_STATE})
 
-    async def fake_get(key):
-        nonlocal call_count
-        call_count += 1
-        return stored_raw if call_count == 1 else None
-
-    with patch("main.appodus_utils.db.redis_utils.RedisUtils.get_redis", side_effect=fake_get), \
-         patch("main.appodus_utils.db.redis_utils.RedisUtils.delete", new_callable=AsyncMock):
+    with patch("main.appodus_utils.db.redis_utils.RedisUtils.pop", side_effect=fake_pop):
         from main.app.domain.user.auth.oauth.providers.utils import OauthUtils
         from main.app.domain.user.auth.oauth.providers.models import OAuthRequestStoredState
         first = await OauthUtils.consume_state("state-abc")
@@ -71,12 +77,26 @@ async def test_consume_state_is_single_use():
 
 
 async def test_consume_state_returns_none_for_missing_key():
-    with patch("main.appodus_utils.db.redis_utils.RedisUtils.get_redis", new_callable=AsyncMock, return_value=None), \
-         patch("main.appodus_utils.db.redis_utils.RedisUtils.delete", new_callable=AsyncMock):
+    with patch("main.appodus_utils.db.redis_utils.RedisUtils.pop", new_callable=AsyncMock, return_value=None):
         from main.app.domain.user.auth.oauth.providers.utils import OauthUtils
         result = await OauthUtils.consume_state("nonexistent-state")
 
     assert result is None
+
+
+async def test_concurrent_callbacks_consume_a_state_once():
+    """Two callbacks racing with one state: exactly one gets it (the pop is atomic)."""
+    import asyncio
+
+    fake_pop = _atomic_pop_store({"oauth:state:state-race": _STORED_STATE})
+
+    with patch("main.appodus_utils.db.redis_utils.RedisUtils.pop", side_effect=fake_pop):
+        from main.app.domain.user.auth.oauth.providers.utils import OauthUtils
+        results = await asyncio.gather(
+            OauthUtils.consume_state("state-race"), OauthUtils.consume_state("state-race"),
+        )
+
+    assert sum(r is not None for r in results) == 1
 
 
 # ── resolve_frontend_origin — allowlist ───────────────────────────────────────
@@ -284,18 +304,16 @@ async def test_oauth_state_round_trips_through_text_store():
     the model object instead round-trips as a bare string and breaks the callback."""
     kv: dict[str, str] = {}
 
-    async def fake_set(key, value, time_to_live=None):
+    async def fake_set(key, value, time_to_live=None, *, strict=False):
+        # A state that was never stored would only fail at the callback, so it is written strictly.
+        assert strict is True
         kv[key] = value
 
-    async def fake_get(key):
-        return kv.get(key)
-
-    async def fake_delete(key):
-        kv.pop(key, None)
+    async def fake_pop(key):
+        return kv.pop(key, None)
 
     with patch("main.appodus_utils.db.redis_utils.RedisUtils.set_redis", side_effect=fake_set), \
-         patch("main.appodus_utils.db.redis_utils.RedisUtils.get_redis", side_effect=fake_get), \
-         patch("main.appodus_utils.db.redis_utils.RedisUtils.delete", side_effect=fake_delete), \
+         patch("main.appodus_utils.db.redis_utils.RedisUtils.pop", side_effect=fake_pop), \
          patch("main.app.domain.user.auth.oauth.providers.utils.JwtAuthUtils") as mock_jwt_utils, \
          patch("main.app.domain.user.auth.oauth.providers.utils.OauthUtils.resolve_frontend_origin",
                new_callable=AsyncMock, return_value="http://localhost:3000"), \

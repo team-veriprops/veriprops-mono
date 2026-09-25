@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { footerLinks, type FooterLink } from "./home.data";
+import { CTA_AGENT_HREF, footerLinks, type FooterLink } from "./home.data";
+import { useBecomeAnAgentHref } from "./BecomeAnAgentLink";
 import BrandLogo from "../ui/BrandLogo";
 import { cn } from "@lib/utils";
 
@@ -58,8 +59,12 @@ const linkColumns: { title: string; links: FooterLink[] }[] = [
 // URLs use a plain <a>. Same className drives both so every link behaves identically.
 function FooterLinkItem({ label, href }: FooterLink) {
   const className = "text-sm transition-colors duration-150 hover:underline text-brand-on-surface-variant hover:text-brand-navy";
+  // "Become an Agent" is the one entry whose destination depends on who is reading it: the
+  // signed-out gate turns a signed-in customer away, and applying is how they become an agent.
+  const becomeAnAgentHref = useBecomeAnAgentHref();
+  const resolved = href === CTA_AGENT_HREF ? becomeAnAgentHref : href;
 
-  if (href.startsWith("/")) {
+  if (resolved.startsWith("/")) {
     return (
       <Link href={href} className={className}>
         {label}

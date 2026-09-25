@@ -23,47 +23,9 @@ import {
 import { ROUTES, isAuthIntent, buildAuthUrl } from "@lib/routes";
 import { resolvePostAuthRedirect } from "@components/website/auth/libs/auth/redirect";
 import { getDeviceFingerprint } from "@components/website/auth/libs/auth/fingerprint";
-import { getErrorMessage } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import { AuthIntent } from "../models";
-
-const LOCKOUT_KEY = "veriprops-login-lockout";
-const ATTEMPTS_KEY = "veriprops-login-attempts";
-
-interface LockoutState {
-  count: number;
-  lockedUntil?: number; // epoch ms
-}
-
-function readLockoutState(): LockoutState {
-  if (typeof window === "undefined") return { count: 0 };
-  try {
-    const raw = localStorage.getItem(LOCKOUT_KEY);
-    return raw ? (JSON.parse(raw) as LockoutState) : { count: 0 };
-  } catch {
-    return { count: 0 };
-  }
-}
-
-function writeLockoutState(state: LockoutState) {
-  try {
-    localStorage.setItem(LOCKOUT_KEY, JSON.stringify(state));
-    localStorage.setItem(ATTEMPTS_KEY, String(state.count));
-  } catch {
-    /* noop */
-  }
-}
-
-// Defined outside the component (rather than inline in the submit handler) so
-// the Date.now() call isn't flagged as an impure render call — React Compiler
-// can't prove `onSubmit` only runs from an event, since it's invoked
-// indirectly via form.handleSubmit(onSubmit).
-function nextLockoutState(currentCount: number): LockoutState {
-  const next: LockoutState = { count: currentCount + 1 };
-  if (next.count >= RATE_LIMIT_LOCKOUT_AT) {
-    next.lockedUntil = Date.now() + RATE_LIMIT_LOCKOUT_MINUTES * 60_000;
-  }
-  return next;
-}
+import { lockoutAfterFailure, readLockoutState, writeLockoutState, type LockoutState } from "./lockout";
 
 export default function LoginContainer() {
   const router = useRouter();
@@ -135,11 +97,11 @@ export default function LoginContainer() {
         : ROUTES.AUTH.LOGIN_SUCCESS_REDIRECT;
       router.push(dest);
     } catch (err) {
-      const next = nextLockoutState(lockout.count);
+      const next = lockoutAfterFailure(lockout, err);
       writeLockoutState(next);
       setLockout(next);
       setErrorMessage(
-        getErrorMessage(err as Error, "Email or password is incorrect."),
+        getErrorMessage(err, "Email or password is incorrect."),
       );
     }
   };

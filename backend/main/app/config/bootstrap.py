@@ -1,20 +1,25 @@
-import redis
 from main.appodus_utils.config.bootstrap import BaseDiBootstrap
 
 from main.app.config.settings import settings
 from kink import di
-from redis import Redis
+from redis.asyncio import Redis
 
 class DiBootstrap(BaseDiBootstrap):
 
     def inject_redis(self):
-        di[Redis] = lambda _di: redis.Redis(
+        """Register the asyncio client `RedisUtils` resolves when REDIS_ENABLED; otherwise keep
+        the base's empty registration, which sends `RedisUtils` to the SQL key/value store."""
+        if not settings.REDIS_ENABLED:
+            super().inject_redis()
+            return
+
+        di[Redis] = lambda _di: Redis(
             host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            db=settings.REDIS_DB,
+            port=int(settings.REDIS_PORT or 6379),
+            db=int(settings.REDIS_DB or 0),
             password=settings.REDIS_PASSWORD,
-            username=settings.REDIS_USERNAME
-        ) if settings.REDIS_ENABLED else {}
+            username=settings.REDIS_USERNAME,
+        )
 
     def inject_others(self):
         # Process-singleton real-time emitters (§4.9). Registered as concrete instances

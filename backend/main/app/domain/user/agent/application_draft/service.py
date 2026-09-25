@@ -24,6 +24,10 @@ from main.appodus_utils import Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.db.locks import advisory_xact_lock
+
+# Advisory-lock namespace: one draft write per applicant at a time.
+_DRAFT_LOCK = "agent_application_draft"
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
@@ -44,6 +48,9 @@ class AgentApplicationDraftService:
 
     async def save_draft(self, user_id: str, dto: SaveAgentApplicationDraftDto) -> AgentApplicationDraftDto:
         payload_json = json.dumps(dto.payload)
+        # One active draft per applicant: concurrent autosaves take turns, so the second finds
+        # the first's draft instead of creating another.
+        await advisory_xact_lock(f"{_DRAFT_LOCK}:{user_id}")
         existing = await self._draft_repo.get_active_for_user(user_id)
         if existing:
             await self._draft_repo.update(

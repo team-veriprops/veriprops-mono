@@ -21,6 +21,7 @@ from main.app.domain.payment.service import PaymentService
 from main.app.domain.user.auth.session.models import UserPersona
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import ValidationException
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -107,17 +108,26 @@ class TestInitiate:
         svc._payment_repo.create_return_model.assert_not_called()
 
 
+def _payment():
+    return SimpleNamespace(
+        id="pay-1", verification_id="ver-1", customer_id="cust-1", failure_count=0, purpose="INITIAL",
+        status=PaymentStatus.INITIATED.value, gateway_event_id=None, deleted=False,
+    )
+
+
 class TestWebhook:
     async def test_success_marks_paid_and_upgrades_trust(self):
         svc = _make_service()
         svc._idempotency.claim = AsyncMock(return_value=True)
-        svc._payment_repo.get_by_tx_ref = AsyncMock(
-            return_value=SimpleNamespace(id="pay-1", verification_id="ver-1", customer_id="cust-1", failure_count=0, purpose="INITIAL")
-        )
+        payment = _payment()
+        svc._payment_repo.get_by_tx_ref = AsyncMock(return_value=payment)
+        svc._payment_repo.claim_transition = fake_claim_transition(lambda _id: payment)
         processed = await svc.handle_webhook(
             PaymentWebhookDto(event_id="evt-1", tx_ref="VP-2026-ABC123-xyz", succeeded=True)
         )
         assert processed is True
+        assert payment.status == PaymentStatus.SUCCEEDED.value
+        assert payment.gateway_event_id == "evt-1"
         svc._verification_service.mark_paid.assert_awaited_once_with("ver-1")
         svc._user_service.upgrade_trust_status_if_eligible.assert_awaited_once_with("cust-1", UserPersona.CUSTOMER)
 
@@ -133,13 +143,12 @@ class TestWebhook:
     async def test_failed_webhook_marks_failed(self):
         svc = _make_service()
         svc._idempotency.claim = AsyncMock(return_value=True)
-        svc._payment_repo.get_by_tx_ref = AsyncMock(
-            return_value=SimpleNamespace(id="pay-1", verification_id="ver-1", customer_id="cust-1", failure_count=0, purpose="INITIAL")
-        )
+        payment = _payment()
+        svc._payment_repo.get_by_tx_ref = AsyncMock(return_value=payment)
+        svc._payment_repo.claim_transition = fake_claim_transition(lambda _id: payment)
         await svc.handle_webhook(
             PaymentWebhookDto(event_id="evt-1", tx_ref="VP-2026-ABC123-xyz", succeeded=False)
         )
-        # last update sets FAILED
-        statuses = [c.args[1].status for c in svc._payment_repo.update.call_args_list if c.args[1].status]
-        assert PaymentStatus.FAILED.value in statuses
+        assert payment.status == PaymentStatus.FAILED.value
+        assert payment.failure_count == 1
         svc._verification_service.mark_paid.assert_not_called()
