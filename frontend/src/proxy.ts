@@ -3,6 +3,7 @@ import { jwtDecode } from "jwt-decode";
 import { ROUTES, WA_INTAKE_PREFIX, WA_LINK_PREFIX } from "./lib/routes";
 import { EDGE_AUTH_HEADER, isEdgeAuthorized } from "./lib/edgeAuth";
 import { JwtPayload, UserPersona, UserType } from "./components/website/auth/models";
+import { dashboardFor } from "./components/website/auth/libs/auth/redirect";
 
 /**
  * Centralised auth guard (Next.js 16 Proxy).
@@ -27,9 +28,6 @@ const ACCESS_COOKIE_KEY = "__Host-refresh_token";
 const LOGIN_PATH = ROUTES.AUTH.LOGIN;
 const HOME_PATH = ROUTES.HOME ?? "/";
 
-const ADMIN_DASHBOARD = ROUTES.ADMIN.DASHBOARD;
-const PORTAL_DASHBOARD = ROUTES.PORTAL.DASHBOARD;
-const AGENT_DASHBOARD = ROUTES.AGENT.DASHBOARD;
 
 // Surfaces that require an authenticated session.
 const PROTECTED_PREFIXES = [
@@ -92,16 +90,13 @@ function getPersonas(jwt?: JwtPayload): UserPersona[] {
 function redirectToDashboard(decodedJwt?: JwtPayload): string {
   if (!decodedJwt) return LOGIN_PATH;
 
-  if (decodedJwt.user_type === UserType.ADMIN) return ADMIN_DASHBOARD;
-
-  const personas = getPersonas(decodedJwt);
-
-  if (decodedJwt.user_type === UserType.USER){
-    if(personas?.includes(UserPersona.AGENT)) return AGENT_DASHBOARD;
-    if(personas?.includes(UserPersona.CUSTOMER)) return PORTAL_DASHBOARD;
-  }
-
-  return HOME_PATH;
+  // Same persona priority the app uses post-auth and on the 403 page — one rule, one place.
+  // The home-page fallback is load-bearing: a session with no persona sent to /portal would be
+  // bounced back by the portal guard below, looping forever.
+  return dashboardFor(
+    { userType: decodedJwt.user_type as UserType, personas: getPersonas(decodedJwt) },
+    { fallback: HOME_PATH },
+  );
 }
 
 /**

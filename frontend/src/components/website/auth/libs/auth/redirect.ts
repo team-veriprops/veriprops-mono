@@ -27,13 +27,21 @@ export function isSafeRedirectPath(value: string | null | undefined): value is s
 
 /**
  * The home dashboard for a signed-in user, by highest privilege: admin, then agent, then
- * customer. A user with no persona yet belongs to the customer journey. Used wherever the app
- * sends someone "back to their dashboard" — the post-auth fallback and the 403 page.
+ * customer. Used wherever the app sends someone "back to their dashboard" — the post-auth
+ * landing, the 403 page, and the proxy's role guards.
+ *
+ * `fallback` is where a user with no persona yet goes; it defaults to the customer journey.
+ * The proxy overrides it with the home page, because routing a personaless session to `/portal`
+ * would bounce off the portal guard back into this same call — an infinite redirect.
  */
-export function dashboardFor(user: Pick<AuthUser, "userType" | "personas">): string {
+export function dashboardFor(
+  user: Pick<AuthUser, "userType" | "personas">,
+  options: { fallback?: string } = {},
+): string {
   if (user.userType === UserType.ADMIN) return ROUTES.ADMIN.DASHBOARD;
   if (user.personas.includes(UserPersona.AGENT)) return ROUTES.AGENT.DASHBOARD;
-  return ROUTES.PORTAL.DASHBOARD;
+  if (user.personas.includes(UserPersona.CUSTOMER)) return ROUTES.PORTAL.DASHBOARD;
+  return options.fallback ?? ROUTES.PORTAL.DASHBOARD;
 }
 
 export function resolvePostAuthRedirect(

@@ -146,6 +146,15 @@ describe("dashboardFor", () => {
   it("defaults a user with no persona yet to the customer portal", () => {
     expect(dashboardFor({ ...baseUser, personas: [] })).toBe("/portal/dashboard");
   });
+
+  // The proxy overrides the fallback: routing a personaless session to /portal would bounce off
+  // the portal guard straight back here, which is an infinite redirect rather than a landing.
+  it("honours a caller's fallback for a user with no persona", () => {
+    expect(dashboardFor({ ...baseUser, personas: [] }, { fallback: "/" })).toBe("/");
+    expect(dashboardFor({ ...baseUser, userType: UserType.ADMIN, personas: [] }, { fallback: "/" })).toBe(
+      "/admin/dashboard",
+    );
+  });
 });
 
 describe("isSafeRedirectPath", () => {
