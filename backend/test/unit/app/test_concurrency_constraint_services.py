@@ -1,4 +1,4 @@
-"""Services that migration 0018's narrowed and added unique guards rely on.
+"""Services that the live-only unique guards rely on.
 
 - A signup draft is one statement keyed on the live email: an abandoned (soft-deleted) or
   expired draft never blocks a new one, and two concurrent saves can't both insert.

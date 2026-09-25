@@ -686,6 +686,27 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
 - `python-jose` → PyJWT (MASTER-PRD §G.2).
 - CI hardware is still unmeasured against these budgets.
 
+### Follow-on: 0018/0019 folded into `0001` (D96, 2026-09-26)
+- **Every database at the head first**, per D95.
+  - Remote staging (`preview` → `veriprops_staging`) and production went `0017 → 0019` through
+    the pipeline: PR #24 dev → staging, then PR #25 staging → master (`f5361ed`). Each merge ran
+    green CI, e2e, the migration and the deploy.
+  - The read-only pre-check of 0018's duplicates was clean on both beforehand.
+  - Local `veriprops_test` was upgraded, and the empty local `veriprops_staging` was built.
+  - Confirmed at `0019_sla_breach_marker (head)`: dev, staging, production, and all four local
+    databases.
+- **Then the fold.** `0001`'s revision is now `0019_sla_breach_marker`, and 0018/0019 are
+  deleted.
+  - Parity proof (chain-built vs squash-built): `pg_dump --schema-only` is identical, including
+    column order. Seeded rows are identical. The drive-through passes 554/554 on the squash-built
+    database.
+  - Backend unit tests: 2615. The two per-revision test files became
+    `test_migration_0001_live_uniqueness.py`, which checks model ↔ migration both ways.
+  - Under the squash, every migrated database reads head and `upgrade head` runs nothing.
+- Promotion by PR needs `gh`. It is now installed machine-wide and signed in as `appodus`. A
+  plain `winget install GitHub.cli` fails here because the id matches two sources, so pass
+  `--source winget`.
+
 ### Runtime state left behind
 - **`veriprops_e2e` and `veriprops_uat` had been dropped** from the same Postgres container.
   `veriprops_e2e` was recreated and migrated to `0019`. `veriprops_uat` was not recreated, and
@@ -693,8 +714,8 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
 - The e2e env needs `DB_PASSWORD=postgres` (the compose value); the `.env.dev_personal` password
   is rejected under `APPODUS_ACTIVE_ENV=test`.
 - `veriprops-uat-tls` was missing and has been recreated with `--restart unless-stopped`.
-- The e2e backend (:8000) and the standalone frontend (:3001) are running from this session. The
-  standalone bundle is current (built after all app changes).
+- The e2e servers are stopped; ports 8000 and 3001 are free. The standalone bundle in
+  `.next/standalone` is current (built after all app changes). `veriprops-uat-tls` is up.
 
 ---
 

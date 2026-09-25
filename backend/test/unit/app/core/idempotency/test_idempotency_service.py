@@ -1,6 +1,6 @@
 """IdempotencyService (PRD §4.6): exactly-once creates and webhook dedup.
 
-Keys are unique per scope among live rows (migration 0018). Reserving is one
+Keys are unique per scope among live rows (`uq_idempotency_scope_key`). Reserving is one
 `INSERT … ON CONFLICT DO NOTHING`, so a concurrent duplicate replays the winner instead of
 failing on the constraint. An expired key is retired (soft-deleted) first, which frees its
 value. Repo mocked, no DB.

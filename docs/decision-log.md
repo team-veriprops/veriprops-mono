@@ -2808,3 +2808,48 @@ this was committed.
 
 ### Revisit
 At the next cycle boundary, under the same precondition — every live database at the head first.
+
+## Decision: D96 — the concurrency hardening is folded back into `0001_initial_schema`
+
+### Context
+`0018_concurrency_constraints` (unique guards over live rows only) and `0019_sla_breach_marker`
+reopened the chain after D95. The user asked to fold them back in and migrate every environment,
+local and remote.
+
+### Chosen
+Same procedure as D95, in the same order:
+1. **Every live database to the head first.**
+   - A read-only audit ran first. It found remote dev at `0019`, and staging (`preview` →
+     `veriprops_staging`) and production at `0017`. 0018's duplicate pre-check was clean on both.
+   - Staging and production were then promoted through the pipeline by PR, so each deploy ran
+     `alembic upgrade head`.
+   - Local `veriprops_test` was upgraded, and the empty local `veriprops_staging` was built at
+     head.
+2. **Then the fold.** `revision = "0019_sla_breach_marker"`, `down_revision = None`.
+   - Each full-table `UniqueConstraint` that 0018 narrowed is removed from its `create_table`.
+     The same-named partial index is built beside the table's other indexes by
+     `_live_unique_index`, and so are the nine guards 0018 added and `uq_idempotency_scope_key`.
+   - `verifications.sla_breach_notified_at` follows the audit columns, where `ADD COLUMN` put it.
+   - The data steps (nulling the OAuth placeholder phone, the SLA backfill) are dropped. A fresh
+     database has no rows, and every live one already ran them.
+
+### Rationale
+Proved rather than assumed, as D95 did. One database was built through the pre-squash chain (a
+worktree at `9f6868c`) and one from the squashed file.
+- `pg_dump --schema-only` is **identical**, down to column order. The only difference is
+  pg_dump's per-dump random `\restrict` key.
+- Seeded row counts match table for table.
+- The drive-through passes 554/554 against the squash-built database alone.
+
+`test_migration_0001_live_uniqueness.py` replaces the two per-revision tests. It runs every
+builder against a recording `op` and pins model ↔ migration in both directions: every live-only
+guard a model declares is built with the same name, columns and predicate, and vice versa.
+
+### Tradeoffs
+- One-way, as every squash is: a database behind `0019_sla_breach_marker` cannot upgrade, and has
+  to be rebuilt (`scripts/rebuild_local_db.py`) rather than stamped.
+- The removed revisions' own tests (offline SQL both ways, the duplicate pre-check, the backfill)
+  are gone with them. What they protected now exists only in live databases that already ran it.
+
+### Revisit
+At the next cycle boundary, under the same precondition.

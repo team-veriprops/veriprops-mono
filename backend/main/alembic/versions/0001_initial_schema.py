@@ -6,7 +6,9 @@ This single migration is a squash of the original 20-file chain
 0003_user_verify_started (users.has_started_verification), re-squashed
 again to fold in the ten-file WhatsApp cycle (0002_whatsapp_channel …
 0011_whatsapp_legal_copy), and re-squashed once more to fold in the
-unified-chat cycle (0012_remove_chat_clarifications … 0017_session_pkey_name)
+unified-chat cycle (0012_remove_chat_clarifications … 0017_session_pkey_name),
+and re-squashed again to fold in the concurrency hardening (0018_concurrency_constraints —
+unique guards over live rows only — and 0019_sla_breach_marker)
 — each time only once every environment had been migrated past that head.
 The table each cycle builds is created in the shape the cycle *ended* in, so
 ``chat_bot_sessions`` is built under that name with the primary key
@@ -38,9 +40,9 @@ weights, D30), and pricing tiers + line items (``TIER_PRICE_NGN_KOBO``).
 Enum members are reduced to their raw ``.value`` strings at row-build time,
 keeping the emitted SQL decoupled from app enums.
 
-Revision ID: 0017_session_pkey_name
+Revision ID: 0019_sla_breach_marker
 Revises:
-Create Date: 2026-09-21 00:00:00.000000
+Create Date: 2026-09-25 00:00:00.000000
 """
 import json
 from datetime import datetime, timezone
@@ -63,7 +65,7 @@ from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 # filename: a database already stamped at that revision is left alone by this squash, which
 # is what makes re-squashing safe on live environments (the previous squash kept
 # `0003_user_verify_started` for the same reason).
-revision: str = "0017_session_pkey_name"
+revision: str = "0019_sla_breach_marker"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -75,6 +77,18 @@ _MODE_BOT = "BOT"
 _STATUS_PENDING = "PENDING"
 _STATUS_NOT_FOUND = "NOT_FOUND"
 _QUALITY_UNKNOWN = "UNKNOWN"
+_CHANNEL_WHATSAPP = "WHATSAPP"
+_TYPE_GENERAL_SUPPORT = "GENERAL_SUPPORT"
+
+# Lookups skip soft-deleted rows, so a unique guard on a soft-deletable table covers live rows
+# only — otherwise a soft-deleted row blocks re-creating it forever. Each is declared on its model
+# with `live_unique_index(...)` under the same name, which `insert_or_get` targets.
+_LIVE = "deleted = false"
+
+
+def _live_unique_index(table: str, name: str, columns: list, where: str = _LIVE) -> None:
+    """A unique index over live rows only (folded from 0018_concurrency_constraints)."""
+    op.create_index(name, table, columns, unique=True, postgresql_where=sa.text(where))
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -125,6 +139,7 @@ def _create_users():
     op.create_index("ix_users_referred_by", "users", ["referred_by"], unique=False)
     op.create_index("ix_users_deleted", "users", ["deleted"], unique=False)
     op.create_index("ix_users_id", "users", ["id"], unique=True)
+    _live_unique_index("users", "uq_users_phone_e164", ["phone_e164"], f"{_LIVE} AND phone_e164 IS NOT NULL")
 
 
 def _create_key_values():
@@ -147,10 +162,10 @@ def _create_oauth_identities():
         sa.Column("email", sa.String(length=254), nullable=True),
         sa.Column("raw_profile", sa.Text(), nullable=True),
         *AlembicUtils.base_audit_columns(),
-        sa.UniqueConstraint("provider", "subject", name="uq_oauth_provider_subject"),
     )
     op.create_index("ix_oauth_identities_id", "oauth_identities", ["id"], unique=True)
     op.create_index("ix_oauth_identities_user_id", "oauth_identities", ["user_id"], unique=False)
+    _live_unique_index("oauth_identities", "uq_oauth_provider_subject", ["provider", "subject"])
 
 
 def _create_consent_documents():
@@ -262,11 +277,11 @@ def _create_signup_drafts():
         sa.Column("payload", sa.Text(), nullable=False),
         sa.Column("expires_at", UTCDateTime, nullable=False),
         *AlembicUtils.base_audit_columns(),
-        sa.UniqueConstraint("email", name="uq_signup_drafts_email"),
     )
     op.create_index("ix_signup_drafts_id", "signup_drafts", ["id"], unique=True)
     op.create_index("ix_signup_drafts_email", "signup_drafts", ["email"], unique=False)
     op.create_index("ix_signup_drafts_expires_at", "signup_drafts", ["expires_at"], unique=False)
+    _live_unique_index("signup_drafts", "uq_signup_drafts_email", ["email"])
     op.create_index(
         "ix_signup_drafts_email_active", "signup_drafts", ["email", "expires_at"], unique=False,
     )
@@ -361,11 +376,12 @@ def _create_idempotency_keys():
         sa.Column("resource_id", sa.String(length=36), nullable=True),
         sa.Column("expires_at", UTCDateTime, nullable=False),
         *AlembicUtils.base_audit_columns(),
-        sa.UniqueConstraint("key", name="uq_idempotency_key"),
     )
     op.create_index("ix_idempotency_keys_id", "idempotency_keys", ["id"], unique=True)
     op.create_index("ix_idempotency_keys_deleted", "idempotency_keys", ["deleted"], unique=False)
     op.create_index("ix_idempotency_scope_expires", "idempotency_keys", ["scope", "expires_at"], unique=False)
+    # A key is unique within its scope, not across every scope.
+    _live_unique_index("idempotency_keys", "uq_idempotency_scope_key", ["scope", "key"])
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -392,6 +408,7 @@ def _create_agent_profiles():
     op.create_index("ix_agent_profiles_id", "agent_profiles", ["id"], unique=True)
     op.create_index("ix_agent_profiles_user_id", "agent_profiles", ["user_id"], unique=False)
     op.create_index("ix_agent_profiles_status", "agent_profiles", ["status"], unique=False)
+    _live_unique_index("agent_profiles", "uq_agent_profiles_user_id", ["user_id"])
 
 
 def _create_agent_credentials():
@@ -534,6 +551,9 @@ def _create_verifications():
         # Pending report re-version reason for the next release (§14): RECHECK / TIER_UPGRADE.
         sa.Column("pending_revision_kind", sa.String(length=16), nullable=True),
         *AlembicUtils.base_audit_columns(),
+        # folded from 0019_sla_breach_marker — the SLA-breach sweep claims a verification here
+        # before it announces the breach, so the announcement goes out once (§11.4).
+        sa.Column("sla_breach_notified_at", UTCDateTime, nullable=True),
         sa.UniqueConstraint("vid", name="uq_verifications_vid"),
     )
     op.create_index("ix_verifications_id", "verifications", ["id"], unique=True)
@@ -710,10 +730,10 @@ def _create_trust_score_weight_config():
         sa.Column("role", sa.String(length=16), nullable=False),
         sa.Column("weight_percent", sa.Integer(), nullable=False, server_default="0"),
         *AlembicUtils.base_audit_columns(),
-        # One weight per (tier, role); weights sum to 100 within a tier (app-enforced).
-        sa.UniqueConstraint("tier", "role", name="uq_trust_weight_tier_role"),
     )
     op.create_index("ix_trust_score_weight_config_id", "trust_score_weight_config", ["id"], unique=True)
+    # One weight per (tier, role); weights sum to 100 within a tier (app-enforced).
+    _live_unique_index("trust_score_weight_config", "uq_trust_weight_tier_role", ["tier", "role"])
 
 
 def _create_reports():
@@ -736,6 +756,7 @@ def _create_reports():
     op.create_index("ix_reports_id", "reports", ["id"], unique=True)
     op.create_index("ix_reports_verification", "reports", ["verification_id"], unique=False)
     op.create_index("ix_reports_state", "reports", ["state"], unique=False)
+    _live_unique_index("reports", "uq_reports_verification_version", ["verification_id", "report_version"])
 
 
 def _create_conversations():
@@ -761,6 +782,18 @@ def _create_conversations():
     op.create_index("ix_conversations_id", "conversations", ["id"], unique=True)
     op.create_index("ix_conversations_verification", "conversations", ["verification_id"], unique=False)
     op.create_index("ix_conversations_external_ref", "conversations", ["external_ref"], unique=False)
+    _live_unique_index(
+        "conversations", "uq_conversations_verification_type", ["verification_id", "type"],
+        f"{_LIVE} AND verification_id IS NOT NULL",
+    )
+    _live_unique_index(
+        "conversations", "uq_conversations_web_support_owner", ["created_by"],
+        f"{_LIVE} AND type = '{_TYPE_GENERAL_SUPPORT}' AND channel = '{_CHANNEL_WEB}'",
+    )
+    _live_unique_index(
+        "conversations", "uq_conversations_whatsapp_number", ["external_ref"],
+        f"{_LIVE} AND channel = '{_CHANNEL_WHATSAPP}'",
+    )
 
 
 def _create_conversation_participants():
@@ -880,6 +913,7 @@ def _create_notification_preferences():
     )
     op.create_index("ix_notif_prefs_id", "notification_preferences", ["id"], unique=True)
     op.create_index("ix_notif_prefs_user", "notification_preferences", ["user_id"], unique=False)
+    _live_unique_index("notification_preferences", "uq_notif_prefs_user_event", ["user_id", "event_type"])
 
 
 def _create_verification_shares():
@@ -938,12 +972,16 @@ def _create_upgrade_requests():
         sa.Column("payment_id", sa.String(length=36), nullable=True),
         sa.Column("idempotency_key", sa.String(length=80), nullable=False),
         *AlembicUtils.base_audit_columns(),
-        sa.UniqueConstraint("idempotency_key", name="uq_upgrade_requests_key"),
     )
     op.create_index("ix_upgrade_requests_id", "upgrade_requests", ["id"], unique=True)
     op.create_index("ix_upgrade_verification", "upgrade_requests", ["verification_id"], unique=False)
     op.create_index("ix_upgrade_requests_status", "upgrade_requests", ["status"], unique=False)
     op.create_index("ix_upgrade_requests_payment", "upgrade_requests", ["payment_id"], unique=False)
+    # One live request per key while it is still pending; a settled one frees the key.
+    _live_unique_index(
+        "upgrade_requests", "uq_upgrade_requests_key", ["idempotency_key"],
+        f"{_LIVE} AND status = '{_STATUS_PENDING}'",
+    )
 
 
 def _create_disputes():
@@ -980,10 +1018,10 @@ def _create_system_config():
         sa.Column("value_json", JSONB_VARIANT, nullable=True),
         sa.Column("description", sa.Text(), nullable=True),
         *AlembicUtils.base_audit_columns(),
-        sa.UniqueConstraint("key", name="uq_system_config_key"),
     )
     op.create_index("ix_system_config_id", "system_config", ["id"], unique=True)
     op.create_index("ix_system_config_key", "system_config", ["key"], unique=False)
+    _live_unique_index("system_config", "uq_system_config_key", ["key"])
 
 
 def _create_commission_rules():
@@ -994,9 +1032,9 @@ def _create_commission_rules():
         sa.Column("tier", sa.String(length=16), nullable=False),
         sa.Column("rate_bps", sa.Integer(), nullable=False, server_default="0"),
         *AlembicUtils.base_audit_columns(),
-        sa.UniqueConstraint("role", "tier", name="uq_commission_rule_role_tier"),
     )
     op.create_index("ix_commission_rules_id", "commission_rules", ["id"], unique=True)
+    _live_unique_index("commission_rules", "uq_commission_rule_role_tier", ["role", "tier"])
 
 
 def _create_agent_bank_accounts():
@@ -1045,10 +1083,10 @@ def _create_pricing_tier_config():
         sa.Column("tier", sa.String(length=16), nullable=False),
         sa.Column("price_ngn_kobo", sa.BigInteger(), nullable=False),
         *AlembicUtils.base_audit_columns(),
-        sa.UniqueConstraint("tier", name="uq_pricing_tier_config_tier"),
     )
     op.create_index("ix_pricing_tier_config_id", "pricing_tier_config", ["id"], unique=True)
     op.create_index("ix_pricing_tier_config_tier", "pricing_tier_config", ["tier"], unique=False)
+    _live_unique_index("pricing_tier_config", "uq_pricing_tier_config_tier", ["tier"])
 
 
 def _create_pricing_line_items():
@@ -1119,6 +1157,7 @@ def _create_referral_credits():
     op.create_index("ix_referral_credits_invitee", "referral_credits", ["invitee_user_id"], unique=False)
     op.create_index("ix_referral_credits_verification", "referral_credits", ["verification_id"], unique=False)
     op.create_index("ix_referral_credits_status", "referral_credits", ["status"], unique=False)
+    _live_unique_index("referral_credits", "uq_referral_credits_invitee", ["invitee_user_id"])
 
 
 def _create_report_acknowledgements():
@@ -1223,8 +1262,8 @@ def _create_whatsapp_links():
     )
     op.create_index("ix_whatsapp_links_id", "whatsapp_links", ["id"], unique=True)
     # The §26.4.4 one-to-one rule, enforced in the database rather than by convention.
-    op.create_unique_constraint("uq_whatsapp_links_user_id", "whatsapp_links", ["user_id"])
-    op.create_unique_constraint("uq_whatsapp_links_phone_e164", "whatsapp_links", ["phone_e164"])
+    _live_unique_index("whatsapp_links", "uq_whatsapp_links_user_id", ["user_id"])
+    _live_unique_index("whatsapp_links", "uq_whatsapp_links_phone_e164", ["phone_e164"])
 
 
 def _create_whatsapp_templates():
@@ -1398,6 +1437,7 @@ def _create_whatsapp_number_health():
     op.create_index(
         "ix_whatsapp_number_health_phone_number_id", "whatsapp_number_health", ["phone_number_id"]
     )
+    _live_unique_index("whatsapp_number_health", "uq_whatsapp_number_health_phone_number_id", ["phone_number_id"])
 
 
 # ─────────────────────────────────────────────────────────────────────
