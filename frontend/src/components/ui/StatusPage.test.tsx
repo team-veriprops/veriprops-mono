@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import NotFound from "@app/not-found";
 import ForbiddenPage from "@app/(website)/forbidden/page";
+import ErrorPage from "@app/error";
+import LoginSuccessPage from "@app/(website)/auth/login/success-redirect/page";
 import { useAuthStore } from "@components/website/auth/libs/useAuthStore";
 import { AuthSession, AuthUser, UserPersona, UserType } from "@components/website/auth/models";
 import { ROUTES } from "@lib/routes";
@@ -82,5 +84,25 @@ describe("403 page", () => {
 
     signIn({ userType: UserType.ADMIN });
     expect(hrefs(mount(<ForbiddenPage />))).toContain(ROUTES.ADMIN.DASHBOARD);
+  });
+});
+
+describe("crash page", () => {
+  it("offers a retry on the shared shell, with the brand and a route to support", () => {
+    const html = renderToStaticMarkup(<ErrorPage error={new Error("boom")} reset={() => {}} />);
+    expect(html).toContain("Something went wrong");
+    expect(html).toMatch(/<button[^>]*bg-primary[^>]*>Try again<\/button>/);
+    expect(html).toContain("Veriprops home");
+    expect(html).toContain("mailto:");
+  });
+});
+
+describe("login success hop", () => {
+  // proxy.ts redirects every visitor off this route to the dashboard their session earns, so the
+  // page can only ever guess at a destination — it must not offer one.
+  it("shows progress and offers no destination", () => {
+    const html = renderToStaticMarkup(<LoginSuccessPage />);
+    expect(html).toContain("Signing you in");
+    expect(hrefs(html)).toEqual([]);
   });
 });
