@@ -1,8 +1,9 @@
 # Progress Tracker — Playwright UAT suite (cycle 3)
 
-status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pending user approval.
+status: **Slices 0–5 and both side tracks are complete, committed and released.** The full six-engine matrix passes on the first attempt (see the closeout section). The migration chain is folded back into `0001` (D96).
 
 ## Slice 0 — baseline gate (existing 5 specs × 6 projects)
+
 - **Stack:** backend `dev_personal` on :8000. Frontend is the **production standalone build** (`node .next/standalone/server.js` on :3001) behind Caddy TLS on :3000 ([e2e/tls/Caddyfile](../frontend/e2e/tls/Caddyfile)). See uat-strategy §9.
 - **chromium-desktop:** 24/24 on first attempt, after the fixes below.
 - **Full matrix:** 144 tests (24 × 6 projects), **143 passed first attempt, 0 failed**, 1 retry, 23.3 min.
@@ -26,6 +27,7 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
 - **Gates:** Vitest 593/593, `tsc` and eslint clean. Backend unit 2066/2066 (`/dev/scenario` work); ruff and mypy clean.
 
 ## Slice 1 — foundation (code complete; browser pass pending)
+
 - **`/dev/scenario`:** stages `DRAFT` → `RELEASED` are cumulative. `DISPUTED`, `RECHECK_REQUESTED` and `PAYOUT_READY` are alternative branches off `RELEASED`, all driven by the real services.
   - The only direct write is `PAYOUT_READY` backdating the commission `clearing_until`, before the real clearance sweep runs.
   - Live check: 12/12 builds OK. DISPUTED returns a dispute id; PAYOUT_READY gives every agent a positive balance and a bank account on both tiers.
@@ -66,6 +68,7 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
 - **Firefox rerun after the `loginViaUi` fix (firefox-desktop + firefox-mobile, both lanes):** 44/44 on first attempt (parallel 38, serial 6), no retries. Slice 1 is green across the 6-engine matrix.
 
 ## Slice 2 — session lifecycle (`session.spec.ts`, P0)
+
 - **Scenarios** (each builds its own customer, so all run parallel):
   - UAT-SESS-01: an expired access token is renewed silently.
   - UAT-SESS-02: a lost session goes to login and back to the page.
@@ -98,6 +101,7 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
 - **Slice 2 gates:** backend unit 2096/2096, ruff + mypy clean; frontend Vitest 615/615, tsc + eslint clean.
 
 ## Slice 3 — signup funnel (`auth.spec.ts` extended, P0/P1)
+
 - **Scenarios** (each signs up a brand-new account, so they own their data and run in parallel):
   - UAT-AUTH-09: the four-step funnel (Account → Verify → Residence → Consent) ends on the new-verification wizard, because a new customer has no verification yet.
   - UAT-AUTH-10: a half-finished signup resumes, restoring the typed email.
@@ -110,6 +114,7 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
 - **This stack runs `PHONE_VERIFICATION_ENABLED=false`**, so the Verify step asks for one OTP (email) and collects the phone for the pay step. The spec uses the same `verify-phone-input` id on both sides of the flag, so it survives the flag flipping.
 
 ### Real app defects found and fixed (test-first)
+
 - **Unlabelled selects — axe `select-name`, critical.** The residence step's country and timezone selects had no accessible name: the local `Field` rendered a `<label>` with no `htmlFor` and the selects carried no id. Screen-reader users heard two unnamed dropdowns. The sibling text inputs escaped the equivalent rule only because axe accepts their `placeholder` as a name — selects have no such fallback.
   - The same defect sat in `ProfileCompletionModal` (the OAuth twin of this step), and `AdminPayouts`' status filter was unnamed too.
   - Fixed by extracting shared [`Field`/`FieldGroup`](../frontend/src/components/ui/form/Field.tsx), which hands the control the id its label points at so the binding cannot be forgotten. That removed **three** duplicated local `Field` copies (residence, account basics, profile modal). `FieldGroup` names the currency button row via `role="group"` + `aria-labelledby`, since there is no single control to bind. `FormField`/`FormSelect` were not reusable here — they require `useFormContext`, and these steps use plain `useForm`.
@@ -118,13 +123,15 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
   - `renderToStaticMarkup` *is* the pre-hydration HTML, so the guard test asserts directly that the server never ships a live submit.
   - **`__app_ready__` cannot protect against this.** It is set by a `useEffect` on the root provider, so it means "the app mounted", not "this form is interactive" — the app has to own the fix.
 
-### Misjudgements of mine, recorded so they are not repeated
+### Misjudgements of mine, recorded so they are not repeated (Slice 3)
+
 - **The a11y scan raced an animation.** UAT-AUTH-13's first failure was `color-contrast 2.16` on an OTP box whose style was `opacity: 0` — axe scanned mid-stagger. The helper now waits for the last box to reach full opacity. Same class as the Slice 2 overlay race.
 - **I under-budgeted the OTP wait, twice.** UAT-AUTH-09 failed on four engines against a 15 s then a 45 s budget. The funnel describes are now `test.slow()` and the dialog wait is 90 s; re-verified green on the three engines that had failed (24.9–35.7 s). The cause is the browser being starved under two workers on this box — **not** a slow endpoint, as the corrected measurement below shows.
 - **I misdiagnosed it as rate limiting first.** `otp_send` is capped at 5/min/IP, which fit the symptom — but a truncated grep let me read "no hit in `.env.dev_personal`" as "not set", when that file does set `DISABLE_RATE_LIMITING=true`. Throttles were off the whole time. A truncated search is not evidence of absence.
 - The helper now races the dialog against `verify-{field}-error` and fails with the app's own message, so a refused send can never again present as a bare "element not found".
 
 ### Corrected: the OTP endpoint is **not** slow — my measurement was wrong
+
 - I first recorded "requesting an OTP takes 3–12 s", blamed the in-band mail dispatch, and wrote that into the Slice 3 commit message. **It was an artifact of how I measured.** Benchmarked properly — one warm process, connection setup absorbed first, eight sequential sends — `POST /users/auth/otp/send` runs in **0.14–0.25 s** (control `GET /config/public`: 0.04–0.06 s).
 - Every earlier probe was a *first* call in a freshly spawned PowerShell process or `Start-Job` runspace, and the first call to a host costs ~2.3 s in connection setup plus backend lazy-init (the DI lookup and first Jinja compile inside `send_verification_msg`). I sampled that warm-up five times and read it as endpoint latency, including a "concurrent" test whose two runspaces each paid it separately.
 - **Lesson: absorb the first-call cost before timing anything, and measure inside one process.** Two conclusions in this slice (this one and the rate-limit theory) came from treating a single unrepresentative sample as evidence.
@@ -133,12 +140,14 @@ status: **Slice 0 passed. Slice 1 is partial.** All changes are uncommitted, pen
 - **Watch item:** UAT-AUTH-03 on webkit-mobile once timed out after 20 s waiting for `login-submit` to become enabled — the cost side of disabled-until-hydrated, under two-worker load. It passed on retry in 9.7 s. Worth watching; the alternative re-opens the credentials-in-URL hole.
 
 ### Results
+
 - **All six engines green**, assembled from chunked runs (a full matrix in one invocation exceeds the per-run time budget on this box): chromium-desktop 13/13, chromium-mobile 9 P0, webkit-desktop 9 P0, webkit-mobile 13/13, firefox-desktop 9 P0, firefox-mobile 9/9 first attempt.
 - **`@serial` lane: 6/6** — UAT-AUTH-05 passes on every engine.
 - The final edits were timeout-only (`test.slow()`, 90 s dialog wait) and so cannot invalidate the earlier passes; they were re-verified on the three engines that had failed.
 - **Slice 3 gates:** frontend Vitest 623/623, tsc + eslint clean; backend ruff + mypy clean, unit 2109/2109 (the backend was touched by the follow-on below).
 
 ## Slice 3 follow-on — telling the truth about an undelivered code
+
 Both fixes came from reading the OTP path while chasing a latency problem that turned out not to exist.
 
 - **A failed OTP send was invisible to the customer.** `MessagingService.send_bulk` *buckets* failures into its result rather than raising, and `_send_direct_message` discarded that result — so a send that failed on every channel was indistinguishable from one that succeeded. `send_otp` returned 200, the dialog opened, and the customer waited for a code that had never been sent.
@@ -151,6 +160,7 @@ Both fixes came from reading the OTP path while chasing a latency problem that t
 - **Worth knowing for the next slice:** the backend does not hot-reload. A stale process serves the old contract and fails the funnel in a way that looks like a code defect — the verification run now polls until `/otp/send` actually returns `delivered` before it starts testing.
 
 ### Decisions carried into Slice 4 (user, 2026-09-16)
+
 - **The 6-engine matrix is not re-run for the follow-on.** chromium-desktop 13/13 stands as its verification, and full-matrix confirmation folds into Slice 4's checkpoint — so that run covers both slices' specs. Recorded rather than assumed: the follow-on's engine risk is low because it changed a JSON field and a navigation option, not rendering.
 - **Slice 4 is next:** golden-path legs 2–5 (`golden-path.spec.ts`, `@serial`) — customer pays → admin suggests/assigns → agents accept, start, upload and submit → admin rejects FIELD → the agent sees the reason and resubmits → approve with quality → release → the customer sees the REPORT_READY bell, the disclaimer gate, the trust gauge and a parsed PDF (`%PDF` + VID). Folds in the assign/suggest testids.
 - **Stack at handover:** backend on :8000 restarted and confirmed serving the new `OtpSendResultDto`; standalone frontend on :3001 from the current production build; Caddy TLS on :3000. `dev` is at `52d09ea`.
@@ -167,6 +177,7 @@ the customer is notified, clears the disclaimer gate, reads the trust gauge and 
 the branded PDF (asserted on the bytes: `%PDF` magic plus the VID). Four a11y scans en route.
 
 ### Six defects it exposed, each fixed test-first
+
 1. **An admin-assigned task could not be accepted.** `assign()` moves a task to ASSIGNED and out
    of the pool, but both agent surfaces gated Accept on `state === PENDING || inPool`. The
    manual-assign path (§2.2) therefore dead-ended in the UI while the backend's machine allowed
@@ -199,7 +210,8 @@ the branded PDF (asserted on the bytes: `%PDF` magic plus the VID). Four a11y sc
    nothing scrolls. This is the clearest argument this cycle for the engine matrix being a gate
    rather than a formality.
 
-### Misjudgements of mine, recorded so they are not repeated
+### Misjudgements of mine, recorded so they are not repeated (Slice 4)
+
 - **I traded one strict-mode violation for another.** After the bell resolved to three elements I
   scoped it with `filter({ visible: true })`, which passed on desktop and broke on mobile: the
   off-canvas drawer's copy still reads as *visible* while parked off-screen. `helpers/ui.ts:signOut`
@@ -210,7 +222,8 @@ the branded PDF (asserted on the bytes: `%PDF` magic plus the VID). Four a11y sc
   `NotificationRule.in_app` defaults to `True`; the notification was always being created, and the
   page snapshot showed the badge reading 7. The failure was entirely my locator.
 
-### Folded in
+### Folded in (Slice 4)
+
 - Assign/suggest anchors (`assign-submit-{role}`, `suggested-agent-{role}` + `data-agent-id`),
   `open-task-{id}`, `detail-rejection-reason`, `task-progress`, `report-trust-score`.
 - The deferred evidence fixtures now exist and are used: `e2e/fixtures/evidence-photo.jpg` (a real
@@ -221,7 +234,8 @@ the branded PDF (asserted on the bytes: `%PDF` magic plus the VID). Four a11y sc
 - Fixture contexts now grant geolocation, so evidence capture exercises the real §12.3 GPS path
   instead of waiting out a prompt for a position it would never get.
 
-### Verification
+### Verification (Slice 4)
+
 - **Gates:** backend ruff + mypy clean, unit **2260**; frontend Vitest **684** across 106 files,
   tsc + eslint clean.
 - **chromium-desktop + chromium-mobile:** green on both `auth.spec.ts` and `golden-path.spec.ts`
@@ -247,8 +261,9 @@ the branded PDF (asserted on the bytes: `%PDF` magic plus the VID). Four a11y sc
   exceeding even the 600s budget. Those three tests alone took 1.7 hours here.
 
 ### Matrix result
+
 | engine | `auth.spec.ts` + `golden-path.spec.ts` |
-|---|---|
+| --- | --- |
 | chromium-desktop | green, first attempt |
 | chromium-mobile | green, first attempt |
 | webkit-mobile | green, first attempt |
@@ -263,10 +278,12 @@ passing the identical flow on the same Gecko engine). **User decision, 2026-09-2
 it is** — the journey is not made cheaper, the budget is not raised again, and GP-03 is not
 re-tagged to fewer engines. CI hardware is unmeasured, so if the retries survive there the
 classification deserves re-testing rather than restating.
+
 - A full six-engine matrix in one invocation exceeds the per-call budget here, so it is chunked by
   engine pair.
 
 ### Stack notes for the next session
+
 - **The local database was rebuilt as `veriprops_uat`.** After the squash that folded the
   unified-chat chain into `0001_initial_schema`, `veriprops_local` was left stamped at
   `0011_whatsapp_legal_copy` — a revision that no longer exists, so alembic could not resolve it.
@@ -287,6 +304,7 @@ from inside their portal, and an agent takes up the customer hat and reaches the
 wizard. Both must work **in the session the person is already in**.
 
 ### The live P0 this slice started from
+
 **Every new signup was blocked by the consent re-acceptance modal.** `libs/auth/consent.ts`
 hardcoded every consent version at `1.0.0` while the backend publishes `1.1.0` for Platform Terms
 and Privacy, so an account was created having "accepted" versions that were already superseded and
@@ -299,6 +317,7 @@ place for a version to be written down. The `signup-consent-terms`/`-privacy` an
 auth testids are contract.
 
 ### Defects it exposed, each fixed test-first
+
 1. **A granted persona could not take effect until the next sign-in.** Claims were already read
    from the user record at each mint, but a refresh re-mints only the *access* token while the route
    guard decides from the **refresh** token — and nothing re-minted that. So applying granted AGENT
@@ -354,7 +373,8 @@ auth testids are contract.
     behaves like the library (no subject until verified), including one that pins the ordering.
     This is exactly why the plan re-runs `session.spec.ts` whenever refresh is touched.
 
-### Misjudgements of mine, recorded so they are not repeated
+### Misjudgements of mine, recorded so they are not repeated (Slice 5)
+
 - **I decoded the wrong cookie and nearly blamed the backend.** Checking whether the rotated token
   carried both personas, I read curl's jar after a request I had given `-b` but not `-c` — so I was
   reading the *login-time* token and concluded the grant had not reached the mint. The backend was
@@ -365,7 +385,8 @@ auth testids are contract.
 - **I asserted the portal switcher while a full-screen wizard covered it.** The trigger still reads
   as visible under a page-layer overlay; the click simply goes to the overlay.
 
-### Folded in
+### Folded in (Slice 5)
+
 - `POST /users/auth/personas/customer` — grants CUSTOMER and *only* CUSTOMER, so no client can
   claim a hat; `/agents/verify-property` is its UI, a route rather than a nav action so the grant
   completes before the navigation the guard would otherwise refuse.
@@ -374,7 +395,8 @@ auth testids are contract.
 - `DATATABLE_TEST_IDS.SEARCH`, so the spec and the toolbar share one derivation.
 - Anchors: `agent-apply-coverage/-experience/-bio/-rejection-reason`, `agent-verify-property*`.
 
-### Verification
+### Verification (Slice 5)
+
 - **Gates:** backend ruff + mypy clean, unit **2273**; frontend Vitest **713** across 114 files,
   tsc + eslint clean.
 - **Regression specs on chromium-desktop:** `auth.spec.ts` 13/13 and `session.spec.ts` 4/4, both
@@ -391,8 +413,9 @@ auth testids are contract.
   in `openApplication`, so the table fixes above keep their coverage.
 
 ### Matrix result (`@P1`: chromium-desktop + webkit-mobile, single worker)
+
 | engine | UAT-AGENT-01…05 |
-|---|---|
+| --- | --- |
 | chromium-desktop | **5/5, first attempt** |
 | webkit-mobile | **5/5, first attempt** |
 
@@ -425,6 +448,7 @@ message is the full inventory; the design rules it introduced are recorded in
 reload, one ERROR per real fault, rebuild-don't-stamp) and MASTER-PRD §11.4 (SLA-breach claim).
 
 ### What exists now, in one line each
+
 - Race-free writes on `GenericRepo`: `claim_transition`, `lock_model`, `insert_or_get`/`upsert`,
   advisory transaction locks (`db/locks.py`). `_flush_pending()` runs before any of them reloads a
   row — sessions are `autoflush=False` and `populate_existing` would silently discard an edit.
@@ -442,7 +466,8 @@ reload, one ERROR per real fault, rebuild-don't-stamp) and MASTER-PRD §11.4 (SL
 - E2E: CHAT-06 builds its threads over the API (66 s → 22 s); local default is **2 workers**;
   `e2e/tls/Caddyfile` upstream is overridable via `UAT_UPSTREAM` and retries GET/HEAD/PUT only.
 
-### Verification at the commit
+### Verification at the commit (concurrency track)
+
 Backend unit **2594**, ruff + mypy clean; frontend Vitest **748**, tsc + eslint clean;
 drive-through **550/550**; full six-engine Playwright, both lanes. The parallel lane was 181 passed,
 12 flaky, 3 failed (2.2 h, 2 workers). All three failures and the flaky set passed when re-run
@@ -451,6 +476,7 @@ retries**. The serial lane passed 24/24, split across two runs because a Docker 
 cut the first one short.
 
 ### Spec faults fixed in this pass (not product defects)
+
 - **AGENT-02/03** reloaded the applicant's page straight after the admin's click, racing the save.
   `decideApplication` now waits for the drawer to close, which happens only once the decision is
   saved.
@@ -460,6 +486,7 @@ cut the first one short.
   now waits for `domcontentloaded`.
 
 ### Blockers — act on these first
+
 1. **`dev` CI/e2e is expected red until the sign-out/error-message work is committed.** Another
    session's work is still **uncommitted in the working tree, 76 files**: the sign-out busy
    overlay (`SignOutOverlay.tsx`, `useSignOut.ts`), the toast removal (`3rdparty/ui/toast*`,
@@ -477,6 +504,7 @@ cut the first one short.
    nothing reaches dev until blocker 1 is resolved.
 
 ### Pending, in priority order
+
 1. **The same `load` wait behind SESS-04 exists at 9 more sites.** Each should wait for
    `domcontentloaded` (then `waitReady`) like `goto` does:
    `helpers/auth.ts:35`, `helpers/ui.ts:38,50`, `specs/auth.spec.ts:117,161`,
@@ -499,7 +527,8 @@ cut the first one short.
    `docs/uat-strategy.md`), which skips Docker Desktop's container→host hop — the likely cost.
 6. Outside this track: GitHub reports 44 Dependabot alerts (4 critical) on the default branch.
 
-### Runtime state left behind
+### Runtime state left behind (concurrency track)
+
 - The user's own backend is **stopped at their request — do not restart it**. The e2e servers
   (backend on :8000 against `veriprops_e2e`, standalone frontend on :3001) are stopped.
   `veriprops-uat-tls` (Caddy) is up; Docker restarts it automatically.
@@ -528,6 +557,7 @@ and "the login form shows raw backend errors — fix everywhere". It also includ
 (the nine `load` waits). Stopped mid-verification at the user's request; what's unfinished is below.
 
 ### What exists now
+
 - **Sign-out.** Every control goes through `useSignOut()`, which drives the global `SignOutOverlay`
   (keyed on `useAuthStore.signingOut`, never on the mutation's pending state), a double-press guard, and
   a full-document redirect (`navigateAfterSignOut`). A failsafe (`SIGN_OUT_MAX_WAIT_MS`) redirects
@@ -545,13 +575,15 @@ and "the login form shows raw backend errors — fix everywhere". It also includ
   (a sign-in outage shows the safe message and reference, and doesn't lock the user out) and `UAT-WA-04`
   (a toast never covers the WhatsApp button).
 
-### Verification at the commit
+### Verification at the commit (sign-out track)
+
 Backend unit **2594**, ruff + mypy clean. Frontend Vitest **748**, tsc + eslint clean, `pnpm build` clean.
 Drive-through **550/550**. Full six-engine matrix: **interrupted by the user**. The parallel lane finished:
 188 passed, 4 flaky, 4 failed (52 min). The serial lane got 18 passed, 4 failed, 1 flaky, 1 not run before
 the stop.
 
 ### Act on these first
+
 1. **`UAT-WA-04` fails on webkit-mobile, and it's this track's own bug.** The overlap assertion
    passes, but the at-rest scan (`expectNoA11yViolations(page, { include: TOASTER_SELECTOR })`)
    throws "No elements found for include". The toast's ~4 s timer runs out while the helper waits for
@@ -577,7 +609,8 @@ the stop.
    timed out and needs a real run. The flaky set was all webkit-desktop: DEV-06, SESS-03, SESS-04 and WAH-01,
    each a 90 s timeout.
 
-### Runtime state left behind
+### Runtime state left behind (sign-out track)
+
 - All e2e processes stopped; ports 8000/3001 free. `veriprops-uat-tls` is still up, as found.
 - `veriprops_local` was **rebuilt** earlier in this track, with the user's go-ahead, because it was
   stranded at `0011` behind the squash. The other session has since brought it to `0019`.
@@ -593,6 +626,7 @@ Every "Act on these first" item from the sign-out track is closed, and so are th
 list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user decision and stays open.
 
 ### Fixed
+
 - **UAT-WA-04 (webkit-mobile), spec bug.** The at-rest toast scan now hovers the toast first:
   Sonner pauses dismissal while its toaster is hovered. The overlap is measured before the hover,
   because hovering expands the stack. No timeout changed.
@@ -622,6 +656,7 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
   earlier failures sat in the interrupted run and read as load.
 
 ### Dependencies (the Dependabot alerts)
+
 - **Frontend: `pnpm audit` went from 36 to 0** (it had 2 critical Next.js RCEs).
   - `next` and `eslint-config-next` are at 16.3.6.
   - `pdfjs-dist` is removed, because nothing imported it.
@@ -637,6 +672,7 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
   GitHub's own alert list was not read. Check it after the push.
 
 ### Tests added
+
 - **Backend unit tests:**
   - A late logout revokes through the refresh cookie.
   - A failure in that revoke is reported with the cookies still cleared.
@@ -655,7 +691,8 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
   user lands on and stays on the login form, that the queued logout is re-sent from there, and
   that the dashboard then demands sign-in.
 
-### Verification
+### Verification (closeout)
+
 - **Backend:** ruff and mypy clean; unit **2596/2596**.
 - **Frontend:** tsc and eslint clean; Vitest **776/776** (122 files); `pnpm build` clean on
   Next 16.3.6. `routes-manifest.json` targets the local backend only.
@@ -667,7 +704,7 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
   lanes: **parallel 214/214, serial 24/24, all first-attempt, 0 retries, 0 flaky.**
 
   | pair | parallel | serial | wall time |
-  |---|---|---|---|
+  | --- | --- | --- | --- |
   | chromium desktop + mobile | 80/80 | 8/8 | 4 min |
   | webkit desktop + mobile | 80/80 | 8/8 | 10 min |
   | firefox desktop + mobile | 54/54 | 8/8 | 4 min |
@@ -681,12 +718,14 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
   consistent with that, but it doesn't prove it.
 
 ### Still open
+
 - Native Caddy (pending item 5): skipped by user decision. Given the timing above, re-measure
   before investing in it.
 - `python-jose` → PyJWT (MASTER-PRD §G.2).
 - CI hardware is still unmeasured against these budgets.
 
 ### Follow-on: 0018/0019 folded into `0001` (D96, 2026-09-26)
+
 - **Every database at the head first**, per D95.
   - Remote staging (`preview` → `veriprops_staging`) and production went `0017 → 0019` through
     the pipeline: PR #24 dev → staging, then PR #25 staging → master (`f5361ed`). Each merge ran
@@ -707,7 +746,8 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
   plain `winget install GitHub.cli` fails here because the id matches two sources, so pass
   `--source winget`.
 
-### Runtime state left behind
+### Runtime state left behind (closeout)
+
 - **`veriprops_e2e` and `veriprops_uat` had been dropped** from the same Postgres container.
   `veriprops_e2e` was recreated and migrated to `0019`. `veriprops_uat` was not recreated, and
   `veriprops_local` was not touched.
@@ -719,11 +759,12 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
 
 ---
 
-# Progress Tracker — WhatsApp Channel (cycle 2)
+## Progress Tracker — WhatsApp Channel (cycle 2)
 
 status: **cycle complete** — S1–S11 delivered (+ S4.1 template registry, + S10.0 handoffs)
 
-## Completed Slices
+### Completed Slices
+
 - S1 widget + attribution (dc7adb4)
 - S2 channel foundation (webhook + facade + console inbound)
 - S3 handoff tokens + /wa/* landings
@@ -759,24 +800,30 @@ status: **cycle complete** — S1–S11 delivered (+ S4.1 template registry, + S
     commented-out blocks. The unreachable frontend upload cluster (mock service, offline queue,
     six `ui/upload` components and an unregistered service worker) was deleted.
 
-## Current Slice
+### Current Slice
+
 - none
 
-## Pending Slices
+### Pending Slices
+
 - none — the cycle's code-side scope is complete. What remains is external (§26.11 hard gates)
   and is tracked in [whatsapp-launch-runbook.md](whatsapp-launch-runbook.md).
 
-## Runtime State
+### Runtime State
+
 - idle (checkpointed after S11)
 
-## Pending Recovery
+### Pending Recovery
+
 - none
 
-## Blockers
+### Blockers
+
 - none in code. Launch is gated on the external §26.11 items — Meta business verification,
   template approval, number custody, counsel sign-off on retention duration.
 
-## Findings outside the WhatsApp scope
+### Findings outside the WhatsApp scope
+
 - `appodus_utils/domain/webhook/google_drive/` is **dead and does not import**: `repo.py`,
   `service.py` and `validator.py` reference `main.app.domain.webhook.google_drive.*` and
   `main.app.db.repo`, neither of which exists, so only `model.py` loads — and it registers a
@@ -787,10 +834,12 @@ status: **cycle complete** — S1–S11 delivered (+ S4.1 template registry, + S
   "Known Gaps & Roadmap" row landed with the §26 incorporation (MASTER-PRD §G.2), so
   `grep -rn "TODO(gap)"` enumerates every deferred item again.
 
-## Open Questions
+### Open Questions
+
 - none (gate decisions D42–D48; run-time decisions D49–D86)
 
-## What later work should know
+### What later work should know
+
 - **All seven §26.7 templates have senders**, and all three §26.3.4 `HANDOFF` actions now have
   producers. What remains external is Meta's **approval** of each template, which the admin
   registry displays and which deliberately never blocks a send — a stale sync must not take the
@@ -814,7 +863,8 @@ status: **cycle complete** — S1–S11 delivered (+ S4.1 template registry, + S
   disclosure and a visible UX event on the day. Retention *duration* is still counsel's call, so
   the clauses name the policy rather than a number and all three stay `DRAFT`.
 
-## Launch-gate checklist (§26.11)
+### Launch-gate checklist (§26.11)
+
 Full runbook, with owners and order: [whatsapp-launch-runbook.md](whatsapp-launch-runbook.md).
 The one-way step (concierge → Cloud API number binding) is called out there.
 
@@ -837,16 +887,19 @@ The one-way step (concierge → Cloud API number binding) is called out there.
 - [ ] ⊘ Concierge → Cloud API cutover scheduled (number binding is one-way)
 - [ ] ⊘ Conversation-theme tracker live from first concierge chat
 
-## Risks
+### Risks
+
 - Meta platform dependency (accepted, §26.11). Early warning is now instrumented: §26.10 reports
   the quality rating with its sync age, and `YELLOW` is the signal to slow template volume.
 - Template-approval lag (mitigation: the registry shipped early, in S4.1).
 - Live-path external assets (D43 fallback: the stub keeps everything demoable, and
   `ENVIRONMENT=prod` refuses to boot on it).
 
-## Last Commit
+### Last Commit
+
 - S11: live-path hardening and launch-gate closeout
 
-## Completion %
+### Completion %
+
 - 100 of the cycle's code-side scope (11 of 11 slices, plus S4.1 and S10.0).
   42 of 44 requirements complete; WA-02 and WA-41 are `partial` **only** on external Meta items.
