@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { TriangleAlert } from 'lucide-react'
 import { Button } from '@3rdparty/ui/button'
 import StatusPage from '@components/ui/StatusPage'
 
@@ -18,10 +19,12 @@ export default function Error({ error, reset }: ErrorPageProps) {
   return (
     <StatusPage
       code={500}
+      eyebrow="Unexpected error"
+      icon={TriangleAlert}
       title="Something went wrong"
-      message="We encountered an unexpected error. Please try again, or contact support if the problem persists."
+      message="Something on our side didn’t load as it should. Your data is safe. Please try again, or contact support if it keeps happening."
       actions={
-        <Button type="button" onClick={reset}>
+        <Button type="button" size="lg" className="w-full sm:w-auto" onClick={reset}>
           Try again
         </Button>
       }

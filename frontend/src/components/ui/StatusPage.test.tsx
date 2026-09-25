@@ -44,17 +44,37 @@ afterEach(() => {
 describe("404 page", () => {
   it("offers a visible way home on the design system's primary button", () => {
     const html = renderToStaticMarkup(<NotFound />);
-    const home = html.match(/<a[^>]*href="\/"[^>]*>Go back home<\/a>/)?.[0];
+    const home = html.match(/<a[^>]*href="\/"[^>]*>(?:(?!<\/a>).)*Go back home<\/a>/)?.[0];
     expect(home).toBeDefined();
     expect(home).toContain("bg-primary");
     expect(home).toContain("text-primary-foreground");
   });
 });
 
+describe("status shell", () => {
+  const deadEnds = {
+    "404": { ui: <NotFound />, eyebrow: "Dead link" },
+    "403": { ui: <ForbiddenPage />, eyebrow: "Restricted area" },
+    "500": { ui: <ErrorPage error={new Error("boom")} reset={() => {}} />, eyebrow: "Unexpected error" },
+  };
+
+  for (const [code, { ui, eyebrow }] of Object.entries(deadEnds)) {
+    it(`${code}: states the code and its eyebrow, with the brand and a route to support`, () => {
+      const html = renderToStaticMarkup(ui);
+      expect(html).toContain(`${code} · ${eyebrow}`);
+      expect(html).toContain("Veriprops home");
+      expect(html).toContain("mailto:");
+      // The brand separates regions by tone, never by a hard rule.
+      expect(html).not.toMatch(/border-t\b/);
+    });
+  }
+});
+
 describe("403 page", () => {
-  it("is Veriprops-branded", () => {
+  it("is Veriprops-branded and speaks in the brand's voice", () => {
     const html = renderToStaticMarkup(<ForbiddenPage />);
     expect(html).toContain("Veriprops");
+    expect(html).toMatch(/<h1[^>]*>This page isn’t open to your account<\/h1>/);
     expect(html).not.toMatch(/NovaStack|workspace/i);
   });
 

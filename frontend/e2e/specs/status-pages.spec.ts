@@ -44,7 +44,7 @@ test.describe("UAT-STATUS — forbidden @P1", () => {
   }) => {
     await goto(anonPage, ROUTES.FORBIDDEN);
 
-    await expect(anonPage.getByRole("heading", { name: /have access to this page/ })).toBeVisible();
+    await expect(anonPage.getByRole("heading", { name: /isn’t open to your account/ })).toBeVisible();
     await expect(anonPage.getByRole("link", { name: "Back to home" })).toBeVisible();
     // Offering a dashboard to someone with no session sends them to a login round-trip.
     await expect(anonPage.getByRole("link", { name: "Go to your dashboard" })).toHaveCount(0);

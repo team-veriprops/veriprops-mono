@@ -1,3 +1,4 @@
+import { ShieldAlert } from "lucide-react";
 import StatusPage from "@components/ui/StatusPage";
 import ForbiddenActions from "@components/website/ForbiddenActions";
 
@@ -6,8 +7,10 @@ export default function ForbiddenPage() {
   return (
     <StatusPage
       code={403}
-      title="You don’t have access to this page"
-      message="Your account doesn’t have permission to view it. If you think this is a mistake, contact support."
+      eyebrow="Restricted area"
+      icon={ShieldAlert}
+      title="This page isn’t open to your account"
+      message="Access on Veriprops is granted by role and by case, so every report and document stays with the people entitled to see it. If you think you should have access, contact support and we’ll look into it."
       actions={<ForbiddenActions />}
     />
   );

@@ -20,11 +20,11 @@ export default function ForbiddenActions() {
   return (
     <>
       {hydrated && user && (
-        <Button asChild>
+        <Button asChild size="lg" className="w-full sm:w-auto">
           <Link href={dashboardFor(user)}>Go to your dashboard</Link>
         </Button>
       )}
-      <Button asChild variant={hydrated && user ? "outline" : "default"}>
+      <Button asChild size="lg" className="w-full sm:w-auto" variant={hydrated && user ? "outline" : "default"}>
         <Link href={ROUTES.HOME}>
           <ArrowLeft aria-hidden />
           Back to home
