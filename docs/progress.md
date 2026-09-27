@@ -1,3 +1,88 @@
+# Progress Tracker — Audit remediation (2026-09-27)
+
+status: **Stage 0 (baseline) complete — all green; S1 next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
+
+Scope, stages S0–S9 and the user's decisions are in the audit plan (`~/.claude/plans/any-pending-issues-task-polymorphic-duckling.md`). In short:
+
+- **S1:** untrack the service-account keys, fix SMS routing, fix S3 upload.
+- **S2:** correctness bugs.
+- **S3:** live payment on both gateways.
+- **S4:** live payouts.
+- **S5:** Dojah and Places, plus the prod boot guards.
+- **S6:** live smoke.
+- **S7:** convention debt.
+- **S8:** backend tests.
+- **S9:** Playwright P0/P1.
+
+A parallel session holds uncommitted fixed-commission work, with migration `0002_fixed_agent_commission`, in the main checkout. This branch rebases onto it before the PR, and the S4 migration chains after it.
+
+### Stage 0 — baseline (the regression reference every later stage must keep green)
+
+| Gate | Command | Result |
+|---|---|---|
+| ruff | `ruff check .` | clean |
+| mypy | `mypy main` | clean, 604 files |
+| pytest | `pytest -q -p no:cacheprovider` (`APPODUS_ACTIVE_ENV=test`) | **2615 passed** |
+| drive-through | `python scripts/e2e_drive_through.py` against `veriprops_e2e` | **554/554 passed**, 0 WARN (matches the 2026-09-25 count) |
+| eslint | `pnpm lint` | clean |
+| types | `pnpm exec tsc --noEmit` | clean |
+| vitest | `pnpm test --maxWorkers=2` | **776 passed**, 122 files |
+| build | `NEXT_PUBLIC_ENVIRONMENT=test API_BASE_URL=http://localhost:8000 pnpm build` | green; the rewrite targets `localhost:8000` |
+| Playwright | `UAT_ENGINES=chromium-desktop,webkit-mobile node e2e/run-lanes.mjs` | **114/114 passed**: parallel lane 105 first attempt + 1 flaky (7.1 min), serial lane 8/8 (3.2 min) |
+
+**Pre-existing failures:** none.
+
+**Pre-existing flake:** UAT-AGENT-02 on webkit-mobile failed once and passed on retry.
+
+- `fillResidenceStep` (`e2e/helpers/signup.ts:135`) waited 15s for `signup-residence-form` after step 2's Continue.
+- The failure screenshot shows step 2 complete, with the email verified, the phone entered and no error shown. The step just hadn't advanced yet.
+- Logged here instead of fixed in another stage. Watch whether it recurs in S9.
+
+**Environment notes:**
+
+- The first pytest attempt crashed with an internal `MemoryError` after 1491 tests, while pytest was building a traceback. It came from memory pressure on this machine, not from a test. A clean re-run passed all 2615.
+- `veriprops_test` is stamped `0002_fixed_agent_commission` by the parallel session, so this branch runs its live stack against `veriprops_e2e`, which is at head `0019_sla_breach_marker`.
+
+## Third-party sandbox test register
+
+This register lists every third-party integration still stubbed, or not yet proven live. It is created in S0 and updated at the close of every stage, so the sandbox runs can be done together once keys land in Doppler `stg`.
+
+- **Mode** is how staging and prod run today; test and dev run every integration on stubs.
+- **Status** is one of `STUBBED`, `CONTRACT-TESTED`, `SANDBOX-PASSED` or `BLOCKED(<reason>)`.
+- The run command for each row is `doppler run --config stg -- python scripts/live_smoke.py --only <name>`, which S6 builds, or the `@live` Playwright spec.
+
+| # | Integration | Mode stg / prd (today) | Automated coverage | Sandbox test still to run | Needs (who) | Stage | Status |
+|---|---|---|---|---|---|---|---|
+| 1 | Flutterwave collection | live path **broken** (no checkout URL, missing webhook bridge) | none | init → hosted checkout with a test card → `verif-hash` webhook → verify → PAID; failed card → FAILED; refund → REFUNDED | FLW test public/secret keys + secret hash; webhook URL registered to staging (user) | S3 | STUBBED |
+| 2 | Paystack collection | same as 1 | none | same flow with a Paystack test card; `x-paystack-signature`; refund | Paystack test secret key; webhook URL (user) | S3 | STUBBED |
+| 3 | Chargebacks (both gateways) | stub endpoint only (404s in prod) | none | sandbox dispute event → Chargeback row | dashboard dispute simulation, if offered | S3 | STUBBED |
+| 4 | Bank list + account resolve | not built | none | `list_banks(NG)`; `resolve_account` on the gateway's test account | gateway test keys + documented test accounts (user) | S4 | STUBBED |
+| 5 | Batch payout disbursement | PAID with no transfer | none | button and sweep → transfer → webhook → PAID; failed transfer → FAILED + balance restored | test keys with transfers enabled (user) | S4 | STUBBED |
+| 6 | Paystack transfer fee / retry | `NotImplementedException` | none | `get_transfer_fee`, `retry_failed_bank_transfer` | Paystack test key (user) | S4 | STUBBED |
+| 7 | Dojah BVN/NIN lookup | stub approves any BVN | none | sandbox BVN/NIN → name/DOB match score | Dojah sandbox AppId + secret, test IDs (user) | S5 | STUBBED |
+| 8 | Dojah selfie liveness | not built | none | selfie vs ID photo, pass and fail | Dojah sandbox; a test selfie (user) | S5 | STUBBED |
+| 9 | Google Places (New) | stub (3 fixture addresses) | none | autocomplete "Lekki" → place details, NG-restricted | Places API key restricted to staging (user) | S5 | STUBBED |
+| 10 | S3 evidence storage | live path **broken** (`ExtraArgs` on `put_object`) | none | put (image + PDF MIME) → presign → GET 200 → delete | AWS staging bucket + IAM keys (user) | S1 | STUBBED |
+| 11 | SMS Termii | live path **broken** (`msg.recipient`) | none | OTP to a +234 test number → delivered | Termii key + sender ID, test handset (user) | S1 | STUBBED |
+| 12 | SMS Twilio fallback | same as 11 | none | non-NG number, and Termii forced down → Twilio | Twilio SID/token/number (user) | S1 | STUBBED |
+| 13 | Email Resend → Mailjet → SES | wired | Mailpit in drive-through (SMTP only) | send to a test inbox; force a Resend failure → fallback | Resend/Mailjet/SES keys, verified domain (user) | S6 | STUBBED |
+| 14 | WhatsApp Meta `send_message` + templates | wired (D88 test number on stg) | signature checks in drive-through; no send test | template to Meta's test number; free text inside the 24h window | Meta test number, WABA id, token (user) | S6 | STUBBED |
+| 15 | Intent (DeepSeek) | wired | none live | 5 fixed utterances → expected intents; bad key → UNKNOWN | `INTENT_API_KEY` in stg (user) | S6 | STUBBED |
+| 16 | OAuth Google / Facebook / Apple | Google OK; FB/Apple `mock_value` | none live | full login on staging per provider | real FB app id; Apple team/key/client id + p8 key (user) | I-5 | STUBBED |
+| 17 | Firebase push | credentials load at startup, no tokens stored | none | — | — | §G | BLOCKED(feature not built) |
+| 18 | FX live rates | hardcoded rates | none | — | OpenExchangeRates key when the gap is picked up | §G | BLOCKED(deferred gap) |
+| 19 | Zoho DocSign / Google Drive | not in any live flow | none | — | — | — | BLOCKED(unused) |
+
+**User actions gathered from the audit:**
+
+- Rotate the Firebase and contracts service-account keys (they are tracked in git), plus any credentials recorded in memory.
+- Load the sandbox and live keys above into Doppler `stg`/`prd`.
+- Correct the `.env.prod:18` origin.
+- Set up branch protection and the Cloudflare edge-auth Transform Rule.
+- Clear the WhatsApp launch gates and the `docs/handoff-token-pen-check.md` items.
+
+---
+
 # Progress Tracker — Playwright UAT suite (cycle 3)
 
 status: **Slices 0–5 and both side tracks are complete, committed and released.** The full six-engine matrix passes on the first attempt (see the closeout section). The migration chain is folded back into `0001` (D96).
