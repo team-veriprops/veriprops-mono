@@ -12,7 +12,6 @@ from starlette import status
 
 from main.app.config.settings import settings  # noqa: F401
 from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
-from main.appodus_utils.integrations.webhook import webhook_router
 from main.appodus_utils.config.client_manager import ClientStateManager
 
 # from main.app.domain.user.auth.active_auditor.global_context import init_auth_context
@@ -63,8 +62,7 @@ app = FastAPI(
     # dependencies=[Depends(init_auth_context)]
 )
 
-# Routers
-router.include_router(webhook_router)
+# Routers: every domain router, webhooks included, is mounted once in main/app/domain/__init__.py
 app.include_router(router, prefix="/api")
 
 # Exception Handlers
