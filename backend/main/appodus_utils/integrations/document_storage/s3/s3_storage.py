@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from loguru import Logger
 import asyncio
 import os
-from typing import Union, BinaryIO
+from typing import BinaryIO, Optional, Union
 
 import boto3
 from botocore.config import Config
@@ -15,6 +15,10 @@ from kink import inject, di
 
 from main.app.config.settings import settings
 from main.appodus_utils.integrations.document_storage.interface import IDocumentStorageProvider
+from main.appodus_utils.integrations.exception.exceptions import IntegrationException
+
+# Stored when the uploader did not say what the bytes are; S3 then serves them as a download.
+_DEFAULT_CONTENT_TYPE = "application/octet-stream"
 
 logger: Logger = di["logger"]
 
@@ -49,33 +53,35 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
         file_bytes: Union[bytes, BinaryIO],
         metadata: dict,
         encrypted: bool = False,
+        content_type: Optional[str] = None,
     ) -> str:
-        try:
-            if hasattr(file_bytes, "read"):
-                file_data = file_bytes.read()
-            else:
-                file_data = file_bytes
+        """Store the bytes privately and return a short-lived read URL.
 
+        Objects are private by default, so no ACL is sent: buckets with ACLs disabled (the AWS
+        default since 2023) reject any ACL parameter outright.
+        """
+        if hasattr(file_bytes, "read"):
+            file_data = file_bytes.read()
+        else:
+            file_data = file_bytes
+
+        params: dict = {
+            "Bucket": bucket,
+            "Key": key,
+            "Body": file_data,
+            "ContentType": content_type or _DEFAULT_CONTENT_TYPE,
+            "Metadata": {k: str(v) for k, v in metadata.items()},
+        }
+        if encrypted:
+            params["ServerSideEncryption"] = "AES256"
+
+        try:
             logger.info(f"Uploading object to S3 bucket={bucket}, key={key}")
-            cleaned_metadata = {k: str(v) for k, v in metadata.items()}
-            extra_args: dict = {
-                "ContentType": "application/pdf",
-                "ACL": "private",
-                "Metadata": cleaned_metadata,
-            }
-            if encrypted:
-                extra_args["ServerSideEncryption"] = "AES256"
-            await asyncio.to_thread(
-                self.client.put_object,
-                Bucket=bucket,
-                Key=key,
-                Body=file_data,
-                ExtraArgs=extra_args,
-            )
-            return await self.get_presigned_url(key, bucket, expires_in_sec=settings.AWS_S3_PRESIGNED_URL_EXPIRES)
+            await asyncio.to_thread(self.client.put_object, **params)
         except (BotoCoreError, ClientError) as e:
-            logger.error(f"S3 upload failed: {e}")
-            raise HTTPException(status_code=500, detail=f"S3 upload failed: {e}")
+            logger.error(f"S3 upload failed for bucket={bucket}, key={key}: {e}")
+            raise IntegrationException("Could not store the document.") from e
+        return await self.get_presigned_url(key, bucket, expires_in_sec=settings.AWS_S3_PRESIGNED_URL_EXPIRES)
 
     async def upload_local_doc(self, key: str, bucket: str, local_path: str, metadata: dict) -> str:
         if not os.path.exists(local_path):
@@ -92,7 +98,6 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
                 Key=key,
                 ExtraArgs={
                     "ContentType": "application/pdf",
-                    "ACL": "private",  # Change if public access is required
                     "Metadata": cleaned_metadata
                 }
             )
@@ -101,14 +106,13 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
             logger.info(f"Local PDF removed after upload: {local_path}")
 
             return await self.get_presigned_url(key, bucket, expires_in_sec=settings.AWS_S3_PRESIGNED_URL_EXPIRES)
-        except ClientError as e:
-            logger.error(f"S3 upload failed: {e}")
-            raise HTTPException(status_code=500, detail=f"S3 upload failed: {str(e)}")
-        except Exception as e:
-            logger.exception("Unexpected error while uploading PDF")
-            raise HTTPException(status_code=500, detail=f"PDF processing error: {str(e)}")
+        except (BotoCoreError, ClientError) as e:
+            logger.error(f"S3 upload failed for bucket={bucket}, key={key}: {e}")
+            raise IntegrationException("Could not store the document.") from e
 
-    async def get_presigned_url(self, key: str, bucket: str, expires_in_sec: int = 3600) -> str:
+    async def get_presigned_url(
+        self, key: str, bucket: str, expires_in_sec: int = settings.AWS_S3_PRESIGNED_URL_EXPIRES
+    ) -> str:
         try:
             logger.info(f"Generating presigned URL for {bucket}/{key}")
             url = await asyncio.to_thread(
@@ -119,8 +123,8 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
             )
             return url
         except (BotoCoreError, ClientError) as e:
-            logger.error(f"Presigned URL generation failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Could not generate presigned URL: {e}")
+            logger.error(f"Presigned URL generation failed for bucket={bucket}, key={key}: {e}")
+            raise IntegrationException("Could not open the document.") from e
 
     async def delete(self, key: str, bucket: str) -> None:
         """Delete an object from S3."""
@@ -132,5 +136,5 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
                 Key=key,
             )
         except (BotoCoreError, ClientError) as e:
-            logger.error(f"Object deletion failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Could not delete document: {e}")
+            logger.error(f"Object deletion failed for bucket={bucket}, key={key}: {e}")
+            raise IntegrationException("Could not delete the document.") from e

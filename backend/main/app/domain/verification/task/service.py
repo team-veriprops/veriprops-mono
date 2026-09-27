@@ -29,6 +29,7 @@ from main.app.domain.user.service import UserService
 from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.models import UpdateVerificationDto, Verification
 from main.app.domain.verification.status_events import publish_verification_started
+from main.app.domain.verification.task.evidence.models import EvidenceItem
 from main.app.domain.verification.task.evidence.service import EvidenceService
 from main.app.domain.verification.task.models import (
     AgentDashboardDto,
@@ -421,6 +422,12 @@ class VerificationTaskService:
         return count
 
     # ── Read ──────────────────────────────────────────────────────
+
+    async def list_evidence(self, task_id: str, agent_id: str) -> List[EvidenceItem]:
+        """Evidence on one of the agent's own tasks. Ownership-gated like every other agent
+        read, because each item is served with a fresh read URL to the stored file."""
+        task = await self._get_owned_task(task_id, agent_id)
+        return await self._evidence.list_for_task(Utils.uuid_to_hex(task.id))
 
     async def list_for_verification(self, verification_id: str) -> List[VerificationTask]:
         return await self._task_repo.list_for_verification(verification_id)

@@ -1,4 +1,5 @@
 from abc import abstractmethod, ABC
+from typing import Optional
 
 from typing_extensions import BinaryIO
 
@@ -13,8 +14,11 @@ class IDocumentStorageProvider(ABC):
 
     @abstractmethod
     async def upload(
-        self, key: str, bucket: str, file_bytes: BinaryIO, metadata: dict, encrypted: bool = False
+        self, key: str, bucket: str, file_bytes: BinaryIO, metadata: dict, encrypted: bool = False,
+        content_type: Optional[str] = None,
     ) -> str:
+        """Store the bytes and return a short-lived read URL. ``content_type`` is the MIME type
+        the object is served with; ``None`` stores it as a generic binary download."""
         pass
 
     @abstractmethod
