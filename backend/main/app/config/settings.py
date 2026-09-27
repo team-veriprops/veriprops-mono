@@ -63,6 +63,8 @@ class Settings(AppodusBaseSettings):
         "ZOHO_REFRESH_TOKEN",
         "ZOHO_WEBHOOK_SECRET",
         "GOOGLE_WEBHOOK_SECRET",
+        "GOOGLE_SERVICE_ACCOUNT_JSON_B64",
+        "FIREBASE_CREDENTIALS_JSON_B64",
         "WHATSAPP_APP_SECRET_KEY",
         "WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN",
         "WHATSAPP_BUSINESS_ACCESS_TOKEN",
@@ -193,6 +195,9 @@ class Settings(AppodusBaseSettings):
     GOOGLE_WEBHOOK_SECRET: Optional[str] = None
     GOOGLE_WEBHOOK_NOTIFICATION_TTL: int = 60 * 60 * 24 # 1 Day
     GOOGLE_DOC_CHANGE_UPDATE_WINDOW: int = 60 * 60 * 24 # 1 Day
+    # The Drive service-account key: base64 JSON from Doppler in deployed environments, or a
+    # gitignored local file at GOOGLE_SERVICE_ACCOUNT_FILE (see config/service_account.py).
+    GOOGLE_SERVICE_ACCOUNT_JSON_B64: Optional[str] = None
     GOOGLE_SERVICE_ACCOUNT_FILE: Optional[str] = get_absolute_path("service_accounts/contracts-service_account.json")
     GOOGLE_DOC_PARENT_CONTRACT_FOLDER_ID: str = "1lODSM6OMBX4Qan7SPFzJf_zJF6fH9mCA"
     GOOGLE_DOC_PROPERTY_CONTRACT_FOLDER_ID: str = "1VblZfpRnHmQj8DN5nOJNc4C1xbQe9u-h"
@@ -245,6 +250,8 @@ class Settings(AppodusBaseSettings):
 
     # PUSH Providers
     # Firebase
+    # Same loading rule as the Drive key: base64 JSON from Doppler, else a gitignored local file.
+    FIREBASE_CREDENTIALS_JSON_B64: Optional[str] = None
     FIREBASE_CREDENTIALS_PATH: Optional[str] = get_absolute_path("service_accounts/firebase-service-account.json")
     # Web Push Configuration
     WEB_PUSH_PRIVATE_KEY: Optional[str] = None

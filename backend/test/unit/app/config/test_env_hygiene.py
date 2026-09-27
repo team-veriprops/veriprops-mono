@@ -272,3 +272,28 @@ class TestTemplateDriftGuard:
             f".env.example is missing keys for Settings fields: {sorted(missing)}; "
             "add them (commented is fine) or add to TEMPLATE_EXEMPT_FIELDS with a reason."
         )
+
+
+class TestNoTrackedPrivateKeys:
+    """Service-account keys arrive as base64 JSON from Doppler (`*_JSON_B64` settings); a local
+    key file is gitignored and never shipped. A tracked file holding private-key material is a
+    leaked credential the moment it is pushed, whatever its name or extension."""
+
+    def test_no_tracked_file_holds_private_key_material(self):
+        import shutil
+        import subprocess
+
+        if shutil.which("git") is None or not (REPO_ROOT / ".git").exists():
+            pytest.skip("not a git checkout")
+        # `-e`: the pattern starts with dashes, which git would otherwise parse as an option.
+        found = subprocess.run(
+            ["git", "grep", "-l", "-E", "-e", r"-----BEGIN ([A-Z]+ )?PRIVATE KEY-----"],
+            cwd=REPO_ROOT, capture_output=True, text=True,
+        )
+        # git grep exits 1 for "no match"; anything else means the scan itself failed.
+        assert found.returncode in (0, 1), f"git grep failed: {found.stderr}"
+        offenders = found.stdout.split()
+        assert not offenders, (
+            f"tracked files hold private-key material: {offenders}; untrack them "
+            "(`git rm --cached`), rotate the key, and load it from Doppler instead."
+        )

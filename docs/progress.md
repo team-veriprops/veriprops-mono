@@ -1,6 +1,6 @@
 # Progress Tracker — Audit remediation (2026-09-27)
 
-status: **Stage 0 (baseline) complete — all green; S1 next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
+status: **S0 and S1 complete; S2 (correctness bugs) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
 
 Scope, stages S0–S9 and the user's decisions are in the audit plan (`~/.claude/plans/any-pending-issues-task-polymorphic-duckling.md`). In short:
 
@@ -16,10 +16,10 @@ Scope, stages S0–S9 and the user's decisions are in the audit plan (`~/.claude
 
 A parallel session holds uncommitted fixed-commission work, with migration `0002_fixed_agent_commission`, in the main checkout. This branch rebases onto it before the PR, and the S4 migration chains after it.
 
-### Stage 0 — baseline (the regression reference every later stage must keep green)
+## Stage 0 — baseline (the regression reference every later stage must keep green)
 
 | Gate | Command | Result |
-|---|---|---|
+| --- | --- | --- |
 | ruff | `ruff check .` | clean |
 | mypy | `mypy main` | clean, 604 files |
 | pytest | `pytest -q -p no:cacheprovider` (`APPODUS_ACTIVE_ENV=test`) | **2615 passed** |
@@ -36,12 +36,52 @@ A parallel session holds uncommitted fixed-commission work, with migration `0002
 
 - `fillResidenceStep` (`e2e/helpers/signup.ts:135`) waited 15s for `signup-residence-form` after step 2's Continue.
 - The failure screenshot shows step 2 complete, with the email verified, the phone entered and no error shown. The step just hadn't advanced yet.
-- Logged here instead of fixed in another stage. Watch whether it recurs in S9.
+- Logged here instead of fixed in another stage.
+- It recurred in the S1 gate on two webkit-mobile tests (UAT-AGENT-03 and the signup accessibility check), both at the same wait, and both passed on retry. S1 doesn't touch signup. The pattern repeats, so S9 should find out why the step doesn't advance, rather than re-marking the test as flaky.
 
 **Environment notes:**
 
 - The first pytest attempt crashed with an internal `MemoryError` after 1491 tests, while pytest was building a traceback. It came from memory pressure on this machine, not from a test. A clean re-run passed all 2615.
 - `veriprops_test` is stamped `0002_fixed_agent_commission` by the parallel session, so this branch runs its live stack against `veriprops_e2e`, which is at head `0019_sla_breach_marker`.
+
+## S1 — keys out of git, SMS routing, evidence storage
+
+**Service-account keys.**
+
+- `backend/service_accounts/*.json` are untracked and gitignored, and are no longer bundled into the Vercel function (`vercel.json`).
+- The keys now load from Doppler as base64 JSON (`GOOGLE_SERVICE_ACCOUNT_JSON_B64`, `FIREBASE_CREDENTIALS_JSON_B64`, both in `SECRET_ENV_KEYS`), through the shared `config/service_account.load_service_account_info`. A local key file stays as a fallback.
+- Firebase initialises on the first push send, so a missing key can no longer break the message router.
+- A new hygiene tripwire fails if any tracked file holds private-key material. It was verified to flag `HEAD`'s two key files.
+- `NOTES.md` no longer lists test-user passwords.
+- **User action:** rotate both keys in GCP/Firebase, then put the new ones in Doppler `stg`/`prd` as base64. The old keys remain in git history, which is not purged by decision.
+
+**SMS routing.**
+
+- The +234 rule read `msg.recipient`, which doesn't exist, so every staging/prod SMS raised before reaching a provider. The HIGH-priority rule compared an int enum with `"high"`. Both are fixed, and a single recipient passed as a one-element list is handled.
+- **Also found and fixed:** an unmatched message and the last-resort fallback could pick `MOCK_SMS`, which is registered in every environment. That would mark a foreign-number SMS, or an SMS sent while Termii and Twilio were both down, as SENT without delivering it. Both paths are now confined to the channel's declared `default` list, and WhatsApp's default no longer names the stub.
+- **From review:** an exclusive rule whose provider's circuit was open fell through to later rules. In test/dev, a tripped `MOCK_SMS`/`SMTP` breaker could then reach Termii or Resend. In production, a tripped Cloud API breaker could record a WhatsApp send in the stub. An exclusive rule now holds at selection time too.
+
+**Evidence storage.**
+
+- `put_object` no longer passes `ExtraArgs`, which S3 rejected, or an ACL, which ACL-disabled buckets reject.
+- Errors now answer with a safe sentence (`IntegrationException`, 502) instead of boto's own text.
+- Agent evidence reads now regenerate presigned URLs valid for `AWS_S3_PRESIGNED_URL_EXPIRES`, where they used to serve an expired stored one.
+- **Also found and fixed:** `GET /agents/tasks/{id}/evidence` had no ownership check, so any signed-in user could list any task's evidence. It now goes through `VerificationTaskService.list_evidence`, which requires the requesting agent to own the task. This had to land together with the fresh URLs, which would otherwise have handed out working links to other people's evidence.
+- **From review:** the stored Content-Type is what the bytes prove (`FileUtils.sniff_mime`), limited to an evidence-format allowlist; anything else is stored as a download. Every file used to be tagged `application/pdf`. Passing the client's claimed type through, as the first S1 draft did, would have let an HTML or SVG "photo" run script on the bucket's origin.
+- R2 support (`AWS_S3_ENDPOINT_URL`) was drafted and then dropped: R2 needs different region and encryption handling, it has not been tested, and nobody has asked for it.
+
+**Deferred from review:** upload presigns twice, and the listing presigns items one at a time. That is a small efficiency cost, not a bug.
+
+**Gate.**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 2653 passed (+38) |
+| ruff, mypy | clean (605 files) |
+| drive-through | 554/554 |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114 on the first attempt. The run before the review fixes had 2 flaky, both at the signup wait above. |
+
+The frontend is unchanged, so the S0 vitest and build results carry over.
 
 ## Third-party sandbox test register
 
@@ -52,7 +92,7 @@ This register lists every third-party integration still stubbed, or not yet prov
 - The run command for each row is `doppler run --config stg -- python scripts/live_smoke.py --only <name>`, which S6 builds, or the `@live` Playwright spec.
 
 | # | Integration | Mode stg / prd (today) | Automated coverage | Sandbox test still to run | Needs (who) | Stage | Status |
-|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Flutterwave collection | live path **broken** (no checkout URL, missing webhook bridge) | none | init → hosted checkout with a test card → `verif-hash` webhook → verify → PAID; failed card → FAILED; refund → REFUNDED | FLW test public/secret keys + secret hash; webhook URL registered to staging (user) | S3 | STUBBED |
 | 2 | Paystack collection | same as 1 | none | same flow with a Paystack test card; `x-paystack-signature`; refund | Paystack test secret key; webhook URL (user) | S3 | STUBBED |
 | 3 | Chargebacks (both gateways) | stub endpoint only (404s in prod) | none | sandbox dispute event → Chargeback row | dashboard dispute simulation, if offered | S3 | STUBBED |
@@ -62,9 +102,9 @@ This register lists every third-party integration still stubbed, or not yet prov
 | 7 | Dojah BVN/NIN lookup | stub approves any BVN | none | sandbox BVN/NIN → name/DOB match score | Dojah sandbox AppId + secret, test IDs (user) | S5 | STUBBED |
 | 8 | Dojah selfie liveness | not built | none | selfie vs ID photo, pass and fail | Dojah sandbox; a test selfie (user) | S5 | STUBBED |
 | 9 | Google Places (New) | stub (3 fixture addresses) | none | autocomplete "Lekki" → place details, NG-restricted | Places API key restricted to staging (user) | S5 | STUBBED |
-| 10 | S3 evidence storage | live path **broken** (`ExtraArgs` on `put_object`) | none | put (image + PDF MIME) → presign → GET 200 → delete | AWS staging bucket + IAM keys (user) | S1 | STUBBED |
-| 11 | SMS Termii | live path **broken** (`msg.recipient`) | none | OTP to a +234 test number → delivered | Termii key + sender ID, test handset (user) | S1 | STUBBED |
-| 12 | SMS Twilio fallback | same as 11 | none | non-NG number, and Termii forced down → Twilio | Twilio SID/token/number (user) | S1 | STUBBED |
+| 10 | S3 evidence storage | fixed in S1 (valid `put_object`, real MIME, fresh presigned reads) | `test_s3_storage.py` (botocore Stubber: put, presign, delete, safe failure) | put (image + PDF MIME) → presign → GET 200 → delete | AWS staging bucket + IAM keys (user) | S1 | CONTRACT-TESTED |
+| 11 | SMS Termii | routing fixed in S1 | routing: `test_router_sms_routing.py`; Termii HTTP adapter: none | OTP to a +234 test number → delivered | Termii key + sender ID, test handset (user) | S1 | STUBBED |
+| 12 | SMS Twilio fallback | routing fixed in S1 (Termii down → Twilio; never the mock) | routing: `test_router_sms_routing.py`; Twilio adapter: none | non-NG number, and Termii forced down → Twilio | Twilio SID/token/number (user) | S1 | STUBBED |
 | 13 | Email Resend → Mailjet → SES | wired | Mailpit in drive-through (SMTP only) | send to a test inbox; force a Resend failure → fallback | Resend/Mailjet/SES keys, verified domain (user) | S6 | STUBBED |
 | 14 | WhatsApp Meta `send_message` + templates | wired (D88 test number on stg) | signature checks in drive-through; no send test | template to Meta's test number; free text inside the 24h window | Meta test number, WABA id, token (user) | S6 | STUBBED |
 | 15 | Intent (DeepSeek) | wired | none live | 5 fixed utterances → expected intents; bad key → UNKNOWN | `INTENT_API_KEY` in stg (user) | S6 | STUBBED |
@@ -83,7 +123,7 @@ This register lists every third-party integration still stubbed, or not yet prov
 
 ---
 
-# Progress Tracker — Playwright UAT suite (cycle 3)
+## Progress Tracker — Playwright UAT suite (cycle 3)
 
 status: **Slices 0–5 and both side tracks are complete, committed and released.** The full six-engine matrix passes on the first attempt (see the closeout section). The migration chain is folded back into `0001` (D96).
 
