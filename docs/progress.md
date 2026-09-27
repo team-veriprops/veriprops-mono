@@ -1,6 +1,6 @@
 # Progress Tracker — Audit remediation (2026-09-27)
 
-status: **S0 and S1 complete; S2 (correctness bugs) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
+status: **S0, S1 and S2 complete; S3 (live payment, both gateways) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
 
 Scope, stages S0–S9 and the user's decisions are in the audit plan (`~/.claude/plans/any-pending-issues-task-polymorphic-duckling.md`). In short:
 
@@ -82,6 +82,44 @@ A parallel session holds uncommitted fixed-commission work, with migration `0002
 | Playwright (chromium-desktop + webkit-mobile) | 114/114 on the first attempt. The run before the review fixes had 2 flaky, both at the signup wait above. |
 
 The frontend is unchanged, so the S0 vitest and build results carry over.
+
+## S2 — correctness bugs
+
+**Backend.**
+
+- **Webhook callback lookups.** `CallbackRepo` called the sync ORM's `session.query` on an `AsyncSession`, so every Google Drive notification's "already recorded?" check raised AttributeError. Both lookups now run as awaited `select`s scoped to live, unhandled rows.
+- **From review:** `update_callback__handle_time` found its row through the generic criterion search, which drops `platform` (`db_utils` excludes it). One provider's event could overwrite another provider's unhandled callback. The lookup now uses the platform-scoped repo query.
+- **Double-mounted webhooks.** `webhook_router` was included twice, in `veriprops.py` and in `domain/__init__.py`. It is now mounted once. `test_route_table.py` fails if any `(method, path)` is mounted twice.
+- **Dead code removed** (each grepped repo-wide first):
+  - the never-mounted `messagin_router` module;
+  - an unused duplicate `MessageValidator` (`messaging/services/validation.py`);
+  - the empty `main/app/exception/` package;
+  - the empty `utils_router`;
+  - the inert `exact_string_values` query control, which nothing ever read.
+
+**Frontend.**
+
+- **`pageSize=` on the wire.** Five service calls sent `pageSize=`, which FastAPI ignores; it binds `page_size`. They only appeared to work because each caller's size matched the endpoint's default. Their tests asserted the wrong URL. All are fixed, and `api-query-contract.test.ts` fails on a camelCase page size in a query string or a `URLSearchParams` key.
+- **Toasts that dropped the error.** Sixteen mutation `onError` handlers, plus three `catch` blocks found in review, showed a fixed sentence and threw the error away. That lost the backend's 4xx explanation and the 5xx support reference. They all go through `getErrorMessage(err, "<old sentence>")` now, and `error-toast-contract.test.ts` catches both forms.
+- **Suspense boundaries.** `/auth`, `/auth/login`, `/auth/signup` and the OAuth callback are wrapped in `<Suspense>`, following the repo convention. The first three are prerendered static pages, so the layout now prerenders while only the form waits for hydration.
+- The client `PageRequest` type no longer carries the server-only `queryFields`/`where`/`exactStringValues`.
+- `ui/ShareModal.tsx` and its store are deleted. They were never rendered, and the "share referral" action only showed a success toast without sending anything.
+
+**New gap (both halves):** DataTable sort headers set `orderBy`, but no list endpoint accepts a client sort. Recorded as `TODO(gap)` in `types/models.ts` plus a §G.2 row.
+
+**Deferred to S7:** a single shared page-query serializer for the 8+ services that each build `?page=…&page_size=…` by hand. That was a review suggestion; the regex guard covers the drift in the meantime.
+
+**Gate.**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 2660 passed (+7) |
+| ruff, mypy | clean (600 files, down from 605 after the deletions) |
+| eslint, tsc | clean |
+| vitest | 778 passed (+2 contract guards) |
+| build | green; rewrites target `localhost:8000` |
+| drive-through | 554/554 |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114, 1 flaky (UAT-AUTH-12, the same signup wait). It has now appeared in 3 of 4 gate runs, so S9 must investigate it. |
 
 ## Third-party sandbox test register
 
