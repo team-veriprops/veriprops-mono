@@ -1917,7 +1917,6 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 
 | Gap | Code home |
 |---|---|
-| Live Paystack/Flutterwave collection (checkout, webhooks, refunds run against the deterministic stub) | `backend/main/app/domain/payment/service.py` |
 | Card-fingerprint capture (referral anti-farming's payment-instrument half is dark under the stub) | `backend/main/app/domain/payment/models.py` |
 | `STRIPE` enum value has no integration | `backend/main/app/config/settings.py` (`PaymentMethod`) |
 | Live Dojah KYC (facade built; STUB default) | `backend/main/app/domain/user/agent/kyc/service.py` |

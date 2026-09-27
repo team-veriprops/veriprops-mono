@@ -1,6 +1,6 @@
 # Progress Tracker — Audit remediation (2026-09-27)
 
-status: **S0, S1 and S2 complete; S3 (live payment, both gateways) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
+status: **S0–S3 complete; S4 (live payouts) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
 
 Scope, stages S0–S9 and the user's decisions are in the audit plan (`~/.claude/plans/any-pending-issues-task-polymorphic-duckling.md`). In short:
 
@@ -121,6 +121,61 @@ The frontend is unchanged, so the S0 vitest and build results carry over.
 | drive-through | 554/554 |
 | Playwright (chromium-desktop + webkit-mobile) | 114/114, 1 flaky (UAT-AUTH-12, the same signup wait). It has now appeared in 3 of 4 gate runs, so S9 must investigate it. |
 
+## S3 — live payment collection and refunds (both gateways)
+
+**Before S3 on staging/prod:** `PAYMENT_STUB_MODE=false` produced an empty checkout URL, the stub confirm 404'd, and both webhooks called a `PaymentService` method that did not exist. Every verification stuck at `PAYMENT_PENDING`, and refunds never reached a gateway.
+
+**What the gateway docs showed, beyond the audit** (Flutterwave checked live; Paystack's pages block automated fetches, so its contract is from its long-documented scheme and is flagged for sandbox confirmation):
+
+- Flutterwave's `verif-hash` is the dashboard secret hash sent **verbatim**, so the HMAC check rejected every genuine webhook.
+- Paystack signs with the **secret key**. The `PAYSTACK_WEBHOOK_SECRET` the code used does not exist at Paystack, so every genuine webhook would have failed too. The setting is removed.
+- Flutterwave verifies by our reference at `GET /transactions/verify_by_reference?tx_ref=`. The code called the id-keyed `/transactions/{ref}/verify`.
+- Flutterwave refunds are `POST /transactions/{id}/refund`, which needs its own transaction id. The code posted a pydantic model to `/refunds`.
+- Flutterwave chargeback webhooks cite the charge only by `flw_ref`, and must be enabled by Flutterwave support.
+- Paystack's mapper read a field that does not exist (`request.metadata`), so every Paystack checkout would have raised.
+- The payment keys defaulted to the literal `"random"`. They now default to the `CHANGE_ME` placeholder, which the signature checks treat as unconfigured.
+
+**What exists now:**
+
+- **Gateway contract.** One provider-neutral contract (`create_hosted_checkout` / `get_charge` / `refund_charge`) with minor units inside, and a shared `GatewayHttp` that maps every failure to a safe `IntegrationException`.
+- **Settlement.** `confirm_from_gateway` settles only from the gateway's own answer, and only when reference, amount and currency match the quote.
+- **Return path.** `POST /payments/reconcile/{verification_id}` is the return-path check. On mount the pay page asks the backend where the payment stands, sends a hosted charge to the gateway's page, polls briefly while it is unsettled, and uses a fresh double-tap key after a failure. Before, a retry replayed the failed payment.
+- **Chargebacks.** Both gateways route to `record_chargeback`. Migration `0003_payment_gateway_ref` adds `payments.gateway_reference`, which is additive and chained after `0002`.
+- **Refunds (user decision: keep what succeeded).** Payments are refunded one at a time. A refusal puts that payment alone back to `SUCCEEDED`, and finance retries it from a new "Refunds to retry" card (`REFUND_PAYMENT`, FINANCE).
+- **Also fixed:** `PaymentDto.purpose` was never populated. The base webhook handler slept with the blocking `time.sleep` between retries.
+- **Also shared:** `is_configured_secret` replaces two private copies, and `hex_ref` replaces a private copy in the pseudonymiser.
+- **Rebase.** S3 started by rebasing this branch onto the commission commit `030afb6`, so the migration chain is real. The only conflicts were `task/controller.py` and `CommissionRules.tsx`, and both kept both sides.
+
+**Stage review fixes** (`/code-review high`, 10 findings; 9 fixed, 1 documented):
+
+- **Abandoned checkouts.** A customer who left a hosted checkout without paying was stuck on "Confirming…" for good. Once polling is spent, the page now offers "Return to checkout" (the same charge) and "Start a new payment" (a fresh key).
+- **Chargebacks.** A payment under a chargeback is never re-settled from the gateway, never refunded (it is held in `RefundOutcome.held_payment_ids`), and never listed or retried. The issuer is already returning that money.
+- **Repeat failures.** A FAILED payment that the gateway still calls failed is not counted again on each visit.
+- **Mismatch audits.** A mismatch is audited once per charge (an idempotency claim on `…:MISMATCH`) instead of on every poll and redelivery.
+- **Refund ordering.** The dispute FULL_REFUND refund is now the last step of its transaction, so a later failure can no longer roll back a refund that had already left at the gateway. `refund()` documents this contract; the review-fail path already met it.
+- **Reconcile.** It asks only about the latest payment and tolerates a gateway error, so one bad lookup no longer aborts the pay page's check.
+- **WhatsApp handoff.** A hosted checkout from a handoff now returns to the public `/wa/pay/return`, which asks the grant-scoped `POST /public/wa/handoff/pay/reconcile`. Before, the customer was sent back to a portal page that needs a session they do not have.
+- **Stub secondary charges.** The stub confirm now routes through reconcile, so a stub upgrade or re-check payment no longer strands the customer on "Processing".
+- **Polling.** Polls no longer overlap: the next one is scheduled only once the previous answer is in.
+- **Documented, not coded.** A refund whose response times out is treated as refused and listed for retry. Both gateways refuse a refund beyond what remains on the charge, so a retry after an accepted refund is declined rather than paid twice. This is flagged on register rows 1 and 2 for sandbox confirmation.
+
+**Deferred:** the Paystack transfer fee and transfer retry are payout concerns, so they move to S4.
+
+**Gate** (after the review fixes, on the rebased branch):
+
+| Gate | Result |
+| --- | --- |
+| pytest | 2791 passed (+85 over the post-rebase 2706) |
+| ruff, mypy | clean (603 files) |
+| eslint, tsc | clean |
+| vitest | 802 passed (+14 over the post-rebase 788) |
+| build | green; `/wa/pay/return` prerendered; rewrites target `localhost:8000` |
+| migration | `veriprops_e2e` upgraded `0019 → 0002 → 0003`; `downgrade -1` then `upgrade head` round-trips; single head |
+| drive-through | 567/567 (the commission work added 13 checks to the old 554) |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114 on the first attempt |
+
+**New flake to watch:** the first S3 browser run had UAT-GP-03 on webkit-mobile wait 15s for the FIELD review card to show "Rejected" after the admin clicked Reject; it passed on retry. S3 does not touch review, but the rebased commission commit does, so S9 should check whether this recurs.
+
 ## Third-party sandbox test register
 
 This register lists every third-party integration still stubbed, or not yet proven live. It is created in S0 and updated at the close of every stage, so the sandbox runs can be done together once keys land in Doppler `stg`.
@@ -131,9 +186,9 @@ This register lists every third-party integration still stubbed, or not yet prov
 
 | # | Integration | Mode stg / prd (today) | Automated coverage | Sandbox test still to run | Needs (who) | Stage | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Flutterwave collection | live path **broken** (no checkout URL, missing webhook bridge) | none | init → hosted checkout with a test card → `verif-hash` webhook → verify → PAID; failed card → FAILED; refund → REFUNDED | FLW test public/secret keys + secret hash; webhook URL registered to staging (user) | S3 | STUBBED |
-| 2 | Paystack collection | same as 1 | none | same flow with a Paystack test card; `x-paystack-signature`; refund | Paystack test secret key; webhook URL (user) | S3 | STUBBED |
-| 3 | Chargebacks (both gateways) | stub endpoint only (404s in prod) | none | sandbox dispute event → Chargeback row | dashboard dispute simulation, if offered | S3 | STUBBED |
+| 1 | Flutterwave collection | wired in S3 (hosted checkout, verify-by-reference, verbatim `verif-hash`, refund by id) | `test_gateway_contracts.py`, `test_payment_webhooks.py`, `test_payment_gateway_flow.py` | init → hosted checkout with a test card → `verif-hash` webhook → verify → PAID; failed card → FAILED; refund → REFUNDED | FLW test public/secret keys + secret hash; webhook URL registered to staging (user). Also confirm a second refund of a refunded charge is declined | S3 | CONTRACT-TESTED |
+| 2 | Paystack collection | wired in S3 (signature keyed by the **secret key** — confirm in sandbox) | `test_gateway_contracts.py`, `test_payment_webhooks.py` | same flow with a Paystack test card; `x-paystack-signature`; refund | Paystack test secret key; webhook URL (user). Also confirm a second refund of a refunded charge is declined | S3 | CONTRACT-TESTED |
+| 3 | Chargebacks (both gateways) | wired in S3: Paystack `charge.dispute.create` by reference; Flutterwave `chargeback.initiated` by `flw_ref` | `test_payment_webhooks.py`, `test_payment_gateway_flow.py` | sandbox dispute event → Chargeback row | dashboard dispute simulation, if offered; Flutterwave chargeback webhooks enabled by FLW support (user) | S3 | CONTRACT-TESTED |
 | 4 | Bank list + account resolve | not built | none | `list_banks(NG)`; `resolve_account` on the gateway's test account | gateway test keys + documented test accounts (user) | S4 | STUBBED |
 | 5 | Batch payout disbursement | PAID with no transfer | none | button and sweep → transfer → webhook → PAID; failed transfer → FAILED + balance restored | test keys with transfers enabled (user) | S4 | STUBBED |
 | 6 | Paystack transfer fee / retry | `NotImplementedException` | none | `get_transfer_fee`, `retry_failed_bank_transfer` | Paystack test key (user) | S4 | STUBBED |
