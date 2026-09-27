@@ -387,7 +387,6 @@ class InternalPageRequest(PageRequest):
     that would let a client supply ``where``/``order_by``/``query_fields``.
     """
     query_fields: Optional[str] = Field(None, description='Comma separated list of return fields')
-    exact_string_values: Optional[bool] = True
     order_by: Optional[str] = Field('date_created desc', description='e.g: username asc, firstname desc')
     where: Optional[str] = Field(None, description='e.g: date_created >=')
 

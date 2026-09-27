@@ -30,7 +30,7 @@ class DbUtils:
             search_dto.deleted = False
 
         where_conditions: List = []
-        exclusion = {'platform', 'page', 'page_size', 'query_fields', 'exact_string_values', 'ocr', 'order_by', 'where'}
+        exclusion = {'platform', 'page', 'page_size', 'query_fields', 'ocr', 'order_by', 'where'}
         # The flexible query controls live only on InternalPageRequest-derived DTOs.
         # A client-facing PageRequest DTO won't have them — read via getattr so it never
         # carries a wire-supplied `where`.

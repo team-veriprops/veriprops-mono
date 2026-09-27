@@ -1938,6 +1938,7 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Redis multi-instance SSE fan-out (in-process emitter today; poll fallback keeps correctness) | `backend/main/app/core/realtime/emitter.py` |
 | Per-agent pool-feed visibility reduction (ranking-only today; pool is untargeted accept-by-id) | `backend/main/app/domain/user/agent/reputation/service.py` |
 | Richer per-role quality rubric feeding the composite score | `backend/main/app/domain/verification/review/service.py` |
+| Client-driven list sorting (DataTable sort headers set `orderBy` locally; no list endpoint accepts a client sort, and `order_by` stays server-set) | `frontend/src/types/models.ts` (`PageRequest`) |
 | Secondary-PII erasure scope (card fingerprints, share-recipient emails, property addresses — each needs its own retention basis) | `backend/main/app/domain/compliance/erasure/pseudonymiser.py` |
 | Role-specific agent dashboard variants (one unified dashboard today) | `frontend/src/components/agents/dashboard/AgentDashboard.tsx` |
 | Cartographic Nigeria map paths (schematic geo-grid today) | `frontend/src/components/agents/reputation/NigeriaCoverageMap.tsx` |
