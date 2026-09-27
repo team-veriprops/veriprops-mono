@@ -9,6 +9,7 @@ import {
   useRevokeAllOtherDevicesMutation,
 } from "@components/website/auth/libs/useAuthQueries";
 import { Button } from "@3rdparty/ui/button";
+import { getErrorMessage } from "@lib/errors";
 
 export default function ConnectedDevicesPage() {
   const { data: devices = [], isLoading, isError } = useDevicesQuery();
@@ -36,7 +37,7 @@ export default function ConnectedDevicesPage() {
             onClick={() =>
               revokeAllOthers.mutate(undefined, {
                 onSuccess: () => toast.success("Signed out of all other devices."),
-                onError: () => toast.error("Could not sign out other devices."),
+                onError: (err) => toast.error(getErrorMessage(err, "Could not sign out other devices.")),
               })
             }
           >
@@ -99,7 +100,7 @@ export default function ConnectedDevicesPage() {
                   onClick={() =>
                     revoke.mutate(d.id, {
                       onSuccess: () => toast.success("Device signed out."),
-                      onError: () => toast.error("Could not revoke device."),
+                      onError: (err) => toast.error(getErrorMessage(err, "Could not revoke device.")),
                     })
                   }
                   className="text-danger"

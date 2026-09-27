@@ -30,6 +30,7 @@ import {
   useSetTrustStatusMutation,
   useSuspendUserMutation,
 } from "@components/admin/libs/useAdminUsersQueries";
+import { getErrorMessage } from "@lib/errors";
 
 const SUSPEND_REASON_MIN_LENGTH = 5;
 
@@ -77,7 +78,7 @@ function UserDetailContent({ user }: { user: AdminUserDetailDto }) {
           toast.success("Account suspended");
           setSuspendReason("");
         },
-        onError: () => toast.error("Could not suspend the account."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not suspend the account.")),
       },
     );
   };
@@ -85,14 +86,14 @@ function UserDetailContent({ user }: { user: AdminUserDetailDto }) {
   const onReactivate = () => {
     reactivate.mutate(user.id, {
       onSuccess: () => toast.success("Account reactivated"),
-      onError: () => toast.error("Could not reactivate the account."),
+      onError: (err) => toast.error(getErrorMessage(err, "Could not reactivate the account.")),
     });
   };
 
   const onForceReset = () => {
     forceReset.mutate(user.id, {
       onSuccess: () => toast.success("Password reset email sent; all sessions revoked."),
-      onError: () => toast.error("Could not force the password reset."),
+      onError: (err) => toast.error(getErrorMessage(err, "Could not force the password reset.")),
     });
   };
 
@@ -101,7 +102,7 @@ function UserDetailContent({ user }: { user: AdminUserDetailDto }) {
       { userId: user.id, trustStatus: pendingTrust },
       {
         onSuccess: () => toast.success("Trust status updated"),
-        onError: () => toast.error("Could not update the trust status."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not update the trust status.")),
       },
     );
   };

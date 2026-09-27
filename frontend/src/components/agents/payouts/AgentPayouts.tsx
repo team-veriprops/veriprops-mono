@@ -120,7 +120,7 @@ function BankAccounts() {
         toast.success("Bank account saved.");
         setForm({ bankName: "", accountNumber: "", accountName: "" });
       },
-      onError: () => toast.error("Could not save the account."),
+      onError: (err) => toast.error(getErrorMessage(err, "Could not save the account.")),
     });
   };
 

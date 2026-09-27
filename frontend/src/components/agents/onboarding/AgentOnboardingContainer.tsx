@@ -25,6 +25,7 @@ import RolesStep from "./RolesStep";
 import KycStep from "./KycStep";
 import CredentialsStep from "./CredentialsStep";
 import ReviewStep from "./ReviewStep";
+import { getErrorMessage } from "@lib/errors";
 
 interface AgentOnboardingContainerProps {
   /** False for the compulsory login-time gate (no application yet / REJECTED) — hides the close control. */
@@ -99,8 +100,8 @@ export default function AgentOnboardingContainer({ closable = true }: AgentOnboa
       // reload still claiming one hat.
       await refreshSession();
       navigateAfterPersonaChange(ROUTES.AGENT.DASHBOARD);
-    } catch {
-      toast.error("Submission failed", { description: "Please try again." });
+    } catch (err) {
+      toast.error("Submission failed", { description: getErrorMessage(err, "Please try again.") });
     }
   };
 

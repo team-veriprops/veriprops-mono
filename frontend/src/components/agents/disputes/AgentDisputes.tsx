@@ -11,6 +11,7 @@ import {
   useSubmitDefenceMutation,
 } from "@components/portal/libs/useRevisionQueries";
 import { Dispute } from "@/types/revision";
+import { getErrorMessage } from "@lib/errors";
 
 /**
  * Agent dispute-defence (§14.3). Admin-mediated: the agent responds to a dispute touching their
@@ -62,7 +63,7 @@ function DefenceCard({ dispute }: { dispute: Dispute }) {
       { disputeId: dispute.id, text: text.trim() },
       {
         onSuccess: () => toast.success("Response sent to the admin."),
-        onError: () => toast.error("Could not send your response. The window may have closed."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not send your response. The window may have closed.")),
       },
     );
   };

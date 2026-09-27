@@ -15,6 +15,7 @@ import {
 import { DisputeType } from "@/types/revision";
 import { VerificationTier } from "@/types/verification";
 import { humanizeEnumLabel } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 
 const MIN_DISPUTE_CHARS = 100; // §14.3
 
@@ -96,7 +97,7 @@ function RecheckDialog({
           setReason("");
           onClose();
         },
-        onError: () => toast.error("Could not submit the re-check request."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not submit the re-check request.")),
       },
     );
   };
@@ -159,7 +160,7 @@ function UpgradeDialog({
           onClose();
           if (url) window.location.assign(url);
         },
-        onError: () => toast.error("Could not create the upgrade."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not create the upgrade.")),
       },
     );
   };
@@ -225,7 +226,7 @@ function DisputeDialog({
           setDescription("");
           onClose();
         },
-        onError: () => toast.error("Could not file the dispute. Check the dispute window."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not file the dispute. Check the dispute window.")),
       },
     );
   };

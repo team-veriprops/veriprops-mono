@@ -13,6 +13,7 @@ import {
   useAcceptInvitationMutation,
   useInvitePreviewQuery,
 } from "@components/admin/libs/useAdminQueries";
+import { getErrorMessage } from "@lib/errors";
 
 /**
  * Admin invite acceptance (PRD §4.1). Routes the three scenarios:
@@ -38,8 +39,8 @@ export default function AdminInviteAcceptContainer({ token }: { token: string })
       setAccepted(true);
       toast.success("You're now an admin", { description: `Role: ${preview.subRole}` });
       router.push(ROUTES.ADMIN.DASHBOARD);
-    } catch {
-      toast.error("Could not accept invitation");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Could not accept invitation"));
     }
   };
 

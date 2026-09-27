@@ -16,6 +16,7 @@ import {
 import { AgentRole } from "@/types/agent";
 import { Dispute, DisputeOutcome, ResolveDisputeRequest } from "@/types/revision";
 import { Page } from "@/types/models";
+import { getErrorMessage } from "@lib/errors";
 
 const OUTCOME_LABEL: Record<DisputeOutcome, string> = {
   [DisputeOutcome.REJECTED]: "Reject — back to Completed",
@@ -100,7 +101,7 @@ function ResolvePanel({ dispute, onDone }: { dispute: Dispute; onDone: () => voi
           toast.success("Dispute resolved");
           onDone();
         },
-        onError: () => toast.error("Could not resolve the dispute."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not resolve the dispute.")),
       },
     );
   };

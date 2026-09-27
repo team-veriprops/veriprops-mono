@@ -14,6 +14,7 @@ import {
 import { AgentRole } from "@/types/agent";
 import { Recheck } from "@/types/revision";
 import { Page } from "@/types/models";
+import { getErrorMessage } from "@lib/errors";
 
 /**
  * Admin re-check queue (§14.1): approve (scoping which roles to redo) or reject a pending
@@ -83,7 +84,7 @@ function DecidePanel({ recheck, onDone }: { recheck: Recheck; onDone: () => void
           toast.success(approve ? "Re-check approved" : "Re-check rejected");
           onDone();
         },
-        onError: () => toast.error("Could not update the re-check."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not update the re-check.")),
       },
     );
   };
