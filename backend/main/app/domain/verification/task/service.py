@@ -14,6 +14,8 @@ from typing import List, Optional
 from kink import inject
 
 from main.app.config.settings import settings
+from main.app.domain.system_config.models import ConfigKey
+from main.app.domain.system_config.service import ConfigService
 from main.app.core.realtime import VerificationEventType
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.dependencies import is_unlocked, roles_for_tier
@@ -65,12 +67,14 @@ class VerificationTaskService:
         evidence_service: EvidenceService,
         user_service: UserService,
         audit_service: AuditLogService,
+        config_service: ConfigService,
     ):
         self._task_repo = task_repo
         self._verification_repo = verification_repo
         self._evidence = evidence_service
         self._user_service = user_service
         self._audit = audit_service
+        self._config = config_service
 
     # ── Instantiation (§4.2 dependency-aware) ─────────────────────
 
@@ -388,13 +392,16 @@ class VerificationTaskService:
 
     async def sweep_pool_starvation(self) -> int:
         """Aging broadcast tasks unclaimed past the pool timeout escalate off the open
-        pool to await targeted assignment by admin/ranking (§11.4 starvation backstop)."""
+        pool to await targeted assignment by admin/ranking (§11.4 starvation backstop). Each
+        carries the admin-set remote bonus (``remote_job_bonus_ngn_kobo``) from then on, paid as
+        its own commission line at release (§20.1 / D97)."""
         now = Utils.datetime_now()
+        remote_bonus = await self._config.get_int(ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO)
         count = 0
         for task in await self._task_repo.list_pool_expired(now):
             bonus = (
-                {"remote_bonus_minor": settings.REMOTE_JOB_BONUS_MINOR}
-                if settings.REMOTE_JOB_BONUS_MINOR > 0 and task.remote_bonus_minor is None else {}
+                {"remote_bonus_minor": remote_bonus}
+                if remote_bonus > 0 and task.remote_bonus_minor is None else {}
             )
             # Taken off the pool only while still on it and still PENDING: an agent who
             # accepted it at the deadline keeps it, and an overlapping run escalates it once.

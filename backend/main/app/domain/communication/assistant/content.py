@@ -19,6 +19,7 @@ from __future__ import annotations
 import enum
 from typing import Optional
 
+from main.app.core.money_text import naira  # re-exported: the intake flow reads content.naira
 from main.app.config.settings import settings
 from main.app.core.state.status import VerificationTier
 from main.app.domain.communication.assistant.capabilities import ChannelAction
@@ -174,15 +175,6 @@ def pricing(view: TierPricingViewDto) -> str:
 
 def _tier_label(tier: VerificationTier) -> str:
     return tier.value.capitalize()
-
-
-def naira(minor: int) -> str:
-    """Kobo → a readable naira amount. Whole naira: we do not price in kobo.
-
-    Public because the intake flow quotes tiers too, and two renderings of the same price
-    is exactly the drift D54 exists to prevent.
-    """
-    return f"₦{minor // 100:,}"
 
 
 # ─── Escalation, refusal and failure copy ─────────────────────────

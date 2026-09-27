@@ -1,5 +1,6 @@
 "use client";
 
+import { commissionLineLabel } from "@lib/commission";
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@3rdparty/ui/badge";
@@ -402,7 +403,7 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
               detail.commissions.map((c) => (
                 <div key={c.id} className="flex items-center justify-between">
                   <span>
-                    {humanizeEnumLabel(c.role)} — {formatMinor(c.amountMinor, c.currency)}
+                    {commissionLineLabel(c)} — {formatMinor(c.amountMinor, c.currency)}
                   </span>
                   <Badge variant="outline">{humanizeEnumLabel(c.status)}</Badge>
                 </div>

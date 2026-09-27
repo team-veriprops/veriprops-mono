@@ -28,6 +28,7 @@ import {
   useTaskEvidenceQuery,
   useUploadEvidenceMutation,
 } from "./libs/useAgentTaskQueries";
+import { TaskCommissionBadge } from "./TaskCommissionBadge";
 
 /** Best-effort GPS hint; the backend stamps the authoritative capture location (§12.3). */
 function useGeolocationHint() {
@@ -92,9 +93,10 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{humanizeEnumLabel(task.role)} task</h1>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <Badge variant="outline">{humanizeEnumLabel(task.state)}</Badge>
             <Badge variant="secondary">{humanizeEnumLabel(task.tier)}</Badge>
+            <TaskCommissionBadge task={task} />
           </div>
         </div>
         <div className="flex gap-2">

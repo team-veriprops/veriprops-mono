@@ -39,6 +39,7 @@ def _task_dto(t) -> TaskDto:
         assigned_agent_id=t.assigned_agent_id,
         assignment_mode=TaskAssignmentMode(t.assignment_mode) if t.assignment_mode else None,
         in_pool=bool(t.in_pool), decline_count=t.decline_count or 0,
+        remote_bonus_minor=t.remote_bonus_minor,
         submitted_at=t.submitted_at, approved_at=t.approved_at,
         review_decision=ReviewDecision(t.review_decision) if t.review_decision else None,
         review_quality=t.review_quality, rejection_reason=t.rejection_reason,

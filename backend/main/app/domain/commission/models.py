@@ -30,6 +30,14 @@ class CommissionStatus(str, enum.Enum):
     REVERSED = "REVERSED"    # chargeback lost — clawed back
 
 
+class CommissionKind(str, enum.Enum):
+    """What a commission line pays for (§20.1 / D97). A task accrues at most one live line of
+    each kind."""
+
+    BASE = "BASE"                  # the role's fixed commission for the approved task
+    REMOTE_BONUS = "REMOTE_BONUS"  # the flat bonus an aging pool task carried when it was taken
+
+
 # ─── ORM ──────────────────────────────────────────────────────────
 
 class Commission(BaseEntity):
@@ -40,6 +48,7 @@ class Commission(BaseEntity):
     agent_id = Column(String(36), nullable=False, index=True)
     role = Column(String(16), nullable=False)
     tier = Column(String(16), nullable=False)
+    kind = Column(String(16), nullable=False, default=CommissionKind.BASE.value)
 
     amount_minor = Column(BigInteger, nullable=False)
     currency = Column(String(8), nullable=False, default=TransactionCurrency.NGN.value)
@@ -70,6 +79,7 @@ class CreateCommissionDto(Object):
     agent_id: str
     role: AgentRole
     tier: VerificationTier
+    kind: CommissionKind = CommissionKind.BASE
     amount_minor: int
     currency: TransactionCurrency = TransactionCurrency.NGN
     status: CommissionStatus = CommissionStatus.CLEARING
@@ -103,6 +113,7 @@ class CommissionDto(Object):
     agent_id: str
     role: AgentRole
     tier: VerificationTier
+    kind: CommissionKind = CommissionKind.BASE
     amount_minor: int
     currency: TransactionCurrency
     status: CommissionStatus

@@ -198,6 +198,9 @@ class AgentTaskDto(Object):
     assignment_mode: Optional[TaskAssignmentMode] = None
     accept_deadline_at: Optional[datetime] = None
     remote_bonus_minor: Optional[int] = None
+    # What one approved task of this role pays the agent (NGN kobo) — a fixed per-role amount,
+    # shown before accept (§12.1 / §20.1).
+    commission_minor: int = 0
     submission_payload: Optional[Dict[str, Any]] = None
     rejection_reason: Optional[str] = None
     evidence_count: int = 0

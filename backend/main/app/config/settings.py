@@ -304,11 +304,6 @@ class Settings(AppodusBaseSettings):
     AGENT_MAX_ACTIVE_TASKS: int = 5             # capacity cap enforced on assign/accept
     TASK_NO_SHOW_TIMEOUT_HOURS: int = 12        # manual-assign accept deadline
     TASK_POOL_TIMEOUT_HOURS: int = 24           # broadcast starvation timeout
-    REMOTE_JOB_BONUS_MINOR: int = 0             # optional flat bonus on aging pool tasks (kobo)
-
-    # Agent commission (PRD §8.3/§15.2, D13) — share of the verification price paid out
-    # to agents, split across roles by the Trust Score Weights; accrued at release.
-    AGENT_COMMISSION_SHARE: float = 0.40
 
     # Background scheduler (PRD §6.4/§11.4) — disabled in test; sweeps invoked directly.
     SCHEDULER_ENABLED: bool = True

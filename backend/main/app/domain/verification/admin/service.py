@@ -25,7 +25,7 @@ from main.app.core.state.status import (
 )
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.commission.models import CommissionDto, CommissionStatus
+from main.app.domain.commission.models import CommissionDto, CommissionKind, CommissionStatus
 from main.app.domain.commission.service import CommissionService
 from main.app.domain.payment.chargeback.models import ChargebackDto, ChargebackStatus
 from main.app.domain.payment.chargeback.service import ChargebackService
@@ -322,8 +322,8 @@ class AdminVerificationService:
     def _commission_dto(self, c) -> CommissionDto:
         return CommissionDto(
             id=c.id, verification_id=c.verification_id, task_id=c.task_id, agent_id=c.agent_id,
-            role=AgentRole(c.role), tier=VerificationTier(c.tier), amount_minor=c.amount_minor,
-            currency=TransactionCurrency(c.currency),
+            role=AgentRole(c.role), tier=VerificationTier(c.tier), kind=CommissionKind(c.kind),
+            amount_minor=c.amount_minor, currency=TransactionCurrency(c.currency),
             status=CommissionStatus(c.status),
             clearing_until=c.clearing_until, date_created=c.date_created,
         )

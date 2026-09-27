@@ -10,10 +10,13 @@ import {
   useSystemConfigQuery,
 } from "@components/admin/config/libs/useSystemConfigQueries";
 import { ConfigKey, SystemConfigItem } from "@/types/systemConfig";
+import { getErrorMessage } from "@lib/errors";
+import { humanizeEnumLabel } from "@lib/utils";
 
 /**
- * Admin system-config CRUD (§14/§18.5, D28). Backend owns defaults + coercion; each row is a
- * typed operational knob (dispute window, re-check pricing, agent defence window).
+ * Admin system-config CRUD (§14/§18.5, D28). Backend owns defaults, coercion and validation;
+ * each row is a typed business knob (dispute window, re-check pricing, commission margin, remote
+ * bonus, …). A refused save shows the backend's reason.
  */
 export default function SystemConfigManager() {
   const { data, isLoading, isError } = useSystemConfigQuery();
@@ -21,7 +24,7 @@ export default function SystemConfigManager() {
     <div className="mx-auto max-w-2xl space-y-4 p-4 sm:p-6">
       <div>
         <h1 className="text-lg font-semibold">System configuration</h1>
-        <p className="text-sm text-muted-foreground">Operational settings for re-checks and disputes.</p>
+        <p className="text-sm text-muted-foreground">Business rules that take effect without a redeploy.</p>
       </div>
       <AsyncStateComponent<SystemConfigItem[]>
         isLoading={isLoading}
@@ -54,13 +57,18 @@ function ConfigRow({ item }: { item: SystemConfigItem }) {
     }
     setConfig.mutate(
       { key: item.key as ConfigKey, value: num },
-      { onSuccess: () => toast.success("Setting saved") },
+      {
+        onSuccess: () => toast.success("Setting saved"),
+        // A refusal (e.g. a remote bonus or minimum margin the commission margin cannot meet)
+        // is shown in the backend's words; getErrorMessage keeps a 5xx's text off the screen.
+        onError: (err) => toast.error(getErrorMessage(err, "Could not save the setting.")),
+      },
     );
   };
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <p className="text-sm font-medium">{item.key.replace(/_/g, " ")}</p>
+        <p className="text-sm font-medium">{humanizeEnumLabel(item.key)}</p>
         {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
       </div>
       <div className="flex items-center gap-2">

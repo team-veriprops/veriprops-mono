@@ -934,7 +934,8 @@ searchable, included in the audit export, and never visible to customers or agen
 ### 12.1 Discovery, accept, execute
 
 The agent dashboard shows available jobs (role-matched, coverage-filtered for on-site roles) and active
-tasks. Commission for the job is visible **before** accept (§20.1). Accept moves `ASSIGNED/PENDING →
+tasks. The job's commission — a fixed amount per role, the same on every tier — is visible **before**
+accept (§20.1). Accept moves `ASSIGNED/PENDING →
 ACCEPTED`; "Start work" → `IN_PROGRESS`; task endpoints are ownership-checked against the JWT subject.
 Decline returns the task to the pool; repeated declines feed the reputation penalty (§21.1).
 
@@ -1304,11 +1305,26 @@ preserved), SLA due date recomputed, next release ships `v3.0`. Idempotent on re
 
 ### 20.1 Commission accrual
 
-Rates are an admin-configured **`commission_rule` table, per role × tier, in basis points** (exact kobo
-math: `commission = price_locked_minor × rate_bps / 10_000`); defaults seeded from a static role-weight map
-reproducing `trust-weight % × AGENT_COMMISSION_SHARE (0.40)`. The rate and amount show on the job-accept
-screen **before** the agent commits. Accrual happens at report release per approved task, with a
+An agent's commission is a **fixed amount per role**, admin-configured in the `commission_rule` table
+(NGN kobo, one row per role, RBAC `CONFIGURE_PRICING`) — the same on every tier and independent of the
+price paid, so no job pays more for the same work and a referral-discounted case still pays its agents in
+full (D97, superseding D30's per-role×tier share of the price). Seeded defaults: REGISTRY ₦20,000 · FIELD
+₦14,400 · SURVEYOR ₦14,400 · LAWYER ₦36,000. The amount shows on the agent's task card and task page
+(`commissionMinor`) **before** the agent commits. Accrual happens at report release per approved task, with a
 double-accrual guard (a re-released re-check never accrues twice).
+
+**Minimum margin.** For every tier, what the roles it requires can be paid must leave at least
+`commission_min_margin_pct` (30%) of the tier's price. That is the worst case: each role's fixed commission
+plus the remote bonus. `CommissionMarginGuard` refuses any of the four changes that could break this, naming
+the tier and the figures: a role's commission, a tier's price, the minimum margin, or the remote bonus.
+`test_margin_guard_coverage.py` fails CI on any writer of those values that skips the guard. The seeded
+defaults (bonus ₦0) leave BASIC 60%, STANDARD ~59% and PREMIUM ~72%.
+
+**Remote bonus.** A task that ages out of the open pool is stamped with the admin-set flat bonus
+`remote_job_bonus_ngn_kobo` (system config, default ₦0), counted against the margin as above. It shows beside
+the commission before accept, and is paid at release as its **own** ledger line (`commissions.kind =
+REMOTE_BONUS`, beside the `BASE` line) on the same clearance and reserve schedule, so earnings list it apart.
+The double-accrual guard holds per task and kind.
 
 ### 20.2 Two-stage clearance & reserve
 
@@ -1408,7 +1424,7 @@ itself is untargeted accept-by-id today, so per-agent pool-feed reduction is a f
   (`analytics_trend_months`, 6), revenue by tier & location, regional performance. RBAC `VIEW_ANALYTICS`;
   the dashboard renders dependency-free CSS bar charts.
 - **Pricing** — DB-backed tier prices + line items (§10.2); edits change the next quote without a deploy;
-  existing price locks are honoured. **Commission rules** — the bps table (§20.1), RBAC `CONFIGURE_PRICING`.
+  existing price locks are honoured. **Commission rules** — the fixed per-role amounts (§20.1), RBAC `CONFIGURE_PRICING`.
 - **Trust Score Weights** — per tier × role CRUD with sum-to-100 validation (§13.3).
 - **System configuration** — the typed `ConfigKey` key-value store (§R), seeded idempotently, RBAC-gated
   CRUD at `/admin/config/system`.
@@ -1852,7 +1868,7 @@ Selected keys (see `backend/main/app/config/settings.py` and `.env.example` for 
 `REPORT_PDF_STUB_MODE=False` · `KYC_PROVIDER=STUB` · `GEOCODING_PROVIDER=STUB` · `PRICING_FX_PROVIDER=STUB`
 · `PHONE_VERIFICATION_ENABLED=False` · `LEGAL_OPINION_ENABLED=False` · `PRICE_LOCK_TTL_HOURS=24` ·
 `IDEMPOTENCY_KEY_TTL_HOURS=24` · `ADMIN_INVITE_TTL_HOURS=72` · `KYC_SELFIE_REVIEW_THRESHOLD=80` ·
-`AGENT_COMMISSION_SHARE=0.40` · `SSE_HEARTBEAT_SECONDS=25` · `SSE_QUEUE_MAXSIZE=100` ·
+`SSE_HEARTBEAT_SECONDS=25` · `SSE_QUEUE_MAXSIZE=100` ·
 `MESSAGING_RETRY_INTERVALS_SECONDS=[60,300,900]` · `OTP_MODE` (env-enforced, §25.1).
 
 ### R.2 Admin-tunable business rules — `system_config` `ConfigKey` store
@@ -1867,6 +1883,8 @@ without a redeploy:
 | `agent_dispute_defence_hours` | 48 | Agent's window to respond to a dispute on their task |
 | `commission_clearance_days` | 7 | Days after approval before the commission bulk is withdrawable |
 | `commission_reserve_pct` | 10 | % of commission held until the chargeback window closes |
+| `commission_min_margin_pct` | 30 | % of each tier's price its agents' worst-case pay (commissions + remote bonus) must leave (§20.1) |
+| `remote_job_bonus_ngn_kobo` | 0 | Flat bonus (kobo) on a task that ages out of the open pool, paid as its own commission line (§20.1) |
 | `chargeback_window_days` | 120 | Card-chargeback window (reserve release; referral-credit clearance) |
 | `task_sla_hours` | 48 | Accept→submit target feeding the timeliness metric |
 | `agent_low_performance_threshold` | 40 | Composite below which ranking visibility is reduced |

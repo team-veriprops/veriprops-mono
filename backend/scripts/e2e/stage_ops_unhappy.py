@@ -11,6 +11,10 @@ import uuid
 from .harness import Ctx, check, consent_version_for
 
 
+# ₦5,000 — small enough to leave every tier its minimum margin on the seeded prices.
+_REMOTE_BONUS = 500_000
+
+
 def _ops_task(ctx: Ctx, role: str) -> dict:
     """Admin view of an ops-verification task (agent projections hide pool internals)."""
     review = ctx.admin.get(f"/admin/review/{ctx.seed['ops']['id']}").json()["data"]
@@ -36,13 +40,25 @@ def run(ctx: Ctx) -> None:
           f"state={reg['state']} declines={reg['declineCount']} sweep={swept}")
 
     # 2. Pool-starvation sweep (§11.4): the seeded FIELD pool window expired unclaimed.
-    # Same reasoning — assert the task left the pool, not who pushed it out.
+    # Same reasoning — assert the task left the pool, not who pushed it out. The remote bonus
+    # is admin config (§20.1 / D97): set it first, so the escalated task carries it.
+    bonus_key = "/admin/config/settings/remote_job_bonus_ngn_kobo"
+    greedy = admin.put(bonus_key, json={"value": 10_000_000})
+    check("a remote bonus that would eat a tier's minimum margin is refused (§20.1/D97)",
+          greedy.status_code == 422 and "remote bonuses" in greedy.json()["error"]["message"],
+          f"http {greedy.status_code}")
+    admin.put(bonus_key, json={"value": _REMOTE_BONUS}).raise_for_status()
     starved = admin.post("/admin/verifications/sweeps/pool-starvation").json()["data"]
     check("pool-starvation sweep endpoint responds (§11.4)", "escalated" in starved,
           f"body={starved}")
     fld = _ops_task(ctx, "FIELD")
     check("an expired pool task leaves the pool for targeted assignment (§11.3)",
           fld["inPool"] is False, f"in_pool={fld['inPool']} sweep={starved}")
+    detail_tasks = admin.get(f"/admin/verifications/{ops['id']}").json()["data"]["tasks"]
+    fld_bonus = next(t for t in detail_tasks if t["role"] == "FIELD").get("remoteBonusMinor")
+    check("the escalated task carries the admin-set remote bonus (§11.4/§20.1)",
+          fld_bonus == _REMOTE_BONUS, f"remoteBonusMinor={fld_bonus}")
+    admin.put(bonus_key, json={"value": 0}).raise_for_status()  # config outlives the run too
 
     # 3. Decline → back to pool → first-accept-wins re-claim (§12.1).
     surveyor = ctx.agent("SURVEYOR")

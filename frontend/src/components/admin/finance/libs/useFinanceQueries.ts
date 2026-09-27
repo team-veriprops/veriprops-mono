@@ -6,7 +6,6 @@ import { httpClient } from "@/containers";
 import { PayoutDecisionRequest } from "@/types/payout";
 import { SetCommissionRuleRequest } from "@/types/commission";
 import { AgentRole } from "@/types/agent";
-import { VerificationTier } from "@/types/verification";
 import { AdminPayoutService } from "./admin-payout-service";
 import { CommissionRuleService } from "./commission-rule-service";
 
@@ -48,8 +47,7 @@ export function useCommissionRulesQuery() {
 export function useSetCommissionRuleMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { tier: VerificationTier; role: AgentRole; req: SetCommissionRuleRequest }) =>
-      ruleService.setRule(v.tier, v.role, v.req),
+    mutationFn: (v: { role: AgentRole; req: SetCommissionRuleRequest }) => ruleService.setRule(v.role, v.req),
     onSuccess: () => qc.invalidateQueries({ queryKey: financeKeys.commissionRules() }),
   });
 }

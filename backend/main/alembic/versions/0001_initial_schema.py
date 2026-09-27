@@ -36,7 +36,7 @@ and the rows are sourced from the app-side registries so nothing is
 duplicated: legal-document content (``LEGAL_DOCUMENT_CONTENT``), the super
 admin (``settings``), trust-score weights (``DEFAULT_TRUST_WEIGHTS``),
 system config (``CONFIG_DEFAULTS``), commission rules (derived from the
-weights, D30), and pricing tiers + line items (``TIER_PRICE_NGN_KOBO``).
+weights, D30 — re-seeded as fixed per-role amounts by ``0002_fixed_agent_commission``, D97), and pricing tiers + line items (``TIER_PRICE_NGN_KOBO``).
 Enum members are reduced to their raw ``.value`` strings at row-build time,
 keeping the emitted SQL decoupled from app enums.
 
@@ -53,7 +53,6 @@ from alembic import op
 
 from main.alembic.utils import AlembicUtils
 from main.app.config.settings import settings
-from main.app.domain.commission_rule.models import BPS_PER_PERCENT
 from main.app.domain.system_config.models import CONFIG_DEFAULTS, CONFIG_DESCRIPTIONS
 from main.app.domain.user.auth.consent.content import LEGAL_DOCUMENT_CONTENT
 from main.app.domain.verification.pricing import TIER_PRICE_NGN_KOBO
@@ -69,6 +68,13 @@ revision: str = "0019_sla_breach_marker"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+# The first commission model's constants (D30): basis points per whole percent, and the share
+# of the tier price paid to agents. `0002_fixed_agent_commission` replaces the rows this seeds
+# with a fixed amount per role (D97); they stay here, frozen, so this file still builds the
+# schema a migrated database came through.
+_BPS_PER_PERCENT = 100
+_AGENT_COMMISSION_SHARE = 0.40
 
 # Raw strings by design — migrations stay decoupled from app enums.
 _CHANNEL_WEB = "WEB"
@@ -1487,12 +1493,13 @@ def _system_config_rows() -> list[dict]:
 
 def _commission_rule_rows() -> list[dict]:
     """One rate per (role, tier), reproducing the prior flat model
-    ``weight_percent/100 × AGENT_COMMISSION_SHARE`` in basis points (§15.1 / D30)."""
+    ``weight_percent/100 × _AGENT_COMMISSION_SHARE`` in basis points (§15.1 / D30).
+    Superseded by the fixed per-role amounts `0002_fixed_agent_commission` seeds (D97)."""
     return [
         {
             "role": role.value,
             "tier": tier.value,
-            "rate_bps": round(weight * BPS_PER_PERCENT * settings.AGENT_COMMISSION_SHARE),
+            "rate_bps": round(weight * _BPS_PER_PERCENT * _AGENT_COMMISSION_SHARE),
         }
         for tier, role_weights in DEFAULT_TRUST_WEIGHTS.items()
         for role, weight in role_weights.items()

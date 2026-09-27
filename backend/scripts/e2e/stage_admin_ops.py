@@ -22,10 +22,24 @@ def run(ctx: Ctx) -> None:
           fresh_quote["priceNgnMinor"] == new_price,
           f"quote={fresh_quote['priceNgnMinor']} expected={new_price}")
 
+    # A price that would leave BASIC's agent commission above the margin is refused (§20.1/D97).
+    cut = admin.put("/admin/pricing/tiers/BASIC", json={"priceNgnMinor": 100})
+    still = next(t for t in admin.get("/admin/pricing").json()["data"]["tiers"]
+                 if t["tier"] == "BASIC")["priceNgnMinor"]
+    check("a price cut below the commission margin is refused and changes nothing (§20.1/D97)",
+          cut.status_code == 422 and still == new_price, f"http {cut.status_code} price={still}")
+
     # The fresh verification's charged price is NOT rewritten by the edit.
     locked = ctx.customer.get(f"/verifications/{ctx.vid_id}").json()["data"]
     check("a locked/charged price is untouched by the edit (§18.2)",
           locked["priceLockedMinor"] != new_price)
+
+    # Put the price back: /dev/reset keeps pricing, so a bump left here outlives the run.
+    restored = admin.put("/admin/pricing/tiers/BASIC", json={"priceNgnMinor": basic_before})
+    back = next(t for t in admin.get("/admin/pricing").json()["data"]["tiers"]
+                if t["tier"] == "BASIC")["priceNgnMinor"]
+    check("the BASIC price is restored after the pricing checks",
+          restored.status_code == 200 and back == basic_before, f"price={back} expected={basic_before}")
 
     # ── Analytics (§18.1, D38) ───────────────────────────────────
     funnel = admin.get("/admin/analytics/funnel").json()["data"]

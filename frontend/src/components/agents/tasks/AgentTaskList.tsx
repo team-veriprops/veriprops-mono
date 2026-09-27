@@ -26,6 +26,7 @@ import {
   useAgentTasksQuery,
   useDeclineTaskMutation,
 } from "./libs/useAgentTaskQueries";
+import { TaskCommissionBadge } from "./TaskCommissionBadge";
 
 const ALL = "ALL";
 const PAGE_SIZE = DEFAULT_PAGE_SIZE;
@@ -107,6 +108,7 @@ export default function AgentTaskList() {
                             </span>
                             <StatusPill status={task.state} />
                             <Badge variant="secondary">{humanizeEnumLabel(task.tier)}</Badge>
+                            <TaskCommissionBadge task={task} />
                             {task.inPool && (
                               <Badge className="gap-1">
                                 <Sparkles className="size-3" /> Open pool
@@ -119,12 +121,6 @@ export default function AgentTaskList() {
                             <span className="inline-flex items-center gap-1">
                               <ImageIcon className="size-3.5" /> {task.evidenceCount} evidence
                             </span>
-                            {task.remoteBonusMinor ? (
-                              <>
-                                <span aria-hidden>·</span>
-                                <span className="text-emerald-600 dark:text-emerald-400">remote bonus</span>
-                              </>
-                            ) : null}
                           </p>
                         </div>
                         <div className="flex shrink-0 gap-2">

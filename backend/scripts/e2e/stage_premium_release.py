@@ -8,7 +8,7 @@ PARTIAL_RECHECK (upheld) dispute that reopens the LAWYER and produces the v3 REC
 """
 from __future__ import annotations
 
-from .harness import MINIMAL_PNG, Ctx, check
+from .harness import Ctx, MINIMAL_PNG, accrued_commissions, check, commission_by_role
 from .stage_execution import ROLE_PAYLOADS
 
 
@@ -61,6 +61,11 @@ def run(ctx: Ctx) -> None:
           released["report"] is not None and released["report"]["reportVersion"] >= 2,
           f"version={released['report'] and released['report']['reportVersion']}")
     v2_version = released["report"]["reportVersion"]
+    rules = commission_by_role(admin)
+    accrued = accrued_commissions(admin, vid_id)
+    check("the PREMIUM case pays each role the same fixed commission as STANDARD did (§20.1/D97)",
+          accrued.get("LAWYER") == rules["LAWYER"] and accrued.get("REGISTRY") == rules["REGISTRY"],
+          f"accrued={accrued} rules={rules}")
     report = customer.get(f"/verifications/{vid_id}/report").json()["data"]
     check("customer report reflects the PREMIUM tier after upgrade (§14.2)",
           report.get("tier") == "PREMIUM", f"tier={report.get('tier')}")

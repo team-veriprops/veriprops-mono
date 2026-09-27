@@ -11,6 +11,7 @@ from test.utils.repo_fakes import fake_claim_transition, fake_insert_or_get
 from main.app.config.settings import settings
 from main.app.core.state.status import AgentRole, TaskState, VerificationStatus, VerificationTier
 from main.app.domain.audit.models import AuditActionType
+from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.verification.task.models import TaskAssignmentMode
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.appodus_utils.db.session import db_session_ctx
@@ -70,6 +71,8 @@ def _make_service(verification, tasks):
     svc._evidence = MagicMock()
     svc._user_service = MagicMock()
     svc._audit = MagicMock()
+    svc._config = MagicMock()
+    svc._config.get_int = AsyncMock(return_value=0)  # remote_job_bonus_ngn_kobo: no bonus
 
     svc._verification_repo.get_model = AsyncMock(return_value=verification)
     svc._verification_repo.update = AsyncMock()
@@ -343,6 +346,17 @@ class TestSweeps:
         count = await svc.sweep_pool_starvation()
         assert count == 1
         assert stale.in_pool is False
+        assert stale.remote_bonus_minor is None  # the configured bonus is ₦0
+
+    async def test_pool_starvation_stamps_the_configured_remote_bonus(self):
+        """§11.4 / D97: the bonus is admin config (remote_job_bonus_ngn_kobo), read at the sweep."""
+        stale = _task(AgentRole.FIELD, TaskState.PENDING, in_pool=True)
+        svc = _make_service(_verification(), [stale])
+        svc._task_repo.list_pool_expired = AsyncMock(return_value=[stale])
+        svc._config.get_int = AsyncMock(return_value=500_000)
+        await svc.sweep_pool_starvation()
+        svc._config.get_int.assert_awaited_once_with(ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO)
+        assert stale.remote_bonus_minor == 500_000
 
 
 class TestAgentDashboardSummary:

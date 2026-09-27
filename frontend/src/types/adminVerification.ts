@@ -50,6 +50,12 @@ export enum CommissionStatus {
   REVERSED = "REVERSED",
 }
 
+/** What a commission line pays for (§20.1 / D97) — mirrors CommissionKind in commission/models.py. */
+export enum CommissionKind {
+  BASE = "BASE",
+  REMOTE_BONUS = "REMOTE_BONUS",
+}
+
 export enum ChargebackStatus {
   FLAGGED = "FLAGGED",
   REBUTTAL_SUBMITTED = "REBUTTAL_SUBMITTED",
@@ -156,6 +162,7 @@ export interface CommissionDto {
   agentId: string;
   role: AgentRole;
   tier: VerificationTier;
+  kind: CommissionKind;
   amountMinor: number;
   currency: TransactionCurrency;
   status: CommissionStatus;

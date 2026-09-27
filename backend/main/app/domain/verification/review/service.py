@@ -10,7 +10,8 @@ task back to work; fail marks FAILED and refunds (§8.5).
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from kink import inject
@@ -29,7 +30,7 @@ from main.app.core.state.status import (
 )
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.commission.models import CreateCommissionDto
+from main.app.domain.commission.models import CommissionKind, CreateCommissionDto
 from main.app.domain.commission.service import CommissionService
 from main.app.domain.commission_rule.service import CommissionRuleService
 from main.app.domain.system_config.models import ConfigKey
@@ -347,40 +348,49 @@ class ReviewService:
     # ── helpers ───────────────────────────────────────────────────
 
     async def _accrue_commissions(self, verification: Verification, tasks: List[VerificationTask]) -> None:
-        """Accrue a CLEARING commission per approved task, at the admin per-role×tier rate
-        (§15.1/D30), on a two-stage clearance schedule (§15.2/D31): the bulk clears after
-        ``commission_clearance_days``, a ``commission_reserve_pct`` reserve after the chargeback
-        window. Idempotent on a re-release: a task that already carries a live (non-reversed)
-        commission is skipped (closes the S18 double-accrual follow-up)."""
-        price = verification.price_locked_minor or 0
-        if price <= 0:
-            return
-        tier = VerificationTier(verification.tier)
-        clearance_days = await self._config.get_int(ConfigKey.COMMISSION_CLEARANCE_DAYS)
-        reserve_pct = await self._config.get_int(ConfigKey.COMMISSION_RESERVE_PCT)
-        chargeback_days = await self._config.get_int(ConfigKey.CHARGEBACK_WINDOW_DAYS)
-        now = Utils.datetime_now()
+        """Accrue CLEARING commission lines per approved task (§20.1/D97): the role's fixed
+        admin-set amount — independent of the tier and the price paid, so a discounted case pays
+        its agents in full — plus, as its own line, any remote bonus the task carried. Both clear
+        on the two-stage schedule (§15.2/D31): the bulk after ``commission_clearance_days``, a
+        ``commission_reserve_pct`` reserve after the chargeback window. Idempotent on a
+        re-release: a line already live for the task is never accrued again (the S18
+        double-accrual follow-up), one guard per kind."""
+        schedule = _AccrualSchedule(
+            now=Utils.datetime_now(),
+            clearance_days=await self._config.get_int(ConfigKey.COMMISSION_CLEARANCE_DAYS),
+            reserve_pct=await self._config.get_int(ConfigKey.COMMISSION_RESERVE_PCT),
+            chargeback_days=await self._config.get_int(ConfigKey.CHARGEBACK_WINDOW_DAYS),
+        )
         for t in tasks:
             if not t.assigned_agent_id:
                 continue
-            # Double-accrual guard: never accrue twice for the same task across re-release cycles.
-            # Ref columns are String(36) and store the .hex form — coerce so the lookup matches
-            # what accrue stored (the two-string-forms gotcha; caught live, not by mocked tests).
-            if await self._commissions.get_live_for_task(
-                Utils.uuid_to_hex(verification.id), Utils.uuid_to_hex(t.id)
-            ):
-                continue
-            amount = await self._commission_rules.commission_minor(price, AgentRole(t.role), tier)
-            if amount <= 0:
-                continue
-            reserve = round(amount * reserve_pct / 100)
-            await self._commissions.accrue(CreateCommissionDto(
-                verification_id=verification.id, task_id=t.id, agent_id=t.assigned_agent_id,
-                role=AgentRole(t.role), tier=tier, amount_minor=amount,
-                clearing_until=now + timedelta(days=clearance_days),
-                reserve_amount_minor=reserve,
-                reserve_until=now + timedelta(days=chargeback_days),
-            ))
+            role = AgentRole(t.role)
+            await self._accrue_line(verification, t, CommissionKind.BASE,
+                                    await self._commission_rules.commission_minor(role), schedule)
+            await self._accrue_line(verification, t, CommissionKind.REMOTE_BONUS,
+                                    t.remote_bonus_minor or 0, schedule)
+
+    async def _accrue_line(
+        self, verification: Verification, task: VerificationTask, kind: CommissionKind,
+        amount: int, schedule: _AccrualSchedule,
+    ) -> None:
+        """One commission line for *task*, unless it pays nothing or is already live."""
+        if amount <= 0:
+            return
+        # Ref columns are String(36) and store the .hex form — coerce so the lookup matches
+        # what accrue stored (the two-string-forms gotcha; caught live, not by mocked tests).
+        if await self._commissions.get_live_for_task(
+            Utils.uuid_to_hex(verification.id), Utils.uuid_to_hex(task.id), kind
+        ):
+            return
+        await self._commissions.accrue(CreateCommissionDto(
+            verification_id=verification.id, task_id=task.id, agent_id=task.assigned_agent_id,
+            role=AgentRole(task.role), tier=VerificationTier(verification.tier), kind=kind,
+            amount_minor=amount,
+            clearing_until=schedule.now + timedelta(days=schedule.clearance_days),
+            reserve_amount_minor=round(amount * schedule.reserve_pct / 100),
+            reserve_until=schedule.now + timedelta(days=schedule.chargeback_days),
+        ))
 
     def _submissions_by_role(
         self, tasks: List[VerificationTask]
@@ -440,6 +450,16 @@ class ReviewService:
         await publish_verification_started(
             verification_id, verification, new_status, task_states
         )
+
+
+@dataclass(frozen=True)
+class _AccrualSchedule:
+    """The clearance timing every commission line accrued by one release shares (§15.2)."""
+
+    now: datetime
+    clearance_days: int
+    reserve_pct: int
+    chargeback_days: int
 
 
 class ReviewContext:

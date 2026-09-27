@@ -130,6 +130,20 @@ def stub_pay(c: httpx.Client, checkout_url: str) -> None:
     c.post("/payments/stub/confirm", json={"tx_ref": tx_ref, "succeeded": True}).raise_for_status()
 
 
+def commission_by_role(admin: httpx.Client) -> dict[str, int]:
+    """Each agent role's fixed commission (kobo) as the admin configured it (§20.1 / D97)."""
+    rules = admin.get("/admin/commission-rules").json()["data"]
+    return {r["role"]: r["amountNgnKobo"] for r in rules}
+
+
+def accrued_commissions(admin: httpx.Client, verification_id: str) -> dict[str, int]:
+    """The live (non-reversed) fixed commission accrued per role on one verification — the
+    BASE lines only; a remote bonus is a separate line (D97)."""
+    detail = admin.get(f"/admin/verifications/{verification_id}").json()["data"]
+    return {c["role"]: c["amountMinor"] for c in detail["commissions"]
+            if c["status"] != "REVERSED" and c["kind"] == "BASE"}
+
+
 def idem_key() -> str:
     return uuid.uuid4().hex
 

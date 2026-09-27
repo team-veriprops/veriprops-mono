@@ -7,7 +7,7 @@ the §11.1 SYSTEM auto-post, then the customer report + acknowledgement + PDF (�
 """
 from __future__ import annotations
 
-from .harness import Ctx, check
+from .harness import Ctx, accrued_commissions, check, commission_by_role
 from .stage_execution import ROLE_PAYLOADS
 
 _REWORK_ROLE = "FIELD"  # the role driven through the reject → rework cycle
@@ -68,6 +68,10 @@ def run(ctx: Ctx) -> None:
     rel = admin.post(f"/admin/review/{vid_id}/release", json={"reason": "All checks passed."})
     check("admin release succeeded (UNDER_REVIEW → COMPLETED)", rel.status_code == 200,
           f"http {rel.status_code}")
+    rules = commission_by_role(admin)
+    accrued = accrued_commissions(admin, vid_id)
+    check("release accrues each role's fixed commission, not a share of the price (§20.1/D97)",
+          accrued == {role: rules[role] for role in ctx.task_ids}, f"accrued={accrued} rules={rules}")
 
     types = {n["type"] for n in customer.get("/notifications").json()["data"]["items"]}
     check("customer got a REPORT_READY notification (§12.2)", "REPORT_READY" in types, str(types))

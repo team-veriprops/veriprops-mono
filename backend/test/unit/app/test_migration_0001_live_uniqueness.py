@@ -1,10 +1,12 @@
-"""The squashed `0001` builds every live-only unique guard the models declare, and the SLA marker.
+"""The migration chain builds every live-only unique guard the models declare, and the SLA marker.
 
 Lookups skip soft-deleted rows, so a unique guard on a soft-deletable table is a partial index
 (`WHERE deleted = false`), declared on the model with `live_unique_index(...)` and built by the
 migration under the same name — `insert_or_get` targets it by columns and predicate, so the two
 must agree exactly. Pinned in both directions, with no database: each `_create_<table>()` builder
-runs against a recording stand-in for alembic's `op`.
+runs against a recording stand-in for alembic's `op`, and then every additive revision after `0001`
+replays its `upgrade()` against the same stand-in, so a guard a later revision drops or creates
+(`0002_fixed_agent_commission` re-keys `commission_rules` by role) is folded into what "built" means.
 
 `0001`'s revision id is the last revision folded into it, so a database already stamped there is
 left alone by the squash (backend/CLAUDE.md, "Squashing the chain back into 0001").
@@ -21,7 +23,8 @@ from main.app import core as _core, domain as _domain
 from main.appodus_utils import BaseEntity
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
-_MIGRATION = _BACKEND_ROOT / "main" / "alembic" / "versions" / "0001_initial_schema.py"
+_VERSIONS = _BACKEND_ROOT / "main" / "alembic" / "versions"
+_MIGRATION = _VERSIONS / "0001_initial_schema.py"
 _HEAD = "0019_sla_breach_marker"
 
 
@@ -29,11 +32,23 @@ def _norm(sql: str) -> str:
     return re.sub(r"\s+", " ", str(sql).replace("(", " ( ").replace(")", " ) ")).strip().lower()
 
 
-def _load():
-    spec = importlib.util.spec_from_file_location("migration_0001_live_uniqueness", _MIGRATION)
+def _load(path: Path = _MIGRATION):
+    spec = importlib.util.spec_from_file_location(f"live_uniqueness_{path.stem}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _later_revisions():
+    """Every revision after `0001`, in chain order (each names its predecessor in `down_revision`)."""
+    modules = [_load(path) for path in sorted(_VERSIONS.glob("*.py")) if path != _MIGRATION]
+    by_parent = {m.down_revision: m for m in modules}
+    ordered, parent = [], _HEAD
+    while parent in by_parent:
+        ordered.append(by_parent[parent])
+        parent = ordered[-1].revision
+    assert len(ordered) == len(modules), "a revision is not reachable from 0001's head"
+    return ordered
 
 
 def _record_builders():
@@ -49,7 +64,21 @@ def _record_builders():
     return module, tables, indexes, constraints
 
 
+def _replay_later_revisions():
+    """Run each later revision's `upgrade()` against a recording `op`; return the index names it
+    dropped and the create_index calls it made, in order."""
+    dropped, created = [], []
+    for revision in _later_revisions():
+        recorder = MagicMock()
+        revision.op = recorder
+        revision.upgrade()
+        dropped += [call.args[0] for call in recorder.drop_index.call_args_list]
+        created += [call for call in recorder.create_index.call_args_list if isinstance(call.args[0], str)]
+    return dropped, created
+
+
 _MODULE, _TABLES, _INDEXES, _UNIQUE_CONSTRAINTS = _record_builders()
+_DROPPED_LATER, _CREATED_LATER = _replay_later_revisions()
 
 
 def _partial_unique(call) -> bool:
@@ -70,8 +99,13 @@ _MODEL_GUARDS = _model_partial_uniques()
 _BUILT_GUARDS = {
     call.args[0]: (call.args[1], list(call.args[2]), call.kwargs["postgresql_where"])
     for call in _INDEXES
-    if _partial_unique(call)
+    if _partial_unique(call) and call.args[0] not in _DROPPED_LATER
 }
+_BUILT_GUARDS.update({
+    call.args[0]: (call.args[1], list(call.args[2]), call.kwargs["postgresql_where"])
+    for call in _CREATED_LATER
+    if _partial_unique(call)
+})
 
 
 def test_it_is_the_one_root_and_carries_the_last_folded_revision():
@@ -86,15 +120,15 @@ def test_the_models_declare_live_only_guards():
 @pytest.mark.parametrize("name", sorted(_MODEL_GUARDS))
 def test_every_guard_a_model_declares_is_built_the_same(name):
     table, columns, where = _MODEL_GUARDS[name]
-    assert name in _BUILT_GUARDS, f"0001 never builds {name}"
+    assert name in _BUILT_GUARDS, f"the migration chain never builds {name}"
     built_table, built_columns, built_where = _BUILT_GUARDS[name]
     assert (built_table, built_columns) == (table, columns)
     assert _norm(built_where) == _norm(where)
 
 
 @pytest.mark.parametrize("name", sorted(_BUILT_GUARDS))
-def test_every_guard_0001_builds_is_declared_on_a_model(name):
-    assert name in _MODEL_GUARDS, f"0001 builds {name}, which no model declares"
+def test_every_guard_the_chain_builds_is_declared_on_a_model(name):
+    assert name in _MODEL_GUARDS, f"the migration chain builds {name}, which no model declares"
 
 
 @pytest.mark.parametrize("name", sorted(_MODEL_GUARDS))

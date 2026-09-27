@@ -18,6 +18,7 @@ from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.commission.models import (
     Commission,
+    CommissionKind,
     CommissionStatus,
     CreateCommissionDto,
 )
@@ -120,6 +121,7 @@ class CommissionService:
     async def list_for_verification(self, verification_id: str) -> List[Commission]:
         return await self._commission_repo.list_for_verification(verification_id)
 
-    async def get_live_for_task(self, verification_id: str, task_id: str):
-        """A non-reversed commission already accrued for this task, or None (double-accrual guard)."""
-        return await self._commission_repo.get_live_for_task(verification_id, task_id)
+    async def get_live_for_task(self, verification_id: str, task_id: str, kind: CommissionKind):
+        """A non-reversed commission line of *kind* already accrued for this task, or None
+        (the double-accrual guard)."""
+        return await self._commission_repo.get_live_for_task(verification_id, task_id, kind)

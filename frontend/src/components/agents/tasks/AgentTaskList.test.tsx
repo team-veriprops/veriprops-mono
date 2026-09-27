@@ -5,6 +5,7 @@ import { AgentRole } from "@/types/agent";
 import { VerificationTier } from "@/types/verification";
 import { AgentTask } from "@/types/agentTask";
 import { Page } from "@/types/models";
+import { formatMinor } from "@lib/utils";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -63,6 +64,24 @@ describe("AgentTaskList", () => {
     listResult.data = pageOf([{ ...task, state: TaskState.ASSIGNED }]);
     const html = renderToStaticMarkup(<AgentTaskList />);
     expect(html).toContain("accept-task-1");
+  });
+
+  /**
+   * §12.1 / §20.1: the agent sees what a job pays before they take it. The figure is the role's
+   * fixed commission from the backend, so it is rendered as given — never derived from the tier.
+   */
+  it("shows the job's commission before accept", () => {
+    listResult.data = pageOf([{ ...task, state: TaskState.ASSIGNED, commissionMinor: 1_440_000 }]);
+    const html = renderToStaticMarkup(<AgentTaskList />);
+    expect(html).toContain("task-commission-task-1");
+    expect(html).toContain(formatMinor(1_440_000));
+  });
+
+  it("shows a remote bonus beside the commission, as its own figure", () => {
+    listResult.data = pageOf([{ ...task, commissionMinor: 1_440_000, remoteBonusMinor: 500_000 }]);
+    const html = renderToStaticMarkup(<AgentTaskList />);
+    expect(html).toContain("task-bonus-task-1");
+    expect(html).toContain(formatMinor(500_000));
   });
 
   it("renders a friendly empty state when there are no tasks", () => {

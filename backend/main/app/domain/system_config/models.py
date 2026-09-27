@@ -24,6 +24,8 @@ class ConfigKey(str, enum.Enum):
     COMMISSION_CLEARANCE_DAYS = "commission_clearance_days"      # days a commission clears (bulk → available)
     COMMISSION_RESERVE_PCT = "commission_reserve_pct"            # % held back until the chargeback window closes
     CHARGEBACK_WINDOW_DAYS = "chargeback_window_days"            # card-chargeback window (reserve release)
+    COMMISSION_MIN_MARGIN_PCT = "commission_min_margin_pct"      # % of each tier's price its commissions must leave (D97)
+    REMOTE_JOB_BONUS_NGN_KOBO = "remote_job_bonus_ngn_kobo"      # flat bonus stamped on a task that ages out of the open pool (kobo)
     # §16.1 agent reputation / timeliness (S20)
     TASK_SLA_HOURS = "task_sla_hours"                            # per-task turnaround target (timeliness metric)
     AGENT_LOW_PERFORMANCE_THRESHOLD = "agent_low_performance_threshold"   # composite below → reduced job feed
@@ -60,6 +62,8 @@ CONFIG_DEFAULTS: dict[ConfigKey, Any] = {
     ConfigKey.COMMISSION_CLEARANCE_DAYS: 7,
     ConfigKey.COMMISSION_RESERVE_PCT: 10,
     ConfigKey.CHARGEBACK_WINDOW_DAYS: 120,
+    ConfigKey.COMMISSION_MIN_MARGIN_PCT: 30,
+    ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO: 0,
     ConfigKey.TASK_SLA_HOURS: 48,
     ConfigKey.AGENT_LOW_PERFORMANCE_THRESHOLD: 40,
     ConfigKey.AGENT_TOP_AGENT_ACCURACY_THRESHOLD: 90,
@@ -90,6 +94,8 @@ CONFIG_DESCRIPTIONS: dict[ConfigKey, str] = {
     ConfigKey.COMMISSION_CLEARANCE_DAYS: "Days after task approval before the bulk of a commission becomes withdrawable.",
     ConfigKey.COMMISSION_RESERVE_PCT: "Percentage of a commission retained in reserve until the chargeback window closes.",
     ConfigKey.CHARGEBACK_WINDOW_DAYS: "Card-chargeback window; the commission reserve is released only after it passes.",
+    ConfigKey.COMMISSION_MIN_MARGIN_PCT: "Minimum share of each tier's price left after paying its agents' fixed commissions and any remote bonus; price, commission and bonus edits that would breach it are refused.",
+    ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO: "Flat bonus, in kobo, paid on top of the commission for a task that ages out of the open pool unclaimed (0 = none). Counted against every tier's minimum margin.",
     ConfigKey.TASK_SLA_HOURS: "Target hours from task acceptance to submission, used for the agent timeliness metric.",
     ConfigKey.AGENT_LOW_PERFORMANCE_THRESHOLD: "Composite score below which an agent's job-feed visibility is reduced.",
     ConfigKey.AGENT_TOP_AGENT_ACCURACY_THRESHOLD: "Accuracy score at/above which an agent earns the Top Agent badge.",
@@ -162,3 +168,9 @@ class SetConfigValueDto(Object):
     """Admin update of a single config value (typed loosely — coerced per key)."""
 
     value: Any
+
+
+def effective_config_value(stored_value: Any, key: ConfigKey) -> Any:
+    """The live value of a config key: the stored value when one is set, else its default —
+    the one fallback rule every reader of ``system_config`` applies."""
+    return stored_value if stored_value is not None else CONFIG_DEFAULTS[key]

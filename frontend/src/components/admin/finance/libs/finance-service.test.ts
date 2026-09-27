@@ -3,7 +3,6 @@ import { AdminPayoutService } from "./admin-payout-service";
 import { CommissionRuleService } from "./commission-rule-service";
 import { HttpClient } from "@lib/FetchHttpClient";
 import { AgentRole } from "@/types/agent";
-import { VerificationTier } from "@/types/verification";
 
 function mockHttp() {
   const calls: { method: string; url: string; body?: unknown }[] = [];
@@ -50,10 +49,10 @@ describe("CommissionRuleService contract (mirrors app/domain/commission_rule/con
     expect(calls[0]).toMatchObject({ method: "get", url: "/admin/commission-rules" });
   });
 
-  it("sets a rule by tier and role", async () => {
+  it("sets a role's fixed commission — no tier in the path", async () => {
     const { http, calls } = mockHttp();
-    await new CommissionRuleService(http).setRule(VerificationTier.BASIC, AgentRole.REGISTRY, { rateBps: 4000 });
-    expect(calls[0]).toMatchObject({ method: "put", url: "/admin/commission-rules/BASIC/REGISTRY" });
-    expect(calls[0].body).toMatchObject({ rateBps: 4000 });
+    await new CommissionRuleService(http).setRule(AgentRole.REGISTRY, { amountNgnKobo: 2_000_000 });
+    expect(calls[0]).toMatchObject({ method: "put", url: "/admin/commission-rules/REGISTRY" });
+    expect(calls[0].body).toMatchObject({ amountNgnKobo: 2_000_000 });
   });
 });

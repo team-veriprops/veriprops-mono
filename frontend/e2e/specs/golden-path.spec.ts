@@ -220,6 +220,8 @@ test.describe("UAT-GP — golden path, legs 2-5: assignment, execution, review &
       await expect(page.getByTestId("agent-task-detail")).toBeVisible();
       await expectNoA11yViolations(page);
 
+      // §12.1 / §20.1: what the job pays — the role's fixed commission — shows before accept.
+      await expect(page.getByTestId(/^task-commission-/)).toContainText(/[1-9]/);
       await page.getByTestId("detail-accept").click();
       await page.getByTestId("detail-start").click();
 
