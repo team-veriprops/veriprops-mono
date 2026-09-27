@@ -1923,7 +1923,6 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Live document storage (S3/R2 behind the facade; `DOCUMENT_STORAGE_STUB_MODE` defaults to the stub) | `backend/main/appodus_utils/integrations/document_storage/factory.py` |
 | Live FX rates (`OPENEXCHANGERATES` option unwired; hardcoded indicative stub rates) | `backend/main/appodus_utils/db/types/money.py` |
 | Real payout disbursement (approval marks `PAID` under the stub) | `backend/main/app/domain/payout/service.py` |
-| Paystack transfer-fee calculation (no provider endpoint; must be computed from their published cost table) | `backend/main/appodus_utils/integrations/payment/gateway/paystack/payment.py` |
 
 ### G.2 Deferred features
 

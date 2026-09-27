@@ -1,17 +1,11 @@
 import enum
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from main.appodus_utils import Object
 from pydantic import Field
 
 from main.appodus_utils.db.types.money import TransactionCurrency
-
-
-class GenericPaymentGatewayResponse(Object):
-    status: str | bool | None
-    message: str
-    data: Optional[Dict[str, Any]] = None  # e.g., {"link": "..."} or nested objects
 
 
 # ─── Collection: the provider-neutral contract (checkout → charge → refund) ────────────
@@ -70,64 +64,62 @@ def to_major_units(amount_minor: int) -> float:
     return float(Decimal(amount_minor) / 100)
 
 
-# initialize_bank_transfer – Send Money to Bank
-class BankTransferRequest(Object):
-    account_bank: str = Field(..., description="Bank code (e.g., 044 for GTBank)")
-    account_number: str
-    amount: float
-    narration: str
-    currency: TransactionCurrency
-    reference: str
-    callback_url: Optional[str] = None
-    debit_currency: Optional[str] = None
-    fullname: str
-    recipient_code:  Optional[str] = None
+# ─── Transfers: paying agents out (bank list → resolve → quote → send → look up) ──────
 
 
-class BankTransferResponseData(Object):
-    id: int
-    account_number: str
-    bank_code: str
-    full_name: Optional[str]
-    date_created: Optional[str]
-    currency: TransactionCurrency
-    amount: float
-    fee: Optional[float]
-    status: str
-    reference: str
+class GatewayTransferStatus(str, enum.Enum):
+    """Where a transfer stands at the gateway, normalised across providers."""
+
+    SUCCEEDED = "SUCCEEDED"
+    # Refused, failed at the bank, or reversed after the fact: the money is back with us.
+    FAILED = "FAILED"
+    # Queued, in flight, waiting on an OTP, or a status this code does not know. None of
+    # these may settle a payout, so they share one value.
+    PENDING = "PENDING"
 
 
-class BankTransferResponse(Object):
-    message: str
-    data: BankTransferResponseData
+class GatewayBank(Object):
+    """A bank a transfer can be sent to. ``code`` is the gateway's own code for it."""
 
-
-# get_transfer_fee
-class TransferFeeRequest(Object):
-    amount: float
-    currency: TransactionCurrency
-
-
-class TransferFeeResponseData(Object):
-    currency: TransactionCurrency
-    amount: float
-    fee: float
-
-
-class TransferFeeResponse(Object):
-    status: str
-    message: str
-    data: TransferFeeResponseData
-
-
-# get_all_country_banks
-class Bank(Object):
-    id: int
     code: str
     name: str
 
 
-class CountryBanksResponse(Object):
-    status: str
-    message: str
-    data: list[Bank]
+class GatewayAccount(Object):
+    """A bank account as the bank holds it: ``account_name`` is the bank's, never typed."""
+
+    bank_code: str
+    account_number: str
+    account_name: str
+
+
+# Both gateways accept this form; Paystack's is the stricter rule (lowercase, 16+ characters).
+TRANSFER_REFERENCE_PATTERN = r"^[a-z0-9_-]{16,64}$"
+
+
+class TransferRequest(Object):
+    """Send ``amount_minor`` to one resolved bank account, under our own reference.
+
+    The reference is how the transfer is found again when an answer is lost, and both
+    gateways refuse a second transfer under a reference they have seen, so a retry of the
+    same attempt can never pay twice."""
+
+    reference: str = Field(..., pattern=TRANSFER_REFERENCE_PATTERN)
+    amount_minor: int = Field(..., gt=0)
+    currency: TransactionCurrency
+    bank_code: str
+    account_number: str
+    account_name: str
+    narration: str
+
+
+class GatewayTransfer(Object):
+    """A transfer as the gateway reports it when asked directly — what a payout settles from."""
+
+    reference: str = Field(..., description="Our reference, as the gateway recorded it")
+    gateway_transfer_id: str = Field(..., description="The gateway's own id or code for the transfer")
+    status: GatewayTransferStatus
+    amount_minor: int
+    # The gateway's own words for a failure. Finance reads them to choose retry or reject;
+    # they never reach an agent.
+    failure_reason: Optional[str] = None

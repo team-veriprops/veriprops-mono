@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from kink import inject
 
@@ -6,7 +6,8 @@ from main.app.config.bootstrap import di_bootstrap
 from main.app.config.settings import IntegratedPlatform, settings
 from main.appodus_utils.integrations.exception.exceptions import IntegrationFatalException
 from main.appodus_utils.integrations.interface import IWebhookHandler, BaseWebhookHandler
-from main.appodus_utils.integrations.payment.gateway.interface import IPaymentGateway
+from main.appodus_utils.integrations.payment.gateway.interface import IPaymentGateway, ITransferGateway
+from main.appodus_utils.integrations.payment.gateway.stub import StubTransferGateway
 
 di_bootstrap.register_all_subclasses(BaseWebhookHandler)
 di_bootstrap.register_all_subclasses(IPaymentGateway)
@@ -68,8 +69,33 @@ class PaymentGatewayFactory:
             )
         return self.for_platform(platform)
 
+    def transfer_platform(self) -> Optional[IntegratedPlatform]:
+        """The platform new bank accounts are resolved with, and so later paid through;
+        ``None`` under PAYMENT_STUB_MODE."""
+        return None if settings.PAYMENT_STUB_MODE else self.active().platform
+
+    def transfers(self, platform: Optional[IntegratedPlatform]) -> ITransferGateway:
+        """The gateway that pays an account resolved with *platform*.
+
+        A bank code is only meaningful to the gateway whose list it came from, so a payout
+        leaves through its account's own platform. Under PAYMENT_STUB_MODE it is always the
+        stub, so no automated run can reach a live gateway."""
+        if settings.PAYMENT_STUB_MODE:
+            return _STUB_TRANSFERS
+        if platform is None:
+            raise IntegrationFatalException(
+                "This bank account was never resolved with a payment gateway; it must be added again."
+            )
+        gateway = self.for_platform(platform)
+        if not isinstance(gateway, ITransferGateway):
+            raise IntegrationFatalException(f"{platform.value} cannot send transfers.")
+        return gateway
+
     def get_gateways(self) -> List[IPaymentGateway]:
         return self._gateways
+
+
+_STUB_TRANSFERS = StubTransferGateway()
 
 
 @inject

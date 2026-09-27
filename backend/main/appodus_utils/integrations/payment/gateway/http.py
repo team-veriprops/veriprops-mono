@@ -26,6 +26,14 @@ class GatewayNotFound(Exception):
     """The gateway has no record of the thing asked for (a reference nobody paid)."""
 
 
+class GatewayDeclined(IntegrationException):
+    """The gateway answered and refused the request (a 4xx, or a 2xx whose envelope says no).
+
+    Only this proves nothing happened. An unreachable gateway or a 5xx raises the plain
+    ``IntegrationException``: the request may have landed, so a money move must be looked up
+    by its reference before it is called failed."""
+
+
 class GatewayHttp:
     def __init__(self, provider: str, base_url: str, secret_key: str, is_ok: Callable[[Dict[str, Any]], bool]):
         self._provider = provider
@@ -46,8 +54,10 @@ class GatewayHttp:
         json: Optional[Dict[str, Any]] = None,
         params: Optional[Dict[str, Any]] = None,
         not_found_when: Optional[Callable[[int, Dict[str, Any]], bool]] = None,
-    ) -> Dict[str, Any]:
-        """The envelope's ``data``. ``action`` completes "Could not …" in the raised sentence.
+        envelope: bool = False,
+    ) -> Any:
+        """The envelope's ``data`` (the whole envelope with ``envelope=True``, for a caller
+        that pages through ``meta``). ``action`` completes "Could not …" in the raised sentence.
 
         ``not_found_when`` recognises the provider's "no such record" answer, which raises
         ``GatewayNotFound`` instead of a failure so the caller can treat it as an answer."""
@@ -67,10 +77,15 @@ class GatewayHttp:
 
         if not_found_when is not None and not_found_when(response.status_code, body):
             raise GatewayNotFound()
+        if response.status_code >= 500:
+            logger.error(f"{self._provider} failed while trying to {action}: HTTP {response.status_code}")
+            raise IntegrationException(f"Could not {action}: the payment gateway is unavailable.")
         if response.is_error or not self._is_ok(body):
             logger.error(
                 f"{self._provider} refused to {action}: HTTP {response.status_code}, "
                 f"message={body.get('message')!r}"
             )
-            raise IntegrationException(f"Could not {action}: the payment gateway declined the request.")
+            raise GatewayDeclined(f"Could not {action}: the payment gateway declined the request.")
+        if envelope:
+            return body
         return body.get("data") or {}

@@ -74,34 +74,6 @@ class PaystackInitPaymentDto(Object):
 ###############################################################################################################
 ##########################  WEBHOOK ###########################################################################
 
-# CreateRecipientRequest
-class CreateRecipientRequest(Object):
-    type: str = Field(default="nuban", description="Recipient type, usually 'nuban'")
-    name: str = Field(..., description="Recipient's full name")
-    account_number: str
-    bank_code: str
-    bank_name: str
-    currency: TransactionCurrency = Field(...)
-
-
-# CreateRecipientResponse
-class RecipientData(Object):
-    recipient_code: str
-    name: str
-    account_number: str
-    bank_code: str
-    currency: TransactionCurrency
-    description: Optional[str] = None
-    active: Optional[bool] = None
-    email: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-
-
-class CreateRecipientResponse(Object):
-    status: bool
-    message: str
-    data: RecipientData
-
 # === Paystack Event Types ===
 class PaystackEventType(str, enum.Enum):
     CHARGE_SUCCESS = "charge.success"
