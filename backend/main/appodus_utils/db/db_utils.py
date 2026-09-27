@@ -9,13 +9,19 @@ from typing import Type, List, Optional, Dict, Any, Union
 
 from fastapi.encoders import jsonable_encoder
 from kink import di
-from sqlalchemy import Row
+from sqlalchemy import Row, String, cast, func
 
 from main.appodus_utils import Utils
 from main.appodus_utils.db.models import ModelType, QuerySchemaType, SearchSchemaType, Page, PaginationMeta, SuccessResponse
 from main.appodus_utils.exception.exceptions import AppodusBaseException
 
 logger: Logger = di['logger']
+
+
+def hex_ref(uuid_column):
+    """A UUID primary key in the 32-char hex form that reference columns store, for comparing
+    or joining the two in SQL (``hex_ref(Verification.id) == Payment.verification_id``)."""
+    return func.replace(cast(uuid_column, String), "-", "")
 
 
 class DbUtils:

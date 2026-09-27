@@ -8,6 +8,7 @@
  */
 import { TransactionCurrency } from "./models";
 import { VerificationStatus, VerificationTier } from "./verification";
+import { PaymentCheckoutKind, PaymentStatus } from "@/types/verification";
 
 export enum HandoffIntent {
   PAY = "pay",
@@ -37,8 +38,14 @@ export interface HandoffContext {
 export interface HandoffPayment {
   txRef: string;
   checkoutUrl?: string | null;
+  checkoutKind: PaymentCheckoutKind;
   amountMinor: number;
   currency: TransactionCurrency;
+}
+
+/** Where a handoff's payment stands, for the page its hosted checkout returns to. */
+export interface HandoffPaymentStatus {
+  status: PaymentStatus | null;
 }
 
 

@@ -52,7 +52,7 @@ from main.app.domain.referral.controller import referral_router
 from main.app.domain.analytics.controller import analytics_router
 from main.app.domain.broadcast.controller import broadcast_router
 from main.app.domain.finance.controller import finance_router
-from main.app.domain.payment.controller import payment_router
+from main.app.domain.payment.controller import admin_payment_router, payment_router
 
 from main.appodus_utils.integrations.webhook import webhook_router
 from main.app.domain.audit.controller import audit_router
@@ -106,6 +106,7 @@ router.include_router(analytics_router)
 router.include_router(broadcast_router)
 router.include_router(finance_router)
 router.include_router(payment_router)
+router.include_router(admin_payment_router)
 router.include_router(audit_router)
 router.include_router(erasure_router)
 router.include_router(admin_erasure_router)

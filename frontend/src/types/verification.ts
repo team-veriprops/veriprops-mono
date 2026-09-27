@@ -38,6 +38,21 @@ export enum PaymentStatus {
   SUCCEEDED = "SUCCEEDED",
   FAILED = "FAILED",
   PENDING_TRANSFER = "PENDING_TRANSFER",
+  REFUNDED = "REFUNDED",
+}
+
+/** What a charge pays for (mirrors backend PaymentPurpose). */
+export enum PaymentPurpose {
+  INITIAL = "INITIAL",
+  RECHECK = "RECHECK",
+  UPGRADE = "UPGRADE",
+}
+
+/** How a charge is completed (mirrors backend PaymentCheckoutKind): on the gateway's hosted
+ *  page, or by the local/test stub's confirm step. */
+export enum PaymentCheckoutKind {
+  STUB = "STUB",
+  HOSTED = "HOSTED",
 }
 
 export interface SellerInfo {
@@ -139,11 +154,13 @@ export interface Payment {
   verificationId: string;
   txRef: string;
   method: PaymentMethodKind;
+  purpose: PaymentPurpose;
   status: PaymentStatus;
   amountMinor: number;
   currency: TransactionCurrency;
   chargeCurrency?: TransactionCurrency;
   chargeAmountMinor?: number;
   checkoutUrl?: string;
+  checkoutKind: PaymentCheckoutKind;
   dateCreated: string;
 }

@@ -38,6 +38,11 @@ class AuditActionType(str, enum.Enum):
     PAYMENT_SUCCEEDED = "PAYMENT_SUCCEEDED"
     PAYMENT_FAILED = "PAYMENT_FAILED"
     PAYMENT_REFUNDED = "PAYMENT_REFUNDED"
+    # The gateway reported a charge that differs from the quote (amount, currency or
+    # reference); it was not settled.
+    PAYMENT_AMOUNT_MISMATCH = "PAYMENT_AMOUNT_MISMATCH"
+    # The gateway refused a refund; the payment stayed SUCCEEDED and awaits a finance retry.
+    PAYMENT_REFUND_FAILED = "PAYMENT_REFUND_FAILED"
     WIRE_PROOF_UPLOADED = "WIRE_PROOF_UPLOADED"
     WIRE_PROOF_CONFIRMED = "WIRE_PROOF_CONFIRMED"
     # ── Chargeback (§6a) ───────────────────────────────────────────

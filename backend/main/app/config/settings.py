@@ -50,7 +50,6 @@ class Settings(AppodusBaseSettings):
         "FLUTTERWAVE_SECRET_KEY",
         "FLUTTERWAVE_WEBHOOK_SECRET",
         "PAYSTACK_SECRET_KEY",
-        "PAYSTACK_WEBHOOK_SECRET",
         "AWS_ACCESS_KEY",
         "AWS_SECRET_ACCESS_KEY",
         "TERMII_API_KEY",
@@ -127,15 +126,17 @@ class Settings(AppodusBaseSettings):
     # PAYMENT
     PAYMENT_FRONTEND_REDIRECT_PATH: str = "/payment/redirect"
     # FLUTTERWAVE
-    FLUTTERWAVE_PUBLIC_KEY: Optional[str] = "random"
-    FLUTTERWAVE_SECRET_KEY: Optional[str] = "random"
-    FLUTTERWAVE_WEBHOOK_SECRET: Optional[str] = None  # For verifying webhooks
+    FLUTTERWAVE_PUBLIC_KEY: Optional[str] = SECRET_PLACEHOLDER
+    FLUTTERWAVE_SECRET_KEY: Optional[str] = SECRET_PLACEHOLDER
+    # The "secret hash" set on the Flutterwave dashboard; Flutterwave sends it verbatim in
+    # every webhook's `verif-hash` header.
+    FLUTTERWAVE_WEBHOOK_SECRET: Optional[str] = None
     FLUTTERWAVE_BASE_URL: Optional[str] = "https://api.flutterwave.com/v3"
     FLUTTERWAVE_REDIRECT_URL: Optional[str] = "webhooks/flutterwave/redirect"
     # PAYSTACK
-    PAYSTACK_PUBLIC_KEY: Optional[str] = "random"
-    PAYSTACK_SECRET_KEY: Optional[str] = "random"
-    PAYSTACK_WEBHOOK_SECRET: Optional[str] = None  # For verifying webhooks
+    PAYSTACK_PUBLIC_KEY: Optional[str] = SECRET_PLACEHOLDER
+    # Also signs Paystack's webhooks (HMAC-SHA512); Paystack has no separate webhook secret.
+    PAYSTACK_SECRET_KEY: Optional[str] = SECRET_PLACEHOLDER
     PAYSTACK_BASE_URL: Optional[str] = "https://api.paystack.co"
 
     # ACTIVES

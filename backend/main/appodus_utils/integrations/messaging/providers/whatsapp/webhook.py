@@ -29,7 +29,7 @@ from kink import di, inject
 from starlette.responses import RedirectResponse, Response
 
 from main.app.config.settings import IntegratedPlatform, settings
-from main.appodus_utils.config.settings import SECRET_PLACEHOLDER
+from main.appodus_utils.config.settings import is_configured_secret
 from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 from main.appodus_utils.exception.exceptions import UnauthorizedException
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
@@ -43,11 +43,6 @@ logger = di["logger"]
 
 _SIGNATURE_HEADER = "x-hub-signature-256"
 _SIGNATURE_PREFIX = "sha256="
-
-
-def _is_configured(secret: Optional[str]) -> bool:
-    """A blank or placeholder secret is 'not configured', never 'no check needed'."""
-    return bool((secret or "").strip()) and (secret or "").strip() != SECRET_PLACEHOLDER
 
 
 @inject
@@ -65,7 +60,7 @@ class WhatsAppWebhookHandler(BaseWebhookHandler):
         return IntegratedPlatform.WHATSAPP
 
     async def validate_signature(self, body: bytes, headers: Dict) -> bool:
-        if not _is_configured(self.platform_secret):
+        if not is_configured_secret(self.platform_secret):
             logger.error(
                 "WhatsApp webhook rejected: WHATSAPP_APP_SECRET_KEY is not configured."
             )
@@ -91,7 +86,7 @@ class WhatsAppWebhookHandler(BaseWebhookHandler):
     async def _process_verify_webhook_payload(self, payload: QueryParams) -> PlainTextResponse:
         """Meta's subscription handshake: echo `hub.challenge` for the right token."""
         verify_token = settings.WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN
-        if not _is_configured(verify_token):
+        if not is_configured_secret(verify_token):
             raise UnauthorizedException(
                 "WhatsApp webhook verify token is not configured."
             )

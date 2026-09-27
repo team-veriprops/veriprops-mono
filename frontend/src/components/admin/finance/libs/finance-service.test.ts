@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AdminPayoutService } from "./admin-payout-service";
 import { CommissionRuleService } from "./commission-rule-service";
+import { AdminPaymentService } from "./admin-payment-service";
 import { HttpClient } from "@lib/FetchHttpClient";
 import { AgentRole } from "@/types/agent";
 
@@ -54,5 +55,16 @@ describe("CommissionRuleService contract (mirrors app/domain/commission_rule/con
     await new CommissionRuleService(http).setRule(AgentRole.REGISTRY, { amountNgnKobo: 2_000_000 });
     expect(calls[0]).toMatchObject({ method: "put", url: "/admin/commission-rules/REGISTRY" });
     expect(calls[0].body).toMatchObject({ amountNgnKobo: 2_000_000 });
+  });
+});
+
+describe("AdminPaymentService contract (mirrors admin_payment_router in app/domain/payment/controller.py)", () => {
+  it("lists refunds a gateway refused, paged, and retries one", async () => {
+    const { http, calls } = mockHttp();
+    const svc = new AdminPaymentService(http);
+    await svc.listRefundRetries(2, 20);
+    await svc.retryRefund("pay-1");
+    expect(calls[0]).toMatchObject({ method: "get", url: "/admin/payments/refund-retries?page=2&page_size=20" });
+    expect(calls[1]).toMatchObject({ method: "post", url: "/admin/payments/pay-1/refund" });
   });
 });

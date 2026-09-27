@@ -151,6 +151,9 @@ export const ROUTES = {
   // so they must stay outside PROTECTED_PREFIXES in proxy.ts.
   WA: {
     PAY: (token: string) => `/wa/pay/${token}`,
+    // Where a handoff's hosted checkout returns (backend WA_PAY_RETURN_PATH). Public: the
+    // customer holds a grant cookie, not a session.
+    PAY_RETURN: '/wa/pay/return',
     UPLOAD: (token: string) => `/wa/upload/${token}`,
     REPORT: (token: string) => `/wa/report/${token}`,
     // §26.4.4 WhatsApp→web linking. Unlike its siblings this one *does* need a session —

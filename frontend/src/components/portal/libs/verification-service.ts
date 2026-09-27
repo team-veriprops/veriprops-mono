@@ -113,6 +113,12 @@ export class VerificationService {
     });
   }
 
+  /** On return from a hosted checkout (or a reload): the backend asks the gateway about the
+   *  verification's open payments and answers with the latest one. */
+  reconcilePayment(id: string): Promise<SuccessResponse<Payment | null>> {
+    return this.http.post(`/payments/reconcile/${id}`);
+  }
+
   // Deterministic completion in local/test/dev (backend PAYMENT_STUB_MODE).
   stubConfirm(txRef: string, succeeded = true): Promise<SuccessResponse<{ processed: boolean }>> {
     return this.http.post(`/payments/stub/confirm`, { txRef, succeeded });

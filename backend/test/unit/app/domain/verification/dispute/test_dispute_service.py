@@ -24,6 +24,7 @@ from main.appodus_utils.exception.exceptions import (
     ValidationException,
 )
 from test.utils.repo_fakes import fake_claim_transition
+from main.app.domain.payment.models import RefundOutcome
 
 _LONG = "x" * 120  # ≥ 100-char description
 
@@ -95,7 +96,7 @@ def _service(verification=None, report=None, dispute=None, window_days=30):
     svc._commissions.freeze_for_verification = AsyncMock()
     svc._commissions.unfreeze_for_verification = AsyncMock()
     svc._commissions.reverse_for_verification = AsyncMock()
-    svc._payments.refund = AsyncMock(return_value=12_000_000)
+    svc._payments.refund = AsyncMock(return_value=RefundOutcome(refunded_minor=12_000_000))
     svc._reviews.reopen_task = AsyncMock()
     return svc
 
@@ -152,12 +153,17 @@ class TestAgentDefence:
 
 
 class TestResolve:
-    async def _resolve(self, monkeypatch, outcome, **kwargs):
+    async def _resolve(self, monkeypatch, outcome, track=None, **kwargs):
+        """*track*, when given, collects the order of the resolution's side effects."""
         import main.app.domain.verification.dispute.service as mod
-        monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
+        seen = track if track is not None else []
+        monkeypatch.setattr(mod, "publish_domain_event", AsyncMock(side_effect=lambda *_: seen.append("event")))
         v = _verification(status=VerificationStatus.DISPUTED)
         dispute = _dispute(status=DisputeStatus.OPEN)
         svc = _service(verification=v, dispute=dispute)
+        svc._payments.refund = AsyncMock(side_effect=lambda *a, **k: seen.append("refund") or RefundOutcome())
+        svc._commissions.reverse_for_verification = AsyncMock(side_effect=lambda *a, **k: seen.append("reverse"))
+        svc._audit.schedule = MagicMock(side_effect=lambda **k: seen.append("audit"))
         await svc.resolve("d-1", ResolveDisputeDto(outcome=outcome, note="admin decision", **kwargs), "admin-1")
         # The resolution itself is the claim, recorded with its outcome and who decided.
         assert dispute.status == DisputeStatus.RESOLVED.value
@@ -169,6 +175,14 @@ class TestResolve:
         statuses = [c.args[1].status for c in svc._verification_repo.update.call_args_list if c.args[1].status]
         assert VerificationStatus.COMPLETED.value in statuses
         svc._commissions.unfreeze_for_verification.assert_awaited_once()
+
+    async def test_the_refund_is_the_last_thing_that_can_fail(self, monkeypatch):
+        """Money leaves at the gateway the moment refund() runs, so nothing that can still
+        roll the transaction back may come after it."""
+        order = []
+        await self._resolve(monkeypatch, DisputeOutcome.FULL_REFUND, track=order)
+        assert order[-1] == "refund"
+        assert "reverse" in order
 
     async def test_full_refund_refunds_and_reverses(self, monkeypatch):
         svc = await self._resolve(monkeypatch, DisputeOutcome.FULL_REFUND)

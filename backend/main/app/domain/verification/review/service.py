@@ -310,11 +310,13 @@ class ReviewService:
             from_state=verification.status, to_state=VerificationStatus.FAILED.value,
             details={"reason": reason},
         )
-        refunded = await self._payments.refund(verification_id, admin_id, reason)
+        refund = await self._payments.refund(verification_id, admin_id, reason)
         self._audit.schedule(
             action=AuditActionType.VERIFICATION_REFUNDED,
             resource_type="verification", resource_id=verification_id, actor_id=admin_id,
-            details={"refunded_minor": refunded, "reason": reason},
+            # A refused refund leaves its payment settled, in finance's refunds-to-retry list.
+            details={"refunded_minor": refund.refunded_minor,
+                     "refund_failed_payment_ids": refund.failed_payment_ids, "reason": reason},
         )
         return await self._verification_repo.get_model(verification_id)
 

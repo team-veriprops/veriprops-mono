@@ -1,4 +1,4 @@
-from typing import List, Optional, Type
+from typing import List, Optional, Tuple, Type
 
 from kink import inject
 from sqlalchemy import func, select
@@ -12,6 +12,8 @@ from main.app.domain.payment.models import (
     SearchPaymentDto,
     UpdatePaymentDto,
 )
+from main.app.domain.verification.models import Verification, VerificationStatus
+from main.appodus_utils.db.db_utils import hex_ref
 from main.appodus_utils.db.repo import GenericRepo
 
 
@@ -35,6 +37,34 @@ class PaymentRepo(
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_by_gateway_reference(self, provider: str, gateway_reference: str) -> Optional[Payment]:
+        """The payment a gateway identifies by its own reference (a chargeback that cites no tx_ref)."""
+        stmt = select(Payment).where(
+            Payment.deleted.is_(False),
+            Payment.provider == provider,
+            Payment.gateway_reference == gateway_reference,
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def page_refunds_to_retry(self, page: int, page_size: int) -> Tuple[List[Payment], int]:
+        """Settled payments whose verification was failed or refunded: money that should have
+        gone back and did not, because the gateway refused the refund. Oldest first."""
+        criteria = (
+            Payment.deleted.is_(False),
+            Payment.status == PaymentStatus.SUCCEEDED.value,
+            Payment.chargeback_status.is_(None),
+            Verification.status.in_([VerificationStatus.FAILED.value, VerificationStatus.REFUNDED.value]),
+        )
+        joined = select(Payment).join(Verification, hex_ref(Verification.id) == Payment.verification_id)
+        total = await self._session.scalar(
+            select(func.count()).select_from(joined.where(*criteria).subquery())
+        )
+        rows = await self._session.execute(
+            joined.where(*criteria).order_by(Payment.date_created.asc()).offset(page * page_size).limit(page_size)
+        )
+        return list(rows.scalars().all()), int(total or 0)
 
     async def list_for_verification(self, verification_id: str) -> List[Payment]:
         stmt = select(Payment).where(

@@ -8,6 +8,7 @@ import { PageShell } from "@components/ui/PageShell";
 import { AttentionChip } from "@components/ui/AttentionChip";
 import { MiniBarBreakdown } from "@components/ui/MiniBarBreakdown";
 import { useFinanceSummaryQuery } from "./libs/useFinanceSummaryQuery";
+import RefundRetries from "./RefundRetries";
 import { FinanceSummary } from "@/types/finance";
 import { ROUTES } from "@lib/routes";
 import { formatMinor } from "@lib/utils";
@@ -52,6 +53,8 @@ export default function AdminFinance() {
               href={ROUTES.ADMIN.FINANCE_PAYOUTS}
             />
           </div>
+
+          <RefundRetries />
         </PageShell>
       )}
     </AsyncStateComponent>

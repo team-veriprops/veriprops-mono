@@ -20,7 +20,7 @@ import hashlib
 from typing import List
 
 from kink import inject
-from sqlalchemy import String, case, cast, func, or_, select, update
+from sqlalchemy import case, or_, select, update
 
 from main.app.config.settings import settings
 from main.app.domain.audit.models import AuditLog
@@ -44,6 +44,7 @@ from main.appodus_utils import Utils
 from main.appodus_utils.db.session import get_db_session_from_context
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
+from main.appodus_utils.db.db_utils import hex_ref
 
 _REDACTED = "[erased]"
 
@@ -294,17 +295,12 @@ class PiiPseudonymiser:
         return surfaces
 
 
-def _hex_ref(column):
-    """A UUID column in the 32-char form reference columns store."""
-    return func.replace(cast(column, String), "-", "")
-
-
 def _subject_conversation_refs(subject_user_id: str):
     """The subject's own threads, as stored conversation refs: the ones they opened (web
     support, an owned WhatsApp thread) and their cases' customer threads, whose opener may
     have been an admin."""
-    own_cases = select(_hex_ref(Verification.id)).where(Verification.customer_id == subject_user_id)
-    return select(_hex_ref(Conversation.id)).where(
+    own_cases = select(hex_ref(Verification.id)).where(Verification.customer_id == subject_user_id)
+    return select(hex_ref(Conversation.id)).where(
         or_(
             Conversation.created_by == subject_user_id,
             Conversation.verification_id.in_(own_cases),

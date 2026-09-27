@@ -3,45 +3,31 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query
 from kink import di
 from libre_fastapi_jwt import AuthJWT
 
 from main.app.config.settings import settings
 from main.app.domain.payment.models import (
     InitiatePaymentDto,
-    Payment,
     PaymentDto,
     PaymentWebhookDto,
+    payment_to_dto,
 )
 from main.app.domain.payment.service import PaymentService
 from main.appodus_utils import Object
-from main.appodus_utils.db.models import SuccessResponse
-from main.appodus_utils.db.types.money import TransactionCurrency
+from main.app.domain.user.auth.utils.permissions import Permission, require_permission
+from main.appodus_utils.db.models import Page, SuccessResponse
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 
 from main.app.domain.payment.chargeback.controller import chargeback_router
 
 payment_router = APIRouter(prefix="/payments", tags=["Payments"])
+# Finance's view of payments: the refunds a gateway refused, and their retry.
+admin_payment_router = APIRouter(prefix="/admin/payments", tags=["Admin: Payments"])
 payment_service: PaymentService = di[PaymentService]
 # Chargeback ingestion is a child of the payment domain (§6a.1).
 payment_router.include_router(chargeback_router)
-
-
-def _to_dto(p: Payment) -> PaymentDto:
-    return PaymentDto(
-        id=p.id,
-        verification_id=p.verification_id,
-        tx_ref=p.tx_ref,
-        method=p.method,
-        status=p.status,
-        amount_minor=p.amount_minor,
-        currency=TransactionCurrency(p.currency),
-        charge_currency=TransactionCurrency(p.charge_currency) if p.charge_currency else None,
-        charge_amount_minor=p.charge_amount_minor,
-        checkout_url=p.checkout_url,
-        date_created=p.date_created,
-    )
 
 
 @payment_router.post("/initiate/{verification_id}", response_model=SuccessResponse[PaymentDto])
@@ -56,7 +42,17 @@ async def initiate_payment(
     payment = await payment_service.initiate(
         verification_id, customer_id, req.method, idempotency_key=idempotency_key
     )
-    return SuccessResponse[PaymentDto](data=_to_dto(payment))
+    return SuccessResponse[PaymentDto](data=payment_to_dto(payment))
+
+
+@payment_router.post("/reconcile/{verification_id}", response_model=SuccessResponse[Optional[PaymentDto]])
+async def reconcile_payment(verification_id: str, authorize: AuthJWT = Depends()):
+    """The pay page's check on return from a hosted checkout (or on reload): asks the gateway
+    about the customer's open payments on this verification, and returns the latest one."""
+    await authorize.jwt_required()
+    customer_id = str(authorize.get_jwt_subject())
+    payment = await payment_service.reconcile_for_verification(verification_id, customer_id)
+    return SuccessResponse[Optional[PaymentDto]](data=payment_to_dto(payment) if payment else None)
 
 
 class StubConfirmPaymentDto(Object):
@@ -88,3 +84,23 @@ async def stub_confirm_payment(
         )
     )
     return SuccessResponse[dict](data={"processed": processed})
+
+
+@admin_payment_router.get("/refund-retries", response_model=SuccessResponse[Page[PaymentDto]])
+async def list_refund_retries(
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=10, ge=1, le=100),
+    _admin_id: str = Depends(require_permission(Permission.REFUND_PAYMENT)),
+):
+    """Settled payments on verifications that were refunded or failed: a gateway refused to
+    return the money, and finance retries it here."""
+    return SuccessResponse[Page[PaymentDto]](data=await payment_service.page_refunds_to_retry(page, page_size))
+
+
+@admin_payment_router.post("/{payment_id}/refund", response_model=SuccessResponse[PaymentDto])
+async def retry_refund(
+    payment_id: str,
+    admin_id: str = Depends(require_permission(Permission.REFUND_PAYMENT)),
+):
+    payment = await payment_service.retry_refund(payment_id, admin_id)
+    return SuccessResponse[PaymentDto](data=payment_to_dto(payment))

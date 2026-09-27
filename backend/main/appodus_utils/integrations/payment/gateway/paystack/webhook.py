@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from loguru import Logger
+
+    from main.app.domain.payment.service import PaymentService
 import hashlib
 import hmac
 from typing import Dict, Optional
@@ -18,8 +20,8 @@ from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 from main.appodus_utils.domain.webhook.callback.service import CallbackService
 from main.appodus_utils import Utils
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
-from main.appodus_utils.integrations.payment.gateway.paystack.models import PaystackWebhookPayload, PaystackEventType, \
-    ChargeSuccessData, TransferData, RefundData
+from main.appodus_utils.config.settings import is_configured_secret
+from main.appodus_utils.integrations.payment.gateway.paystack.models import PaystackEventType
 
 
 logger: Logger = di["logger"]
@@ -31,7 +33,8 @@ class PaystackWebhookHandler(BaseWebhookHandler):
                  callback_service: CallbackService,
                  # transaction_service: TransactionService
                  ):
-        super().__init__(settings.PAYSTACK_WEBHOOK_SECRET)
+        # Paystack signs webhooks with the account's secret key, read at validation time.
+        super().__init__(settings.PAYSTACK_SECRET_KEY)
         self._callback_service = callback_service
         # self._transaction_service = transaction_service
 
@@ -40,14 +43,14 @@ class PaystackWebhookHandler(BaseWebhookHandler):
         return IntegratedPlatform.PAYSTACK
 
     async def validate_signature(self, body: bytes, headers: Dict) -> bool:
-        received_signature = headers.get("x-paystack-signature")
-        if not received_signature:
+        """`x-paystack-signature` is HMAC-SHA512 of the raw body, keyed by the secret key.
+        An unconfigured key rejects every request."""
+        key = settings.PAYSTACK_SECRET_KEY
+        received = headers.get("x-paystack-signature")
+        if not is_configured_secret(key) or not received:
             return False
-
-        expected_signature = hmac.new(key=self.platform_secret.encode(), msg=body, digestmod=hashlib.sha512).hexdigest()
-
-        # Compare securely
-        return hmac.compare_digest(received_signature, expected_signature)
+        expected = hmac.new(key=key.encode(), msg=body, digestmod=hashlib.sha512).hexdigest()
+        return hmac.compare_digest(received, expected)
 
     async def webhook_replay_handler(self, callback: QueryCallbackDto) -> None:
         pass
@@ -76,52 +79,29 @@ class PaystackWebhookHandler(BaseWebhookHandler):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not implemented!")
 
     async def _process_handle_webhook_payload(self, payload_dict: Dict) -> Dict:
-        payload = PaystackWebhookPayload(**payload_dict)
+        """Route a verified event. A charge event only asks for the charge to be confirmed
+        with the gateway; the body itself never settles anything. Events we do not act on
+        are acknowledged, so Paystack stops retrying them."""
+        event = payload_dict.get("event")
+        data = payload_dict.get("data") or {}
 
-        event = payload.event
-        data = payload.data
-
-        if event == PaystackEventType.CHARGE_SUCCESS:
-            await self.handle_charge_success(data)
-
-        elif event == PaystackEventType.TRANSFER_SUCCESS:
-            await self.handle_transfer_success(data)
-
-        elif event == PaystackEventType.TRANSFER_FAILED:
-            await self.handle_transfer_failed(data)
-
-        elif event == PaystackEventType.TRANSFER_REVERSED:
-            await self.handle_transfer_reversed(data)
-
-        elif event == PaystackEventType.REFUND_SUCCESS:
-            await self.handle_refund_success(data)
+        if event == PaystackEventType.CHARGE_SUCCESS.value and data.get("reference"):
+            await self._payments().confirm_from_gateway(data["reference"])
+        elif event == PaystackEventType.CHARGE_DISPUTE_CREATE.value and (data.get("transaction") or {}).get("reference"):
+            await self._payments().record_chargeback(
+                IntegratedPlatform.PAYSTACK,
+                event_id=f"paystack:dispute:{data['id']}",
+                tx_ref=data["transaction"]["reference"],
+                reason=data.get("category"),
+            )
         else:
-            # Log unhandled event
-            msg = f"Unhandled Paystack event: {event}, Data: {data}"
-            logger.error(msg)
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
-
+            # Transfers are settled by the payout flow (S4); refunds were accepted when issued.
+            logger.info(f"Paystack event {event!r} acknowledged without action")
+            return {"status": "ignored"}
         return {"status": "success"}
 
-    # === Event-specific Handlers ===
-    async def handle_charge_success(self, data: ChargeSuccessData):
+    @staticmethod
+    def _payments() -> "PaymentService":
+        """Resolved per event: the payment domain depends on this integration package."""
         from main.app.domain.payment.service import PaymentService
-        from main.app.domain.payment.models import PaymentStatus
-        payment_service: PaymentService = di[PaymentService]
-        await payment_service.record_provider_event(
-            provider_ref=data.reference,
-            status=PaymentStatus.SUCCEEDED.value,
-            payload=data.model_dump(),
-        )
-
-    async def handle_transfer_success(self, data: TransferData):
-        print(f"[transfer.success] Transfer to {data.recipient} successful. Ref: {data.reference}")
-
-    async def handle_transfer_failed(self, data: TransferData):
-        print(f"[transfer.failed] Transfer to {data.recipient} failed. Ref: {data.reference}")
-
-    async def handle_transfer_reversed(self, data: TransferData):
-        print(f"[transfer.reversed] Transfer reversed. Ref: {data.reference}")
-
-    async def handle_refund_success(self, data: RefundData):
-        print(f"[refund.success] Refund successful. Ref: {data.reference}")
+        return di[PaymentService]

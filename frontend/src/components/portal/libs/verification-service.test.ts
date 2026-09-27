@@ -90,4 +90,11 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
     expect(calls[0].config).toMatchObject({ headers: { "Idempotency-Key": "pay-key" } });
     expect(calls[1]).toMatchObject({ url: "/payments/stub/confirm", body: { txRef: "VP-2026-ABC-xyz", succeeded: true } });
   });
+
+  it("reconciles a verification's payments with the gateway on return from checkout", async () => {
+    const { http, calls } = mockHttp();
+    const svc = new VerificationService(http);
+    await svc.reconcilePayment("ver-1");
+    expect(calls[0]).toMatchObject({ method: "post", url: "/payments/reconcile/ver-1" });
+  });
 });

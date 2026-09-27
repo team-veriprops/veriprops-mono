@@ -6,7 +6,8 @@ from main.appodus_utils.domain.webhook.callback.service import CallbackService
 
 if TYPE_CHECKING:
     from loguru import Logger
-import hashlib
+
+    from main.app.domain.payment.service import PaymentService
 import hmac
 from typing import Dict, Optional
 
@@ -19,8 +20,8 @@ from starlette.responses import Response, RedirectResponse
 from main.app.config.settings import IntegratedPlatform, settings
 from main.appodus_utils import Utils
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
-from main.appodus_utils.integrations.payment.gateway.flutterwave.models import FlutterwaveWebhookPayload, FlutterwaveEvent, \
-    WebhookData
+from main.appodus_utils.config.settings import is_configured_secret
+from main.appodus_utils.integrations.payment.gateway.flutterwave.models import FlutterwaveEvent
 
 logger: Logger = di["logger"]
 
@@ -39,14 +40,13 @@ class FlutterwaveWebhookHandler(BaseWebhookHandler):
         return IntegratedPlatform.FLUTTERWAVE
 
     async def validate_signature(self, body: bytes, headers: Dict) -> bool:
-        received_signature = headers.get("verif-hash")
-        if not received_signature:
+        """Flutterwave v3 sends the dashboard's secret hash verbatim in `verif-hash` (it is not
+        an HMAC of the body). An unconfigured secret rejects every request."""
+        secret = settings.FLUTTERWAVE_WEBHOOK_SECRET
+        received = headers.get("verif-hash")
+        if not is_configured_secret(secret) or not received:
             return False
-
-        expected_signature = hmac.new(key=self.platform_secret.encode(), msg=body, digestmod=hashlib.sha256).hexdigest()
-
-        # Compare securely
-        return hmac.compare_digest(received_signature, expected_signature)
+        return hmac.compare_digest(received.encode(), secret.encode())
 
     async def webhook_replay_handler(self, callback: QueryCallbackDto) -> None:
         pass
@@ -75,74 +75,30 @@ class FlutterwaveWebhookHandler(BaseWebhookHandler):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not implemented!")
 
     async def _process_handle_webhook_payload(self, payload_dict: Dict) -> Dict:
-        payload = FlutterwaveWebhookPayload(**payload_dict)
+        """Route a verified event. A charge event only asks for the charge to be confirmed
+        with the gateway; the body itself never settles anything. Events we do not act on
+        are acknowledged, so Flutterwave stops retrying them."""
+        event = payload_dict.get("event")
+        data = payload_dict.get("data") or {}
 
-        event = payload.event
-        data = payload.data
-
-        if event == FlutterwaveEvent.CHARGE_COMPLETED and data.status == "successful":
-            # Handle successful payment
-            await self.handle_charge_completed(data)
-
-        elif event == FlutterwaveEvent.TRANSFER_COMPLETED:
-            # Handle successful transfer
-            await self.handle_transfer_completed(data)
-
-        elif event == FlutterwaveEvent.TRANSFER_FAILED:
-            # Handle failed transfer
-            await self.handle_transfer_failed(data)
-
-        elif event == FlutterwaveEvent.REFUND_COMPLETED:
-            # Handle refund confirmation
-            await self.handle_refund_completed(data)
-
-        elif event == FlutterwaveEvent.VIRTUAL_ACCOUNT_CREATED:
-            # Handle virtual account creation
-            await self.handle_virtual_account_created(data)
-
-        elif event == FlutterwaveEvent.BILL_COMPLETED:
-            # Handle successful bill payment
-            await self.handle_bill_completed(data)
-
-        elif event == FlutterwaveEvent.PAYMENT_LINK_CANCELLED:
-            # Handle payment link cancellation
-            await self.handle_payment_link_cancelled(data)
-
+        if event == FlutterwaveEvent.CHARGE_COMPLETED.value and data.get("tx_ref"):
+            await self._payments().confirm_from_gateway(data["tx_ref"])
+        elif event == FlutterwaveEvent.CHARGEBACK_INITIATED.value and data.get("flw_ref"):
+            # Flutterwave cites a disputed charge only by its own reference.
+            await self._payments().record_chargeback(
+                IntegratedPlatform.FLUTTERWAVE,
+                event_id=f"flutterwave:chargeback:{data['id']}",
+                gateway_reference=data["flw_ref"],
+                reason=data.get("comment"),
+            )
         else:
-            # Log unhandled event
-            msg = f"Unhandled Flutterwave event: {event}, Data: {data}"
-            logger.error(msg)
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
-
+            # Transfers are settled by the payout flow (S4); refunds were accepted when issued.
+            logger.info(f"Flutterwave event {event!r} acknowledged without action")
+            return {"status": "ignored"}
         return {"status": "success"}
 
-    # === Handlers (Stub Implementations) ===
-
-    async def handle_charge_completed(self, data: WebhookData):
-        # Bridge Flutterwave webhook → veriprops PaymentService.
+    @staticmethod
+    def _payments() -> "PaymentService":
+        """Resolved per event: the payment domain depends on this integration package."""
         from main.app.domain.payment.service import PaymentService
-        from main.app.domain.payment.models import PaymentStatus
-        payment_service: PaymentService = di[PaymentService]
-        await payment_service.record_provider_event(
-            provider_ref=data.reference,
-            status=PaymentStatus.SUCCEEDED.value,
-            payload=data.model_dump() if hasattr(data, "model_dump") else dict(data.__dict__),
-        )
-
-    async def handle_transfer_completed(self, data: WebhookData):
-        print("Transfer completed", data)
-
-    async def handle_transfer_failed(self, data: WebhookData):
-        print("Transfer failed", data)
-
-    async def handle_refund_completed(self, data: WebhookData):
-        print("Refund completed", data)
-
-    async def handle_virtual_account_created(self, data: WebhookData):
-        print("Virtual account created", data)
-
-    async def handle_bill_completed(self, data: WebhookData):
-        print("Bill completed", data)
-
-    async def handle_payment_link_cancelled(self, data: WebhookData):
-        print("Payment link cancelled", data)
+        return di[PaymentService]

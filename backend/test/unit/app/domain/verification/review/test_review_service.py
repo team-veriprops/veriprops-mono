@@ -15,6 +15,7 @@ from main.appodus_utils.exception.exceptions import (
     ValidationException,
 )
 from test.utils.repo_fakes import fake_claim_transition
+from main.app.domain.payment.models import RefundOutcome
 
 
 @pytest.fixture(autouse=True)
@@ -109,7 +110,7 @@ def _make_service(verification, tasks):
     svc._reports.release = AsyncMock(return_value=SimpleNamespace(id="rep-1", report_version=1))
     svc._reports.get_released = AsyncMock(return_value=None)
     svc._reports.supersede_current = AsyncMock()
-    svc._payments.refund = AsyncMock(return_value=1000000)
+    svc._payments.refund = AsyncMock(return_value=RefundOutcome(refunded_minor=1000000))
     svc._state = state
     return svc
 

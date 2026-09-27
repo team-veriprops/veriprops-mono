@@ -4,6 +4,7 @@ from kink import inject
 
 from main.app.config.bootstrap import di_bootstrap
 from main.app.config.settings import IntegratedPlatform, settings
+from main.appodus_utils.integrations.exception.exceptions import IntegrationFatalException
 from main.appodus_utils.integrations.interface import IWebhookHandler, BaseWebhookHandler
 from main.appodus_utils.integrations.payment.gateway.interface import IPaymentGateway
 
@@ -31,6 +32,13 @@ di_bootstrap.register_all_subclasses(IPaymentGateway)
 
 @inject
 class PaymentGatewayFactory:
+    """The payment gateways, by platform.
+
+    Like the webhook factory below, the table is rebuilt on a miss: gateways are discovered
+    through ``IPaymentGateway.__subclasses__()``, so one whose package loaded after this
+    factory was built would otherwise be invisible for the life of the process.
+    """
+
     def __init__(self, gateways: List[IPaymentGateway]):
         self._gateways = gateways
         self._factory = {}
@@ -40,11 +48,25 @@ class PaymentGatewayFactory:
         for gateway in self._gateways:
             self._factory[gateway.platform] = gateway
 
-    def get_gateway(self, platform: IntegratedPlatform) -> IPaymentGateway:
-        return self._factory.get(platform)
+    def for_platform(self, platform: IntegratedPlatform) -> IPaymentGateway:
+        """The gateway that holds charges on *platform*; a missing one is a deployment fault."""
+        gateway = self._factory.get(platform)
+        if gateway is None:
+            self._gateways = di_bootstrap.register_all_subclasses(IPaymentGateway)
+            self._init_factory()
+            gateway = self._factory.get(platform)
+        if gateway is None:
+            raise IntegrationFatalException(f"No payment gateway is registered for {platform.value}.")
+        return gateway
 
-    def get_default_gateway(self) -> IPaymentGateway:
-        return self._factory.get(settings.ACTIVE_PAYMENT_METHOD)
+    def active(self) -> IPaymentGateway:
+        """The gateway new charges go to (settings.ACTIVE_PAYMENT_METHOD)."""
+        platform = settings.ACTIVE_PAYMENT_METHOD.integrated_platform
+        if platform is None:
+            raise IntegrationFatalException(
+                f"{settings.ACTIVE_PAYMENT_METHOD.value} has no payment integration."
+            )
+        return self.for_platform(platform)
 
     def get_gateways(self) -> List[IPaymentGateway]:
         return self._gateways

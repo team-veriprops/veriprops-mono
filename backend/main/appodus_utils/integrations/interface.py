@@ -7,8 +7,8 @@ from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 
 if TYPE_CHECKING:
     from loguru import Logger
+import asyncio
 import json
-import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Callable, Optional
 
@@ -89,7 +89,7 @@ class BaseWebhookHandler(IWebhookHandler):
                     raise
                 wait_time = 2 ** attempt
                 logger.warning(f"Attempt {attempt + 1} failed. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
+                await asyncio.sleep(wait_time)
         return None
 
     async def handle_redirect(self, payload: QueryParams, headers: Dict, response: Response) -> Optional[RedirectResponse]:

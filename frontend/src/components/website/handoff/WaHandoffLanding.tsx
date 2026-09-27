@@ -14,6 +14,7 @@ import { waMeUrl } from "@lib/whatsapp";
 import WhatsAppOptInControls from "@components/shared/whatsapp/WhatsAppOptInControls";
 import { NO_WHATSAPP_CONSENT, WhatsAppConsent } from "@/types/whatsappConsent";
 import { HandoffService } from "./libs/handoff-service";
+import { PaymentCheckoutKind } from "@/types/verification";
 
 const service = new HandoffService(httpClient);
 
@@ -83,7 +84,13 @@ export default function WaHandoffLanding({
     setPaying(true);
     try {
       const res = await service.initiatePayment();
-      setPayment(res.data ?? null);
+      const started = res.data ?? null;
+      if (started?.checkoutKind === PaymentCheckoutKind.HOSTED && started.checkoutUrl) {
+        // Paid on the gateway's page, which returns to the public PAY_RETURN page.
+        window.location.assign(started.checkoutUrl);
+        return;
+      }
+      setPayment(started);
     } catch {
       setFailed(true);
     } finally {
@@ -247,15 +254,6 @@ export function PaySection({
           <p className="text-sm text-muted-foreground">
             Complete the payment on the secure checkout page.
           </p>
-          {payment.checkoutUrl?.startsWith("http") && (
-            <a
-              href={payment.checkoutUrl}
-              className="text-primary underline"
-              data-testid="wa-handoff-checkout-link"
-            >
-              Open secure checkout
-            </a>
-          )}
         </div>
       )}
       </>
@@ -309,7 +307,7 @@ function ContinueInPortal({
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto max-w-md px-5 py-10 space-y-5">{children}</main>
   );

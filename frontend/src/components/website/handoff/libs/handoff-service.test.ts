@@ -43,4 +43,10 @@ describe("HandoffService", () => {
     await new HandoffService(http).release();
     expect(http.post).toHaveBeenCalledWith("/public/wa/handoff/release");
   });
+
+  it("reconciles the grant's payment on return from the hosted checkout", async () => {
+    const http = client();
+    await new HandoffService(http).reconcilePayment();
+    expect(http.post).toHaveBeenCalledWith("/public/wa/handoff/pay/reconcile");
+  });
 });

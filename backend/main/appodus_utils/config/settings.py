@@ -112,6 +112,13 @@ _INSECURE_SECRET_VALUES = {
     "d344auth_jwt_s3cr3t-635678$%#agst634",
 }
 
+def is_configured_secret(value) -> bool:
+    """Whether a secret setting holds a real value. Blank, the placeholder and the known
+    insecure defaults all mean "not configured", which a signature check treats as "reject",
+    never as "no check needed"."""
+    return (value or "").strip() not in _INSECURE_SECRET_VALUES
+
+
 # Settings fields that hold credentials. Single source of truth for env hygiene:
 # committed .env.{env} files must never carry a real value for any of these keys —
 # real values are injected as process env vars by the secrets manager (Doppler),

@@ -1,6 +1,6 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { SuccessResponse } from "@/types/models";
-import { HandoffContext, HandoffIntent, HandoffPayment, SeededDraft } from "@/types/handoff";
+import { HandoffContext, HandoffIntent, HandoffPayment, HandoffPaymentStatus, SeededDraft } from "@/types/handoff";
 import { SetWhatsAppConsent, WhatsAppConsent } from "@/types/whatsappConsent";
 
 /**
@@ -35,6 +35,12 @@ export class HandoffService {
   /** Start payment for the case the grant names — never a case id from the client. */
   initiatePayment(): Promise<SuccessResponse<HandoffPayment>> {
     return this.http.post(`/public/wa/handoff/pay/initiate`);
+  }
+
+  /** On return from the hosted checkout: the backend asks the gateway where the grant's
+   *  payment stands, so a late or lost webhook still settles it. */
+  reconcilePayment(): Promise<SuccessResponse<HandoffPaymentStatus>> {
+    return this.http.post(`/public/wa/handoff/pay/reconcile`);
   }
 
   /**

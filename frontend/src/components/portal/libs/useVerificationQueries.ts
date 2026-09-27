@@ -163,6 +163,14 @@ export function useInitiatePaymentMutation() {
   });
 }
 
+export function useReconcilePaymentMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => service.reconcilePayment(id),
+    onSuccess: (_res, id) => qc.invalidateQueries({ queryKey: verificationKeys.detail(id) }),
+  });
+}
+
 export function useStubConfirmMutation() {
   const qc = useQueryClient();
   return useMutation({

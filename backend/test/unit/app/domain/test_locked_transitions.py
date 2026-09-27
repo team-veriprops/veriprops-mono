@@ -177,7 +177,7 @@ def _payment(status=PaymentStatus.INITIATED, purpose="VERIFICATION"):
     return SimpleNamespace(
         id="pay-1", tx_ref="tx-1", verification_id="v-1", customer_id="c-1", amount_minor=10_000,
         status=status.value, purpose=purpose, failure_count=0, deleted=False,
-        gateway_event_id=None, refunded_amount_minor=None, card_fingerprint=None,
+        gateway_event_id=None, refunded_amount_minor=None, card_fingerprint=None, chargeback_status=None,
     )
 
 
@@ -237,7 +237,7 @@ class TestPaymentWebhook:
         db = _payment(PaymentStatus.REFUNDED)
         svc = _payment_service(db, read=_snapshot(db, status=PaymentStatus.SUCCEEDED.value))
 
-        assert await svc.refund("v-1", "admin-1") == 0
+        assert (await svc.refund("v-1", "admin-1")).refunded_minor == 0
         svc._audit.schedule.assert_not_called()
 
 

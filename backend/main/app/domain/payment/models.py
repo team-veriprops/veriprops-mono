@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from sqlalchemy import BigInteger, Column, Index, Integer, String
 
@@ -32,6 +32,15 @@ class PaymentMethodKind(str, enum.Enum):
     BANK_TRANSFER = "BANK_TRANSFER"
 
 
+class PaymentCheckoutKind(str, enum.Enum):
+    """How the customer completes a charge, so the pay page never has to guess from a URL."""
+
+    # Deterministic local/test/dev completion (PAYMENT_STUB_MODE): the pay page confirms it.
+    STUB = "STUB"
+    # The gateway's hosted page: the pay page sends the customer to ``checkout_url``.
+    HOSTED = "HOSTED"
+
+
 class PaymentPurpose(str, enum.Enum):
     """What a charge is for, so the idempotent webhook routes a confirmed payment to the
     right post-payment handler (§5.4 initial vs §14.1 re-check vs §14.2 tier upgrade)."""
@@ -51,7 +60,11 @@ class Payment(BaseEntity):
     tx_ref = Column(String(64), nullable=False, unique=True, index=True)
     # Gateway event id — the idempotency key for webhook processing (§4.6).
     gateway_event_id = Column(String(128), nullable=True, index=True)
+    # The IntegratedPlatform that holds the charge (None under PAYMENT_STUB_MODE).
     provider = Column(String(32), nullable=True)
+    # The gateway's own handle for the charge (Flutterwave flw_ref, Paystack transaction id),
+    # recorded when the charge is confirmed. Chargebacks that cite only it are matched by it.
+    gateway_reference = Column(String(128), nullable=True, index=True)
     method = Column(String(16), nullable=False)
     status = Column(String(20), nullable=False, default=PaymentStatus.INITIATED.value)
 
@@ -99,6 +112,7 @@ class CreatePaymentDto(Object):
 class UpdatePaymentDto(Object):
     status: Optional[str] = None
     gateway_event_id: Optional[str] = None
+    gateway_reference: Optional[str] = None
     provider: Optional[str] = None
     checkout_url: Optional[str] = None
     card_fingerprint: Optional[str] = None
@@ -138,7 +152,37 @@ class PaymentDto(Object):
     charge_currency: Optional[TransactionCurrency] = None
     charge_amount_minor: Optional[int] = None
     checkout_url: Optional[str] = None
+    checkout_kind: PaymentCheckoutKind = PaymentCheckoutKind.STUB
     date_created: datetime
+
+
+class RefundOutcome(Object):
+    """What a verification's refund did: the total refunded, and the payments whose gateway
+    refund was refused (still SUCCEEDED, listed for a finance retry)."""
+
+    refunded_minor: int = 0
+    failed_payment_ids: List[str] = []
+    # Payments under a chargeback: the issuer is returning that money, so we do not.
+    held_payment_ids: List[str] = []
+
+
+def payment_to_dto(p: Payment) -> PaymentDto:
+    return PaymentDto(
+        id=p.id,
+        verification_id=p.verification_id,
+        tx_ref=p.tx_ref,
+        method=p.method,
+        purpose=p.purpose,
+        status=p.status,
+        amount_minor=p.amount_minor,
+        currency=TransactionCurrency(p.currency),
+        charge_currency=TransactionCurrency(p.charge_currency) if p.charge_currency else None,
+        charge_amount_minor=p.charge_amount_minor,
+        checkout_url=p.checkout_url,
+        # A live charge has a provider; a stub charge completes on the pay page itself.
+        checkout_kind=PaymentCheckoutKind.HOSTED if p.provider else PaymentCheckoutKind.STUB,
+        date_created=p.date_created,
+    )
 
 
 class PaymentWebhookDto(Object):

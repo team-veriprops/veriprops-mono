@@ -203,7 +203,6 @@ class DisputeService:
             await self._commissions.unfreeze_for_verification(vid, admin_id)
         elif dto.outcome == DisputeOutcome.FULL_REFUND:
             await self._transition(vid, verification.status, VerificationStatus.REFUNDED)
-            await self._payments.refund(vid, admin_id, reason="dispute_upheld_full_refund")
             await self._commissions.reverse_for_verification(vid, admin_id)
         else:  # PARTIAL_RECHECK
             # The re-checked release becomes v2.0.
@@ -228,6 +227,9 @@ class DisputeService:
             recipient_user_ids=(dispute.customer_id,),
             data={"outcome": dto.outcome.value, "note": dto.note.strip()},
         ))
+        if dto.outcome == DisputeOutcome.FULL_REFUND:
+            # Last: money leaves at the gateway here, so nothing after it may roll back.
+            await self._payments.refund(vid, admin_id, reason="dispute_upheld_full_refund")
         return resolved
 
     async def list_for_verification(self, verification_id: str, customer_id: str) -> List[Dispute]:
