@@ -42,7 +42,7 @@ export class ChatService {
   }
 
   listMessages(conversationId: string, page = 0, pageSize = CHAT_MESSAGES_PAGE_SIZE): Promise<SuccessResponse<Page<ChatMessage>>> {
-    return this.http.get(`/chat/conversations/${conversationId}/messages?page=${page}&pageSize=${pageSize}`);
+    return this.http.get(`/chat/conversations/${conversationId}/messages?page=${page}&page_size=${pageSize}`);
   }
 
   markRead(conversationId: string): Promise<SuccessResponse<{ count: number }>> {
@@ -114,7 +114,7 @@ export class ChatService {
   }
 
   heldQueue(page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<Page<HeldMessage>>> {
-    return this.http.get(`/admin/messages/held?page=${page}&pageSize=${pageSize}`);
+    return this.http.get(`/admin/messages/held?page=${page}&page_size=${pageSize}`);
   }
 
   approveMessage(messageId: string): Promise<SuccessResponse<{ id: string; state: string }>> {

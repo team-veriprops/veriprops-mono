@@ -56,7 +56,7 @@ export class VerificationService {
   // shape with the /stream SSE endpoint. Backend owns every label and SLA state.
 
   listMine(page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<VerificationListItem>>> {
-    return this.http.get(`/verifications?page=${page}&pageSize=${pageSize}`);
+    return this.http.get(`/verifications?page=${page}&page_size=${pageSize}`);
   }
 
   /** Portal home summary (§9) — backend-derived counts + most-recent verifications. */
@@ -69,7 +69,7 @@ export class VerificationService {
   }
 
   getEvidence(id: string, page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<CustomerEvidence>>> {
-    return this.http.get(`/verifications/${id}/evidence?page=${page}&pageSize=${pageSize}`);
+    return this.http.get(`/verifications/${id}/evidence?page=${page}&page_size=${pageSize}`);
   }
 
   /** SSE stream URL (§4.9). Consumed by EventSource in useVerificationStream. */

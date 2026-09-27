@@ -34,7 +34,7 @@ describe("ChatService contract (mirrors /chat + /admin/messages)", () => {
     const svc = new ChatService(http);
     await svc.listMessages("conv-1", 0, 30);
     await svc.markRead("conv-1");
-    expect(calls[0]).toMatchObject({ method: "get", url: "/chat/conversations/conv-1/messages?page=0&pageSize=30" });
+    expect(calls[0]).toMatchObject({ method: "get", url: "/chat/conversations/conv-1/messages?page=0&page_size=30" });
     expect(calls[1]).toMatchObject({ method: "post", url: "/chat/conversations/conv-1/read" });
   });
 
@@ -70,7 +70,7 @@ describe("ChatService contract (mirrors /chat + /admin/messages)", () => {
     await svc.heldQueue(0, 20);
     await svc.approveMessage("msg-1");
     await svc.rejectMessage("msg-2");
-    expect(calls[0]).toMatchObject({ method: "get", url: "/admin/messages/held?page=0&pageSize=20" });
+    expect(calls[0]).toMatchObject({ method: "get", url: "/admin/messages/held?page=0&page_size=20" });
     expect(calls[1]).toMatchObject({ method: "post", url: "/admin/messages/msg-1/approve" });
     expect(calls[2]).toMatchObject({ method: "post", url: "/admin/messages/msg-2/reject" });
   });

@@ -55,7 +55,7 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
   it("lists the customer's own verifications (paged)", async () => {
     const { http, calls } = mockHttp();
     await new VerificationService(http).listMine(1, 20);
-    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications?page=1&pageSize=20" });
+    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications?page=1&page_size=20" });
   });
 
   it("fetches the portal dashboard summary from /verifications/summary", async () => {
@@ -73,7 +73,7 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
   it("fetches the review-approved evidence feed (paged)", async () => {
     const { http, calls } = mockHttp();
     await new VerificationService(http).getEvidence("ver-1", 0, 10);
-    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications/ver-1/evidence?page=0&pageSize=10" });
+    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications/ver-1/evidence?page=0&page_size=10" });
   });
 
   it("builds the proxied SSE stream URL", () => {
