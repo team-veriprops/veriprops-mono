@@ -45,19 +45,15 @@ class CallbackService:
         return True
 
     async def update_callback__handle_time(self, obj_in: CreateCallbackDto) -> bool:
-        search_dto = SearchCallbackDto(
-            query_fields="id",
+        # The dedicated query, not a criterion search: the generic search drops `platform`,
+        # which would let one provider's event overwrite another's unhandled callback.
+        callback = await self._callback_repo.get_by_platform_event_type_and_external_id(
             platform=obj_in.platform,
             event_type=obj_in.event_type,
             external_id=obj_in.external_id,
-            deleted=False,
-            handled=False,
-            page_size=1,
-            page=0
         )
-        callbacks = await self._callback_repo.get_by_criterion(search_dto=search_dto)
-        if callbacks and len(callbacks) > 0:
-            callback_id = callbacks[0].id
+        if callback is not None:
+            callback_id = callback.id
 
             obj_in = _UpdateCallbackDto(
                 handle_from_time=obj_in.handle_from_time,

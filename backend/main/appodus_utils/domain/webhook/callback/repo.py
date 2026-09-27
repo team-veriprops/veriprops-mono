@@ -1,7 +1,7 @@
 from typing import Type, Optional
 
 from kink import inject
-from sqlalchemy import and_, literal
+from sqlalchemy import literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.config.settings import IntegratedPlatform
@@ -22,35 +22,30 @@ class CallbackRepo(GenericRepo[Callback, CreateCallbackDto, UpdateCallbackDto, Q
                                                          platform: IntegratedPlatform,
                                                          event_type: CallbackType,
                                                          external_id: str) -> Optional[QueryCallbackDto]:
-        try:
-            callbacks = self._build_query_for__by_platform_event_type_and_external_id(
-                platform=platform,
-                event_type=event_type,
-                external_id=external_id
-            ).first()
-
-            return self._build_row_response(callbacks)
-        except Exception as exc:
-            raise exc
+        stmt = select(self._model).where(
+            *self._unhandled_event_criterion(platform, event_type, external_id)
+        ).limit(1)
+        row = (await self._session.execute(stmt)).scalars().first()
+        return await self.to_query_dto(row) if row is not None else None
 
     async def exists_by_platform_event_type_and_external_id(self,
-                                                         platform: IntegratedPlatform,
-                                                         event_type: CallbackType,
-                                                         external_id: str) -> bool:
-        return self._session.query(literal(True)).filter(
-            self._build_query_for__by_platform_event_type_and_external_id(
-                platform=platform,
-                event_type=event_type,
-                external_id=external_id
-            ).exists()).scalar()
+                                                            platform: IntegratedPlatform,
+                                                            event_type: CallbackType,
+                                                            external_id: str) -> bool:
+        stmt = select(literal(True)).where(
+            *self._unhandled_event_criterion(platform, event_type, external_id)
+        ).limit(1)
+        return (await self._session.execute(stmt)).scalar() is not None
 
-    def _build_query_for__by_platform_event_type_and_external_id(self,
-                                                         platform: IntegratedPlatform,
-                                                         event_type: CallbackType,
-                                                         external_id: str):
-        return self._session.query(self._model).filter(
-                and_(self._model.deleted == False,
-                     and_(self._model.platform == platform,
-                          and_(self._model.handled == False,
-                               and_(self._model.event_type == event_type, self._model.external_id == external_id))))
-            )
+    def _unhandled_event_criterion(self,
+                                   platform: IntegratedPlatform,
+                                   event_type: CallbackType,
+                                   external_id: str) -> list:
+        """A live callback for this provider event that has not been handled yet."""
+        return [
+            self._model.deleted.is_(False),
+            self._model.handled.is_(False),
+            self._model.platform == platform,
+            self._model.event_type == event_type,
+            self._model.external_id == external_id,
+        ]
