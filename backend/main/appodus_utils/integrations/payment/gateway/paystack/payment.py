@@ -3,131 +3,96 @@ from kink import di, inject
 
 from main.app.config.settings import IntegratedPlatform, settings
 from main.appodus_utils.exception.exceptions import NotImplementedException
+from typing import Optional
+
+from main.appodus_utils.db.types.money import TransactionCurrency
+from main.appodus_utils.integrations.payment.gateway.http import GatewayHttp, GatewayNotFound
 from main.appodus_utils.integrations.payment.gateway.interface import IPaymentGateway
-from main.appodus_utils.integrations.payment.gateway.models import (PaymentInitRequest, RefundRequest, BankTransferRequest,
-                                                          BankTransferResponse, GenericPaymentGatewayResponse,
-                                                          TransferFeeResponse, CountryBanksResponse, TransferFeeRequest)
+from main.appodus_utils.integrations.payment.gateway.models import (
+    BankTransferRequest,
+    BankTransferResponse,
+    CountryBanksResponse,
+    GatewayCharge,
+    GatewayChargeStatus,
+    GenericPaymentGatewayResponse,
+    HostedCheckoutRequest,
+    TransferFeeRequest,
+    TransferFeeResponse,
+)
 from main.appodus_utils.integrations.payment.gateway.paystack.mapper import PaystackMapper
 from main.appodus_utils.integrations.payment.gateway.paystack.models import (
     CreateRecipientRequest,
     CreateRecipientResponse,
-    PaystackBankTransferChargeRequest,
-    PaystackBankTransferResult,
 )
 
 httpx_client: AsyncClient = di[AsyncClient]
 
 
+# Paystack transaction statuses. `reversed` is money that came back out, so it never settles a
+# payment; `abandoned`/`ongoing`/`pending` (and anything new) have not settled either way.
+_PSK_STATUS = {
+    "success": GatewayChargeStatus.SUCCEEDED,
+    "failed": GatewayChargeStatus.FAILED,
+    "reversed": GatewayChargeStatus.FAILED,
+}
+
+
+def _psk_ok(body: dict) -> bool:
+    return body.get("status") is True
+
+
+def _psk_not_found(status_code: int, body: dict) -> bool:
+    return status_code == 404 or (status_code == 400 and "not found" in str(body.get("message", "")).lower())
+
+
 @inject
 class PaystackPaymentGateway(IPaymentGateway):
+    """Paystack. Amounts are kobo (or the currency's minor unit) on the wire."""
 
     def __init__(self):
         self.base_url = settings.PAYSTACK_BASE_URL
         self.headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}", "Content-Type": "application/json",
                         "Accept": "application/json"}
+        self._http = GatewayHttp("Paystack", settings.PAYSTACK_BASE_URL, settings.PAYSTACK_SECRET_KEY, _psk_ok)
+
     @property
     def platform(self) -> IntegratedPlatform:
         return IntegratedPlatform.PAYSTACK
 
-    async def initialize_payment(self, payment_request: PaymentInitRequest) -> str:
-        """
-        Initializes a payment session using Paystack's `/transaction/initialize` endpoint.
+    async def create_hosted_checkout(self, request: HostedCheckoutRequest) -> str:
+        """POST /transaction/initialize → ``data.authorization_url``."""
+        data = await self._http.request(
+            "POST", "/transaction/initialize", action="open the checkout",
+            json=PaystackMapper.to_init_payment_dto(request).model_dump(mode="json", exclude_none=True),
+        )
+        return data["authorization_url"]
 
-        ✅ Required Fields:
-        - `email` (str): Customer email
-        - `amount` (int): Amount in kobo (e.g., 500000 for ₦5000)
+    async def get_charge(self, reference: str) -> Optional[GatewayCharge]:
+        """GET /transaction/verify/{reference}."""
+        try:
+            data = await self._http.request(
+                "GET", f"/transaction/verify/{reference}", action="check the payment",
+                not_found_when=_psk_not_found,
+            )
+        except GatewayNotFound:
+            return None
+        transaction_id = str(data["id"])
+        return GatewayCharge(
+            reference=data["reference"],
+            gateway_transaction_id=transaction_id,
+            # Paystack's own handle for a transaction is its id; disputes cite it too.
+            gateway_reference=transaction_id,
+            status=_PSK_STATUS.get(str(data.get("status", "")).lower(), GatewayChargeStatus.PENDING),
+            amount_minor=int(data["amount"]),
+            currency=TransactionCurrency(data["currency"]),
+        )
 
-        🔁 Sample Request:
-        {
-            "email": "buyer@email.com",
-            "amount": 500000,
-            "metadata": {
-                "property_id": "PLOT-21-A1",
-                "buyer_name": "Kingsley"
-            }
-        }
-
-        ✅ Sample Response (partial):
-        {
-            "status": true,
-            "data": {
-                "authorization_url": "https://checkout.paystack.com/abc123",
-                "reference": "abc123xyz"
-            }
-        }
-
-        Returns:
-            str: Paystack checkout URL
-        """
-
-        paystack_payload = PaystackMapper.to_init_payment_dto(payment_request)
-        payload_dict = paystack_payload.model_dump(exclude_none=True)
-
-        print("payload_dict: ", payload_dict)
-
-        response = await httpx_client.post(f"{self.base_url}/transaction/initialize", headers=self.headers,
-                                           json=payload_dict)
-
-        response.raise_for_status()
-
-        print("response: ", response.json())
-        response_data = GenericPaymentGatewayResponse(**response.json())
-        return response_data.data.get("authorization_url")
-
-    async def verify_payment(self, reference: str) -> GenericPaymentGatewayResponse:
-        """
-        Verifies a transaction using `/transaction/verify/{reference}`.
-
-        ✅ Required:
-        - `reference` (str): Transaction reference
-
-        ✅ Sample Response:
-        {
-            "status": true,
-            "data": {
-                "amount": 500000,
-                "currency": "NGN",
-                "status": "success",
-                "paid_at": "2024-06-16T12:00:00.000Z",
-                ...
-            }
-        }
-
-        Returns:
-            PaymentVerificationResponse
-        """
-        response = await httpx_client.get(f"{self.base_url}/transaction/verify/{reference}", headers=self.headers)
-        response.raise_for_status()
-        return GenericPaymentGatewayResponse(**response.json())
-
-    async def refund_transaction(self, payload: RefundRequest) -> GenericPaymentGatewayResponse:
-        """
-        Issues a refund using `/refund`.
-
-        ✅ Required Fields:
-        - `transaction` (str): Transaction reference or ID
-        - `amount` (optional): Amount in kobo (for partial refunds)
-
-        ✅ Sample Response:
-        {
-            "status": true,
-            "message": "Refund queued successfully",
-            "data": {
-                "id": 101,
-                "status": "pending"
-            }
-        }
-
-        Returns:
-            RefundResponse
-        """
-        payload_dict = payload.model_dump()
-        payload_dict["amount"] = int(payload.amount * 100)  # in kobo
-        payload_dict["transaction"] = payload.transaction_id
-        payload_dict["reason"] = payload.comments
-        response = await httpx_client.post(f"{self.base_url}/refund", headers=self.headers, json=payload_dict)
-        response.raise_for_status()
-        return GenericPaymentGatewayResponse(**response.json())
+    async def refund_charge(self, reference: str, amount_minor: int, reason: Optional[str]) -> None:
+        """POST /refund, naming the transaction by our reference."""
+        body = {"transaction": reference, "amount": amount_minor}
+        if reason:
+            body["merchant_note"] = reason
+        await self._http.request("POST", "/refund", action="refund the payment", json=body)
 
     async def _create_recipient(self, payload: CreateRecipientRequest) -> CreateRecipientResponse:
         """
@@ -252,31 +217,6 @@ class PaystackPaymentGateway(IPaymentGateway):
         # computed locally from their published transfer-cost table — unwired while payouts
         # run against the stub disburser — PRD "Known Gaps & Roadmap".
         raise NotImplementedException("Feature not natively available in Paystack client.")
-
-    async def charge_bank_transfer(
-        self,
-        payload: PaystackBankTransferChargeRequest,
-    ) -> PaystackBankTransferResult:
-        """Create a one-time virtual account for NGN bank transfer via POST /charge.
-
-        Returns bank name, account number, and expiry so the frontend can
-        display transfer instructions without redirecting to a checkout page.
-        """
-        payload_dict = payload.model_dump(exclude_none=True)
-        response = await httpx_client.post(
-            f"{self.base_url}/charge",
-            headers=self.headers,
-            json=payload_dict,
-        )
-        response.raise_for_status()
-        data = response.json().get("data", {})
-        return PaystackBankTransferResult(
-            reference=data.get("reference", payload.reference or ""),
-            bank=data.get("bank", ""),
-            account_number=data.get("account_number", ""),
-            account_name=data.get("account_name"),
-            expiry_date=data.get("expiry_date"),
-        )
 
     async def get_all_country_banks(self, country_code: str) -> CountryBanksResponse:
         """
