@@ -5,6 +5,7 @@ if TYPE_CHECKING:
     from loguru import Logger
 
     from main.app.domain.payment.service import PaymentService
+    from main.app.domain.payout.disbursement import PayoutDisbursementService
 import hashlib
 import hmac
 from typing import Dict, Optional
@@ -94,8 +95,12 @@ class PaystackWebhookHandler(BaseWebhookHandler):
                 tx_ref=data["transaction"]["reference"],
                 reason=data.get("category"),
             )
+        elif event in _TRANSFER_EVENTS and data.get("reference"):
+            # Success, failure or reversal alike: the payout settles from the transfer as
+            # Paystack reports it when asked, never from this body.
+            await self._payouts().settle_from_gateway(data["reference"])
         else:
-            # Transfers are settled by the payout flow (S4); refunds were accepted when issued.
+            # Refunds were accepted when issued; anything else needs no action.
             logger.info(f"Paystack event {event!r} acknowledged without action")
             return {"status": "ignored"}
         return {"status": "success"}
@@ -105,3 +110,16 @@ class PaystackWebhookHandler(BaseWebhookHandler):
         """Resolved per event: the payment domain depends on this integration package."""
         from main.app.domain.payment.service import PaymentService
         return di[PaymentService]
+
+    @staticmethod
+    def _payouts() -> "PayoutDisbursementService":
+        """Resolved per event, for the same reason as `_payments`."""
+        from main.app.domain.payout.disbursement import PayoutDisbursementService
+        return di[PayoutDisbursementService]
+
+
+_TRANSFER_EVENTS = {
+    PaystackEventType.TRANSFER_SUCCESS.value,
+    PaystackEventType.TRANSFER_FAILED.value,
+    PaystackEventType.TRANSFER_REVERSED.value,
+}

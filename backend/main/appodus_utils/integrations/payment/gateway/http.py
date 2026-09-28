@@ -31,7 +31,15 @@ class GatewayDeclined(IntegrationException):
 
     Only this proves nothing happened. An unreachable gateway or a 5xx raises the plain
     ``IntegrationException``: the request may have landed, so a money move must be looked up
-    by its reference before it is called failed."""
+    by its reference before it is called failed.
+
+    ``provider_message`` keeps the gateway's own words ("balance is not enough") for staff
+    screens such as a failed payout's reason. It is never part of the exception's message,
+    which is what an error response would carry."""
+
+    def __init__(self, message: str, provider_message: Optional[str] = None):
+        super().__init__(message)
+        self.provider_message = provider_message
 
 
 class GatewayHttp:
@@ -85,7 +93,11 @@ class GatewayHttp:
                 f"{self._provider} refused to {action}: HTTP {response.status_code}, "
                 f"message={body.get('message')!r}"
             )
-            raise GatewayDeclined(f"Could not {action}: the payment gateway declined the request.")
+            provider_message = body.get("message")
+            raise GatewayDeclined(
+                f"Could not {action}: the payment gateway declined the request.",
+                provider_message=str(provider_message)[:500] if provider_message else None,
+            )
         if envelope:
             return body
         return body.get("data") or {}

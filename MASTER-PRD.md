@@ -1344,11 +1344,17 @@ is the accepted, bounded tail risk.
 
 ### 20.4 Payouts
 
-Agent requests a withdrawal against available balance (stored beneficiary account or one-time entry); a
-`REQUESTED/APPROVED/HELD` payout **locks funds** so nothing is double-spent. Finance panel
-(`APPROVE_PAYOUT`): approve / hold / reject / adjust, all audit-logged; target settlement
-`payout_sla_business_days` (2). **Disbursement is stub-first** — approval marks `PAID` and fires
-`PAYOUT_APPROVED`; a real transfer gateway drops in behind the facade (§G).
+Agent requests a withdrawal against available balance, to a **saved account the bank has named**: the
+bank comes from the paying gateway's list, the account name from the gateway's account lookup (never
+typed). The gateway's **transfer fee is quoted before the agent confirms and deducted** from what reaches
+the bank. A `REQUESTED/APPROVED/HELD/PROCESSING/FAILED` payout **locks funds** so nothing is
+double-spent. Finance panel (`APPROVE_PAYOUT`): approve / hold / reject / adjust / retry, all
+audit-logged; target settlement `payout_sla_business_days` (2). **Approval queues; a batch pays**:
+approved payouts leave as bank transfers from a daily sweep (10:00 Lagos) or finance's "Disburse N
+approved (₦total)" button — `APPROVED → PROCESSING → PAID`, settled only from what the gateway reports
+when asked by our per-attempt reference (webhook or reconcile). A transfer the bank refuses becomes
+`FAILED` with its funds **still reserved**; finance retries it (a new attempt and reference) or rejects it
+(funds released, agent notified). Stub mode runs the same flow through a stub transfer gateway.
 
 ---
 
@@ -1922,7 +1928,6 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Live Dojah KYC (facade built; STUB default) | `backend/main/app/domain/user/agent/kyc/service.py` |
 | Live document storage (S3/R2 behind the facade; `DOCUMENT_STORAGE_STUB_MODE` defaults to the stub) | `backend/main/appodus_utils/integrations/document_storage/factory.py` |
 | Live FX rates (`OPENEXCHANGERATES` option unwired; hardcoded indicative stub rates) | `backend/main/appodus_utils/db/types/money.py` |
-| Real payout disbursement (approval marks `PAID` under the stub) | `backend/main/app/domain/payout/service.py` |
 
 ### G.2 Deferred features
 

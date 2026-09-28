@@ -92,7 +92,7 @@ def _snapshot(row, **stale):
 def _payout(status=PayoutStatus.REQUESTED):
     return SimpleNamespace(
         id="p-1", agent_id="a-1", amount_minor=50_000, status=status.value, adjustment_minor=0,
-        note=None, decided_at=None, decided_by=None, deleted=False,
+        fee_minor=1_000, bank_code="058", note=None, decided_at=None, decided_by=None, deleted=False,
     )
 
 
@@ -105,6 +105,13 @@ def _payout_service(db_row, read=None):
     svc._payout_repo.claim_transition = fake_claim_transition({"p-1": db_row})
     svc._earnings = AsyncMock()
     svc._banks = AsyncMock()
+    svc._banks.get_owned = AsyncMock(return_value=SimpleNamespace(
+        bank_name="GT", bank_code="058", provider=None, account_number="0123456789", account_name="A",
+    ))
+    transfers = AsyncMock()
+    transfers.quote_fee = AsyncMock(return_value=1_000)
+    svc._gateways = MagicMock()
+    svc._gateways.transfers = MagicMock(return_value=transfers)
     svc._audit = MagicMock()
     svc._config = AsyncMock()
     svc._config.get_int = AsyncMock(return_value=2)
@@ -126,17 +133,15 @@ class TestPayouts:
         svc._earnings.available_minor = AsyncMock(side_effect=_available)
         svc._payout_repo.create_return_model = AsyncMock(return_value=_payout())
 
-        await svc.request("a-1", RequestPayoutDto(
-            amount_minor=60_000, bank_name="GT", account_number="1", account_name="A",
-        ))
+        await svc.request("a-1", RequestPayoutDto(amount_minor=60_000, bank_account_id="ba-1"))
 
         # A second request waits here until the first commits, then sees its reservation
         # in the balance — two withdrawals can no longer both spend the same money.
         assert locks == ["payout:a-1"]
         assert order == ["lock:payout:a-1", "balance"]
 
-    async def test_a_second_approval_is_refused_and_pays_nothing(self, events):
-        db = _payout(PayoutStatus.PAID)  # another finance admin approved first
+    async def test_a_second_approval_is_refused_and_notifies_nothing(self, events):
+        db = _payout(PayoutStatus.APPROVED)  # another finance admin approved first
         svc = _payout_service(db, read=_snapshot(db, status=PayoutStatus.REQUESTED.value))
 
         with pytest.raises(InvalidResourceStateException):
@@ -146,12 +151,20 @@ class TestPayouts:
         svc._audit.schedule.assert_not_called()
 
     async def test_cancel_loses_to_a_concurrent_approval(self):
-        db = _payout(PayoutStatus.PAID)
+        db = _payout(PayoutStatus.APPROVED)
         svc = _payout_service(db, read=_snapshot(db, status=PayoutStatus.REQUESTED.value))
 
         with pytest.raises(InvalidResourceStateException):
             await svc.cancel("a-1", "p-1")
-        assert db.status == PayoutStatus.PAID.value
+        assert db.status == PayoutStatus.APPROVED.value
+
+    async def test_a_hold_cannot_land_on_a_payout_the_batch_already_sent(self):
+        db = _payout(PayoutStatus.PROCESSING)  # the disbursement claimed it first
+        svc = _payout_service(db, read=_snapshot(db, status=PayoutStatus.APPROVED.value))
+
+        with pytest.raises(InvalidResourceStateException):
+            await svc.hold("p-1", "fin-1", PayoutDecisionDto(note="query"))
+        assert db.status == PayoutStatus.PROCESSING.value
 
     async def test_an_adjustment_cannot_land_on_a_decided_payout(self):
         db = _payout(PayoutStatus.REJECTED)
@@ -167,7 +180,7 @@ class TestPayouts:
 
         await svc.approve("p-1", "fin-1", PayoutDecisionDto(note="ok"))
 
-        assert db.status == PayoutStatus.PAID.value
+        assert db.status == PayoutStatus.APPROVED.value
         assert (db.decided_by, db.note) == ("fin-1", "ok")
         assert db.decided_at is not None
         assert len(events) == 1

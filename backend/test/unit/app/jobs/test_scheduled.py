@@ -22,13 +22,27 @@ EXPECTED_JOBS = {
     "expired_key_value_cleanup": 60,
     "unprocessed_whatsapp_inbound_check": 5,
 }
+# id -> (hour, minute) in Africa/Lagos, for the jobs that run at a time of day.
+EXPECTED_DAILY_JOBS = {
+    # Approved payouts leave once a day, while banks are settling (§15.1).
+    "payout_disbursement": (10, 0),
+}
 
 
 def test_all_sweeps_registered_with_expected_intervals():
     jobs = {job.id: job for job in scheduled.scheduler.get_jobs()}
-    assert set(jobs) == set(EXPECTED_JOBS)
+    assert set(jobs) == set(EXPECTED_JOBS) | set(EXPECTED_DAILY_JOBS)
     for job_id, minutes in EXPECTED_JOBS.items():
         assert jobs[job_id].trigger.interval == timedelta(minutes=minutes), job_id
+
+
+def test_daily_jobs_run_at_their_lagos_time():
+    jobs = {job.id: job for job in scheduled.scheduler.get_jobs()}
+    for job_id, (hour, minute) in EXPECTED_DAILY_JOBS.items():
+        trigger = jobs[job_id].trigger
+        fields = {f.name: str(f) for f in trigger.fields}
+        assert (fields["hour"], fields["minute"]) == (str(hour), str(minute)), job_id
+        assert str(trigger.timezone) == "Africa/Lagos", job_id
 
 
 def test_start_scheduler_is_noop_under_test_environment(monkeypatch):

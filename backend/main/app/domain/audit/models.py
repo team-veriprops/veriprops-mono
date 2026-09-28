@@ -65,6 +65,10 @@ class AuditActionType(str, enum.Enum):
     PAYOUT_ADJUSTED = "PAYOUT_ADJUSTED"
     PAYOUT_REJECTED = "PAYOUT_REJECTED"
     PAYOUT_CANCELLED = "PAYOUT_CANCELLED"
+    PAYOUT_RETRIED = "PAYOUT_RETRIED"                  # finance sent a failed transfer back to the batch
+    PAYOUT_TRANSFER_SENT = "PAYOUT_TRANSFER_SENT"      # an attempt handed to the gateway
+    PAYOUT_PAID = "PAYOUT_PAID"                        # the bank took the transfer
+    PAYOUT_TRANSFER_FAILED = "PAYOUT_TRANSFER_FAILED"  # the transfer failed or was reversed
     # ── Admin control panel (§6.1) ─────────────────────────────────
     VERIFICATION_PAUSED = "VERIFICATION_PAUSED"
     VERIFICATION_RESUMED = "VERIFICATION_RESUMED"

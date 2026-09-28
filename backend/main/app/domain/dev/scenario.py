@@ -43,8 +43,9 @@ from main.app.domain.dev.fixtures import (
 from main.app.domain.earnings.service import EarningsService
 from main.app.domain.payment.models import PaymentMethodKind, PaymentWebhookDto
 from main.app.domain.payment.service import PaymentService
-from main.app.domain.payout.bank_account.models import AddBankAccountDto
-from main.app.domain.payout.bank_account.service import BankAccountService
+from main.app.domain.payout.bank_account.models import CreateBankAccountDto
+from main.app.domain.payout.bank_account.repo import BankAccountRepo
+from main.appodus_utils.integrations.payment.gateway.stub import STUB_BANKS
 from main.app.domain.property.models import PropertyInputDto, PropertyType
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.system_config.service import ConfigService
@@ -67,6 +68,12 @@ from main.appodus_utils.decorators.transactional import TransactionSessionPolicy
 from main.appodus_utils.exception.exceptions import ValidationException
 
 T = TypeVar("T")
+
+
+# A bank on the stub gateway's list, for the stored beneficiaries a scenario creates. The
+# account number's leading digit is never 0, so the stub's unknown and declining numbers are
+# never drawn.
+SCENARIO_BANK = STUB_BANKS[0]
 
 
 class ScenarioStage(str, enum.Enum):
@@ -184,7 +191,7 @@ class DevScenarioService:
         dispute_service: DisputeService,
         recheck_service: RecheckService,
         earnings_service: EarningsService,
-        bank_account_service: BankAccountService,
+        bank_account_repo: BankAccountRepo,
         config_service: ConfigService,
     ):
         self._verification_service = verification_service
@@ -195,7 +202,7 @@ class DevScenarioService:
         self._dispute_service = dispute_service
         self._recheck_service = recheck_service
         self._earnings_service = earnings_service
-        self._bank_account_service = bank_account_service
+        self._bank_account_repo = bank_account_repo
         self._config_service = config_service
 
     async def build(self, req: BuildScenarioDto) -> ScenarioDto:
@@ -351,9 +358,13 @@ class DevScenarioService:
 
         accounts: Dict[AgentRole, Tuple[int, str]] = {}
         for role, agent_id in agent_ids.items():
-            bank_account = await self._step(lambda role=role, agent_id=agent_id: self._bank_account_service.add(
-                agent_id, AddBankAccountDto(
-                    bank_name="Scenario Bank", account_number=f"{secrets.randbelow(10 ** 10):010d}",
+            # A fixture row, like the people: resolving a made-up number would ask whichever
+            # gateway is live, and a live gateway must never see one. It names no gateway, so a
+            # live disbursement refuses it rather than paying it.
+            bank_account = await self._step(lambda role=role, agent_id=agent_id: self._bank_account_repo.create_return_model(
+                CreateBankAccountDto(
+                    agent_id=agent_id, bank_name=SCENARIO_BANK.name, bank_code=SCENARIO_BANK.code, provider=None,
+                    account_number=f"{secrets.randbelow(9) + 1}{secrets.randbelow(10 ** 9):09d}",
                     account_name=f"{role.value.title()} Agent", is_default=True,
                 ),
             ))

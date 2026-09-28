@@ -1,44 +1,50 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@3rdparty/ui/button";
-import { Input } from "@3rdparty/ui/input";
-import { Label } from "@3rdparty/ui/label";
 import DetailDrawer from "@components/ui/DetailDrawer";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { PageShell } from "@components/ui/PageShell";
 import { StatusPill } from "@components/ui/StatusPill";
 import { formatMinor, humanizeEnumLabel } from "@lib/utils";
-import { Payout, PayoutStatus } from "@/types/payout";
+import { AdminPayout, PayoutStatus } from "@/types/payout";
 import { Page } from "@/types/models";
-import { useAdminPayoutsQuery, usePayoutDecisionMutation } from "./libs/useFinanceQueries";
-import { getErrorMessage } from "@lib/errors";
+import { useAdminPayoutsQuery } from "./libs/useFinanceQueries";
+import DisburseButton from "./DisburseButton";
+import PayoutDecisionPanel from "./PayoutDecisionPanel";
 
-const STATUSES = ["", PayoutStatus.REQUESTED, PayoutStatus.HELD, PayoutStatus.PAID, PayoutStatus.REJECTED];
+// Filter order follows the lifecycle: waiting on finance, queued, with the bank, finished.
+const STATUSES = [
+  "", PayoutStatus.REQUESTED, PayoutStatus.HELD, PayoutStatus.APPROVED, PayoutStatus.PROCESSING,
+  PayoutStatus.FAILED, PayoutStatus.PAID, PayoutStatus.REJECTED, PayoutStatus.CANCELLED,
+];
 
-/** Finance payout panel (§15.1): approve / hold / adjust / reject withdrawal requests. */
+/** Finance payout panel (§15.1): decide withdrawal requests, send approved ones as a batch,
+ * and retry or reject transfers the bank refused. */
 export default function AdminPayouts() {
   const [page, setPage] = useState(0);
   const [status, setStatus] = useState("");
   const { data, isLoading, isError } = useAdminPayoutsQuery(page, 10, status);
-  const [selected, setSelected] = useState<Payout | null>(null);
+  const [selected, setSelected] = useState<AdminPayout | null>(null);
 
   return (
     <PageShell
       title="Payouts"
-      description="Approve, hold, adjust, or reject agent withdrawal requests."
+      description="Approve agent withdrawals, then send them to agents' banks with Disburse. Where scheduled jobs run, a daily run sends them too."
       actions={
-        // A toolbar filter has no visible label to bind to, so it names itself — without this
-        // the control is announced only as "combo box" (axe `select-name`, critical).
-        <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(0); }}
-          aria-label="Filter payouts by status"
-          className="h-9 rounded-md border bg-background px-3 text-sm" data-testid="payout-status-filter">
-          {STATUSES.map((s) => <option key={s || "all"} value={s}>{s ? humanizeEnumLabel(s) : "All"}</option>)}
-        </select>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {/* A toolbar filter has no visible label to bind to, so it names itself — without this
+              the control is announced only as "combo box" (axe `select-name`, critical). */}
+          <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(0); }}
+            aria-label="Filter payouts by status"
+            className="h-9 rounded-md border bg-background px-3 text-sm" data-testid="payout-status-filter">
+            {STATUSES.map((s) => <option key={s || "all"} value={s}>{s ? humanizeEnumLabel(s) : "All"}</option>)}
+          </select>
+          <DisburseButton />
+        </div>
       }
     >
-      <AsyncStateComponent<Page<Payout>>
+      <AsyncStateComponent<Page<AdminPayout>>
         isLoading={isLoading}
         isError={isError}
         data={data}
@@ -53,10 +59,10 @@ export default function AdminPayouts() {
               <ul className="divide-y rounded-lg border" data-testid="admin-payouts">
                 {pageData.items.map((p) => (
                   <li key={p.id}>
-                    <button onClick={() => setSelected(p)}
+                    <button onClick={() => setSelected(p)} data-testid={`admin-payout-${p.id}`}
                       className="flex w-full items-center justify-between gap-3 p-3 text-left text-sm hover:bg-muted/50">
                       <div className="min-w-0">
-                        <p className="font-semibold tabular-nums">{formatMinor(p.amountMinor, p.currency)}</p>
+                        <p className="font-semibold tabular-nums">{formatMinor(p.netMinor, p.currency)}</p>
                         <p className="truncate text-xs text-muted-foreground">{p.bankName} · {p.accountNumber} · {p.accountName}</p>
                       </div>
                       <StatusPill status={p.status} className="shrink-0" />
@@ -76,61 +82,8 @@ export default function AdminPayouts() {
 
       <DetailDrawer open={!!selected} onOpenChange={(o) => !o && setSelected(null)}
         title="Payout" reference={selected?.id ?? ""}>
-        {selected && <DecisionPanel payout={selected} onDone={() => setSelected(null)} />}
+        {selected && <PayoutDecisionPanel payout={selected} onDone={() => setSelected(null)} />}
       </DetailDrawer>
     </PageShell>
-  );
-}
-
-function DecisionPanel({ payout, onDone }: { payout: Payout; onDone: () => void }) {
-  const decide = usePayoutDecisionMutation();
-  const [note, setNote] = useState("");
-  const [adjustment, setAdjustment] = useState("");
-  const pending = decide.isPending;
-  const decided = payout.status !== PayoutStatus.REQUESTED && payout.status !== PayoutStatus.HELD;
-
-  const run = (action: "approve" | "hold" | "adjust" | "reject") => {
-    const req = {
-      note: note || undefined,
-      adjustmentMinor: action === "adjust" && adjustment ? Math.round(Number(adjustment) * 100) : undefined,
-    };
-    decide.mutate(
-      { action, payoutId: payout.id, req },
-      {
-        onSuccess: () => { toast.success(`Payout ${action}ed.`); onDone(); },
-        onError: (e: unknown) => toast.error(getErrorMessage(e, "Could not update the payout.")),
-      },
-    );
-  };
-
-  return (
-    <div className="space-y-4 p-4 text-sm">
-      <section className="rounded-lg border p-3">
-        <p className="text-lg font-semibold tabular-nums">{formatMinor(payout.amountMinor, payout.currency)}</p>
-        <p className="text-muted-foreground">{payout.bankName} · {payout.accountNumber} · {payout.accountName}</p>
-        <div className="mt-2"><StatusPill status={payout.status} /></div>
-      </section>
-
-      {decided ? (
-        <p className="text-muted-foreground">This payout has been finalised.</p>
-      ) : (
-        <>
-          <div className="space-y-2">
-            <Label htmlFor="payout-note">Note (hold reason / correction)</Label>
-            <Input id="payout-note" value={note} onChange={(e) => setNote(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="payout-adjust">Adjustment (₦, for Adjust)</Label>
-            <Input id="payout-adjust" inputMode="decimal" value={adjustment} onChange={(e) => setAdjustment(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Button onClick={() => run("approve")} disabled={pending} data-testid="payout-approve">Approve &amp; pay</Button>
-            <Button variant="outline" onClick={() => run("hold")} disabled={pending} data-testid="payout-hold">Hold</Button>
-            <Button variant="outline" onClick={() => run("adjust")} disabled={pending} data-testid="payout-adjust-btn">Adjust</Button>
-            <Button variant="destructive" onClick={() => run("reject")} disabled={pending} data-testid="payout-reject">Reject</Button>
-          </div>
-        </>
-      )}
-    </div>
   );
 }

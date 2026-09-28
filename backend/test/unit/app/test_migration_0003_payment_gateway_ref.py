@@ -1,7 +1,8 @@
 """Migration 0003 adds the provider-neutral gateway reference to payments, additively.
 
-It must chain directly after the fixed-commission migration, leave the migration history with a
-single head, and create exactly the column and index the ORM model declares.
+It must chain directly after the fixed-commission migration and create exactly the column and
+index the ORM model declares. (That the history has a single head is pinned by the newest
+migration's own test.)
 """
 from pathlib import Path
 
@@ -19,9 +20,8 @@ def _scripts() -> ScriptDirectory:
     return ScriptDirectory.from_config(config)
 
 
-def test_it_chains_after_the_commission_migration_and_is_the_only_head():
+def test_it_chains_after_the_commission_migration():
     scripts = _scripts()
-    assert scripts.get_heads() == ["0003_payment_gateway_ref"]
     assert scripts.get_revision("0003_payment_gateway_ref").down_revision == "0002_fixed_agent_commission"
 
 

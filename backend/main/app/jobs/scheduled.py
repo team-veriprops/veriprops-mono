@@ -27,6 +27,7 @@ from main.app.jobs.tasks import (
     check_commission_clearance,
     check_expired_key_values,
     check_message_retries,
+    check_payout_disbursement,
     check_pending_assistant_turns,
     check_referral_credits,
     check_scheduled_broadcasts,
@@ -50,6 +51,11 @@ scheduler.add_job(check_task_pool_timeouts, "interval", minutes=15, id="pool_tim
 scheduler.add_job(check_task_no_show_timeouts, "interval", minutes=15, id="no_show_check")
 scheduler.add_job(check_sla_breaches, "interval", minutes=30, id="sla_breach_check")
 scheduler.add_job(check_commission_clearance, "interval", minutes=60, id="commission_clearance_check")
+# Approved payouts leave as bank transfers once a day, mid-morning Lagos time, when banks are
+# settling (§15.1). Finance's "disburse" button runs the same batch on demand.
+scheduler.add_job(
+    check_payout_disbursement, "cron", hour=10, minute=0, timezone="Africa/Lagos", id="payout_disbursement",
+)
 # Growth sweeps (§17.1): abandonment recovery (hourly) + referral-credit clearance (daily-ish).
 scheduler.add_job(check_abandoned_drafts, "interval", minutes=60, id="abandonment_recovery_check")
 scheduler.add_job(check_referral_credits, "interval", minutes=180, id="referral_credit_check")

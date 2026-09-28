@@ -41,6 +41,21 @@ describe("AdminPayoutService contract (mirrors app/domain/payout/controller.py f
     expect(calls[2]).toMatchObject({ method: "post", url: "/admin/payouts/p-1/reject" });
     expect(calls[3]).toMatchObject({ method: "post", url: "/admin/payouts/p-1/adjust" });
   });
+
+  it("retries a failed transfer", async () => {
+    const { http, calls } = mockHttp();
+    await new AdminPayoutService(http).retry("p-1");
+    expect(calls[0]).toMatchObject({ method: "post", url: "/admin/payouts/p-1/retry" });
+  });
+
+  it("reads the disbursement queue and runs a batch", async () => {
+    const { http, calls } = mockHttp();
+    const svc = new AdminPayoutService(http);
+    await svc.disbursementQueue();
+    await svc.disburse();
+    expect(calls[0]).toMatchObject({ method: "get", url: "/admin/payouts/disbursement-queue" });
+    expect(calls[1]).toMatchObject({ method: "post", url: "/admin/payouts/disburse" });
+  });
 });
 
 describe("CommissionRuleService contract (mirrors app/domain/commission_rule/controller.py)", () => {

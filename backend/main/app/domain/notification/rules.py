@@ -79,6 +79,8 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.TASK_REJECTED: NotificationRule(email=True, template=_T.VERIFICATION_REVISION_REQUEST),
     EventType.PAYOUT_APPROVED: NotificationRule(email=True, template=_T.VERIFICATION_PAYOUT_APPROVED),
     EventType.PAYOUT_HELD: NotificationRule(email=True, template=_T.VERIFICATION_PAYOUT_HELD),
+    EventType.PAYOUT_PAID: NotificationRule(email=True, template=_T.VERIFICATION_PAYOUT_PAID),
+    EventType.PAYOUT_REJECTED: NotificationRule(email=True, template=_T.VERIFICATION_PAYOUT_REJECTED),
     # Positive-movement earnings alert (§15.1): in-app only, no external template.
     EventType.COMMISSION_CLEARED: NotificationRule(in_app=True),
     # Referral credit cleared to the referrer's balance (§17.1): in-app only.

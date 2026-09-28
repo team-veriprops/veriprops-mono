@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
-import { PayoutDecisionRequest } from "@/types/payout";
+import { PayoutAction, PayoutDecisionRequest } from "@/types/payout";
 import { SetCommissionRuleRequest } from "@/types/commission";
 import { AgentRole } from "@/types/agent";
 import { AdminPayoutService } from "./admin-payout-service";
@@ -16,6 +16,7 @@ const paymentService = new AdminPaymentService(httpClient);
 
 export const financeKeys = {
   payouts: (page: number, status: string) => ["admin-payouts", page, status] as const,
+  disbursementQueue: () => ["admin-payouts", "disbursement-queue"] as const,
   commissionRules: () => ["commission-rules"] as const,
   refundRetries: (page: number) => ["refund-retries", page] as const,
 };
@@ -46,13 +47,40 @@ export function useAdminPayoutsQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE, sta
   });
 }
 
-type DecisionAction = "approve" | "hold" | "adjust" | "reject";
+/** The finance actions a decision panel can take (the agent's CANCEL is not one). */
+export type FinancePayoutAction = Exclude<PayoutAction, PayoutAction.CANCEL>;
+
+const DECIDE: Record<FinancePayoutAction, (id: string, req: PayoutDecisionRequest) => Promise<unknown>> = {
+  [PayoutAction.APPROVE]: (id, req) => payoutService.approve(id, req),
+  [PayoutAction.HOLD]: (id, req) => payoutService.hold(id, req),
+  [PayoutAction.ADJUST]: (id, req) => payoutService.adjust(id, req),
+  [PayoutAction.REJECT]: (id, req) => payoutService.reject(id, req),
+  [PayoutAction.RETRY]: (id) => payoutService.retry(id),
+};
 
 export function usePayoutDecisionMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { action: DecisionAction; payoutId: string; req?: PayoutDecisionRequest }) =>
-      payoutService[v.action](v.payoutId, v.req ?? {}),
+    mutationFn: (v: { action: FinancePayoutAction; payoutId: string; req?: PayoutDecisionRequest }) =>
+      DECIDE[v.action](v.payoutId, v.req ?? {}),
+    // The queue count moves with approvals and retries, so it refreshes with the list. On an
+    // error too: a refused retry may have found the transfer paid and settled it meanwhile.
+    onSettled: () => qc.invalidateQueries({ queryKey: ["admin-payouts"] }),
+  });
+}
+
+/** Approved payouts waiting for the next batch — the disburse button's label. */
+export function useDisbursementQueueQuery() {
+  return useQuery({
+    queryKey: financeKeys.disbursementQueue(),
+    queryFn: async () => (await payoutService.disbursementQueue()).data ?? null,
+  });
+}
+
+export function useDisburseMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => payoutService.disburse(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-payouts"] }),
   });
 }

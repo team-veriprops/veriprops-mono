@@ -38,6 +38,8 @@ class EventType(str, enum.Enum):
     TASK_REJECTED = "TASK_REJECTED"            # admin revision request
     PAYOUT_APPROVED = "PAYOUT_APPROVED"        # source: S19
     PAYOUT_HELD = "PAYOUT_HELD"                # source: S19
+    PAYOUT_PAID = "PAYOUT_PAID"                # the transfer reached the agent's bank
+    PAYOUT_REJECTED = "PAYOUT_REJECTED"        # finance declined; funds back in the balance
     COMMISSION_CLEARED = "COMMISSION_CLEARED"  # source: S19 — earnings moved to available (§15.1)
     REFERRAL_CREDIT_EARNED = "REFERRAL_CREDIT_EARNED"  # source: S21 — referral credit cleared (§17.1)
     # Growth (§17)

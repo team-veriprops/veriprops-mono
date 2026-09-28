@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from loguru import Logger
 
     from main.app.domain.payment.service import PaymentService
+    from main.app.domain.payout.disbursement import PayoutDisbursementService
 import hmac
 from typing import Dict, Optional
 
@@ -91,8 +92,12 @@ class FlutterwaveWebhookHandler(BaseWebhookHandler):
                 gateway_reference=data["flw_ref"],
                 reason=data.get("comment"),
             )
+        elif event == FlutterwaveEvent.TRANSFER_COMPLETED.value and data.get("reference"):
+            # Success or failure alike: the payout settles from the transfer as Flutterwave
+            # reports it when asked, never from this body.
+            await self._payouts().settle_from_gateway(data["reference"])
         else:
-            # Transfers are settled by the payout flow (S4); refunds were accepted when issued.
+            # Refunds were accepted when issued; anything else needs no action.
             logger.info(f"Flutterwave event {event!r} acknowledged without action")
             return {"status": "ignored"}
         return {"status": "success"}
@@ -102,3 +107,9 @@ class FlutterwaveWebhookHandler(BaseWebhookHandler):
         """Resolved per event: the payment domain depends on this integration package."""
         from main.app.domain.payment.service import PaymentService
         return di[PaymentService]
+
+    @staticmethod
+    def _payouts() -> "PayoutDisbursementService":
+        """Resolved per event, for the same reason as `_payments`."""
+        from main.app.domain.payout.disbursement import PayoutDisbursementService
+        return di[PayoutDisbursementService]

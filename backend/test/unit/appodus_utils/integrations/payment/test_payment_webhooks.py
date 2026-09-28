@@ -9,7 +9,8 @@ Signatures follow each provider's documented scheme:
 
 Both fail closed: an unconfigured secret rejects every request. A verified event is never
 trusted on its own word either — a charge event only asks `PaymentService` to confirm the
-charge with the gateway. Events we do not act on are acknowledged, so the provider stops
+charge with the gateway, and a transfer event only asks the payout disburser to look the
+transfer up by our reference. Events we do not act on are acknowledged, so the provider stops
 retrying them.
 """
 import hashlib
@@ -43,6 +44,15 @@ def payments(monkeypatch):
     service.record_chargeback = AsyncMock(return_value=None)
     monkeypatch.setattr(FlutterwaveWebhookHandler, "_payments", staticmethod(lambda: service))
     monkeypatch.setattr(PaystackWebhookHandler, "_payments", staticmethod(lambda: service))
+    return service
+
+
+@pytest.fixture
+def payouts(monkeypatch):
+    service = MagicMock()
+    service.settle_from_gateway = AsyncMock(return_value=None)
+    monkeypatch.setattr(FlutterwaveWebhookHandler, "_payouts", staticmethod(lambda: service))
+    monkeypatch.setattr(PaystackWebhookHandler, "_payouts", staticmethod(lambda: service))
     return service
 
 
@@ -127,11 +137,21 @@ class TestFlutterwaveEvents:
             gateway_reference="FLW-1", reason="Card holder disputes",
         )
 
-    @pytest.mark.parametrize("event", ["transfer.completed", "refund.completed", "something.new"])
-    async def test_events_we_do_not_act_on_are_acknowledged(self, payments, event):
+    @pytest.mark.parametrize("status", ["SUCCESSFUL", "FAILED"])
+    async def test_a_completed_transfer_asks_the_disburser_to_look_it_up(self, payments, payouts, status):
+        await _flutterwave()._process_handle_webhook_payload({
+            "event": "transfer.completed",
+            "data": {"id": 117369760, "reference": "vp-po-abc-1", "status": status, "amount": 2000},
+        })
+        payouts.settle_from_gateway.assert_awaited_once_with("vp-po-abc-1")
+        payments.confirm_from_gateway.assert_not_awaited()
+
+    @pytest.mark.parametrize("event", ["refund.completed", "something.new"])
+    async def test_events_we_do_not_act_on_are_acknowledged(self, payments, payouts, event):
         result = await _flutterwave()._process_handle_webhook_payload({"event": event, "data": {"id": 1}})
         assert result == {"status": "ignored"}
         payments.confirm_from_gateway.assert_not_awaited()
+        payouts.settle_from_gateway.assert_not_awaited()
 
 
 class TestPaystackEvents:
@@ -150,8 +170,17 @@ class TestPaystackEvents:
             IntegratedPlatform.PAYSTACK, event_id="paystack:dispute:77", tx_ref="ref-1", reason="fraud",
         )
 
-    @pytest.mark.parametrize("event", ["transfer.success", "refund.processed", "subscription.create", "something.new"])
-    async def test_events_we_do_not_act_on_are_acknowledged(self, payments, event):
+    @pytest.mark.parametrize("event", ["transfer.success", "transfer.failed", "transfer.reversed"])
+    async def test_a_transfer_event_asks_the_disburser_to_look_it_up(self, payments, payouts, event):
+        await _paystack()._process_handle_webhook_payload({
+            "event": event, "data": {"reference": "vp-po-abc-1", "transfer_code": "TRF_1", "status": "success"},
+        })
+        payouts.settle_from_gateway.assert_awaited_once_with("vp-po-abc-1")
+        payments.confirm_from_gateway.assert_not_awaited()
+
+    @pytest.mark.parametrize("event", ["refund.processed", "subscription.create", "something.new"])
+    async def test_events_we_do_not_act_on_are_acknowledged(self, payments, payouts, event):
         result = await _paystack()._process_handle_webhook_payload({"event": event, "data": {}})
         assert result == {"status": "ignored"}
         payments.confirm_from_gateway.assert_not_awaited()
+        payouts.settle_from_gateway.assert_not_awaited()

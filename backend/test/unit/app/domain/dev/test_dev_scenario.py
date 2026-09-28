@@ -69,7 +69,7 @@ def _service(calls: list[str], tier: VerificationTier, final_status: Verificatio
         sweep_cleared=recorder("sweep_cleared", 3),
         available_minor=AsyncMock(return_value=450_000),
     )
-    svc._bank_account_service = SimpleNamespace(add=recorder("bank_add", SimpleNamespace(id="b" * 32)))
+    svc._bank_account_repo = SimpleNamespace(create_return_model=recorder("bank_add", SimpleNamespace(id="b" * 32)))
     svc._config_service = SimpleNamespace(get_int=AsyncMock(return_value=100))
     svc._backdate_commission_clearance = AsyncMock(
         side_effect=lambda *_: calls.append("backdate_clearance")

@@ -3,11 +3,17 @@ reputation/availability/coverage (S20 §16).
 
 All on the fresh, now-COMPLETED verification. The commission-clearance/reserve windows were
 zeroed in the runner prologue, so the commissions accrued at release clear in this run and
-the earnings → payout → finance-approval flow completes end-to-end.
+the earnings → payout → approval → disbursement flow completes end-to-end, including a
+declined transfer that finance retries and then rejects.
 """
 from __future__ import annotations
 
 from .harness import Ctx, check, stub_pay
+
+# The stub transfer gateway's documented accounts (main/appodus_utils/integrations/payment/
+# gateway/stub.py): one no bank knows, one whose transfers the bank declines.
+STUB_UNKNOWN_ACCOUNT = "0000000000"
+STUB_DECLINING_ACCOUNT = "0000009999"
 
 
 def run(ctx: Ctx) -> None:
@@ -64,28 +70,79 @@ def run(ctx: Ctx) -> None:
     check("agent has an available balance after clearance (§15.1)",
           earnings["availableMinor"] > 0, f"available={earnings['availableMinor']}")
 
-    agent.post("/agents/payouts/bank-accounts", json={
-        "bankName": "GTBank", "accountNumber": "0123456789", "accountName": "QA Agent"}).raise_for_status()
-    bank = agent.get("/agents/payouts/bank-accounts").json()["data"][0]
+    # A beneficiary is picked from the gateway's bank list and named by the bank, never typed.
+    banks = agent.get("/agents/payouts/banks").json()["data"]
+    check("agent sees the paying gateway's bank list (§15.1)", len(banks) > 0, f"banks={len(banks)}")
+    bank_code = banks[0]["code"]
+    unknown = agent.post("/agents/payouts/bank-accounts/resolve", json={
+        "bankCode": bank_code, "accountNumber": STUB_UNKNOWN_ACCOUNT})
+    check("an account the bank does not know is refused (422)", unknown.status_code == 422,
+          f"http {unknown.status_code}")
+    resolved = agent.post("/agents/payouts/bank-accounts/resolve", json={
+        "bankCode": bank_code, "accountNumber": "1234567890"}).json()["data"]
+    check("the account name comes from the bank", resolved["accountName"] == "TEST ACCOUNT 7890",
+          f"name={resolved['accountName']}")
+    good = agent.post("/agents/payouts/bank-accounts", json={
+        "bankCode": bank_code, "accountNumber": "1234567890", "accountName": "Typed By Agent"}).json()["data"]
+    check("the saved account carries the bank's name, not the typed one",
+          good["accountName"] == "TEST ACCOUNT 7890", f"name={good['accountName']}")
+    declining = agent.post("/agents/payouts/bank-accounts", json={
+        "bankCode": bank_code, "accountNumber": STUB_DECLINING_ACCOUNT}).json()["data"]
+
+    # The transfer fee is quoted before the agent confirms, and comes out of what they receive.
+    available = earnings["availableMinor"]
+    small = min(200_000, available // 4)
+    quote = agent.post("/agents/payouts/quote", json={
+        "amountMinor": small, "bankAccountId": declining["id"]}).json()["data"]
+    check("the fee is quoted up front and deducted (§15.1)",
+          quote["feeMinor"] > 0 and quote["netMinor"] == small - quote["feeMinor"], f"quote={quote}")
+
+    doomed = agent.post("/agents/payouts", json={"amountMinor": small, "bankAccountId": declining["id"]}).json()["data"]
     payout = agent.post("/agents/payouts", json={
-        "amountMinor": earnings["availableMinor"], "bankAccountId": bank["id"]}).json()["data"]
+        "amountMinor": available - small, "bankAccountId": good["id"]}).json()["data"]
     check("agent requests a withdrawal (REQUESTED, §15.1)", payout["status"] == "REQUESTED",
           f"status={payout['status']}")
+    check("the request records the fee and the net amount",
+          payout["feeMinor"] > 0 and payout["netMinor"] == payout["amountMinor"] - payout["feeMinor"], str(payout))
 
     # Requesting locks the funds — available drops to 0 so nothing can be double-spent.
     after_request = agent.get("/agents/earnings").json()["data"]
     check("requesting a payout locks the funds out of available (§15.2)",
           after_request["availableMinor"] == 0, f"available={after_request['availableMinor']}")
 
-    paid = admin.post(f"/admin/payouts/{payout['id']}/approve", json={}).json()["data"]
-    check("finance approves + disburses the payout (→ PAID, §15.1)", paid["status"] == "PAID",
-          f"status={paid['status']}")
+    approved = admin.post(f"/admin/payouts/{payout['id']}/approve", json={}).json()["data"]
+    check("finance approval queues the payout (→ APPROVED, §15.1)", approved["status"] == "APPROVED",
+          f"status={approved['status']}")
+    admin.post(f"/admin/payouts/{doomed['id']}/approve", json={}).raise_for_status()
+    queue = admin.get("/admin/payouts/disbursement-queue").json()["data"]
+    check("the disburse button shows what waits (§15.1)", queue["count"] >= 2
+          and queue["totalMinor"] >= available, f"queue={queue}")
+
+    outcome = admin.post("/admin/payouts/disburse").json()["data"]
+    check("the batch pays one transfer and records the declined one",
+          outcome["paid"] >= 1 and outcome["failed"] >= 1 and outcome["remaining"] == 0, f"outcome={outcome}")
+    finance_view = {p["id"]: p for p in admin.get("/admin/payouts?page_size=50").json()["data"]["items"]}
+    check("the paid transfer is PAID with its reference", finance_view[payout["id"]]["status"] == "PAID"
+          and bool(finance_view[payout["id"]]["transferReference"]), str(finance_view[payout["id"]]))
+    failed = finance_view[doomed["id"]]
+    check("the declined transfer is FAILED, with the bank's reason for finance",
+          failed["status"] == "FAILED" and bool(failed["failureReason"])
+          and set(failed["allowedActions"]) == {"RETRY", "ADJUST", "REJECT"}, str(failed))
+
+    # A failed transfer keeps its funds reserved until finance decides.
+    retried = admin.post(f"/admin/payouts/{doomed['id']}/retry").json()["data"]
+    check("finance retries a failed transfer (→ APPROVED)", retried["status"] == "APPROVED", str(retried))
+    rejected = admin.post(f"/admin/payouts/{doomed['id']}/reject", json={"note": "account closed"}).json()["data"]
+    check("finance rejects it instead (→ REJECTED)", rejected["status"] == "REJECTED", str(rejected))
+
     agent_notifs = {n["type"] for n in agent.get("/notifications").json()["data"]["items"]}
-    check("agent got the PAYOUT_APPROVED notification (§12.2)", "PAYOUT_APPROVED" in agent_notifs,
-          str(agent_notifs))
+    check("agent got PAYOUT_APPROVED, PAYOUT_PAID and PAYOUT_REJECTED (§12.2)",
+          {"PAYOUT_APPROVED", "PAYOUT_PAID", "PAYOUT_REJECTED"} <= agent_notifs, str(agent_notifs))
     final = agent.get("/agents/earnings").json()["data"]
-    check("paid-out amount is reflected in total paid (§15.1)", final["totalPaidMinor"] > 0,
+    check("paid-out amount is reflected in total paid (§15.1)", final["totalPaidMinor"] == available - small,
           f"totalPaid={final['totalPaidMinor']}")
+    check("the rejected withdrawal is back in available (§15.1)", final["availableMinor"] == small,
+          f"available={final['availableMinor']}")
 
     # ── S20: Agent reputation, availability, coverage + ranked assignment (§16) ──
     metrics = agent.get("/agents/me/metrics").json()["data"]

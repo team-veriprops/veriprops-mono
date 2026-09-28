@@ -183,7 +183,9 @@ class TestFlutterwaveTransfers:
 
         with pytest.raises(GatewayDeclined) as exc:
             await FlutterwavePaymentGateway().send_transfer(_transfer())
+        # Kept for finance's eyes on the payout, never in the exception a client could see.
         assert "already exists" not in str(exc.value)
+        assert exc.value.provider_message == "Payout with this ref already exists"
 
     @respx.mock
     async def test_a_gateway_that_cannot_be_reached_is_not_a_decline(self):
