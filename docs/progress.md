@@ -176,6 +176,83 @@ The frontend is unchanged, so the S0 vitest and build results carry over.
 
 **New flake to watch:** the first S3 browser run had UAT-GP-03 on webkit-mobile wait 15s for the FIELD review card to show "Rejected" after the admin clicked Reject; it passed on retry. S3 does not touch review, but the rebased commission commit does, so S9 should check whether this recurs.
 
+## S4 — live payouts (both gateways)
+
+**Before S4:** approval marked a payout `PAID` and nothing left the platform. There was no bank code, the account name was whatever the agent typed, and transfer webhooks were ignored. The gateway transfer code was unreachable, and it was wrong: Flutterwave's "create beneficiary" parsed a Paystack response shape, Paystack's fee and retry raised `NotImplementedException`, and both sent float amounts.
+
+**What the gateway docs showed** (Flutterwave from its llms.txt markdown pages; Paystack from its public OpenAPI repo, because paystack.com blocks automated fetches):
+
+- **Bank list.**
+  - Paystack: `GET /bank?currency=NGN`, cursor-paged.
+  - Flutterwave: `GET /banks/NG`.
+- **Account lookup.**
+  - Paystack: `GET /bank/resolve`.
+  - Flutterwave: `POST /accounts/resolve`.
+  - Both return the bank-held `account_name`.
+- **Sending.**
+  - Paystack sends to a recipient code (`POST /transferrecipient`, then `POST /transfer`). The reference must be lowercase `[a-z0-9_-]`, 16 characters or more. **Transfer OTP must be disabled** on the account.
+  - Flutterwave sends straight to an account (`POST /transfers`, in major units). It refuses a duplicate reference. **Server IPs must be whitelisted**, which is a problem for Vercel's changing IPs.
+- **Looking a transfer up by our reference.**
+  - Paystack: `GET /transfer/verify/{ref}`.
+  - Flutterwave: `GET /transfers?reference=`.
+- **Fees.** Flutterwave quotes through `GET /transfers/fee`. Paystack has no fee API, so its NGN table (₦10 / ₦25 / ₦50) is in code.
+
+**User decisions:**
+
+- A failed transfer keeps its funds reserved. Finance retries or rejects it.
+- **The fee is deducted from the agent.**
+- The unused one-time beneficiary path is removed.
+- Stub mode runs the same approve → disburse flow.
+
+**What exists now:**
+
+- **Gateway contract.** `ITransferGateway` (`list_banks`, `resolve_account`, `quote_fee`, `send_transfer`, `get_transfer`) on both adapters, plus a `StubTransferGateway`. The stub has two documented unhappy account numbers: `0000000000` is unknown and `0000009999` declines. `GatewayDeclined` (a refusal) is told apart from an unreachable gateway or a 5xx, because only a refusal proves no money moved.
+- **Bank accounts.** A saved account holds the bank-resolved name, `bank_code`, and the resolving `provider`. Bank codes only mean something to the gateway whose list they came from. New endpoints:
+  - `GET /agents/payouts/banks`;
+  - `POST /agents/payouts/bank-accounts/resolve`, rate-limited because it reveals a name;
+  - `POST /agents/payouts/quote`.
+- **Payout lifecycle.** `REQUESTED → APPROVED → PROCESSING → PAID`, with `FAILED` for finance to retry or reject. The actions each status allows are one table, `ACTION_FROM_STATUSES`, and DTOs carry `allowedActions`.
+- **Disbursement.** `PayoutDisbursementService.run` is called by the daily `payout_disbursement` sweep (10:00 Lagos) and by `POST /admin/payouts/disburse`, and is bounded per call. Each payout is claimed in its own `INDEPENDENT` transaction under a per-attempt reference **before** the gateway is called.
+- **Webhooks.** Transfer webhooks only call `settle_from_gateway`.
+- **Migration `0004_payout_transfers`.** It is additive and chained after `0003`.
+- **Notifications.** New events `PAYOUT_PAID` and `PAYOUT_REJECTED`, each with an email template.
+- **Screens.**
+  - Agent: a bank select, then "Check account" (the bank's name, read-only), then Save; the withdrawal shows Review (fee, "You'll receive"), then Confirm.
+  - Finance: a "Disburse N approved (₦total)" button, and a decision panel driven by `allowedActions` that shows the transfer's trail and the gateway's reason for a failure.
+
+**Stage review fixes** (`/code-review high`, 10 findings; 9 fixed, 1 answered):
+
+- **Batch resilience.** A claimed payout that can't become a transfer (adjusted below its fee, or with no bank code) is failed with a reason. Any fault in one payout is logged and never stops the batch.
+- **Adjustments.** An adjustment carried by approve or hold gets the same "must stay above the fee" check as `adjust()`.
+- **No double payment.**
+  - A retry first asks the gateway about the failed attempt. One that actually went through is settled `PAID`. One still pending, or that can't be checked, is refused.
+  - A late success for the current attempt moves `FAILED` to `PAID`.
+- **In-flight transfers.** The button stays enabled while transfers are in flight ("Check N transfers with the bank"). On serverless it is the only thing that reconciles.
+- **Legacy payouts.** A payout from before 0004 has no bank code. It can't be approved or retried; finance rejects it.
+- **Dev scenario.** It writes its beneficiaries as fixture rows, and never asks a possibly live gateway to resolve a made-up number.
+- **Audit.** The finance user who presses Disburse is the actor on each `PAYOUT_TRANSFER_SENT`.
+- **Decline reasons.** The gateway's own reason for a decline reaches finance's view of the payout, never the exception text.
+- **Copy.** No "daily run" promise to agents, since every environment is serverless today.
+- **Answered, not changed.** The review doubted that Flutterwave filters transfers by `reference`. Its "Get all transfers" reference documents the `reference` query parameter.
+
+**Gate** (after the review fixes):
+
+| Gate | Result |
+| --- | --- |
+| pytest | 2918 passed (+127) |
+| ruff, mypy | clean (606 files) |
+| eslint, tsc | clean |
+| vitest | 817 passed (+15) |
+| build | green; rewrites target `localhost:8000` |
+| migration | `0004` upgrades, `downgrade -1` and `upgrade head` round-trip on `veriprops_e2e`; single head. A schema diff of `payouts` and `agent_bank_accounts` against the models shows nothing from 0004 (only 0001's index-name drift, see below) |
+| drive-through | 580/580 (+13: bank list, lookup and refusal, fee, paid, declined → retried → rejected, notifications, balances) |
+| Playwright (chromium-desktop + webkit-mobile) | 113/114. The failure is **UAT-AGENT-03 on webkit-mobile**, waiting for `signup-residence-form` after signup step 2. It is the recurring signup flake, and this time it failed its retry too. It passes 3/3 in isolation. S4 touches no signup code |
+| manual (playwright-cli, 390px) | agent Withdrawals: review shows ₦1,000 − ₦10 fee = ₦990; "Check account" shows the bank-held name; no console errors |
+
+**For S7 (found here, not S4's):** `alembic check` reports index-name drift across the 0001 schema (`ix_<table>_agent` vs the models' `ix_<table>_agent_id`, missing `ix_<table>_deleted`, unique constraints vs unique indexes). It is pre-existing and harmless to queries, but a column-level parity check can't pass until it is reconciled.
+
+**For S9:** the signup-residence flake has now appeared in 4 of 5 gate runs, and failed both attempts here under the parallel lane load.
+
 ## Third-party sandbox test register
 
 This register lists every third-party integration still stubbed, or not yet proven live. It is created in S0 and updated at the close of every stage, so the sandbox runs can be done together once keys land in Doppler `stg`.
@@ -189,9 +266,9 @@ This register lists every third-party integration still stubbed, or not yet prov
 | 1 | Flutterwave collection | wired in S3 (hosted checkout, verify-by-reference, verbatim `verif-hash`, refund by id) | `test_gateway_contracts.py`, `test_payment_webhooks.py`, `test_payment_gateway_flow.py` | init → hosted checkout with a test card → `verif-hash` webhook → verify → PAID; failed card → FAILED; refund → REFUNDED | FLW test public/secret keys + secret hash; webhook URL registered to staging (user). Also confirm a second refund of a refunded charge is declined | S3 | CONTRACT-TESTED |
 | 2 | Paystack collection | wired in S3 (signature keyed by the **secret key** — confirm in sandbox) | `test_gateway_contracts.py`, `test_payment_webhooks.py` | same flow with a Paystack test card; `x-paystack-signature`; refund | Paystack test secret key; webhook URL (user). Also confirm a second refund of a refunded charge is declined | S3 | CONTRACT-TESTED |
 | 3 | Chargebacks (both gateways) | wired in S3: Paystack `charge.dispute.create` by reference; Flutterwave `chargeback.initiated` by `flw_ref` | `test_payment_webhooks.py`, `test_payment_gateway_flow.py` | sandbox dispute event → Chargeback row | dashboard dispute simulation, if offered; Flutterwave chargeback webhooks enabled by FLW support (user) | S3 | CONTRACT-TESTED |
-| 4 | Bank list + account resolve | not built | none | `list_banks(NG)`; `resolve_account` on the gateway's test account | gateway test keys + documented test accounts (user) | S4 | STUBBED |
-| 5 | Batch payout disbursement | PAID with no transfer | none | button and sweep → transfer → webhook → PAID; failed transfer → FAILED + balance restored | test keys with transfers enabled (user) | S4 | STUBBED |
-| 6 | Paystack transfer fee / retry | `NotImplementedException` | none | `get_transfer_fee`, `retry_failed_bank_transfer` | Paystack test key (user) | S4 | STUBBED |
+| 4 | Bank list + account resolve | wired in S4: Paystack `GET /bank?currency=NGN` (cursor-paged, transfer-capable only) + `GET /bank/resolve`; Flutterwave `GET /banks/NG` + `POST /accounts/resolve`. The saved name is the bank's | `test_transfer_contracts.py`, `test_bank_account_service.py`; drive-through (stub) | list banks; resolve a documented test account (Flutterwave `0690000032`/044); an unknown number → refused | gateway test keys (user) | S4 | CONTRACT-TESTED |
+| 5 | Batch payout disbursement | wired in S4: approve → APPROVED; button/daily sweep claims → `send_transfer` under a per-attempt reference → webhook or lookup → PAID; a decline → FAILED (funds reserved) → finance retry/reject | `test_payout_disbursement.py`, `test_transfer_contracts.py`, `test_payment_webhooks.py`; drive-through (stub: paid, declined, retried, rejected) | button → transfer → `transfer.completed`/`transfer.success` → PAID; a failing test account → FAILED; retry; a `transfer.reversed` → FAILED. Confirm a duplicate reference is refused | test keys with transfers enabled; **Paystack transfer OTP disabled**; **Flutterwave server-IP whitelist** (a problem on Vercel's changing IPs); webhook URLs (user) | S4 | CONTRACT-TESTED |
+| 6 | Transfer fee (both) / retry | wired in S4: Flutterwave `GET /transfers/fee`; Paystack from its published NGN table (₦10 / ₦25 / ₦50), which has no API. Retry is a new attempt under a new reference, after the gateway confirms the last one failed | `test_transfer_contracts.py`, `test_payout_service.py` | quote on both gateways vs the dashboard's charged fee; a retried transfer lands once | test keys (user). Re-check Paystack's table if its pricing changes | S4 | CONTRACT-TESTED |
 | 7 | Dojah BVN/NIN lookup | stub approves any BVN | none | sandbox BVN/NIN → name/DOB match score | Dojah sandbox AppId + secret, test IDs (user) | S5 | STUBBED |
 | 8 | Dojah selfie liveness | not built | none | selfie vs ID photo, pass and fail | Dojah sandbox; a test selfie (user) | S5 | STUBBED |
 | 9 | Google Places (New) | stub (3 fixture addresses) | none | autocomplete "Lekki" → place details, NG-restricted | Places API key restricted to staging (user) | S5 | STUBBED |
