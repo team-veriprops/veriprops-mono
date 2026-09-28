@@ -244,13 +244,12 @@ class BaseEntity(Base, AutoRepr):
     #     'postgresql_partition_by': 'RANGE (date_created)'  # Optional for large tables
     # }
 
-    # UUID as PK (PostgreSQL-native)
+    # UUID as PK (PostgreSQL-native). The primary key is already unique and indexed; a second
+    # index on it would only slow every write.
     id = Column(
         UUID(as_uuid=True),
         primary_key=True,
         default=Utils.generate_uuid,
-        unique=True,
-        index=True
     )
 
     # Optimized timestamp columns
@@ -276,12 +275,12 @@ class BaseEntity(Base, AutoRepr):
         nullable=True
     )
 
-    # Soft delete pattern
+    # Soft delete pattern. Not indexed: nearly every row is live, so an index on it is never
+    # chosen — queries find rows by their real keys and filter `deleted` alongside.
     deleted = Column(
         Boolean,
         default=False,
         nullable=False,
-        index=True  # Important for filtering active records
     )
 
     date_deleted = Column(

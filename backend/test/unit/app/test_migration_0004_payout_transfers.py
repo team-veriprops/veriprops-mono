@@ -1,7 +1,6 @@
 """Migration 0004 gives payouts a real transfer trail, additively.
 
-It must chain directly after the payment-gateway-reference migration, leave the history with a
-single head, and create exactly the columns and the unique reference index the ORM declares —
+It must chain directly after the payment-gateway-reference migration and create exactly the columns and the unique reference index the ORM declares —
 a webhook finds its payout by that reference, and one reference is one transfer attempt.
 """
 from pathlib import Path
@@ -21,9 +20,8 @@ def _scripts() -> ScriptDirectory:
     return ScriptDirectory.from_config(config)
 
 
-def test_it_chains_after_the_gateway_reference_migration_and_is_the_only_head():
+def test_it_chains_after_the_gateway_reference_migration():
     scripts = _scripts()
-    assert scripts.get_heads() == ["0004_payout_transfers"]
     assert scripts.get_revision("0004_payout_transfers").down_revision == "0003_payment_gateway_ref"
 
 

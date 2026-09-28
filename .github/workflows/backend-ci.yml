@@ -121,6 +121,10 @@ jobs:
           alembic upgrade head
           alembic downgrade base
           alembic upgrade head
+      # The migrated schema must be exactly what the models declare — no missing, extra or
+      # misnamed index, key or column. Fails with the differences listed.
+      - name: Models and migrations agree
+        run: alembic check
 
   summary:
     if: always()

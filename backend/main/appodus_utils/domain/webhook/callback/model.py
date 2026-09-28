@@ -19,7 +19,7 @@ class Callback(BaseEntity):
     __tablename__ = 'callbacks'
     platform = Column(String(20), nullable=False)
     event_type = Column(String(20), nullable=False)
-    external_id = Column(String(97), nullable=False)
+    external_id = Column(String(97), nullable=False, index=True)
     payload = Column(MutableDict.as_mutable(jsonb_variant()), nullable=False)
     handle_from_time = Column(UTCDateTime, nullable=False)
     handled = Column(Boolean, nullable=False, default=False)

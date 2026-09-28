@@ -10,7 +10,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Index, Integer, String, Text
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
@@ -44,6 +44,11 @@ class Broadcast(BaseEntity):
     recipient_count = Column(Integer, nullable=False, server_default="0")
     # created_by (the composing admin) is inherited from BaseEntity — set via the create DTO.
     # status index is declared inline (index=True) → ix_broadcasts_status, matching the migration.
+
+    __table_args__ = (
+        # Inherited columns cannot take index=True here, so the admin index is declared here.
+        Index("ix_broadcasts_created_by", "created_by"),
+    )
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────

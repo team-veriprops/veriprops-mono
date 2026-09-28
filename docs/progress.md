@@ -253,6 +253,35 @@ The frontend is unchanged, so the S0 vitest and build results carry over.
 
 **For S9:** the signup-residence flake has now appeared in 4 of 5 gate runs, and failed both attempts here under the parallel lane load.
 
+## S5 — part 1: schema parity (user request, pulled forward from S7)
+
+**Before:** `alembic check` against a database migrated to head reported 142 differences between the models and the schema. All of them came from the squashed `0001`:
+
+- 58 unique indexes on `id` that duplicate the primary key's own index;
+- 54 `deleted` indexes that the models declared and 4 the database had;
+- 10 columns with a unique constraint *and* a plain index;
+- 7 indexes under other names;
+- 34 declared lookup indexes that were never built, including `notifications.user_id` and `commissions.agent_id`;
+- 5 database-only indexes;
+- 1 type mismatch.
+
+**Now:** migration `0005_schema_parity` and matching model edits leave zero differences.
+
+- **Dropped as waste.** The redundant `id` indexes, the `deleted` indexes, and `callbacks.handled`. `BaseEntity` no longer declares an index on `id` or `deleted`.
+- **Uniqueness.** Each constraint-plus-index pair becomes one unique index. `ON CONFLICT (column)` targets it the same way.
+- **Renamed** to `ix_<table>_<column>`.
+- **Missing lookup indexes created.**
+- **Database-only indexes declared** in their models where queries use them: `devices.user_id`, `callbacks.external_id`, `broadcasts.created_by`, and WhatsApp inbound `(kind, received_at)`.
+- **`oauth_identities.raw_profile`** is TEXT in the model, as in the database.
+
+**Guard:** the backend CI `migrations` job now runs `alembic check` after its up/down/up round trip. `test_migration_0005_schema_parity.py` pins the model-side rules.
+
+**Verified:**
+
+- `veriprops_e2e`: 0004 → 0005 → check clean. `downgrade -1` restores exactly the 58 `id` and 4 `deleted` indexes. `upgrade` is clean again.
+- A fresh database runs base → head → base → head, and `alembic check` exits 0, as CI will.
+- pytest 2921. Drive-through 580/580 on the new schema, which covers the `ON CONFLICT` paths.
+
 ## Third-party sandbox test register
 
 This register lists every third-party integration still stubbed, or not yet proven live. It is created in S0 and updated at the close of every stage, so the sandbox runs can be done together once keys land in Doppler `stg`.

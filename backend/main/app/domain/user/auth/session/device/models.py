@@ -11,7 +11,7 @@ from main.appodus_utils.integrations.messaging.models import PushToken, PushProv
 
 class Device(BaseEntity):
     __tablename__ = 'devices'
-    user_id = Column(String(36), nullable=False)
+    user_id = Column(String(36), nullable=False, index=True)
     device_id = Column(String(36), nullable=False)
     push_provider_type = Column(String(20), nullable=False)
     push_token = Column(JSONB_VARIANT, nullable=False)

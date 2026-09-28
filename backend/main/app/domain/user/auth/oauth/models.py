@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Column, String, Index
+from sqlalchemy import Column, Index, String, Text
 
 from main.appodus_utils.db.models import live_unique_index
 
@@ -15,7 +15,7 @@ class OAuthIdentity(BaseEntity):
     provider = Column(String(16), nullable=False)
     subject = Column(String(255), nullable=False)  # provider's stable user id
     email = Column(String(254), nullable=True)
-    raw_profile = Column(String, nullable=True)  # JSON-encoded profile snapshot
+    raw_profile = Column(Text, nullable=True)  # JSON-encoded profile snapshot
 
     __table_args__ = (
         # Live identities only, so an unlinked provider account can be linked again.
