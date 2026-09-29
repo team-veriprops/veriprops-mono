@@ -145,6 +145,21 @@ class TestCommittedEnvFilesAreConfigOnly:
             f"move them to Doppler and leave the key absent/empty/{SECRET_PLACEHOLDER}."
         )
 
+    @pytest.mark.parametrize("name", BACKEND_ENV_FILES)
+    def test_no_value_is_read_as_its_own_comment(self, name: str):
+        """`KEY=    # note` is read by python-dotenv (what pydantic-settings loads with) as the
+        value "# note", not as blank: a support phone printed into every message as comment
+        text, and a secret that counts as configured. A blank value keeps its note on the line
+        above instead."""
+        from dotenv import dotenv_values
+
+        read_as_comment = sorted(
+            key for key, value in dotenv_values(_env_path(name)).items() if (value or "").startswith("#")
+        )
+        assert not read_as_comment, (
+            f"{name}: {read_as_comment} load as their comment text; move the comment to its own line"
+        )
+
     def test_frontend_backend_secret_key_is_inert(self):
         for name in FRONTEND_ENV_FILES:
             values = _parse_env(_env_path(name, frontend=True))
