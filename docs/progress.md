@@ -282,6 +282,68 @@ The frontend is unchanged, so the S0 vitest and build results carry over.
 - A fresh database runs base → head → base → head, and `alembic check` exits 0, as CI will.
 - pytest 2921. Drive-through 580/580 on the new schema, which covers the `ON CONFLICT` paths.
 
+## S5 — part 2: live identity checks, address search, and the production boot guard
+
+**Before S5:** staging and production ran the KYC and geocoding stubs. In production the KYC stub approved any BVN, so anyone could become a verified agent, and address search offered three fixture addresses. The Dojah and Places adapters raised on every call. No selfie was ever captured.
+
+**User decisions:**
+
+- Passport, driver's licence and voter's card stay, and go to manual review. The review shows the selfie and the document photo **side by side with a draggable centre divider**.
+- Staging switches to live Dojah (sandbox host) and Google Places, mirroring production.
+
+**Consequence the user accepted with the review view:** the photos are now **kept**, where the platform previously stored no biometrics:
+
+- storage is private and encrypted;
+- reviewers see the photos only through 5-minute links;
+- erasure deletes them;
+- the wizard's saved draft never holds one.
+
+The PRD states this.
+
+**What exists now:**
+
+- **Dojah.** Liveness first, then a BVN/NIN selfie match plus a name check. Other IDs go to review after liveness. A Dojah that is down, unpaid or unconfigured is an outage (a safe 5xx), never an applicant who failed. The reference is random, never derived from the identity number.
+- **Selfies stay out of logs.** Selfies travel as `SecretStr`, because the trace loggers print method arguments.
+- **Wizard.**
+  - A selfie is required on every path, taken with the camera (front on phones, webcam on desktop) or uploaded. It is resized, re-encoded as JPEG and EXIF-stripped in the browser.
+  - The document photo is required for the IDs the backend names in public config (`kycDocumentIdTypes`).
+  - A resumed draft reopens at the identity step to retake the photos.
+- **Photo storage.** Photos are stored *before* the paid Dojah call, so a storage failure costs nothing. Erasure deletes the user's whole `kyc/{user}/` folder (new `delete_prefix`), which reaches photos from a submission that rolled back.
+- **Places.** Autocomplete and place details, each with a field mask. One session token per search, closed by the details call on selection, which fills the coordinates.
+- **Production boot guard.** Payments, storage (with AWS keys), Dojah on its production host, and Places, each with its keys, or no boot. Every missing piece is named in one error. Staging is free.
+- **Enums.** `KycProvider` and `GeoProvider` moved to `appodus_utils/config/providers.py`, so the settings are enum-typed. That retires the documented "stay `str`" exception.
+- **Migration `0006_kyc_images`** (additive). Two §G rows closed: live Dojah KYC, and live document storage, whose `TODO(gap)` was stale since S1.
+
+**Stage review fixes** (`/code-review high`, 10 findings, all fixed):
+
+- **Orphaned photos.** Fixed by upload-first plus erasure by prefix.
+- **Boot guard.** It checks the AWS keys.
+- **Places 400s.** A place-details 400 is a logged configuration fault, not "no such place".
+- **Places session.** The session token was never closed with a details call, and a pick fired one more billed autocomplete. Both fixed.
+- **Dojah 400s.** A 400 that is not "not found" is an outage.
+- **NIN names.** The name fields are read under both namings.
+- **Wizard rules.** The wizard waits for the backend's ID-type rules before judging the step complete.
+- **Reversible reference.** The unsalted hash of an 11-digit number (brute-forceable) became a random reference.
+- **Image checks** reuse `FileUtils.sniff_mime`, JPEG only.
+- **Enum literals** are gone (the provider enums moved).
+
+**Gate** (after the review fixes):
+
+| Gate | Result |
+| --- | --- |
+| pytest | 3012 passed (+91 over the schema-parity commit's 2921) |
+| ruff, mypy | clean (607 files) |
+| eslint, tsc | clean |
+| vitest | 838 passed (+21) |
+| build | green; rewrites target `localhost:8000` |
+| migration | `0006` upgrades, `downgrade -1` and `upgrade head` round-trip on `veriprops_e2e`; `alembic check` reports nothing |
+| drive-through | 580/580, plus a new check that the reviewer's detail carries the selfie link (68/68 on the prefix through agent onboarding) |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114. UAT-AGENT-05 on webkit-mobile needed its retry, waiting for `signup-consent-form`: the signup-wait flake family already logged for S9, not the new selfie step, which every onboarding spec uploaded through on both engines |
+
+**Not verified in a browser:** the reviewer's side-by-side view with real images. The stub storage serves placeholder URLs locally, so the component tests pin its structure, and the drive-through pins the links. It needs the S6 staging run with real storage.
+
+**Not done, and noted:** the property step fills only the coordinates from Google. Its `state` is the customer's own pick from the canonical list, and Google's naming ("Lagos", "Federal Capital Territory") may not match its slugs.
+
 ## Third-party sandbox test register
 
 This register lists every third-party integration still stubbed, or not yet proven live. It is created in S0 and updated at the close of every stage, so the sandbox runs can be done together once keys land in Doppler `stg`.
@@ -298,9 +360,9 @@ This register lists every third-party integration still stubbed, or not yet prov
 | 4 | Bank list + account resolve | wired in S4: Paystack `GET /bank?currency=NGN` (cursor-paged, transfer-capable only) + `GET /bank/resolve`; Flutterwave `GET /banks/NG` + `POST /accounts/resolve`. The saved name is the bank's | `test_transfer_contracts.py`, `test_bank_account_service.py`; drive-through (stub) | list banks; resolve a documented test account (Flutterwave `0690000032`/044); an unknown number → refused | gateway test keys (user) | S4 | CONTRACT-TESTED |
 | 5 | Batch payout disbursement | wired in S4: approve → APPROVED; button/daily sweep claims → `send_transfer` under a per-attempt reference → webhook or lookup → PAID; a decline → FAILED (funds reserved) → finance retry/reject | `test_payout_disbursement.py`, `test_transfer_contracts.py`, `test_payment_webhooks.py`; drive-through (stub: paid, declined, retried, rejected) | button → transfer → `transfer.completed`/`transfer.success` → PAID; a failing test account → FAILED; retry; a `transfer.reversed` → FAILED. Confirm a duplicate reference is refused | test keys with transfers enabled; **Paystack transfer OTP disabled**; **Flutterwave server-IP whitelist** (a problem on Vercel's changing IPs); webhook URLs (user) | S4 | CONTRACT-TESTED |
 | 6 | Transfer fee (both) / retry | wired in S4: Flutterwave `GET /transfers/fee`; Paystack from its published NGN table (₦10 / ₦25 / ₦50), which has no API. Retry is a new attempt under a new reference, after the gateway confirms the last one failed | `test_transfer_contracts.py`, `test_payout_service.py` | quote on both gateways vs the dashboard's charged fee; a retried transfer lands once | test keys (user). Re-check Paystack's table if its pricing changes | S4 | CONTRACT-TESTED |
-| 7 | Dojah BVN/NIN lookup | stub approves any BVN | none | sandbox BVN/NIN → name/DOB match score | Dojah sandbox AppId + secret, test IDs (user) | S5 | STUBBED |
-| 8 | Dojah selfie liveness | not built | none | selfie vs ID photo, pass and fail | Dojah sandbox; a test selfie (user) | S5 | STUBBED |
-| 9 | Google Places (New) | stub (3 fixture addresses) | none | autocomplete "Lekki" → place details, NG-restricted | Places API key restricted to staging (user) | S5 | STUBBED |
+| 7 | Dojah BVN/NIN selfie match | wired in S5: `/kyc/{bvn,nin}/verify` with the selfie (threshold sent at Dojah's floor, 50; ≥80 verifies, 50–79 and a name mismatch go to review); passport/licence/voter's card go to a reviewer. stg on the sandbox host, prd on `api.dojah.io` (prod refuses the sandbox) | `test_dojah_kyc.py`, `test_kyc_service.py`, `test_stub_kyc.py`; drive-through (stub) | sandbox BVN `22222222222` and NIN `70123456789` with a test selfie → VERIFIED; an unknown number → FAILED; confirm which name fields `/kyc/nin/verify` returns (both variants are read) and how an unknown number is answered (404 vs 400 "not found") | Dojah sandbox AppId + secret key (user) | S5 | CONTRACT-TESTED |
+| 8 | Dojah selfie liveness | wired in S5: `/api/v1/ml/liveness` before every identity call; no face, several faces or not live → FAILED with our sentence; photos kept privately for the reviewer (side-by-side view), deleted by erasure | `test_dojah_kyc.py`, `test_kyc_service.py`, `test_erasure_service.py`, `KycPhotoCompare.test.tsx`; Playwright onboarding uploads a real JPEG | a live selfie → pass; a photo of a photo → fail; a group photo → fail | Dojah sandbox (user) | S5 | CONTRACT-TESTED |
+| 9 | Google Places (New) | wired in S5: `places:autocomplete` (Nigeria only) + place details on selection, field masks on both, one session token per search; key in a header | `test_google_places.py`, `verification-service.test.ts` | type "Lekki" → suggestions → pick one → coordinates filled; check the billing console shows one session | Places API (New) key restricted to that API and the staging server (user) | S5 | CONTRACT-TESTED |
 | 10 | S3 evidence storage | fixed in S1 (valid `put_object`, real MIME, fresh presigned reads) | `test_s3_storage.py` (botocore Stubber: put, presign, delete, safe failure) | put (image + PDF MIME) → presign → GET 200 → delete | AWS staging bucket + IAM keys (user) | S1 | CONTRACT-TESTED |
 | 11 | SMS Termii | routing fixed in S1 | routing: `test_router_sms_routing.py`; Termii HTTP adapter: none | OTP to a +234 test number → delivered | Termii key + sender ID, test handset (user) | S1 | STUBBED |
 | 12 | SMS Twilio fallback | routing fixed in S1 (Termii down → Twilio; never the mock) | routing: `test_router_sms_routing.py`; Twilio adapter: none | non-NG number, and Termii forced down → Twilio | Twilio SID/token/number (user) | S1 | STUBBED |
