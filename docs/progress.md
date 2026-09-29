@@ -1,6 +1,6 @@
 # Progress Tracker — Audit remediation (2026-09-27)
 
-status: **S0–S3 complete; S4 (live payouts) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
+status: **S0–S6 complete; S7 (convention debt) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
 
 Scope, stages S0–S9 and the user's decisions are in the audit plan (`~/.claude/plans/any-pending-issues-task-polymorphic-duckling.md`). In short:
 
@@ -344,13 +344,97 @@ The PRD states this.
 
 **Not done, and noted:** the property step fills only the coordinates from Google. Its `state` is the customer's own pick from the canonical list, and Google's naming ("Lagos", "Federal Capital Territory") may not match its slugs.
 
+## S6 — the live smoke, the `@live` spec, and the release-gate runbook
+
+**Before S6:** nothing ever called a real sandbox. The contract tests pin each adapter to the provider's documented shapes. Whether the adapters work against the real APIs was unknown.
+
+**What exists now:**
+
+- **`backend/scripts/live_smoke.py`**
+  - One probe per integration, calling the app's own adapters with Doppler `stg`'s keys:
+    - both gateways' checkout and charge read-back;
+    - banks, resolve and fee, plus an optional ₦100 transfer with the duplicate-reference check;
+    - S3 put, read, fresh link and delete-by-prefix;
+    - Resend, Mailjet and SES;
+    - Termii and Twilio;
+    - Meta: number health, templates and `hello_world`;
+    - five intents;
+    - Dojah liveness and BVN match, plus an unknown BVN;
+    - Places suggest and resolve in one session.
+  - It refuses production, live gateway keys and Dojah's production host before any probe runs.
+  - It exits 0 only when every selected probe passed. A SKIP (missing key or recipient) exits 3, "incomplete", so the gate can't go green on probes that didn't run.
+- **`@live` Playwright spec** (`e2e/specs/live-integrations.spec.ts`, `pnpm e2e:live`, against `UAT_BASE_URL`).
+  - The tests:
+    - **UAT-LIVE-01:** pay on the hosted checkout with the gateway's sandbox card, get to PAID through the webhook, then fail the case and see the refund accepted.
+    - **UAT-LIVE-02:** the report PDF from the deployment.
+    - **UAT-LIVE-03:** a passport application through Dojah liveness, and the reviewer sees both photos loaded from S3, with the divider working.
+  - Both CI lanes exclude it. It runs on one worker with no retries and no reset or seed, because staging is shared.
+  - A missing credential fails the test, and an empty lane fails the run.
+  - The card-filling steps find fields the way a person reads them, and are **unverified until the first staging run**. The user chose fully automated filling over a tester paying by hand.
+- **Runbook** [live-integration-smoke.md](live-integration-smoke.md): one-time setup (Doppler `stg`, keys, dashboards, test assets), both parts, what to confirm on the first run, and updating this register.
+
+**Found and fixed along the way:**
+
+- **Every committed backend env file loaded some blank values as their comment text.** python-dotenv reads `KEY=    # note` as the value "# note". In production and staging that made `BRAND_SUPPORT_PHONE` the literal text "# E.164 digits, no + (blank = none)", printed into every message that shows it. In `.env.test` it made the gateway keys look configured. The fix moves the comment onto its own line. A hygiene test now loads every backend env file with python-dotenv itself, the parser the app uses.
+- **QA fixtures got real addresses on staging.**
+  - `/dev/seed` and `/dev/scenario` gave fixtures real-looking Nigerian numbers (`81…`/`803…`) and `@veriprops.io` emails. On staging, where messaging is live, a scenario's notifications would have reached whoever owns them. The `@live` spec would have done this on every run.
+  - Fixture contact details now come from `messaging/qa_recipients.py`: `@veriprops.io` and `+234 8100…`.
+  - On staging, the first exclusive SMS and email rule hands a message for them to the new `QaSinkProvider`, which records it and sends nothing. Local runs keep Mailpit and the SMS mock.
+- **The admin was told "Verification failed & refunded" even when the gateway refused the refund.**
+  - The fail response now carries the `RefundOutcome`, and `failSummary` says what happened: refunded, refused and waiting in Finance, or held because a chargeback is already returning the money.
+  - UAT-LIVE-01 asserts the exact "refunded" sentence.
+
+**Stage review fixes** (`/code-review high`, 10 findings; 9 fixed, 1 answered):
+
+- **Texting strangers.** Fixed by the QA sink above.
+- **An all-SKIP run or a skipped live test exited 0.** Both now fail or read as incomplete.
+- **The S3 probe could leave its object behind on a failed check.** It now deletes in `finally`.
+- **The transfer probes took `transfers()`, which hands out the stub under `PAYMENT_STUB_MODE`.** They now resolve the named gateway, and a test pins it.
+- **The card fields appended text on a retry.** They are cleared first, and the helper waits for the card channel to render.
+- **Bare `assert`s vanish under `python -O`.** They are now `check()`.
+- **Enum and route literals.** The `Gateway` enum became `PaymentMethod`, the `/confirmed` regex became `ROUTES.PORTAL.VERIFICATION_CONFIRMED`, and the production env-file name comes from `Environment.PRODUCTION`.
+- **Answered:** "the refunds-to-retry list never shows the VID". It does: every `tx_ref` begins with the VID. Its paging (oldest first) was a real weakness, though. The admin's toast now tells the truth about the refund, so the spec uses the toast instead.
+
+**Logged for S7:**
+
+- **An admin cancel of a paid case starts no refund.** `admin/service.py cancel` writes CANCELLED and audits `refund_pending: True`. Its comment says "refund executes in S12", but no refund was ever wired. Only "Fail & refund" refunds. A user decision is needed: should cancel after payment refund, or be refused in favour of fail?
+- **`ROUTES.ADMIN.FINANCE_PAYMENTS` has no page behind it.** Nothing shows a single payment's status.
+
+**Gate:**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 3055 passed (+43) |
+| ruff, mypy | clean (609 files) |
+| eslint, tsc | clean |
+| vitest | 842 passed (+4) |
+| build | green; rewrites target `localhost:8000` |
+| migrations | none in S6; `veriprops_e2e` stays at `0006` |
+| drive-through | 581/581 (the seed's new phone range included) |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114, every test passing first time (no retries). Locally, UAT-LIVE-02 passes against the stack through the live lane, proving the staging-safe helpers (sign-in without automation hooks, hydration waits, `/dev/scenario`), and UAT-LIVE-03 without credentials fails, naming `UAT_LIVE_ADMIN_EMAIL` |
+| `live_smoke.py`, no keys | 14 probes, all SKIP with the missing key named, exit 3 (incomplete) |
+| `@live` lane isolation | 0 `@live` tests in the parallel and serial lanes; the live lane lists exactly UAT-LIVE-01..03 and refuses to start without `UAT_BASE_URL` |
+
+**Not run:** the live smoke and the `@live` spec against staging. There is no Doppler `stg` config and no sandbox key yet, so nothing in the register moves to `SANDBOX-PASSED` in this stage.
+
 ## Third-party sandbox test register
 
 This register lists every third-party integration still stubbed, or not yet proven live. It is created in S0 and updated at the close of every stage, so the sandbox runs can be done together once keys land in Doppler `stg`.
 
 - **Mode** is how staging and prod run today; test and dev run every integration on stubs.
 - **Status** is one of `STUBBED`, `CONTRACT-TESTED`, `SANDBOX-PASSED` or `BLOCKED(<reason>)`.
-- The run command for each row is `doppler run --config stg -- python scripts/live_smoke.py --only <name>`, which S6 builds, or the `@live` Playwright spec.
+- Each row is exercised live by a `live_smoke.py` probe or a `@live` test (built in S6; runbook [live-integration-smoke.md](live-integration-smoke.md)):
+  - rows 1–2 (collection opens and reads back): probes `flutterwave`, `paystack`; the payment, webhook and refund: `@live` UAT-LIVE-01;
+  - rows 4–6: `flutterwave_transfers`, `paystack_transfers` (`--send-transfer` sends ₦100);
+  - rows 7–8: `dojah` (with `--selfie`), and the reviewer's view: UAT-LIVE-03;
+  - row 9: `places`;
+  - row 10: `s3`, and the KYC photos through their links: UAT-LIVE-03;
+  - rows 11–12: `sms_termii`, `sms_twilio`;
+  - row 13: `email_resend`, `email_mailjet`, `email_ses`;
+  - row 14: `whatsapp`;
+  - row 15: `intent`;
+  - the report PDF on the deployed runtime: UAT-LIVE-02.
+- Run it with `doppler run --config stg -- python scripts/live_smoke.py --only <probe>`. A row becomes `SANDBOX-PASSED` only from a run where its probe printed PASS.
 
 | # | Integration | Mode stg / prd (today) | Automated coverage | Sandbox test still to run | Needs (who) | Stage | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -364,11 +448,11 @@ This register lists every third-party integration still stubbed, or not yet prov
 | 8 | Dojah selfie liveness | wired in S5: `/api/v1/ml/liveness` before every identity call; no face, several faces or not live → FAILED with our sentence; photos kept privately for the reviewer (side-by-side view), deleted by erasure | `test_dojah_kyc.py`, `test_kyc_service.py`, `test_erasure_service.py`, `KycPhotoCompare.test.tsx`; Playwright onboarding uploads a real JPEG | a live selfie → pass; a photo of a photo → fail; a group photo → fail | Dojah sandbox (user) | S5 | CONTRACT-TESTED |
 | 9 | Google Places (New) | wired in S5: `places:autocomplete` (Nigeria only) + place details on selection, field masks on both, one session token per search; key in a header | `test_google_places.py`, `verification-service.test.ts` | type "Lekki" → suggestions → pick one → coordinates filled; check the billing console shows one session | Places API (New) key restricted to that API and the staging server (user) | S5 | CONTRACT-TESTED |
 | 10 | S3 evidence storage | fixed in S1 (valid `put_object`, real MIME, fresh presigned reads) | `test_s3_storage.py` (botocore Stubber: put, presign, delete, safe failure) | put (image + PDF MIME) → presign → GET 200 → delete | AWS staging bucket + IAM keys (user) | S1 | CONTRACT-TESTED |
-| 11 | SMS Termii | routing fixed in S1 | routing: `test_router_sms_routing.py`; Termii HTTP adapter: none | OTP to a +234 test number → delivered | Termii key + sender ID, test handset (user) | S1 | STUBBED |
+| 11 | SMS Termii | routing fixed in S1 | routing: `test_router_sms_routing.py`; Termii HTTP adapter: none; live probe `sms_termii` | OTP to a +234 test number → delivered. Confirm Termii accepts the number with its leading `+` (the adapter sends E.164 as given) | Termii key + sender ID, test handset (user) | S1 | STUBBED |
 | 12 | SMS Twilio fallback | routing fixed in S1 (Termii down → Twilio; never the mock) | routing: `test_router_sms_routing.py`; Twilio adapter: none | non-NG number, and Termii forced down → Twilio | Twilio SID/token/number (user) | S1 | STUBBED |
-| 13 | Email Resend → Mailjet → SES | wired | Mailpit in drive-through (SMTP only) | send to a test inbox; force a Resend failure → fallback | Resend/Mailjet/SES keys, verified domain (user) | S6 | STUBBED |
-| 14 | WhatsApp Meta `send_message` + templates | wired (D88 test number on stg) | signature checks in drive-through; no send test | template to Meta's test number; free text inside the 24h window | Meta test number, WABA id, token (user) | S6 | STUBBED |
-| 15 | Intent (DeepSeek) | wired | none live | 5 fixed utterances → expected intents; bad key → UNKNOWN | `INTENT_API_KEY` in stg (user) | S6 | STUBBED |
+| 13 | Email Resend → Mailjet → SES | wired | Mailpit in drive-through (SMTP only); `test_resend_provider.py`, `test_aws_ses_provider.py`; live probes `email_*` | one email per provider to a test inbox; force a Resend failure → fallback | Resend/Mailjet/SES keys, verified domain (user) | S6 | STUBBED |
+| 14 | WhatsApp Meta `send_message` + templates | wired (D88 test number on stg) | signature checks in drive-through; live probe `whatsapp` (number health, template directory, `hello_world`) | template to Meta's test number; free text inside the 24h window | Meta test number, WABA id, token (user) | S6 | STUBBED |
+| 15 | Intent (DeepSeek) | wired | `test_live_intent_adapters.py`; live probe `intent` | 5 fixed utterances → expected intents; bad key → UNKNOWN | `INTENT_API_KEY` in stg (user) | S6 | STUBBED |
 | 16 | OAuth Google / Facebook / Apple | Google OK; FB/Apple `mock_value` | none live | full login on staging per provider | real FB app id; Apple team/key/client id + p8 key (user) | I-5 | STUBBED |
 | 17 | Firebase push | credentials load at startup, no tokens stored | none | — | — | §G | BLOCKED(feature not built) |
 | 18 | FX live rates | hardcoded rates | none | — | OpenExchangeRates key when the gap is picked up | §G | BLOCKED(deferred gap) |
@@ -377,7 +461,15 @@ This register lists every third-party integration still stubbed, or not yet prov
 **User actions gathered from the audit:**
 
 - Rotate the Firebase and contracts service-account keys (they are tracked in git), plus any credentials recorded in memory.
-- Load the sandbox and live keys above into Doppler `stg`/`prd`.
+- **Create the Doppler `stg` config.** `veriprops-verf-backend` has only `dev`, `dev_personal`, `dev_test`, `prd` and `preview`, as checked in S6. Then put its service tokens in the GitHub `staging` Environment: `deploy.yml` and `live_smoke.py` both expect it.
+- Load the sandbox keys above into Doppler `stg`, and the live keys into `prd`. **Production refuses to boot** without Dojah (production host), Places, AWS and the active gateway's keys (S5).
+- Restrict the Places key to Places API (New) and the server.
+- On the gateway dashboards:
+  - register the webhook URLs (`https://<host>/api/webhooks/{flutterwave,paystack}`);
+  - disable the Paystack transfer OTP;
+  - decide on Flutterwave's server-IP whitelist against Vercel's changing IPs;
+  - ask Flutterwave support to enable chargeback webhooks.
+- Run the release gate on staging once the keys land ([live-integration-smoke.md](live-integration-smoke.md)). It includes the only check of the reviewer's KYC photo view with real storage.
 - Correct the `.env.prod:18` origin.
 - Set up branch protection and the Cloudflare edge-auth Transform Rule.
 - Clear the WhatsApp launch gates and the `docs/handoff-token-pen-check.md` items.
