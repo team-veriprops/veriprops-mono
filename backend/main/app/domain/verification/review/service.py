@@ -36,6 +36,7 @@ from main.app.domain.commission_rule.service import CommissionRuleService
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.system_config.service import ConfigService
 from main.app.domain.message.verification_messages import VerificationMessages
+from main.app.domain.payment.models import RefundOutcome
 from main.app.domain.payment.service import PaymentService
 from main.app.domain.verification.models import UpdateVerificationDto, Verification
 from main.app.domain.verification.report.service import ReportService
@@ -288,8 +289,9 @@ class ReviewService:
         await self._derive_and_persist(verification_id, admin_id)
         return await self._tasks.get_model(task.id)
 
-    async def fail(self, verification_id: str, reason: str, admin_id: str) -> Verification:
-        """Fail the verification and refund the customer (§8.5)."""
+    async def fail(self, verification_id: str, reason: str, admin_id: str) -> RefundOutcome:
+        """Fail the verification and refund the customer (§8.5). Returns what the refund did,
+        so the admin is told when a gateway refused it and finance has to retry."""
         verification = await self._get_verification(verification_id)
         verification_state_machine.assert_can_transition(
             verification.status, VerificationStatus.FAILED.value, resource="Verification"
@@ -318,7 +320,7 @@ class ReviewService:
             details={"refunded_minor": refund.refunded_minor,
                      "refund_failed_payment_ids": refund.failed_payment_ids, "reason": reason},
         )
-        return await self._verification_repo.get_model(verification_id)
+        return refund
 
     # ── Read (§8.1) ───────────────────────────────────────────────
 

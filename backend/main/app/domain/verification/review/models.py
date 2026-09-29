@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from main.app.core.state.status import AgentRole, VerificationStatus, VerificationTier
+from main.app.domain.payment.models import RefundOutcome
 from main.app.domain.verification.report.models import ReportDto
 from main.app.domain.verification.task.models import TaskDto
 from main.appodus_utils import Object
@@ -48,3 +49,5 @@ class ReviewStateDto(Object):
     releasable: bool = False
     report: Optional[ReportDto] = None
     findings: Dict[str, Any] = {}
+    # Set only by failing a case: what its refund did (refused refunds wait for finance).
+    refund: Optional[RefundOutcome] = None

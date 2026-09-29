@@ -387,3 +387,14 @@ class TestReopenFail:
         await svc.fail("v-1", "fraud detected", "admin-1")
         svc._payments.refund.assert_awaited_once()
         assert verification.status == VerificationStatus.FAILED.value
+
+    async def test_fail_reports_what_the_refund_did(self):
+        """The admin is told whether the gateway took the refund: a refused one waits for
+        finance to retry, and saying "refunded" then would be false."""
+        svc = _make_service(_verification(status=VerificationStatus.UNDER_REVIEW), _standard_tasks())
+        svc._payments.refund.return_value = RefundOutcome(refunded_minor=0, failed_payment_ids=["p-1"])
+
+        outcome = await svc.fail("v-1", "fraud detected", "admin-1")
+
+        assert outcome.failed_payment_ids == ["p-1"]
+        assert outcome.refunded_minor == 0

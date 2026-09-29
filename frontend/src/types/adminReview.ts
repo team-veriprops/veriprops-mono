@@ -40,6 +40,17 @@ export interface ReviewState {
   releasable: boolean;
   report?: ReportDto;
   findings: Record<string, Record<string, unknown> | null>;
+  /** Set only by failing a case: what its refund did. */
+  refund?: RefundOutcome | null;
+}
+
+/** What failing a case did to its money (backend `RefundOutcome`). */
+export interface RefundOutcome {
+  refundedMinor: number;
+  /** Refunds the gateway refused: still paid, waiting in Finance's refunds-to-retry list. */
+  failedPaymentIds: string[];
+  /** Payments under a chargeback: the card issuer returns that money, so no refund is sent. */
+  heldPaymentIds: string[];
 }
 
 // ── Trust Score Weights (§8.3) ──

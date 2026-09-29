@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { humanizeEnumLabel } from "@lib/utils";
 import { ReviewDecision, TaskDto, TaskState } from "@/types/adminVerification";
-import { ReviewState } from "@/types/adminReview";
+import { RefundOutcome, ReviewState } from "@/types/adminReview";
 import {
   useApproveTaskMutation,
   useFailMutation,
@@ -127,6 +127,24 @@ function ReviewTaskRow({ verificationId, task, findings }: {
       )}
     </div>
   );
+}
+
+/** What to tell the admin after failing a case: "refunded" only when the gateway took it. */
+export function failSummary(refund: RefundOutcome | null | undefined): { ok: boolean; message: string } {
+  if (!refund) return { ok: true, message: "Verification failed" };
+  if (refund.failedPaymentIds.length) {
+    return {
+      ok: false,
+      message: "Verification failed, but the gateway refused the refund. It is waiting in Finance to retry.",
+    };
+  }
+  if (refund.heldPaymentIds.length) {
+    return {
+      ok: false,
+      message: "Verification failed. No refund was sent: a chargeback is already returning the money.",
+    };
+  }
+  return { ok: true, message: "Verification failed & refunded" };
 }
 
 export default function AdminReportReview({ verificationId }: { verificationId: string }) {
@@ -246,8 +264,9 @@ export default function AdminReportReview({ verificationId }: { verificationId: 
             <Button
               variant="destructive"
               onClick={async () => {
-                await fail.mutateAsync({ reason: failReason });
-                toast.success("Verification failed & refunded");
+                const res = await fail.mutateAsync({ reason: failReason });
+                const summary = failSummary(res.data?.refund);
+                (summary.ok ? toast.success : toast.warning)(summary.message);
                 setFailReason("");
               }}
               disabled={fail.isPending || !failReason.trim()}

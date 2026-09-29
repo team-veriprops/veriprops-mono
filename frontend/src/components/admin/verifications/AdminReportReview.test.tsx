@@ -6,7 +6,7 @@ import { ReviewDecision, TaskDto, TaskState } from "@/types/adminVerification";
 import { ReviewState } from "@/types/adminReview";
 import { isNamed } from "@/test-utils/markup";
 
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }));
 
 const noopMutation = { mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false };
 const reviewResult: { data: ReviewState | null; isLoading: boolean; isError: boolean } = {
@@ -24,7 +24,7 @@ vi.mock("./libs/useReviewQueries", () => ({
   useFailMutation: () => noopMutation,
 }));
 
-import AdminReportReview from "./AdminReportReview";
+import AdminReportReview, { failSummary } from "./AdminReportReview";
 
 const review: ReviewState = {
   verificationId: "v1",
@@ -85,5 +85,31 @@ describe("AdminReportReview", () => {
     // "Quality (0-100)" sits above the box but named nothing: the number an admin types here
     // feeds the composite trust score, so the field has to say what it is.
     expect(isNamed(markup(), `quality-${AgentRole.FIELD}`)).toBe(true);
+  });
+});
+
+describe("failSummary", () => {
+  it("says refunded only when the gateway took the refund", () => {
+    expect(failSummary({ refundedMinor: 1_500_000, failedPaymentIds: [], heldPaymentIds: [] })).toEqual({
+      ok: true,
+      message: "Verification failed & refunded",
+    });
+  });
+
+  it("says so when a gateway refused the refund, and where it waits", () => {
+    const summary = failSummary({ refundedMinor: 0, failedPaymentIds: ["p1"], heldPaymentIds: [] });
+    expect(summary.ok).toBe(false);
+    expect(summary.message).toMatch(/refused the refund/);
+    expect(summary.message).toMatch(/Finance/);
+  });
+
+  it("says a refund was held back for a chargeback, which returns the money instead", () => {
+    const summary = failSummary({ refundedMinor: 0, failedPaymentIds: [], heldPaymentIds: ["p1"] });
+    expect(summary.ok).toBe(false);
+    expect(summary.message).toMatch(/chargeback/);
+  });
+
+  it("claims nothing when the response carried no refund", () => {
+    expect(failSummary(undefined)).toEqual({ ok: true, message: "Verification failed" });
   });
 });
