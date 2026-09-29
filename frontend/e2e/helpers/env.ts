@@ -41,6 +41,18 @@ export const TEST_OTP = "654123";
  * `SUPER_ADMIN_EMAIL`/`_PASSWORD` in its response payload, so the suite reads them from the
  * seed result (see `SeedPayload.admin`) and can never drift from the running backend. */
 
+/* ── The `@live` lane (e2e/specs/live-integrations.spec.ts, docs/live-integration-smoke.md) ──
+ * Runs against a deployed staging, never the local stack, so it has no seed to read an admin
+ * from: staging's super admin comes in from Doppler `stg`. A test needing a value that is not
+ * set skips and says which. */
+
+/** Staging's super admin — decides the KYC application and fails the paid case to refund it. */
+export const LIVE_ADMIN_EMAIL = process.env.UAT_LIVE_ADMIN_EMAIL;
+export const LIVE_ADMIN_PASSWORD = process.env.UAT_LIVE_ADMIN_PASSWORD;
+
+/** A JPEG of a real, live face: Dojah's liveness check refuses anything else. */
+export const LIVE_SELFIE = process.env.UAT_LIVE_SELFIE;
+
 /** Where `globalSetup` parks per-persona `storageState` files. */
 export const AUTH_STATE_DIR = "e2e/.auth";
 

@@ -46,8 +46,22 @@ const P0 = "@P0";
  * both lanes are listed.
  */
 const SERIAL = "@serial";
-type Lane = "parallel" | "serial";
+
+/**
+ * `@live` marks specs that drive the real third parties (a gateway's hosted checkout, Dojah, S3)
+ * on a deployed staging — docs/live-integration-smoke.md. Neither CI lane ever runs them; they
+ * run alone in the `live` lane (`pnpm e2e:live`), on one worker, against `UAT_BASE_URL`, and
+ * without globalSetup: staging is shared with human QA, so nothing is reset or seeded there —
+ * each live spec builds its own accounts through `/dev/scenario`.
+ */
+const LIVE = "@live";
+type Lane = "parallel" | "serial" | "live";
 const lane = process.env.UAT_LANE as Lane | undefined;
+
+if (lane === "live" && !process.env.UAT_BASE_URL) {
+  // The local stack runs every integration on its stub, so a live run there would prove nothing.
+  throw new Error("The live lane needs UAT_BASE_URL (e.g. https://staging.veriprops.ng).");
+}
 
 const requestedEngines = process.env.UAT_ENGINES?.split(",").map((name) => name.trim());
 const engines = requestedEngines?.length
@@ -61,13 +75,21 @@ const parallelProjects: Project[] = engines.map((engine) => ({
   name: engine.name,
   use: engine.use,
   grep: FULL_MATRIX_ENGINES.has(engine.name) ? undefined : allTags(P0),
-  grepInvert: new RegExp(SERIAL),
+  grepInvert: new RegExp(`${SERIAL}|${LIVE}`),
 }));
 
 const serialProjects: Project[] = engines.map((engine) => ({
   name: `${engine.name}-serial`,
   use: engine.use,
   grep: FULL_MATRIX_ENGINES.has(engine.name) ? allTags(SERIAL) : allTags(SERIAL, P0),
+  grepInvert: new RegExp(LIVE),
+}));
+
+// One engine is enough for the third parties: what they return does not depend on the browser.
+const liveProjects: Project[] = ENGINES.filter((engine) => engine.name === "chromium-desktop").map((engine) => ({
+  name: `${engine.name}-live`,
+  use: engine.use,
+  grep: new RegExp(LIVE),
 }));
 
 // Two, locally as on CI: the same machine also runs the Next server, the backend, Caddy and
@@ -77,16 +99,17 @@ const DEFAULT_WORKERS = 2;
 
 export default defineConfig({
   testDir: "./specs",
-  globalSetup: "./global-setup.ts",
+  globalSetup: lane === "live" ? undefined : "./global-setup.ts",
 
   /* Parallel-lane specs own their data (scenario fixtures), so tests within a file may run
    * concurrently too. The serial lane runs on a single worker. */
-  fullyParallel: lane !== "serial",
-  workers: lane === "serial" ? 1 : Number(process.env.UAT_WORKERS ?? DEFAULT_WORKERS),
+  fullyParallel: lane === "parallel" || lane === undefined,
+  workers: lane === "serial" || lane === "live" ? 1 : Number(process.env.UAT_WORKERS ?? DEFAULT_WORKERS),
 
   /* A retry absorbs engine-specific timing flake without hiding a real failure: the HTML
    * report still flags the test as flaky. */
-  retries: process.env.CI ? 2 : 1,
+  // A live retry would pay, apply and upload twice; a failure there is read, not re-rolled.
+  retries: lane === "live" ? 0 : process.env.CI ? 2 : 1,
   forbidOnly: !!process.env.CI,
 
   timeout: 90_000,
@@ -123,5 +146,7 @@ export default defineConfig({
       ? parallelProjects
       : lane === "serial"
         ? serialProjects
-        : [...parallelProjects, ...serialProjects],
+        : lane === "live"
+          ? liveProjects
+          : [...parallelProjects, ...serialProjects],
 });

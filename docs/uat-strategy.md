@@ -53,6 +53,7 @@ New top-level `frontend/e2e/` with `playwright.config.ts`, `global-setup.ts`, `f
 4. **Parallel by default, serial by tag.**
    - Specs own their data: `POST /dev/scenario` gives each one a fresh customer and fresh agents. That lets the suite run `fullyParallel` across workers.
    - A describe tagged `@serial` touches state other specs can see: the Mailpit inbox, a seeded persona's data, or the seeded customer's drafts. `pnpm e2e` (`frontend/e2e/run-lanes.mjs`) runs the parallel lane, then the serial lane: the per-engine `<engine>-serial` projects on one worker, reusing the parallel lane's seed. Nothing races a serial spec, and the serial lane still runs when the parallel lane fails. Playwright project dependencies would skip it instead.
+   - A describe tagged `@live` drives the real third parties on a deployed staging: a gateway's hosted checkout, Dojah, S3. Neither lane runs it. `pnpm e2e:live` runs it alone, on one Chromium worker, with no retries and no reset or seed, because staging is shared with human QA. The release-gate runbook is [live-integration-smoke.md](live-integration-smoke.md).
    - Risk tags pick engines: `@P0` on all six projects, `@P1`/`@P2` on `chromium-desktop` + `webkit-mobile`.
 
 **Helper layer to build once:** `login(page, persona)`, `waitReady(page)` (`__app_ready__`), `authSnapshot(page)`, `resetAndSeed()`, `api(persona)` (thin authenticated HTTP client for preconditions/teardown, mirroring `e2e/harness.py`), `mailpit(recipient)`, `stubPay(page)`, `runSweep(name)` (admin sweep triggers), `portalSwitch(page, persona)`.
