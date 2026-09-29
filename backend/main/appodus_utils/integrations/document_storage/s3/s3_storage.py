@@ -138,3 +138,26 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
         except (BotoCoreError, ClientError) as e:
             logger.error(f"Object deletion failed for bucket={bucket}, key={key}: {e}")
             raise IntegrationException("Could not delete the document.") from e
+
+    async def delete_prefix(self, prefix: str, bucket: str) -> int:
+        """List every object under ``prefix`` (1,000 per page) and delete each page in one call."""
+        if not prefix:
+            raise ValueError("Refusing to delete a whole bucket: the prefix is empty.")
+        deleted = 0
+        token = None
+        try:
+            while True:
+                page_args = {"Bucket": bucket, "Prefix": prefix, **({"ContinuationToken": token} if token else {})}
+                page = await asyncio.to_thread(self.client.list_objects_v2, **page_args)
+                keys = [{"Key": o["Key"]} for o in page.get("Contents", [])]
+                if keys:
+                    await asyncio.to_thread(
+                        self.client.delete_objects, Bucket=bucket, Delete={"Objects": keys, "Quiet": True},
+                    )
+                    deleted += len(keys)
+                if not page.get("IsTruncated"):
+                    return deleted
+                token = page.get("NextContinuationToken")
+        except (BotoCoreError, ClientError) as e:
+            logger.error(f"Prefix deletion failed for bucket={bucket}, prefix={prefix}: {e}")
+            raise IntegrationException("Could not delete the documents.") from e

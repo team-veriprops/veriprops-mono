@@ -22,11 +22,8 @@ class TestStubGeocoder:
         assert loc.state == "Lagos"
         assert loc.latitude and loc.longitude
 
-    async def test_reverse_geocode_returns_dragged_point(self):
-        geo = StubGeocoder()
-        loc = await geo.reverse_geocode(6.45, 3.47)
-        assert loc is not None
-        assert loc.latitude == 6.45  # keeps the dragged pin
+    async def test_an_unknown_place_is_none(self):
+        assert await StubGeocoder().geocode("stub-nowhere") is None
 
 
 class TestFactory:

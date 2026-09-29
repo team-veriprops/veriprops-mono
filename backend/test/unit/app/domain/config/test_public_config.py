@@ -22,6 +22,16 @@ def mock_pricing_config_service(monkeypatch):
 
 
 class TestPublicConfig:
+    async def test_names_the_ids_that_need_a_photo_of_the_document(self):
+        # Only the ones no provider can match to a photo on file: a reviewer compares the
+        # document photo with the selfie instead.
+        from main.appodus_utils.integrations.kyc.models import GovIdType
+
+        resp = await config_controller.public_config()
+        assert set(resp.data.kyc_document_id_types) == {
+            GovIdType.PASSPORT, GovIdType.DRIVERS_LICENCE, GovIdType.VOTERS_CARD,
+        }
+
     async def test_reflects_phone_verification_flag_enabled(self, monkeypatch):
         monkeypatch.setattr(settings, "PHONE_VERIFICATION_ENABLED", True)
         resp = await config_controller.public_config()

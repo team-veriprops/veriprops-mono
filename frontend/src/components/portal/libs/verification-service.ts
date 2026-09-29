@@ -86,12 +86,15 @@ export class VerificationService {
     return this.http.get(`/verifications/quote?tier=${tier}&currency=${currency}`);
   }
 
-  geoAutocomplete(q: string): Promise<SuccessResponse<GeoSuggestion[]>> {
-    return this.http.get(`/verifications/geo/autocomplete?q=${encodeURIComponent(q)}`);
+  /** Address suggestions. `sessionToken` groups one search into one billed provider session. */
+  geoAutocomplete(q: string, sessionToken?: string): Promise<SuccessResponse<GeoSuggestion[]>> {
+    const session = sessionToken ? `&session_token=${encodeURIComponent(sessionToken)}` : "";
+    return this.http.get(`/verifications/geo/autocomplete?q=${encodeURIComponent(q)}${session}`);
   }
 
-  geoPlace(placeId: string): Promise<SuccessResponse<GeoLocation | null>> {
-    return this.http.get(`/verifications/geo/place/${placeId}`);
+  geoPlace(placeId: string, sessionToken?: string): Promise<SuccessResponse<GeoLocation | null>> {
+    const session = sessionToken ? `?session_token=${encodeURIComponent(sessionToken)}` : "";
+    return this.http.get(`/verifications/geo/place/${encodeURIComponent(placeId)}${session}`);
   }
 
   submit(id: string, payload: SubmitVerificationRequest): Promise<SuccessResponse<Verification>> {

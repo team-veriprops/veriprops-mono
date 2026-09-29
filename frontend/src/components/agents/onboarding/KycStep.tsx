@@ -12,11 +12,17 @@ import {
   SelectValue,
 } from "@3rdparty/ui/select";
 import { SelectableCard } from "@components/ui/SelectableCard";
-import { AgentWizardState } from "./types";
+import { CameraFacing, PhotoCapture } from "@components/ui/PhotoCapture";
+import { AgentWizardState, KycPhotos } from "./types";
+import { kycNeedsDocument } from "./validation";
 
 interface Props {
   value: AgentWizardState["kyc"];
   onChange: (kyc: AgentWizardState["kyc"]) => void;
+  photos: KycPhotos;
+  onPhotosChange: (photos: KycPhotos) => void;
+  /** The ID types a reviewer checks from a photo of the document (backend public config). */
+  documentIdTypes: GovIdType[];
 }
 
 const ID_LABELS: Record<GovIdType, string> = {
@@ -44,8 +50,9 @@ const METHODS: { method: KycMethod; title: string; blurb: string; icon: typeof F
   },
 ];
 
-export default function KycStep({ value, onChange }: Props) {
+export default function KycStep({ value, onChange, photos, onPhotosChange, documentIdTypes }: Props) {
   const set = (patch: Partial<AgentWizardState["kyc"]>) => onChange({ ...value, ...patch });
+  const needsDocument = kycNeedsDocument(value, documentIdTypes);
 
   return (
     <div className="space-y-6" data-testid="agent-apply-kyc">
@@ -120,10 +127,34 @@ export default function KycStep({ value, onChange }: Props) {
         </div>
       )}
 
-      {/* Privacy reassurance — we keep the verification result, not raw biometrics. */}
+      {/* The selfie is checked for liveness and, for BVN and NIN, against the photo on file. */}
+      <PhotoCapture
+        label="Selfie"
+        hint="Face the camera in good light, with nothing covering your face."
+        facing={CameraFacing.USER}
+        value={photos.selfie}
+        onChange={(selfie) => onPhotosChange({ ...photos, selfie })}
+        testId="agent-apply-selfie"
+      />
+
+      {needsDocument && (
+        <PhotoCapture
+          label={`Photo of your ${value.idType ? ID_LABELS[value.idType] : "ID"}`}
+          hint="The photo page, flat and fully in frame. A reviewer compares it with your selfie."
+          facing={CameraFacing.ENVIRONMENT}
+          value={photos.idDocument}
+          onChange={(idDocument) => onPhotosChange({ ...photos, idDocument })}
+          testId="agent-apply-id-document"
+        />
+      )}
+
+      {/* What happens to the photos — they are not part of a saved draft. */}
       <div className="flex items-start gap-2.5 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-        <span>We store only the pass/fail verification result — never your raw biometric data.</span>
+        <span>
+          Your photos are sent securely to check your identity and kept privately for the reviewer of your
+          application. They aren&apos;t saved with your progress, so if you come back later you&apos;ll take them again.
+        </span>
       </div>
     </div>
   );

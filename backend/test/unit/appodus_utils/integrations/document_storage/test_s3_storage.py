@@ -96,3 +96,32 @@ async def test_a_failed_upload_answers_with_a_safe_sentence(provider, stubber):
     assert caught.value.status_code == 502
     assert "arn:aws" not in str(caught.value)
     assert "AccessDenied" not in str(caught.value)
+
+
+async def test_delete_prefix_deletes_every_page_under_the_prefix(provider, stubber):
+    prefix = "kyc/u-1/"
+    stubber.add_response(
+        "list_objects_v2",
+        {"Contents": [{"Key": "kyc/u-1/a/selfie"}], "IsTruncated": True, "NextContinuationToken": "t-2"},
+        {"Bucket": BUCKET, "Prefix": prefix},
+    )
+    stubber.add_response(
+        "delete_objects", {}, {"Bucket": BUCKET, "Delete": {"Objects": [{"Key": "kyc/u-1/a/selfie"}], "Quiet": True}},
+    )
+    stubber.add_response(
+        "list_objects_v2",
+        {"Contents": [{"Key": "kyc/u-1/b/selfie"}, {"Key": "kyc/u-1/b/document"}], "IsTruncated": False},
+        {"Bucket": BUCKET, "Prefix": prefix, "ContinuationToken": "t-2"},
+    )
+    stubber.add_response(
+        "delete_objects", {},
+        {"Bucket": BUCKET, "Delete": {"Objects": [{"Key": "kyc/u-1/b/selfie"}, {"Key": "kyc/u-1/b/document"}], "Quiet": True}},
+    )
+
+    assert await provider.delete_prefix(prefix, BUCKET) == 3
+    stubber.assert_no_pending_responses()
+
+
+async def test_delete_prefix_refuses_an_empty_prefix(provider):
+    with pytest.raises(ValueError):
+        await provider.delete_prefix("", BUCKET)

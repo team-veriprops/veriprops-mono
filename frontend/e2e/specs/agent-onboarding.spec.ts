@@ -15,7 +15,11 @@
  *
  * Identity is deterministic: the KYC stub fails `00000000000` and passes anything else
  * (`appodus_utils/integrations/kyc/stub/stub_kyc.py`), so the unhappy path needs no fixture.
+ * Every path takes a selfie; the specs upload a real JPEG through the wizard's file fallback,
+ * which runs the same in-browser resize a camera photo does.
  */
+import path from "node:path";
+
 import { Page } from "@playwright/test";
 
 import { ROUTES } from "@lib/routes";
@@ -33,6 +37,13 @@ import { openNavItem } from "../helpers/ui";
 const FAILING_BVN = "00000000000";
 const PASSING_BVN = "22222222222";
 const SURVEYOR_LICENCE = "SURCON/2026/4471";
+const SELFIE_PHOTO = path.join("e2e", "fixtures", "evidence-photo.jpg");
+
+/** Take the selfie through the upload fallback, and wait for the wizard to show it back. */
+async function takeSelfie(page: Page): Promise<void> {
+  await page.getByTestId("agent-apply-selfie-file").setInputFiles(SELFIE_PHOTO);
+  await expect(page.getByTestId("agent-apply-selfie-preview")).toBeVisible();
+}
 
 /** Sign a new applicant up through the agent path and follow them to the compulsory gate. */
 async function arriveAtTheGate(page: Page): Promise<NewAccount> {
@@ -56,6 +67,7 @@ async function applyAsAgent(page: Page, bvn: string): Promise<void> {
   // BVN is the wizard's default method, so its field is already the one on screen.
   await expect(page.getByTestId("agent-apply-kyc")).toBeVisible();
   await page.getByTestId("agent-apply-bvn").fill(bvn);
+  await takeSelfie(page);
   await page.getByTestId("agent-apply-continue").click();
 
   // The wizard will not advance until every licence-bearing role has its number.
@@ -158,6 +170,9 @@ test.describe("UAT-AGENT — agent onboarding @P1", () => {
     await expect(page.getByTestId("agent-apply-kyc")).toBeVisible();
     await expectNoA11yViolations(page);
     await page.getByTestId("agent-apply-bvn").fill(PASSING_BVN);
+    // No selfie yet: the identity step does not let the applicant past it.
+    await expect(page.getByTestId("agent-apply-continue")).toBeDisabled();
+    await takeSelfie(page);
     await page.getByTestId("agent-apply-continue").click();
 
     // ── Credentials ─────────────────────────────────────────────────────────

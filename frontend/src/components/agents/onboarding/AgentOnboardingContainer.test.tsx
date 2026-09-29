@@ -9,6 +9,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@components/website/auth/libs/useAuthQueries", () => ({
   authKeys: { session: ["auth", "session"] },
   useRefreshSession: () => async () => {},
+  usePublicConfigQuery: () => ({ data: { phoneVerificationEnabled: true, kycDocumentIdTypes: [] } }),
 }));
 
 const session: { user: { personas: UserPersona[] } } | null = { user: { personas: [] } };

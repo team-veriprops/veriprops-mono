@@ -6,15 +6,11 @@ a mandatory escape valve at the domain layer — geocoding is never a hard gate.
 """
 from __future__ import annotations
 
-import enum
 from typing import Optional
 
 from main.appodus_utils import Object
-
-
-class GeoProvider(str, enum.Enum):
-    STUB = "STUB"
-    GOOGLE_PLACES = "GOOGLE_PLACES"
+# Re-exported: the selector enum lives beside Settings, which cannot import this package.
+from main.appodus_utils.config.providers import GeoProvider  # noqa: F401
 
 
 class GeoSuggestion(Object):

@@ -19,8 +19,9 @@ import { useRefreshSession } from "@components/website/auth/libs/useAuthQueries"
 import { UserPersona } from "@components/website/auth/models";
 import { navigateAfterPersonaChange } from "@lib/session-navigation";
 import { onboardingExitHref } from "./exit";
-import { AGENT_WIZARD_STEPS, AgentWizardState, EMPTY_WIZARD_STATE } from "./types";
-import { canAdvanceStep, canSubmit } from "./validation";
+import { usePublicConfigQuery } from "@components/website/auth/libs/useAuthQueries";
+import { AGENT_WIZARD_STEPS, AgentWizardState, EMPTY_WIZARD_STATE, KYC_STEP, KycPhotos } from "./types";
+import { canAdvanceStep, canSubmit, KycRules } from "./validation";
 import RolesStep from "./RolesStep";
 import KycStep from "./KycStep";
 import CredentialsStep from "./CredentialsStep";
@@ -39,7 +40,11 @@ export default function AgentOnboardingContainer({ closable = true }: AgentOnboa
   const [step, setStep] = useState(0);
   const [state, setState] = useState<AgentWizardState>(EMPTY_WIZARD_STATE);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  // Never part of `state`, so never in the saved draft: a photo lives only until submit.
+  const [photos, setPhotos] = useState<KycPhotos>({});
   const restored = useRef(false);
+  const { data: publicConfig } = usePublicConfigQuery();
+  const kycRules: KycRules = { photos, documentIdTypes: publicConfig?.kycDocumentIdTypes };
 
   const { data: draft } = useAgentDraftQuery();
   const { data: terms } = useAgentTermsQuery();
@@ -57,7 +62,8 @@ export default function AgentOnboardingContainer({ closable = true }: AgentOnboa
     if (restored.current || !draft) return;
     restored.current = true;
     setState({ ...EMPTY_WIZARD_STATE, ...(draft.payload as Partial<AgentWizardState>) });
-    setStep(Math.min(draft.step, AGENT_WIZARD_STEPS.length - 1));
+    // The photos were never saved, so a draft past the identity step resumes there to retake them.
+    setStep(Math.min(draft.step, KYC_STEP));
   }, [draft]);
 
   const update = (patch: Partial<AgentWizardState>) => setState((s) => ({ ...s, ...patch }));
@@ -79,10 +85,10 @@ export default function AgentOnboardingContainer({ closable = true }: AgentOnboa
   const goBack = () => setStep((s) => Math.max(0, s - 1));
 
   const onSubmit = async () => {
-    if (!canSubmit(state, termsAccepted)) return;
+    if (!canSubmit(state, termsAccepted, kycRules) || !photos.selfie) return;
     const payload: SubmitAgentApplicationRequest = {
       roles: state.roles,
-      kyc: state.kyc,
+      kyc: { ...state.kyc, selfieImage: photos.selfie, idDocumentImage: photos.idDocument },
       credentials: state.credentials,
       coverage: state.coverage,
       bio: state.bio || undefined,
@@ -116,13 +122,13 @@ export default function AgentOnboardingContainer({ closable = true }: AgentOnboa
       {isLast ? (
         <Button
           onClick={onSubmit}
-          disabled={submitting || !canSubmit(state, termsAccepted)}
+          disabled={submitting || !canSubmit(state, termsAccepted, kycRules)}
           data-testid="agent-apply-submit"
         >
           {submitting ? "Submitting…" : "Submit application"}
         </Button>
       ) : (
-        <Button onClick={goNext} disabled={!canAdvanceStep(step, state)} data-testid="agent-apply-continue">
+        <Button onClick={goNext} disabled={!canAdvanceStep(step, state, kycRules)} data-testid="agent-apply-continue">
           Continue
         </Button>
       )}
@@ -152,7 +158,15 @@ export default function AgentOnboardingContainer({ closable = true }: AgentOnboa
       )}
 
       {step === 0 && <RolesStep value={state.roles} onChange={(roles: AgentRole[]) => update({ roles })} />}
-      {step === 1 && <KycStep value={state.kyc} onChange={(kyc) => update({ kyc })} />}
+      {step === KYC_STEP && (
+        <KycStep
+          value={state.kyc}
+          onChange={(kyc) => update({ kyc })}
+          photos={photos}
+          onPhotosChange={setPhotos}
+          documentIdTypes={kycRules.documentIdTypes ?? []}
+        />
+      )}
       {step === 2 && <CredentialsStep state={state} update={update} />}
       {step === 3 && (
         <ReviewStep

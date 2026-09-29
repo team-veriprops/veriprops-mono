@@ -619,11 +619,11 @@ automation never depend on third parties:
 | Integration | Selector | Default | Live option |
 |---|---|---|---|
 | Payments | `PAYMENT_STUB_MODE` / `ACTIVE_PAYMENT_METHOD` | stub (`True`) | Flutterwave, Paystack |
-| KYC | `KYC_PROVIDER` | `STUB` | `DOJAH` |
+| KYC | `KYC_PROVIDER` | `STUB` | `DOJAH` (liveness + BVN/NIN selfie match; `DOJAH_BASE_URL` sandbox or production) |
 | Document storage | `DOCUMENT_STORAGE_STUB_MODE` | stub (`True`) | AWS S3 / R2 |
 | FX rates | `PRICING_FX_PROVIDER` | `STUB` | `OPENEXCHANGERATES` (unwired, §G) |
 | Report PDF | `REPORT_PDF_STUB_MODE` | **real fpdf2 renderer** (`False`) | — |
-| Geocoding | `GEOCODING_PROVIDER` | `STUB` | Google Places |
+| Geocoding | `GEOCODING_PROVIDER` | `STUB` | Google Places (New), Nigeria-only, one billed session per search |
 | OTP | `OTP_MODE` | env-enforced (§25.1) | — |
 
 ---
@@ -745,10 +745,17 @@ erasure request, §24.4), notification preferences (per-portal pages under `…/
 **Application wizard (4 steps, resumable via server-side draft):**
 
 1. **Roles** — Field / Surveyor / Registry / Lawyer, multi-select; reviewed per role.
-2. **KYC** — **BVN primary; government-ID upload fallback**. Liveness/face-match are deferred entirely to
-   the provider behind the facade (`KYC_PROVIDER`: `STUB` default, `DOJAH` live). The platform stores the
-   provider's decision, reference, and score (`KycRecord`) — never raw biometrics; documents are stored as
-   storage references. A selfie score below `KYC_SELFIE_REVIEW_THRESHOLD` (80) routes to admin review.
+2. **KYC** — **BVN primary; government-ID fallback**, with a **selfie on every path** (camera — front on
+   phones, webcam on desktop — or an uploaded photo, resized and EXIF-stripped in the browser). Behind the
+   facade (`KYC_PROVIDER`: `STUB` in test/dev, `DOJAH` on staging and prod) the selfie must first pass
+   **liveness** (one live face); then **BVN and NIN** are matched to the photo on file and the record's name
+   must be the applicant's. Match ≥ `KYC_SELFIE_REVIEW_THRESHOLD` (80) verifies; a weaker match (down to
+   Dojah's floor, 50) or a name mismatch routes to review; below 50 fails. **Passport, driver's licence and
+   voter's card** cannot be matched automatically: after liveness they go to a reviewer, with a photo of
+   the document. Every application reaches a reviewer, so the **selfie and document photo are kept in
+   private, encrypted storage** (keys on `KycRecord`, never a raw identity number), shown to the reviewer
+   side by side with a draggable divider through short-lived links (`KYC_IMAGE_LINK_SECONDS`), and
+   **deleted by data erasure** (§4.11). The wizard's saved draft never holds a photo.
 3. **Credentials** — conditional: `SURVEYOR_LICENCE` for Surveyor, `NBA_LICENCE` for Lawyer (with expiry
    dates); optional experience, coverage, bio.
 4. **Review & submit** — truthfulness declaration + versioned `AGENT_TERMS` acceptance.
@@ -1494,7 +1501,9 @@ These are **permanent contracts** for autonomous QA (Playwright + Claude Code) �
   `ENVIRONMENT=test` requires `deterministic`; `prod` requires `random`; startup fails otherwise. Never
   infer OTP behaviour from `ENVIRONMENT`.
 - **Stub matrix** (§4.13): payment, KYC, storage, FX, and geocoding default to deterministic stubs; the PDF
-  renderer is real by default.
+  renderer is real by default. **Production refuses to start on a stub**: `ENVIRONMENT=prod` requires live
+  payments, storage, Dojah (on its production host) and Google Places, each with its keys, and names every
+  missing piece in one boot error. Staging is unconstrained.
 
 ### 25.2 Dev endpoints (`app/domain/dev/`)
 
@@ -1925,8 +1934,6 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 |---|---|
 | Card-fingerprint capture (referral anti-farming's payment-instrument half is dark under the stub) | `backend/main/app/domain/payment/models.py` |
 | `STRIPE` enum value has no integration | `backend/main/app/config/settings.py` (`PaymentMethod`) |
-| Live Dojah KYC (facade built; STUB default) | `backend/main/app/domain/user/agent/kyc/service.py` |
-| Live document storage (S3/R2 behind the facade; `DOCUMENT_STORAGE_STUB_MODE` defaults to the stub) | `backend/main/appodus_utils/integrations/document_storage/factory.py` |
 | Live FX rates (`OPENEXCHANGERATES` option unwired; hardcoded indicative stub rates) | `backend/main/appodus_utils/db/types/money.py` |
 
 ### G.2 Deferred features

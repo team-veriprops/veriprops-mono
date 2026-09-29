@@ -55,6 +55,19 @@ class TestDraftResume:
         svc._draft_repo.update.assert_awaited_once()
 
 
+class TestDraftKeepsNoPhoto:
+    async def test_kyc_photos_are_dropped_before_the_draft_is_saved(self):
+        svc = _make_service()
+        await svc.save_draft("u-1", SaveAgentApplicationDraftDto(step=1, payload={
+            "roles": ["FIELD"],
+            "kyc": {"method": "BVN", "bvn": "22222222222", "selfieImage": "/9j/xyz", "idDocumentImage": "/9j/abc"},
+        }))
+
+        saved = svc._draft_repo.create.call_args.args[0].payload
+        assert "/9j/" not in saved
+        assert '"bvn": "22222222222"' in saved
+
+
 class TestDiscard:
     async def test_discards_active_draft(self):
         svc = _make_service()

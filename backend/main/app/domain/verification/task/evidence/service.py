@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from kink import di, inject
+from kink import inject
 
 from main.app.config.settings import settings
 from main.app.core.evidence import compute_content_hash
@@ -27,9 +27,6 @@ from main.appodus_utils.decorators.method_trace_logger import method_trace_logge
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.integrations.document_storage.factory import DocumentStorageProviderFactory
 from main.appodus_utils.integrations.document_storage.interface import IDocumentStorageProvider
-from main.appodus_utils.integrations.document_storage.stub.stub_storage import (
-    StubDocumentStorageProvider,
-)
 
 
 # Formats the store may serve inline: the photos, video and documents an agent captures.
@@ -124,8 +121,4 @@ class EvidenceService:
         )
 
     def _provider(self) -> IDocumentStorageProvider:
-        # Deterministic default (no external calls / creds) unless a real provider is
-        # explicitly selected — mirrors PAYMENT_STUB_MODE / OTP_MODE.
-        if settings.DOCUMENT_STORAGE_STUB_MODE:
-            return di[StubDocumentStorageProvider]
-        return self._storage_factory.get_active_provider()
+        return self._storage_factory.storage()

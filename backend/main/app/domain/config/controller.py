@@ -9,6 +9,7 @@ from main.app.domain.config.nigeria_locations import NigeriaLocationsDto, nigeri
 from main.app.domain.config.whatsapp_number import display_number, official_number_digits
 from main.app.domain.verification.pricing_config.service import PricingConfigService
 from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.integrations.kyc.models import AUTO_VERIFIABLE_ID_TYPES, GovIdType
 
 config_router = APIRouter(prefix="/config", tags=["Config"])
 pricing_config_service: PricingConfigService = di[PricingConfigService]
@@ -29,6 +30,7 @@ async def public_config():
         whatsapp_number=whatsapp_number,
         whatsapp_display_number=display_number(whatsapp_number),
         whatsapp_widget_enabled=settings.WHATSAPP_WIDGET_ENABLED,
+        kyc_document_id_types=[t for t in GovIdType if t not in AUTO_VERIFIABLE_ID_TYPES],
     ))
 
 

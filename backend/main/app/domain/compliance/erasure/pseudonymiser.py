@@ -136,11 +136,12 @@ class PiiPseudonymiser:
         )
         surfaces.append("oauth_identities")
 
-        # 7) KYC — the provider reference (never raw biometrics) is severed.
+        # 7) KYC — the provider reference is severed, and the keys of the stored photos
+        #    (deleted from storage by the erasure service just before) are cleared.
         await session.execute(
             update(KycRecord)
             .where(KycRecord.user_id == subject_user_id)
-            .values(provider_ref=token)
+            .values(provider_ref=token, selfie_key=None, document_key=None)
         )
         surfaces.append("kyc_records")
 

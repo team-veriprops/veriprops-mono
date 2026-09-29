@@ -8,9 +8,13 @@ Also asserts the §3.3a credential requirement (SURVEYOR without a licence is re
 """
 from __future__ import annotations
 
+import base64
+
 from .harness import Ctx, check, consent_version_for, signup_fresh_user
 
 # Deterministic stub KYC sentinels (integrations/kyc/stub): anything else verifies.
+# A selfie the stub KYC accepts: it checks only that the bytes are a JPEG, never a face.
+_SELFIE = base64.b64encode(b"\xff\xd8\xff\xe0" + b"\x00" * 64).decode()
 _KYC_FAILING_BVN = "00000000000"
 
 
@@ -29,7 +33,7 @@ def run(ctx: Ctx) -> None:
 
     # §3.3a: a credentialed role without its licence is refused outright.
     bad = applicant.post("/users/agents/application", json={
-        "roles": ["SURVEYOR"], "kyc": {"method": "BVN", "bvn": "22233344455"},
+        "roles": ["SURVEYOR"], "kyc": {"method": "BVN", "bvn": "22233344455", "selfieImage": _SELFIE},
         "truthfulnessConfirmed": True, "agentTermsVersion": consent_version_for("AGENT_TERMS"),
     })
     check("SURVEYOR application without a licence is refused (§3.3a)",
@@ -40,7 +44,7 @@ def run(ctx: Ctx) -> None:
         "credentials": [{"role": "SURVEYOR", "credentialType": "SURVEYOR_LICENCE",
                          "licenceNumber": "SUR-2026-0099", "expiryDate": "2027-12-31"}],
         "coverage": [{"state": "lagos", "lga": "eti-osa"}],
-        "kyc": {"method": "BVN", "bvn": "22233344455"},  # non-sentinel → stub VERIFIED
+        "kyc": {"method": "BVN", "bvn": "22233344455", "selfieImage": _SELFIE},  # non-sentinel → stub VERIFIED
         "bio": "Licensed surveyor, 6 years in Lagos.", "yearsExperience": 6,
         "truthfulnessConfirmed": True, "agentTermsVersion": consent_version_for("AGENT_TERMS"),
     }).json()["data"]
@@ -56,6 +60,8 @@ def run(ctx: Ctx) -> None:
     check("admin detail carries the applicant email + stub KYC outcome (§3.1)",
           detail.get("applicantEmail") == applicant_email and detail.get("kyc") is not None,
           f"kyc={detail.get('kyc')}")
+    check("the reviewer gets a short-lived link to the applicant's selfie (§3.1)",
+          bool((detail.get("kyc") or {}).get("selfieUrl")), f"kyc={detail.get('kyc')}")
 
     approved = admin.post(f"/users/agents/applications/{profile_id}/approve",
                           json={"approvedRoles": ["SURVEYOR"]}).json()["data"]
@@ -71,7 +77,7 @@ def run(ctx: Ctx) -> None:
     second = reject_c.post("/users/agents/application", json={
         "roles": ["REGISTRY"],
         "coverage": [{"state": "lagos", "lga": "ikeja"}],
-        "kyc": {"method": "BVN", "bvn": _KYC_FAILING_BVN},  # stub sentinel → FAILED
+        "kyc": {"method": "BVN", "bvn": _KYC_FAILING_BVN, "selfieImage": _SELFIE},  # stub sentinel → FAILED
         "truthfulnessConfirmed": True, "agentTermsVersion": consent_version_for("AGENT_TERMS"),
     }).json()["data"]
     check("failed stub KYC still lodges a PENDING application for review (§3.1)",

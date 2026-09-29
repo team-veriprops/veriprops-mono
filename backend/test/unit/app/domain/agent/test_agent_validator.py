@@ -11,6 +11,7 @@ from main.app.domain.user.agent.models import SubmitAgentApplicationDto
 from main.app.domain.user.agent.validator import AgentApplicationValidator
 from main.appodus_utils.integrations.kyc.models import KycMethod
 from main.appodus_utils.exception.exceptions import ValidationException
+from pydantic import SecretStr
 
 validator = AgentApplicationValidator()
 
@@ -18,7 +19,7 @@ validator = AgentApplicationValidator()
 def _dto(**overrides) -> SubmitAgentApplicationDto:
     base = dict(
         roles=[AgentRole.FIELD],
-        kyc=KycSubmissionDto(method=KycMethod.BVN, bvn="22222222222"),
+        kyc=KycSubmissionDto(method=KycMethod.BVN, bvn="22222222222", selfie_image=SecretStr("/9j/4AAQ")),
         credentials=[],
         coverage=[],
         truthfulness_confirmed=True,

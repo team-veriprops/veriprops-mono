@@ -28,6 +28,17 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
     expect(calls[0].config).toMatchObject({ headers: { "Idempotency-Key": "key-123" } });
   });
 
+  it("groups an address search into one provider session", async () => {
+    const { http, calls } = mockHttp();
+    const svc = new VerificationService(http);
+    await svc.geoAutocomplete("Lekki Phase 1", "sess-1");
+    await svc.geoPlace("ChIJ/x", "sess-1");
+    await svc.geoAutocomplete("Ikeja");
+    expect(calls[0].url).toBe("/verifications/geo/autocomplete?q=Lekki%20Phase%201&session_token=sess-1");
+    expect(calls[1].url).toBe("/verifications/geo/place/ChIJ%2Fx?session_token=sess-1");
+    expect(calls[2].url).toBe("/verifications/geo/autocomplete?q=Ikeja");
+  });
+
   it("requests a quote with tier + currency", async () => {
     const { http, calls } = mockHttp();
     await new VerificationService(http).quote(VerificationTier.STANDARD, TransactionCurrency.USD);

@@ -33,3 +33,11 @@ class IDocumentStorageProvider(ABC):
     @abstractmethod
     async def delete(self, key: str, bucket: str) -> None:
         pass
+
+    @abstractmethod
+    async def delete_prefix(self, prefix: str, bucket: str) -> int:
+        """Delete every object whose key starts with ``prefix``; how many were deleted.
+
+        For erasure: it reaches objects no database row points at any more (an upload whose
+        transaction rolled back), which a delete by known keys would leave behind."""
+        pass

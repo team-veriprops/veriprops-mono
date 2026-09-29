@@ -45,3 +45,6 @@ class StubDocumentStorageProvider(IDocumentStorageProvider):
 
     async def delete(self, key: str, bucket: str) -> None:
         return None
+
+    async def delete_prefix(self, prefix: str, bucket: str) -> int:
+        return 0

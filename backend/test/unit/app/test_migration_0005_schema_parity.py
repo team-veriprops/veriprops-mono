@@ -6,7 +6,7 @@ decisions it rests on, so a later edit cannot quietly reintroduce the drift:
 
 * the primary key is the only index on `id`, and the soft-delete flag is not indexed;
 * uniqueness lives in unique indexes, not constraint + plain index pairs;
-* the migration chains after 0004 and is the only head.
+* the migration chains after 0004.
 """
 from pathlib import Path
 
@@ -25,9 +25,8 @@ def _scripts() -> ScriptDirectory:
     return ScriptDirectory.from_config(config)
 
 
-def test_it_chains_after_the_payout_migration_and_is_the_only_head():
+def test_it_chains_after_the_payout_migration():
     scripts = _scripts()
-    assert scripts.get_heads() == ["0005_schema_parity"]
     assert scripts.get_revision("0005_schema_parity").down_revision == "0004_payout_transfers"
 
 

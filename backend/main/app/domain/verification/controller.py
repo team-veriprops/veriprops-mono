@@ -94,16 +94,21 @@ async def save_draft(verification_id: str, req: SaveVerificationDraftDto, author
 
 
 @verification_router.get("/geo/autocomplete", response_model=SuccessResponse[list[GeoSuggestion]])
-async def geo_autocomplete(q: str = Query(...), authorize: AuthJWT = Depends()):
+async def geo_autocomplete(
+    q: str = Query(...), session_token: Optional[str] = Query(None, max_length=64), authorize: AuthJWT = Depends(),
+):
+    """Address suggestions (Nigeria). ``session_token`` groups one search into one billed session."""
     await authorize.jwt_required()
-    suggestions = await geocoder_factory.get_active_provider().autocomplete(q, country="NG")
+    suggestions = await geocoder_factory.get_active_provider().autocomplete(q, country="NG", session_token=session_token)
     return SuccessResponse[list[GeoSuggestion]](data=suggestions)
 
 
 @verification_router.get("/geo/place/{place_id}", response_model=SuccessResponse[Optional[GeoLocation]])
-async def geo_place(place_id: str, authorize: AuthJWT = Depends()):
+async def geo_place(
+    place_id: str, session_token: Optional[str] = Query(None, max_length=64), authorize: AuthJWT = Depends(),
+):
     await authorize.jwt_required()
-    loc = await geocoder_factory.get_active_provider().geocode(place_id)
+    loc = await geocoder_factory.get_active_provider().geocode(place_id, session_token=session_token)
     return SuccessResponse[Optional[GeoLocation]](data=loc)
 
 

@@ -1,3 +1,4 @@
+import type { GovIdType } from "@/types/agent";
 import type { VerificationTier } from "@/types/verification";
 
 export enum TransactionCurrency {
@@ -319,4 +320,7 @@ export interface PublicConfig {
   whatsappDisplayNumber?: string;
   // §26.4.1 floating chat widget kill switch.
   whatsappWidgetEnabled?: boolean;
+  // The government IDs the agent wizard asks a photo of (a reviewer compares it with the
+  // selfie); the backend owns which ones a provider can match on its own.
+  kycDocumentIdTypes?: GovIdType[];
 }

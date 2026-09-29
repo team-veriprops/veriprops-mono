@@ -6,11 +6,17 @@ from pydantic import model_validator
 from main.appodus_utils.config.settings import (
     AppodusBaseSettings,
     BASE_SECRET_ENV_KEYS,
+    Environment,
     SECRET_PLACEHOLDER,
     WhatsAppProvider,
     get_absolute_path,
     FileStorage,
+    is_configured_secret,
 )
+from main.appodus_utils.config.providers import GeoProvider, KycProvider
+
+# Dojah's sandbox answers with mock data: a sandbox match is no evidence of anyone's identity.
+DOJAH_SANDBOX_HOST = "sandbox.dojah.io"
 
 
 class PricingFxProvider(str, enum.Enum):
@@ -72,8 +78,8 @@ class Settings(AppodusBaseSettings):
         "INTENT_API_KEY",
         "WEB_PUSH_PRIVATE_KEY",
         "DOJAH_APP_ID",
+        "GOOGLE_PLACES_API_KEY",
         "DOJAH_PRIVATE_KEY",
-        "DOJAH_WEBHOOK_SECRET",
         "SUPER_ADMIN_PASSWORD",
         "EDGE_AUTH_SECRET",
     })
@@ -267,17 +273,28 @@ class Settings(AppodusBaseSettings):
     # in the integrations package, which imports the settings singleton back and so
     # cannot be imported here (circular). The provider factory coerces the value to the
     # enum at its boundary — GeoProvider(settings.GEOCODING_PROVIDER).
-    GEOCODING_PROVIDER: str = "STUB"
+    GEOCODING_PROVIDER: GeoProvider = GeoProvider.STUB
+    # Google Places (New), required when GEOCODING_PROVIDER=GOOGLE_PLACES. Restrict the key to
+    # the Places API (New) and to the deployment's server in the Google Cloud console.
+    GOOGLE_PLACES_API_KEY: str = ""
+    GOOGLE_PLACES_BASE_URL: str = "https://places.googleapis.com/v1"
 
     # KYC (PRD Open Q #15 / #16) — same constraint as GEOCODING_PROVIDER; the KYC factory
     # coerces via KycProvider(settings.KYC_PROVIDER). STUB | DOJAH.
-    KYC_PROVIDER: str = "STUB"
-    # Dojah credentials (required when KYC_PROVIDER=DOJAH)
+    KYC_PROVIDER: KycProvider = KycProvider.STUB
+    # Dojah credentials (required when KYC_PROVIDER=DOJAH). Dojah's API is synchronous, so there
+    # is no webhook secret. The base URL picks the environment: sandbox (mock data, free) or
+    # production (https://api.dojah.io, charged per call).
     DOJAH_APP_ID: str = ""
     DOJAH_PRIVATE_KEY: str = ""
-    DOJAH_WEBHOOK_SECRET: str = ""
+    DOJAH_BASE_URL: str = "https://sandbox.dojah.io"
     # Selfie scores below this threshold route to admin UNDER_REVIEW queue (D18)
     KYC_SELFIE_REVIEW_THRESHOLD: int = 80
+    # The largest selfie or ID photo accepted, decoded. The wizard downsizes before sending,
+    # so this only stops a raw camera file (or anything that is not a photo) at the door.
+    KYC_IMAGE_MAX_BYTES: int = 3_000_000
+    # How long a reviewer's link to a stored selfie or ID photo stays valid.
+    KYC_IMAGE_LINK_SECONDS: int = 300
 
     # Bot intent classification (PRD §26.6, D53 as amended by D87). INTENT_PROVIDER itself
     # is enum-typed on the base settings so a startup validator can pin test to the stub;
@@ -364,6 +381,43 @@ class Settings(AppodusBaseSettings):
             )
         return self
 
+
+    @model_validator(mode="after")
+    def _enforce_live_integrations_in_production(self) -> "Settings":
+        """Production runs every integration live, with its keys, or does not start.
+
+        Each stub exists for tests and local work, and only a setting kept it out of production:
+        the KYC stub approves any BVN, so an impostor could become a verified agent. Staging is
+        left free, because it has to boot while its keys are still being arranged. Every missing
+        piece is named in one message, so one failed deploy shows the whole list.
+        """
+        if self.ENVIRONMENT != Environment.PRODUCTION:
+            return self
+        problems = []
+        if self.PAYMENT_STUB_MODE:
+            problems.append("PAYMENT_STUB_MODE must be false")
+        if self.DOCUMENT_STORAGE_STUB_MODE:
+            problems.append("DOCUMENT_STORAGE_STUB_MODE must be false")
+        if self.KYC_PROVIDER != KycProvider.DOJAH:
+            problems.append(f"KYC_PROVIDER must be {KycProvider.DOJAH.value}")
+        if DOJAH_SANDBOX_HOST in (self.DOJAH_BASE_URL or ""):
+            problems.append("DOJAH_BASE_URL must be Dojah's production host, not the sandbox")
+        if self.GEOCODING_PROVIDER != GeoProvider.GOOGLE_PLACES:
+            problems.append(f"GEOCODING_PROVIDER must be {GeoProvider.GOOGLE_PLACES.value}")
+
+        required = ["DOJAH_APP_ID", "DOJAH_PRIVATE_KEY", "GOOGLE_PLACES_API_KEY", "AWS_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"]
+        if self.ACTIVE_PAYMENT_METHOD == PaymentMethod.FLUTTERWAVE:
+            required += ["FLUTTERWAVE_SECRET_KEY", "FLUTTERWAVE_WEBHOOK_SECRET"]
+        elif self.ACTIVE_PAYMENT_METHOD == PaymentMethod.PAYSTACK:
+            required += ["PAYSTACK_SECRET_KEY"]
+        problems += [f"{key} is not set" for key in required if not is_configured_secret(getattr(self, key))]
+
+        if problems:
+            raise ValueError(
+                "ENVIRONMENT=prod must run every integration live: " + "; ".join(problems)
+                + ". Set them in Doppler `prd` — the stubs must never serve real customers."
+            )
+        return self
 
 settings = Settings()
 settings.set_env_vars() # Set the env vars in os.environ

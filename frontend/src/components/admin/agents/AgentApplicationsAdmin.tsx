@@ -7,6 +7,7 @@ import { Input } from "@3rdparty/ui/input";
 import { toast } from "sonner";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import DetailDrawer, { DetailDrawerWidth } from "@components/ui/DetailDrawer";
+import { KycPhotoCompare } from "./KycPhotoCompare";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
 import { humanizeEnumLabel } from "@lib/utils";
 import { AgentApplicationStatus, AgentApplicationSummary } from "@/types/agent";
@@ -148,10 +149,15 @@ export default function AgentApplicationsAdmin() {
             <section>
               <h3 className="mb-2 font-medium">KYC</h3>
               {detail.kyc ? (
-                <div className="rounded-lg border border-border p-3 text-sm">
-                  <Row label="Method" value={humanizeEnumLabel(detail.kyc.method)} />
-                  <Row label="Result" value={humanizeEnumLabel(detail.kyc.status)} />
-                  {detail.kyc.score != null && <Row label="Score" value={String(detail.kyc.score)} />}
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-border p-3 text-sm">
+                    <Row label="Method" value={humanizeEnumLabel(detail.kyc.method)} />
+                    {detail.kyc.idType && <Row label="ID type" value={humanizeEnumLabel(detail.kyc.idType)} />}
+                    <Row label="Result" value={humanizeEnumLabel(detail.kyc.status)} />
+                    {detail.kyc.score != null && <Row label="Selfie match" value={`${detail.kyc.score}%`} />}
+                    {detail.kyc.summary && <p className="mt-2 text-muted-foreground">{detail.kyc.summary}</p>}
+                  </div>
+                  <KycPhotoCompare kyc={detail.kyc} />
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No KYC record.</p>

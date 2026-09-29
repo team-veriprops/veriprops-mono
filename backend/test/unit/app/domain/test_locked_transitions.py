@@ -844,6 +844,7 @@ class TestErasure:
         svc._pseudonymiser = MagicMock()
         svc._pseudonymiser.token_for = MagicMock(return_value="tok")
         svc._pseudonymiser.pseudonymise = AsyncMock(return_value=["users"])
+        svc._kyc = MagicMock(delete_images=AsyncMock(return_value=0))
         svc._audit = MagicMock()
         svc._notify = AsyncMock()
         return svc
