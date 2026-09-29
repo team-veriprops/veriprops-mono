@@ -27,11 +27,11 @@ from main.app.domain.user.auth.consent.models import REQUIRED_SIGNUP_CONSENTS, U
 from main.app.domain.user.auth.session.models import UserPersona, UserType
 from main.app.domain.user.models import AdminSubRole, User
 from main.appodus_utils import Utils
+# Fixture contact details come from ranges the messaging router sinks on staging.
+from main.appodus_utils.integrations.messaging.qa_recipients import QA_EMAIL_DOMAIN
 
 # The password every QA account shares (non-prod only).
 QA_PASSWORD = "Test1234!"
-# A non-special-use domain — the email validator rejects reserved TLDs like `.test`.
-QA_EMAIL_DOMAIN = "veriprops.io"
 
 
 def new_entity(model, **fields):
@@ -56,13 +56,6 @@ def unique_qa_email(prefix: str) -> str:
     """A QA email no other fixture holds, so parallel scenarios never collide."""
     return f"{prefix}-{secrets.token_hex(4)}@{QA_EMAIL_DOMAIN}"
 
-
-def unique_local_phone() -> str:
-    """A Nigerian local number unique to one fixture.
-
-    Sharing a verified phone across accounts is the §17.1 anti-farming signal, so a fixture
-    that reused one would quietly void any referral behaviour a spec asserts on."""
-    return f"81{secrets.randbelow(10 ** 8):08d}"
 
 
 @lru_cache(maxsize=None)

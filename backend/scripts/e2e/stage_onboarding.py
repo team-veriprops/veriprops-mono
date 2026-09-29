@@ -16,7 +16,8 @@ import uuid
 from .harness import TEST_OTP, Ctx, check, consent_version_for, idem_key, signup_fresh_user
 
 # The seeded customer's verified number (`/dev/seed`) — no other account may claim it.
-_SEEDED_CUSTOMER_NUMBER = {"countryCode": "NG", "dialCode": "+234", "phone": "8030000001"}
+# The seeded customer's number: `qa_local_phone(1)`, in the QA range staging sinks.
+_SEEDED_CUSTOMER_NUMBER = {"countryCode": "NG", "dialCode": "+234", "phone": "8100000001"}
 
 
 def run(ctx: Ctx) -> None:

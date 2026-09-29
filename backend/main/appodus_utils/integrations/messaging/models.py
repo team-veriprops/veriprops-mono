@@ -100,6 +100,7 @@ class MessageProviderName(str, Enum):
     AWS_SES = "AWS_SES"
     SMTP = "SMTP"       # Dev/test email capture via Mailpit
     MOCK_SMS = "MOCK_SMS"  # Dev/test SMS suppression (no real SMS sent)
+    QA_SINK = "QA_SINK"  # Staging: messages to QA fixtures, recorded and never sent
     WHATSAPP_STUB = "WHATSAPP_STUB"  # Dev/test/CI WhatsApp transport (records, never sends)
 
 

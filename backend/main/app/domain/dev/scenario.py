@@ -37,10 +37,10 @@ from main.app.domain.dev.fixtures import (
     add_approved_agent,
     add_verified_user,
     record_required_consents,
-    unique_local_phone,
     unique_qa_email,
 )
 from main.app.domain.earnings.service import EarningsService
+from main.appodus_utils.integrations.messaging.qa_recipients import unique_qa_local_phone
 from main.app.domain.payment.models import PaymentMethodKind, PaymentWebhookDto
 from main.app.domain.payment.service import PaymentService
 from main.app.domain.payout.bank_account.models import CreateBankAccountDto
@@ -401,14 +401,14 @@ class DevScenarioService:
         customer_email = unique_qa_email("qa-scn-customer")
         customer = add_verified_user(
             session, first_name="Ada", last_name="Scenario", email=customer_email,
-            phone_local=unique_local_phone(), persona=UserPersona.CUSTOMER.value,
+            phone_local=unique_qa_local_phone(), persona=UserPersona.CUSTOMER.value,
             phone_verified=customer_phone_verified,
         )
         agents: Dict[AgentRole, ScenarioAccountDto] = {}
         for role in roles_for_tier(tier):
             email = unique_qa_email(f"qa-scn-{role.value.lower()}")
             agent = add_approved_agent(
-                session, role, email=email, phone_local=unique_local_phone(), now=now,
+                session, role, email=email, phone_local=unique_qa_local_phone(), now=now,
             )
             agents[role] = ScenarioAccountDto(id=str(agent.id), email=email, password=QA_PASSWORD)
 

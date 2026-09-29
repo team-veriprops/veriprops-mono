@@ -16,6 +16,7 @@ from main.appodus_utils.db.redis_utils import RedisUtils
 from main.appodus_utils.integrations.exception.exceptions import IntegrationFatalException
 from main.appodus_utils.integrations.messaging.models import Stat, MessagePriority, MessageProviderName
 from main.appodus_utils.integrations.messaging.providers.models import IMessageProvider
+from main.appodus_utils.integrations.messaging.qa_recipients import is_qa_recipient
 from main.appodus_utils.integrations.messaging.services.cost_tracking import cost_tracker, CostRecord
 from main.appodus_utils.integrations.messaging.services.resilience import resilience_manager
 
@@ -25,6 +26,14 @@ logger: Logger = di['logger']
 _EPOCH = datetime.min.replace(tzinfo=timezone.utc)
 _STATS_KEY_PREFIX = "messaging_stats"
 _STATS_TTL = timedelta(hours=24)
+
+
+def _staging_fixture(message: UpsertMessageDto) -> bool:
+    """A message on staging addressed only to QA fixtures (`qa_recipients.py`)."""
+    if settings.ENVIRONMENT != Environment.STAGING:
+        return False
+    recipients = message.to.recipient if isinstance(message.to.recipient, list) else [message.to.recipient]
+    return all(is_qa_recipient(message.channel, r) for r in recipients)
 
 
 def _single_recipient(message: UpsertMessageDto) -> str:
@@ -128,6 +137,14 @@ class MessageRouter:
             "sms": {
                 "rules": [
                     {
+                        # Staging sends for real, and /dev/seed and /dev/scenario run there: a
+                        # QA fixture's address is recorded by the sink, never sent to its owner.
+                        "condition": _staging_fixture,
+                        "providers": [MessageProviderName.QA_SINK],
+                        "fallback_order": [],
+                        "exclusive": True,
+                    },
+                    {
                         # Test/dev/dev_personal: suppress all SMS. Single-path, no fallback.
                         # Exclusive=True prevents last-resort fallback to real SMS providers.
                         "condition": lambda msg: settings.ENVIRONMENT in {
@@ -152,6 +169,14 @@ class MessageRouter:
             },
             "email": {
                 "rules": [
+                    {
+                        # Staging sends for real, and /dev/seed and /dev/scenario run there: a
+                        # QA fixture's address is recorded by the sink, never sent to its owner.
+                        "condition": _staging_fixture,
+                        "providers": [MessageProviderName.QA_SINK],
+                        "fallback_order": [],
+                        "exclusive": True,
+                    },
                     {
                         # Route to local Mailpit SMTP in dev/test/dev_personal envs.
                         # Production and staging always use external providers.
