@@ -19,6 +19,7 @@ from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import
     InboundKind,
     InboundWhatsAppMessage,
 )
+from test.utils.di_override import override_service
 
 
 @pytest.fixture(autouse=True)
@@ -46,11 +47,10 @@ def stub_console_sender(monkeypatch):
     records and answers, and the queue's own behaviour is pinned in
     `test_console_sender.py`.
     """
-    from kink import di
     from main.app.domain.channel.whatsapp.console_sender import WhatsAppConsoleSender
 
     sender = MagicMock(flush=AsyncMock())
-    monkeypatch.setitem(di._services, WhatsAppConsoleSender, sender)
+    override_service(monkeypatch, WhatsAppConsoleSender, sender)
     return sender
 
 

@@ -1,51 +1,18 @@
-from datetime import datetime
-from typing import Optional
-
 from sqlalchemy import Column, String
 
-from main.appodus_utils import BaseEntity, InternalPageRequest, BaseQueryDto, Utils
-from main.appodus_utils import Object
+from main.appodus_utils import BaseEntity
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
-from main.appodus_utils.integrations.messaging.models import PushToken, PushProviderType
 
 
 class Device(BaseEntity):
+    """A user's push-capable device. `UserRepo.get_user_contact` reads a user's devices to
+    address push.
+
+    TODO(gap): Push delivery — nothing registers devices until push ships — PRD "Known Gaps & Roadmap".
+    """
     __tablename__ = 'devices'
     user_id = Column(String(36), nullable=False, index=True)
     device_id = Column(String(36), nullable=False)
     push_provider_type = Column(String(20), nullable=False)
     push_token = Column(JSONB_VARIANT, nullable=False)
     last_active = Column(UTCDateTime, nullable=False)
-
-
-class DeviceBaseDto(Object):
-    pass
-
-
-class CreateDeviceDto(DeviceBaseDto):
-    user_id: str
-    device_id: str
-    push_provider_type: PushProviderType
-    push_token: PushToken
-
-
-class _CreateDeviceDto(CreateDeviceDto):
-    last_active: datetime = Utils.datetime_now()
-
-
-class UpdateDeviceDto(DeviceBaseDto):
-    pass
-
-
-class _UpdateDeviceDto(DeviceBaseDto):
-    push_token: Optional[PushToken] = None
-    last_active: datetime = Utils.datetime_now()
-
-
-class SearchDeviceDto(InternalPageRequest, BaseQueryDto):
-    user_id: Optional[str] = None
-    push_provider_type: Optional[PushProviderType] = None
-
-
-class QueryDeviceDto(_CreateDeviceDto, BaseQueryDto):
-    pass

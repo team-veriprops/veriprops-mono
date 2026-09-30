@@ -27,6 +27,7 @@ from main.app.domain.communication.chat_message.models import ChannelDeliverySta
 from main.app.domain.communication.chat_message.repo import ChatMessageRepo
 from main.app.domain.communication.conversation.models import ConversationChannel
 from main.appodus_utils.db.session import db_session_ctx
+from test.utils.di_override import override_service
 
 PHONE = "+2348012345678"
 
@@ -59,12 +60,11 @@ def outbound_enabled(monkeypatch):
 @pytest.fixture
 def window_reopen(monkeypatch):
     """Capture `window_reopen` sends without reaching the messaging pipeline."""
-    from kink import di
     from main.app.domain.user.user_messages import AccountSecurityMessages
 
     sender = MagicMock()
     sender.send_whatsapp_window_reopen_message = AsyncMock()
-    monkeypatch.setitem(di._services, AccountSecurityMessages, sender)
+    override_service(monkeypatch, AccountSecurityMessages, sender)
     return sender.send_whatsapp_window_reopen_message
 
 

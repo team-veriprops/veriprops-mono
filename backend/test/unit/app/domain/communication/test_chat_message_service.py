@@ -16,6 +16,7 @@ from main.app.domain.communication.chat_message.service import ChatMessageServic
 from main.app.domain.communication.conversation.models import ConversationChannel
 from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
+from test.utils.di_override import override_service
 
 
 @pytest.fixture(autouse=True)
@@ -279,11 +280,10 @@ class TestChannelDelivery:
 
     @staticmethod
     def _console_sender(monkeypatch):
-        from kink import di
         from main.app.domain.channel.whatsapp.console_sender import WhatsAppConsoleSender
 
         sender = MagicMock(deliver=AsyncMock())
-        monkeypatch.setitem(di._services, WhatsAppConsoleSender, sender)
+        override_service(monkeypatch, WhatsAppConsoleSender, sender)
         return sender
 
     async def test_a_clean_reply_on_a_whatsapp_thread_is_carried_out(self, monkeypatch):

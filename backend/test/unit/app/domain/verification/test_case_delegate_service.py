@@ -29,6 +29,7 @@ from main.appodus_utils.exception.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+from test.utils.di_override import override_service
 
 CASE = "case-1"
 OWNER = "cust-1"
@@ -327,7 +328,7 @@ class TestMilestoneAudience:
         from main.app.domain.channel.whatsapp.milestones import WhatsAppMilestoneSender
 
         sender = MagicMock(send_delegate_milestone=AsyncMock())
-        monkeypatch.setitem(di._services, WhatsAppMilestoneSender, sender)
+        override_service(monkeypatch, WhatsAppMilestoneSender, sender)
         monkeypatch.setitem(di._memoized_services, WhatsAppMilestoneSender, sender)
 
         svc = _service([_verified_row()])
@@ -343,7 +344,7 @@ class TestMilestoneAudience:
         from main.app.domain.channel.whatsapp.milestones import WhatsAppMilestoneSender
 
         sender = MagicMock(send_delegate_milestone=AsyncMock())
-        monkeypatch.setitem(di._services, WhatsAppMilestoneSender, sender)
+        override_service(monkeypatch, WhatsAppMilestoneSender, sender)
         monkeypatch.setitem(di._memoized_services, WhatsAppMilestoneSender, sender)
 
         svc = _service([_verified_row()])

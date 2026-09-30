@@ -24,6 +24,7 @@ from main.appodus_utils.db.session import db_session_ctx, is_independent_session
 from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import InboundKind
 from main.appodus_utils.integrations.messaging.providers.whatsapp.webhook import WhatsAppWebhookHandler
 from test.unit.app.domain.channel.whatsapp.test_inbound_service import _service, inbound
+from test.utils.di_override import override_service
 
 
 class _Savepoints:
@@ -69,13 +70,12 @@ def request_session():
 
 @pytest.fixture(autouse=True)
 def stub_collaborators(monkeypatch):
-    from kink import di
     from main.app.domain.channel.whatsapp.bot.surface import WhatsAppAssistantSurface
     from main.app.domain.channel.whatsapp.console_sender import WhatsAppConsoleSender
 
     bot = MagicMock(handle=AsyncMock())
-    monkeypatch.setitem(di._services, WhatsAppConsoleSender, MagicMock(flush=AsyncMock()))
-    monkeypatch.setitem(di._services, WhatsAppAssistantSurface, bot)
+    override_service(monkeypatch, WhatsAppConsoleSender, MagicMock(flush=AsyncMock()))
+    override_service(monkeypatch, WhatsAppAssistantSurface, bot)
     return bot
 
 

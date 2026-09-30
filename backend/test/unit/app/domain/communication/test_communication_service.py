@@ -20,6 +20,7 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ResourceNotFoundException,
 )
+from test.utils.di_override import override_service
 
 
 @pytest.fixture(autouse=True)
@@ -463,14 +464,13 @@ class TestReadingInThePortalCancelsQueuedPhoneDelivery:
 async def test_the_assistant_can_never_fail_a_customers_send(monkeypatch):
     """The customer's message is already in the thread; an assistant fault must not turn a
     successful send into an error."""
-    from kink import di
 
     from main.app.domain.communication.assistant.web import WebAssistantService
 
     svc = _service(tasks=[], user_type="USER")
     svc._conversations.get_for_admin = AsyncMock(return_value=_convo(ConversationType.GENERAL_SUPPORT))
     broken = MagicMock(after_customer_message=AsyncMock(side_effect=RuntimeError("model down")))
-    monkeypatch.setitem(di._services, WebAssistantService, broken)
+    override_service(monkeypatch, WebAssistantService, broken)
     monkeypatch.setattr(WebAssistantService, "after_customer_message", broken.after_customer_message)
 
     outcome = await svc.answer_with_assistant(SimpleNamespace(id="msg-1", conversation_id="conv-1"))
