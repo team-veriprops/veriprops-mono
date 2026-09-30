@@ -1,6 +1,6 @@
 # Progress Tracker — Audit remediation (2026-09-27)
 
-status: **S0–S6 complete; S7 (convention debt) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
+status: **S0–S7 complete; S8 (backend tests) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
 
 Scope, stages S0–S9 and the user's decisions are in the audit plan (`~/.claude/plans/any-pending-issues-task-polymorphic-duckling.md`). In short:
 
@@ -416,6 +416,85 @@ The PRD states this.
 | `@live` lane isolation | 0 `@live` tests in the parallel and serial lanes; the live lane lists exactly UAT-LIVE-01..03 and refuses to start without `UAT_BASE_URL` |
 
 **Not run:** the live smoke and the `@live` spec against staging. There is no Doppler `stg` config and no sandbox key yet, so nothing in the register moves to `SANDBOX-PASSED` in this stage.
+
+## S7 — convention debt, and closing a paid case through Finance
+
+**Planned convention work, done:**
+
+- **Enum literals.**
+  - Chat participant roles now use `SenderKind`.
+  - Conflict severity has a new `ConflictSeverity` enum, mirrored on the frontend.
+  - Other new enums: `AdminTeamState` for the admin-team audit, and `AuditPackRowKind` / `ConsentDecision` for the audit pack.
+  - The currency defaults and the re-check decision now use their enums.
+  - On the frontend: the invitation status, `WhatsAppQualityRating`, and the pricing currencies are derived from `TransactionCurrency`.
+  - Tests pin every wire value that stays the same.
+- **`FinanceService`.** The summary moved out of the controller, pinned by a test.
+- **Deprecated APIs.** `asyncio.get_event_loop` became `get_running_loop`. The shared HTTP client's exit-time close now works both inside the app loop and at exit. Pydantic `min_items`/`max_items` became `min_length`/`max_length`.
+- **Silent excepts.** A failed real-time push now logs once (`log_fault_once`). The settings serialisation fallbacks stay silent: they fall back to the next strategy rather than swallow a fault, and they run before logging exists.
+- **Dead code.**
+  - `webhook_replay_handler` was declared on the interface, implemented five times as a no-op, and never called; it is removed. The dead Google Drive package keeps its copy, per D83.
+  - Dead routes are removed: `PROJECTS`, `SETTINGS`, `ADMIN.CONFIG`, `ADMIN.PAYOUTS` and `FINANCE_COMMISSIONS`.
+  - `routes.pages.test.ts` now fails if any declared route lacks a page, apart from the `TODO(gap)` allowlist.
+- **§G and doc hygiene.**
+  - The duplicate python-jose gap marker in `test-requirements.txt` is now a pointer.
+  - The Google Drive client's plain TODO is now a `TODO(gap)` on the dead-package row.
+  - The "SMS fallback" gap references are stale (D60 delivered it) and are corrected.
+  - `uat-strategy.md` §10 and §12 now show today's counts and the CI wiring.
+  - `runtime-state.yaml` and the README's open-work section are updated.
+
+**User decisions (2026-09-29/30), found while doing S7:** an admin could cancel a paid case and no refund was ever started. The user chose **option 2**, a proper close flow, with every customer money outflow approved by Finance:
+
+- **Finance payments page** (`/admin/finance/payments`): every charge, searchable by reference or VID, with wildcards escaped, and filterable by status. It shows the refunded amount, any refund still owed, and chargebacks.
+- **Refund approvals** (`payment/refund_request/`, migration `0007_refund_requests`):
+  - Closing a paid case, an upheld dispute and a charge that lands on a closed case each file a request; nothing sends money directly.
+  - Finance approves or rejects at `/admin/finance/refunds`. A rejection needs a reason, and approving asks for an explicit confirmation stating the amount.
+  - Refunds can be partial: the amount is spread across the case's charges, oldest first, in each charge's own currency.
+  - A charge whose gateway refuses a refund records what it still owes (`refund_due_minor`). Finance's retry list is built from that record, and a retry sends exactly that amount. The migration backfills what the old list showed.
+  - A late charge refunds itself only (`payment_id`) and is filed on its own, so it never collides with another request. Revenue now counts what a partial refund kept.
+- **Closing a paid case** (`verification/closure/`):
+  - The PRD refund table is a pure policy:
+    - a withdrawal before work starts is refunded less the surcharge; after work starts, nothing;
+    - a duplicate, or "we cannot deliver" (which ends `FAILED`), is refunded in full;
+    - fraud gets nothing;
+    - an inaccessible property gets an amount the admin enters on evidence.
+  - The admin confirms a backend quote showing the refund, how the case ends and each agent's outcome.
+  - If money is owed, the case goes on hold: agents cannot act, admins cannot assign or decide in review, the sweeps skip it, and everyone is told. Agents see the hold on the task.
+  - If Finance approves: submitted work is paid, other tasks become the new terminal `CANCELLED` state (which frees agents' task limits), and the refund is sent last.
+  - If Finance rejects: the hold lifts. For an upheld dispute, the dispute reopens for ops.
+  - Cancel is now for unpaid cases only. "Fail & refund" is folded into Close (report review opens it on "cannot deliver"). Screens ask the backend which way out applies.
+
+**Stage review** (`/code-review high`, 10 findings, all fixed):
+
+- a held case could still be released, leaving its refund request stuck forever;
+- an upheld dispute marked the case REFUNDED and reversed commissions before Finance approved;
+- a late charge refunded the case's oldest charge instead of itself;
+- a charge already owing a refused refund could be refunded again, wiping the debt;
+- a late charge could collide with another pending request and fail its webhook;
+- audit rows recorded post-claim states;
+- partial refunds dropped kept money from revenue;
+- close amounts were labelled ₦ instead of the case's currency;
+- the payments page guessed "refused refund" instead of reading `refundDueMinor`;
+- the agent task list and the admin detail made extra per-row queries.
+
+**Logged, not done:**
+
+- The erasure queue still uses `window.confirm`/`prompt` instead of `ConfirmDialog`.
+- The admin list searches (users, team, verifications) do not escape `%`/`_`.
+- The lawyer's `risk_level` is free text, so the HIGH-risk conflict fires only on exactly "high".
+- `AdminVerificationDetail` keeps a local `formatMinor` that differs slightly from the shared one.
+
+**Gate:**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 3155 passed (+100) |
+| ruff, mypy | clean (622 files) |
+| eslint, tsc | clean |
+| vitest | 874 passed (+32) |
+| build | green; rewrites target `localhost:8000` |
+| migration `0007` | upgrade, `downgrade -1` and upgrade round-trip twice on `veriprops_e2e`; `alembic check` reports nothing |
+| drive-through | 592/592. New checks: paid cancel refused, quote, hold, reject resumes, approve refunds, payments list, late charge, "cannot deliver" closes FAILED with tasks cancelled |
+| Playwright (chromium-desktop + webkit-mobile) | 105/106; the one failure is UAT-AGENT-05 on webkit-mobile (both attempts), the known webkit signup-funnel flake where Continue doesn't advance past the phone step, which S9 investigates. Not in S7's area. Also verified: commit b575ae1 passes on its own (pytest 3057, mypy 609 files, vitest 842, tsc, eslint) |
 
 ## Third-party sandbox test register
 
