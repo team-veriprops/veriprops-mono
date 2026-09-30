@@ -1,6 +1,6 @@
 # Progress Tracker — Audit remediation (2026-09-27)
 
-status: **S0–S7 complete; S8 (backend tests) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
+status: **S0–S8 complete; S9 (Playwright P0/P1 + the webkit signup flake) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
 
 Scope, stages S0–S9 and the user's decisions are in the audit plan (`~/.claude/plans/any-pending-issues-task-polymorphic-duckling.md`). In short:
 
@@ -495,6 +495,73 @@ The PRD states this.
 | migration `0007` | upgrade, `downgrade -1` and upgrade round-trip twice on `veriprops_e2e`; `alembic check` reports nothing |
 | drive-through | 592/592. New checks: paid cancel refused, quote, hold, reject resumes, approve refunds, payments list, late charge, "cannot deliver" closes FAILED with tasks cancelled |
 | Playwright (chromium-desktop + webkit-mobile) | 105/106; the one failure is UAT-AGENT-05 on webkit-mobile (both attempts), the known webkit signup-funnel flake where Continue doesn't advance past the phone step, which S9 investigates. Not in S7's area. Also verified: commit b575ae1 passes on its own (pytest 3057, mypy 609 files, vitest 842, tsc, eslint) |
+
+## S8 — backend tests, a route-permission guard, and the drive-through's missing endpoints
+
+**Planned work, done:**
+
+- **Unit tests for the eleven untested modules.** ReportService (release, supersede, version labels), acknowledgement, OAuth identity, the social-provider factory and Facebook (respx), signup draft, the user and message validators, the notification dispatcher and the states canon. Dead code found while writing them was deleted instead of tested: the device service, validator and repo (the `Device` table stays, marked as part of the Push-delivery gap), three message-validator methods that would have crashed with a TypeError, `UserValidator.get_by_email_or_raise`, `ReportService._set_released_at`, and a 903-line unused frontend copy of the states list.
+- **`test_router_permissions.py`.** Table-driven off the live route table (609 cases):
+  - every route not listed in `PUBLIC` refuses an anonymous caller;
+  - a route that validates its body first must authenticate before any other await;
+  - every admin route refuses a customer;
+  - every permission-guarded route refuses each sub-role without that permission.
+
+  A mutation check (session check removed from one handler) fails it.
+- **Drive-through: 592 → 685 checks.** A new `account` stage covers:
+  - signup draft, profile completion, the customer persona;
+  - password change, OAuth links, the security log, the cross-portal summary;
+  - legal documents and consent history, notification preferences, read receipts;
+  - address lookup and the portal summary.
+
+  Existing stages gain the admin user directory, the admin list's filters, notes, trust weights, line items, dispute detail and the agent's defence, the recheck queue, payout cancel/hold/adjust, earnings jobs, the agent profile, the case team thread and the chat stream, a reopen after release, reconcile, refund retries, erasure detail, delegate revoke, and the handoff reconcile/release. The email and messaging-retry stages now **fail in CI** instead of warn-skipping (`skip_unless_ci`).
+
+**Defects the new checks found, fixed:**
+
+- **Password change needed no current password** and left every other session signed in (user decision: require it and sign out the others). A wrong one is refused and logged as `PASSWORD_CHANGE_REFUSED` on its own commit. Both password pages now share one `SetPasswordForm`.
+- **Notification preferences were decided by the frontend** (user decision: the backend owns the catalogue). Seven hardcoded events meant other email/SMS events couldn't be opted out; every row showed an SMS toggle; any string was stored; and **the report email, documented as unconditional, could be switched off**, as could the suspension email. Now:
+  - `required_email` on the rule is honoured by the router;
+  - `catalogue.py` derives the offer from the rule table, per audience;
+  - PUT accepts only those events;
+  - the page renders each channel as a toggle, a lock or a dash.
+- **"link my account" on WhatsApp looped.** Every refusal told an unlinked number to say it, and saying it repeated the refusal: the WhatsApp→web link was never sent. The surface now mints the signed `/wa/link/<token>` link, or says the number is already linked.
+- **Adding an admin note returned 500** (a UUID in the audit details). Every engine now writes JSON through `json_serialize` (UUID, datetime, enum and Decimal in wire form; anything else still refused).
+- **The note response didn't show the note.** Autoflush is off, so the list now flushes first.
+- **The admin verification list took free-text `status`/`tier`.** A typo silently matched nothing; they are now enums and refused with 422.
+- **An order-dependent test** (pre-existing on HEAD): kink answers from `_memoized_services` before `_services`, so a `di._services` override was ignored once any earlier test resolved the real service. There is now one `override_service` helper for all eight sites.
+- The permission test's own `PUBLIC` list wrongly contained the two `from-token` link routes. They need a session, and the static check now covers them.
+
+**Logged, not done:**
+
+- Pricing line items are not checked against the tier price, so a quote's breakdown can fail to add up to its total.
+- The consent-history endpoint returns its own page shape instead of `Page[T]`.
+- Other create-then-list-in-one-request paths may miss rows the same way the notes did (autoflush off).
+- Agent-side ownership (IDOR) is enforced in services against the database, so it is left to S9's `rbac` spec rather than the unit guard.
+
+**Stage review** (`/code-review high`): no finding in the S8 changes. All ten findings are in the fixed-commission commit `030afb6` (the parallel session's work this branch is rebased onto). They are for the user to schedule:
+
+1. The margin guard takes no advisory lock, so a concurrent price cut and commission raise can each pass and together breach the minimum margin.
+2. The commission shown before an agent accepts is re-read at release rather than locked to the task.
+3. The margin is measured against list price, while discounts (`max_discount_percent`, unguarded) can leave a case paying out more than it keeps.
+4. `0002`'s downgrade deletes admin-set commissions without a `refuse_if_rows` guard.
+5. The remote-bonus config key is entered in kobo beside a naira key.
+6. The breach message rounds and floors oddly.
+7. `0002` doesn't insert the two new config rows, which the fresh build has.
+8. The guard duplicates the service's commission and config reads.
+9. `list_all` bypasses `effective_config_value`.
+10. Accrual queries the rule once per task.
+
+**Gate:**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 3843 passed (+688) |
+| ruff, mypy | clean (621 files) |
+| eslint, tsc | clean |
+| vitest | 883 passed (+9) |
+| build | green |
+| drive-through | 685/685 |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114 (8 serial + 106 parallel); UAT-AGENT-03 flaked once on webkit-mobile (the known signup flake, S9) and passed on retry. The changed UAT-AUTH-14 passes on both. |
 
 ## Third-party sandbox test register
 
