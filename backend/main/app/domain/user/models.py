@@ -63,7 +63,7 @@ class User(BaseEntity):
 
     country_of_residence = Column(String(2), nullable=False)
     timezone = Column(String(64), nullable=False)
-    preferred_currency = Column(String(8), nullable=False, default="NGN")
+    preferred_currency = Column(String(8), nullable=False, default=TransactionCurrency.NGN.value)
 
     user_type = Column(String(8), nullable=False, default=UserType.USER.value)
     personas = Column(MutableList.as_mutable(jsonb_variant()), nullable=False, default=list)

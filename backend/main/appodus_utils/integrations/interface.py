@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 
 from fastapi.responses import PlainTextResponse
 
-from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 
 if TYPE_CHECKING:
     from loguru import Logger
@@ -32,10 +31,6 @@ class IWebhookHandler(ABC):
     @property
     @abstractmethod
     def platform(self) -> IntegratedPlatform:
-        pass
-
-    @abstractmethod
-    async def webhook_replay_handler(self, callback: QueryCallbackDto) -> None:
         pass
 
     @abstractmethod

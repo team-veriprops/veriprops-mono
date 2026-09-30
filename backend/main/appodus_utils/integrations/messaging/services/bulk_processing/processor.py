@@ -28,7 +28,7 @@ class BulkProcessor:
             process_fn: Callable[[MessageRequest], Awaitable[T]]
     ) -> BatchResult:
         """Process messages in parallel batches with backpressure"""
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
         results = []
 
         async def process_one(msg: MessageRequest):
@@ -63,7 +63,7 @@ class BulkProcessor:
         return BatchResult(
             successes=successes,
             failures=failures,
-            processing_time=asyncio.get_event_loop().time() - start_time
+            processing_time=asyncio.get_running_loop().time() - start_time
         )
 
     async def process_with_retry(

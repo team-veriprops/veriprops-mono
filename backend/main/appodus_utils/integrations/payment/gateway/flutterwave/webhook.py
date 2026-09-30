@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 from main.appodus_utils.domain.webhook.callback.service import CallbackService
 
 if TYPE_CHECKING:
@@ -48,9 +47,6 @@ class FlutterwaveWebhookHandler(BaseWebhookHandler):
         if not is_configured_secret(secret) or not received:
             return False
         return hmac.compare_digest(received.encode(), secret.encode())
-
-    async def webhook_replay_handler(self, callback: QueryCallbackDto) -> None:
-        pass
 
     async def _process_handle_redirect_payload(self, payload: QueryParams, headers: Dict, response: Response) -> Optional[RedirectResponse]:
         redirect_url = settings.PAYMENT_FRONTEND_REDIRECT_PATH

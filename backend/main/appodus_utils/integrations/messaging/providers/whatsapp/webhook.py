@@ -30,7 +30,6 @@ from starlette.responses import RedirectResponse, Response
 
 from main.app.config.settings import IntegratedPlatform, settings
 from main.appodus_utils.config.settings import is_configured_secret
-from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 from main.appodus_utils.exception.exceptions import UnauthorizedException
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
 from main.appodus_utils.integrations.messaging.providers.whatsapp.inbound import (
@@ -77,11 +76,6 @@ class WhatsAppWebhookHandler(BaseWebhookHandler):
             key=self.platform_secret.encode(), msg=body, digestmod=hashlib.sha256
         ).hexdigest()
         return hmac.compare_digest(supplied_digest, expected)
-
-    async def webhook_replay_handler(self, callback: QueryCallbackDto) -> None:
-        # Redelivery is handled by wamid deduplication at ingest, not by replaying
-        # stored callbacks.
-        return None
 
     async def _process_verify_webhook_payload(self, payload: QueryParams) -> PlainTextResponse:
         """Meta's subscription handshake: echo `hub.challenge` for the right token."""

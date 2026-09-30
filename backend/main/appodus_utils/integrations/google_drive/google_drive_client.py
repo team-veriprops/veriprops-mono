@@ -32,7 +32,8 @@ def _drive_failure(action: str, error: HttpError) -> HTTPException:
 class GoogleDriveClient:
     def __init__(self):
         self.SCOPES = ['https://www.googleapis.com/auth/documents', 'https://www.googleapis.com/auth/drive']
-        # TODO: Consider using Workload Identity Federation instead of a service-account key
+        # TODO(gap): only the dead google_drive webhook package uses this client (§G, D83). If it
+        # is revived, authenticate with Workload Identity Federation, not a service-account key.
         try:
             info = load_service_account_info(settings.GOOGLE_SERVICE_ACCOUNT_JSON_B64, settings.GOOGLE_SERVICE_ACCOUNT_FILE)
         except ValueError as e:

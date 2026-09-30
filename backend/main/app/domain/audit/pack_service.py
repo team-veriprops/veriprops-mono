@@ -20,6 +20,7 @@ from typing import List
 
 from kink import inject
 
+from main.app.domain.audit.models import AuditPackRowKind, ConsentDecision
 from main.app.config.settings import settings
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.commission.repo import CommissionRepo
@@ -129,7 +130,7 @@ class VerificationAuditPackService:
         # Transition backbone (verification + every child resource).
         for t in transitions:
             writer.writerow([
-                "TRANSITION",
+                AuditPackRowKind.TRANSITION.value,
                 t.occurred_at.isoformat() if t.occurred_at else "",
                 t.action, t.actor_id or "", t.resource_type, t.resource_id,
                 t.from_state or "", t.to_state or "", t.ip_address or "",
@@ -139,7 +140,7 @@ class VerificationAuditPackService:
         # Evidence content hashes (§4.5 tamper-evidence).
         for e in evidence:
             writer.writerow([
-                "EVIDENCE",
+                AuditPackRowKind.EVIDENCE.value,
                 e.captured_at.isoformat() if e.captured_at else "",
                 e.kind, "", "task_evidence", Utils.uuid_to_hex(e.id), "", "", "",
                 f"sha256={e.content_sha256}; task={e.task_id}",
@@ -148,7 +149,7 @@ class VerificationAuditPackService:
         # Versioned consent snapshots for the owning customer.
         for c in consents:
             writer.writerow([
-                "CONSENT",
+                AuditPackRowKind.CONSENT.value,
                 c.accepted_at.isoformat() if c.accepted_at else "",
                 c.document_type, "", "user_consent", c.consent_version, "", "",
                 c.ip_address or "",
@@ -189,9 +190,9 @@ def _whatsapp_consent_rows(consent) -> List[list]:
         # customer last acted rather than by when they first did.
         occurred = max(filter(None, (granted_at, revoked_at)))
         rows.append([
-            "WHATSAPP_CONSENT",
+            AuditPackRowKind.WHATSAPP_CONSENT.value,
             occurred.isoformat(),
-            "GRANTED" if granted else "REVOKED",
+            (ConsentDecision.GRANTED if granted else ConsentDecision.REVOKED).value,
             "", "whatsapp_consent", kind.value, "", "", "",
             f"granted_at={granted_at.isoformat() if granted_at else ''}; "
             f"revoked_at={revoked_at.isoformat() if revoked_at else ''}; "

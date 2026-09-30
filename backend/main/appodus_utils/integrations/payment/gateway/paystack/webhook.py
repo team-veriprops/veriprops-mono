@@ -17,7 +17,6 @@ from starlette import status
 from starlette.responses import Response, RedirectResponse
 
 from main.app.config.settings import IntegratedPlatform, settings
-from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 from main.appodus_utils.domain.webhook.callback.service import CallbackService
 from main.appodus_utils import Utils
 from main.appodus_utils.integrations.interface import BaseWebhookHandler
@@ -52,9 +51,6 @@ class PaystackWebhookHandler(BaseWebhookHandler):
             return False
         expected = hmac.new(key=key.encode(), msg=body, digestmod=hashlib.sha512).hexdigest()
         return hmac.compare_digest(received, expected)
-
-    async def webhook_replay_handler(self, callback: QueryCallbackDto) -> None:
-        pass
 
     async def _process_handle_redirect_payload(self, payload: QueryParams, headers: Dict, response: Response) -> Optional[RedirectResponse]:
         redirect_url = settings.PAYMENT_FRONTEND_REDIRECT_PATH

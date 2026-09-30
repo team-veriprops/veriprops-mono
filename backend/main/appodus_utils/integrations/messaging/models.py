@@ -337,7 +337,7 @@ class WhatsappSectionRow(Object):
 class WhatsappSection(Object):
     """Section in a WhatsApp interactive message"""
     title: str = Field(..., max_length=24)
-    rows: List[WhatsappSectionRow] = Field(..., min_items=1, max_items=10)
+    rows: List[WhatsappSectionRow] = Field(..., min_length=1, max_length=10)
 
 
 class WhatsappPayload(Object):

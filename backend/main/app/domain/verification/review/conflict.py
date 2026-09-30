@@ -8,6 +8,7 @@ consistent (release may proceed once every role is approved).
 """
 from __future__ import annotations
 
+import enum
 from typing import Any, Dict, List, Optional
 
 from main.app.core.state.status import AgentRole
@@ -18,16 +19,24 @@ _PROCEED_MARKERS = ("proceed", "no objection", "clear to")
 _HIGH_RISK = ("high",)
 
 
+class ConflictSeverity(str, enum.Enum):
+    """How much a conflict matters to release: a HIGH one blocks it until resolved (§8.2)."""
+
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+
 class ReviewConflict:
     """A detected contradiction between role submissions."""
 
-    def __init__(self, severity: str, roles: List[AgentRole], message: str):
+    def __init__(self, severity: ConflictSeverity, roles: List[AgentRole], message: str):
         self.severity = severity
         self.roles = roles
         self.message = message
 
     def as_dict(self) -> Dict[str, Any]:
-        return {"severity": self.severity, "roles": [r.value for r in self.roles], "message": self.message}
+        return {"severity": self.severity.value, "roles": [r.value for r in self.roles], "message": self.message}
 
 
 def _text(payload: Optional[Dict[str, Any]], *keys: str) -> str:
@@ -54,12 +63,12 @@ def detect_conflicts(submissions: Dict[AgentRole, Optional[Dict[str, Any]]]) -> 
         lawyer_proceeds = any(m in lawyer_text for m in _PROCEED_MARKERS)
         if has_encumbrance and lawyer_proceeds:
             conflicts.append(ReviewConflict(
-                severity="HIGH", roles=[AgentRole.REGISTRY, AgentRole.LAWYER],
+                severity=ConflictSeverity.HIGH, roles=[AgentRole.REGISTRY, AgentRole.LAWYER],
                 message="Registry flags a title encumbrance but the legal opinion recommends proceeding.",
             ))
         if _text(lawyer, "risk_level").strip() in _HIGH_RISK:
             conflicts.append(ReviewConflict(
-                severity="MEDIUM", roles=[AgentRole.LAWYER],
+                severity=ConflictSeverity.MEDIUM, roles=[AgentRole.LAWYER],
                 message="Lawyer flagged a HIGH legal risk — review before release.",
             ))
 

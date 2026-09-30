@@ -233,3 +233,19 @@ class AdminActionLogPageDto(Object):
     total: int
     page: int
     page_size: int
+
+
+class AuditPackRowKind(str, enum.Enum):
+    """What one row of a verification's audit pack records (§19)."""
+
+    TRANSITION = "TRANSITION"
+    EVIDENCE = "EVIDENCE"
+    CONSENT = "CONSENT"
+    WHATSAPP_CONSENT = "WHATSAPP_CONSENT"
+
+
+class ConsentDecision(str, enum.Enum):
+    """Where a customer's consent stands, as an audit pack row states it."""
+
+    GRANTED = "GRANTED"
+    REVOKED = "REVOKED"

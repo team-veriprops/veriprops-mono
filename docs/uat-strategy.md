@@ -218,7 +218,7 @@ Named because they are the "will this actually automate?" risks; each becomes a 
 
 ## 10. Out of scope
 
-- No CI wiring (`pull_requests.yml`/`e2e.yml`) — local/manual only for now.
+- The full six-engine matrix in CI. `e2e.yml` runs the suite on every PR and release, on `chromium-desktop` + `webkit-mobile` (one desktop and one mobile engine from different rendering families); all six engines stay a local/nightly run. The `@live` spec never runs in CI (§4).
 - Load/performance and security **pen-testing** (UAT covers only *functional* authorization per §6a; rate limits, including the public lookup's, are off under `DISABLE_RATE_LIMITING` in automation). Accessibility is **in scope** (§7), not deferred.
 - Global PRD §G exclusions (live gateways/KYC/storage/FX/disbursement, offline upload, image derivatives, chat attachments, Legal Opinion flag-off, unbuilt `TODO(gap)` routes, all post-MVP) — asserted against stubs or skipped, never as real behaviour; launch-gate business/legal items flagged as go-live blockers, not UAT.
 
@@ -230,6 +230,8 @@ Named because they are the "will this actually automate?" risks; each becomes a 
 
 
 ## 12. Implementation status
+
+**Now (2026-09-29):** 57 scenarios in 9 specs run on every PR in CI (`chromium-desktop` + `webkit-mobile`, 114 runs): dev contracts, auth, session, agent onboarding, the golden path (legs 1–5), chat, status pages, WhatsApp widget and handoff. `live-integrations.spec.ts` (`@live`) runs only on demand against staging. Uncovered areas, P0 first: public lookup and sharing, re-check / upgrade / disputes, earnings and payouts, audit and erasure, RBAC, then admin ops, tracking, notifications. The audit remediation's S9 builds the P0 ones. The record below is the first slice's, kept as its history.
 
 Built and verified green against a live local stack — **78/78 across the full six-permutation engine matrix** (Chromium/Firefox/WebKit × desktop/mobile), zero retries needed. Every scenario below is therefore *accepted* under §1's "green on all engines" rule.
 
@@ -262,8 +264,8 @@ Built and verified green against a live local stack — **78/78 across the full 
 
 **Known limitations**
 
-- **No CI wiring** (unchanged, §10) — local/manual runs.
+- (Since resolved: CI runs the suite on two engines, §10.)
 - Firefox's mobile project is a phone-sized viewport only — Playwright has no touch/`isMobile` emulation for Gecko.
 - The remaining 18 areas of §6, the §4 golden-path backbone, and the §8.2 seed extension (RBAC admins, pagination volume, fixture variants) are **not built yet**.
 
-**Next**: the §4 golden-path backbone (it produces the shared ids the branch specs consume), then the §8.2 seed extension, then P0 areas — Submission & Payment, Review/Trust/Release, Public Lookup, Disputes, Earnings/Payouts, Audit/Erasure.
+**Next** (as of the first slice; the golden path and the seed extension have since shipped — see *Now* above).

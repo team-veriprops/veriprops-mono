@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from main.appodus_utils.domain.webhook.callback.model import QueryCallbackDto
 
 if TYPE_CHECKING:
     from loguru import Logger
@@ -25,9 +24,6 @@ class ZohoWebhookHandler(BaseWebhookHandler):
 
     def __init__(self):
         super().__init__(settings.ZOHO_WEBHOOK_SECRET)
-
-    async def webhook_replay_handler(self, callback: QueryCallbackDto) -> None:
-        pass
 
     @property
     def platform(self) -> IntegratedPlatform:

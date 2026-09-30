@@ -30,3 +30,12 @@ class TestConflictDetection:
     def test_no_lawyer_no_conflict(self):
         subs = {AgentRole.REGISTRY: {"title_search_result": "encumbrance"}}
         assert detect_conflicts(subs) == []
+
+
+def test_severity_goes_on_the_wire_as_the_same_string():
+    """The admin console reads "HIGH"/"MEDIUM"; the enum must not change what it receives."""
+    from main.app.domain.verification.review.conflict import ConflictSeverity, ReviewConflict
+
+    conflict = ReviewConflict(severity=ConflictSeverity.HIGH, roles=[AgentRole.LAWYER], message="m")
+    assert conflict.as_dict()["severity"] == "HIGH"
+    assert [s.value for s in ConflictSeverity] == ["HIGH", "MEDIUM", "LOW"]

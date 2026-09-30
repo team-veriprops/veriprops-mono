@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { TransactionCurrency } from "@/types/models";
 import {
   pricingTiers,
   methodologySteps,
@@ -283,24 +284,24 @@ describe("currencies", () => {
 
 describe("formatPrice", () => {
   it("formats NGN with k suffix — no decimal places", () => {
-    expect(formatPrice(150000, "NGN")).toBe("₦150k");
-    expect(formatPrice(350000, "NGN")).toBe("₦350k");
-    expect(formatPrice(750000, "NGN")).toBe("₦750k");
+    expect(formatPrice(150000, TransactionCurrency.NGN)).toBe("₦150k");
+    expect(formatPrice(350000, TransactionCurrency.NGN)).toBe("₦350k");
+    expect(formatPrice(750000, TransactionCurrency.NGN)).toBe("₦750k");
   });
 
   it("formats USD with $ symbol and no k suffix", () => {
-    const result = formatPrice(150000, "USD");
+    const result = formatPrice(150000, TransactionCurrency.USD);
     expect(result.startsWith("$")).toBe(true);
     expect(result).not.toContain("k");
   });
 
   it("formats GBP with £ symbol", () => {
-    const result = formatPrice(150000, "GBP");
+    const result = formatPrice(150000, TransactionCurrency.GBP);
     expect(result.startsWith("£")).toBe(true);
   });
 
   it("formats EUR with € symbol", () => {
-    const result = formatPrice(150000, "EUR");
+    const result = formatPrice(150000, TransactionCurrency.EUR);
     expect(result.startsWith("€")).toBe(true);
   });
 
@@ -315,7 +316,7 @@ describe("formatPrice", () => {
   });
 
   it("a whole-naira tier price formats as a compact ₦ figure", () => {
-    const result = formatPrice(120000, "NGN");
+    const result = formatPrice(120000, TransactionCurrency.NGN);
     expect(result.startsWith("₦")).toBe(true);
     expect(result.endsWith("k")).toBe(true);
   });

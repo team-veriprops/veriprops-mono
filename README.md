@@ -27,8 +27,6 @@ claude mcp add next-devtools -- npx -y next-devtools-mcp@latest
 claude mcp add github -- npx -y @modelcontextprotocol/server-github
 `
 
-## TODO
+## Open work
 
-1. Centralize chats, and synchronize a user's chats from WhatsApp and in-app
-2. Validate Users e2e flow, and implement missing/failing features
-3. Implement complete frontend e2e tests with playwright
+Deferred work is one list: [MASTER-PRD §G Known Gaps & Roadmap](MASTER-PRD.md#g-known-gaps), mirrored in code as `TODO(gap):` markers. Work in flight, and the third-party sandbox register, are in [docs/progress.md](docs/progress.md).

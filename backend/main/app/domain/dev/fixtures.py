@@ -14,6 +14,7 @@ from typing import Dict, Iterable
 
 from sqlalchemy import text
 
+from main.appodus_utils.db.types.money import TransactionCurrency
 from main.app.config.settings import settings
 from main.app.core.state.status import AgentRole
 from main.app.domain.user.agent.coverage.models import AgentCoverage
@@ -79,7 +80,7 @@ def add_verified_user(
         email=email, email_normalized=email, email_verified=True,
         phone_country_code="NG", phone_dial_code="+234", phone=phone_local,
         phone_e164=f"+234{phone_local}", phone_verified=phone_verified,
-        country_of_residence="NG", timezone="Africa/Lagos", preferred_currency="NGN",
+        country_of_residence="NG", timezone="Africa/Lagos", preferred_currency=TransactionCurrency.NGN.value,
         user_type=UserType.USER.value, personas=[persona] if persona else [], trust_status="TRUSTED",
         password_hash=fixture_password_hash(password),
     )

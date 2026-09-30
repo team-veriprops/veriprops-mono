@@ -24,6 +24,7 @@ from typing import AsyncIterator, Dict, Optional, Set
 
 from kink import di
 
+from main.appodus_utils.exception.faults import log_fault_once
 from main.app.config.settings import settings
 
 
@@ -92,5 +93,6 @@ def publish_verification_event(
         return
     try:
         emitter.publish(verification_id, event, data)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Still best-effort, but a push that fails is a fault to see, not to swallow.
+        log_fault_once(exc, "real-time verification push")

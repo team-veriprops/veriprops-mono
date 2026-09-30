@@ -122,8 +122,8 @@ Resolved at the initialize gate (see decision log D42–D47). Residual, carried 
   case state machine. Revisit if intake-resumability needs its own persisted states beyond drafts.
 - [ ] Console integration shape (new `ConversationType` vs source label on existing types) →
   decided at S2 design; PRD requires "one conversation object" across surfaces (§26.8).
-- [ ] SMS-OTP fallback provider (§B pending) → D46: deferred, `TODO(gap):`; WhatsApp auth
-  template is the only linking OTP transport at v1.
+- [x] SMS-OTP fallback provider (§B pending) → D46 deferred it; D60 delivered it: the linking
+  OTP falls back to SMS through the router's existing chain.
 - [ ] Intent-LLM provider/model → D48 (amends D44): provider-agnostic facade; default provider +
   model chosen at S5 via settings, targeting Haiku-class-or-equivalent latency/cost.
 

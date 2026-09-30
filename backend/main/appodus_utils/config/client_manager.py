@@ -20,11 +20,15 @@ class ClientStateManager:
     @staticmethod
     @atexit.register
     def _close_httpx_client():
+        """Close the shared HTTP client: on the app's loop during shutdown, or on a fresh one
+        at interpreter exit, when no loop is running."""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(httpx_client.aclose())
-            else:
-                loop.run_until_complete(httpx_client.aclose())
-        except Exception:
-            pass
+            asyncio.get_running_loop().create_task(httpx_client.aclose())
+            return
+        except RuntimeError:
+            pass  # no running loop: this is the atexit call
+        try:
+            asyncio.run(httpx_client.aclose())
+        except Exception as exc:
+            # At exit the client's own loop is often gone already; nothing is left to leak.
+            di["logger"].debug(f"Closing the shared HTTP client at exit: {exc!r}")

@@ -108,4 +108,4 @@ class ProfileCompletionDto(Object):
     phone: str
     country_of_residence: str
     timezone: str
-    preferred_currency: str = "NGN"
+    preferred_currency: str = TransactionCurrency.NGN.value

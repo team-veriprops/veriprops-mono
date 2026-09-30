@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Plus, Clock } from "lucide-react";
 import { currencies, formatPrice, withLivePrices, CTA_VERIFY_HREF, type Currency } from "./home.data";
-import type { PublicPricingTier } from "@/types/models";
+import { TransactionCurrency, type PublicPricingTier } from "@/types/models";
 import { cn } from "@lib/utils";
 
 interface PricingSectionProps {
@@ -15,7 +15,7 @@ interface PricingSectionProps {
 }
 
 export default function PricingSection({ prices }: PricingSectionProps) {
-  const [currency, setCurrency] = useState<Currency>("NGN");
+  const [currency, setCurrency] = useState<Currency>(TransactionCurrency.NGN);
 
   const resolvedTiers = withLivePrices(prices);
 
@@ -61,7 +61,7 @@ export default function PricingSection({ prices }: PricingSectionProps) {
             ))}
           </div>
 
-          {currency !== "NGN" && (
+          {currency !== TransactionCurrency.NGN && (
             <div className="mt-3 text-xs text-brand-on-surface-variant">
               Converted from NGN · Rate for reference only · Locked at checkout
             </div>

@@ -25,6 +25,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+from main.appodus_utils.db.types.money import TransactionCurrency
 from main.app.core.state.status import VerificationTier
 from main.app.domain.property.models import PropertyType
 from main.app.domain.verification.pricing_config.models import TierPricingViewDto
@@ -138,7 +139,7 @@ def _blank() -> Dict[str, Any]:
             "details": {},
         },
         "tier": VerificationTier.STANDARD.value,
-        "currency": "NGN",
+        "currency": TransactionCurrency.NGN.value,
         # §5.3's bundled acceptance is an evidentiary record with an IP and a version.
         # A chat message is not that, so consent is always taken on the web.
         "consentAccepted": False,

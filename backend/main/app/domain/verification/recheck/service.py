@@ -215,5 +215,5 @@ class RecheckService:
         await publish_domain_event(DomainEvent(
             type=EventType.RECHECK_DECISION, verification_id=recheck.verification_id,
             recipient_user_ids=(recheck.customer_id,),
-            data={"decision": "APPROVED" if approved else "REJECTED"},
+            data={"decision": (RecheckStatus.APPROVED if approved else RecheckStatus.REJECTED).value},
         ))

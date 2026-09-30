@@ -144,7 +144,7 @@ class Throttler:
         """
         interval = min_interval or self.min_interval
         async with self.semaphore:
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             if self.last_request_time is not None:
                 elapsed = now - self.last_request_time
                 if elapsed < interval:

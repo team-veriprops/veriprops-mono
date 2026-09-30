@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
 import { toast } from "sonner";
 import { ROUTES, buildAuthUrl } from "@lib/routes";
 import { AuthIntent } from "@components/website/auth/models";
-import { InviteAcceptScenario } from "@/types/admin";
+import { AdminInvitationStatus, InviteAcceptScenario } from "@/types/admin";
 import { useCurrentSession } from "@components/website/auth/libs/useAuthQueries";
 import {
   useAcceptInvitationMutation,
@@ -31,7 +31,7 @@ export default function AdminInviteAcceptContainer({ token }: { token: string })
   if (isLoading) return <Centered>Loading invitation…</Centered>;
   if (isError || !preview) return <Centered>This invitation link is invalid.</Centered>;
   if (preview.expired) return <Centered>This invitation has expired. Ask for a new one.</Centered>;
-  if (preview.status !== "PENDING") return <Centered>This invitation has already been used.</Centered>;
+  if (preview.status !== AdminInvitationStatus.PENDING) return <Centered>This invitation has already been used.</Centered>;
 
   const onAccept = async () => {
     try {
