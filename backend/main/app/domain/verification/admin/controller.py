@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from kink import di
 
-from main.app.core.state.status import AgentRole
+from main.app.core.state.status import AgentRole, VerificationStatus, VerificationTier
 from main.app.domain.payment.chargeback.models import ChargebackDto, ResolveChargebackDto
 from main.app.domain.payment.chargeback.service import ChargebackService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
@@ -47,8 +47,8 @@ def _cb_dto(c) -> ChargebackDto:
 
 @admin_verification_router.get("", response_model=SuccessResponse[Page[VerificationSummaryDto]])
 async def list_verifications(
-    status: Optional[str] = Query(default=None),
-    tier: Optional[str] = Query(default=None),
+    status: Optional[VerificationStatus] = Query(default=None),
+    tier: Optional[VerificationTier] = Query(default=None),
     state_region: Optional[str] = Query(default=None),
     query: Optional[str] = Query(default=None),
     overdue_only: bool = Query(default=False),
@@ -57,8 +57,8 @@ async def list_verifications(
     _admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
 ):
     result = await admin_service.list_verifications(
-        status=status, tier=tier, state_region=state_region, query=query,
-        overdue_only=overdue_only, page=page, page_size=page_size,
+        status=status.value if status else None, tier=tier.value if tier else None,
+        state_region=state_region, query=query, overdue_only=overdue_only, page=page, page_size=page_size,
     )
     return SuccessResponse[Page[VerificationSummaryDto]](data=result)
 

@@ -1,8 +1,9 @@
 """Stage 15 (last) — real email delivery via Mailpit + the password-reset flow (§2, §12.2).
 
 Requires the backend to run with ENABLE_OUT_MESSAGING=True and Mailpit on localhost:1025/8025
-(`docker compose up -d mailpit`). Degrades cleanly: if Mailpit is unreachable or captured
-nothing, the stage warns and returns — the run stays green without it. Runs LAST because the
+(`docker compose up -d mailpit`). Off CI it degrades cleanly: if Mailpit is unreachable or
+captured nothing, the stage warns and returns; in CI (`CI=true`) that is a failure, because the
+stack is provisioned there and a skip would hide a broken delivery path. Runs LAST because the
 password reset revokes the fresh customer's sessions (ctx.customer becomes unusable).
 """
 from __future__ import annotations
@@ -11,7 +12,7 @@ import re
 
 import httpx
 
-from .harness import QA_PASSWORD, Ctx, check, login_status, warn
+from .harness import QA_PASSWORD, Ctx, check, login_status, skip_unless_ci
 
 MAILPIT = "http://localhost:8025"
 
@@ -29,11 +30,11 @@ def run(ctx: Ctx) -> None:
     try:
         total = mp.get("/api/v1/messages", params={"limit": 1}).json().get("total", 0)
     except httpx.HTTPError:
-        warn("Mailpit not reachable on :8025 — email assertions skipped",
+        skip_unless_ci("Mailpit not reachable on :8025 — email assertions skipped",
              "run `docker compose up -d mailpit` + ENABLE_OUT_MESSAGING=True to cover email")
         return
     if total == 0:
-        warn("Mailpit captured no mail — backend likely runs ENABLE_OUT_MESSAGING=False",
+        skip_unless_ci("Mailpit captured no mail — backend likely runs ENABLE_OUT_MESSAGING=False",
              "restart it with ENABLE_OUT_MESSAGING=True to cover email delivery")
         return
 

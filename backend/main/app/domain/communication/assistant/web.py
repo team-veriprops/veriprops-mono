@@ -169,6 +169,12 @@ class WebAssistantSurface:
     ) -> BotReply:
         return await engine.unmatched(session)
 
+    async def link_account(
+        self, engine: AssistantEngine, session: AssistantSession, party: AssistantParty
+    ) -> BotReply:
+        """Signed in already: the portal account *is* the identity, so there is nothing to link."""
+        return await engine.understood(session, content.portal_identity_required())
+
     async def non_text_turn(
         self, engine: AssistantEngine, session: AssistantSession, party: AssistantParty, kind: InboundKind
     ) -> BotReply:

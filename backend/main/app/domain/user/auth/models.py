@@ -100,6 +100,8 @@ class ResetPasswordDto(Object):
 
 class SetPasswordDto(Object):
     password: str
+    # Required when the account already has a password; absent when setting a first one.
+    current_password: Optional[str] = None
 
 
 class ProfileCompletionDto(Object):

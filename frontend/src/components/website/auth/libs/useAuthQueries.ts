@@ -144,8 +144,19 @@ export const useForgotPasswordMutation = () =>
 export const useResetPasswordMutation = () =>
   useMutation({ mutationFn: (payload: ResetPasswordRequest) => authService.resetPassword(payload) });
 
-export const useSetPasswordMutation = () =>
-  useMutation({ mutationFn: (payload: SetPasswordRequest) => authService.setPassword(payload) });
+/** Setting a password flips the session's `hasPassword` and signs out every other device. */
+export const useSetPasswordMutation = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SetPasswordRequest) => authService.setPassword(payload),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: authKeys.session }),
+        qc.invalidateQueries({ queryKey: authKeys.devices }),
+      ]);
+    },
+  });
+};
 
 export const useCompleteProfileMutation = () => {
   const setSession = useAuthStore((s) => s.setSession);

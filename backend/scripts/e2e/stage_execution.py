@@ -107,3 +107,9 @@ def run(ctx: Ctx) -> None:
     status = admin.get(f"/admin/review/{vid_id}").json()["data"]["status"]
     check("all tasks submitted → verification derived to UNDER_REVIEW (§2.5)",
           status == "UNDER_REVIEW", f"status={status}")
+
+    # The agent home summary counts the agent's own tasks server-side (§12).
+    role = next(iter(ctx.task_ids))
+    summary = ctx.agent(role).get("/agents/tasks/summary").json()["data"]
+    check("the agent summary counts their submitted work (§12)",
+          summary["submitted"] >= 1 and summary["assigned"] >= 0, f"summary={summary}")

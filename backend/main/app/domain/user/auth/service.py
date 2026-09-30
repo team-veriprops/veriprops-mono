@@ -32,6 +32,7 @@ from main.app.domain.user.auth.consent.service import ConsentService
 from main.app.domain.user.auth.session.models import (
     SecurityEventType, UserPersona,
 )
+from main.app.domain.user.auth.session.failure_recorder import AuthFailureRecorder
 from main.app.domain.user.auth.session.service import SessionService
 from main.app.domain.user.models import (
     OAUTH_PLACEHOLDER_PHONE,
@@ -92,12 +93,14 @@ class AuthService:
             session_service: SessionService,
             otp_service: OtpService,
             oauth_identity_service: OAuthIdentityService,
+            failure_recorder: AuthFailureRecorder,
     ):
         self._user_service = user_service
         self._consent_service = consent_service
         self._session_service = session_service
         self._otp_service = otp_service
         self._oauth_identity_service = oauth_identity_service
+        self._failures = failure_recorder
 
     # ── Signup ────────────────────────────────────────────────────
     async def signup(
@@ -371,12 +374,36 @@ class AuthService:
         )
         return await self._user_service.get_user_model(str(token.user_id))
 
-    async def set_password(self, user_id: str, new_password: str) -> None:
+    async def set_password(
+            self,
+            user_id: str,
+            new_password: str,
+            *,
+            current_password: Optional[str],
+            keep_session_hash: Optional[str],
+    ) -> None:
+        """Set a first password, or change the existing one, from a signed-in session.
+
+        A session alone can set a first password (an account that signed up through a social
+        provider has none). Changing one needs the current password, so a stolen session
+        cannot lock the owner out; a wrong one is refused and logged on its own commit, which
+        the refusal's rollback cannot erase. Either way every other session is signed out and
+        the one making the change (``keep_session_hash``) stays signed in.
+        """
         _assert_password_strength(new_password)
+        user = await self._user_service.get_user_model(user_id)
+        if user.password_hash and not await Utils.check_password(current_password or "", user.password_hash):
+            await self._failures.record_event(
+                SecurityEventType.PASSWORD_CHANGE_REFUSED, "Password change refused: wrong current password",
+                user_id=user_id,
+            )
+            raise ValidationException(message="Your current password is incorrect.")
         new_hash = await Utils.hash_password(new_password)
         await self._user_service.set_password_hash(user_id, new_hash)
+        await self._session_service.revoke_all_other_devices(user_id, keep_session_hash)
         await self._session_service.record_event(
-            SecurityEventType.PASSWORD_CHANGED, "Password set",
+            SecurityEventType.PASSWORD_CHANGED,
+            "Password changed" if user.password_hash else "Password set",
             user_id=user_id,
         )
 

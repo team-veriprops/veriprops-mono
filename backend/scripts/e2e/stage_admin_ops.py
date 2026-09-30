@@ -6,7 +6,7 @@ locked prices stay untouched), the server-derived analytics endpoints, broadcast
 """
 from __future__ import annotations
 
-from .harness import Ctx, check
+from .harness import QA_PASSWORD, Ctx, check, login, login_status, signup_fresh_user
 
 
 def run(ctx: Ctx) -> None:
@@ -109,3 +109,99 @@ def run(ctx: Ctx) -> None:
     check("mission control carries revenue + available agents (§18.1)",
           "revenueMinor" in mc and "availableAgents" in mc and "slaAtRisk" in mc,
           f"revenue={mc.get('revenueMinor')} agents={mc.get('availableAgents')}")
+
+    _user_directory(ctx)
+    _verification_list_and_notes(ctx)
+    _trust_score_weights(admin)
+    _line_items(admin, customer)
+
+
+def _user_directory(ctx: Ctx) -> None:
+    """Admin user management on a throwaway customer (§4.2): find, inspect, suspend, reactivate,
+    set trust, force a password reset."""
+    admin = ctx.admin
+    user, email = signup_fresh_user("qa-directory")
+    listed = admin.get("/users/admins/users", params={"query": email}).json()["data"]
+    check("the user directory finds an account by email, server-side (§4.2)",
+          [u["email"] for u in listed["items"]] == [email], f"items={[u['email'] for u in listed['items']]}")
+    user_id = listed["items"][0]["id"] if listed["items"] else ""
+    detail = admin.get(f"/users/admins/users/{user_id}").json()["data"]
+    check("the user detail carries the account's activity (§4.2)",
+          detail["email"] == email and detail["verificationsTotal"] == 0 and detail["accountStatus"] == "ACTIVE",
+          f"detail={ {k: detail.get(k) for k in ('email', 'verificationsTotal', 'accountStatus')} }")
+
+    suspended = admin.post(f"/users/admins/users/{user_id}/suspend", json={"reason": "Suspected shared login."})
+    check("an admin suspends an account (§4.2)", suspended.status_code == 200, f"http {suspended.status_code}")
+    check("a suspended account cannot sign in (§4.2)", login_status(email, QA_PASSWORD) != 200)
+    check("its live session can no longer refresh (§4.2)",
+          user.post("/users/auth/sessions/current").status_code == 401)
+    admin.post(f"/users/admins/users/{user_id}/reactivate").raise_for_status()
+    check("a reactivated account signs in again (§4.2)", login_status(email, QA_PASSWORD) == 200)
+
+    target = "TRUSTED" if detail["trustStatus"] == "UNTRUSTED" else "UNTRUSTED"
+    trusted = admin.post(f"/users/admins/users/{user_id}/trust-status", json={"trustStatus": target})
+    after = admin.get(f"/users/admins/users/{user_id}").json()["data"]
+    check("an admin changes an account's trust status (§4.2)",
+          trusted.status_code == 200 and after["trustStatus"] == target, f"trust={after['trustStatus']}")
+    same = admin.post(f"/users/admins/users/{user_id}/trust-status", json={"trustStatus": target})
+    check("setting the status it already has is refused, so the audit trail only records changes",
+          same.status_code == 422, f"http {same.status_code}")
+
+    reset = admin.post(f"/users/admins/users/{user_id}/password-reset")
+    check("an admin forces a password reset (§4.2)", reset.status_code == 200, f"http {reset.status_code}")
+    fresh = login(email, QA_PASSWORD)
+    check("the forced reset signs out existing sessions (§4.2)",
+          user.post("/users/auth/sessions/current").status_code == 401
+          and fresh.get("/users/auth/sessions/current").status_code == 200)
+
+
+def _verification_list_and_notes(ctx: Ctx) -> None:
+    """The admin verification list filters server-side (§6.1); notes land on the case (§6.3)."""
+    admin = ctx.admin
+    found = admin.get("/admin/verifications", params={"query": ctx.vid}).json()["data"]["items"]
+    check("the admin list finds a case by VID (§6.1)", [v["id"] for v in found] == [ctx.vid_id],
+          f"found={[v['vid'] for v in found]}")
+    by_status = admin.get("/admin/verifications", params={"status": "COMPLETED", "page_size": 100}).json()["data"]["items"]
+    check("the status filter is applied by the server (§6.1)",
+          bool(by_status) and all(v["status"] == "COMPLETED" for v in by_status),
+          f"statuses={sorted({v['status'] for v in by_status})}")
+    junk = admin.get("/admin/verifications", params={"status": "NOT_A_STATUS"})
+    check("an unknown status filter is refused rather than silently matching nothing",
+          junk.status_code == 422, f"http {junk.status_code}")
+
+    note = admin.post(f"/admin/verifications/{ctx.vid_id}/notes",
+                      json={"category": "OPERATIONAL", "body": "Called the customer about access.", "pinned": True})
+    notes = note.json()["data"]["notes"] if note.status_code == 200 else []
+    check("an admin note is added to the case, pinned (§6.3)",
+          any(n["body"] == "Called the customer about access." and n["pinned"] for n in notes),
+          f"http {note.status_code}")
+
+
+def _trust_score_weights(admin) -> None:
+    """Per-tier trust-score weights must sum to 100 (§8.3)."""
+    tiers = admin.get("/admin/trust-score-weights").json()["data"]
+    basic = next(t for t in tiers if t["tier"] == "BASIC")
+    check("each tier's weights are listed and valid (§8.3)", basic["valid"] and basic["totalPercent"] == 100,
+          f"basic={basic}")
+    current = {w["role"]: w["weightPercent"] for w in basic["weights"]}
+    bad = dict(current)
+    first = next(iter(bad))
+    bad[first] += 1
+    refused = admin.put("/admin/trust-score-weights/BASIC", json={"weights": bad})
+    check("weights that do not sum to 100 are refused (§8.3)", refused.status_code == 422,
+          f"http {refused.status_code}")
+    kept = admin.put("/admin/trust-score-weights/BASIC", json={"weights": current}).json()["data"]
+    check("saving a valid map keeps the tier valid (§8.3)", kept["valid"] and kept["totalPercent"] == 100)
+
+
+def _line_items(admin, customer) -> None:
+    """A tier's itemised breakdown is replaced as a set (§18.1), and restored afterwards."""
+    tier = next(t for t in admin.get("/admin/pricing").json()["data"]["tiers"] if t["tier"] == "STANDARD")
+    before = [{"label": li["label"], "amountMinor": li["amountMinor"]} for li in tier["lineItems"]]
+    replacement = [{"label": "Registry search", "amountMinor": 100_000}, {"label": "Field visit", "amountMinor": 200_000}]
+    saved = admin.put("/admin/pricing/tiers/STANDARD/line-items", json={"lineItems": replacement}).json()["data"]
+    standard = next(t for t in saved["tiers"] if t["tier"] == "STANDARD")
+    check("a tier's line items are replaced as a set, in order (§18.1)",
+          [(li["label"], li["amountMinor"]) for li in standard["lineItems"]]
+          == [("Registry search", 100_000), ("Field visit", 200_000)], f"items={standard['lineItems']}")
+    admin.put("/admin/pricing/tiers/STANDARD/line-items", json={"lineItems": before}).raise_for_status()

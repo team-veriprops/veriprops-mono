@@ -159,6 +159,16 @@ def run(ctx: Ctx) -> None:
           [(p["vid"], p["status"], p["refundedAmountMinor"]) for p in listed["items"]]
           == [(paid_case["vid"], "REFUNDED", charge["amountMinor"])],
           f"items={listed['items']}")
+    # The stub gateway never refuses a refund, so nothing waits to be retried — and a retry
+    # of a charge that owes nothing is refused rather than sending money twice.
+    retries = admin.get("/admin/payments/refund-retries").json()["data"]
+    check("nothing waits in the refunds-to-retry list when every refund landed (§8.5)",
+          all(p["id"] != listed["items"][0]["id"] for p in retries["items"]) if listed["items"] else False,
+          f"retries={retries['meta']}")
+    refunded_id = listed["items"][0]["id"] if listed["items"] else "missing"
+    retry = admin.post(f"/admin/payments/{refunded_id}/refund")
+    check("retrying a refund on a charge that owes nothing is refused (§8.5)", 400 <= retry.status_code < 500,
+          f"http {retry.status_code}: {retry.text[:120]}")
 
     # 5c. A charge that settles after its case was cancelled mid-payment: the case stays
     # cancelled, and the whole charge waits for Finance as a late-charge refund.

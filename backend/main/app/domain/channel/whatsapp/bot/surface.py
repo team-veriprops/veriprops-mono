@@ -250,6 +250,22 @@ class WhatsAppAssistantSurface:
         )
         return await engine.understood(session, content.messages_restarted())
 
+    # ─── Account linking (§26.4.4, WhatsApp → web) ───────────────────
+
+    async def link_account(
+        self, engine: AssistantEngine, session: AssistantSession, party: AssistantParty
+    ) -> BotReply:
+        """Send an unlinked number the signed link its refusals promised.
+
+        The token names the number and nothing else; the landing still needs the person to
+        sign in and prove the number with an OTP before anything is linked. A number that
+        already resolves to an account is told so rather than sent round the flow again.
+        """
+        if party.is_customer:
+            return await engine.understood(session, content.number_already_linked())
+        token = await self._whatsapp_link_service.issue_link_invitation(party.phone_e164)
+        return await engine.understood(session, content.link_account_with_link(wa_link(HandoffIntent.LINK, token)))
+
     # ─── Non-text inbound (§26.6.3) ────────────────────────────────
 
     async def non_text_turn(

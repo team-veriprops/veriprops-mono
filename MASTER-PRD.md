@@ -716,7 +716,10 @@ A 4-step wizard — **Account → Verify → Residence → Consent** (`SignupCon
 - **Connected devices**: list sessions, revoke one, "log out all". **Security activity log** from
   `SecurityEvent`s.
 - **Forgot/reset password**: tokenised single-use email link; reset invalidates all sessions.
-  **Set password** for OAuth-only users.
+  **Set password** for OAuth-only users, from their session. **Changing** an existing password needs the
+  current one — a session alone (a stolen cookie) cannot lock the owner out — and a wrong one is refused
+  and recorded as `PASSWORD_CHANGE_REFUSED` on its own commit. Setting or changing signs out every other
+  session and keeps the one that made the change.
 - Route protection: the Next.js proxy gates `/portal/*`, `/admin/*`, `/agents/*`, `/account/*` on cookie
   presence; session validity is enforced server-side on every API call.
 
@@ -1272,6 +1275,13 @@ rule lives in the one table.
 
 In-app is always on (SSE-delivered, cannot be disabled); email and SMS are per-event opt-outs at
 `…/account/notification-preferences`. Push/WhatsApp are post-MVP subscribers (§G).
+
+What a user may switch off is the backend's (`notification_preference/catalogue.py`), derived from the
+§17.3 rule table: an event is listed when one of its external channels is **optional**, each channel is
+`UNUSED`, `REQUIRED` or `OPTIONAL`, and a user sees only the events addressed to their personas (customer,
+agent, admin). A **required** email goes out whatever the preference — the delivered report (WA-35) and
+account suspension/reactivation, the only channel that reaches a suspended user. The page renders the
+catalogue it is given; a save outside it is refused.
 
 ---
 
@@ -2026,7 +2036,7 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | **Trust-gated auto-approval** | High-accuracy agents skip manual review — first post-launch priority once reputation data accrues |
 | **Verification Academy / Content Hub** | Education content (pairs with the unbuilt admin content CMS) |
 | **WhatsApp channel v1.1 (§26.9)** | Voice-note transcription-assist, delegate enhancements (multiple delegates, granular permissions), richer status flows from the concierge corpus, Pidgin evaluated against real data, in-chat payment re-examination — all explicitly non-launch-gating |
-| **Push delivery** | A new event-bus subscriber; WhatsApp already ships as one (§26) |
+| **Push delivery** | A new event-bus subscriber; WhatsApp already ships as one (§26). Device registration ships with it: the `devices` table is read when addressing a user but nothing writes it yet |
 | **Mobile apps (iOS/Android)** | Native parity for customers and field agents |
 
 ---

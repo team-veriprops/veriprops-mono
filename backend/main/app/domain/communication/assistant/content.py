@@ -266,6 +266,30 @@ def unlinked_number() -> str:
     )
 
 
+def link_account_with_link(link: str) -> str:
+    """§26.4.4 WhatsApp→web — the link every "say \"link my account\"" refusal promises.
+
+    Carries the number, never a grant: the page still asks the person to sign in and to
+    enter the code we send to this number before anything is linked.
+    """
+    return (
+        "Here's your secure link to connect this number to your Veriprops account:\n"
+        f"{link}\n\n"
+        "Sign in (or create your account), then enter the code we send to this WhatsApp "
+        "number. It's good for 15 minutes and works once — say \"link my account\" for a "
+        "fresh one."
+    )
+
+
+def number_already_linked() -> str:
+    """"Link my account" from a number that already resolves to an account."""
+    return (
+        "This number is already linked to your Veriprops account, so I can see your "
+        "verifications.\n\n"
+        "Ask me for your status, pricing, or to start a verification."
+    )
+
+
 def no_cases() -> str:
     return (
         "I can't find a verification on your account yet. If you'd like to start one, "

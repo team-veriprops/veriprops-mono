@@ -149,6 +149,14 @@ def run(ctx: Ctx) -> None:
     check("stub gateway confirmed the payment → PAID (§4.6)", r.status_code == 200
           and r.json()["data"].get("processed") is True, f"http {r.status_code}: {r.text[:160]}")
 
+    # 6a. The pay page's return check reads where the payment stands; only the owner may ask.
+    r = fresh.post(f"/payments/reconcile/{ctx.vid_id}")
+    check("the pay page's return check reports the settled payment (§5.4)",
+          r.status_code == 200 and r.json()["data"]["status"] == "SUCCEEDED", f"http {r.status_code}: {r.text[:160]}")
+    r = ctx.seed_customer.post(f"/payments/reconcile/{ctx.vid_id}")
+    check("another customer cannot reconcile someone else's case (§6a)", 400 <= r.status_code < 500,
+          f"http {r.status_code}")
+
     # 7. Payment moves the verification out of the customer's hands into the work pipeline.
     status = fresh.get(f"/verifications/{ctx.vid_id}").json()["data"]["status"]
     check("paid verification progressed past DRAFT/SUBMITTED into the pipeline (§5.6→§6)",

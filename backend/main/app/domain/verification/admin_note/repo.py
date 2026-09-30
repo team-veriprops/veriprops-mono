@@ -37,7 +37,9 @@ class AdminNoteRepo(
         self.db = db
 
     async def list_for_verification(self, verification_id: str) -> List[AdminNote]:
-        """Pinned notes first, then most-recent — the admin detail ordering."""
+        """Pinned notes first, then most-recent — the admin detail ordering. Flushes first, so
+        a note added earlier in the same request (the add-note response) is in the list."""
+        await self._flush_pending()
         stmt = (
             select(AdminNote)
             .where(

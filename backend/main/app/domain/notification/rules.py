@@ -35,6 +35,9 @@ class NotificationRule:
     in_app: bool = True
     email: bool = False
     sms: bool = False
+    # The email goes out whatever the user's preference says — the event's durable record, or
+    # the only channel that reaches the recipient. Such an email is never offered as an opt-out.
+    required_email: bool = False
     chat_only: bool = False
     template: Optional[AvailableTemplate] = None
     whatsapp: bool = False
@@ -64,9 +67,9 @@ RULES: Dict[EventType, NotificationRule] = {
     ),
     # §26.6.2 report delivery (WA-35): WhatsApp respects the opt-in, **email is
     # unconditional**. The durable record of a delivered report cannot depend on a
-    # messaging preference, so `email=True` here is a requirement, not a default.
+    # messaging preference, so the email is required, not a default.
     EventType.REPORT_READY: NotificationRule(
-        email=True, sms=True, template=_T.VERIFICATION_REPORT_READY,
+        email=True, required_email=True, sms=True, template=_T.VERIFICATION_REPORT_READY,
         whatsapp=True, whatsapp_template=_T.WHATSAPP_REPORT_READY,
     ),
     EventType.REPORT_VERSIONED: NotificationRule(email=True, template=_T.VERIFICATION_REPORT_READY),
@@ -116,8 +119,8 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.ERASURE_STATUS_CHANGED: NotificationRule(in_app=True),
     # Admin user management (§4.2): a suspended user cannot log in, so email is the only
     # channel that reaches them; the in-app entry still lands for post-reactivation review.
-    EventType.ACCOUNT_SUSPENDED: NotificationRule(email=True, template=_T.ACCOUNT_DEACTIVATION),
-    EventType.ACCOUNT_REACTIVATED: NotificationRule(email=True, template=_T.ACCOUNT_ACTIVATION),
+    EventType.ACCOUNT_SUSPENDED: NotificationRule(email=True, required_email=True, template=_T.ACCOUNT_DEACTIVATION),
+    EventType.ACCOUNT_REACTIVATED: NotificationRule(email=True, required_email=True, template=_T.ACCOUNT_ACTIVATION),
     # §26.4.5 (D77): a delegate opted out in chat. In-app only — the buyer needs to know
     # their case has no delegate any more, not to be emailed about someone else's
     # messaging preference.

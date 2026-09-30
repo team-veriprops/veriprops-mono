@@ -7,6 +7,7 @@ workaround for plain-http runs), the deterministic stub-payment confirmer, and t
 """
 from __future__ import annotations
 
+import os
 import sys
 import uuid
 from dataclasses import dataclass, field
@@ -71,6 +72,16 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 def warn(name: str, detail: str = "") -> None:
     """Non-fatal observation (e.g. an SSE probe that timed out waiting for an event)."""
     print(f"[WARN] {name}" + (f" — {detail}" if detail else ""))
+
+
+def skip_unless_ci(name: str, detail: str = "") -> None:
+    """A stage that cannot run here: a warning on a laptop without Mailpit or docker, a
+    failure in CI (``CI=true``), where the whole stack is provisioned and a skip would hide
+    a broken delivery path behind a green run."""
+    if os.environ.get("CI", "").lower() == "true":
+        check(name, False, f"skipped in CI — {detail}")
+    else:
+        warn(name, detail)
 
 
 def failures() -> list[str]:

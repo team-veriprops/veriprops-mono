@@ -72,6 +72,8 @@ export interface ResetPasswordRequest {
 
 export interface SetPasswordRequest {
   password: string;
+  /** Required when the account already has a password; omitted when setting a first one. */
+  currentPassword?: string;
 }
 
 export interface ProfileCompletionRequest {

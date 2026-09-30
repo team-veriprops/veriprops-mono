@@ -402,9 +402,8 @@ class AssistantEngine:
         if intent == BotIntent.CHECK_STATUS:
             return await self._status(session, party, surface)
         if intent == BotIntent.LINK_ACCOUNT:
-            # The linking flow itself lives with the surface that has something to link;
-            # here the assistant only points at it.
-            return await self.understood(session, surface.copy.identity_required())
+            # The linking flow lives with the surface that has something to link.
+            return await surface.link_account(self, session, party)
         if intent in (BotIntent.STOP_MESSAGES, BotIntent.START_MESSAGES):
             if not surface.handles_consent_keywords:
                 return await self.unmatched(session)

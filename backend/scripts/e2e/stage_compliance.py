@@ -74,6 +74,12 @@ def run(ctx: Ctx) -> None:
     check("admin erasure queue lists the pending request (§18.1)",
           any(i["subjectUserId"] == erasable["id"] for i in pending["items"]))
 
+    detail = admin.get(f"/admin/erasure-requests/{req_id}").json()["data"]
+    check("compliance opens one request's detail before deciding it (§19)",
+          detail["id"] == req_id and detail["status"] == "PENDING", f"detail={detail}")
+    check("a customer cannot read an erasure request's detail (MANAGE_COMPLIANCE)",
+          customer.get(f"/admin/erasure-requests/{req_id}").status_code == 403)
+
     admin.post(f"/admin/erasure-requests/{req_id}/approve").raise_for_status()
     executed = admin.post(f"/admin/erasure-requests/{req_id}/execute").json()["data"]
     check("admin executes the erasure → EXECUTED (§4.11)", executed["status"] == "EXECUTED")

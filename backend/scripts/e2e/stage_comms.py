@@ -7,6 +7,8 @@ verification's due date is in the future.
 """
 from __future__ import annotations
 
+import httpx
+
 from .harness import Ctx, check, signup_fresh_user
 
 
@@ -90,6 +92,9 @@ def run(ctx: Ctx) -> None:
     admin_types = {n["type"] for n in admin.get("/notifications").json()["data"]["items"]}
     check("customer got the SLA_BREACHED notification", "SLA_BREACHED" in cust_types)
     check("admin got the SLA_BREACHED notification (G3)", "SLA_BREACHED" in admin_types)
+
+    _run_case_team_thread_checks(ctx)
+    _run_chat_stream_check(ctx)
 
 
 def _run_conversations_inbox_checks(ctx: Ctx) -> None:
@@ -237,3 +242,49 @@ def _run_web_assistant_checks(ctx: Ctx) -> None:
     ).json()["data"]["items"]
     check("the swept reply landed in the orphan's own thread",
           any(m.get("sender", {}).get("kind") == "SYSTEM" for m in orphan_msgs))
+
+
+def _run_case_team_thread_checks(ctx: Ctx) -> None:
+    """The admin↔agent thread on a case (§11.1): an assigned agent and the admins share one
+    thread, an agent not on the case cannot open it, and the admin reaches the customer thread
+    from the same case (§4.6)."""
+    admin, vid_id = ctx.admin, ctx.vid_id
+    role = next(iter(ctx.task_ids))
+    agent = ctx.agent(role)
+
+    thread = agent.get(f"/agents/verifications/{vid_id}/chat").json()["data"]
+    check("an assigned agent opens the case's team thread (§11.1)", thread["type"] == "ADMIN_AGENT", f"thread={thread}")
+    sent = agent.post(f"/agents/verifications/{vid_id}/chat/messages",
+                      json={"body": "Site visit booked for Thursday.", "taskId": ctx.task_ids[role]}).json()["data"]
+    check("the agent's clean message is delivered (§4.7)", sent["state"] == "DELIVERED", f"state={sent['state']}")
+
+    admin_side = admin.get(f"/admin/verifications/{vid_id}/chat", params={"type": "ADMIN_AGENT"}).json()["data"]
+    check("the admin opens the same team thread, not a second one (§11.1)", admin_side["id"] == thread["id"],
+          f"admin={admin_side['id']} agent={thread['id']}")
+    reply = admin.post(f"/admin/verifications/{vid_id}/chat/messages",
+                       json={"body": "Thanks, noted.", "conversationType": "ADMIN_AGENT"}).json()["data"]
+    feed = agent.get(f"/chat/conversations/{thread['id']}/messages").json()["data"]["items"]
+    check("the admin's reply reaches the agent's thread (§11.1)",
+          reply["state"] == "DELIVERED" and any(m.get("body") == "Thanks, noted." for m in feed))
+
+    customer_side = admin.get(f"/admin/verifications/{vid_id}/chat", params={"type": "CUSTOMER_ADMIN"}).json()["data"]
+    check("the admin reaches the case's customer thread from the case (§4.6)", customer_side["id"] == ctx.conv_id,
+          f"admin={customer_side['id']} customer={ctx.conv_id}")
+
+    outsider_role = next((r for r in ("REGISTRY", "FIELD", "SURVEYOR", "LAWYER") if r not in ctx.task_ids), None)
+    if outsider_role:
+        refused = ctx.agent(outsider_role).get(f"/agents/verifications/{vid_id}/chat")
+        check("an agent not on the case cannot open its team thread (§6a)", refused.status_code >= 400,
+              f"http {refused.status_code}")
+
+
+def _run_chat_stream_check(ctx: Ctx) -> None:
+    """The per-user chat/notification stream (§4.9) opens and greets with a heartbeat."""
+    try:
+        with ctx.customer.stream("GET", "/chat/stream", timeout=httpx.Timeout(10.0, read=5.0)) as stream:
+            first = next((line for line in stream.iter_lines() if line.strip()), "")
+            check("the chat stream opens as SSE and greets with a heartbeat (§4.9)",
+                  stream.status_code == 200 and "text/event-stream" in stream.headers.get("content-type", "")
+                  and "heartbeat" in first.lower(), f"http {stream.status_code} first={first[:60]}")
+    except httpx.HTTPError as exc:
+        check("the chat stream opens as SSE (§4.9)", False, repr(exc))
