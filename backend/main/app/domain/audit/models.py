@@ -94,6 +94,15 @@ class AuditActionType(str, enum.Enum):
     CONFLICT_DETECTED = "CONFLICT_DETECTED"
     REPORT_RELEASED = "REPORT_RELEASED"
     VERIFICATION_REFUNDED = "VERIFICATION_REFUNDED"
+    # Closing a paid case (§6.4): on hold while Finance decides the refund, or back to work.
+    VERIFICATION_ON_HOLD = "VERIFICATION_ON_HOLD"
+    VERIFICATION_HOLD_LIFTED = "VERIFICATION_HOLD_LIFTED"
+    # The refund-approval queue (§8.5, §18.1): every return of a customer's money.
+    REFUND_REQUESTED = "REFUND_REQUESTED"
+    REFUND_APPROVED = "REFUND_APPROVED"
+    REFUND_REJECTED = "REFUND_REJECTED"
+    # Finance refused an upheld dispute's refund: the dispute goes back to ops, open.
+    DISPUTE_REOPENED = "DISPUTE_REOPENED"
     # ── KYC ────────────────────────────────────────────────────────
     KYC_BVN_VERIFIED = "KYC_BVN_VERIFIED"
     KYC_SELFIE_RESOLVED = "KYC_SELFIE_RESOLVED"

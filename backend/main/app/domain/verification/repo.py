@@ -163,6 +163,8 @@ class VerificationRepo(
             Verification.sla_due_date.is_not(None),
             Verification.sla_due_date < today,
             Verification.sla_breach_notified_at.is_(None),
+            # A case on hold for closing is not late: it is waiting for Finance (§6.4).
+            Verification.closure_reason.is_(None),
         )
         return list((await self._session.execute(stmt)).scalars().all())
 

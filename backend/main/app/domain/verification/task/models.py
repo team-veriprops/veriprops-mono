@@ -204,6 +204,9 @@ class AgentTaskDto(Object):
     submission_payload: Optional[Dict[str, Any]] = None
     rejection_reason: Optional[str] = None
     evidence_count: int = 0
+    # The case is being closed and waits for Finance (§6.4): the agent must stop, and every
+    # action on the task is refused until it resumes or closes.
+    case_on_hold: bool = False
     assigned_at: Optional[datetime] = None
     accepted_at: Optional[datetime] = None
     submitted_at: Optional[datetime] = None

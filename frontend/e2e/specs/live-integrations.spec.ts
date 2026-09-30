@@ -27,10 +27,11 @@ import { expect, test } from "../fixtures";
 import { LIVE_ADMIN_EMAIL, LIVE_ADMIN_PASSWORD, LIVE_SELFIE } from "../helpers/env";
 import { openLive, payOnHostedCheckout, signInLive } from "../helpers/live";
 import { buildScenario, ScenarioStage } from "../helpers/scenario";
+import { CloseReason } from "@/types/closure";
 
 const ID_DOCUMENT_PHOTO = path.join("e2e", "fixtures", "evidence-photo.jpg");
 const SURVEYOR_LICENCE = "SURCON/2026/4471";
-const FAIL_REASON = "Live smoke: refunding the sandbox charge.";
+const CLOSE_NOTE = "Live smoke: closing and refunding the sandbox charge.";
 
 /**
  * A value the live run needs, or a failure naming it. Never a skip: a skipped live test proves
@@ -94,14 +95,24 @@ test.describe("UAT-LIVE — third-party journeys on staging @live", () => {
       throw new Error("still waiting for the payment to be confirmed");
     }).toPass({ timeout: 180_000, intervals: [5_000] });
 
-    // ── Refund: an admin fails the case, and the gateway accepts the refund ──
+    // ── Refund: an admin closes the case, Finance approves, and the gateway accepts it ──
     await asAnotherPerson(browser, admin, async (adminPage) => {
-      await openLive(adminPage, ROUTES.ADMIN.REPORT_REVIEW(scenario.verificationId), "fail-reason");
-      await adminPage.getByTestId("fail-reason").fill(FAIL_REASON);
-      await adminPage.getByTestId("fail-submit").click();
-      // The refund is asked for inside the failing request, and the admin is told what the
-      // gateway did: this sentence only when it took the refund (`failSummary`).
-      await expect(adminPage.getByText("Verification failed & refunded", { exact: true })).toBeVisible();
+      await openLive(adminPage, ROUTES.ADMIN.VERIFICATION_DETAIL(scenario.verificationId), "close-case-open");
+      await adminPage.getByTestId("close-case-open").click();
+      await adminPage.getByTestId("close-case-reason").selectOption(CloseReason.DUPLICATE);
+      await adminPage.getByTestId("close-case-note").fill(CLOSE_NOTE);
+      await expect(adminPage.getByTestId("close-case-refund")).toBeVisible();
+      await adminPage.getByTestId("close-case-review").click();
+      await adminPage.getByTestId("close-case-confirm-confirm").click();
+      await expect(adminPage.getByText(/Case on hold/)).toBeVisible();
+
+      // Finance (the super admin holds REFUND_PAYMENT) approves it from the queue. The toast
+      // says "refunded" only when the gateway took the refund (`refundSummary`).
+      await openLive(adminPage, ROUTES.ADMIN.FINANCE_REFUNDS, DATATABLE_TEST_IDS.ROW);
+      await adminPage.getByTestId(DATATABLE_TEST_IDS.ROW).filter({ hasText: scenario.vid }).click();
+      await adminPage.getByTestId("refund-request-approve").click();
+      await adminPage.getByTestId("refund-request-confirm-confirm").click();
+      await expect(adminPage.getByText("Refund approved & refunded", { exact: true })).toBeVisible();
     });
   });
 

@@ -6,7 +6,7 @@ import { SlaHealth, TaskState, VerificationDetail } from "@/types/adminVerificat
 import { attributeFor, isNamed } from "@/test-utils/markup";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }));
 
 const noopMutation = { mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false };
 const detailResult: { data: VerificationDetail | null; isLoading: boolean; isError: boolean } = {
@@ -29,6 +29,8 @@ vi.mock("./libs/useAdminVerificationQueries", () => ({
   useSetDelayMutation: () => noopMutation,
   useResolveChargebackMutation: () => noopMutation,
   useSubmitRebuttalMutation: () => noopMutation,
+  useCloseCaseMutation: () => noopMutation,
+  useClosureQuoteQuery: () => ({ data: null, isFetching: false, isError: false, error: null }),
 }));
 
 import AdminVerificationDetail from "./AdminVerificationDetail";
@@ -60,13 +62,17 @@ const detail: VerificationDetail = {
   payments: [],
   commissions: [],
   chargebacks: [],
+  refundableMinor: 0,
+  onHold: false,
+  canCancel: false,
+  canClose: true,
   progressPercent: 0,
   requiredTaskCount: 3,
   approvedTaskCount: 0,
 };
 
-function markup(): string {
-  detailResult.data = detail;
+function markup(over: Partial<VerificationDetail> = {}): string {
+  detailResult.data = { ...detail, ...over };
   return renderToStaticMarkup(<AdminVerificationDetail verificationId="v1" />);
 }
 
@@ -89,5 +95,24 @@ describe("AdminVerificationDetail", () => {
     // The surrounding text says "0/3 approved", but the progressbar node itself is what
     // assistive tech announces (axe `aria-progressbar-name`).
     expect(attributeFor(markup(), "task-progress", "aria-label")).toBeTruthy();
+  });
+
+  it("offers Close, not Cancel, on a paid unfinished case — never a cancel that skips the refund rules", () => {
+    const html = markup({ canClose: true, canCancel: false, refundableMinor: 1_500_000 });
+    expect(html).toContain('data-testid="close-case-open"');
+    expect(html).not.toContain('data-testid="cancel-submit"');
+  });
+
+  it("offers a plain Cancel on a case nobody has paid for", () => {
+    const html = markup({ canClose: false, canCancel: true });
+    expect(html).toContain('data-testid="cancel-submit"');
+    expect(html).not.toContain('data-testid="close-case-open"');
+  });
+
+  it("shows a case waiting for Finance as on hold, with nothing left to close", () => {
+    const html = markup({ onHold: true, closureReason: "DUPLICATE", canClose: false, canCancel: false });
+    expect(html).toContain('data-testid="closure-hold"');
+    expect(html).toContain("Duplicate case or payment");
+    expect(html).not.toContain('data-testid="close-case-open"');
   });
 });

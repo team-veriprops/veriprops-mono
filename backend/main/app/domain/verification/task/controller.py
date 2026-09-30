@@ -37,7 +37,7 @@ evidence_service: EvidenceService = di[EvidenceService]
 commission_rule_service: CommissionRuleService = di[CommissionRuleService]
 
 
-def _agent_task_dto(t: VerificationTask, evidence_count: int, commission_minor: int) -> AgentTaskDto:
+def _agent_task_dto(t: VerificationTask, evidence_count: int, commission_minor: int, case_on_hold: bool = False) -> AgentTaskDto:
     return AgentTaskDto(
         id=t.id, verification_id=t.verification_id, role=AgentRole(t.role),
         tier=VerificationTier(t.tier), state=TaskState(t.state), in_pool=bool(t.in_pool),
@@ -45,19 +45,23 @@ def _agent_task_dto(t: VerificationTask, evidence_count: int, commission_minor: 
         accept_deadline_at=t.accept_deadline_at, remote_bonus_minor=t.remote_bonus_minor,
         commission_minor=commission_minor,
         submission_payload=t.submission_payload, rejection_reason=t.rejection_reason,
-        evidence_count=evidence_count, assigned_at=t.assigned_at,
+        evidence_count=evidence_count, case_on_hold=case_on_hold, assigned_at=t.assigned_at,
         accepted_at=t.accepted_at, submitted_at=t.submitted_at,
     )
 
 
-async def _to_agent_dto(t: VerificationTask, commission_minor: Optional[int] = None) -> AgentTaskDto:
+async def _to_agent_dto(
+    t: VerificationTask, commission_minor: Optional[int] = None, case_on_hold: Optional[bool] = None,
+) -> AgentTaskDto:
     """The agent's view of a task, with what it pays (§20.1). A list passes the commission it
     already read for every role; a single task looks its role's figure up."""
     # t.id is a uuid.UUID on the ORM row; the evidence reference column is hex text.
     evidence_count = await evidence_service.count_for_task(Utils.uuid_to_hex(t.id))
     if commission_minor is None:
         commission_minor = await commission_rule_service.commission_minor(AgentRole(t.role))
-    return _agent_task_dto(t, evidence_count, commission_minor)
+    if case_on_hold is None:
+        case_on_hold = await task_service.is_case_on_hold(t.verification_id)
+    return _agent_task_dto(t, evidence_count, commission_minor, case_on_hold)
 
 
 async def _evidence_dto(e: EvidenceItem) -> EvidenceDto:
@@ -83,7 +87,11 @@ async def list_my_tasks(
     states = [state] if state else None
     rows, total = await task_service.list_for_agent(agent_id, states, page, page_size)
     commission_by_role = await commission_rule_service.commission_by_role()
-    items = [await _to_agent_dto(t, commission_by_role[AgentRole(t.role)]) for t in rows]
+    # One hold lookup per case on the page, not per task.
+    holds = {vid: await task_service.is_case_on_hold(vid) for vid in {t.verification_id for t in rows}}
+    items = [
+        await _to_agent_dto(t, commission_by_role[AgentRole(t.role)], holds[t.verification_id]) for t in rows
+    ]
     total_pages = (total + page_size - 1) // page_size if page_size else 0
     return SuccessResponse[Page[AgentTaskDto]](data=Page[AgentTaskDto](
         items=items,

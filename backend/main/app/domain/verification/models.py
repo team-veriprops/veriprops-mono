@@ -62,6 +62,11 @@ class Verification(BaseEntity):
     # unaffected so work resumes cleanly. Set/cleared by the admin control panel.
     paused = Column(Boolean, nullable=False, server_default="false")
 
+    # Why a paid case was closed (a `CloseReason`, §6.4). Set while the case waits ON HOLD for
+    # Finance to approve its refund, and kept once it closes as the record of why. On hold =
+    # set and not yet terminal: agents cannot move their tasks and the sweeps pass it by.
+    closure_reason = Column(String(32), nullable=True)
+
     # Public VID-lookup visibility (§13.1/§13.2 "Public" mode): when true, anyone who
     # knows the VID sees the report *summary* at /verify/{vid}. Default private.
     public_lookup_enabled = Column(Boolean, nullable=False, server_default="false")

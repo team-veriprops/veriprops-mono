@@ -45,6 +45,8 @@ import {
   useSetDelayMutation,
   useSubmitRebuttalMutation,
 } from "./libs/useAdminVerificationQueries";
+import { CloseCaseDialog } from "./CloseCaseDialog";
+import { CLOSE_REASONS } from "./libs/closure";
 
 const formatMinor = (minor?: number, currency: TransactionCurrency = TransactionCurrency.NGN) =>
   minor === undefined
@@ -235,6 +237,7 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
   const addNote = useAddNoteMutation(verificationId);
 
   const [cancelReason, setCancelReason] = useState("");
+  const [closing, setClosing] = useState(false);
   const [delayDays, setDelayDays] = useState(1);
   const [noteBody, setNoteBody] = useState("");
   const [noteCategory, setNoteCategory] = useState<AdminNoteCategory>(AdminNoteCategory.OPERATIONAL);
@@ -252,6 +255,12 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
   }
 
   const detail = data as VerificationDetail;
+
+  const submitCancel = async () => {
+    await cancel.mutateAsync({ reason: cancelReason });
+    setCancelReason("");
+    toast.success("Verification cancelled");
+  };
   const { summary } = detail;
 
   const onAddNote = async () => {
@@ -513,29 +522,50 @@ export default function AdminVerificationDetail({ verificationId }: { verificati
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label>Cancel verification</Label>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Reason"
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                data-testid="cancel-reason"
-              />
-              <Button
-                variant="destructive"
-                onClick={async () => {
-                  await cancel.mutateAsync({ reason: cancelReason });
-                  toast.success("Verification cancelled");
-                  setCancelReason("");
-                }}
-                disabled={cancel.isPending || !cancelReason.trim()}
-                data-testid="cancel-submit"
-              >
-                Cancel
-              </Button>
+          {detail.canCancel && (
+            <div className="space-y-2">
+              <Label>Cancel verification</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Reason"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  data-testid="cancel-reason"
+                />
+                <Button
+                  variant="destructive"
+                  onClick={submitCancel}
+                  disabled={cancel.isPending || !cancelReason.trim()}
+                  data-testid="cancel-submit"
+                >
+                  Cancel
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Nobody has paid yet, so nothing is refunded.</p>
             </div>
-          </div>
+          )}
+
+          {detail.onHold && (
+            <div className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm" data-testid="closure-hold" role="status">
+              <p className="font-medium">On hold: closing ({CLOSE_REASONS.find((r) => r.value === detail.closureReason)?.label ?? detail.closureReason})</p>
+              <p className="text-muted-foreground">
+                The refund is waiting for Finance. Agents are told to stop; if Finance rejects it, the case goes back to work.
+              </p>
+            </div>
+          )}
+
+          {detail.canClose && (
+            <div className="space-y-2">
+              <Label>Close this case</Label>
+              <p className="text-xs text-muted-foreground">
+                Paid: closing follows the refund rules, and any refund ({formatMinor(detail.refundableMinor)} paid so far) waits for Finance.
+              </p>
+              <Button variant="destructive" onClick={() => setClosing(true)} data-testid="close-case-open">
+                Close case…
+              </Button>
+              <CloseCaseDialog verificationId={verificationId} vid={summary.vid} open={closing} onOpenChange={setClosing} />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

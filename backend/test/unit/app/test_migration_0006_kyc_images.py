@@ -19,10 +19,8 @@ def _scripts() -> ScriptDirectory:
     return ScriptDirectory.from_config(config)
 
 
-def test_it_chains_after_the_schema_parity_migration_and_is_the_only_head():
-    scripts = _scripts()
-    assert scripts.get_heads() == ["0006_kyc_images"]
-    assert scripts.get_revision("0006_kyc_images").down_revision == "0005_schema_parity"
+def test_it_chains_after_the_schema_parity_migration():
+    assert _scripts().get_revision("0006_kyc_images").down_revision == "0005_schema_parity"
 
 
 def test_the_model_declares_what_the_migration_creates():

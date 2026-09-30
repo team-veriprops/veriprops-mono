@@ -45,11 +45,12 @@ def _task(role, state=TaskState.SUBMITTED, review=None, payload=None, agent="age
     )
 
 
-def _verification(status=VerificationStatus.UNDER_REVIEW, tier=VerificationTier.STANDARD, price=1000000):
+def _verification(status=VerificationStatus.UNDER_REVIEW, tier=VerificationTier.STANDARD, price=1000000,
+                  closure_reason=None):
     return SimpleNamespace(
         id="v-1", vid="VP-2026-0001", status=status.value, tier=tier.value,
         price_locked_minor=price, customer_id="cust-1",
-        pending_revision_kind=None,
+        pending_revision_kind=None, closure_reason=closure_reason,
     )
 
 
@@ -371,7 +372,34 @@ class TestCommissionAccrual:
         assert svc._commissions.accrue.await_count == 3
 
 
-class TestReopenFail:
+class TestOnHold:
+    """A case waiting for Finance on its closing refund cannot be decided in review (§6.4):
+    releasing it would strand the refund request, which could then be neither approved nor
+    rejected."""
+
+    def _held(self):
+        tasks = _standard_tasks(review="APPROVED")
+        return _make_service(_verification(closure_reason="DUPLICATE"), tasks)
+
+    async def test_it_cannot_be_released(self):
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held().release("v-1", "admin-1")
+
+    async def test_its_tasks_cannot_be_approved_rejected_or_reopened(self):
+        svc = self._held()
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await svc.approve_task("v-1", AgentRole.REGISTRY, 90, "admin-1")
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await svc.reject_task("v-1", AgentRole.REGISTRY, "blurry", "admin-1")
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await svc.reopen_task("v-1", AgentRole.REGISTRY, "admin-1")
+
+    async def test_the_review_says_it_is_not_releasable(self):
+        context = await self._held().get_review_context("v-1")
+        assert context.releasable is False
+
+
+class TestReopen:
     async def test_reopen_approved_task(self):
         tasks = _standard_tasks(review="APPROVED", state=TaskState.APPROVED)
         svc = _make_service(_verification(status=VerificationStatus.COMPLETED), tasks)
@@ -380,21 +408,3 @@ class TestReopenFail:
         assert reg.state == TaskState.IN_PROGRESS.value
         svc._reports.supersede_current.assert_awaited_once()
         assert svc._verification_repo.update.await_args.args[1].status == VerificationStatus.IN_PROGRESS.value
-
-    async def test_fail_marks_failed_and_refunds(self):
-        verification = _verification(status=VerificationStatus.UNDER_REVIEW)
-        svc = _make_service(verification, _standard_tasks())
-        await svc.fail("v-1", "fraud detected", "admin-1")
-        svc._payments.refund.assert_awaited_once()
-        assert verification.status == VerificationStatus.FAILED.value
-
-    async def test_fail_reports_what_the_refund_did(self):
-        """The admin is told whether the gateway took the refund: a refused one waits for
-        finance to retry, and saying "refunded" then would be false."""
-        svc = _make_service(_verification(status=VerificationStatus.UNDER_REVIEW), _standard_tasks())
-        svc._payments.refund.return_value = RefundOutcome(refunded_minor=0, failed_payment_ids=["p-1"])
-
-        outcome = await svc.fail("v-1", "fraud detected", "admin-1")
-
-        assert outcome.failed_payment_ids == ["p-1"]
-        assert outcome.refunded_minor == 0

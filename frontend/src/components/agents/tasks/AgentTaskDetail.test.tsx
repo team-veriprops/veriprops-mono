@@ -52,6 +52,7 @@ function taskIn(state: TaskState, extra: Partial<AgentTask> = {}): AgentTask {
     state,
     inPool: false,
     evidenceCount: 1,
+    caseOnHold: false,
     ...extra,
   } as AgentTask;
 }
@@ -130,5 +131,21 @@ describe("AgentTaskDetail", () => {
     const html = markupFor(taskIn(TaskState.SUBMITTED));
     expect(html).toContain("awaiting admin review");
     expect(html).not.toContain("detail-submit");
+  });
+
+  it("tells the agent to stop, and offers no action, while the case is on hold for closing", () => {
+    for (const state of [TaskState.ASSIGNED, TaskState.ACCEPTED, TaskState.IN_PROGRESS]) {
+      const html = markupFor(taskIn(state, { caseOnHold: true }));
+      expect(html).toContain('data-testid="detail-case-on-hold"');
+      for (const control of ["detail-accept", "detail-start", "detail-submit", "evidence-file"]) {
+        expect(html).not.toContain(`data-testid="${control}"`);
+      }
+    }
+  });
+
+  it("says a task cancelled by its case closing has nothing more to do", () => {
+    const html = markupFor(taskIn(TaskState.CANCELLED));
+    expect(html).toContain('data-testid="detail-task-cancelled"');
+    expect(html).not.toContain('data-testid="detail-start"');
   });
 });

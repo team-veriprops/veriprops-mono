@@ -25,6 +25,7 @@ from main.appodus_utils.exception.exceptions import (
 )
 from test.utils.repo_fakes import fake_claim_transition
 from main.app.domain.payment.models import RefundOutcome
+from main.app.domain.payment.refund_request.models import RefundSource
 
 _LONG = "x" * 120  # ≥ 100-char description
 
@@ -47,7 +48,7 @@ def mock_db_session():
 
 def _verification(status=VerificationStatus.COMPLETED):
     return SimpleNamespace(id="v-1", vid="VP-1", tier=VerificationTier.STANDARD.value,
-                           status=status.value, customer_id="cust-1")
+                           status=status.value, customer_id="cust-1", currency="NGN")
 
 
 def _report(days_ago=1):
@@ -97,6 +98,9 @@ def _service(verification=None, report=None, dispute=None, window_days=30):
     svc._commissions.unfreeze_for_verification = AsyncMock()
     svc._commissions.reverse_for_verification = AsyncMock()
     svc._payments.refund = AsyncMock(return_value=RefundOutcome(refunded_minor=12_000_000))
+    svc._payments.refundable_minor = AsyncMock(return_value=12_000_000)
+    svc._refund_requests = MagicMock()
+    svc._refund_requests.file = AsyncMock()
     svc._reviews.reopen_task = AsyncMock()
     return svc
 
@@ -176,20 +180,52 @@ class TestResolve:
         assert VerificationStatus.COMPLETED.value in statuses
         svc._commissions.unfreeze_for_verification.assert_awaited_once()
 
-    async def test_the_refund_is_the_last_thing_that_can_fail(self, monkeypatch):
-        """Money leaves at the gateway the moment refund() runs, so nothing that can still
-        roll the transaction back may come after it."""
-        order = []
-        await self._resolve(monkeypatch, DisputeOutcome.FULL_REFUND, track=order)
-        assert order[-1] == "refund"
-        assert "reverse" in order
-
-    async def test_full_refund_refunds_and_reverses(self, monkeypatch):
+    async def test_an_upheld_dispute_files_the_full_refund_for_finance_and_waits(self, monkeypatch):
+        """No customer money leaves unapproved (§8.5): the refund waits in Finance's queue, and
+        the case stays DISPUTED with commissions frozen until Finance approves it."""
         svc = await self._resolve(monkeypatch, DisputeOutcome.FULL_REFUND)
         statuses = [c.args[1].status for c in svc._verification_repo.update.call_args_list if c.args[1].status]
+        assert VerificationStatus.REFUNDED.value not in statuses
+        svc._payments.refund.assert_not_awaited()
+        svc._commissions.reverse_for_verification.assert_not_awaited()
+        filed = svc._refund_requests.file.await_args.kwargs
+        assert (filed["source"], filed["amount_minor"], filed["requested_by"]) == (
+            RefundSource.DISPUTE_UPHELD, 12_000_000, "admin-1",
+        )
+
+    async def test_nothing_is_filed_when_nothing_is_refundable(self, monkeypatch):
+        """Every charge already refunded, or held under a chargeback."""
+        import main.app.domain.verification.dispute.service as mod
+        monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
+        svc = _service(verification=_verification(status=VerificationStatus.DISPUTED), dispute=_dispute())
+        svc._payments.refundable_minor = AsyncMock(return_value=0)
+        await svc.resolve("d-1", ResolveDisputeDto(outcome=DisputeOutcome.FULL_REFUND, note="admin decision"), "admin-1")
+        svc._refund_requests.file.assert_not_awaited()
+        # Nothing waits on Finance, so the case settles now.
+        statuses = [c.args[1].status for c in svc._verification_repo.update.call_args_list if c.args[1].status]
         assert VerificationStatus.REFUNDED.value in statuses
-        svc._payments.refund.assert_awaited_once()
         svc._commissions.reverse_for_verification.assert_awaited_once()
+
+    async def test_finance_approving_settles_the_case_as_refunded(self):
+        v = _verification(status=VerificationStatus.DISPUTED)
+        svc = _service(verification=v, dispute=_dispute())
+
+        await svc.settle_full_refund("v-1", "finance-1")
+
+        statuses = [c.args[1].status for c in svc._verification_repo.update.call_args_list if c.args[1].status]
+        assert VerificationStatus.REFUNDED.value in statuses
+        svc._commissions.reverse_for_verification.assert_awaited_once_with("v-1", "finance-1")
+
+    async def test_finance_refusing_reopens_the_dispute_for_ops(self):
+        upheld = _dispute(status=DisputeStatus.RESOLVED)
+        upheld.resolution_outcome = DisputeOutcome.FULL_REFUND.value
+        svc = _service(verification=_verification(status=VerificationStatus.DISPUTED), dispute=upheld)
+        svc._dispute_repo.list_for_verification = AsyncMock(return_value=[upheld])
+
+        await svc.reopen_refused_refund("v-1", "finance-1", "Evidence does not support a refund")
+
+        assert (upheld.status, upheld.resolution_outcome) == (DisputeStatus.OPEN.value, None)
+        svc._commissions.reverse_for_verification.assert_not_awaited()
 
     async def test_partial_recheck_reopens_and_marks_v2(self, monkeypatch):
         svc = await self._resolve(

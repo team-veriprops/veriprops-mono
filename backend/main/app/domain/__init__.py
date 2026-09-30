@@ -29,6 +29,7 @@ from main.app.domain.verification.dispute.controller import (
     admin_dispute_router,
 )
 from main.app.domain.verification.admin.controller import admin_verification_router
+from main.app.domain.verification.closure.controller import closure_router
 from main.app.domain.verification.task.controller import agent_task_router
 from main.app.domain.verification.scoring.controller import trust_weight_router
 from main.app.domain.verification.pricing_config.controller import admin_pricing_router
@@ -53,6 +54,7 @@ from main.app.domain.analytics.controller import analytics_router
 from main.app.domain.broadcast.controller import broadcast_router
 from main.app.domain.finance.controller import finance_router
 from main.app.domain.payment.controller import admin_payment_router, payment_router
+from main.app.domain.payment.refund_request.controller import refund_request_router
 
 from main.appodus_utils.integrations.webhook import webhook_router
 from main.app.domain.audit.controller import audit_router
@@ -85,6 +87,7 @@ router.include_router(dispute_router)
 router.include_router(agent_dispute_router)
 router.include_router(admin_dispute_router)
 router.include_router(admin_verification_router)
+router.include_router(closure_router)
 router.include_router(agent_task_router)
 router.include_router(trust_weight_router)
 router.include_router(admin_pricing_router)
@@ -107,6 +110,7 @@ router.include_router(broadcast_router)
 router.include_router(finance_router)
 router.include_router(payment_router)
 router.include_router(admin_payment_router)
+router.include_router(refund_request_router)
 router.include_router(audit_router)
 router.include_router(erasure_router)
 router.include_router(admin_erasure_router)

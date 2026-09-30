@@ -108,7 +108,7 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
           </Button>
           {/* ASSIGNED is the manual-assign path (§2.2): an admin picked this agent, and the
               task has already left the pool, so accepting it is their next step. */}
-          {(task.state === TaskState.PENDING ||
+          {!task.caseOnHold && (task.state === TaskState.PENDING ||
             task.state === TaskState.ASSIGNED ||
             task.inPool) && (
             <Button
@@ -125,7 +125,7 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
           {/* A returned task reopens the same way work begins: REJECTED → IN_PROGRESS is the
               rework path (§8.1), so the agent needs the control here or the reason they were
               given is all they can do anything about. */}
-          {(task.state === TaskState.ACCEPTED || task.state === TaskState.REJECTED) && (
+          {!task.caseOnHold && (task.state === TaskState.ACCEPTED || task.state === TaskState.REJECTED) && (
             <Button
               onClick={async () => {
                 await start.mutateAsync(task.id);
@@ -140,6 +140,24 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
         </div>
       </div>
 
+      {task.caseOnHold && (
+        <Card className="border-amber-500/40 bg-amber-500/5" data-testid="detail-case-on-hold" role="status">
+          <CardContent className="p-4 text-sm">
+            <span className="font-medium">Case on hold — stop work. </span>
+            This case is being closed. Don&apos;t start, upload or submit anything until you hear back: if it goes
+            ahead you&apos;ll be told to resume; if it closes, work you already submitted is paid.
+          </CardContent>
+        </Card>
+      )}
+
+      {task.state === TaskState.CANCELLED && (
+        <Card data-testid="detail-task-cancelled">
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            This case was closed before this task was finished, so the task is cancelled. There is nothing more to do.
+          </CardContent>
+        </Card>
+      )}
+
       {task.rejectionReason && (
         <Card className="border-destructive/40" data-testid="detail-rejection-reason">
           <CardContent className="p-4 text-sm">
@@ -149,7 +167,7 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
         </Card>
       )}
 
-      {task.state === TaskState.IN_PROGRESS && (
+      {task.state === TaskState.IN_PROGRESS && !task.caseOnHold && (
         <>
           <Card>
             <CardHeader>

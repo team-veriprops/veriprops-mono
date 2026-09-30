@@ -17,6 +17,7 @@ from main.app.domain.payment.models import (
     PaymentStatus,
     PaymentWebhookDto,
 )
+from main.app.domain.payment.refund_request.models import RefundSource
 from main.app.domain.payment.service import PaymentService
 from main.app.domain.user.auth.session.models import UserPersona
 from main.appodus_utils.db.session import db_session_ctx
@@ -60,6 +61,12 @@ def _make_service(phone_verified=True, verification=None):
     svc._audit = MagicMock()
 
     svc._verification_service.get_owned = AsyncMock(return_value=verification or _verification())
+    # The webhook reads the case's status: a charge on a closed case is refunded, not applied.
+    svc._verification_service.get_by_id = AsyncMock(
+        return_value=verification or _verification(status=VerificationStatus.PAYMENT_PENDING.value)
+    )
+    svc._refund_requests = MagicMock()
+    svc._refund_requests.file = AsyncMock()
     svc._verification_service.mark_payment_pending = AsyncMock()
     svc._verification_service.mark_paid = AsyncMock()
     # At PAID the payment service instantiates/broadcasts tasks (§6.2).
@@ -112,6 +119,7 @@ def _payment():
     return SimpleNamespace(
         id="pay-1", verification_id="ver-1", customer_id="cust-1", failure_count=0, purpose="INITIAL",
         status=PaymentStatus.INITIATED.value, gateway_event_id=None, deleted=False,
+        amount_minor=12_000_000, currency="NGN", tx_ref="VP-2026-ABC123-xyz",
     )
 
 
@@ -130,6 +138,29 @@ class TestWebhook:
         assert payment.gateway_event_id == "evt-1"
         svc._verification_service.mark_paid.assert_awaited_once_with("ver-1")
         svc._user_service.upgrade_trust_status_if_eligible.assert_awaited_once_with("cust-1", UserPersona.CUSTOMER)
+
+    @pytest.mark.parametrize("closed", [VerificationStatus.CANCELLED, VerificationStatus.FAILED])
+    async def test_a_charge_on_a_closed_case_is_filed_for_a_refund_not_applied(self, closed):
+        """Cancelled while its payment was pending, then charged anyway: the case stays
+        closed, and the whole charge waits for Finance to approve its refund."""
+        svc = _make_service(verification=_verification(status=closed.value))
+        svc._idempotency.claim = AsyncMock(return_value=True)
+        payment = _payment()
+        svc._payment_repo.get_by_tx_ref = AsyncMock(return_value=payment)
+        svc._payment_repo.claim_transition = fake_claim_transition(lambda _id: payment)
+
+        processed = await svc.handle_webhook(
+            PaymentWebhookDto(event_id="evt-1", tx_ref="VP-2026-ABC123-xyz", succeeded=True)
+        )
+
+        assert processed is True
+        assert payment.status == PaymentStatus.SUCCEEDED.value
+        svc._verification_service.mark_paid.assert_not_called()
+        svc._task_service.prepare_for_paid.assert_not_called()
+        filed = svc._refund_requests.file.await_args.kwargs
+        assert (filed["source"], filed["amount_minor"], filed["requested_by"]) == (
+            RefundSource.LATE_CHARGE, payment.amount_minor, None,
+        )
 
     async def test_duplicate_webhook_is_noop(self):
         svc = _make_service()

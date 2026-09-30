@@ -29,6 +29,8 @@ export interface AgentTask {
   submissionPayload?: Record<string, unknown>;
   rejectionReason?: string;
   evidenceCount: number;
+  /** The case is being closed and waits for Finance: stop work — every action is refused until it resumes. */
+  caseOnHold: boolean;
   assignedAt?: string;
   acceptedAt?: string;
   submittedAt?: string;

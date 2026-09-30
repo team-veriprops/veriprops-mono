@@ -57,10 +57,10 @@ def _task(role, state=TaskState.PENDING, agent=None, **over):
     return SimpleNamespace(**base)
 
 
-def _verification(status=VerificationStatus.PAID, tier=VerificationTier.STANDARD):
+def _verification(status=VerificationStatus.PAID, tier=VerificationTier.STANDARD, closure_reason=None):
     return SimpleNamespace(
         id="v-1", vid="VP-2026-0001", status=status.value, tier=tier.value,
-        customer_id="cust-1",
+        customer_id="cust-1", closure_reason=closure_reason,
     )
 
 
@@ -327,6 +327,39 @@ class TestAgentExecution:
         svc = _make_service(_verification(), [mine])
         with pytest.raises(ValidationException):
             await svc.submit(mine.id, "agent-9", _valid_payload(AgentRole.FIELD))
+
+
+class TestOnHold:
+    """A case being closed waits for Finance (§6.4): its agents cannot move their tasks and
+    admins cannot assign it — work done now could be for nothing."""
+
+    def _held(self, *tasks):
+        return _make_service(_verification(VerificationStatus.IN_PROGRESS, closure_reason="DUPLICATE"), list(tasks))
+
+    async def test_an_agent_cannot_accept(self):
+        pooled = _task(AgentRole.FIELD, TaskState.PENDING, in_pool=True)
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held(pooled).accept(pooled.id, "agent-1")
+
+    async def test_an_agent_cannot_start(self):
+        mine = _task(AgentRole.FIELD, TaskState.ACCEPTED, agent="agent-1")
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held(mine).start(mine.id, "agent-1")
+
+    async def test_an_agent_cannot_submit(self):
+        mine = _task(AgentRole.FIELD, TaskState.IN_PROGRESS, agent="agent-1")
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held(mine).submit(mine.id, "agent-1", _valid_payload(AgentRole.FIELD))
+
+    async def test_an_agent_cannot_decline(self):
+        mine = _task(AgentRole.FIELD, TaskState.ACCEPTED, agent="agent-1")
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held(mine).decline(mine.id, "agent-1", reason="too far")
+
+    async def test_an_admin_cannot_assign(self):
+        pending = _task(AgentRole.FIELD, TaskState.PENDING)
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held(pending).assign("v-1", AgentRole.FIELD, "agent-1", "ops-1")
 
 
 class TestSweeps:

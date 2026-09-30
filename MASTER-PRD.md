@@ -280,6 +280,16 @@ All refunds compute from the contractual NGN figure in kobo and are issued in NG
 | Ambiguous location input, defensible interpretation verified | Customer | No refund; re-verification at re-check pricing |
 | Wrong property despite clear input | Veriprops | Full refund + free re-verification |
 
+**How the table is applied (§11.2a).** After payment a case leaves only by being **closed**, and the admin
+picks the row it falls under (`CloseReason`); the backend — never the admin, never the browser — computes the
+refund: customer withdrawal before work starts (`PAID`) refunds less `cancellation_surcharge_pct`, after work
+starts nothing; a duplicate case or payment, and "we cannot deliver" (which covers a payment confirmed but never
+activated), refund in full — the latter ends the case `FAILED`, every other reason `CANCELLED`; fraud refunds
+nothing; an inaccessible property refunds the amount the admin enters on the evidence (capped at what was paid,
+with the evidence reference recorded). The rows about a wrong agent, a skipped step, a wrong property or
+ambiguous input are resolved by a re-check or a dispute (§19), not by closing. **No customer money leaves
+without Finance's approval** (§20.5).
+
 #### Communication boundaries
 
 - ❌ No direct Customer ↔ Agent chat. Routine coordination is **admin-mediated**: the customer writes in
@@ -881,8 +891,13 @@ amount.
   double-receipt.
 - Payment confirmation fires `PAYMENT_CONFIRMED` (email + SMS templates) and upgrades the customer to
   `TRUSTED` on first success. Confirmation page: `/portal/verifications/[id]/confirmed` with SLA countdown.
-- Refunds (`PaymentService.refund`) are idempotent and flow through the same facade; invoked by admin
-  fail-with-refund and upheld disputes.
+- Refunds (`PaymentService.refund`) move an approved amount, spread across the case's settled charges oldest
+  first (part of a charge when it runs out, in the currency it was charged). **Only an approved refund request
+  calls it** (§20.5): closing a paid case, an upheld dispute, and a charge that settles on a case already
+  closed each file a request instead. A charge whose gateway refuses stays settled and owes its share
+  (`payments.refund_due_minor`) — Finance's refunds-to-retry list, and exactly what a retry sends.
+- A charge that settles after its case was cancelled (while the payment was pending) never reopens the case:
+  it is recorded, and a full refund request waits for Finance.
 
 ---
 
@@ -896,8 +911,28 @@ amount.
 
 `/admin/verifications` is a server-driven DataTable (status, tier, SLA health, location filters);
 `/admin/verifications/[id]` is the ops control panel: per-role task rows with assign/reassign, pause/resume
-(a flag, §3.8), cancel-with-reason, declare-failure, extend SLA, progress bar, property/payment/commission
-panels, chargeback management, audit-pack export, and the report-review entry point.
+(a flag, §3.8), cancel-with-reason for a case nobody has paid for, **close** for a paid unfinished one
+(§11.2a), extend SLA, progress bar, property/payment/commission panels, chargeback management, audit-pack
+export, and the report-review entry point. Which of cancel and close is offered comes from the backend
+(`canCancel` / `canClose`).
+
+### 11.2a Closing a paid case
+
+Paid and unfinished cases (`PAID`, `IN_PROGRESS`, `UNDER_REVIEW`) are closed, never cancelled
+(`verification/closure/`). The admin picks a reason and writes what happened; the backend quotes the exact
+refund, how the case ends and each agent's outcome, and the admin confirms that quote in a dialog stating
+every consequence.
+
+- **Nothing to refund:** the case ends at once.
+- **Money to return:** the case goes **on hold** (`verifications.closure_reason`) and a refund request waits
+  for Finance. While on hold, agents cannot accept, start, upload, submit or decline, admins cannot assign,
+  and the no-show, pool-starvation and SLA sweeps pass the case by; agents with work in hand and the customer
+  are told (`TASK_ON_HOLD`, `CASE_ON_HOLD`). Agents see the hold on the task itself.
+- **Finance approves:** the case closes for good — submitted and approved work is paid its role's fixed
+  commission, every other task becomes `CANCELLED` (terminal, freeing the agent's task limit), everyone is
+  told (`TASK_CASE_CLOSED`, `CASE_CLOSED`) — and then the refund is sent.
+- **Finance rejects** (a reason is required): nothing is sent; the hold lifts and agents are told to resume
+  (`TASK_RESUMED`, `CASE_RESUMED`).
 
 ### 11.2 Assignment
 
@@ -1014,9 +1049,9 @@ version with a `revision_kind` and reason (§3.3).
 
 ### 13.5 FAILED
 
-Admin may declare `FAILED` (confirmed fraud / permanent inaccessibility / fraudulent submission): reason +
-evidence required, irreversible, refund policy applied through the payment facade, agents' completed work
-still logged.
+A case we cannot deliver ends `FAILED` through the close flow (§11.2a, reason "we cannot deliver", offered on
+the report-review page as well): a full refund, sent once Finance approves; submitted work is paid and the rest
+cancelled. Fraud and an inaccessible property are closed with their own reasons and end `CANCELLED`.
 
 ---
 
@@ -1298,8 +1333,8 @@ preserved), SLA due date recomputed, next release ships `v3.0`. Idempotent on re
   window (`agent_dispute_defence_hours`, default 48) that the admin sees before resolving — admin-mediated;
   the agent never learns the customer's identity.
 - Outcomes (`DisputeOutcome`), each with a mandatory resolution note delivered verbatim:
-  `REJECTED` → `COMPLETED` (commissions unfreeze) · `FULL_REFUND` → `REFUNDED` (gateway refund + commission
-  reversal) · `PARTIAL_RECHECK` → `IN_PROGRESS` (free scoped re-check; next release `v2.0`).
+  `REJECTED` → `COMPLETED` (commissions unfreeze) · `FULL_REFUND` → `REFUNDED` (commission reversal, and a
+  full refund request for Finance's approval, §20.5) · `PARTIAL_RECHECK` → `IN_PROGRESS` (free scoped re-check; next release `v2.0`).
 
 ---
 
@@ -1362,6 +1397,15 @@ approved (₦total)" button — `APPROVED → PROCESSING → PAID`, settled only
 when asked by our per-attempt reference (webhook or reconcile). A transfer the bank refuses becomes
 `FAILED` with its funds **still reserved**; finance retries it (a new attempt and reference) or rejects it
 (funds released, agent notified). Stub mode runs the same flow through a stub transfer gateway.
+
+### 20.5 Refund approvals and the payments list (Finance)
+
+Every return of a customer's money waits for a Finance (or super) admin (`REFUND_PAYMENT`) at
+`/admin/finance/refunds` (`payment/refund_request/`): a closed case, an upheld dispute, a charge that settled
+after its case closed. One request may be pending per case; a second late charge joins the first. Approving
+sends the refund and says what the gateways did (a refused charge waits in the refunds-to-retry list);
+rejecting sends nothing and needs a reason. `/admin/finance/payments` lists every charge — status, gateway,
+refunded amount, what an approved refund still owes, chargeback — searchable by reference or VID.
 
 ---
 
@@ -1533,7 +1577,8 @@ production/staging. No `EMAIL_PROVIDER` setting — the router selects by `ENVIR
 `backend/scripts/e2e_drive_through.py` runs the staged live-HTTP suite in `backend/scripts/e2e/` (shared
 `harness.py`; `--stages` runs a contiguous prefix): onboarding → agent onboarding → admin team → execution
 → comms → review/release → tracking → sharing → aftermarket (disputes/re-checks/upgrades/payouts) → growth
-→ admin ops → premium release → compliance → ops-unhappy (pool mechanics, fail+refund, chargeback) → email
+→ admin ops → premium release → compliance → ops-unhappy (pool mechanics, closing paid cases through
+Finance, a late charge, chargeback) → email
 → messaging-retry. Stages have linear data dependencies; the email stages warn-skip without Mailpit/docker.
 The drive-throughs exist because they repeatedly catch the UUID/transaction-boundary bug class that mocked
 unit tests cannot (see the runtime-bug notes in [docs/decision-log.md](docs/decision-log.md)).
@@ -1866,8 +1911,8 @@ config · Trust-score weights · Audit action log · Erasure requests.
 
 Personal info · Login & security · Devices · Linked accounts · Password · Consents · Data & privacy.
 
-Several routes are declared in `routes.ts` but have no pages yet (admin content CMS, fraud-flags, finance
-sub-pages, some detail pages) — the sidebars deliberately omit them; see §G.
+Several routes are declared in `routes.ts` but have no pages yet (admin content CMS, fraud-flags,
+some detail pages) — the sidebars deliberately omit them; see §G.
 
 ---
 
@@ -1952,9 +1997,9 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Secondary-PII erasure scope (card fingerprints, share-recipient emails, property addresses — each needs its own retention basis) | `backend/main/app/domain/compliance/erasure/pseudonymiser.py` |
 | Role-specific agent dashboard variants (one unified dashboard today) | `frontend/src/components/agents/dashboard/AgentDashboard.tsx` |
 | Cartographic Nigeria map paths (schematic geo-grid today) | `frontend/src/components/agents/reputation/NigeriaCoverageMap.tsx` |
-| Dead vendored `google_drive` webhook package: `repo.py`/`service.py`/`validator.py` import modules that do not exist, so only `model.py` loads — and it registers `g_drive_webhook_subscriptions` with no migration builder. Inert (nothing reaches it); kept and marked rather than deleted, per D83. Pick up = remove the package, or fix the imports and give the table a migration | `backend/main/appodus_utils/domain/webhook/google_drive/model.py` |
+| Dead vendored `google_drive` webhook package: `repo.py`/`service.py`/`validator.py` import modules that do not exist, so only `model.py` loads — and it registers `g_drive_webhook_subscriptions` with no migration builder. Inert (nothing reaches it); kept and marked rather than deleted, per D83. Pick up = remove the package (with `GoogleDriveClient`, its only user of a service-account key), or fix the imports, give the table a migration, and move the client to Workload Identity Federation | `backend/main/appodus_utils/domain/webhook/google_drive/model.py`, `backend/main/appodus_utils/integrations/google_drive/google_drive_client.py` |
 | `python-jose` → PyJWT: jose hard-depends on `ecdsa` (PYSEC-2026-1325, timing side channel, no fixed release). Not exploitable here — the `[cryptography]` extra routes every sign/verify (RS256 handoff + OAuth, Apple's ES256 client secret) through `cryptography` — but the Dependabot alert stays open until the five `from jose import` sites (OAuth Google/Apple, WhatsApp handoff grant/tokens, `appodus_utils/common/commons.py`) move to PyJWT | `backend/requirements.txt` |
-| Declared-but-unbuilt routes: admin content CMS (how-it-works / FAQs / testimonials / spotlights / area insights), fraud-flags, finance payments/commissions sub-pages, dispute/broadcast/task detail pages, portal payments page | `frontend/src/lib/routes.ts` |
+| Declared-but-unbuilt routes: admin content CMS (how-it-works / FAQs / testimonials / spotlights / area insights), fraud-flags, dispute/broadcast/task detail pages, portal payments page | `frontend/src/lib/routes.ts` |
 
 ### G.3 Launch gates (business/legal — not code)
 

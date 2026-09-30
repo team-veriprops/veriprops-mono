@@ -136,7 +136,8 @@ def test_no_full_table_constraint_shadows_a_live_only_guard(name):
     # A leftover full-table UniqueConstraint of the same name would still block re-creating a
     # soft-deleted row — the defect the live-only guards exist to remove.
     table, _columns, _where = _MODEL_GUARDS[name]
-    constraint_names = {item.name for item in _TABLES[table] if isinstance(item, sa.UniqueConstraint)}
+    # A table a later revision created has no 0001 constraints to leave behind.
+    constraint_names = {item.name for item in _TABLES.get(table, ()) if isinstance(item, sa.UniqueConstraint)}
     assert name not in constraint_names
     assert name not in {call.args[0] for call in _UNIQUE_CONSTRAINTS}
 

@@ -31,6 +31,14 @@ class EventType(str, enum.Enum):
     REPORT_VERSIONED = "REPORT_VERSIONED"
     SLA_BREACHED = "SLA_BREACHED"
     REFUND_INITIATED = "REFUND_INITIATED"
+    # Closing a paid case (§6.4). The customer: on hold while Finance decides the refund,
+    # back to work, or closed. The agents: stop, resume, or the case closed under them.
+    CASE_ON_HOLD = "CASE_ON_HOLD"
+    CASE_RESUMED = "CASE_RESUMED"
+    CASE_CLOSED = "CASE_CLOSED"
+    TASK_ON_HOLD = "TASK_ON_HOLD"
+    TASK_RESUMED = "TASK_RESUMED"
+    TASK_CASE_CLOSED = "TASK_CASE_CLOSED"
     RECHECK_DECISION = "RECHECK_DECISION"      # source: S18 (declared, unfired)
     # Agent lifecycle
     NEW_JOB = "NEW_JOB"

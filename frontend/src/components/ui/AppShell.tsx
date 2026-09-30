@@ -30,6 +30,7 @@ import {
   LogOut,
   Menu,
   X,
+  Receipt,
 } from "lucide-react";
 import NotificationBell from "@components/shared/notifications/NotificationBell";
 import ChatButton from "@components/chat/ChatButton";
@@ -92,6 +93,7 @@ const iconMap = {
   dollarSign: DollarSign,
   fileText: FileText,
   megaphone: Megaphone,
+  receipt: Receipt,
 } as const;
 
 interface SidebarNavProps {

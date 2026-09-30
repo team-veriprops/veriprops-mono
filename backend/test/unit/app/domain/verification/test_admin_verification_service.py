@@ -20,6 +20,8 @@ from main.app.domain.verification.admin_note.models import AddAdminNoteDto, Admi
 from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import InvalidResourceStateException
+from main.app.domain.payment.models import RefundOutcome
+from test.utils.repo_fakes import fake_claim_transition
 
 
 @pytest.fixture(autouse=True)
@@ -38,11 +40,11 @@ def mock_db_session():
     db_session_ctx.reset(token)
 
 
-def _verification(status=VerificationStatus.IN_PROGRESS, tier=VerificationTier.STANDARD, due=None):
+def _verification(status=VerificationStatus.IN_PROGRESS, tier=VerificationTier.STANDARD, due=None, closure_reason=None):
     return SimpleNamespace(
         id="v-1", vid="VP-ABC123", customer_id="cust-1", property_id=None,
         tier=tier.value, status=status.value, paused=False,
-        sla_due_date=due, date_created=Utils.datetime_now(),
+        sla_due_date=due, date_created=Utils.datetime_now(), closure_reason=closure_reason,
     )
 
 
@@ -56,8 +58,12 @@ def _make_service(verification):
     svc._commissions = MagicMock()
     svc._chargebacks = MagicMock()
     svc._audit = MagicMock()
+    svc._payments = MagicMock()
+    svc._payments.refund = AsyncMock(return_value=RefundOutcome())
+    svc._payments.refundable_minor = AsyncMock(return_value=0)
 
     svc._verification_repo.get_model = AsyncMock(return_value=verification)
+    svc._verification_repo.claim_transition = fake_claim_transition(lambda _id: verification)
     svc._verification_repo.update = AsyncMock()
     svc._property_repo.get_model = AsyncMock(return_value=None)
     svc._payment_repo.list_for_verification = AsyncMock(return_value=[])
@@ -86,7 +92,7 @@ class TestDashboardSummary:
         svc._verification_repo.count_due_within = AsyncMock(return_value=6)
         svc._verification_repo.page_admin = AsyncMock(return_value=(list(recent_rows), len(recent_rows)))
         svc._property_repo.get_model = AsyncMock(return_value=None)
-        svc._payment_repo.sum_succeeded_amount = AsyncMock(return_value=99_000_000)
+        svc._payment_repo.sum_collected_revenue = AsyncMock(return_value=99_000_000)
         svc._task_service.count_pool_pending = AsyncMock(return_value=4)
         svc._agents.count_pending_applications = AsyncMock(return_value=2)
         svc._agents.count_available_agents = AsyncMock(return_value=7)
@@ -165,6 +171,54 @@ class TestActions:
         svc = _make_service(_verification(status=VerificationStatus.COMPLETED))
         with pytest.raises(InvalidResourceStateException):
             await svc.cancel("v-1", CancelVerificationDto(reason="dup"), "admin-1")
+
+    @pytest.mark.parametrize("status", [
+        VerificationStatus.DRAFT, VerificationStatus.SUBMITTED, VerificationStatus.PAYMENT_PENDING,
+    ])
+    async def test_an_unpaid_case_is_simply_cancelled(self, status):
+        v = _verification(status=status)
+        svc = _make_service(v)
+
+        await svc.cancel("v-1", CancelVerificationDto(reason="dup"), "admin-1")
+
+        assert v.status == VerificationStatus.CANCELLED.value
+        svc._payments.refund.assert_not_awaited()
+
+    @pytest.mark.parametrize("status", [VerificationStatus.PAID, VerificationStatus.IN_PROGRESS])
+    async def test_a_paid_case_is_closed_not_cancelled(self, status):
+        """After payment the refund table and Finance's approval apply: closure/, never cancel."""
+        v = _verification(status=status)
+        svc = _make_service(v)
+
+        with pytest.raises(InvalidResourceStateException, match="close it instead"):
+            await svc.cancel("v-1", CancelVerificationDto(reason="customer asked"), "admin-1")
+        assert v.status == status.value
+        svc._payments.refund.assert_not_awaited()
+
+    async def test_the_detail_states_what_a_close_could_refund_and_whether_it_is_on_hold(self):
+        svc = _make_service(_verification(status=VerificationStatus.IN_PROGRESS, closure_reason="DUPLICATE"))
+        settled = SimpleNamespace(
+            id="p-1", verification_id="v-1", tx_ref="VP-1-x", method="CARD", status="SUCCEEDED",
+            amount_minor=1_500_000, currency="NGN", charge_currency=None, charge_amount_minor=None,
+            checkout_url=None, date_created=Utils.datetime_now(), chargeback_status=None, refund_due_minor=None,
+        )
+        svc._payment_repo.list_for_verification = AsyncMock(return_value=[settled])
+
+        detail = await svc.get_detail("v-1")
+
+        assert (detail.refundable_minor, detail.closure_reason, detail.on_hold) == (1_500_000, "DUPLICATE", True)
+
+    @pytest.mark.parametrize("status, closure_reason, can_cancel, can_close", [
+        (VerificationStatus.SUBMITTED, None, True, False),
+        (VerificationStatus.PAYMENT_PENDING, None, True, False),
+        (VerificationStatus.PAID, None, False, True),
+        (VerificationStatus.UNDER_REVIEW, None, False, True),
+        (VerificationStatus.IN_PROGRESS, "DUPLICATE", False, False),  # already closing
+        (VerificationStatus.COMPLETED, None, False, False),
+    ])
+    async def test_the_detail_offers_the_right_way_out(self, status, closure_reason, can_cancel, can_close):
+        detail = await _make_service(_verification(status=status, closure_reason=closure_reason)).get_detail("v-1")
+        assert (detail.can_cancel, detail.can_close) == (can_cancel, can_close)
 
     async def test_set_delay_extends_due_date(self):
         due = add_business_days(Utils.datetime_now().date(), 3)

@@ -85,6 +85,9 @@ class Payment(BaseEntity):
     # this column marks the payment so lists/detail can surface it. Null = none.
     chargeback_status = Column(String(24), nullable=True)
     refunded_amount_minor = Column(BigInteger, nullable=True)
+    # What an approved refund still owes on this charge because its gateway refused it:
+    # Finance's refunds-to-retry list, and exactly what a retry sends. None once paid back.
+    refund_due_minor = Column(BigInteger, nullable=True)
 
     __table_args__ = (
         Index("ix_payments_verification", "verification_id"),
@@ -156,6 +159,20 @@ class PaymentDto(Object):
     date_created: datetime
 
 
+class AdminPaymentDto(PaymentDto):
+    """One charge as finance reads it (§18.1): which case, which gateway, and where the money
+    stands: refunded, or held under a chargeback."""
+
+    vid: str
+    customer_id: str
+    provider: Optional[str] = None
+    gateway_reference: Optional[str] = None
+    refunded_amount_minor: Optional[int] = None
+    # An approved refund the gateway refused, still owed: retry it from the refunds list.
+    refund_due_minor: Optional[int] = None
+    chargeback_status: Optional[str] = None
+
+
 class RefundOutcome(Object):
     """What a verification's refund did: the total refunded, and the payments whose gateway
     refund was refused (still SUCCEEDED, listed for a finance retry)."""
@@ -191,3 +208,16 @@ class PaymentWebhookDto(Object):
     event_id: str
     tx_ref: str
     succeeded: bool
+
+
+def admin_payment_to_dto(p: Payment, vid: str) -> AdminPaymentDto:
+    return AdminPaymentDto(
+        **payment_to_dto(p).model_dump(),
+        vid=vid,
+        customer_id=p.customer_id,
+        provider=p.provider,
+        gateway_reference=p.gateway_reference,
+        refunded_amount_minor=p.refunded_amount_minor,
+        refund_due_minor=p.refund_due_minor,
+        chargeback_status=p.chargeback_status,
+    )

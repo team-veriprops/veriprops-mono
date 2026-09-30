@@ -23,15 +23,25 @@ export interface ReportDto {
   dateCreated: string;
 }
 
+/** How much a review conflict matters (backend `ConflictSeverity`): HIGH blocks release. */
+export enum ConflictSeverity {
+  HIGH = "HIGH",
+  MEDIUM = "MEDIUM",
+  LOW = "LOW",
+}
+
 export interface ReviewConflict {
-  severity: "HIGH" | "MEDIUM" | "LOW";
+  severity: ConflictSeverity;
   roles: AgentRole[];
   message: string;
 }
 
 export interface ReviewState {
   verificationId: string;
+  vid: string;
   status: VerificationStatus;
+  /** Whether the case can be closed from here (paid, unfinished, not already closing). */
+  canClose: boolean;
   tier?: VerificationTier;
   tasks: TaskDto[];
   conflicts: ReviewConflict[];
@@ -40,17 +50,6 @@ export interface ReviewState {
   releasable: boolean;
   report?: ReportDto;
   findings: Record<string, Record<string, unknown> | null>;
-  /** Set only by failing a case: what its refund did. */
-  refund?: RefundOutcome | null;
-}
-
-/** What failing a case did to its money (backend `RefundOutcome`). */
-export interface RefundOutcome {
-  refundedMinor: number;
-  /** Refunds the gateway refused: still paid, waiting in Finance's refunds-to-retry list. */
-  failedPaymentIds: string[];
-  /** Payments under a chargeback: the card issuer returns that money, so no refund is sent. */
-  heldPaymentIds: string[];
 }
 
 // ── Trust Score Weights (§8.3) ──

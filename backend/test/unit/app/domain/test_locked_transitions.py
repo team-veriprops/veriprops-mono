@@ -191,6 +191,7 @@ def _payment(status=PaymentStatus.INITIATED, purpose="VERIFICATION"):
         id="pay-1", tx_ref="tx-1", verification_id="v-1", customer_id="c-1", amount_minor=10_000,
         status=status.value, purpose=purpose, failure_count=0, deleted=False,
         gateway_event_id=None, refunded_amount_minor=None, card_fingerprint=None, chargeback_status=None,
+        refund_due_minor=None,
     )
 
 
@@ -250,14 +251,15 @@ class TestPaymentWebhook:
         db = _payment(PaymentStatus.REFUNDED)
         svc = _payment_service(db, read=_snapshot(db, status=PaymentStatus.SUCCEEDED.value))
 
-        assert (await svc.refund("v-1", "admin-1")).refunded_minor == 0
+        read = _snapshot(db, status=PaymentStatus.SUCCEEDED.value)
+        assert (await svc.refund("v-1", read.amount_minor, "admin-1")).refunded_minor == 0
         svc._audit.schedule.assert_not_called()
 
 
 def _verification(status, **extra):
     base = dict(
         id="v-1", vid="VP-1", customer_id="c-1", status=status.value, tier="STANDARD",
-        referral_credit_applied_minor=0, deleted=False,
+        referral_credit_applied_minor=0, deleted=False, closure_reason=None,
     )
     return SimpleNamespace(**{**base, **extra})
 
@@ -445,15 +447,6 @@ class TestReviewDecisions:
         svc._verification_repo.lock_model.assert_awaited_once_with("v-1")
         svc._commissions.accrue.assert_not_called()
         svc._reports.release.assert_not_called()
-
-    async def test_fail_loses_to_a_concurrent_release_and_refunds_nothing(self):
-        locked = _verification(VerificationStatus.COMPLETED)
-        svc = self._service(locked)
-
-        with pytest.raises(InvalidResourceStateException):
-            await svc.fail("v-1", "fraud", "admin-2")
-
-        svc._payments.refund.assert_not_called()
 
 
 class TestRecheck:

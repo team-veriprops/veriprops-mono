@@ -20,7 +20,7 @@ from main.app.core.realtime import VerificationEventType
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.dependencies import required_task_count
 from main.app.core.state.derive import derive_status
-from main.app.core.state.machine import task_state_machine, verification_state_machine
+from main.app.core.state.machine import task_state_machine
 from main.app.core.state.status import (
     AgentRole,
     ReportRevisionKind,
@@ -36,12 +36,12 @@ from main.app.domain.commission_rule.service import CommissionRuleService
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.system_config.service import ConfigService
 from main.app.domain.message.verification_messages import VerificationMessages
-from main.app.domain.payment.models import RefundOutcome
 from main.app.domain.payment.service import PaymentService
+from main.app.domain.verification.closure.policy import is_on_hold
 from main.app.domain.verification.models import UpdateVerificationDto, Verification
 from main.app.domain.verification.report.service import ReportService
 from main.app.domain.verification.repo import VerificationRepo
-from main.app.domain.verification.review.conflict import ReviewConflict, detect_conflicts
+from main.app.domain.verification.review.conflict import ReviewConflict, detect_conflicts, ConflictSeverity
 from main.app.domain.verification.scoring.service import TrustScoreWeightService
 from main.app.domain.verification.status_events import publish_verification_started
 from main.app.domain.verification.task.models import ReviewDecision, UpdateTaskDto, VerificationTask
@@ -109,6 +109,7 @@ class ReviewService:
         # single 0-100 quality number today — PRD "Known Gaps & Roadmap".
         if not 0 <= quality <= 100:
             raise ValidationException(message="Quality score must be between 0 and 100.")
+        _assert_not_on_hold(await self._get_verification(verification_id))
         task = await self._get_task(verification_id, role)
         if task.state != TaskState.SUBMITTED.value:
             raise InvalidResourceStateException(
@@ -222,7 +223,7 @@ class ReviewService:
 
         submissions = self._submissions_by_role(tasks)
         conflicts = detect_conflicts(submissions)
-        if any(c.severity == "HIGH" for c in conflicts):
+        if any(c.severity == ConflictSeverity.HIGH for c in conflicts):
             raise ValidationException(
                 message="Unresolved high-severity conflicts — reject the affected task(s) first."
             )
@@ -238,7 +239,7 @@ class ReviewService:
         role_quality = {AgentRole(t.role): (t.review_quality or 100) for t in tasks}
         composite = await self._weights.compute_composite(tier, role_quality)
 
-        await self._accrue_commissions(verification, tasks)
+        await self.accrue_commissions(verification, tasks)
         # A re-check / tier-upgrade cycle records why this release bumps the version (§14).
         revision_kind = (
             ReportRevisionKind(verification.pending_revision_kind)
@@ -289,39 +290,6 @@ class ReviewService:
         await self._derive_and_persist(verification_id, admin_id)
         return await self._tasks.get_model(task.id)
 
-    async def fail(self, verification_id: str, reason: str, admin_id: str) -> RefundOutcome:
-        """Fail the verification and refund the customer (§8.5). Returns what the refund did,
-        so the admin is told when a gateway refused it and finance has to retry."""
-        verification = await self._get_verification(verification_id)
-        verification_state_machine.assert_can_transition(
-            verification.status, VerificationStatus.FAILED.value, resource="Verification"
-        )
-        # Claimed before the refund: a release (or another failure) that got there first
-        # leaves nothing to fail, and the customer is refunded once.
-        failed = await self._verification_repo.claim_transition(
-            verification_id, verification_state_machine.sources_of(VerificationStatus.FAILED.value),
-            VerificationStatus.FAILED,
-        )
-        if failed is None:
-            raise InvalidResourceStateException(
-                resource="verification", message="This verification has already moved on."
-            )
-        self._audit.schedule(
-            action=AuditActionType.VERIFICATION_FAILED,
-            resource_type="verification", resource_id=verification_id, actor_id=admin_id,
-            from_state=verification.status, to_state=VerificationStatus.FAILED.value,
-            details={"reason": reason},
-        )
-        refund = await self._payments.refund(verification_id, admin_id, reason)
-        self._audit.schedule(
-            action=AuditActionType.VERIFICATION_REFUNDED,
-            resource_type="verification", resource_id=verification_id, actor_id=admin_id,
-            # A refused refund leaves its payment settled, in finance's refunds-to-retry list.
-            details={"refunded_minor": refund.refunded_minor,
-                     "refund_failed_payment_ids": refund.failed_payment_ids, "reason": reason},
-        )
-        return refund
-
     # ── Read (§8.1) ───────────────────────────────────────────────
 
     async def get_review_context(self, verification_id: str) -> ReviewContext:
@@ -344,14 +312,14 @@ class ReviewService:
         return ReviewContext(
             verification=verification, tier=tier, tasks=tasks, conflicts=conflicts,
             all_approved=all_approved, projected_trust_score=projected,
-            releasable=all_approved and not any(c.severity == "HIGH" for c in conflicts)
-            and verification.status == VerificationStatus.UNDER_REVIEW.value,
+            releasable=all_approved and not any(c.severity == ConflictSeverity.HIGH for c in conflicts)
+            and verification.status == VerificationStatus.UNDER_REVIEW.value and not is_on_hold(verification),
             report=report, submissions=submissions,
         )
 
     # ── helpers ───────────────────────────────────────────────────
 
-    async def _accrue_commissions(self, verification: Verification, tasks: List[VerificationTask]) -> None:
+    async def accrue_commissions(self, verification: Verification, tasks: List[VerificationTask]) -> None:
         """Accrue CLEARING commission lines per approved task (§20.1/D97): the role's fixed
         admin-set amount — independent of the tier and the price paid, so a discounted case pays
         its agents in full — plus, as its own line, any remote bonus the task carried. Both clear
@@ -413,6 +381,7 @@ class ReviewService:
         verification = await self._verification_repo.lock_model(verification_id)
         if not verification:
             raise ResourceNotFoundException(resource="verification")
+        _assert_not_on_hold(verification)
         return verification
 
     async def _get_verification(self, verification_id: str) -> Verification:
@@ -464,6 +433,16 @@ class _AccrualSchedule:
     clearance_days: int
     reserve_pct: int
     chargeback_days: int
+
+
+def _assert_not_on_hold(verification: Verification) -> None:
+    """A case waiting for Finance on its closing refund is not decided in review (§6.4): a
+    release would strand the request, which could then be neither approved nor rejected."""
+    if is_on_hold(verification):
+        raise InvalidResourceStateException(
+            resource="verification",
+            message="This case is on hold while it is being closed; Finance decides it first.",
+        )
 
 
 class ReviewContext:

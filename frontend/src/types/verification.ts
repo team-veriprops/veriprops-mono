@@ -149,6 +149,19 @@ export interface VerificationDraft {
   payload: Record<string, unknown>;
 }
 
+/** One charge as finance reads it (backend `AdminPaymentDto`, `GET /admin/payments`). */
+export interface AdminPayment extends Payment {
+  vid: string;
+  customerId: string;
+  /** The gateway that took the charge; absent for a stub charge. */
+  provider?: string | null;
+  gatewayReference?: string | null;
+  refundedAmountMinor?: number | null;
+  /** An approved refund the gateway refused, still owed: retry it from Finance. */
+  refundDueMinor?: number | null;
+  chargebackStatus?: string | null;
+}
+
 export interface Payment {
   id: string;
   verificationId: string;

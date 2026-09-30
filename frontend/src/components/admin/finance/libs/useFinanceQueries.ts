@@ -8,18 +8,61 @@ import { SetCommissionRuleRequest } from "@/types/commission";
 import { AgentRole } from "@/types/agent";
 import { AdminPayoutService } from "./admin-payout-service";
 import { CommissionRuleService } from "./commission-rule-service";
-import { AdminPaymentService } from "./admin-payment-service";
+import { AdminPaymentService, PaymentListFilters } from "./admin-payment-service";
+import { RefundRequestService } from "./refund-request-service";
+import { RefundRequestStatus } from "@/types/closure";
 
 const payoutService = new AdminPayoutService(httpClient);
 const ruleService = new CommissionRuleService(httpClient);
 const paymentService = new AdminPaymentService(httpClient);
+const refundRequestService = new RefundRequestService(httpClient);
 
 export const financeKeys = {
   payouts: (page: number, status: string) => ["admin-payouts", page, status] as const,
   disbursementQueue: () => ["admin-payouts", "disbursement-queue"] as const,
   commissionRules: () => ["commission-rules"] as const,
   refundRetries: (page: number) => ["refund-retries", page] as const,
+  payments: (page: number, filters: PaymentListFilters) => ["admin-payments", page, filters] as const,
+  refundRequests: (page: number, status: string) => ["refund-requests", page, status] as const,
 };
+
+// ── Refund approvals: every customer refund waits for Finance ────────
+export function useRefundRequestsQuery(page: number, status?: RefundRequestStatus, pageSize = DEFAULT_PAGE_SIZE) {
+  return useQuery({
+    queryKey: financeKeys.refundRequests(page, status ?? ""),
+    queryFn: async () => (await refundRequestService.list(page, pageSize, status)).data,
+  });
+}
+
+function useRefundDecision<TArgs>(fn: (args: TArgs) => ReturnType<RefundRequestService["approve"]>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      // A decision moves the queue, the payments it refunded, and the case it closed or resumed.
+      qc.invalidateQueries({ queryKey: ["refund-requests"] });
+      qc.invalidateQueries({ queryKey: ["admin-payments"] });
+      qc.invalidateQueries({ queryKey: ["refund-retries"] });
+      qc.invalidateQueries({ queryKey: ["admin", "verifications"] });
+    },
+  });
+}
+
+export function useApproveRefundMutation() {
+  return useRefundDecision(({ id, note }: { id: string; note?: string }) => refundRequestService.approve(id, note));
+}
+
+export function useRejectRefundMutation() {
+  return useRefundDecision(({ id, note }: { id: string; note: string }) => refundRequestService.reject(id, note));
+}
+
+// ── Every payment (finance's payments list) ──────────────────────────
+export function useAdminPaymentsQuery(page: number, filters: PaymentListFilters, pageSize = DEFAULT_PAGE_SIZE) {
+  return useQuery({
+    queryKey: financeKeys.payments(page, filters),
+    queryFn: async () => (await paymentService.list(page, pageSize, filters)).data,
+  });
+}
 
 // ── Refunds a gateway refused ──────────────────────────────────────
 export function useRefundRetriesQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE) {
@@ -35,7 +78,10 @@ export function useRetryRefundMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (paymentId: string) => paymentService.retryRefund(paymentId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["refund-retries"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["refund-retries"] });
+      qc.invalidateQueries({ queryKey: ["admin-payments"] });
+    },
   });
 }
 

@@ -72,10 +72,17 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.REPORT_VERSIONED: NotificationRule(email=True, template=_T.VERIFICATION_REPORT_READY),
     EventType.SLA_BREACHED: NotificationRule(email=True, sms=True, template=_T.VERIFICATION_SLA_BREACH),
     EventType.REFUND_INITIATED: NotificationRule(in_app=True),
+    EventType.CASE_ON_HOLD: NotificationRule(in_app=True),
+    EventType.CASE_RESUMED: NotificationRule(in_app=True),
+    EventType.CASE_CLOSED: NotificationRule(in_app=True),
     EventType.RECHECK_DECISION: NotificationRule(email=True, template=_T.VERIFICATION_RECHECK_DECISION),
     # Agent
     EventType.NEW_JOB: NotificationRule(email=True, sms=True, template=_T.VERIFICATION_JOB_ALERT),
     EventType.TASK_REASSIGNED: NotificationRule(in_app=True),
+    # A case closing under an agent (§6.4): stop now, resume, or closed for good.
+    EventType.TASK_ON_HOLD: NotificationRule(in_app=True),
+    EventType.TASK_RESUMED: NotificationRule(in_app=True),
+    EventType.TASK_CASE_CLOSED: NotificationRule(in_app=True),
     EventType.TASK_REJECTED: NotificationRule(email=True, template=_T.VERIFICATION_REVISION_REQUEST),
     EventType.PAYOUT_APPROVED: NotificationRule(email=True, template=_T.VERIFICATION_PAYOUT_APPROVED),
     EventType.PAYOUT_HELD: NotificationRule(email=True, template=_T.VERIFICATION_PAYOUT_HELD),

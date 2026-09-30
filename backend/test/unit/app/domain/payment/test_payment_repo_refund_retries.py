@@ -1,8 +1,9 @@
 """PaymentRepo.page_refunds_to_retry: the SQL behind finance's refunds-to-retry list.
 
-A refund the gateway refused leaves its payment SUCCEEDED on a verification that was failed or
-refunded. The query must find exactly those: live, settled payments, joined to their
-verification through the hex reference column, oldest first.
+An approved refund the gateway refused leaves its charge SUCCEEDED and still owing what it was
+asked for (`refund_due_minor`). The query finds exactly those: live, settled charges owing money,
+not under a chargeback, oldest first. What is owed is recorded, never inferred from the case's
+status — a failed case with nothing approved owes nothing.
 """
 from unittest.mock import AsyncMock, MagicMock
 
@@ -25,7 +26,7 @@ def _sql(stmt) -> str:
     return " ".join(str(stmt.compile(compile_kwargs={"literal_binds": True})).lower().split())
 
 
-async def test_it_lists_settled_payments_on_failed_or_refunded_verifications(session):
+async def test_it_lists_settled_charges_still_owing_an_approved_refund(session):
     rows = MagicMock()
     rows.scalars.return_value.all.return_value = ["p1"]
     session.scalar = AsyncMock(return_value=7)
@@ -37,11 +38,11 @@ async def test_it_lists_settled_payments_on_failed_or_refunded_verifications(ses
 
     assert (page_rows, total) == (["p1"], 7)
     sql = _sql(session.execute.await_args.args[0])
-    assert "replace(cast(verifications.id as varchar), '-', '') = payments.verification_id" in sql
     assert "payments.deleted is false" in sql
     assert "payments.status = 'succeeded'" in sql
     # A payment under a chargeback is the issuer's to settle, never ours to refund.
     assert "payments.chargeback_status is null" in sql
-    assert "verifications.status in ('failed', 'refunded')" in sql
+    assert "payments.refund_due_minor > 0" in sql
+    assert "verifications" not in sql
     assert "order by payments.date_created asc" in sql
     assert "limit 5 offset 5" in sql

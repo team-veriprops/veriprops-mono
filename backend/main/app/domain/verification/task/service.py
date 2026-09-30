@@ -26,6 +26,7 @@ from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.auth.session.models import UserPersona
 from main.app.domain.user.service import UserService
+from main.app.domain.verification.closure.policy import is_on_hold
 from main.app.domain.verification.repo import VerificationRepo
 from main.app.domain.verification.models import UpdateVerificationDto, Verification
 from main.app.domain.verification.status_events import publish_verification_started
@@ -156,6 +157,7 @@ class VerificationTaskService:
                 resource="verification",
                 message="This verification is in a terminal state.",
             )
+        self._assert_not_on_hold(verification)
 
         await self._assert_capacity(agent_id)
 
@@ -223,6 +225,11 @@ class VerificationTaskService:
             agent_id, states, offset=page * page_size, limit=page_size
         )
 
+    async def is_case_on_hold(self, verification_id: str) -> bool:
+        """Whether the task's case waits for Finance to decide its closing refund (§6.4)."""
+        verification = await self._verification_repo.get_model(verification_id)
+        return verification is not None and is_on_hold(verification)
+
     async def count_pool_pending(self) -> int:
         """Unclaimed broadcast tasks in the open pool (admin dashboard §6.3)."""
         return await self._task_repo.count_pool_pending()
@@ -248,6 +255,7 @@ class VerificationTaskService:
         must still be unclaimed PENDING); manual = only the assigned agent may accept.
         Enforces capacity (§6.5) and moves the task to ACCEPTED."""
         task = await self._get_task(task_id)
+        await self._assert_case_not_on_hold(task)
         if task.state == TaskState.ACCEPTED.value and task.assigned_agent_id == agent_id:
             return task  # idempotent re-accept
 
@@ -287,6 +295,7 @@ class VerificationTaskService:
         """Agent declines a task they own (§12.1). Returns it to the open pool for the
         next agent and records the decline (feeds ranking / reliability, §11.3)."""
         task = await self._get_owned_task(task_id, agent_id)
+        await self._assert_case_not_on_hold(task)
         if task.state not in (TaskState.ASSIGNED.value, TaskState.ACCEPTED.value):
             raise InvalidResourceStateException(
                 resource="task", message="Only an assigned/accepted task can be declined."
@@ -311,6 +320,7 @@ class VerificationTaskService:
     async def start(self, task_id: str, agent_id: str) -> VerificationTask:
         """Agent begins work (§12.2): ACCEPTED → IN_PROGRESS."""
         task = await self._get_owned_task(task_id, agent_id)
+        await self._assert_case_not_on_hold(task)
         self._assert_task_transition(task.state, TaskState.IN_PROGRESS)
         await self._task_repo.update(task.id, UpdateTaskDto(state=TaskState.IN_PROGRESS.value))
         self._audit.schedule(
@@ -329,6 +339,7 @@ class VerificationTaskService:
         """Capture a piece of proof-of-work for an in-progress task (§4.5, §12.3).
         Ownership + IN_PROGRESS enforced; the evidence service stamps hash/GPS/timestamp."""
         task = await self._get_owned_task(task_id, agent_id)
+        await self._assert_case_not_on_hold(task)
         if task.state != TaskState.IN_PROGRESS.value:
             raise InvalidResourceStateException(
                 resource="task", message="Evidence can only be added while the task is in progress."
@@ -359,6 +370,7 @@ class VerificationTaskService:
         to trusted (§3.3). The derive owner promotes the verification to UNDER_REVIEW once
         every required task is SUBMITTED (§2.5)."""
         task = await self._get_owned_task(task_id, agent_id)
+        await self._assert_case_not_on_hold(task)
         validate_submission(AgentRole(task.role), payload)
         if await self._evidence.count_for_task(Utils.uuid_to_hex(task.id)) == 0:
             raise ValidationException(
@@ -473,6 +485,21 @@ class VerificationTaskService:
         tasks = await self._task_repo.list_for_verification(verification_id)
         settled = {TaskState.SUBMITTED.value, TaskState.APPROVED.value}
         return [AgentRole(t.role) for t in tasks if t.state in settled]
+
+    @staticmethod
+    def _assert_not_on_hold(verification: Verification) -> None:
+        if is_on_hold(verification):
+            raise InvalidResourceStateException(
+                resource="verification",
+                message="This case is on hold while it is being closed. Wait until you hear back.",
+            )
+
+    async def _assert_case_not_on_hold(self, task: VerificationTask) -> None:
+        """An agent may not move a task on a case being closed (§6.4): the case waits for
+        Finance, and work done now could be for nothing."""
+        verification = await self._verification_repo.get_model(task.verification_id)
+        if verification is not None:
+            self._assert_not_on_hold(verification)
 
     async def _assert_capacity(self, agent_id: str) -> None:
         """Refuse a task beyond the agent's cap (§6.5).

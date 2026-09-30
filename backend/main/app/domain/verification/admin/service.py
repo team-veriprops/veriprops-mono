@@ -16,7 +16,7 @@ from kink import inject
 from main.app.config.settings import settings
 from main.app.core.sla import ACTIVE_SLA_STATES, SlaHealth, add_business_days, compute_sla_health
 from main.app.core.state.dependencies import required_task_count
-from main.app.core.state.machine import verification_state_machine
+from main.app.domain.verification.closure.policy import CLOSABLE_STATUSES, is_on_hold
 from main.app.core.state.status import (
     AgentRole,
     TaskState,
@@ -31,6 +31,7 @@ from main.app.domain.payment.chargeback.models import ChargebackDto, ChargebackS
 from main.app.domain.payment.chargeback.service import ChargebackService
 from main.app.domain.payment.models import PaymentDto, PaymentMethodKind, PaymentStatus
 from main.app.domain.payment.repo import PaymentRepo
+from main.app.domain.payment.service import PaymentService, refundable_total
 from main.app.domain.property.models import PropertyDto, PropertyType
 from main.app.domain.property.repo import PropertyRepo
 from main.app.domain.system_config.models import ConfigKey
@@ -64,6 +65,10 @@ from main.appodus_utils.exception.exceptions import (
 _DASHBOARD_RECENT_LIMIT = settings.ADMIN_DASHBOARD_RECENT_LIMIT
 
 
+# Before payment: nothing to refund and nobody at work, so a cancel simply ends the case.
+_UNPAID_CANCELLABLE = (VerificationStatus.DRAFT, VerificationStatus.SUBMITTED, VerificationStatus.PAYMENT_PENDING)
+
+
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
@@ -80,6 +85,7 @@ class AdminVerificationService:
         agent_service: AgentService,
         audit_service: AuditLogService,
         config_service: ConfigService,
+        payment_service: PaymentService,
     ):
         self._verification_repo = verification_repo
         self._property_repo = property_repo
@@ -91,6 +97,7 @@ class AdminVerificationService:
         self._agents = agent_service
         self._audit = audit_service
         self._config = config_service
+        self._payments = payment_service
 
     # ── Dashboard summary (§6) ────────────────────────────────────
 
@@ -112,7 +119,7 @@ class AdminVerificationService:
             pending_agent_applications=await self._agents.count_pending_applications(),
             open_chargebacks=await self._chargebacks.count_open(),
             available_agents=await self._agents.count_available_agents(),
-            revenue_minor=await self._payment_repo.sum_succeeded_amount(),
+            revenue_minor=await self._payment_repo.sum_collected_revenue(),
             recent=[await self._summary(v) for v in recent_rows],
         )
 
@@ -172,6 +179,11 @@ class AdminVerificationService:
             payments=[self._payment_dto(p) for p in payments],
             commissions=[self._commission_dto(c) for c in commissions],
             chargebacks=[self._chargeback_dto(c) for c in chargebacks],
+            refundable_minor=refundable_total(payments),
+            closure_reason=verification.closure_reason,
+            on_hold=is_on_hold(verification),
+            can_cancel=verification.status in {s.value for s in _UNPAID_CANCELLABLE},
+            can_close=verification.status in {s.value for s in CLOSABLE_STATUSES} and not verification.closure_reason,
             progress_percent=progress,
             required_task_count=required,
             approved_task_count=approved,
@@ -206,19 +218,28 @@ class AdminVerificationService:
     async def cancel(
         self, verification_id: str, dto: CancelVerificationDto, admin_id: str
     ) -> VerificationDetailDto:
+        """Cancel a verification nobody has paid for (§6.4): no money, no agents, so it simply
+        ends. After payment a case is *closed* instead (closure/), where the PRD refund table
+        and Finance's approval apply. A charge that still lands on a case cancelled while its
+        payment was pending is refunded through Finance as a late charge (payment/)."""
         verification = await self._get(verification_id)
-        verification_state_machine.assert_can_transition(
-            verification.status, VerificationStatus.CANCELLED.value, resource="Verification"
+        if verification.status not in _UNPAID_CANCELLABLE:
+            raise InvalidResourceStateException(
+                resource="verification",
+                message="This verification has been paid: close it instead, so the refund rules and Finance's approval apply.",
+            )
+        cancelled = await self._verification_repo.claim_transition(
+            verification_id, _UNPAID_CANCELLABLE, VerificationStatus.CANCELLED,
         )
-        await self._verification_repo.update(
-            verification_id,
-            {"status": VerificationStatus.CANCELLED.value},
-        )
+        if cancelled is None:
+            raise InvalidResourceStateException(
+                resource="verification", message="This verification has already moved on."
+            )
         self._audit.schedule(
             action=AuditActionType.VERIFICATION_CANCELLED,
             resource_type="verification", resource_id=verification_id, actor_id=admin_id,
             from_state=verification.status, to_state=VerificationStatus.CANCELLED.value,
-            details={"reason": dto.reason, "refund_pending": True},  # refund executes in S12
+            details={"reason": dto.reason},
         )
         return await self.get_detail(verification_id)
 

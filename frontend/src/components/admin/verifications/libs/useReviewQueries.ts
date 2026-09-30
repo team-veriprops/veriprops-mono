@@ -67,12 +67,6 @@ export function useReleaseMutation(verificationId: string) {
   );
 }
 
-export function useFailMutation(verificationId: string) {
-  return useReviewMutation(
-    ({ reason }: { reason: string }) => reviewService.fail(verificationId, reason),
-    verificationId,
-  );
-}
 
 // ── Trust Score Weights ──
 export function useTrustWeightsQuery() {

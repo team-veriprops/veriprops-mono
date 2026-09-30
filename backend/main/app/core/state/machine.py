@@ -80,7 +80,8 @@ VERIFICATION_TRANSITIONS: Dict[str, Set[str]] = {
     _V.PAYMENT_PENDING: {_V.PAID, _V.CANCELLED, _V.FAILED},
     _V.PAID: {_V.IN_PROGRESS, _V.CANCELLED, _V.REFUNDED, _V.FAILED},
     _V.IN_PROGRESS: {_V.UNDER_REVIEW, _V.FAILED, _V.CANCELLED},
-    _V.UNDER_REVIEW: {_V.COMPLETED, _V.IN_PROGRESS, _V.FAILED},
+    # UNDER_REVIEW → CANCELLED: a paid case closed while its report is in review (§6.4).
+    _V.UNDER_REVIEW: {_V.COMPLETED, _V.IN_PROGRESS, _V.FAILED, _V.CANCELLED},
     # COMPLETED → IN_PROGRESS: re-check approved (S44) or tier upgrade (S45)
     _V.COMPLETED: {_V.DISPUTED, _V.IN_PROGRESS},
     # DISPUTED → IN_PROGRESS: partial re-check resolution (S46)
@@ -100,21 +101,23 @@ verification_state_machine = StateMachine(
 # Detours:    ASSIGNED → PENDING   (decline / no-show timeout; back to pool)
 #             SUBMITTED → REJECTED → IN_PROGRESS   (admin rejects; agent reworks)
 #             APPROVED  → IN_PROGRESS               (admin reopens an approved task)
-# Terminal:   none — admin reopen keeps APPROVED non-terminal so it can be walked back.
+#             any undelivered state → CANCELLED   (the case was closed, §6.4)
+# Terminal:   CANCELLED only — admin reopen keeps APPROVED non-terminal so it can be walked back.
 
 _T = TaskState
 TASK_TRANSITIONS: Dict[str, Set[str]] = {
     # Pool path: agent accepts from the open pool (PENDING → ACCEPTED directly).
     # Admin-assign path: admin assigns to a specific agent (PENDING → ASSIGNED → ACCEPTED).
-    _T.PENDING: {_T.ASSIGNED, _T.ACCEPTED},
-    _T.ASSIGNED: {_T.ACCEPTED, _T.PENDING},
-    _T.ACCEPTED: {_T.IN_PROGRESS, _T.PENDING},  # PENDING = agent declines after accepting
-    _T.IN_PROGRESS: {_T.SUBMITTED},
+    _T.PENDING: {_T.ASSIGNED, _T.ACCEPTED, _T.CANCELLED},
+    _T.ASSIGNED: {_T.ACCEPTED, _T.PENDING, _T.CANCELLED},
+    _T.ACCEPTED: {_T.IN_PROGRESS, _T.PENDING, _T.CANCELLED},  # PENDING = agent declines after accepting
+    _T.IN_PROGRESS: {_T.SUBMITTED, _T.CANCELLED},
     _T.SUBMITTED: {_T.APPROVED, _T.REJECTED},
-    _T.REJECTED: {_T.IN_PROGRESS},
+    _T.REJECTED: {_T.IN_PROGRESS, _T.CANCELLED},
     _T.APPROVED: {_T.IN_PROGRESS},  # admin reopen path
 }
-TASK_TERMINAL: Set[str] = set()  # APPROVED is no longer terminal; verification state machine governs completion
+# APPROVED is not terminal (admin reopen); a cancelled task is.
+TASK_TERMINAL: Set[str] = {_T.CANCELLED}
 
 task_state_machine = StateMachine(
     transitions=TASK_TRANSITIONS,

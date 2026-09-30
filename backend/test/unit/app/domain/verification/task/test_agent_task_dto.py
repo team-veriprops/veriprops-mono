@@ -32,3 +32,14 @@ class TestCommissionReachesTheAgent:
         basic = _agent_task_dto(_row(tier=VerificationTier.BASIC), evidence_count=0, commission_minor=2_000_000)
         premium = _agent_task_dto(_row(tier=VerificationTier.PREMIUM), evidence_count=0, commission_minor=2_000_000)
         assert basic.commission_minor == premium.commission_minor
+
+
+class TestTheHoldReachesTheAgent:
+    """A case being closed (§6.4): the task card says so, so the agent stops before an action fails."""
+
+    def test_a_held_case_is_marked_on_the_card(self):
+        wire = _agent_task_dto(_row(), evidence_count=0, commission_minor=0, case_on_hold=True).model_dump(by_alias=True)
+        assert wire["caseOnHold"] is True
+
+    def test_a_task_is_not_on_hold_by_default(self):
+        assert _agent_task_dto(_row(), evidence_count=0, commission_minor=0).case_on_hold is False

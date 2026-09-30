@@ -9,6 +9,7 @@ import {
   VerificationListFilters,
   VerificationSummary,
 } from "@/types/adminVerification";
+import { CloseCaseRequest, CloseReason, ClosureQuote, ClosureResult } from "@/types/closure";
 
 /**
  * Admin verification control-panel API. Mirrors the backend controller at
@@ -61,8 +62,21 @@ export class AdminVerificationService {
     return this.http.post(`${this.base}/${verificationId}/resume`, {});
   }
 
+  /** Cancel a case nobody has paid for. A paid one is closed instead (`close`). */
   cancel(verificationId: string, reason: string): Promise<SuccessResponse<VerificationDetail>> {
     return this.http.post(`${this.base}/${verificationId}/cancel`, { reason });
+  }
+
+  /** What closing a paid case for *reason* would do: the refund, the ending, each agent's outcome. */
+  closureQuote(verificationId: string, reason: CloseReason, amountMinor?: number): Promise<SuccessResponse<ClosureQuote>> {
+    const params = new URLSearchParams({ reason });
+    if (amountMinor !== undefined) params.set("amount_minor", String(amountMinor));
+    return this.http.get(`${this.base}/${verificationId}/closure-quote?${params.toString()}`);
+  }
+
+  /** Close a paid case. A refund it owes waits for Finance; the case is on hold until then. */
+  close(verificationId: string, request: CloseCaseRequest): Promise<SuccessResponse<ClosureResult>> {
+    return this.http.post(`${this.base}/${verificationId}/close`, request);
   }
 
   setDelay(

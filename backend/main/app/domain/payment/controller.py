@@ -9,8 +9,10 @@ from libre_fastapi_jwt import AuthJWT
 
 from main.app.config.settings import settings
 from main.app.domain.payment.models import (
+    AdminPaymentDto,
     InitiatePaymentDto,
     PaymentDto,
+    PaymentStatus,
     PaymentWebhookDto,
     payment_to_dto,
 )
@@ -84,6 +86,20 @@ async def stub_confirm_payment(
         )
     )
     return SuccessResponse[dict](data={"processed": processed})
+
+
+@admin_payment_router.get("", response_model=SuccessResponse[Page[AdminPaymentDto]])
+async def list_payments(
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=10, ge=1, le=100),
+    query: Optional[str] = Query(default=None, max_length=100),
+    status: Optional[PaymentStatus] = Query(default=None),
+    _admin_id: str = Depends(require_permission(Permission.REFUND_PAYMENT)),
+):
+    """Every charge, newest first: finance's view of one payment's own state (§18.1)."""
+    return SuccessResponse[Page[AdminPaymentDto]](
+        data=await payment_service.page_for_admin(page, page_size, query, status)
+    )
 
 
 @admin_payment_router.get("/refund-retries", response_model=SuccessResponse[Page[PaymentDto]])

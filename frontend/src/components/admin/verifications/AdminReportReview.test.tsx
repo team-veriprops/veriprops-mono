@@ -15,20 +15,26 @@ const reviewResult: { data: ReviewState | null; isLoading: boolean; isError: boo
   isError: false,
 };
 
+vi.mock("./libs/useAdminVerificationQueries", () => ({
+  useCloseCaseMutation: () => noopMutation,
+  useClosureQuoteQuery: () => ({ data: null, isFetching: false, isError: false, error: null }),
+}));
+
 vi.mock("./libs/useReviewQueries", () => ({
   useReviewQuery: () => reviewResult,
   useApproveTaskMutation: () => noopMutation,
   useRejectTaskMutation: () => noopMutation,
   useReopenTaskMutation: () => noopMutation,
   useReleaseMutation: () => noopMutation,
-  useFailMutation: () => noopMutation,
 }));
 
-import AdminReportReview, { failSummary } from "./AdminReportReview";
+import AdminReportReview from "./AdminReportReview";
 
 const review: ReviewState = {
   verificationId: "v1",
+  vid: "VP-2026-TEST01",
   status: VerificationStatus.UNDER_REVIEW,
+  canClose: true,
   tier: VerificationTier.STANDARD,
   tasks: [
     {
@@ -86,30 +92,11 @@ describe("AdminReportReview", () => {
     // feeds the composite trust score, so the field has to say what it is.
     expect(isNamed(markup(), `quality-${AgentRole.FIELD}`)).toBe(true);
   });
-});
 
-describe("failSummary", () => {
-  it("says refunded only when the gateway took the refund", () => {
-    expect(failSummary({ refundedMinor: 1_500_000, failedPaymentIds: [], heldPaymentIds: [] })).toEqual({
-      ok: true,
-      message: "Verification failed & refunded",
-    });
-  });
-
-  it("says so when a gateway refused the refund, and where it waits", () => {
-    const summary = failSummary({ refundedMinor: 0, failedPaymentIds: ["p1"], heldPaymentIds: [] });
-    expect(summary.ok).toBe(false);
-    expect(summary.message).toMatch(/refused the refund/);
-    expect(summary.message).toMatch(/Finance/);
-  });
-
-  it("says a refund was held back for a chargeback, which returns the money instead", () => {
-    const summary = failSummary({ refundedMinor: 0, failedPaymentIds: [], heldPaymentIds: ["p1"] });
-    expect(summary.ok).toBe(false);
-    expect(summary.message).toMatch(/chargeback/);
-  });
-
-  it("claims nothing when the response carried no refund", () => {
-    expect(failSummary(undefined)).toEqual({ ok: true, message: "Verification failed" });
+  it("offers to close a case it cannot deliver only when the backend says it can be closed", () => {
+    reviewResult.data = { ...review, canClose: true };
+    expect(renderToStaticMarkup(<AdminReportReview verificationId="v1" />)).toContain('data-testid="close-case-open"');
+    reviewResult.data = { ...review, canClose: false };
+    expect(renderToStaticMarkup(<AdminReportReview verificationId="v1" />)).not.toContain('data-testid="close-case-open"');
   });
 });

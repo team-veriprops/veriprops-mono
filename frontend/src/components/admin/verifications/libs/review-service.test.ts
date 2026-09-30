@@ -32,13 +32,11 @@ describe("ReviewService contract (mirrors /admin/review backend routes)", () => 
     expect(calls[2]).toMatchObject({ method: "post", url: "/admin/review/v-1/tasks/FIELD/reopen" });
   });
 
-  it("releases and fails a verification", async () => {
+  it("releases a verification (a case that cannot be delivered is closed, not failed here)", async () => {
     const { http, calls } = mockHttp();
     const svc = new ReviewService(http);
     await svc.release("v-1", "all good");
-    await svc.fail("v-1", "fraud");
     expect(calls[0]).toMatchObject({ method: "post", url: "/admin/review/v-1/release", body: { reason: "all good" } });
-    expect(calls[1]).toMatchObject({ method: "post", url: "/admin/review/v-1/fail", body: { reason: "fraud" } });
   });
 });
 

@@ -5,18 +5,16 @@ frontend/src/components/admin/verifications/libs/review-service.
 """
 from __future__ import annotations
 
-from typing import Optional
 
 from fastapi import APIRouter, Depends
 from kink import di
 
 from main.app.core.state.status import AgentRole, VerificationStatus, VerificationTier
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
-from main.app.domain.payment.models import RefundOutcome
 from main.app.domain.verification.report.models import ReportDto
+from main.app.domain.verification.closure.policy import CLOSABLE_STATUSES
 from main.app.domain.verification.review.models import (
     ApproveTaskDto,
-    FailVerificationDto,
     RejectTaskDto,
     ReleaseDto,
     ReviewConflictDto,
@@ -60,10 +58,12 @@ def _report_dto(r) -> ReportDto:
     )
 
 
-def _state_dto(verification_id: str, ctx: ReviewContext, refund: Optional[RefundOutcome] = None) -> ReviewStateDto:
+def _state_dto(verification_id: str, ctx: ReviewContext) -> ReviewStateDto:
     return ReviewStateDto(
         verification_id=verification_id,
+        vid=ctx.verification.vid,
         status=VerificationStatus(ctx.verification.status),
+        can_close=ctx.verification.status in {s.value for s in CLOSABLE_STATUSES} and not ctx.verification.closure_reason,
         tier=ctx.tier,
         tasks=[_task_dto(t) for t in ctx.tasks],
         conflicts=[ReviewConflictDto(**c.as_dict()) for c in ctx.conflicts],
@@ -72,7 +72,6 @@ def _state_dto(verification_id: str, ctx: ReviewContext, refund: Optional[Refund
         releasable=ctx.releasable,
         report=_report_dto(ctx.report) if ctx.report else None,
         findings={role.value: payload for role, payload in ctx.submissions.items()},
-        refund=refund,
     )
 
 
@@ -125,11 +124,3 @@ async def release(
     return SuccessResponse[ReviewStateDto](data=_state_dto(verification_id, ctx))
 
 
-@review_router.post("/{verification_id}/fail", response_model=SuccessResponse[ReviewStateDto])
-async def fail(
-    verification_id: str, req: FailVerificationDto,
-    admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
-):
-    refund = await review_service.fail(verification_id, req.reason, admin_id)
-    ctx = await review_service.get_review_context(verification_id)
-    return SuccessResponse[ReviewStateDto](data=_state_dto(verification_id, ctx, refund))

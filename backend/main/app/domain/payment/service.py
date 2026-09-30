@@ -7,7 +7,9 @@ completes. First successful payment upgrades the customer to `trusted`.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from decimal import ROUND_HALF_UP, Decimal
+
+from typing import TYPE_CHECKING, Collection, Optional, Tuple
 
 from kink import di, inject
 
@@ -18,6 +20,8 @@ from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.payment.chargeback.models import ChargebackWebhookDto
 from main.app.domain.payment.models import (
+    AdminPaymentDto,
+    admin_payment_to_dto,
     CreatePaymentDto,
     Payment,
     PaymentMethodKind,
@@ -30,6 +34,9 @@ from main.app.domain.payment.models import (
     payment_to_dto,
 )
 from main.app.domain.payment.repo import PaymentRepo
+from main.app.core.state.machine import VERIFICATION_TERMINAL
+from main.app.domain.payment.refund_request.models import RefundSource
+from main.app.domain.payment.refund_request.service import RefundRequestService
 from main.app.domain.user.auth.session.models import UserPersona
 from main.app.domain.user.service import UserService
 from main.app.domain.verification.models import VerificationStatus
@@ -37,6 +44,7 @@ from main.app.domain.verification.service import VerificationService
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.appodus_utils import Page, Utils
 from main.appodus_utils.exception.faults import log_fault_once
+from main.appodus_utils.db.db_utils import DbUtils
 from main.appodus_utils.db.types.money import TransactionCurrency
 from main.appodus_utils.integrations.exception.exceptions import IntegrationException
 from main.appodus_utils.integrations.factory import PaymentGatewayFactory
@@ -71,11 +79,31 @@ _OPEN_PAYMENT_STATUSES = [
 _OPEN_PAYMENT_VALUES = {status.value for status in _OPEN_PAYMENT_STATUSES}
 _CHECKOUT_TITLE = "Veriprops property verification"
 # A verification whose payments are owed back to the customer.
-_REFUNDABLE_VERIFICATION = {VerificationStatus.FAILED.value, VerificationStatus.REFUNDED.value}
 
 
 class _GatewayRefundRefused(Exception):
     """A gateway refused one payment's refund; the payment has been put back to SUCCEEDED."""
+
+
+def refundable_total(payments) -> int:
+    """What a refund could send back from *payments* (already loaded): see `_refundable`."""
+    return sum(p.amount_minor for p in payments if _refundable(p))
+
+
+def _refundable(payment: Payment) -> bool:
+    """A settled charge whose money is ours to return: not the issuer's (under a chargeback),
+    and not already owed back by a refund Finance approved (that waits for its retry)."""
+    return (payment.status == PaymentStatus.SUCCEEDED.value and not payment.chargeback_status
+            and not payment.refund_due_minor)
+
+
+def _charged_share(payment: Payment, amount_minor: int) -> int:
+    """*amount_minor* of the contractual amount, in what the customer was charged: the same
+    fraction of the charge-currency amount when one was fixed at pricing time (§17.1)."""
+    charged, _currency = _charge_of(payment)
+    if amount_minor >= payment.amount_minor:
+        return charged
+    return int((Decimal(charged) * amount_minor / payment.amount_minor).to_integral_value(rounding=ROUND_HALF_UP))
 
 
 def _charge_of(payment: Payment) -> Tuple[int, TransactionCurrency]:
@@ -99,6 +127,7 @@ class PaymentService:
         idempotency_service: IdempotencyService,
         audit_service: AuditLogService,
         gateway_factory: PaymentGatewayFactory,
+        refund_request_service: RefundRequestService,
     ):
         self._payment_repo = payment_repo
         self._verification_service = verification_service
@@ -107,6 +136,7 @@ class PaymentService:
         self._idempotency = idempotency_service
         self._audit = audit_service
         self._gateways = gateway_factory
+        self._refund_requests = refund_request_service
 
     async def requires_phone_verification(self, customer_id: str) -> bool:
         """The pay-step phone gate (§10.5): a customer must verify their phone before paying.
@@ -241,6 +271,12 @@ class PaymentService:
                 actor_id=payment.customer_id,
                 details={"verification_id": payment.verification_id, "purpose": payment.purpose},
             )
+            # A charge can settle after its case closed (cancelled while the payment was
+            # pending). The case must not reopen; the money goes back through Finance.
+            verification = await self._verification_service.get_by_id(payment.verification_id)
+            if verification.status in VERIFICATION_TERMINAL:
+                await self._refund_late_charge(payment, verification.status)
+                return True
             if payment.purpose == PaymentPurpose.RECHECK.value:
                 await self._on_secondary_paid(payment, PaymentPurpose.RECHECK)
             elif payment.purpose == PaymentPurpose.UPGRADE.value:
@@ -384,87 +420,134 @@ class PaymentService:
     async def get_payment(self, payment_id: str) -> Optional[Payment]:
         return await self._payment_repo.get_model(payment_id)
 
-    async def refund(self, verification_id: str, actor_id: str, reason: Optional[str] = None) -> RefundOutcome:
-        """Refund every settled charge on a verification (§8.5), one payment at a time.
+    async def refund(
+        self, verification_id: str, amount_minor: int, actor_id: str, reason: Optional[str] = None,
+        payment_ids: Optional[Collection[str]] = None,
+    ) -> RefundOutcome:
+        """Send *amount_minor* back to the customer (§8.5), spread across the case's settled
+        charges oldest first — part of a charge when the amount runs out.
 
-        Each payment is claimed first, so a concurrent refund skips it, and then refunded at
-        its gateway. A refusal puts that payment alone back to SUCCEEDED and lists it in the
-        outcome; the rest stay refunded, so our record never disagrees with where the money
-        is. Refused refunds wait in the refunds-to-retry list for finance
-        (`retry_refund`). A payment under a chargeback is held: the issuer is already
-        returning that money. The stub path moves no money.
+        Only an approved refund request calls this (refund_request/): no other path may move
+        a customer's money. Each charge is claimed first, so a concurrent refund skips it, and
+        is then refunded at its gateway. A refusal puts that charge alone back to SUCCEEDED,
+        still owing its share (`refund_due_minor`) for Finance to retry; the others stay
+        refunded, so our record never disagrees with where the money is. A charge under a
+        chargeback is held: the issuer is already returning that money. The stub path moves
+        no money.
 
         **Call it last in its transaction.** Money leaves at the gateway as it runs, so
         nothing that could still roll the transaction back may follow it."""
+        payments = await self._payment_repo.list_for_verification(verification_id)
+        if payment_ids is not None:
+            # A late charge is refunded by itself, never through the case's older charges.
+            wanted = {Utils.uuid_to_hex(pid) for pid in payment_ids}
+            payments = [p for p in payments if Utils.uuid_to_hex(p.id) in wanted]
+        refundable = sum(p.amount_minor for p in payments if _refundable(p))
+        if amount_minor > refundable:
+            raise ValidationException(
+                message="The refund is more than this case's settled charges can return.",
+            )
         outcome = RefundOutcome()
-        for payment in await self._payment_repo.list_for_verification(verification_id):
-            if payment.status != PaymentStatus.SUCCEEDED.value:
-                continue
+        remaining = amount_minor
+        for payment in payments:
+            if payment.status != PaymentStatus.SUCCEEDED.value or payment.refund_due_minor:
+                continue  # settled elsewhere, or already owing a refund Finance approved
             if payment.chargeback_status:
                 outcome.held_payment_ids.append(Utils.uuid_to_hex(payment.id))
                 continue
+            if remaining <= 0:
+                break
+            share = min(remaining, int(payment.amount_minor))
+            remaining -= share
             try:
-                if await self._refund_one(payment, actor_id, reason):
-                    outcome.refunded_minor += payment.amount_minor
+                if await self._refund_one(payment, share, actor_id, reason):
+                    outcome.refunded_minor += share
             except _GatewayRefundRefused:
                 outcome.failed_payment_ids.append(Utils.uuid_to_hex(payment.id))
         return outcome
 
+    async def refundable_minor(self, verification_id: str) -> int:
+        """What `refund` would send back right now: settled charges not under a chargeback.
+        The admin confirms this amount before cancelling a paid case."""
+        return sum(
+            p.amount_minor for p in await self._payment_repo.list_for_verification(verification_id)
+            if _refundable(p)
+        )
+
     async def retry_refund(self, payment_id: str, admin_id: str) -> Payment:
-        """Finance retries a refund the gateway refused (§18.1). Only a settled payment on a
-        failed or refunded verification qualifies; a second refusal raises and leaves the
-        payment settled."""
+        """Finance retries a refund the gateway refused (§18.1): exactly what the charge still
+        owes of an approved refund. A charge owing nothing never qualifies (a retry resends an
+        approved refund, it never starts one); a second refusal raises and keeps the debt."""
         payment = await self._payment_repo.get_model(payment_id)
         if payment is None:
             raise ResourceNotFoundException(resource="payment")
-        verification = await self._verification_service.get_by_id(payment.verification_id)
         if (payment.status != PaymentStatus.SUCCEEDED.value or payment.chargeback_status
-                or verification.status not in _REFUNDABLE_VERIFICATION):
+                or not payment.refund_due_minor):
             raise InvalidResourceStateException(
                 resource="payment", message="This payment is not awaiting a refund.",
             )
         try:
-            await self._refund_one(payment, admin_id, reason="finance_refund_retry")
+            await self._refund_one(payment, payment.refund_due_minor, admin_id, reason="finance_refund_retry")
         except _GatewayRefundRefused:
             raise IntegrationException("The payment gateway declined the refund. Try again later.") from None
         return await self._payment_repo.get_model(payment_id)
+
+    async def page_for_admin(
+        self, page: int, page_size: int, query: Optional[str], status: Optional[PaymentStatus],
+    ) -> Page[AdminPaymentDto]:
+        """Finance's payments list (§18.1): every charge, newest first."""
+        rows, total = await self._payment_repo.page_for_admin(page, page_size, query, status)
+        return DbUtils.build_page([admin_payment_to_dto(p, vid) for p, vid in rows], total, page, page_size)
 
     async def page_refunds_to_retry(self, page: int, page_size: int) -> Page[PaymentDto]:
         rows, total = await self._payment_repo.page_refunds_to_retry(page, page_size)
         return self._payment_repo._db_utils.build_page([payment_to_dto(p) for p in rows], total, page, page_size)
 
-    async def _refund_one(self, payment: Payment, actor_id: str, reason: Optional[str]) -> bool:
-        """Claim, then refund at the gateway. False when another refund got there first;
-        raises ``_GatewayRefundRefused`` (with the claim undone) when the gateway refuses."""
+    async def _refund_one(self, payment: Payment, amount_minor: int, actor_id: str, reason: Optional[str]) -> bool:
+        """Claim, then refund *amount_minor* of *payment* at its gateway. False when another
+        refund got there first; raises ``_GatewayRefundRefused`` when the gateway refuses, with
+        the claim undone and the amount left owing on the charge."""
         refunded = await self._payment_repo.claim_transition(
             payment.id, [PaymentStatus.SUCCEEDED], PaymentStatus.REFUNDED,
-            refunded_amount_minor=payment.amount_minor,
+            refunded_amount_minor=amount_minor, refund_due_minor=None,
         )
         if refunded is None:
             return False
         if not settings.PAYMENT_STUB_MODE and payment.provider:
-            amount_minor, _currency = _charge_of(payment)
             try:
                 gateway = self._gateways.for_platform(IntegratedPlatform(payment.provider))
-                await gateway.refund_charge(payment.tx_ref, amount_minor, reason)
+                await gateway.refund_charge(payment.tx_ref, _charged_share(payment, amount_minor), reason)
             except Exception as e:
                 await self._payment_repo.claim_transition(
-                    payment.id, [PaymentStatus.REFUNDED], PaymentStatus.SUCCEEDED, refunded_amount_minor=None,
+                    payment.id, [PaymentStatus.REFUNDED], PaymentStatus.SUCCEEDED,
+                    refunded_amount_minor=None, refund_due_minor=amount_minor,
                 )
                 log_fault_once(e, f"refund of payment {payment.tx_ref}")
                 self._audit.schedule(
                     action=AuditActionType.PAYMENT_REFUND_FAILED,
                     resource_type="payment", resource_id=payment.id, actor_id=actor_id,
-                    details={"verification_id": payment.verification_id, "tx_ref": payment.tx_ref, "reason": reason},
+                    details={"verification_id": payment.verification_id, "tx_ref": payment.tx_ref,
+                             "amount_minor": amount_minor, "reason": reason},
                 )
                 raise _GatewayRefundRefused() from e
         self._audit.schedule(
             action=AuditActionType.PAYMENT_REFUNDED,
             resource_type="payment", resource_id=payment.id, actor_id=actor_id,
-            details={"verification_id": payment.verification_id, "amount_minor": payment.amount_minor,
+            details={"verification_id": payment.verification_id, "amount_minor": amount_minor,
                      "reason": reason},
         )
         return True
+
+    async def _refund_late_charge(self, payment: Payment, case_status: str) -> None:
+        """File a full refund request for a charge that settled on a closed case. It still
+        waits for Finance: no customer money leaves unapproved."""
+        await self._refund_requests.file(
+            verification_id=payment.verification_id, customer_id=payment.customer_id,
+            source=RefundSource.LATE_CHARGE, amount_minor=payment.amount_minor,
+            currency=TransactionCurrency(payment.currency), requested_by=None,
+            reason=RefundSource.LATE_CHARGE.value, payment_id=Utils.uuid_to_hex(payment.id),
+            note=f"Charge {payment.tx_ref} settled after the case was {case_status.lower()}.",
+        )
 
     async def _award_referral_credit(self, payment: Payment) -> None:
         """Route a confirmed first payment to the referral service (best-effort). Resolved
