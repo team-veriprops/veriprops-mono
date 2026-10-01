@@ -15,22 +15,37 @@ export interface AuthSnapshot {
   personas: string[];
 }
 
+/** Form controls a spec can type into or operate; each must be hydrated before it is touched. */
+const INTERACTIVE_CONTROLS = "input, select, textarea, button";
+
 /**
- * Block until the React tree has mounted and `ClientWrapperProvider` has flipped
- * `__app_ready__`. Use after every navigation instead of `waitForTimeout`.
+ * Block until the page is ready to be operated: `ClientWrapperProvider` has flipped
+ * `__app_ready__` **and** every form control on the page has been hydrated by React.
+ * Use after every navigation instead of `waitForTimeout`.
+ *
+ * `__app_ready__` alone only says the root provider has mounted. Every route renders below the
+ * root `loading.tsx` `Suspense` boundary, so the page's own controls can still be server-rendered
+ * HTML with no handlers: a value typed into one is never seen by React, and the next re-render
+ * writes the controlled value back over it (WebKit: the payout amount came back empty and the
+ * fee was never quoted). React marks every node it hydrates — server-component output included —
+ * with a `__reactProps$…` key, so "no control is missing that key" is a deterministic,
+ * page-agnostic signal.
  */
 export async function waitReady(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__app_ready__ === true);
+  await page.waitForFunction((selector) => {
+    const isHydrated = (el: Element) => Object.keys(el).some((key) => key.startsWith("__reactProps"));
+    return Array.from(document.querySelectorAll(selector)).every(isHydrated);
+  }, INTERACTIVE_CONTROLS);
 }
 
 /**
  * Block until React has hydrated the element behind *testId*.
  *
- * `waitReady` only says the root provider has mounted. A form below a `Suspense` boundary can
- * still be server-rendered HTML with no handlers: text typed into it is either never seen by
- * the form library or wiped when hydration resets the input to its default (observed on WebKit,
- * where the email box came back empty and the sign-in never submitted). React marks a hydrated
- * DOM node with a `__reactProps$…` key, which is a deterministic signal — no fixed sleep.
+ * `waitReady` covers the controls present when a navigation settles; use this for a control
+ * that appears later from server-rendered HTML (a streamed `Suspense` segment), where text typed
+ * before hydration is lost or wiped when hydration resets the input to its default. React marks
+ * a hydrated DOM node with a `__reactProps$…` key, which is a deterministic signal — no fixed sleep.
  */
 export async function waitForHydration(page: Page, testId: string): Promise<void> {
   await page.waitForFunction((id) => {

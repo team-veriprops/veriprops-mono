@@ -210,8 +210,9 @@ Named because they are the "will this actually automate?" risks; each becomes a 
 
    Keep `pnpm dev:https` for authoring a spec; judge green/red only against the build. This is not a formality:
    against the dev server WebKit loses the first field of a form (login, signup, set-password) to the hydration
-   reset and reports failures the build does not have. Every form fill is preceded by `waitForHydration`, which
-   makes both stacks deterministic, but the build remains the verdict.
+   reset and reports failures the build does not have. The ready gate (`waitReady`, behind every `goto` and
+   `waitForPage`) waits until every form control on the page is hydrated, and a control that streams in later is
+   gated by `waitForHydration`. That makes both stacks deterministic, but the build remains the verdict.
 3. **CI runs this suite too** — `e2e.yml` builds the frontend, serves the standalone output behind the same TLS front, and runs `chromium-desktop,webkit-mobile` against the same backend the drive-through just used (its `globalSetup` resets and re-seeds first). A red browser suite blocks the PR and the release. The other four engine permutations stay local/nightly.
 4. `pnpm e2e` (two parallel workers by default, as on CI, since this machine also runs the stack; `UAT_WORKERS` overrides; `@serial` specs then run one at a time) — `globalSetup` reset+seeds once; `--grep @P0` or `--grep UAT-PAY` to scope; `UAT_ENGINES=chromium-desktop` (or `--project=…`) to run one engine/device of the six-permutation matrix (§7). `UAT_BASE_URL` overrides the origin.
 5. Debug failures with the Playwright trace viewer (`pnpm e2e:report`) and the `playwright-cli` skill for ad-hoc UI investigation.
@@ -242,7 +243,7 @@ Built and verified green against a live local stack — **78/78 across the full 
 | Runner config + engine matrix | `playwright.config.ts` | Six projects (§7); `UAT_ENGINES` narrows for a local loop. Two workers in the parallel lane (one in `@serial`; `UAT_WORKERS` overrides), retries, trace/screenshot/video on failure. |
 | One reset+seed + persona sessions | `global-setup.ts` | Seeds once, logs in 7 personas via the real login form, saves `storageState` + the run's seed payload. |
 | API bootstrap client | `helpers/api.ts` | CSRF-aware, envelope-unwrapping; **preconditions only**, never assertions. |
-| Readiness / auth hooks | `helpers/app.ts` | `waitReady`, `authSnapshot`, `expectAuthenticated` — no fixed timeouts anywhere. |
+| Readiness / auth hooks | `helpers/app.ts` | `waitReady` (`__app_ready__` plus every form control hydrated), `waitForHydration`, `authSnapshot`, `expectAuthenticated` — no fixed timeouts anywhere. |
 | UI login | `helpers/auth.ts` | The one place credentials are typed. |
 | Mailpit | `helpers/mailpit.ts` | `waitForEmail`, `extractLinkFromEmail` (HTML **and** plain-text bodies). |
 | Accessibility | `helpers/a11y.ts` | `expectNoA11yViolations` — WCAG 2.1 A/AA, serious+critical block, empty tracked baseline. |
