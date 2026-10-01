@@ -1,7 +1,7 @@
-from typing import List, Optional, Type
+from typing import List, Optional, Tuple, Type
 
 from kink import inject
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.payment.models import (
@@ -12,6 +12,8 @@ from main.app.domain.payment.models import (
     SearchPaymentDto,
     UpdatePaymentDto,
 )
+from main.app.domain.verification.models import Verification
+from main.appodus_utils.db.db_utils import hex_ref
 from main.appodus_utils.db.repo import GenericRepo
 
 
@@ -36,19 +38,74 @@ class PaymentRepo(
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_gateway_reference(self, provider: str, gateway_reference: str) -> Optional[Payment]:
+        """The payment a gateway identifies by its own reference (a chargeback that cites no tx_ref)."""
+        stmt = select(Payment).where(
+            Payment.deleted.is_(False),
+            Payment.provider == provider,
+            Payment.gateway_reference == gateway_reference,
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def page_refunds_to_retry(self, page: int, page_size: int) -> Tuple[List[Payment], int]:
+        """Charges still owing an approved refund their gateway refused, oldest first: what
+        Finance retries. A charge under a chargeback is the issuer's to settle, never ours."""
+        stmt = select(Payment).where(
+            Payment.deleted.is_(False),
+            Payment.status == PaymentStatus.SUCCEEDED.value,
+            Payment.chargeback_status.is_(None),
+            Payment.refund_due_minor > 0,
+        )
+        total = await self._session.scalar(select(func.count()).select_from(stmt.subquery()))
+        rows = await self._session.execute(
+            stmt.order_by(Payment.date_created.asc()).offset(page * page_size).limit(page_size)
+        )
+        return list(rows.scalars().all()), int(total or 0)
+
+    async def page_for_admin(
+        self, page: int, page_size: int, query: Optional[str] = None, status: Optional[PaymentStatus] = None,
+    ) -> Tuple[List[Tuple[Payment, str]], int]:
+        """Every live payment with its case's VID, newest first (finance's payments list).
+        *query* matches the charge reference or the VID, as typed: its wildcards are escaped."""
+        criteria = [Payment.deleted.is_(False)]
+        if status is not None:
+            criteria.append(Payment.status == status.value)
+        if query and query.strip():
+            text = query.strip()
+            criteria.append(or_(
+                Payment.tx_ref.icontains(text, autoescape=True),
+                Verification.vid.icontains(text, autoescape=True),
+            ))
+        joined = (
+            select(Payment, Verification.vid)
+            .join(Verification, hex_ref(Verification.id) == Payment.verification_id)
+            .where(*criteria)
+        )
+        total = await self._session.scalar(select(func.count()).select_from(joined.subquery()))
+        rows = await self._session.execute(
+            joined.order_by(Payment.date_created.desc()).offset(page * page_size).limit(page_size)
+        )
+        return [tuple(row) for row in rows.all()], int(total or 0)
+
     async def list_for_verification(self, verification_id: str) -> List[Payment]:
         stmt = select(Payment).where(
             Payment.deleted.is_(False),
             Payment.verification_id == verification_id,
-        )
+        ).order_by(Payment.date_created.asc())
         return list((await self._session.execute(stmt)).scalars().all())
 
-    async def sum_succeeded_amount(self) -> int:
-        """Total collected revenue — sum of SUCCEEDED payment NGN amounts (Mission Control §18.1)."""
-        stmt = select(func.coalesce(func.sum(Payment.amount_minor), 0)).where(
-            Payment.deleted.is_(False),
-            Payment.status == PaymentStatus.SUCCEEDED.value,
+    async def sum_collected_revenue(self) -> int:
+        """What Veriprops kept, in NGN minor units (Mission Control §18.1): settled charges in
+        full, and of a refunded charge what the refund did not return (the surcharge of a
+        withdrawal, say) — nothing after a full refund."""
+        kept = case(
+            (Payment.status == PaymentStatus.SUCCEEDED.value, Payment.amount_minor),
+            (Payment.status == PaymentStatus.REFUNDED.value,
+             Payment.amount_minor - func.coalesce(Payment.refunded_amount_minor, Payment.amount_minor)),
+            else_=0,
         )
+        stmt = select(func.coalesce(func.sum(kept), 0)).where(Payment.deleted.is_(False))
         return int(await self._session.scalar(stmt) or 0)
 
     async def count_by_status(self) -> dict:

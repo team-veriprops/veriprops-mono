@@ -31,6 +31,14 @@ class EventType(str, enum.Enum):
     REPORT_VERSIONED = "REPORT_VERSIONED"
     SLA_BREACHED = "SLA_BREACHED"
     REFUND_INITIATED = "REFUND_INITIATED"
+    # Closing a paid case (§6.4). The customer: on hold while Finance decides the refund,
+    # back to work, or closed. The agents: stop, resume, or the case closed under them.
+    CASE_ON_HOLD = "CASE_ON_HOLD"
+    CASE_RESUMED = "CASE_RESUMED"
+    CASE_CLOSED = "CASE_CLOSED"
+    TASK_ON_HOLD = "TASK_ON_HOLD"
+    TASK_RESUMED = "TASK_RESUMED"
+    TASK_CASE_CLOSED = "TASK_CASE_CLOSED"
     RECHECK_DECISION = "RECHECK_DECISION"      # source: S18 (declared, unfired)
     # Agent lifecycle
     NEW_JOB = "NEW_JOB"
@@ -38,6 +46,8 @@ class EventType(str, enum.Enum):
     TASK_REJECTED = "TASK_REJECTED"            # admin revision request
     PAYOUT_APPROVED = "PAYOUT_APPROVED"        # source: S19
     PAYOUT_HELD = "PAYOUT_HELD"                # source: S19
+    PAYOUT_PAID = "PAYOUT_PAID"                # the transfer reached the agent's bank
+    PAYOUT_REJECTED = "PAYOUT_REJECTED"        # finance declined; funds back in the balance
     COMMISSION_CLEARED = "COMMISSION_CLEARED"  # source: S19 — earnings moved to available (§15.1)
     REFERRAL_CREDIT_EARNED = "REFERRAL_CREDIT_EARNED"  # source: S21 — referral credit cleared (§17.1)
     # Growth (§17)

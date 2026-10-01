@@ -11,11 +11,15 @@ from __future__ import annotations
 from kink import inject
 
 from main.app.config.settings import settings
+from main.app.core.state.dependencies import roles_for_tier
 from main.app.core.state.status import VerificationTier
 from main.app.domain.property.repo import PropertyRepo
 from main.app.domain.verification.report.acknowledgement.service import ReportAcknowledgementService
 from main.app.domain.verification.report.content import LEGAL_FOOTER_TEXT, build_report_content
-from main.app.domain.verification.report.models import CustomerReportDto
+from main.app.domain.system_config.models import ConfigKey
+from main.app.domain.system_config.service import ConfigService
+from main.app.domain.verification.pricing import is_upgrade
+from main.app.domain.verification.report.models import CustomerReportActionsDto, CustomerReportDto
 from main.app.domain.verification.report.service import ReportService
 from main.app.domain.verification.service import VerificationService
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -41,20 +45,22 @@ class CustomerReportService:
         acknowledgement_service: ReportAcknowledgementService,
         property_repo: PropertyRepo,
         pdf_factory: ReportPdfProviderFactory,
+        config_service: ConfigService,
     ):
         self._verifications = verification_service
         self._reports = report_service
         self._acks = acknowledgement_service
         self._properties = property_repo
         self._pdf_factory = pdf_factory
+        self._config = config_service
 
     async def get_report(self, verification_id: str, customer_id: str) -> CustomerReportDto:
-        content, _ = await self._build(verification_id, customer_id)
+        content, _ = await self._build(verification_id, customer_id, with_actions=True)
         return content
 
     async def acknowledge(self, verification_id: str, customer_id: str) -> CustomerReportDto:
         """Record the one-time access-gate acknowledgement against the current version (§10.1)."""
-        content, report = await self._build(verification_id, customer_id)
+        content, report = await self._build(verification_id, customer_id, with_actions=True)
         await self._acks.acknowledge(
             customer_id=customer_id, verification_id=verification_id,
             report_id=report.id, report_version=report.report_version,
@@ -76,14 +82,26 @@ class CustomerReportService:
 
     # ── helpers ───────────────────────────────────────────────────
 
-    async def _build(self, verification_id: str, customer_id: str):
+    async def _build(self, verification_id: str, customer_id: str, with_actions: bool = False):
         v = await self._verifications.get_owned(verification_id, customer_id)
         content = await self._content_from_verification(v)
         report = await self._reports.get_released(verification_id)
         content.acknowledged = await self._acks.is_acknowledged(
             customer_id, verification_id, report.report_version
         )
+        if with_actions:  # the PDF never shows them
+            content.actions = await self._actions(VerificationTier(v.tier))
         return content, report
+
+    async def _actions(self, tier: VerificationTier) -> CustomerReportActionsDto:
+        """The owner's next steps: which tiers are an upgrade, which parts of the work a
+        dispute can name (each one routes to that task's agent for a defence), and how long a
+        dispute's description must be."""
+        return CustomerReportActionsDto(
+            upgrade_tiers=[t for t in VerificationTier if is_upgrade(tier, t)],
+            dispute_roles=list(roles_for_tier(tier)),
+            dispute_min_description_chars=await self._config.get_int(ConfigKey.DISPUTE_MIN_DESCRIPTION_CHARS),
+        )
 
     async def _content_from_verification(self, v) -> CustomerReportDto:
         # v.id is a native UUID; the report's verification_id column is String(36) (.hex form).

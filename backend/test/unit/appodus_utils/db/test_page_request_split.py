@@ -4,7 +4,7 @@ wire. A client-facing `PageRequest` carries only pagination; `where`/`order_by`/
 """
 from main.appodus_utils import InternalPageRequest, PageRequest
 
-_CONTROL_FIELDS = {"where", "order_by", "query_fields", "exact_string_values"}
+_CONTROL_FIELDS = {"where", "order_by", "query_fields"}
 
 
 def test_page_request_has_no_query_controls():

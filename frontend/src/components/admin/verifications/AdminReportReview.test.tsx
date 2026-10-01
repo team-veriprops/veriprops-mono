@@ -6,7 +6,7 @@ import { ReviewDecision, TaskDto, TaskState } from "@/types/adminVerification";
 import { ReviewState } from "@/types/adminReview";
 import { isNamed } from "@/test-utils/markup";
 
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }));
 
 const noopMutation = { mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false };
 const reviewResult: { data: ReviewState | null; isLoading: boolean; isError: boolean } = {
@@ -15,20 +15,26 @@ const reviewResult: { data: ReviewState | null; isLoading: boolean; isError: boo
   isError: false,
 };
 
+vi.mock("./libs/useAdminVerificationQueries", () => ({
+  useCloseCaseMutation: () => noopMutation,
+  useClosureQuoteQuery: () => ({ data: null, isFetching: false, isError: false, error: null }),
+}));
+
 vi.mock("./libs/useReviewQueries", () => ({
   useReviewQuery: () => reviewResult,
   useApproveTaskMutation: () => noopMutation,
   useRejectTaskMutation: () => noopMutation,
   useReopenTaskMutation: () => noopMutation,
   useReleaseMutation: () => noopMutation,
-  useFailMutation: () => noopMutation,
 }));
 
 import AdminReportReview from "./AdminReportReview";
 
 const review: ReviewState = {
   verificationId: "v1",
+  vid: "VP-2026-TEST01",
   status: VerificationStatus.UNDER_REVIEW,
+  canClose: true,
   tier: VerificationTier.STANDARD,
   tasks: [
     {
@@ -85,5 +91,12 @@ describe("AdminReportReview", () => {
     // "Quality (0-100)" sits above the box but named nothing: the number an admin types here
     // feeds the composite trust score, so the field has to say what it is.
     expect(isNamed(markup(), `quality-${AgentRole.FIELD}`)).toBe(true);
+  });
+
+  it("offers to close a case it cannot deliver only when the backend says it can be closed", () => {
+    reviewResult.data = { ...review, canClose: true };
+    expect(renderToStaticMarkup(<AdminReportReview verificationId="v1" />)).toContain('data-testid="close-case-open"');
+    reviewResult.data = { ...review, canClose: false };
+    expect(renderToStaticMarkup(<AdminReportReview verificationId="v1" />)).not.toContain('data-testid="close-case-open"');
   });
 });

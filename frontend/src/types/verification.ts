@@ -38,6 +38,21 @@ export enum PaymentStatus {
   SUCCEEDED = "SUCCEEDED",
   FAILED = "FAILED",
   PENDING_TRANSFER = "PENDING_TRANSFER",
+  REFUNDED = "REFUNDED",
+}
+
+/** What a charge pays for (mirrors backend PaymentPurpose). */
+export enum PaymentPurpose {
+  INITIAL = "INITIAL",
+  RECHECK = "RECHECK",
+  UPGRADE = "UPGRADE",
+}
+
+/** How a charge is completed (mirrors backend PaymentCheckoutKind): on the gateway's hosted
+ *  page, or by the local/test stub's confirm step. */
+export enum PaymentCheckoutKind {
+  STUB = "STUB",
+  HOSTED = "HOSTED",
 }
 
 export interface SellerInfo {
@@ -124,6 +139,8 @@ export interface Verification {
   paidAt?: string;
   slaDueDate?: string;
   draftStep: number;
+  /** Whether anyone with the VID can see the public summary at `/verify/<vid>` (§13.1). */
+  publicLookupEnabled?: boolean | null;
 }
 
 export interface VerificationDraft {
@@ -134,16 +151,31 @@ export interface VerificationDraft {
   payload: Record<string, unknown>;
 }
 
+/** One charge as finance reads it (backend `AdminPaymentDto`, `GET /admin/payments`). */
+export interface AdminPayment extends Payment {
+  vid: string;
+  customerId: string;
+  /** The gateway that took the charge; absent for a stub charge. */
+  provider?: string | null;
+  gatewayReference?: string | null;
+  refundedAmountMinor?: number | null;
+  /** An approved refund the gateway refused, still owed: retry it from Finance. */
+  refundDueMinor?: number | null;
+  chargebackStatus?: string | null;
+}
+
 export interface Payment {
   id: string;
   verificationId: string;
   txRef: string;
   method: PaymentMethodKind;
+  purpose: PaymentPurpose;
   status: PaymentStatus;
   amountMinor: number;
   currency: TransactionCurrency;
   chargeCurrency?: TransactionCurrency;
   chargeAmountMinor?: number;
   checkoutUrl?: string;
+  checkoutKind: PaymentCheckoutKind;
   dateCreated: string;
 }

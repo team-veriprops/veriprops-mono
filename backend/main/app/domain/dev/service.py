@@ -24,6 +24,7 @@ from main.app.core.state.status import (
 )
 from main.app.core.vid import generate_vid
 from main.app.domain.audit.models import AuditActionType, AuditLog
+from main.appodus_utils.integrations.messaging.qa_recipients import qa_local_phone
 from main.app.domain.dev.fixtures import (
     QA_PASSWORD,
     add_admin,
@@ -130,7 +131,7 @@ class DevSeedService:
 
         customer = add_verified_user(
             session, first_name="Chidi", last_name="Okafor", email=CUSTOMER_EMAIL,
-            phone_local="8030000001", persona=UserPersona.CUSTOMER.value, password=CUSTOMER_PASSWORD,
+            phone_local=qa_local_phone(1), persona=UserPersona.CUSTOMER.value, password=CUSTOMER_PASSWORD,
         )
 
         tier = VerificationTier.STANDARD
@@ -141,7 +142,7 @@ class DevSeedService:
         agents = {
             role: add_approved_agent(
                 session, role, email=seeded_agent_email(role),
-                phone_local=f"803000010{i}", now=now,
+                phone_local=qa_local_phone(100 + i), now=now,
             )
             for i, role in enumerate(agent_roles)
         }
@@ -261,7 +262,7 @@ class DevSeedService:
         # (so pseudonymisation of the audit actor identity is observable, §4.11).
         erasable = add_verified_user(
             session, first_name="Ngozi", last_name="Eze", email=ERASABLE_EMAIL,
-            phone_local="8030009999", persona=UserPersona.CUSTOMER.value, password=ERASABLE_PASSWORD,
+            phone_local=qa_local_phone(9999), persona=UserPersona.CUSTOMER.value, password=ERASABLE_PASSWORD,
         )
         for action in (AuditActionType.CONSENT_RECORDED, AuditActionType.PAYMENT_INITIATED):
             session.add(self._new(
@@ -273,7 +274,7 @@ class DevSeedService:
         # One admin per restricted sub-role, so RBAC specs sign in as a real non-super admin.
         admins = {
             sub_role: add_admin(
-                session, sub_role, email=seeded_admin_email(sub_role), phone_local=f"803000020{i}",
+                session, sub_role, email=seeded_admin_email(sub_role), phone_local=qa_local_phone(200 + i),
             )
             for i, sub_role in enumerate((AdminSubRole.OPERATIONS, AdminSubRole.FINANCE))
         }

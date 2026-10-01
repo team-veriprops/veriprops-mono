@@ -68,3 +68,42 @@ class TestPublishHelper:
             publish_verification_event("v-x", VerificationEventType.STATUS_CHANGED)
         finally:
             di[VerificationEventEmitter] = VerificationEventEmitter()
+
+
+class TestAFailedPushIsLoggedNotRaised:
+    """The push stays best-effort (it never breaks the transaction that emitted it), but a
+    failure is a fault someone should see, logged once rather than swallowed silently."""
+
+    def test_a_verification_push_that_fails_is_logged(self, monkeypatch):
+        from main.app.core.realtime import emitter as module
+
+        class _Boom(VerificationEventEmitter):
+            def publish(self, *a, **k):
+                raise RuntimeError("queue closed")
+
+        logged = []
+        monkeypatch.setattr(module, "log_fault_once", lambda exc, where, **_: logged.append(str(exc)))
+        di[VerificationEventEmitter] = _Boom()
+        try:
+            publish_verification_event("v-1", VerificationEventType.STATUS_CHANGED, {"status": "PAID"})
+        finally:
+            di[VerificationEventEmitter] = VerificationEventEmitter()
+
+        assert logged == ["queue closed"]
+
+    def test_a_user_push_that_fails_is_logged(self, monkeypatch):
+        from main.app.core.realtime import user_emitter as module
+
+        class _Boom(module.UserEventEmitter):
+            def publish(self, *a, **k):
+                raise RuntimeError("queue closed")
+
+        logged = []
+        monkeypatch.setattr(module, "log_fault_once", lambda exc, where, **_: logged.append(str(exc)))
+        di[module.UserEventEmitter] = _Boom()
+        try:
+            module.publish_user_event("u-1", module.UserEventType.CHAT_MESSAGE, {})
+        finally:
+            di[module.UserEventEmitter] = module.UserEventEmitter()
+
+        assert logged == ["queue closed"]

@@ -59,6 +59,8 @@ class WhatsAppInboundMessage(BaseEntity):
         UniqueConstraint("wamid", name="uq_whatsapp_inbound_wamid"),
         Index("ix_whatsapp_inbound_from_phone", "from_phone"),
         Index("ix_whatsapp_inbound_messages_chat_message_id", "chat_message_id"),
+        # The unprocessed-inbound sweep and the §26.10 metrics read by kind over a time window.
+        Index("ix_whatsapp_inbound_kind_received", "kind", "received_at"),
     )
 
 

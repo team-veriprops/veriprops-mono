@@ -340,7 +340,7 @@ test.describe("UAT-AUTH — set a password @P1", () => {
   // Builds its own scenario and signs in twice, so it is slow by design rather than by accident.
   test.slow();
 
-  test("UAT-AUTH-14 · setting a password makes it the one that signs the user in", async ({
+  test("UAT-AUTH-14 · changing a password needs the current one and makes the new one sign in", async ({
     scenario,
     pageFor,
     anonPage,
@@ -352,8 +352,10 @@ test.describe("UAT-AUTH — set a password @P1", () => {
     await goto(page, ROUTES.AUTH.SET_PASSWORD);
     await expect(page.getByTestId("set-password-form")).toBeVisible();
 
+    // The scenario customer already has a password, so changing it asks for the current one.
     const chosen = "Chosen1234!";
-    await waitForHydration(page, "set-password-input");
+    await waitForHydration(page, "set-password-current-input");
+    await page.getByTestId("set-password-current-input").fill(customer.password);
     await page.getByTestId("set-password-input").fill(chosen);
     await page.getByTestId("set-password-confirm-input").fill(chosen);
     await page.getByTestId("set-password-submit").click();

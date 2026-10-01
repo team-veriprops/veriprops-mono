@@ -17,6 +17,8 @@ from typing import List, Optional
 
 from kink import inject
 
+from main.app.core.state.status import VerificationTier
+from main.app.core.state.dependencies import roles_for_tier
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.machine import verification_state_machine
 from main.app.core.state.status import (
@@ -28,11 +30,15 @@ from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.commission.service import CommissionService
 from main.app.domain.payment.service import PaymentService
+from main.appodus_utils.db.types.money import TransactionCurrency
+from main.app.domain.payment.refund_request.models import RefundSource
+from main.app.domain.payment.refund_request.service import RefundRequestService
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.system_config.service import ConfigService
 from main.app.domain.verification.dispute.models import (
     CreateDisputeDto,
     Dispute,
+    DisputeDto,
     DisputeOutcome,
     DisputeStatus,
     OpenDisputeDto,
@@ -74,6 +80,7 @@ class DisputeService:
         config_service: ConfigService,
         task_repo: VerificationTaskRepo,
         audit_service: AuditLogService,
+        refund_request_service: RefundRequestService,
     ):
         self._dispute_repo = dispute_repo
         self._verifications = verification_service
@@ -85,6 +92,7 @@ class DisputeService:
         self._config = config_service
         self._tasks = task_repo
         self._audit = audit_service
+        self._refund_requests = refund_request_service
 
     async def open(self, verification_id: str, customer_id: str, dto: OpenDisputeDto) -> Dispute:
         """Open a dispute within the window (§14.3): COMPLETED → DISPUTED + freeze commissions."""
@@ -99,6 +107,8 @@ class DisputeService:
                 message=f"Please describe the issue in at least {min_chars} characters."
             )
         await self._assert_within_window(verification_id)
+        if dto.target_role is not None and dto.target_role not in roles_for_tier(VerificationTier(v.tier)):
+            raise ValidationException(message="That part of the work is not on this verification.")
 
         verification_state_machine.assert_can_transition(
             v.status, VerificationStatus.DISPUTED.value, resource="Verification"
@@ -202,9 +212,18 @@ class DisputeService:
             await self._transition(vid, verification.status, VerificationStatus.COMPLETED)
             await self._commissions.unfreeze_for_verification(vid, admin_id)
         elif dto.outcome == DisputeOutcome.FULL_REFUND:
-            await self._transition(vid, verification.status, VerificationStatus.REFUNDED)
-            await self._payments.refund(vid, admin_id, reason="dispute_upheld_full_refund")
-            await self._commissions.reverse_for_verification(vid, admin_id)
+            # The case stays DISPUTED, commissions frozen, until Finance approves the refund
+            # (§8.5): only then does it become REFUNDED (settle_full_refund). With nothing to
+            # refund (every charge refunded or under a chargeback) it settles now.
+            refundable = await self._payments.refundable_minor(vid)
+            if refundable:
+                await self._refund_requests.file(
+                    verification_id=vid, customer_id=dispute.customer_id, source=RefundSource.DISPUTE_UPHELD,
+                    amount_minor=refundable, currency=TransactionCurrency(verification.currency),
+                    requested_by=admin_id, reason=dto.outcome.value, note=dto.note.strip(),
+                )
+            else:
+                await self.settle_full_refund(vid, admin_id)
         else:  # PARTIAL_RECHECK
             # The re-checked release becomes v2.0.
             await self._verification_repo.update(
@@ -230,18 +249,50 @@ class DisputeService:
         ))
         return resolved
 
+    async def settle_full_refund(self, verification_id: str, actor_id: str) -> None:
+        """An upheld dispute's refund is going out (Finance approved it): the case becomes
+        REFUNDED and the agents' commissions are reversed. Called before the refund is sent."""
+        verification = await self._verification_repo.get_model(verification_id)
+        if verification is None or verification.status != VerificationStatus.DISPUTED.value:
+            raise InvalidResourceStateException(
+                resource="verification", message="The verification is not under dispute."
+            )
+        await self._transition(verification_id, verification.status, VerificationStatus.REFUNDED)
+        await self._commissions.reverse_for_verification(verification_id, actor_id)
+
+    async def reopen_refused_refund(self, verification_id: str, actor_id: str, note: str) -> None:
+        """Finance refused an upheld dispute's refund: the dispute goes back to ops, open, to
+        be decided again. The case stays DISPUTED with commissions frozen; nothing was sent."""
+        upheld = next((
+            d for d in await self._dispute_repo.list_for_verification(Utils.uuid_to_hex(verification_id))
+            if d.status == DisputeStatus.RESOLVED.value and d.resolution_outcome == DisputeOutcome.FULL_REFUND.value
+        ), None)
+        if upheld is None:
+            raise InvalidResourceStateException(resource="dispute", message="No upheld dispute is waiting on this refund.")
+        if await self._dispute_repo.claim_transition(
+            upheld.id, [DisputeStatus.RESOLVED], DisputeStatus.OPEN,
+            expect={"resolution_outcome": DisputeOutcome.FULL_REFUND.value},
+            resolution_outcome=None, resolution_note=None, resolved_by=None, resolved_at=None,
+        ) is None:
+            raise InvalidResourceStateException(resource="dispute", message="This dispute has already moved on.")
+        self._audit.schedule(
+            action=AuditActionType.DISPUTE_REOPENED,
+            resource_type="dispute", resource_id=upheld.id, actor_id=actor_id,
+            details={"verification_id": verification_id, "note": note},
+        )
+
     async def list_for_verification(self, verification_id: str, customer_id: str) -> List[Dispute]:
         v = await self._verifications.get_owned(verification_id, customer_id)
         return await self._dispute_repo.list_for_verification(Utils.uuid_to_hex(v.id))
 
-    async def list_open_for_agent(self, agent_id: str) -> List[Dispute]:
-        """Open disputes awaiting the agent's admin-mediated defence (§14.3)."""
-        return await self._dispute_repo.list_open_for_agent(agent_id)
+    async def list_open_for_agent(self, agent_id: str) -> List[DisputeDto]:
+        """Open disputes awaiting the agent's admin-mediated defence (§14.3), each naming its case."""
+        return [dispute_to_dto(d, vid) for d, vid in await self._dispute_repo.list_open_for_agent(agent_id)]
 
     async def page_open(self, page: int, page_size: int):
         """Admin queue of open disputes (paged), including any agent defence for review."""
         rows, total = await self._dispute_repo.page_open(offset=page * page_size, limit=page_size)
-        dtos = [dispute_to_dto(d) for d in rows]
+        dtos = [dispute_to_dto(d, vid) for d, vid in rows]
         return self._dispute_repo._db_utils.build_page(dtos, total, page, page_size)
 
     async def get(self, dispute_id: str) -> Dispute:

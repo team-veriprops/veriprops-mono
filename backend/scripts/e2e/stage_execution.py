@@ -7,7 +7,7 @@ required task is SUBMITTED the derive owner promotes the verification to UNDER_R
 """
 from __future__ import annotations
 
-from .harness import MINIMAL_PNG, Ctx, check
+from .harness import MINIMAL_PNG, Ctx, check, commission_by_role
 
 # Minimal valid role forms (per-role required fields, task/validator.py §12.2).
 ROLE_PAYLOADS = {
@@ -28,6 +28,30 @@ def run(ctx: Ctx) -> None:
     # (the seed's task map is keyed by them). The seeded agents also include LAWYER, but
     # that role only enters at the PREMIUM upgrade (stage_premium_release).
     roles = list(ctx.seed["tasks"].keys())
+
+    # The fixed per-role commission is admin-editable and round-trips (§20.1 / D97). The
+    # original figure is restored so every later amount check reads the seeded defaults.
+    commissions = commission_by_role(admin)
+    check("every agent role has a fixed commission configured (§20.1)",
+          set(commissions) == {"REGISTRY", "FIELD", "SURVEYOR", "LAWYER"}
+          and all(v > 0 for v in commissions.values()), str(commissions))
+    original = commissions["REGISTRY"]
+    edited = admin.put("/admin/commission-rules/REGISTRY", json={"amountNgnKobo": original + 100}).json()["data"]
+    restored = admin.put("/admin/commission-rules/REGISTRY", json={"amountNgnKobo": original}).json()["data"]
+    check("admin edits a role's fixed commission, keyed by role alone (§20.1)",
+          edited["amountNgnKobo"] == original + 100 and restored["amountNgnKobo"] == original,
+          f"edited={edited.get('amountNgnKobo')} restored={restored.get('amountNgnKobo')}")
+    refused = admin.put("/admin/commission-rules/REGISTRY", json={"amountNgnKobo": -1})
+    check("a negative commission is refused (§20.1)", refused.status_code == 422,
+          f"http {refused.status_code}")
+    # BASIC pays only REGISTRY, so a REGISTRY commission of the whole BASIC price leaves no margin.
+    basic_price = next(t for t in admin.get("/admin/pricing").json()["data"]["tiers"]
+                       if t["tier"] == "BASIC")["priceNgnMinor"]
+    greedy = admin.put("/admin/commission-rules/REGISTRY", json={"amountNgnKobo": basic_price})
+    check("a commission that would eat a tier's minimum margin is refused (§20.1/D97)",
+          greedy.status_code == 422 and "minimum margin" in greedy.json()["error"]["message"]
+          and commission_by_role(admin)["REGISTRY"] == original,
+          f"http {greedy.status_code}")
 
     for role in roles:
         agent_id = ctx.seed["agents"][role]["id"]
@@ -53,6 +77,9 @@ def run(ctx: Ctx) -> None:
               f"state={mine and mine['state']}")
         task_id = mine["id"]
         ctx.task_ids[role] = task_id
+        check(f"{role} agent sees the job's fixed commission before accepting (§12.1/§20.1)",
+              mine.get("commissionMinor") == commissions[role],
+              f"shown={mine.get('commissionMinor')} rule={commissions[role]}")
 
         # Accept → start → capture evidence → submit (§12.1, §12.2, §12.3).
         accepted = agent.post(f"/agents/tasks/{task_id}/accept").json()["data"]
@@ -80,3 +107,9 @@ def run(ctx: Ctx) -> None:
     status = admin.get(f"/admin/review/{vid_id}").json()["data"]["status"]
     check("all tasks submitted → verification derived to UNDER_REVIEW (§2.5)",
           status == "UNDER_REVIEW", f"status={status}")
+
+    # The agent home summary counts the agent's own tasks server-side (§12).
+    role = next(iter(ctx.task_ids))
+    summary = ctx.agent(role).get("/agents/tasks/summary").json()["data"]
+    check("the agent summary counts their submitted work (§12)",
+          summary["submitted"] >= 1 and summary["assigned"] >= 0, f"summary={summary}")

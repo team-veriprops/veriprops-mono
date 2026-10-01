@@ -32,6 +32,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 import uuid
 
@@ -331,6 +332,16 @@ def _run_handoff_checks(ctx: Ctx) -> None:
     check("the case reached PAID through the WhatsApp handoff", status == "PAID",
           f"status={status}")
 
+    # 6b. The page the hosted checkout returns to asks where the payment stands, by grant.
+    r = holder.post("/public/wa/handoff/pay/reconcile")
+    check("the return page reads the settled payment through the grant (§26.4.2)",
+          r.status_code == 200 and r.json()["data"]["status"] == "SUCCEEDED", f"http {r.status_code}: {r.text[:160]}")
+    # 6c. Once the action is done the landing drops its grant, so it does not outlive its purpose.
+    r = holder.post("/public/wa/handoff/release")
+    dropped = r.headers.get("set-cookie", "")
+    check("releasing the grant tells the browser to delete it (§26.5)",
+          r.status_code == 200 and ("Max-Age=0" in dropped or "1970" in dropped), f"set-cookie={dropped[:160]}")
+
     # 7. Without a grant, the payment endpoint authorizes nothing.
     r = client().post("/public/wa/handoff/pay/initiate")
     check("payment initiation is refused without a grant", r.status_code == 404,
@@ -445,6 +456,49 @@ def _run_linking_checks(ctx: Ctx) -> None:
                       json={"phoneE164": f"+23481{uuid.uuid4().int % 10**8:08d}"})
     check("an unlinked account can start a fresh link (WA-25)", r.status_code == 200,
           f"http {r.status_code}: {r.text[:200]}")
+    customer.delete("/channel/whatsapp/link/me")
+
+    _run_link_from_whatsapp_checks(ctx)
+
+
+def _run_link_from_whatsapp_checks(ctx: Ctx) -> None:
+    """§26.4.4 WhatsApp→web: "link my account" from an unlinked number sends a signed link,
+    and the signed-in customer proves the number the *bot* named — never one they typed."""
+    root, customer = ctx.root, ctx.customer
+    phone = f"23480{uuid.uuid4().int % 10**8:08d}"
+
+    def say(text: str) -> str:
+        root.delete("/dev/whatsapp/outbox").raise_for_status()
+        root.post("/dev/whatsapp/inbound", json={"fromPhone": phone, "text": text}).raise_for_status()
+        messages = root.get("/dev/whatsapp/outbox").json()["data"].get("messages", [])
+        mine = [m for m in messages if phone[-10:] in str(m.get("to", ""))]
+        return str(mine[0].get("text", "")) if mine else ""
+
+    say("Hi")  # §26.6.1 welcome, which answers the turn on its own
+    reply = say("link my account")
+    match = re.search(r"/wa/link/([A-Za-z0-9._-]+)", reply)
+    check("\"link my account\" from an unlinked number sends the signed link (§26.4.4)",
+          match is not None, reply[:200])
+    if match is None:
+        return
+    token = match.group(1)
+
+    started = customer.post("/channel/whatsapp/link/from-token/start", json={"token": token})
+    check("the signed-in customer starts linking the number the bot named (§26.4.4)",
+          started.status_code == 200, f"http {started.status_code}: {started.text[:160]}")
+    wrong = customer.post("/channel/whatsapp/link/from-token/confirm", json={"token": token, "code": "000000"})
+    check("a wrong code does not link the number", wrong.status_code >= 400, f"http {wrong.status_code}")
+    confirmed = customer.post("/channel/whatsapp/link/from-token/confirm", json={"token": token, "code": TEST_OTP})
+    linked = customer.get("/channel/whatsapp/link/me").json()["data"]
+    check("the right code links the bot's number to the account (§26.4.4)",
+          confirmed.status_code == 200 and linked.get("status") == "ACTIVE"
+          and linked.get("phoneE164", "").endswith(phone[-10:]), f"http {confirmed.status_code} link={linked}")
+    replay = customer.post("/channel/whatsapp/link/from-token/confirm", json={"token": token, "code": TEST_OTP})
+    check("the bot's link is spent once used (§26.5 single-use)", replay.status_code >= 400,
+          f"http {replay.status_code}")
+    again = say("link my account")
+    check("a linked number is told it is already linked, not sent round again",
+          "already linked" in again and "/wa/link/" not in again, again[:200])
     customer.delete("/channel/whatsapp/link/me")
 
 
@@ -1472,6 +1526,12 @@ def _run_delegate_checks(ctx: Ctx) -> None:
     check("a revoked delegate does not block a replacement (§26.4.5)",
           replacement.status_code == 200,
           f"http {replacement.status_code}: {replacement.text[:200]}")
+
+    # The account holder can end a delegation from the website too, not only the delegate.
+    revoke = customer.post(f"/verifications/{case_id}/delegates/revoke")
+    after_revoke = customer.get(f"/verifications/{case_id}/delegates").json()["data"]
+    check("the account holder revokes their delegate (§26.4.5)",
+          revoke.status_code == 200 and after_revoke == [], f"http {revoke.status_code} delegates={after_revoke}")
 
 
 def _run_pay_report_handoff_checks(ctx: Ctx) -> None:

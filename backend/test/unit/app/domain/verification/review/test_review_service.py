@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from main.app.core.state.status import AgentRole, TaskState, VerificationStatus, VerificationTier
+from main.app.domain.commission.models import CommissionKind
 from main.app.domain.verification.review.service import ReviewService
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import (
@@ -14,6 +15,7 @@ from main.appodus_utils.exception.exceptions import (
     ValidationException,
 )
 from test.utils.repo_fakes import fake_claim_transition
+from main.app.domain.payment.models import RefundOutcome
 
 
 @pytest.fixture(autouse=True)
@@ -39,15 +41,16 @@ def _task(role, state=TaskState.SUBMITTED, review=None, payload=None, agent="age
         assigned_agent_id=agent, review_decision=review, review_quality=100,
         submission_payload=payload or {"ok": True}, rejection_reason=None,
         in_pool=False, assignment_mode=None, decline_count=0,
-        submitted_at=None, approved_at=None,
+        submitted_at=None, approved_at=None, remote_bonus_minor=None,
     )
 
 
-def _verification(status=VerificationStatus.UNDER_REVIEW, tier=VerificationTier.STANDARD, price=1000000):
+def _verification(status=VerificationStatus.UNDER_REVIEW, tier=VerificationTier.STANDARD, price=1000000,
+                  closure_reason=None):
     return SimpleNamespace(
         id="v-1", vid="VP-2026-0001", status=status.value, tier=tier.value,
         price_locked_minor=price, customer_id="cust-1",
-        pending_revision_kind=None,
+        pending_revision_kind=None, closure_reason=closure_reason,
     )
 
 
@@ -108,7 +111,7 @@ def _make_service(verification, tasks):
     svc._reports.release = AsyncMock(return_value=SimpleNamespace(id="rep-1", report_version=1))
     svc._reports.get_released = AsyncMock(return_value=None)
     svc._reports.supersede_current = AsyncMock()
-    svc._payments.refund = AsyncMock(return_value=1000000)
+    svc._payments.refund = AsyncMock(return_value=RefundOutcome(refunded_minor=1000000))
     svc._state = state
     return svc
 
@@ -302,7 +305,7 @@ class TestCommissionAccrual:
         svc = _make_service(_verification(), tasks)
         already = {tasks[0].id, tasks[1].id}
         svc._commissions.get_live_for_task = AsyncMock(
-            side_effect=lambda vid, tid: object() if tid in already else None
+            side_effect=lambda vid, tid, kind: object() if tid in already else None
         )
         await svc.release("v-1", "admin-1")
         assert svc._commissions.accrue.await_count == 1  # only the third task
@@ -317,8 +320,86 @@ class TestCommissionAccrual:
         assert dto.clearing_until is not None
         assert dto.reserve_until is not None
 
+    async def test_accrual_pays_each_roles_fixed_amount_regardless_of_price(self):
+        """§20.1 / D97: the commission is the role's fixed amount — never a share of the price,
+        so the tier (and any referral discount baked into the locked price) cannot move it."""
+        tasks = _standard_tasks(review="APPROVED")
+        svc = _make_service(_verification(price=99_999_999), tasks)
+        fixed = {AgentRole.REGISTRY: 2_000_000, AgentRole.FIELD: 1_440_000, AgentRole.SURVEYOR: 1_440_000}
+        svc._commission_rules.commission_minor = AsyncMock(side_effect=lambda role: fixed[role])
+        await svc.release("v-1", "admin-1")
+        paid = {dto.role: dto.amount_minor
+                for dto in (c.args[0] for c in svc._commissions.accrue.await_args_list)}
+        assert paid == fixed
+        for call in svc._commission_rules.commission_minor.await_args_list:
+            assert call.args == (call.args[0],)  # role only — the price is not an input
 
-class TestReopenFail:
+    async def test_a_remote_bonus_is_paid_as_its_own_ledger_line(self):
+        """§20.1 / D97: an aging pool task's bonus accrues beside the fixed commission, on the
+        same clearance and reserve schedule, so earnings can show it apart."""
+        tasks = _standard_tasks(review="APPROVED")
+        tasks[1].remote_bonus_minor = 500_000
+        svc = _make_service(_verification(), tasks)
+        await svc.release("v-1", "admin-1")
+        dtos = [c.args[0] for c in svc._commissions.accrue.await_args_list]
+        assert [d.kind for d in dtos].count(CommissionKind.BASE) == 3
+        bonus = next(d for d in dtos if d.kind == CommissionKind.REMOTE_BONUS)
+        assert (bonus.task_id, bonus.role, bonus.amount_minor) == (tasks[1].id, AgentRole.FIELD, 500_000)
+        assert bonus.reserve_amount_minor == 50_000   # the same 10% reserve
+        base = next(d for d in dtos if d.task_id == tasks[1].id and d.kind == CommissionKind.BASE)
+        assert (bonus.clearing_until, bonus.reserve_until) == (base.clearing_until, base.reserve_until)
+
+    async def test_a_re_release_accrues_neither_line_twice(self):
+        tasks = _standard_tasks(review="APPROVED")
+        tasks[0].remote_bonus_minor = 500_000
+        svc = _make_service(_verification(), tasks)
+        svc._commissions.get_live_for_task = AsyncMock(return_value=object())  # both already paid
+        await svc.release("v-1", "admin-1")
+        svc._commissions.accrue.assert_not_awaited()
+        kinds = {c.args[2] for c in svc._commissions.get_live_for_task.await_args_list}
+        assert kinds == {CommissionKind.BASE, CommissionKind.REMOTE_BONUS}
+
+    async def test_no_bonus_means_no_bonus_line(self):
+        svc = _make_service(_verification(), _standard_tasks(review="APPROVED"))
+        await svc.release("v-1", "admin-1")
+        kinds = {c.args[0].kind for c in svc._commissions.accrue.await_args_list}
+        assert kinds == {CommissionKind.BASE}
+
+    async def test_accrual_still_pays_agents_on_a_fully_discounted_case(self):
+        tasks = _standard_tasks(review="APPROVED")
+        svc = _make_service(_verification(price=0), tasks)
+        await svc.release("v-1", "admin-1")
+        assert svc._commissions.accrue.await_count == 3
+
+
+class TestOnHold:
+    """A case waiting for Finance on its closing refund cannot be decided in review (§6.4):
+    releasing it would strand the refund request, which could then be neither approved nor
+    rejected."""
+
+    def _held(self):
+        tasks = _standard_tasks(review="APPROVED")
+        return _make_service(_verification(closure_reason="DUPLICATE"), tasks)
+
+    async def test_it_cannot_be_released(self):
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held().release("v-1", "admin-1")
+
+    async def test_its_tasks_cannot_be_approved_rejected_or_reopened(self):
+        svc = self._held()
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await svc.approve_task("v-1", AgentRole.REGISTRY, 90, "admin-1")
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await svc.reject_task("v-1", AgentRole.REGISTRY, "blurry", "admin-1")
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await svc.reopen_task("v-1", AgentRole.REGISTRY, "admin-1")
+
+    async def test_the_review_says_it_is_not_releasable(self):
+        context = await self._held().get_review_context("v-1")
+        assert context.releasable is False
+
+
+class TestReopen:
     async def test_reopen_approved_task(self):
         tasks = _standard_tasks(review="APPROVED", state=TaskState.APPROVED)
         svc = _make_service(_verification(status=VerificationStatus.COMPLETED), tasks)
@@ -327,10 +408,3 @@ class TestReopenFail:
         assert reg.state == TaskState.IN_PROGRESS.value
         svc._reports.supersede_current.assert_awaited_once()
         assert svc._verification_repo.update.await_args.args[1].status == VerificationStatus.IN_PROGRESS.value
-
-    async def test_fail_marks_failed_and_refunds(self):
-        verification = _verification(status=VerificationStatus.UNDER_REVIEW)
-        svc = _make_service(verification, _standard_tasks())
-        await svc.fail("v-1", "fraud detected", "admin-1")
-        svc._payments.refund.assert_awaited_once()
-        assert verification.status == VerificationStatus.FAILED.value

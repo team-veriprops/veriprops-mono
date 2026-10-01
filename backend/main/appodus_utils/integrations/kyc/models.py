@@ -1,23 +1,20 @@
 """KYC provider facade DTOs (PRD §3.1).
 
-Liveness and face-match are performed entirely by the third-party provider
-(Dojah default). The platform persists the provider's *result* and *reference*
-only — never raw biometric payloads. These DTOs are the provider-agnostic
-contract the agent domain speaks to.
+Liveness and face-match are performed by the third-party provider (Dojah default). The
+selfie travels to the provider as a `SecretStr`, so no log line that prints a request can
+print a face; the provider's *result* carries no image at all. These DTOs are the
+provider-agnostic contract the agent domain speaks to.
 """
 from __future__ import annotations
 
 import enum
 from typing import Optional
 
+from pydantic import SecretStr
+
 from main.appodus_utils import Object
-
-
-class KycProvider(str, enum.Enum):
-    """Selectable KYC backend (settings.KYC_PROVIDER)."""
-
-    STUB = "STUB"
-    DOJAH = "DOJAH"
+# Re-exported: the selector enum lives beside Settings, which cannot import this package.
+from main.appodus_utils.config.providers import KycProvider  # noqa: F401
 
 
 class KycMethod(str, enum.Enum):
@@ -34,13 +31,18 @@ class GovIdType(str, enum.Enum):
     VOTERS_CARD = "VOTERS_CARD"
 
 
+# The government IDs a provider can match against a photo on file. The others are checked by
+# a person, from the selfie beside a photo of the document.
+AUTO_VERIFIABLE_ID_TYPES = {GovIdType.NIN}
+
+
 class KycResultStatus(str, enum.Enum):
     """Outcome of a provider verification call."""
 
     VERIFIED = "VERIFIED"
     FAILED = "FAILED"
-    # Provider succeeded but the match score is below the review threshold
-    # (settings.KYC_SELFIE_REVIEW_THRESHOLD) — routed to admin review.
+    # A person decides: the selfie match is weak, the record's name is not the applicant's, or
+    # the ID is one no provider can match automatically.
     NEEDS_REVIEW = "NEEDS_REVIEW"
     PENDING = "PENDING"
 
@@ -49,10 +51,8 @@ class BvnVerificationRequest(Object):
     bvn: str
     first_name: str
     last_name: str
-    # Provider performs liveness + face-match against this selfie reference; the
-    # image itself is uploaded out-of-band and only the storage reference is
-    # passed here so no raw biometric transits the domain layer.
-    selfie_reference: Optional[str] = None
+    # Base64 JPEG, without a data-URL prefix.
+    selfie_image: SecretStr
 
 
 class GovIdVerificationRequest(Object):
@@ -60,7 +60,7 @@ class GovIdVerificationRequest(Object):
     id_number: str
     first_name: str
     last_name: str
-    selfie_reference: Optional[str] = None
+    selfie_image: SecretStr
 
 
 class KycVerificationResult(Object):
@@ -73,10 +73,10 @@ class KycVerificationResult(Object):
     provider: KycProvider
     method: KycMethod
     status: KycResultStatus
-    # Opaque provider transaction/verification id used for later status lookups.
+    # Opaque reference for the check. Never the raw identity number for a live provider.
     provider_ref: str
-    # Face-match / liveness confidence when the provider returns one (0–100).
+    # Face-match confidence when the provider returns one (0–100).
     score: Optional[int] = None
     matched: Optional[bool] = None
-    # Human-readable provider message (never raw biometrics).
+    # A sentence of our own for the reviewer and the applicant (never the provider's text).
     summary: Optional[str] = None

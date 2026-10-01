@@ -1,3 +1,4 @@
+import { CommissionKind } from "@/types/adminVerification";
 import { AgentRole } from "@/types/agent";
 import { VerificationTier } from "@/types/verification";
 import { TransactionCurrency } from "@/types/models";
@@ -22,6 +23,8 @@ export interface EarningJob {
   verificationId: string;
   role: AgentRole;
   tier: VerificationTier;
+  /** The fixed commission, or a remote bonus paid as its own line (§20.1). */
+  kind: CommissionKind;
   amountMinor: number;
   reserveAmountMinor: number;
   status: CommissionStatus;

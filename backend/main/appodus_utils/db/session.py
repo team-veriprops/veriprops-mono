@@ -15,6 +15,7 @@ from sqlalchemy import NullPool
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession, AsyncEngine
 
 from main.appodus_utils import Utils
+from main.appodus_utils.db.json_codec import json_serialize
 from main.appodus_utils.exception.exceptions import AppodusBaseException
 from main.appodus_utils.exception.faults import log_fault_once
 
@@ -73,6 +74,7 @@ def create_db_engine_for_env(independent: bool = False) -> AsyncEngine:
             echo_pool=echo_pool,
             poolclass=NullPool,
             pool_pre_ping=True,  # still good to verify
+            json_serializer=json_serialize,
             # No pool_recycle with NullPool
         )
 
@@ -81,6 +83,7 @@ def create_db_engine_for_env(independent: bool = False) -> AsyncEngine:
         echo=DB_ENABLE_LOGS,
         echo_pool=echo_pool,
         pool_pre_ping=True,
+        json_serializer=json_serialize,
         pool_recycle=1800,  # proactively recycle stale connections (with pool_pre_ping)
         pool_size=(
             Utils.get_int_from_env("DB_INDEPENDENT_POOL_SIZE", default=DEFAULT_INDEPENDENT_POOL_SIZE)

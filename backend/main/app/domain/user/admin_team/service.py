@@ -7,7 +7,7 @@ from kink import inject
 
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.user.admin_team.models import AdminMemberDto, AdminTeamPageDto
+from main.app.domain.user.admin_team.models import AdminMemberDto, AdminTeamPageDto, AdminTeamState
 from main.app.domain.user.models import AdminSubRole, UpdateUserDto
 from main.app.domain.user.repo import UserRepo
 from main.app.domain.user.service import UserService
@@ -94,7 +94,7 @@ class AdminTeamService:
             resource_id=user_id,
             actor_id=admin_id,
             from_state=from_role,
-            to_state="DEACTIVATED",
+            to_state=AdminTeamState.DEACTIVATED.value,
         )
 
     def _assert_is_admin(self, user) -> None:

@@ -72,13 +72,19 @@ export interface AgentCredentialInput {
   expiryDate?: string;
 }
 
-export interface KycSubmission {
+/** The identity details the wizard keeps (and saves in its draft) — never a photo. */
+export interface KycDetails {
   method: KycMethod;
   bvn?: string;
   idType?: GovIdType;
   idNumber?: string;
-  selfieReference?: string;
-  documentRef?: string;
+}
+
+/** What a submission sends: the details plus the photos, as base64 JPEG. The photos exist
+ * only for this request — they are never kept in wizard state or its saved draft. */
+export interface KycSubmission extends KycDetails {
+  selfieImage: string;
+  idDocumentImage?: string;
 }
 
 export interface SubmitAgentApplicationRequest {
@@ -120,9 +126,13 @@ export interface KycRecordView {
   provider: KycProvider;
   method: KycMethod;
   status: KycResultStatus;
+  idType?: GovIdType | null;
   score?: number;
   summary?: string;
   verifiedAt?: string;
+  // Short-lived links to the photos a reviewer compares (admin view only).
+  selfieUrl?: string | null;
+  documentUrl?: string | null;
 }
 
 // Row in the admin applications DataTable.

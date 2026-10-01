@@ -280,6 +280,16 @@ All refunds compute from the contractual NGN figure in kobo and are issued in NG
 | Ambiguous location input, defensible interpretation verified | Customer | No refund; re-verification at re-check pricing |
 | Wrong property despite clear input | Veriprops | Full refund + free re-verification |
 
+**How the table is applied (§11.2a).** After payment a case leaves only by being **closed**, and the admin
+picks the row it falls under (`CloseReason`); the backend — never the admin, never the browser — computes the
+refund: customer withdrawal before work starts (`PAID`) refunds less `cancellation_surcharge_pct`, after work
+starts nothing; a duplicate case or payment, and "we cannot deliver" (which covers a payment confirmed but never
+activated), refund in full — the latter ends the case `FAILED`, every other reason `CANCELLED`; fraud refunds
+nothing; an inaccessible property refunds the amount the admin enters on the evidence (capped at what was paid,
+with the evidence reference recorded). The rows about a wrong agent, a skipped step, a wrong property or
+ambiguous input are resolved by a re-check or a dispute (§19), not by closing. **No customer money leaves
+without Finance's approval** (§20.5).
+
 #### Communication boundaries
 
 - ❌ No direct Customer ↔ Agent chat. Routine coordination is **admin-mediated**: the customer writes in
@@ -619,11 +629,11 @@ automation never depend on third parties:
 | Integration | Selector | Default | Live option |
 |---|---|---|---|
 | Payments | `PAYMENT_STUB_MODE` / `ACTIVE_PAYMENT_METHOD` | stub (`True`) | Flutterwave, Paystack |
-| KYC | `KYC_PROVIDER` | `STUB` | `DOJAH` |
+| KYC | `KYC_PROVIDER` | `STUB` | `DOJAH` (liveness + BVN/NIN selfie match; `DOJAH_BASE_URL` sandbox or production) |
 | Document storage | `DOCUMENT_STORAGE_STUB_MODE` | stub (`True`) | AWS S3 / R2 |
 | FX rates | `PRICING_FX_PROVIDER` | `STUB` | `OPENEXCHANGERATES` (unwired, §G) |
 | Report PDF | `REPORT_PDF_STUB_MODE` | **real fpdf2 renderer** (`False`) | — |
-| Geocoding | `GEOCODING_PROVIDER` | `STUB` | Google Places |
+| Geocoding | `GEOCODING_PROVIDER` | `STUB` | Google Places (New), Nigeria-only, one billed session per search |
 | OTP | `OTP_MODE` | env-enforced (§25.1) | — |
 
 ---
@@ -706,7 +716,10 @@ A 4-step wizard — **Account → Verify → Residence → Consent** (`SignupCon
 - **Connected devices**: list sessions, revoke one, "log out all". **Security activity log** from
   `SecurityEvent`s.
 - **Forgot/reset password**: tokenised single-use email link; reset invalidates all sessions.
-  **Set password** for OAuth-only users.
+  **Set password** for OAuth-only users, from their session. **Changing** an existing password needs the
+  current one — a session alone (a stolen cookie) cannot lock the owner out — and a wrong one is refused
+  and recorded as `PASSWORD_CHANGE_REFUSED` on its own commit. Setting or changing signs out every other
+  session and keeps the one that made the change.
 - Route protection: the Next.js proxy gates `/portal/*`, `/admin/*`, `/agents/*`, `/account/*` on cookie
   presence; session validity is enforced server-side on every API call.
 
@@ -745,10 +758,17 @@ erasure request, §24.4), notification preferences (per-portal pages under `…/
 **Application wizard (4 steps, resumable via server-side draft):**
 
 1. **Roles** — Field / Surveyor / Registry / Lawyer, multi-select; reviewed per role.
-2. **KYC** — **BVN primary; government-ID upload fallback**. Liveness/face-match are deferred entirely to
-   the provider behind the facade (`KYC_PROVIDER`: `STUB` default, `DOJAH` live). The platform stores the
-   provider's decision, reference, and score (`KycRecord`) — never raw biometrics; documents are stored as
-   storage references. A selfie score below `KYC_SELFIE_REVIEW_THRESHOLD` (80) routes to admin review.
+2. **KYC** — **BVN primary; government-ID fallback**, with a **selfie on every path** (camera — front on
+   phones, webcam on desktop — or an uploaded photo, resized and EXIF-stripped in the browser). Behind the
+   facade (`KYC_PROVIDER`: `STUB` in test/dev, `DOJAH` on staging and prod) the selfie must first pass
+   **liveness** (one live face); then **BVN and NIN** are matched to the photo on file and the record's name
+   must be the applicant's. Match ≥ `KYC_SELFIE_REVIEW_THRESHOLD` (80) verifies; a weaker match (down to
+   Dojah's floor, 50) or a name mismatch routes to review; below 50 fails. **Passport, driver's licence and
+   voter's card** cannot be matched automatically: after liveness they go to a reviewer, with a photo of
+   the document. Every application reaches a reviewer, so the **selfie and document photo are kept in
+   private, encrypted storage** (keys on `KycRecord`, never a raw identity number), shown to the reviewer
+   side by side with a draggable divider through short-lived links (`KYC_IMAGE_LINK_SECONDS`), and
+   **deleted by data erasure** (§4.11). The wizard's saved draft never holds a photo.
 3. **Credentials** — conditional: `SURVEYOR_LICENCE` for Surveyor, `NBA_LICENCE` for Lawyer (with expiry
    dates); optional experience, coverage, bio.
 4. **Review & submit** — truthfulness declaration + versioned `AGENT_TERMS` acceptance.
@@ -781,7 +801,9 @@ must match); already admin → friendly message.
 
 An invitation is used once. Acceptance and revocation both start from `PENDING`, so if they land together
 exactly one stands: a revoked invitation elevates no one, and an accepted one cannot be revoked (removing an
-admin is its own action). Revoking an already-revoked invitation is harmless.
+admin is its own action). Revoking an already-revoked invitation is harmless. Accepting rotates the
+accepting session to the ADMIN claims, so the new admin reaches the admin area without signing in again. The
+link is handed to the inviting Super Admin to pass on — no invitation email yet (§G).
 
 ### 9.2 The sanctioned elevation path
 
@@ -874,8 +896,13 @@ amount.
   double-receipt.
 - Payment confirmation fires `PAYMENT_CONFIRMED` (email + SMS templates) and upgrades the customer to
   `TRUSTED` on first success. Confirmation page: `/portal/verifications/[id]/confirmed` with SLA countdown.
-- Refunds (`PaymentService.refund`) are idempotent and flow through the same facade; invoked by admin
-  fail-with-refund and upheld disputes.
+- Refunds (`PaymentService.refund`) move an approved amount, spread across the case's settled charges oldest
+  first (part of a charge when it runs out, in the currency it was charged). **Only an approved refund request
+  calls it** (§20.5): closing a paid case, an upheld dispute, and a charge that settles on a case already
+  closed each file a request instead. A charge whose gateway refuses stays settled and owes its share
+  (`payments.refund_due_minor`) — Finance's refunds-to-retry list, and exactly what a retry sends.
+- A charge that settles after its case was cancelled (while the payment was pending) never reopens the case:
+  it is recorded, and a full refund request waits for Finance.
 
 ---
 
@@ -889,8 +916,28 @@ amount.
 
 `/admin/verifications` is a server-driven DataTable (status, tier, SLA health, location filters);
 `/admin/verifications/[id]` is the ops control panel: per-role task rows with assign/reassign, pause/resume
-(a flag, §3.8), cancel-with-reason, declare-failure, extend SLA, progress bar, property/payment/commission
-panels, chargeback management, audit-pack export, and the report-review entry point.
+(a flag, §3.8), cancel-with-reason for a case nobody has paid for, **close** for a paid unfinished one
+(§11.2a), extend SLA, progress bar, property/payment/commission panels, chargeback management, audit-pack
+export, and the report-review entry point. Which of cancel and close is offered comes from the backend
+(`canCancel` / `canClose`).
+
+### 11.2a Closing a paid case
+
+Paid and unfinished cases (`PAID`, `IN_PROGRESS`, `UNDER_REVIEW`) are closed, never cancelled
+(`verification/closure/`). The admin picks a reason and writes what happened; the backend quotes the exact
+refund, how the case ends and each agent's outcome, and the admin confirms that quote in a dialog stating
+every consequence.
+
+- **Nothing to refund:** the case ends at once.
+- **Money to return:** the case goes **on hold** (`verifications.closure_reason`) and a refund request waits
+  for Finance. While on hold, agents cannot accept, start, upload, submit or decline, admins cannot assign,
+  and the no-show, pool-starvation and SLA sweeps pass the case by; agents with work in hand and the customer
+  are told (`TASK_ON_HOLD`, `CASE_ON_HOLD`). Agents see the hold on the task itself.
+- **Finance approves:** the case closes for good — submitted and approved work is paid its role's fixed
+  commission, every other task becomes `CANCELLED` (terminal, freeing the agent's task limit), everyone is
+  told (`TASK_CASE_CLOSED`, `CASE_CLOSED`) — and then the refund is sent.
+- **Finance rejects** (a reason is required): nothing is sent; the hold lifts and agents are told to resume
+  (`TASK_RESUMED`, `CASE_RESUMED`).
 
 ### 11.2 Assignment
 
@@ -934,7 +981,8 @@ searchable, included in the audit export, and never visible to customers or agen
 ### 12.1 Discovery, accept, execute
 
 The agent dashboard shows available jobs (role-matched, coverage-filtered for on-site roles) and active
-tasks. Commission for the job is visible **before** accept (§20.1). Accept moves `ASSIGNED/PENDING →
+tasks. The job's commission — a fixed amount per role, the same on every tier — is visible **before**
+accept (§20.1). Accept moves `ASSIGNED/PENDING →
 ACCEPTED`; "Start work" → `IN_PROGRESS`; task endpoints are ownership-checked against the JWT subject.
 Decline returns the task to the pool; repeated declines feed the reputation penalty (§21.1).
 
@@ -1006,9 +1054,9 @@ version with a `revision_kind` and reason (§3.3).
 
 ### 13.5 FAILED
 
-Admin may declare `FAILED` (confirmed fraud / permanent inaccessibility / fraudulent submission): reason +
-evidence required, irreversible, refund policy applied through the payment facade, agents' completed work
-still logged.
+A case we cannot deliver ends `FAILED` through the close flow (§11.2a, reason "we cannot deliver", offered on
+the report-review page as well): a full refund, sent once Finance approves; submitted work is paid and the rest
+cancelled. Fraud and an inaccessible property are closed with their own reasons and end `CANCELLED`.
 
 ---
 
@@ -1230,6 +1278,13 @@ rule lives in the one table.
 In-app is always on (SSE-delivered, cannot be disabled); email and SMS are per-event opt-outs at
 `…/account/notification-preferences`. Push/WhatsApp are post-MVP subscribers (§G).
 
+What a user may switch off is the backend's (`notification_preference/catalogue.py`), derived from the
+§17.3 rule table: an event is listed when one of its external channels is **optional**, each channel is
+`UNUSED`, `REQUIRED` or `OPTIONAL`, and a user sees only the events addressed to their personas (customer,
+agent, admin). A **required** email goes out whatever the preference — the delivered report (WA-35) and
+account suspension/reactivation, the only channel that reaches a suspended user. The page renders the
+catalogue it is given; a save outside it is refused.
+
 ---
 
 <a id="18-lookup-sharing"></a>
@@ -1252,7 +1307,7 @@ numeric score. `PublicLookupState` drives the render: `SHARED` (summary) / `PRIV
 | Mode | Who sees | Content |
 |---|---|---|
 | Private (default — no share row) | Customer only | Full report |
-| Public (`public_lookup_enabled` flag) | Anyone with the VID | Summary |
+| Public (`public_lookup_enabled` flag — the owner turns it on and off from the share controls, which show where it stands) | Anyone with the VID | Summary |
 | `LINK_SUMMARY` | Anyone with the tokenised link | Summary |
 | `NAMED_FULL` | A specific emailed recipient | **Full report**, after a one-time disclaimer acknowledgement |
 
@@ -1288,10 +1343,13 @@ preserved), SLA due date recomputed, next release ships `v3.0`. Idempotent on re
   commissions**, and fires a system notification.
 - **Agent dispute-defence:** when a dispute targets an agent's task, the agent gets a bounded response
   window (`agent_dispute_defence_hours`, default 48) that the admin sees before resolving — admin-mediated;
-  the agent never learns the customer's identity.
+  the agent never learns the customer's identity. The customer names the disputed part when filing, optionally:
+  the report lists the case's roles (backend-supplied, with the upgrade tiers and the minimum description
+  length), and "not sure / the whole report" leaves it with the admin. Admin and agent queues show each
+  dispute's VID.
 - Outcomes (`DisputeOutcome`), each with a mandatory resolution note delivered verbatim:
-  `REJECTED` → `COMPLETED` (commissions unfreeze) · `FULL_REFUND` → `REFUNDED` (gateway refund + commission
-  reversal) · `PARTIAL_RECHECK` → `IN_PROGRESS` (free scoped re-check; next release `v2.0`).
+  `REJECTED` → `COMPLETED` (commissions unfreeze) · `FULL_REFUND` → `REFUNDED` (commission reversal, and a
+  full refund request for Finance's approval, §20.5) · `PARTIAL_RECHECK` → `IN_PROGRESS` (free scoped re-check; next release `v2.0`).
 
 ---
 
@@ -1304,11 +1362,26 @@ preserved), SLA due date recomputed, next release ships `v3.0`. Idempotent on re
 
 ### 20.1 Commission accrual
 
-Rates are an admin-configured **`commission_rule` table, per role × tier, in basis points** (exact kobo
-math: `commission = price_locked_minor × rate_bps / 10_000`); defaults seeded from a static role-weight map
-reproducing `trust-weight % × AGENT_COMMISSION_SHARE (0.40)`. The rate and amount show on the job-accept
-screen **before** the agent commits. Accrual happens at report release per approved task, with a
+An agent's commission is a **fixed amount per role**, admin-configured in the `commission_rule` table
+(NGN kobo, one row per role, RBAC `CONFIGURE_PRICING`) — the same on every tier and independent of the
+price paid, so no job pays more for the same work and a referral-discounted case still pays its agents in
+full (D97, superseding D30's per-role×tier share of the price). Seeded defaults: REGISTRY ₦20,000 · FIELD
+₦14,400 · SURVEYOR ₦14,400 · LAWYER ₦36,000. The amount shows on the agent's task card and task page
+(`commissionMinor`) **before** the agent commits. Accrual happens at report release per approved task, with a
 double-accrual guard (a re-released re-check never accrues twice).
+
+**Minimum margin.** For every tier, what the roles it requires can be paid must leave at least
+`commission_min_margin_pct` (30%) of the tier's price. That is the worst case: each role's fixed commission
+plus the remote bonus. `CommissionMarginGuard` refuses any of the four changes that could break this, naming
+the tier and the figures: a role's commission, a tier's price, the minimum margin, or the remote bonus.
+`test_margin_guard_coverage.py` fails CI on any writer of those values that skips the guard. The seeded
+defaults (bonus ₦0) leave BASIC 60%, STANDARD ~59% and PREMIUM ~72%.
+
+**Remote bonus.** A task that ages out of the open pool is stamped with the admin-set flat bonus
+`remote_job_bonus_ngn_kobo` (system config, default ₦0), counted against the margin as above. It shows beside
+the commission before accept, and is paid at release as its **own** ledger line (`commissions.kind =
+REMOTE_BONUS`, beside the `BASE` line) on the same clearance and reserve schedule, so earnings list it apart.
+The double-accrual guard holds per task and kind.
 
 ### 20.2 Two-stage clearance & reserve
 
@@ -1328,11 +1401,26 @@ is the accepted, bounded tail risk.
 
 ### 20.4 Payouts
 
-Agent requests a withdrawal against available balance (stored beneficiary account or one-time entry); a
-`REQUESTED/APPROVED/HELD` payout **locks funds** so nothing is double-spent. Finance panel
-(`APPROVE_PAYOUT`): approve / hold / reject / adjust, all audit-logged; target settlement
-`payout_sla_business_days` (2). **Disbursement is stub-first** — approval marks `PAID` and fires
-`PAYOUT_APPROVED`; a real transfer gateway drops in behind the facade (§G).
+Agent requests a withdrawal against available balance, to a **saved account the bank has named**: the
+bank comes from the paying gateway's list, the account name from the gateway's account lookup (never
+typed). The gateway's **transfer fee is quoted before the agent confirms and deducted** from what reaches
+the bank. A `REQUESTED/APPROVED/HELD/PROCESSING/FAILED` payout **locks funds** so nothing is
+double-spent. Finance panel (`APPROVE_PAYOUT`): approve / hold / reject / adjust / retry, all
+audit-logged; target settlement `payout_sla_business_days` (2). **Approval queues; a batch pays**:
+approved payouts leave as bank transfers from a daily sweep (10:00 Lagos) or finance's "Disburse N
+approved (₦total)" button — `APPROVED → PROCESSING → PAID`, settled only from what the gateway reports
+when asked by our per-attempt reference (webhook or reconcile). A transfer the bank refuses becomes
+`FAILED` with its funds **still reserved**; finance retries it (a new attempt and reference) or rejects it
+(funds released, agent notified). Stub mode runs the same flow through a stub transfer gateway.
+
+### 20.5 Refund approvals and the payments list (Finance)
+
+Every return of a customer's money waits for a Finance (or super) admin (`REFUND_PAYMENT`) at
+`/admin/finance/refunds` (`payment/refund_request/`): a closed case, an upheld dispute, a charge that settled
+after its case closed. One request may be pending per case; a second late charge joins the first. Approving
+sends the refund and says what the gateways did (a refused charge waits in the refunds-to-retry list);
+rejecting sends nothing and needs a reason. `/admin/finance/payments` lists every charge — status, gateway,
+refunded amount, what an approved refund still owes, chargeback — searchable by reference or VID.
 
 ---
 
@@ -1408,7 +1496,7 @@ itself is untargeted accept-by-id today, so per-agent pool-feed reduction is a f
   (`analytics_trend_months`, 6), revenue by tier & location, regional performance. RBAC `VIEW_ANALYTICS`;
   the dashboard renders dependency-free CSS bar charts.
 - **Pricing** — DB-backed tier prices + line items (§10.2); edits change the next quote without a deploy;
-  existing price locks are honoured. **Commission rules** — the bps table (§20.1), RBAC `CONFIGURE_PRICING`.
+  existing price locks are honoured. **Commission rules** — the fixed per-role amounts (§20.1), RBAC `CONFIGURE_PRICING`.
 - **Trust Score Weights** — per tier × role CRUD with sum-to-100 validation (§13.3).
 - **System configuration** — the typed `ConfigKey` key-value store (§R), seeded idempotently, RBAC-gated
   CRUD at `/admin/config/system`.
@@ -1450,7 +1538,7 @@ actor, role, from→to, timestamp, IP, note, and per-item evidence hashes on evi
 
 Self-service: the data subject opens a request from Account → Data & privacy (one open request per subject,
 server-enforced). Review/approve/execute is gated on `MANAGE_COMPLIANCE` (**SUPER-only**; execute is
-confirm-guarded and idempotent). Execution runs `PiiPseudonymiser`: a deterministic per-subject opaque token
+confirm-guarded and idempotent; a rejection requires a reason, which the requester is shown). Execution runs `PiiPseudonymiser`: a deterministic per-subject opaque token
 replaces the subject's PII across **eight surfaces in one transaction** — `users` (name/email/phone/avatar/
 password → login impossible), `audit_logs` (actor → token, IP nulled, **events retained**),
 `device_sessions` (+revoked), `security_events`, `user_consents`, `oauth_identities`, `kyc_records`,
@@ -1472,7 +1560,9 @@ These are **permanent contracts** for autonomous QA (Playwright + Claude Code) �
   `ENVIRONMENT=test` requires `deterministic`; `prod` requires `random`; startup fails otherwise. Never
   infer OTP behaviour from `ENVIRONMENT`.
 - **Stub matrix** (§4.13): payment, KYC, storage, FX, and geocoding default to deterministic stubs; the PDF
-  renderer is real by default.
+  renderer is real by default. **Production refuses to start on a stub**: `ENVIRONMENT=prod` requires live
+  payments, storage, Dojah (on its production host) and Google Places, each with its keys, and names every
+  missing piece in one boot error. Staging is unconstrained.
 
 ### 25.2 Dev endpoints (`app/domain/dev/`)
 
@@ -1502,7 +1592,8 @@ production/staging. No `EMAIL_PROVIDER` setting — the router selects by `ENVIR
 `backend/scripts/e2e_drive_through.py` runs the staged live-HTTP suite in `backend/scripts/e2e/` (shared
 `harness.py`; `--stages` runs a contiguous prefix): onboarding → agent onboarding → admin team → execution
 → comms → review/release → tracking → sharing → aftermarket (disputes/re-checks/upgrades/payouts) → growth
-→ admin ops → premium release → compliance → ops-unhappy (pool mechanics, fail+refund, chargeback) → email
+→ admin ops → premium release → compliance → ops-unhappy (pool mechanics, closing paid cases through
+Finance, a late charge, chargeback) → email
 → messaging-retry. Stages have linear data dependencies; the email stages warn-skip without Mailpit/docker.
 The drive-throughs exist because they repeatedly catch the UUID/transaction-boundary bug class that mocked
 unit tests cannot (see the runtime-bug notes in [docs/decision-log.md](docs/decision-log.md)).
@@ -1835,8 +1926,8 @@ config · Trust-score weights · Audit action log · Erasure requests.
 
 Personal info · Login & security · Devices · Linked accounts · Password · Consents · Data & privacy.
 
-Several routes are declared in `routes.ts` but have no pages yet (admin content CMS, fraud-flags, finance
-sub-pages, some detail pages) — the sidebars deliberately omit them; see §G.
+Several routes are declared in `routes.ts` but have no pages yet (admin content CMS, fraud-flags,
+some detail pages) — the sidebars deliberately omit them; see §G.
 
 ---
 
@@ -1852,7 +1943,7 @@ Selected keys (see `backend/main/app/config/settings.py` and `.env.example` for 
 `REPORT_PDF_STUB_MODE=False` · `KYC_PROVIDER=STUB` · `GEOCODING_PROVIDER=STUB` · `PRICING_FX_PROVIDER=STUB`
 · `PHONE_VERIFICATION_ENABLED=False` · `LEGAL_OPINION_ENABLED=False` · `PRICE_LOCK_TTL_HOURS=24` ·
 `IDEMPOTENCY_KEY_TTL_HOURS=24` · `ADMIN_INVITE_TTL_HOURS=72` · `KYC_SELFIE_REVIEW_THRESHOLD=80` ·
-`AGENT_COMMISSION_SHARE=0.40` · `SSE_HEARTBEAT_SECONDS=25` · `SSE_QUEUE_MAXSIZE=100` ·
+`SSE_HEARTBEAT_SECONDS=25` · `SSE_QUEUE_MAXSIZE=100` ·
 `MESSAGING_RETRY_INTERVALS_SECONDS=[60,300,900]` · `OTP_MODE` (env-enforced, §25.1).
 
 ### R.2 Admin-tunable business rules — `system_config` `ConfigKey` store
@@ -1867,6 +1958,8 @@ without a redeploy:
 | `agent_dispute_defence_hours` | 48 | Agent's window to respond to a dispute on their task |
 | `commission_clearance_days` | 7 | Days after approval before the commission bulk is withdrawable |
 | `commission_reserve_pct` | 10 | % of commission held until the chargeback window closes |
+| `commission_min_margin_pct` | 30 | % of each tier's price its agents' worst-case pay (commissions + remote bonus) must leave (§20.1) |
+| `remote_job_bonus_ngn_kobo` | 0 | Flat bonus (kobo) on a task that ages out of the open pool, paid as its own commission line (§20.1) |
 | `chargeback_window_days` | 120 | Card-chargeback window (reserve release; referral-credit clearance) |
 | `task_sla_hours` | 48 | Accept→submit target feeding the timeliness metric |
 | `agent_low_performance_threshold` | 40 | Composite below which ranking visibility is reduced |
@@ -1899,14 +1992,9 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 
 | Gap | Code home |
 |---|---|
-| Live Paystack/Flutterwave collection (checkout, webhooks, refunds run against the deterministic stub) | `backend/main/app/domain/payment/service.py` |
 | Card-fingerprint capture (referral anti-farming's payment-instrument half is dark under the stub) | `backend/main/app/domain/payment/models.py` |
 | `STRIPE` enum value has no integration | `backend/main/app/config/settings.py` (`PaymentMethod`) |
-| Live Dojah KYC (facade built; STUB default) | `backend/main/app/domain/user/agent/kyc/service.py` |
-| Live document storage (S3/R2 behind the facade; `DOCUMENT_STORAGE_STUB_MODE` defaults to the stub) | `backend/main/appodus_utils/integrations/document_storage/factory.py` |
 | Live FX rates (`OPENEXCHANGERATES` option unwired; hardcoded indicative stub rates) | `backend/main/appodus_utils/db/types/money.py` |
-| Real payout disbursement (approval marks `PAID` under the stub) | `backend/main/app/domain/payout/service.py` |
-| Paystack transfer-fee calculation (no provider endpoint; must be computed from their published cost table) | `backend/main/appodus_utils/integrations/payment/gateway/paystack/payment.py` |
 
 ### G.2 Deferred features
 
@@ -1920,12 +2008,14 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Redis multi-instance SSE fan-out (in-process emitter today; poll fallback keeps correctness) | `backend/main/app/core/realtime/emitter.py` |
 | Per-agent pool-feed visibility reduction (ranking-only today; pool is untargeted accept-by-id) | `backend/main/app/domain/user/agent/reputation/service.py` |
 | Richer per-role quality rubric feeding the composite score | `backend/main/app/domain/verification/review/service.py` |
+| Client-driven list sorting (DataTable sort headers set `orderBy` locally; no list endpoint accepts a client sort, and `order_by` stays server-set) | `frontend/src/types/models.ts` (`PageRequest`) |
 | Secondary-PII erasure scope (card fingerprints, share-recipient emails, property addresses — each needs its own retention basis) | `backend/main/app/domain/compliance/erasure/pseudonymiser.py` |
 | Role-specific agent dashboard variants (one unified dashboard today) | `frontend/src/components/agents/dashboard/AgentDashboard.tsx` |
 | Cartographic Nigeria map paths (schematic geo-grid today) | `frontend/src/components/agents/reputation/NigeriaCoverageMap.tsx` |
-| Dead vendored `google_drive` webhook package: `repo.py`/`service.py`/`validator.py` import modules that do not exist, so only `model.py` loads — and it registers `g_drive_webhook_subscriptions` with no migration builder. Inert (nothing reaches it); kept and marked rather than deleted, per D83. Pick up = remove the package, or fix the imports and give the table a migration | `backend/main/appodus_utils/domain/webhook/google_drive/model.py` |
+| Dead vendored `google_drive` webhook package: `repo.py`/`service.py`/`validator.py` import modules that do not exist, so only `model.py` loads — and it registers `g_drive_webhook_subscriptions` with no migration builder. Inert (nothing reaches it); kept and marked rather than deleted, per D83. Pick up = remove the package (with `GoogleDriveClient`, its only user of a service-account key), or fix the imports, give the table a migration, and move the client to Workload Identity Federation | `backend/main/appodus_utils/domain/webhook/google_drive/model.py`, `backend/main/appodus_utils/integrations/google_drive/google_drive_client.py` |
 | `python-jose` → PyJWT: jose hard-depends on `ecdsa` (PYSEC-2026-1325, timing side channel, no fixed release). Not exploitable here — the `[cryptography]` extra routes every sign/verify (RS256 handoff + OAuth, Apple's ES256 client secret) through `cryptography` — but the Dependabot alert stays open until the five `from jose import` sites (OAuth Google/Apple, WhatsApp handoff grant/tokens, `appodus_utils/common/commons.py`) move to PyJWT | `backend/requirements.txt` |
-| Declared-but-unbuilt routes: admin content CMS (how-it-works / FAQs / testimonials / spotlights / area insights), fraud-flags, finance payments/commissions sub-pages, dispute/broadcast/task detail pages, portal payments page | `frontend/src/lib/routes.ts` |
+| Admin-invitation email (§9.1): the invite link is returned to the inviting Super Admin to deliver; no email template sends it | `backend/main/app/domain/user/admin_invitation/controller.py` |
+| Declared-but-unbuilt routes: admin content CMS (how-it-works / FAQs / testimonials / spotlights / area insights), fraud-flags, dispute/broadcast/task detail pages, portal payments page | `frontend/src/lib/routes.ts` |
 
 ### G.3 Launch gates (business/legal — not code)
 
@@ -1952,7 +2042,7 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | **Trust-gated auto-approval** | High-accuracy agents skip manual review — first post-launch priority once reputation data accrues |
 | **Verification Academy / Content Hub** | Education content (pairs with the unbuilt admin content CMS) |
 | **WhatsApp channel v1.1 (§26.9)** | Voice-note transcription-assist, delegate enhancements (multiple delegates, granular permissions), richer status flows from the concierge corpus, Pidgin evaluated against real data, in-chat payment re-examination — all explicitly non-launch-gating |
-| **Push delivery** | A new event-bus subscriber; WhatsApp already ships as one (§26) |
+| **Push delivery** | A new event-bus subscriber; WhatsApp already ships as one (§26). Device registration ships with it: the `devices` table is read when addressing a user but nothing writes it yet |
 | **Mobile apps (iOS/Android)** | Native parity for customers and field agents |
 
 ---

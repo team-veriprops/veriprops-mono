@@ -18,6 +18,7 @@ from typing import AsyncIterator, Dict, Optional, Set
 
 from kink import di
 
+from main.appodus_utils.exception.faults import log_fault_once
 from main.app.config.settings import settings
 
 
@@ -83,5 +84,6 @@ def publish_user_event(user_id: str, event: UserEventType, data: Optional[dict] 
         return
     try:
         emitter.publish(user_id, event, data)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Still best-effort, but a push that fails is a fault to see, not to swallow.
+        log_fault_once(exc, "real-time user push")

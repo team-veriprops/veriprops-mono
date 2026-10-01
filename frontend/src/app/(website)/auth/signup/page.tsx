@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import SignupContainer from "@components/website/auth/signup/SignupContainer";
 
 export const metadata: Metadata = {
@@ -7,6 +8,11 @@ export const metadata: Metadata = {
   robots: "noindex, follow",
 };
 
+// The container reads the query string (useSearchParams), which needs a Suspense boundary.
 export default function SignupPage() {
-  return <SignupContainer />;
+  return (
+    <Suspense>
+      <SignupContainer />
+    </Suspense>
+  );
 }

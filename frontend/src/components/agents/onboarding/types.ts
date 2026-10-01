@@ -2,21 +2,22 @@ import {
   AgentCoverageInput,
   AgentCredentialInput,
   AgentRole,
-  GovIdType,
+  KycDetails,
   KycMethod,
 } from "@/types/agent";
+
+/** The KYC photos, as base64 JPEG. Held apart from the wizard state so they are never saved
+ * in the draft; after a resumed draft the applicant takes them again. */
+export interface KycPhotos {
+  selfie?: string;
+  idDocument?: string;
+}
 
 /** Accumulated agent-onboarding wizard state (persisted per step as a draft). */
 export interface AgentWizardState {
   roles: AgentRole[];
-  kyc: {
-    method: KycMethod;
-    bvn?: string;
-    idType?: GovIdType;
-    idNumber?: string;
-    selfieReference?: string;
-    documentRef?: string;
-  };
+  // Saved in the draft, so it never holds a photo (see `KycPhotos`).
+  kyc: KycDetails;
   credentials: AgentCredentialInput[];
   coverage: AgentCoverageInput[];
   bio?: string;
@@ -34,3 +35,5 @@ export const EMPTY_WIZARD_STATE: AgentWizardState = {
 };
 
 export const AGENT_WIZARD_STEPS = ["Roles", "Identity (KYC)", "Credentials", "Review & submit"];
+/** The identity step's index: where a resumed draft returns to retake the photos. */
+export const KYC_STEP = 1;

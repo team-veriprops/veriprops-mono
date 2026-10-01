@@ -1,11 +1,7 @@
 from kink import inject
 
 from main.app.domain.user.repo import UserRepo
-from main.appodus_utils.exception.exceptions import (
-    ResourceNotFoundException,
-    UserAlreadyExistsException,
-    UserNotFoundException,
-)
+from main.appodus_utils.exception.exceptions import UserAlreadyExistsException, UserNotFoundException
 
 
 @inject
@@ -20,9 +16,3 @@ class UserValidator:
     async def should_not_exist_by_email(self, email: str):
         if await self._user_repo.get_by_email(email):
             raise UserAlreadyExistsException(email=email)
-
-    async def get_by_email_or_raise(self, email: str):
-        user = await self._user_repo.get_by_email(email)
-        if not user:
-            raise ResourceNotFoundException("User", f"No user with email {email}")
-        return user

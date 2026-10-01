@@ -6,6 +6,7 @@ that tells an admin their approval registered. Both admin surfaces build ``TaskD
 hand-written mapper, and a field omitted there is invisible to the browser however faithfully
 the service wrote it to the row.
 """
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from main.app.core.state.status import AgentRole, TaskState, VerificationTier
@@ -46,6 +47,14 @@ class TestReviewedTaskReachesTheBrowser:
         row = _row(review=ReviewDecision.REJECTED.value, rejection_reason="Photo too dark.")
         assert review_task_dto(row).rejection_reason == "Photo too dark."
 
+    def test_both_admin_mappers_carry_the_remote_bonus(self):
+        # The bonus is paid as its own commission line (D97); an admin reviewing the task must
+        # see it on either surface, not only on the verification detail.
+        row = _row()
+        row.remote_bonus_minor = 500_000
+        assert review_task_dto(row).remote_bonus_minor == 500_000
+        assert _admin_task_dto(row).remote_bonus_minor == 500_000
+
     def test_an_unreviewed_task_carries_no_decision(self):
         assert review_task_dto(_row(review=None, quality=None)).review_decision is None
 
@@ -54,3 +63,18 @@ class TestReviewedTaskReachesTheBrowser:
         wire = review_task_dto(_row()).model_dump(by_alias=True)
         assert wire["reviewDecision"] == ReviewDecision.APPROVED.value
         assert "review_decision" not in wire
+
+
+class TestCommissionLineKind:
+    def test_the_verification_detail_labels_a_remote_bonus_line(self):
+        # §20.1 / D97: the admin sees a bonus as its own line beside the fixed commission.
+        from main.app.domain.commission.models import CommissionKind, CommissionStatus
+        row = SimpleNamespace(
+            id="c-1", verification_id="v-1", task_id="t-1", agent_id="agent-1",
+            role=AgentRole.FIELD.value, tier=VerificationTier.STANDARD.value,
+            kind=CommissionKind.REMOTE_BONUS.value, amount_minor=500_000, currency="NGN",
+            status=CommissionStatus.CLEARING.value, clearing_until=None,
+            date_created=datetime(2026, 9, 27, tzinfo=timezone.utc),
+        )
+        svc = object.__new__(AdminVerificationService)
+        assert svc._commission_dto(row).kind == CommissionKind.REMOTE_BONUS

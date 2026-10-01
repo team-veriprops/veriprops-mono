@@ -88,6 +88,24 @@ export const resetPasswordSchema = z
 
 export type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 
+/** Setting a password from a signed-in session. Changing an existing one needs the current
+ * password (`requireCurrent`, from the session's `hasPassword`); a first one does not. */
+export const setPasswordSchema = (requireCurrent: boolean) =>
+  z
+    .object({
+      currentPassword: requireCurrent
+        ? z.string().min(1, "Enter your current password")
+        : z.string().optional(),
+      password: passwordSchema,
+      confirmPassword: z.string(),
+    })
+    .refine((d) => d.password === d.confirmPassword, {
+      path: ["confirmPassword"],
+      message: "Passwords do not match",
+    });
+
+export type SetPasswordValues = z.infer<ReturnType<typeof setPasswordSchema>>;
+
 // ─── Profile completion (OAuth users) ────────────────────────────
 export const profileCompletionSchema = phoneFields
   .merge(signupStep3Schema)

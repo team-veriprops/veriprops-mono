@@ -93,6 +93,8 @@ class AvailableTemplate(str, Enum):
     VERIFICATION_REPORT_SHARE = "verification_report_share"  # Email
     VERIFICATION_PAYOUT_APPROVED = "verification_payout_approved"  # Email
     VERIFICATION_PAYOUT_HELD = "verification_payout_held"  # Email
+    VERIFICATION_PAYOUT_PAID = "verification_payout_paid"  # Email
+    VERIFICATION_PAYOUT_REJECTED = "verification_payout_rejected"  # Email
     VERIFICATION_ABANDONMENT_RECOVERY = "verification_abandonment_recovery"  # Email
     INVITE_TEST_NEW_FEATURE = "invite_test_new_feature"  # Email
     FEEDBACK_REQUEST_POST_TRANSACTION = "feedback_request_post_transaction"  # Email, WhatsApp, Mobile push

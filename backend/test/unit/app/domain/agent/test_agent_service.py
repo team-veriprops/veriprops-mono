@@ -23,6 +23,7 @@ from main.app.domain.user.auth.consent.models import ConsentDocumentType
 from main.app.domain.user.auth.session.models import UserPersona
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.integrations.kyc.models import KycMethod
+from pydantic import SecretStr
 
 
 @pytest.fixture(autouse=True)
@@ -79,7 +80,7 @@ def _make_service():
 def _valid_dto(**over):
     base = dict(
         roles=[AgentRole.FIELD],
-        kyc=KycSubmissionDto(method=KycMethod.BVN, bvn="22222222222"),
+        kyc=KycSubmissionDto(method=KycMethod.BVN, bvn="22222222222", selfie_image=SecretStr("/9j/4AAQ")),
         credentials=[],
         coverage=[],
         bio="Experienced field agent",

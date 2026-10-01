@@ -7,12 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
 import { toast } from "sonner";
 import { ROUTES, buildAuthUrl } from "@lib/routes";
 import { AuthIntent } from "@components/website/auth/models";
-import { InviteAcceptScenario } from "@/types/admin";
-import { useCurrentSession } from "@components/website/auth/libs/useAuthQueries";
+import { AdminInvitationStatus, InviteAcceptScenario } from "@/types/admin";
+import { useCurrentSession, useRefreshSession } from "@components/website/auth/libs/useAuthQueries";
 import {
   useAcceptInvitationMutation,
   useInvitePreviewQuery,
 } from "@components/admin/libs/useAdminQueries";
+import { getErrorMessage } from "@lib/errors";
+import { navigateAfterPersonaChange } from "@lib/session-navigation";
 
 /**
  * Admin invite acceptance (PRD §4.1). Routes the three scenarios:
@@ -23,6 +25,7 @@ export default function AdminInviteAcceptContainer({ token }: { token: string })
   const { data: preview, isLoading, isError } = useInvitePreviewQuery(token);
   const { data: session } = useCurrentSession();
   const accept = useAcceptInvitationMutation();
+  const refreshSession = useRefreshSession();
   const [accepted, setAccepted] = useState(false);
 
   const acceptRedirect = `${ROUTES.AUTH.GATE}/admin-invite/${token}`;
@@ -30,16 +33,20 @@ export default function AdminInviteAcceptContainer({ token }: { token: string })
   if (isLoading) return <Centered>Loading invitation…</Centered>;
   if (isError || !preview) return <Centered>This invitation link is invalid.</Centered>;
   if (preview.expired) return <Centered>This invitation has expired. Ask for a new one.</Centered>;
-  if (preview.status !== "PENDING") return <Centered>This invitation has already been used.</Centered>;
+  if (preview.status !== AdminInvitationStatus.PENDING) return <Centered>This invitation has already been used.</Centered>;
 
   const onAccept = async () => {
     try {
       await accept.mutateAsync(token);
       setAccepted(true);
       toast.success("You're now an admin", { description: `Role: ${preview.subRole}` });
-      router.push(ROUTES.ADMIN.DASHBOARD);
-    } catch {
-      toast.error("Could not accept invitation");
+      // Accepting rotated the session with the admin role; refresh the persisted copy, then load the
+      // admin area fresh — the router's cached prefetches were turned away before the grant. The
+      // refresh is best-effort: the accept already succeeded, and the reload re-reads the session.
+      await refreshSession().catch(() => undefined);
+      navigateAfterPersonaChange(ROUTES.ADMIN.DASHBOARD);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Could not accept invitation"));
     }
   };
 

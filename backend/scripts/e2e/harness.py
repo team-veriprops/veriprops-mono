@@ -7,6 +7,7 @@ workaround for plain-http runs), the deterministic stub-payment confirmer, and t
 """
 from __future__ import annotations
 
+import os
 import sys
 import uuid
 from dataclasses import dataclass, field
@@ -73,6 +74,16 @@ def warn(name: str, detail: str = "") -> None:
     print(f"[WARN] {name}" + (f" — {detail}" if detail else ""))
 
 
+def skip_unless_ci(name: str, detail: str = "") -> None:
+    """A stage that cannot run here: a warning on a laptop without Mailpit or docker, a
+    failure in CI (``CI=true``), where the whole stack is provisioned and a skip would hide
+    a broken delivery path behind a green run."""
+    if os.environ.get("CI", "").lower() == "true":
+        check(name, False, f"skipped in CI — {detail}")
+    else:
+        warn(name, detail)
+
+
 def failures() -> list[str]:
     return _failures
 
@@ -128,6 +139,20 @@ def stub_pay(c: httpx.Client, checkout_url: str) -> None:
     """Drive a charge to PAID via the deterministic stub webhook."""
     tx_ref = parse_qs(urlparse(checkout_url).query).get("txRef", [""])[0]
     c.post("/payments/stub/confirm", json={"tx_ref": tx_ref, "succeeded": True}).raise_for_status()
+
+
+def commission_by_role(admin: httpx.Client) -> dict[str, int]:
+    """Each agent role's fixed commission (kobo) as the admin configured it (§20.1 / D97)."""
+    rules = admin.get("/admin/commission-rules").json()["data"]
+    return {r["role"]: r["amountNgnKobo"] for r in rules}
+
+
+def accrued_commissions(admin: httpx.Client, verification_id: str) -> dict[str, int]:
+    """The live (non-reversed) fixed commission accrued per role on one verification — the
+    BASE lines only; a remote bonus is a separate line (D97)."""
+    detail = admin.get(f"/admin/verifications/{verification_id}").json()["data"]
+    return {c["role"]: c["amountMinor"] for c in detail["commissions"]
+            if c["status"] != "REVERSED" and c["kind"] == "BASE"}
 
 
 def idem_key() -> str:

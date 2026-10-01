@@ -27,11 +27,20 @@ describe("PayoutService contract (mirrors app/domain/payout/controller.py)", () 
     expect(calls[0].url).toContain("page_size=5");
   });
 
-  it("requests a withdrawal", async () => {
+  it("quotes the fee on a withdrawal to a saved account", async () => {
+    const { http, calls } = mockHttp();
+    await new PayoutService(http).quotePayout({ amountMinor: 50000, bankAccountId: "b-1" });
+    expect(calls[0]).toMatchObject({
+      method: "post", url: "/agents/payouts/quote", body: { amountMinor: 50000, bankAccountId: "b-1" },
+    });
+  });
+
+  it("requests a withdrawal to a saved account", async () => {
     const { http, calls } = mockHttp();
     await new PayoutService(http).requestPayout({ amountMinor: 50000, bankAccountId: "b-1" });
-    expect(calls[0]).toMatchObject({ method: "post", url: "/agents/payouts" });
-    expect(calls[0].body).toMatchObject({ amountMinor: 50000 });
+    expect(calls[0]).toMatchObject({
+      method: "post", url: "/agents/payouts", body: { amountMinor: 50000, bankAccountId: "b-1" },
+    });
   });
 
   it("cancels a payout", async () => {
@@ -40,14 +49,27 @@ describe("PayoutService contract (mirrors app/domain/payout/controller.py)", () 
     expect(calls[0]).toMatchObject({ method: "post", url: "/agents/payouts/p-1/cancel" });
   });
 
-  it("manages bank accounts", async () => {
+  it("lists banks and resolves an account with the bank before saving it", async () => {
+    const { http, calls } = mockHttp();
+    const svc = new PayoutService(http);
+    await svc.listBanks();
+    await svc.resolveBankAccount({ bankCode: "058", accountNumber: "0123456789" });
+    expect(calls[0]).toMatchObject({ method: "get", url: "/agents/payouts/banks" });
+    expect(calls[1]).toMatchObject({
+      method: "post", url: "/agents/payouts/bank-accounts/resolve",
+      body: { bankCode: "058", accountNumber: "0123456789" },
+    });
+  });
+
+  it("manages bank accounts, never sending a typed name", async () => {
     const { http, calls } = mockHttp();
     const svc = new PayoutService(http);
     await svc.listBankAccounts();
-    await svc.addBankAccount({ bankName: "GT", accountNumber: "1", accountName: "A" });
+    await svc.addBankAccount({ bankCode: "058", accountNumber: "0123456789" });
     await svc.removeBankAccount("b-1");
     expect(calls[0]).toMatchObject({ method: "get", url: "/agents/payouts/bank-accounts" });
     expect(calls[1]).toMatchObject({ method: "post", url: "/agents/payouts/bank-accounts" });
+    expect(calls[1].body).toEqual({ bankCode: "058", accountNumber: "0123456789" });
     expect(calls[2]).toMatchObject({ method: "delete", url: "/agents/payouts/bank-accounts/b-1" });
   });
 });

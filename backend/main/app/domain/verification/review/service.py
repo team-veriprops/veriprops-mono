@@ -10,7 +10,8 @@ task back to work; fail marks FAILED and refunds (§8.5).
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from kink import inject
@@ -19,7 +20,7 @@ from main.app.core.realtime import VerificationEventType
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.dependencies import required_task_count
 from main.app.core.state.derive import derive_status
-from main.app.core.state.machine import task_state_machine, verification_state_machine
+from main.app.core.state.machine import task_state_machine
 from main.app.core.state.status import (
     AgentRole,
     ReportRevisionKind,
@@ -29,17 +30,18 @@ from main.app.core.state.status import (
 )
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.commission.models import CreateCommissionDto
+from main.app.domain.commission.models import CommissionKind, CreateCommissionDto
 from main.app.domain.commission.service import CommissionService
 from main.app.domain.commission_rule.service import CommissionRuleService
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.system_config.service import ConfigService
 from main.app.domain.message.verification_messages import VerificationMessages
 from main.app.domain.payment.service import PaymentService
+from main.app.domain.verification.closure.policy import is_on_hold
 from main.app.domain.verification.models import UpdateVerificationDto, Verification
 from main.app.domain.verification.report.service import ReportService
 from main.app.domain.verification.repo import VerificationRepo
-from main.app.domain.verification.review.conflict import ReviewConflict, detect_conflicts
+from main.app.domain.verification.review.conflict import ReviewConflict, detect_conflicts, ConflictSeverity
 from main.app.domain.verification.scoring.service import TrustScoreWeightService
 from main.app.domain.verification.status_events import publish_verification_started
 from main.app.domain.verification.task.models import ReviewDecision, UpdateTaskDto, VerificationTask
@@ -107,6 +109,7 @@ class ReviewService:
         # single 0-100 quality number today — PRD "Known Gaps & Roadmap".
         if not 0 <= quality <= 100:
             raise ValidationException(message="Quality score must be between 0 and 100.")
+        _assert_not_on_hold(await self._get_verification(verification_id))
         task = await self._get_task(verification_id, role)
         if task.state != TaskState.SUBMITTED.value:
             raise InvalidResourceStateException(
@@ -220,7 +223,7 @@ class ReviewService:
 
         submissions = self._submissions_by_role(tasks)
         conflicts = detect_conflicts(submissions)
-        if any(c.severity == "HIGH" for c in conflicts):
+        if any(c.severity == ConflictSeverity.HIGH for c in conflicts):
             raise ValidationException(
                 message="Unresolved high-severity conflicts — reject the affected task(s) first."
             )
@@ -236,7 +239,7 @@ class ReviewService:
         role_quality = {AgentRole(t.role): (t.review_quality or 100) for t in tasks}
         composite = await self._weights.compute_composite(tier, role_quality)
 
-        await self._accrue_commissions(verification, tasks)
+        await self.accrue_commissions(verification, tasks)
         # A re-check / tier-upgrade cycle records why this release bumps the version (§14).
         revision_kind = (
             ReportRevisionKind(verification.pending_revision_kind)
@@ -287,36 +290,6 @@ class ReviewService:
         await self._derive_and_persist(verification_id, admin_id)
         return await self._tasks.get_model(task.id)
 
-    async def fail(self, verification_id: str, reason: str, admin_id: str) -> Verification:
-        """Fail the verification and refund the customer (§8.5)."""
-        verification = await self._get_verification(verification_id)
-        verification_state_machine.assert_can_transition(
-            verification.status, VerificationStatus.FAILED.value, resource="Verification"
-        )
-        # Claimed before the refund: a release (or another failure) that got there first
-        # leaves nothing to fail, and the customer is refunded once.
-        failed = await self._verification_repo.claim_transition(
-            verification_id, verification_state_machine.sources_of(VerificationStatus.FAILED.value),
-            VerificationStatus.FAILED,
-        )
-        if failed is None:
-            raise InvalidResourceStateException(
-                resource="verification", message="This verification has already moved on."
-            )
-        self._audit.schedule(
-            action=AuditActionType.VERIFICATION_FAILED,
-            resource_type="verification", resource_id=verification_id, actor_id=admin_id,
-            from_state=verification.status, to_state=VerificationStatus.FAILED.value,
-            details={"reason": reason},
-        )
-        refunded = await self._payments.refund(verification_id, admin_id, reason)
-        self._audit.schedule(
-            action=AuditActionType.VERIFICATION_REFUNDED,
-            resource_type="verification", resource_id=verification_id, actor_id=admin_id,
-            details={"refunded_minor": refunded, "reason": reason},
-        )
-        return await self._verification_repo.get_model(verification_id)
-
     # ── Read (§8.1) ───────────────────────────────────────────────
 
     async def get_review_context(self, verification_id: str) -> ReviewContext:
@@ -339,48 +312,57 @@ class ReviewService:
         return ReviewContext(
             verification=verification, tier=tier, tasks=tasks, conflicts=conflicts,
             all_approved=all_approved, projected_trust_score=projected,
-            releasable=all_approved and not any(c.severity == "HIGH" for c in conflicts)
-            and verification.status == VerificationStatus.UNDER_REVIEW.value,
+            releasable=all_approved and not any(c.severity == ConflictSeverity.HIGH for c in conflicts)
+            and verification.status == VerificationStatus.UNDER_REVIEW.value and not is_on_hold(verification),
             report=report, submissions=submissions,
         )
 
     # ── helpers ───────────────────────────────────────────────────
 
-    async def _accrue_commissions(self, verification: Verification, tasks: List[VerificationTask]) -> None:
-        """Accrue a CLEARING commission per approved task, at the admin per-role×tier rate
-        (§15.1/D30), on a two-stage clearance schedule (§15.2/D31): the bulk clears after
-        ``commission_clearance_days``, a ``commission_reserve_pct`` reserve after the chargeback
-        window. Idempotent on a re-release: a task that already carries a live (non-reversed)
-        commission is skipped (closes the S18 double-accrual follow-up)."""
-        price = verification.price_locked_minor or 0
-        if price <= 0:
-            return
-        tier = VerificationTier(verification.tier)
-        clearance_days = await self._config.get_int(ConfigKey.COMMISSION_CLEARANCE_DAYS)
-        reserve_pct = await self._config.get_int(ConfigKey.COMMISSION_RESERVE_PCT)
-        chargeback_days = await self._config.get_int(ConfigKey.CHARGEBACK_WINDOW_DAYS)
-        now = Utils.datetime_now()
+    async def accrue_commissions(self, verification: Verification, tasks: List[VerificationTask]) -> None:
+        """Accrue CLEARING commission lines per approved task (§20.1/D97): the role's fixed
+        admin-set amount — independent of the tier and the price paid, so a discounted case pays
+        its agents in full — plus, as its own line, any remote bonus the task carried. Both clear
+        on the two-stage schedule (§15.2/D31): the bulk after ``commission_clearance_days``, a
+        ``commission_reserve_pct`` reserve after the chargeback window. Idempotent on a
+        re-release: a line already live for the task is never accrued again (the S18
+        double-accrual follow-up), one guard per kind."""
+        schedule = _AccrualSchedule(
+            now=Utils.datetime_now(),
+            clearance_days=await self._config.get_int(ConfigKey.COMMISSION_CLEARANCE_DAYS),
+            reserve_pct=await self._config.get_int(ConfigKey.COMMISSION_RESERVE_PCT),
+            chargeback_days=await self._config.get_int(ConfigKey.CHARGEBACK_WINDOW_DAYS),
+        )
         for t in tasks:
             if not t.assigned_agent_id:
                 continue
-            # Double-accrual guard: never accrue twice for the same task across re-release cycles.
-            # Ref columns are String(36) and store the .hex form — coerce so the lookup matches
-            # what accrue stored (the two-string-forms gotcha; caught live, not by mocked tests).
-            if await self._commissions.get_live_for_task(
-                Utils.uuid_to_hex(verification.id), Utils.uuid_to_hex(t.id)
-            ):
-                continue
-            amount = await self._commission_rules.commission_minor(price, AgentRole(t.role), tier)
-            if amount <= 0:
-                continue
-            reserve = round(amount * reserve_pct / 100)
-            await self._commissions.accrue(CreateCommissionDto(
-                verification_id=verification.id, task_id=t.id, agent_id=t.assigned_agent_id,
-                role=AgentRole(t.role), tier=tier, amount_minor=amount,
-                clearing_until=now + timedelta(days=clearance_days),
-                reserve_amount_minor=reserve,
-                reserve_until=now + timedelta(days=chargeback_days),
-            ))
+            role = AgentRole(t.role)
+            await self._accrue_line(verification, t, CommissionKind.BASE,
+                                    await self._commission_rules.commission_minor(role), schedule)
+            await self._accrue_line(verification, t, CommissionKind.REMOTE_BONUS,
+                                    t.remote_bonus_minor or 0, schedule)
+
+    async def _accrue_line(
+        self, verification: Verification, task: VerificationTask, kind: CommissionKind,
+        amount: int, schedule: _AccrualSchedule,
+    ) -> None:
+        """One commission line for *task*, unless it pays nothing or is already live."""
+        if amount <= 0:
+            return
+        # Ref columns are String(36) and store the .hex form — coerce so the lookup matches
+        # what accrue stored (the two-string-forms gotcha; caught live, not by mocked tests).
+        if await self._commissions.get_live_for_task(
+            Utils.uuid_to_hex(verification.id), Utils.uuid_to_hex(task.id), kind
+        ):
+            return
+        await self._commissions.accrue(CreateCommissionDto(
+            verification_id=verification.id, task_id=task.id, agent_id=task.assigned_agent_id,
+            role=AgentRole(task.role), tier=VerificationTier(verification.tier), kind=kind,
+            amount_minor=amount,
+            clearing_until=schedule.now + timedelta(days=schedule.clearance_days),
+            reserve_amount_minor=round(amount * schedule.reserve_pct / 100),
+            reserve_until=schedule.now + timedelta(days=schedule.chargeback_days),
+        ))
 
     def _submissions_by_role(
         self, tasks: List[VerificationTask]
@@ -399,6 +381,7 @@ class ReviewService:
         verification = await self._verification_repo.lock_model(verification_id)
         if not verification:
             raise ResourceNotFoundException(resource="verification")
+        _assert_not_on_hold(verification)
         return verification
 
     async def _get_verification(self, verification_id: str) -> Verification:
@@ -439,6 +422,26 @@ class ReviewService:
         # apart from a rework re-activating a case that was already under review.
         await publish_verification_started(
             verification_id, verification, new_status, task_states
+        )
+
+
+@dataclass(frozen=True)
+class _AccrualSchedule:
+    """The clearance timing every commission line accrued by one release shares (§15.2)."""
+
+    now: datetime
+    clearance_days: int
+    reserve_pct: int
+    chargeback_days: int
+
+
+def _assert_not_on_hold(verification: Verification) -> None:
+    """A case waiting for Finance on its closing refund is not decided in review (§6.4): a
+    release would strand the request, which could then be neither approved nor rejected."""
+    if is_on_hold(verification):
+        raise InvalidResourceStateException(
+            resource="verification",
+            message="This case is on hold while it is being closed; Finance decides it first.",
         )
 
 

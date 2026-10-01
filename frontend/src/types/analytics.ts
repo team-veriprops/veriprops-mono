@@ -66,8 +66,17 @@ export interface ChannelCount {
  * rather than hidden: a GREEN we have not refreshed for a week is a different fact from
  * a GREEN from this morning, and `syncError` is what says which one you are looking at.
  */
+/** Meta's quality rating for our number (backend `WhatsAppQualityRating`); UNKNOWN is ours:
+ * no successful sync yet, which must never read as green. */
+export enum WhatsAppQualityRating {
+  GREEN = "GREEN",
+  YELLOW = "YELLOW",
+  RED = "RED",
+  UNKNOWN = "UNKNOWN",
+}
+
 export interface WhatsAppNumberHealth {
-  qualityRating: string;
+  qualityRating: WhatsAppQualityRating;
   messagingLimitTier?: string;
   syncedAt?: string;
   syncError?: string;

@@ -47,7 +47,7 @@ export function useApproveErasureMutation() {
 export function useRejectErasureMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, note }: { id: string; note?: string }) => service.reject(id, note),
+    mutationFn: ({ id, note }: { id: string; note: string }) => service.reject(id, note),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["erasure", "admin"] }),
   });
 }

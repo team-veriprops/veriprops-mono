@@ -82,7 +82,6 @@ export const ROUTES = {
     REPORT_REVIEW: (vid: string) => `/admin/verifications/${vid}/report-review`,
     // TODO(gap): route declared, page not built — PRD "Known Gaps & Roadmap".
     TASK_REVIEW: (taskId: string) => `/admin/tasks/${taskId}/review`,
-    CONFIG: '/admin/config',
     TRUST_SCORE_WEIGHTS: '/admin/config/trust-score-weights',
     SYSTEM_CONFIG: '/admin/config/system',
     // PRD §26.7 — Meta template approval status, read-only (definitions are code-owned).
@@ -93,15 +92,13 @@ export const ROUTES = {
     FRAUD_FLAGS: '/admin/fraud-flags',
     DISPUTES: '/admin/disputes',
     RECHECKS: '/admin/rechecks',
-    PAYOUTS: '/admin/payouts',
     COMMISSION_RULES: '/admin/commission-rules',
     ANALYTICS: '/admin/analytics',
     PRICING: '/admin/pricing',
     FINANCE: '/admin/finance',
-    // TODO(gap): finance payments/commissions sub-pages not built — PRD "Known Gaps & Roadmap".
     FINANCE_PAYMENTS: '/admin/finance/payments',
     FINANCE_PAYOUTS: '/admin/finance/payouts',
-    FINANCE_COMMISSIONS: '/admin/finance/commissions',
+    FINANCE_REFUNDS: '/admin/finance/refunds',
     // TODO(gap): admin content CMS pages not built (pairs with the CONTENT_CREATOR/
     // CONTENT_APPROVER sub-roles) — PRD "Known Gaps & Roadmap".
     CONTENT: '/admin/content',
@@ -151,6 +148,9 @@ export const ROUTES = {
   // so they must stay outside PROTECTED_PREFIXES in proxy.ts.
   WA: {
     PAY: (token: string) => `/wa/pay/${token}`,
+    // Where a handoff's hosted checkout returns (backend WA_PAY_RETURN_PATH). Public: the
+    // customer holds a grant cookie, not a session.
+    PAY_RETURN: '/wa/pay/return',
     UPLOAD: (token: string) => `/wa/upload/${token}`,
     REPORT: (token: string) => `/wa/report/${token}`,
     // §26.4.4 WhatsApp→web linking. Unlike its siblings this one *does* need a session —
@@ -181,17 +181,6 @@ export const ROUTES = {
 
   ABOUT: '/about',
   SAMPLE_REPORT: '/sample-report',
-  // TODO(gap): legacy PROJECTS/SETTINGS blocks — no pages; remove or build —
-  // PRD "Known Gaps & Roadmap".
-  PROJECTS: {
-    ROOT: '/projects',
-    DETAIL: (id: string | number) => `/projects/${id}`,
-    NEW: '/projects/new',
-  },
-  SETTINGS: {
-    ACCOUNT: '/settings/account',
-    NOTIFICATIONS: '/settings/notifications',
-  },
 } as const;
 
 /**

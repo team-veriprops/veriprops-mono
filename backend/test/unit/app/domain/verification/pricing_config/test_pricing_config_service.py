@@ -13,6 +13,7 @@ from main.app.domain.verification.pricing import TIER_PRICE_NGN_KOBO
 from main.app.domain.verification.pricing_config.models import LineItemInputDto
 from main.app.domain.verification.pricing_config.service import PricingConfigService
 from main.appodus_utils.db.session import db_session_ctx
+from main.appodus_utils.exception.exceptions import ValidationException
 
 
 @pytest.fixture(autouse=True)
@@ -38,6 +39,7 @@ def _make_service():
     svc._line_items = AsyncMock()
     svc._audit = MagicMock()
     svc._audit.schedule = MagicMock()
+    svc._margin_guard = AsyncMock()
     return svc
 
 
@@ -66,6 +68,20 @@ class TestSetTierPrice:
         # One statement on the live tier key, so a concurrent first save can't insert twice.
         assert svc._tiers.upsert.await_args.kwargs == {"unique_index": "uq_pricing_tier_config_tier"}
         svc._audit.schedule.assert_called_once()
+
+    async def test_the_proposed_price_is_checked_against_the_commission_margin(self):
+        svc = _make_service()
+        svc._tiers.upsert = AsyncMock(return_value=SimpleNamespace(id="pt-1"))
+        await svc.set_tier_price(VerificationTier.BASIC, 7_000_000, "admin-1")
+        svc._margin_guard.check.assert_awaited_once_with(price_overrides={VerificationTier.BASIC: 7_000_000})
+
+    async def test_a_price_that_breaks_the_margin_is_never_written(self):
+        svc = _make_service()
+        svc._tiers.upsert = AsyncMock()
+        svc._margin_guard.check = AsyncMock(side_effect=ValidationException(message="below the margin"))
+        with pytest.raises(ValidationException):
+            await svc.set_tier_price(VerificationTier.BASIC, 1, "admin-1")
+        svc._tiers.upsert.assert_not_awaited()
 
 
 class TestSetLineItems:

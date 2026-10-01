@@ -19,6 +19,7 @@ import { canAdvanceSubmissionStep } from "./validation";
 import PropertyStep from "./PropertyStep";
 import TierStep from "./TierStep";
 import ConsentStep from "./ConsentStep";
+import { getErrorMessage } from "@lib/errors";
 
 const LAST_IN_WIZARD_STEP = 2; // Consent — "Continue to Payment" submits + routes to /pay.
 
@@ -145,8 +146,8 @@ export default function SubmissionContainer() {
     try {
       await submit.mutateAsync({ id: verificationId, payload });
       router.push(ROUTES.PORTAL.VERIFICATION_PAY(verificationId));
-    } catch {
-      toast.error("Could not submit", { description: "Please try again." });
+    } catch (err) {
+      toast.error("Could not submit", { description: getErrorMessage(err, "Please try again.") });
     }
   };
 

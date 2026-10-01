@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from kink import di, inject
+from kink import inject
 
 from main.app.config.settings import settings
 from main.app.core.evidence import compute_content_hash
@@ -21,15 +21,29 @@ from main.app.domain.verification.task.evidence.models import (
     EvidenceKind,
 )
 from main.app.domain.verification.task.evidence.repo import EvidenceRepo
-from main.appodus_utils import Utils
+from main.appodus_utils import FileUtils, Utils
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.integrations.document_storage.factory import DocumentStorageProviderFactory
 from main.appodus_utils.integrations.document_storage.interface import IDocumentStorageProvider
-from main.appodus_utils.integrations.document_storage.stub.stub_storage import (
-    StubDocumentStorageProvider,
-)
+
+
+# Formats the store may serve inline: the photos, video and documents an agent captures.
+# Anything else (markup, SVG, scripts, unrecognised bytes) is stored as a download, because
+# a presigned URL renders on the bucket's origin and inline markup there would run.
+_INLINE_EVIDENCE_MIME_TYPES = frozenset({
+    "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
+    "application/pdf", "video/mp4", "video/quicktime",
+})
+_DOWNLOAD_CONTENT_TYPE = "application/octet-stream"
+
+
+def _stored_content_type(file_bytes: bytes) -> str:
+    """The Content-Type an evidence object is stored under: what its bytes prove, never the
+    uploader's claim (which is still recorded on the evidence row as display metadata)."""
+    mime = FileUtils.sniff_mime(file_bytes)
+    return mime if mime in _INLINE_EVIDENCE_MIME_TYPES else _DOWNLOAD_CONTENT_TYPE
 
 
 @inject
@@ -67,6 +81,7 @@ class EvidenceService:
             file_bytes=file_bytes,
             metadata={"task_id": task_id, "agent_id": agent_id, "sha256": content_hash},
             encrypted=True,
+            content_type=_stored_content_type(file_bytes),
         )
 
         return await self._evidence_repo.create_return_model(CreateEvidenceDto(
@@ -101,11 +116,9 @@ class EvidenceService:
         Routes through the same provider selection as capture, so the deterministic stub
         serves a stable synthetic URL with no bucket/creds in tests/local."""
         provider = self._provider()
-        return await provider.get_presigned_url(item.storage_key, settings.AWS_S3_BUCKET)
+        return await provider.get_presigned_url(
+            item.storage_key, settings.AWS_S3_BUCKET, expires_in_sec=settings.AWS_S3_PRESIGNED_URL_EXPIRES
+        )
 
     def _provider(self) -> IDocumentStorageProvider:
-        # Deterministic default (no external calls / creds) unless a real provider is
-        # explicitly selected — mirrors PAYMENT_STUB_MODE / OTP_MODE.
-        if settings.DOCUMENT_STORAGE_STUB_MODE:
-            return di[StubDocumentStorageProvider]
-        return self._storage_factory.get_active_provider()
+        return self._storage_factory.storage()

@@ -24,6 +24,8 @@ from main.appodus_utils.exception.exceptions import (
     ValidationException,
 )
 from test.utils.repo_fakes import fake_claim_transition
+from main.app.domain.payment.models import RefundOutcome
+from main.app.domain.payment.refund_request.models import RefundSource
 
 _LONG = "x" * 120  # ≥ 100-char description
 
@@ -46,7 +48,7 @@ def mock_db_session():
 
 def _verification(status=VerificationStatus.COMPLETED):
     return SimpleNamespace(id="v-1", vid="VP-1", tier=VerificationTier.STANDARD.value,
-                           status=status.value, customer_id="cust-1")
+                           status=status.value, customer_id="cust-1", currency="NGN")
 
 
 def _report(days_ago=1):
@@ -59,7 +61,7 @@ def _dispute(status=DisputeStatus.OPEN, agent_id="agent-1"):
         dispute_type=DisputeType.INACCURATE_FINDING.value, description=_LONG, evidence=None,
         status=status.value, target_role=AgentRole.SURVEYOR.value, agent_id=agent_id,
         agent_defence_text=None, agent_defence_at=None, resolution_outcome=None,
-        resolution_note=None, date_created=Utils.datetime_now(),
+        resolution_note=None, resolved_at=None, date_created=Utils.datetime_now(),
     )
 
 
@@ -95,7 +97,10 @@ def _service(verification=None, report=None, dispute=None, window_days=30):
     svc._commissions.freeze_for_verification = AsyncMock()
     svc._commissions.unfreeze_for_verification = AsyncMock()
     svc._commissions.reverse_for_verification = AsyncMock()
-    svc._payments.refund = AsyncMock(return_value=12_000_000)
+    svc._payments.refund = AsyncMock(return_value=RefundOutcome(refunded_minor=12_000_000))
+    svc._payments.refundable_minor = AsyncMock(return_value=12_000_000)
+    svc._refund_requests = MagicMock()
+    svc._refund_requests.file = AsyncMock()
     svc._reviews.reopen_task = AsyncMock()
     return svc
 
@@ -130,6 +135,18 @@ class TestOpen:
         with pytest.raises(ValidationException):
             await svc.open("v-1", "cust-1", _open_dto())
 
+    async def test_a_part_the_case_does_not_have_is_refused_before_anything_changes(self, monkeypatch):
+        """A STANDARD case has no lawyer: naming one would park a dispute on no one."""
+        import main.app.domain.verification.dispute.service as mod
+        monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
+        v = _verification()
+        svc = _service(verification=v)
+        with pytest.raises(ValidationException):
+            await svc.open("v-1", "cust-1", OpenDisputeDto(
+                dispute_type=DisputeType.INACCURATE_FINDING, description=_LONG, target_role=AgentRole.LAWYER))
+        assert v.status == VerificationStatus.COMPLETED.value
+        svc._commissions.freeze_for_verification.assert_not_awaited()
+
     async def test_open_blocked_when_not_completed(self, monkeypatch):
         import main.app.domain.verification.dispute.service as mod
         monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
@@ -152,12 +169,17 @@ class TestAgentDefence:
 
 
 class TestResolve:
-    async def _resolve(self, monkeypatch, outcome, **kwargs):
+    async def _resolve(self, monkeypatch, outcome, track=None, **kwargs):
+        """*track*, when given, collects the order of the resolution's side effects."""
         import main.app.domain.verification.dispute.service as mod
-        monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
+        seen = track if track is not None else []
+        monkeypatch.setattr(mod, "publish_domain_event", AsyncMock(side_effect=lambda *_: seen.append("event")))
         v = _verification(status=VerificationStatus.DISPUTED)
         dispute = _dispute(status=DisputeStatus.OPEN)
         svc = _service(verification=v, dispute=dispute)
+        svc._payments.refund = AsyncMock(side_effect=lambda *a, **k: seen.append("refund") or RefundOutcome())
+        svc._commissions.reverse_for_verification = AsyncMock(side_effect=lambda *a, **k: seen.append("reverse"))
+        svc._audit.schedule = MagicMock(side_effect=lambda **k: seen.append("audit"))
         await svc.resolve("d-1", ResolveDisputeDto(outcome=outcome, note="admin decision", **kwargs), "admin-1")
         # The resolution itself is the claim, recorded with its outcome and who decided.
         assert dispute.status == DisputeStatus.RESOLVED.value
@@ -170,12 +192,52 @@ class TestResolve:
         assert VerificationStatus.COMPLETED.value in statuses
         svc._commissions.unfreeze_for_verification.assert_awaited_once()
 
-    async def test_full_refund_refunds_and_reverses(self, monkeypatch):
+    async def test_an_upheld_dispute_files_the_full_refund_for_finance_and_waits(self, monkeypatch):
+        """No customer money leaves unapproved (§8.5): the refund waits in Finance's queue, and
+        the case stays DISPUTED with commissions frozen until Finance approves it."""
         svc = await self._resolve(monkeypatch, DisputeOutcome.FULL_REFUND)
         statuses = [c.args[1].status for c in svc._verification_repo.update.call_args_list if c.args[1].status]
+        assert VerificationStatus.REFUNDED.value not in statuses
+        svc._payments.refund.assert_not_awaited()
+        svc._commissions.reverse_for_verification.assert_not_awaited()
+        filed = svc._refund_requests.file.await_args.kwargs
+        assert (filed["source"], filed["amount_minor"], filed["requested_by"]) == (
+            RefundSource.DISPUTE_UPHELD, 12_000_000, "admin-1",
+        )
+
+    async def test_nothing_is_filed_when_nothing_is_refundable(self, monkeypatch):
+        """Every charge already refunded, or held under a chargeback."""
+        import main.app.domain.verification.dispute.service as mod
+        monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
+        svc = _service(verification=_verification(status=VerificationStatus.DISPUTED), dispute=_dispute())
+        svc._payments.refundable_minor = AsyncMock(return_value=0)
+        await svc.resolve("d-1", ResolveDisputeDto(outcome=DisputeOutcome.FULL_REFUND, note="admin decision"), "admin-1")
+        svc._refund_requests.file.assert_not_awaited()
+        # Nothing waits on Finance, so the case settles now.
+        statuses = [c.args[1].status for c in svc._verification_repo.update.call_args_list if c.args[1].status]
         assert VerificationStatus.REFUNDED.value in statuses
-        svc._payments.refund.assert_awaited_once()
         svc._commissions.reverse_for_verification.assert_awaited_once()
+
+    async def test_finance_approving_settles_the_case_as_refunded(self):
+        v = _verification(status=VerificationStatus.DISPUTED)
+        svc = _service(verification=v, dispute=_dispute())
+
+        await svc.settle_full_refund("v-1", "finance-1")
+
+        statuses = [c.args[1].status for c in svc._verification_repo.update.call_args_list if c.args[1].status]
+        assert VerificationStatus.REFUNDED.value in statuses
+        svc._commissions.reverse_for_verification.assert_awaited_once_with("v-1", "finance-1")
+
+    async def test_finance_refusing_reopens_the_dispute_for_ops(self):
+        upheld = _dispute(status=DisputeStatus.RESOLVED)
+        upheld.resolution_outcome = DisputeOutcome.FULL_REFUND.value
+        svc = _service(verification=_verification(status=VerificationStatus.DISPUTED), dispute=upheld)
+        svc._dispute_repo.list_for_verification = AsyncMock(return_value=[upheld])
+
+        await svc.reopen_refused_refund("v-1", "finance-1", "Evidence does not support a refund")
+
+        assert (upheld.status, upheld.resolution_outcome) == (DisputeStatus.OPEN.value, None)
+        svc._commissions.reverse_for_verification.assert_not_awaited()
 
     async def test_partial_recheck_reopens_and_marks_v2(self, monkeypatch):
         svc = await self._resolve(
@@ -193,3 +255,23 @@ class TestResolve:
         svc = _service(verification=v, dispute=_dispute(status=DisputeStatus.OPEN))
         with pytest.raises(ValidationException):
             await svc.resolve("d-1", ResolveDisputeDto(outcome=DisputeOutcome.REJECTED, note="  "), "admin-1")
+
+
+class TestQueuesNameTheirCase:
+    """A dispute in a queue says which case it is about (§19.3): the admin deciding it and the
+    agent answering it both need the reference — a VID, not the customer's identity."""
+
+    async def test_the_admin_queue_carries_each_dispute_vid(self):
+        svc = _service()
+        svc._dispute_repo.page_open = AsyncMock(return_value=([(_dispute(), "VP-2026-ABC123")], 1))
+        svc._dispute_repo._db_utils = MagicMock(build_page=lambda items, total, page, size: SimpleNamespace(items=items))
+
+        page = await svc.page_open(0, 10)
+
+        assert [d.vid for d in page.items] == ["VP-2026-ABC123"]
+
+    async def test_the_agent_list_carries_each_dispute_vid(self):
+        svc = _service()
+        svc._dispute_repo.list_open_for_agent = AsyncMock(return_value=[(_dispute(), "VP-2026-ABC123")])
+
+        assert [d.vid for d in await svc.list_open_for_agent("agent-1")] == ["VP-2026-ABC123"]

@@ -28,6 +28,7 @@ from main.app.domain.user.agent.credential.models import (
 from main.app.domain.user.agent.credential.repo import AgentCredentialRepo
 from main.app.domain.user.agent.credential.rules import active_roles
 from main.app.domain.user.agent.kyc.models import KycRecordDto
+from main.appodus_utils.integrations.kyc.models import GovIdType
 from main.app.domain.user.agent.kyc.service import KycService
 from main.app.domain.user.agent.models import (
     AgentApplicationDetailDto,
@@ -290,10 +291,18 @@ class AgentService:
             coverage=[AgentCoverageInputDto(
                 state=c.state, lga=c.lga, place=c.place, travel_radius_km=c.travel_radius_km,
             ) for c in coverage],
-            kyc=KycRecordDto(
-                provider=kyc.provider, method=kyc.method, status=kyc.status,
-                score=kyc.score, summary=kyc.summary, verified_at=kyc.verified_at,
-            ) if kyc else None,
+            kyc=await self._kyc_review(kyc) if kyc else None,
+        )
+
+    async def _kyc_review(self, kyc) -> KycRecordDto:
+        """The KYC result as a reviewer sees it, with short-lived links to the photos kept
+        for the side-by-side comparison."""
+        images = await self._kyc_service.review_images(kyc)
+        return KycRecordDto(
+            provider=kyc.provider, method=kyc.method, status=kyc.status,
+            id_type=GovIdType(kyc.id_type) if kyc.id_type else None,
+            score=kyc.score, summary=kyc.summary, verified_at=kyc.verified_at,
+            selfie_url=images.selfie_url, document_url=images.document_url,
         )
 
     async def approve_application(

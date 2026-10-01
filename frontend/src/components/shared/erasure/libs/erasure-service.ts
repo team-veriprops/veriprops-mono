@@ -36,7 +36,8 @@ export class ErasureService {
     return this.http.post(`/admin/erasure-requests/${id}/approve`, {});
   }
 
-  reject(id: string, note?: string): Promise<SuccessResponse<DataErasureRequest>> {
+  /** The reason is required: the requester is told the request was refused and pointed at it. */
+  reject(id: string, note: string): Promise<SuccessResponse<DataErasureRequest>> {
     return this.http.post(`/admin/erasure-requests/${id}/reject`, { note });
   }
 

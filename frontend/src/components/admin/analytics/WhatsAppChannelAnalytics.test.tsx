@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { WhatsAppChannelAnalytics as ChannelAnalytics } from "@/types/analytics";
+import { WhatsAppChannelAnalytics as ChannelAnalytics, WhatsAppQualityRating } from "@/types/analytics";
 
 const { query, syncSpy } = vi.hoisted(() => ({
   query: { current: { data: null as unknown, isLoading: false, isError: false } },
@@ -112,7 +112,7 @@ describe("WhatsAppChannelAnalytics (§26.10, WA-43)", () => {
     const html = render(
       analytics({
         numberHealth: {
-          qualityRating: "GREEN",
+          qualityRating: WhatsAppQualityRating.GREEN,
           syncedAt: "2026-08-01T00:00:00Z",
           syncError: "timeout",
         },

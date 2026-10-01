@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { cn } from "@lib/utils";
 import { AvailabilityStatus } from "@/types/agentReputation";
 import { useSetAvailabilityMutation } from "./libs/useReputationQueries";
+import { getErrorMessage } from "@lib/errors";
 
 const OPTIONS: { value: AvailabilityStatus; label: string; dot: string }[] = [
   { value: AvailabilityStatus.GREEN, label: "Available", dot: "bg-emerald-500" },
@@ -38,7 +39,7 @@ export function AvailabilityToggle({
               aria-checked={active}
               disabled={atCapacity || set.isPending}
               onClick={() =>
-                set.mutate(o.value, { onError: () => toast.error("Could not update availability.") })
+                set.mutate(o.value, { onError: (err) => toast.error(getErrorMessage(err, "Could not update availability.")) })
               }
               className={cn(
                 "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition",
@@ -54,7 +55,7 @@ export function AvailabilityToggle({
         })}
       </div>
       {atCapacity && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
+        <p className="text-xs text-amber-700 dark:text-amber-400">
           You&apos;re at your active-task limit, so you show as Unavailable ({effective}) until a task frees up.
         </p>
       )}

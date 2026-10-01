@@ -1,4 +1,5 @@
 from abc import abstractmethod, ABC
+from typing import Optional
 
 from typing_extensions import BinaryIO
 
@@ -13,8 +14,11 @@ class IDocumentStorageProvider(ABC):
 
     @abstractmethod
     async def upload(
-        self, key: str, bucket: str, file_bytes: BinaryIO, metadata: dict, encrypted: bool = False
+        self, key: str, bucket: str, file_bytes: BinaryIO, metadata: dict, encrypted: bool = False,
+        content_type: Optional[str] = None,
     ) -> str:
+        """Store the bytes and return a short-lived read URL. ``content_type`` is the MIME type
+        the object is served with; ``None`` stores it as a generic binary download."""
         pass
 
     @abstractmethod
@@ -28,4 +32,12 @@ class IDocumentStorageProvider(ABC):
 
     @abstractmethod
     async def delete(self, key: str, bucket: str) -> None:
+        pass
+
+    @abstractmethod
+    async def delete_prefix(self, prefix: str, bucket: str) -> int:
+        """Delete every object whose key starts with ``prefix``; how many were deleted.
+
+        For erasure: it reaches objects no database row points at any more (an upload whose
+        transaction rolled back), which a delete by known keys would leave behind."""
         pass

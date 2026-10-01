@@ -14,6 +14,7 @@ from main.app.core.state.status import VerificationStatus, VerificationTier
 from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
 from main.appodus_utils import Object
 from main.appodus_utils.db.types.money import TransactionCurrency
+from main.app.domain.payment.models import PaymentCheckoutKind, PaymentStatus
 
 
 class HandoffContextDto(Object):
@@ -39,5 +40,12 @@ class HandoffPaymentDto(Object):
 
     tx_ref: str
     checkout_url: Optional[str] = None
+    checkout_kind: PaymentCheckoutKind = PaymentCheckoutKind.STUB
     amount_minor: int
     currency: TransactionCurrency
+
+
+class HandoffPaymentStatusDto(Object):
+    """Where the handoff's payment stands, for the page a hosted checkout returns to."""
+
+    status: Optional[PaymentStatus] = None

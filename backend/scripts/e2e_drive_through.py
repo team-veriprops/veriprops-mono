@@ -13,7 +13,7 @@ NDPA erasure (reject + execute) → the WhatsApp channel (signature-verified Met
 redelivery dedup, console inbound under the same fraud scan, and a handoff link carried all
 the way to a PAID case) → Mailpit email delivery + password reset → outbound-message
 failure→retry→threshold→expiry pipeline (stops/starts the Mailpit container via the docker
-CLI; warn-skips without docker). Prints PASS/FAIL per step; exits non-zero on any failure.
+CLI; warn-skips without docker, fails in CI). Prints PASS/FAIL per step; exits non-zero on any failure.
 
 Stages live in scripts/e2e/ (shared harness in scripts/e2e/harness.py). Stages have linear
 data dependencies (each builds on the previous), so ``--stages`` subsets must be contiguous
@@ -30,8 +30,9 @@ How to run (non-prod only — uses /dev/reset + /dev/seed):
     # 4. run the full drive-through (or a prefix, e.g. --stages session_refresh,onboarding):
     set PYTHONIOENCODING=utf-8 && python scripts/e2e_drive_through.py
 
-Without Mailpit (or with ENABLE_OUT_MESSAGING=False) everything still passes — the final
-email + messaging_retry stages detect the situation and warn-skip instead of failing. The
+Without Mailpit (or with ENABLE_OUT_MESSAGING=False) everything still passes locally — the
+final email + messaging_retry stages detect the situation and warn-skip. In CI (CI=true, set by
+GitHub Actions) the same situation fails the run. The
 messaging_retry stage additionally needs the docker CLI (it stops/starts the Mailpit
 container to induce a real SMTP failure; override the name via MAILPIT_CONTAINER).
 """
@@ -44,6 +45,7 @@ import sys
 # from main.appodus_utils.config.bootstrap import BaseDiBootstrap  # noqa: F401
 
 from e2e import (
+    stage_account,
     stage_admin_ops,
     stage_admin_team,
     stage_aftermarket,
@@ -69,6 +71,7 @@ from e2e.harness import Ctx, check, checks_run, client, failures, login
 STAGES = [
     ("session_refresh", stage_session_refresh),      # §2 — FetchHttpClient silent re-auth contract
     ("onboarding", stage_onboarding),                # Phases 2+5, §17.1 quote/re-lock
+    ("account", stage_account),                      # §1–§3/§9/§12.4 — self-service account surfaces
     ("agent_onboarding", stage_agent_onboarding),    # S7 — application, KYC stub, approve/reject
     ("admin_team", stage_admin_team),                # S8 — invite, accept, RBAC, revoke, deactivate
     ("execution", stage_execution),                  # S10/S11 — assign → evidence → submit
@@ -83,8 +86,8 @@ STAGES = [
     ("ops_unhappy", stage_ops_unhappy),              # §6/§11.3/§8.5/§6a — pool, lifecycle, chargeback
     ("compliance", stage_compliance),                # S23 — audit pack, erasure reject + execute
     ("whatsapp", stage_whatsapp),                    # §26 S1–S11 — the channel end to end
-    ("email", stage_email),                          # Mailpit delivery + password reset (warn-skips)
-    ("messaging_retry", stage_messaging_retry),      # failure→retry→threshold→expiry (warn-skips)
+    ("email", stage_email),                          # Mailpit delivery + password reset (warn-skips off CI)
+    ("messaging_retry", stage_messaging_retry),      # failure→retry→threshold→expiry (warn-skips off CI)
 ]
 
 

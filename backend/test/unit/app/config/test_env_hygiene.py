@@ -145,6 +145,21 @@ class TestCommittedEnvFilesAreConfigOnly:
             f"move them to Doppler and leave the key absent/empty/{SECRET_PLACEHOLDER}."
         )
 
+    @pytest.mark.parametrize("name", BACKEND_ENV_FILES)
+    def test_no_value_is_read_as_its_own_comment(self, name: str):
+        """`KEY=    # note` is read by python-dotenv (what pydantic-settings loads with) as the
+        value "# note", not as blank: a support phone printed into every message as comment
+        text, and a secret that counts as configured. A blank value keeps its note on the line
+        above instead."""
+        from dotenv import dotenv_values
+
+        read_as_comment = sorted(
+            key for key, value in dotenv_values(_env_path(name)).items() if (value or "").startswith("#")
+        )
+        assert not read_as_comment, (
+            f"{name}: {read_as_comment} load as their comment text; move the comment to its own line"
+        )
+
     def test_frontend_backend_secret_key_is_inert(self):
         for name in FRONTEND_ENV_FILES:
             values = _parse_env(_env_path(name, frontend=True))
@@ -199,7 +214,9 @@ class TestTestEnvContract:
         assert env["REPORT_PDF_STUB_MODE"] == "true"
 
     def test_mailpit_smtp(self, env):
-        assert env["SMTP_HOST"] == "localhost"
+        # The IPv4 loopback, not `localhost`: on Windows `localhost` tries ::1 first, which
+        # stalls every host-run send to Mailpit (backend/CLAUDE.md, "Serverless-aware DB engine").
+        assert env["SMTP_HOST"] == "127.0.0.1"
         assert env["SMTP_PORT"] == "1025"
 
 
@@ -271,4 +288,29 @@ class TestTemplateDriftGuard:
         assert not missing, (
             f".env.example is missing keys for Settings fields: {sorted(missing)}; "
             "add them (commented is fine) or add to TEMPLATE_EXEMPT_FIELDS with a reason."
+        )
+
+
+class TestNoTrackedPrivateKeys:
+    """Service-account keys arrive as base64 JSON from Doppler (`*_JSON_B64` settings); a local
+    key file is gitignored and never shipped. A tracked file holding private-key material is a
+    leaked credential the moment it is pushed, whatever its name or extension."""
+
+    def test_no_tracked_file_holds_private_key_material(self):
+        import shutil
+        import subprocess
+
+        if shutil.which("git") is None or not (REPO_ROOT / ".git").exists():
+            pytest.skip("not a git checkout")
+        # `-e`: the pattern starts with dashes, which git would otherwise parse as an option.
+        found = subprocess.run(
+            ["git", "grep", "-l", "-E", "-e", r"-----BEGIN ([A-Z]+ )?PRIVATE KEY-----"],
+            cwd=REPO_ROOT, capture_output=True, text=True,
+        )
+        # git grep exits 1 for "no match"; anything else means the scan itself failed.
+        assert found.returncode in (0, 1), f"git grep failed: {found.stderr}"
+        offenders = found.stdout.split()
+        assert not offenders, (
+            f"tracked files hold private-key material: {offenders}; untrack them "
+            "(`git rm --cached`), rotate the key, and load it from Doppler instead."
         )

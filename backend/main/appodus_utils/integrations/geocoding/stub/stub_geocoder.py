@@ -39,7 +39,9 @@ class StubGeocoder(IGeocoder):
     def platform(self) -> GeoProvider:
         return GeoProvider.STUB
 
-    async def autocomplete(self, query: str, country: str = "NG") -> List[GeoSuggestion]:
+    async def autocomplete(
+        self, query: str, country: str = "NG", session_token: Optional[str] = None,
+    ) -> List[GeoSuggestion]:
         q = (query or "").lower()
         return [
             GeoSuggestion(place_id=loc.place_id, description=loc.address)
@@ -47,16 +49,5 @@ class StubGeocoder(IGeocoder):
             if not q or q in loc.address.lower()
         ]
 
-    async def geocode(self, place_id: str) -> Optional[GeoLocation]:
+    async def geocode(self, place_id: str, session_token: Optional[str] = None) -> Optional[GeoLocation]:
         return _FIXTURES.get(place_id)
-
-    async def reverse_geocode(self, latitude: float, longitude: float) -> Optional[GeoLocation]:
-        # Nearest fixture by naive distance — deterministic for a dragged pin.
-        best = min(
-            _FIXTURES.values(),
-            key=lambda loc: (loc.latitude - latitude) ** 2 + (loc.longitude - longitude) ** 2,
-        )
-        return GeoLocation(
-            place_id=None, address=best.address, state=best.state, lga=best.lga,
-            latitude=latitude, longitude=longitude,
-        )

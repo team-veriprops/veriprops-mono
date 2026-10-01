@@ -29,6 +29,18 @@ from main.appodus_utils.db.locks import advisory_xact_lock
 # Advisory-lock namespace: one draft write per applicant at a time.
 _DRAFT_LOCK = "agent_application_draft"
 
+# The KYC photos a submission carries. A draft is plain text kept for weeks, so a photo that
+# reached one would outlive the check; the wizard never sends them, and this makes sure.
+_PHOTO_KEYS = ("selfieImage", "idDocumentImage", "selfie_image", "id_document_image")
+
+
+def _without_photos(payload: dict) -> dict:
+    kyc = payload.get("kyc")
+    if not isinstance(kyc, dict):
+        return payload
+    return {**payload, "kyc": {k: v for k, v in kyc.items() if k not in _PHOTO_KEYS}}
+
+
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
@@ -47,7 +59,7 @@ class AgentApplicationDraftService:
         )
 
     async def save_draft(self, user_id: str, dto: SaveAgentApplicationDraftDto) -> AgentApplicationDraftDto:
-        payload_json = json.dumps(dto.payload)
+        payload_json = json.dumps(_without_photos(dto.payload))
         # One active draft per applicant: concurrent autosaves take turns, so the second finds
         # the first's draft instead of creating another.
         await advisory_xact_lock(f"{_DRAFT_LOCK}:{user_id}")

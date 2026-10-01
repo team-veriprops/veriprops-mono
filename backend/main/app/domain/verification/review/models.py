@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from main.app.core.state.status import AgentRole, VerificationStatus, VerificationTier
+from main.app.domain.verification.review.conflict import ConflictSeverity
 from main.app.domain.verification.report.models import ReportDto
 from main.app.domain.verification.task.models import TaskDto
 from main.appodus_utils import Object
@@ -25,12 +26,8 @@ class ReleaseDto(Object):
     reason: Optional[str] = None
 
 
-class FailVerificationDto(Object):
-    reason: str
-
-
 class ReviewConflictDto(Object):
-    severity: str
+    severity: ConflictSeverity
     roles: List[AgentRole]
     message: str
 
@@ -39,7 +36,10 @@ class ReviewStateDto(Object):
     """The admin report-review surface: task grid + conflicts + score preview + report."""
 
     verification_id: str
+    vid: str = ""
     status: VerificationStatus
+    # Whether the case can be closed from here (paid, unfinished, not already closing, §6.4).
+    can_close: bool = False
     tier: Optional[VerificationTier] = None
     tasks: List[TaskDto] = []
     conflicts: List[ReviewConflictDto] = []

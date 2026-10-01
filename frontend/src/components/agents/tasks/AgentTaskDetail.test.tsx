@@ -6,6 +6,7 @@ import { VerificationTier } from "@/types/verification";
 import { AgentTask } from "@/types/agentTask";
 import { Page } from "@/types/models";
 import { attributeFor, isNamed } from "@/test-utils/markup";
+import { formatMinor } from "@lib/utils";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
 vi.mock("next/link", () => ({
@@ -51,6 +52,7 @@ function taskIn(state: TaskState, extra: Partial<AgentTask> = {}): AgentTask {
     state,
     inPool: false,
     evidenceCount: 1,
+    caseOnHold: false,
     ...extra,
   } as AgentTask;
 }
@@ -61,6 +63,12 @@ function markupFor(task: AgentTask): string {
 }
 
 describe("AgentTaskDetail", () => {
+  it("shows the job's fixed commission beside the accept control (§20.1)", () => {
+    const html = markupFor(taskIn(TaskState.ASSIGNED, { commissionMinor: 2_000_000 }));
+    expect(html).toContain("task-commission-task-1");
+    expect(html).toContain(formatMinor(2_000_000));
+  });
+
   it("offers the accept control while the task is still pending", () => {
     const html = markupFor(taskIn(TaskState.PENDING));
     expect(html).toContain("detail-accept");
@@ -123,5 +131,21 @@ describe("AgentTaskDetail", () => {
     const html = markupFor(taskIn(TaskState.SUBMITTED));
     expect(html).toContain("awaiting admin review");
     expect(html).not.toContain("detail-submit");
+  });
+
+  it("tells the agent to stop, and offers no action, while the case is on hold for closing", () => {
+    for (const state of [TaskState.ASSIGNED, TaskState.ACCEPTED, TaskState.IN_PROGRESS]) {
+      const html = markupFor(taskIn(state, { caseOnHold: true }));
+      expect(html).toContain('data-testid="detail-case-on-hold"');
+      for (const control of ["detail-accept", "detail-start", "detail-submit", "evidence-file"]) {
+        expect(html).not.toContain(`data-testid="${control}"`);
+      }
+    }
+  });
+
+  it("says a task cancelled by its case closing has nothing more to do", () => {
+    const html = markupFor(taskIn(TaskState.CANCELLED));
+    expect(html).toContain('data-testid="detail-task-cancelled"');
+    expect(html).not.toContain('data-testid="detail-start"');
   });
 });

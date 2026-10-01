@@ -100,6 +100,8 @@ class ResetPasswordDto(Object):
 
 class SetPasswordDto(Object):
     password: str
+    # Required when the account already has a password; absent when setting a first one.
+    current_password: Optional[str] = None
 
 
 class ProfileCompletionDto(Object):
@@ -108,4 +110,4 @@ class ProfileCompletionDto(Object):
     phone: str
     country_of_residence: str
     timezone: str
-    preferred_currency: str = "NGN"
+    preferred_currency: str = TransactionCurrency.NGN.value

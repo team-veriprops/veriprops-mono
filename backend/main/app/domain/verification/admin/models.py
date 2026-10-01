@@ -46,6 +46,16 @@ class VerificationDetailDto(Object):
     payments: List[PaymentDto] = []
     commissions: List[CommissionDto] = []
     chargebacks: List[ChargebackDto] = []
+    # The most a close could return now, in minor units (settled charges not under a
+    # chargeback): 0 for an unpaid case, which is cancelled instead of closed.
+    refundable_minor: int = 0
+    # Why the case was closed (a CloseReason); with `on_hold`, it is waiting for Finance to
+    # decide the closing refund, and its agents are stopped.
+    closure_reason: Optional[str] = None
+    on_hold: bool = False
+    # Which way out an admin is offered: an unpaid case is cancelled, a paid unfinished one closed.
+    can_cancel: bool = False
+    can_close: bool = False
     progress_percent: int = 0
     required_task_count: int = 0
     approved_task_count: int = 0

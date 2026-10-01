@@ -81,7 +81,7 @@ class NotificationService:
             return
         email_ok, sms_ok = await self._preferences.channels_enabled(user_id, event.type.value)
         channels: List[MessageChannel] = []
-        if rule.email and email_ok:
+        if rule.email and (email_ok or rule.required_email):
             channels.append(MessageChannel.EMAIL)
         if rule.sms and sms_ok:
             channels.append(MessageChannel.SMS)

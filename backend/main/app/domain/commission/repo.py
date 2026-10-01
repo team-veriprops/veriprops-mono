@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.commission.models import (
     Commission,
+    CommissionKind,
     CommissionStatus,
     CreateCommissionDto,
     QueryCommissionDto,
@@ -56,14 +57,16 @@ class CommissionRepo(
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def get_live_for_task(
-        self, verification_id: str, task_id: str
+        self, verification_id: str, task_id: str, kind: CommissionKind
     ) -> Optional[Commission]:
-        """A non-reversed commission already accrued for this task — the double-accrual
-        guard on a re-release (§S18 follow-up). REVERSED rows don't block a fresh accrual."""
+        """A non-reversed commission line of this kind already accrued for this task — the
+        double-accrual guard on a re-release (§S18 follow-up), one per kind. REVERSED rows
+        don't block a fresh accrual."""
         stmt = select(Commission).where(
             Commission.deleted.is_(False),
             Commission.verification_id == verification_id,
             Commission.task_id == task_id,
+            Commission.kind == kind.value,
             Commission.status != CommissionStatus.REVERSED.value,
         )
         return (await self._session.execute(stmt)).scalars().first()

@@ -1,46 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, AlertTriangle } from "lucide-react";
-import { Input } from "@3rdparty/ui/input";
 import { Button } from "@3rdparty/ui/button";
-import { SubmitButton } from "@components/ui/form/SubmitButton";
 import AuthShell from "../AuthShell";
 import AuthHeading from "../AuthHeading";
-import PasswordStrengthMeter from "../PasswordStrengthMeter";
-import { useSetPasswordMutation } from "../libs/useAuthQueries";
-import { resetPasswordSchema, type ResetPasswordValues } from "../schemas";
+import SetPasswordForm from "./SetPasswordForm";
 import { ROUTES } from "@lib/routes";
-import { getErrorMessage } from "@lib/errors";
 
+/** Offered after a social signup: add a password so the account can sign in without the provider. */
 export default function SetPasswordContainer() {
   const router = useRouter();
-  const [showPassword, setShowPassword] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const setPasswordMutation = useSetPasswordMutation();
-
-  const form = useForm<ResetPasswordValues>({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: { password: "", confirmPassword: "" },
-    mode: "onBlur",
-  });
-
-  const password = useWatch({ control: form.control, name: "password" });
-
-  const onSubmit = async (values: ResetPasswordValues) => {
-    setErrorMessage(null);
-    try {
-      await setPasswordMutation.mutateAsync({ password: values.password });
-      router.push(`${ROUTES.ACCOUNT.SECURITY}?password=ok`);
-    } catch (err) {
-      setErrorMessage(
-        getErrorMessage(err, "Could not set your password. Please try again."),
-      );
-    }
-  };
 
   return (
     <AuthShell
@@ -53,78 +22,16 @@ export default function SetPasswordContainer() {
         subtitle="You signed up with a social account. Adding a password is optional but recommended."
       />
 
-      {/* method="post" so that a submit landing before hydration cannot put the new password
-          in the URL — see SubmitButton. */}
-      <form
-        className="space-y-5"
-        method="post"
-        onSubmit={form.handleSubmit(onSubmit)}
-        noValidate
-        data-testid="set-password-form"
-      >
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-brand-navy">
-            New password
-          </label>
-          <div className="relative">
-            <Input
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              placeholder="At least 8 characters"
-              className="pr-10"
-              data-testid="set-password-input"
-              {...form.register("password")}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              tabIndex={-1}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-brand-surface-low"
-            >
-              {showPassword ? (
-                <EyeOff className="w-4 h-4 text-brand-on-surface-variant" />
-              ) : (
-                <Eye className="w-4 h-4 text-brand-on-surface-variant" />
-              )}
-            </button>
-          </div>
-          <PasswordStrengthMeter password={password ?? ""} className="mt-2" />
-          {form.formState.errors.password && (
-            <p className="text-xs text-danger">
-              {form.formState.errors.password.message}
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-brand-navy">
-            Confirm new password
-          </label>
-          <Input
-            type={showPassword ? "text" : "password"}
-            autoComplete="new-password"
-            placeholder="Type it again"
-            data-testid="set-password-confirm-input"
-            {...form.register("confirmPassword")}
-          />
-          {form.formState.errors.confirmPassword && (
-            <p className="text-xs text-danger">
-              {form.formState.errors.confirmPassword.message}
-            </p>
-          )}
-        </div>
-
-        {errorMessage && (
-          <div
-            className="p-3 rounded-lg text-sm flex items-start gap-2 bg-danger/6 text-danger border border-danger/18"
-          >
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            {errorMessage}
-          </div>
-        )}
-
-        <div className="flex gap-3">
+      <SetPasswordForm
+        testIds={{
+          form: "set-password-form",
+          current: "set-password-current-input",
+          input: "set-password-input",
+          confirm: "set-password-confirm-input",
+          submit: "set-password-submit",
+        }}
+        onSaved={() => router.push(`${ROUTES.ACCOUNT.SECURITY}?password=ok`)}
+        secondaryAction={
           <Button
             type="button"
             variant="outline"
@@ -135,16 +42,8 @@ export default function SetPasswordContainer() {
           >
             Skip for now
           </Button>
-          <SubmitButton
-            className="flex-1"
-            size="lg"
-            data-testid="set-password-submit"
-            disabled={setPasswordMutation.isPending}
-          >
-            {setPasswordMutation.isPending ? "Saving…" : "Save password"}
-          </SubmitButton>
-        </div>
-      </form>
+        }
+      />
     </AuthShell>
   );
 }

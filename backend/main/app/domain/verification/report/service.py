@@ -122,10 +122,6 @@ class ReportService:
     async def get_released(self, verification_id: str) -> Optional[Report]:
         return await self._report_repo.get_released(verification_id)
 
-    async def _set_released_at(self, report_id: str) -> None:
-        report = await self._report_repo.get_model(report_id)
-        report.released_at = Utils.datetime_now()
-
     async def _set_superseded_at(self, report_id: str) -> None:
         report = await self._report_repo.get_model(report_id)
         report.superseded_at = Utils.datetime_now()

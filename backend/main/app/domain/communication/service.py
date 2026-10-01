@@ -272,7 +272,7 @@ class CommunicationService:
         convo = await self._conversations.get_or_create_verification_thread(
             verification_id, ConversationType.CUSTOMER_ADMIN, created_by=customer_id
         )
-        await self._participants.ensure_participant(convo.id, customer_id, role="CUSTOMER")
+        await self._participants.ensure_participant(convo.id, customer_id, role=SenderKind.CUSTOMER)
         return convo
 
     async def customer_send(self, verification_id: str, customer_id: str, body: str) -> ChatMessage:
@@ -285,7 +285,7 @@ class CommunicationService:
 
     async def support_thread(self, user_id: str) -> Conversation:
         convo = await self._conversations.get_or_create_support_thread(user_id)
-        await self._participants.ensure_participant(convo.id, user_id, role="CUSTOMER")
+        await self._participants.ensure_participant(convo.id, user_id, role=SenderKind.CUSTOMER)
         return convo
 
     async def support_send(self, user_id: str, body: str) -> ChatMessage:
@@ -299,7 +299,7 @@ class CommunicationService:
         convo = await self._conversations.get_or_create_verification_thread(
             verification_id, ConversationType.ADMIN_AGENT, created_by=agent_id
         )
-        await self._participants.ensure_participant(convo.id, agent_id, role="AGENT")
+        await self._participants.ensure_participant(convo.id, agent_id, role=SenderKind.AGENT)
         return convo
 
     async def agent_send(
@@ -317,7 +317,7 @@ class CommunicationService:
         convo = await self._conversations.get_or_create_verification_thread(
             verification_id, conversation_type, created_by=admin_id
         )
-        await self._participants.ensure_participant(convo.id, admin_id, role="ADMIN")
+        await self._participants.ensure_participant(convo.id, admin_id, role=SenderKind.ADMIN)
         return convo
 
     async def admin_send(
@@ -354,7 +354,7 @@ class CommunicationService:
         convo = await self._conversations.get_or_create_verification_thread(
             verification_id, ConversationType.CUSTOMER_ADMIN, created_by=customer_id
         )
-        await self._participants.ensure_participant(convo.id, customer_id, role="CUSTOMER")
+        await self._participants.ensure_participant(convo.id, customer_id, role=SenderKind.CUSTOMER)
         await self._chat.send(convo, None, SenderKind.SYSTEM, body, kind=MessageKind.SYSTEM_AUTO)
 
     async def auto_post_agent(
@@ -367,7 +367,7 @@ class CommunicationService:
             verification_id, ConversationType.ADMIN_AGENT, created_by=creator
         )
         if agent_id:
-            await self._participants.ensure_participant(convo.id, agent_id, role="AGENT")
+            await self._participants.ensure_participant(convo.id, agent_id, role=SenderKind.AGENT)
         await self._chat.send(
             convo, None, SenderKind.SYSTEM, body, task_id=task_id, kind=MessageKind.SYSTEM_AUTO
         )

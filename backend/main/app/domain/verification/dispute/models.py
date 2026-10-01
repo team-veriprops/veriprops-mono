@@ -115,6 +115,7 @@ class ResolveDisputeDto(Object):
 class DisputeDto(Object):
     id: str
     verification_id: str
+    vid: Optional[str] = None  # the case's reference, so a queue row says which case it is about
     dispute_type: DisputeType
     description: str
     evidence: Optional[List[Any]] = None
@@ -128,10 +129,11 @@ class DisputeDto(Object):
     date_created: datetime
 
 
-def dispute_to_dto(d: "Dispute") -> DisputeDto:
-    """Map a Dispute ORM row to its API DTO (shared by the service page + controller)."""
+def dispute_to_dto(d: "Dispute", vid: Optional[str] = None) -> DisputeDto:
+    """Map a Dispute ORM row to its API DTO (shared by the service page + controller). *vid* is
+    the case reference, set where a list shows disputes from many cases."""
     return DisputeDto(
-        id=d.id, verification_id=d.verification_id, dispute_type=DisputeType(d.dispute_type),
+        id=d.id, verification_id=d.verification_id, vid=vid, dispute_type=DisputeType(d.dispute_type),
         description=d.description, evidence=d.evidence, status=DisputeStatus(d.status),
         target_role=AgentRole(d.target_role) if d.target_role else None,
         agent_defence_text=d.agent_defence_text, agent_defence_at=d.agent_defence_at,

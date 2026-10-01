@@ -32,17 +32,18 @@ export default function NotificationsContainer() {
         </div>
         <button
           onClick={() => markAll.mutate()}
-          className="text-sm flex items-center gap-1.5 text-gray-500 hover:text-gray-700"
+          data-testid="notifications-mark-all"
+          className="text-sm flex items-center gap-1.5 text-brand-on-surface-variant hover:text-gray-700"
         >
           <CheckCheck className="w-4 h-4" /> Mark all read
         </button>
       </div>
 
-      {isLoading && <p className="text-sm text-gray-400">Loading…</p>}
+      {isLoading && <p className="text-sm text-brand-on-surface-variant">Loading…</p>}
       {!isLoading && items.length === 0 && (
         <div className="text-center py-12 rounded-xl border border-black/5 bg-white">
           <Bell className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-          <p className="text-sm text-gray-500">No notifications yet.</p>
+          <p className="text-sm text-brand-on-surface-variant">No notifications yet.</p>
         </div>
       )}
 
@@ -50,6 +51,8 @@ export default function NotificationsContainer() {
         {items.map((n) => (
           <li key={n.id}>
             <button
+              data-testid="notification"
+              data-read={n.read}
               onClick={() => {
                 markRead.mutate(n.id);
                 if (n.link) router.push(n.link);
@@ -61,13 +64,16 @@ export default function NotificationsContainer() {
             >
               <div className="flex items-center gap-2">
                 {!n.read && (
-                  <span className="w-2 h-2 rounded-full shrink-0 bg-brand-viridian" />
+                  <>
+                    <span className="w-2 h-2 rounded-full shrink-0 bg-brand-viridian" aria-hidden />
+                    <span className="sr-only">Unread:</span>
+                  </>
                 )}
                 <p className="text-sm font-medium text-brand-navy">
                   {n.title}
                 </p>
               </div>
-              {n.body && <p className="text-xs text-gray-500 mt-1">{n.body}</p>}
+              {n.body && <p className="text-xs text-brand-on-surface-variant mt-1">{n.body}</p>}
             </button>
           </li>
         ))}
@@ -82,7 +88,7 @@ export default function NotificationsContainer() {
           >
             Previous
           </button>
-          <span className="text-sm text-gray-400 py-1.5">
+          <span className="text-sm text-brand-on-surface-variant py-1.5">
             {page + 1} / {meta.totalPages}
           </span>
           <button

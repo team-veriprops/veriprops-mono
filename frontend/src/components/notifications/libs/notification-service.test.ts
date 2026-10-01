@@ -24,7 +24,7 @@ describe("NotificationService contract (mirrors /notifications + /notification-p
     const svc = new NotificationService(http);
     await svc.list(1, 20);
     await svc.unreadCount();
-    expect(calls[0]).toMatchObject({ method: "get", url: "/notifications?page=1&pageSize=20" });
+    expect(calls[0]).toMatchObject({ method: "get", url: "/notifications?page=1&page_size=20" });
     expect(calls[1]).toMatchObject({ method: "get", url: "/notifications/unread" });
   });
 

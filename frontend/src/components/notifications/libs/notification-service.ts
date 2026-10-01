@@ -12,7 +12,7 @@ export class NotificationService {
   constructor(private readonly http: HttpClient) {}
 
   list(page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<Page<AppNotification>>> {
-    return this.http.get(`/notifications?page=${page}&pageSize=${pageSize}`);
+    return this.http.get(`/notifications?page=${page}&page_size=${pageSize}`);
   }
 
   unreadCount(): Promise<SuccessResponse<{ count: number }>> {

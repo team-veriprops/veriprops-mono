@@ -1,10 +1,11 @@
 from typing import List
 
-from kink import inject
+from kink import di, inject
 
 from main.app.config.bootstrap import di_bootstrap
 from main.app.config.settings import settings
 from main.appodus_utils.integrations.document_storage.interface import IDocumentStorageProvider
+from main.appodus_utils.integrations.document_storage.stub.stub_storage import StubDocumentStorageProvider
 
 di_bootstrap.register_all_subclasses(IDocumentStorageProvider)
 
@@ -21,6 +22,11 @@ class DocumentStorageProviderFactory:
             self._factory[provider.platform] = provider
 
     def get_active_provider(self) -> IDocumentStorageProvider:
-        # TODO(gap): live document storage — DOCUMENT_STORAGE_STUB_MODE defaults to the stub
-        # provider; production needs S3/R2 configured — PRD "Known Gaps & Roadmap".
         return self._factory.get(settings.AWS_S3_PLATFORM_NAME)
+
+    def storage(self) -> IDocumentStorageProvider:
+        """Where documents go: the deterministic stub under DOCUMENT_STORAGE_STUB_MODE (no
+        bucket, no credentials — tests and local), else the configured store."""
+        if settings.DOCUMENT_STORAGE_STUB_MODE:
+            return di[StubDocumentStorageProvider]
+        return self.get_active_provider()

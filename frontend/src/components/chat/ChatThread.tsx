@@ -260,7 +260,7 @@ function MessageBubble({ message, mine }: { message: ChatMessage; mine: boolean 
           {message.body}
         </div>
         {message.heldNotice && (
-          <span className="text-[11px] text-amber-600 mt-0.5 px-1">{message.heldNotice}</span>
+          <span className="text-[11px] text-amber-700 mt-0.5 px-1">{message.heldNotice}</span>
         )}
         {/*
           §26.7 — written here, not yet delivered. Meta only carries free text within 24
@@ -270,7 +270,7 @@ function MessageBubble({ message, mine }: { message: ChatMessage; mine: boolean 
         {message.pendingChannelDelivery && (
           <span
             data-testid="chat-pending-channel-delivery"
-            className="mt-0.5 flex items-center gap-1 px-1 text-[11px] text-amber-600"
+            className="mt-0.5 flex items-center gap-1 px-1 text-[11px] text-amber-700"
           >
             <Clock className="h-3 w-3" aria-hidden="true" />
             Waiting for the customer to reply before this can be delivered

@@ -10,6 +10,7 @@ already-resolved base price so they stay DB-agnostic and testable.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 from decimal import Decimal
 
 from main.app.core.state.status import VerificationTier
@@ -38,6 +39,12 @@ def is_upgrade(current: VerificationTier, target: VerificationTier) -> bool:
 def price_ngn_kobo(tier: VerificationTier) -> int:
     """Contractual NGN price for a tier, in kobo."""
     return TIER_PRICE_NGN_KOBO[tier]
+
+
+def effective_tier_price(stored_price_kobo: Optional[int], tier: VerificationTier) -> int:
+    """The live price of a tier: the admin-set price when one is stored, else the static
+    default — the one fallback rule every reader of tier prices applies."""
+    return stored_price_kobo if stored_price_kobo is not None else price_ngn_kobo(tier)
 
 
 def recheck_price_kobo(base_kobo: int, pct: int) -> int:

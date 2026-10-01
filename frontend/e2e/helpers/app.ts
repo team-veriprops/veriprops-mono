@@ -67,6 +67,22 @@ export async function waitForPage(
 }
 
 /**
+ * Run *action* and wait for the full document load it causes, then for the ready gate.
+ *
+ * After a persona change the app refreshes the session and then hard-navigates
+ * (`navigateAfterPersonaChange`). The refreshed session re-renders the current page first — the
+ * new status can be on screen for a moment before the reload tears it down — so asserting on what
+ * is visible, or scanning it, races the navigation and fails with a destroyed execution context.
+ * The load listener is armed before the action, so a fast reload is never missed.
+ */
+export async function withFullReload(page: Page, action: () => Promise<void>): Promise<void> {
+  const loaded = page.waitForEvent("load", { timeout: 60_000 });
+  await action();
+  await loaded;
+  await waitReady(page);
+}
+
+/**
  * The app's current auth snapshot, once the session query has published one.
  * Returns `null` when the hook has not been written yet (no session query ran).
  */

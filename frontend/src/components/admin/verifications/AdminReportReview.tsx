@@ -10,10 +10,11 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { humanizeEnumLabel } from "@lib/utils";
 import { ReviewDecision, TaskDto, TaskState } from "@/types/adminVerification";
-import { ReviewState } from "@/types/adminReview";
+import { ConflictSeverity, ReviewState } from "@/types/adminReview";
+import { CloseCaseDialog } from "./CloseCaseDialog";
+import { CloseReason } from "@/types/closure";
 import {
   useApproveTaskMutation,
-  useFailMutation,
   useRejectTaskMutation,
   useReleaseMutation,
   useReopenTaskMutation,
@@ -132,9 +133,8 @@ function ReviewTaskRow({ verificationId, task, findings }: {
 export default function AdminReportReview({ verificationId }: { verificationId: string }) {
   const { data, isLoading, isError } = useReviewQuery(verificationId);
   const release = useReleaseMutation(verificationId);
-  const fail = useFailMutation(verificationId);
   const [releaseReason, setReleaseReason] = useState("");
-  const [failReason, setFailReason] = useState("");
+  const [closing, setClosing] = useState(false);
 
   if (isLoading) {
     return (
@@ -172,7 +172,7 @@ export default function AdminReportReview({ verificationId }: { verificationId: 
           <CardContent className="space-y-2">
             {review.conflicts.map((c, i) => (
               <div key={i} className="text-sm" data-testid="review-conflict">
-                <Badge variant={c.severity === "HIGH" ? "destructive" : "secondary"}>{c.severity}</Badge>{" "}
+                <Badge variant={c.severity === ConflictSeverity.HIGH ? "destructive" : "secondary"}>{c.severity}</Badge>{" "}
                 {c.message}
               </div>
             ))}
@@ -235,27 +235,19 @@ export default function AdminReportReview({ verificationId }: { verificationId: 
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label>Fail &amp; refund</Label>
-            <Input
-              placeholder="Reason"
-              value={failReason}
-              onChange={(e) => setFailReason(e.target.value)}
-              data-testid="fail-reason"
-            />
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                await fail.mutateAsync({ reason: failReason });
-                toast.success("Verification failed & refunded");
-                setFailReason("");
-              }}
-              disabled={fail.isPending || !failReason.trim()}
-              data-testid="fail-submit"
-            >
-              Fail &amp; refund
-            </Button>
-          </div>
+          {review.canClose && (
+            <div className="space-y-2">
+              <Label>Cannot deliver this case?</Label>
+              <p className="text-xs text-muted-foreground">
+                Close it: the customer is refunded in full once Finance approves, and the case ends as failed.
+              </p>
+              <Button variant="destructive" onClick={() => setClosing(true)} data-testid="close-case-open">
+                Close case…
+              </Button>
+              <CloseCaseDialog verificationId={verificationId} vid={review.vid} open={closing}
+                onOpenChange={setClosing} initialReason={CloseReason.CANNOT_DELIVER} />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

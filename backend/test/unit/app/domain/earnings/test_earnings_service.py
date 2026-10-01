@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from main.app.core.events import EventType
-from main.app.domain.commission.models import CommissionStatus
+from main.app.domain.commission.models import CommissionKind, CommissionStatus
 from main.app.domain.earnings import service as earnings_module
 from main.app.domain.earnings.service import EarningsService
 from main.app.domain.payout.models import PayoutStatus
@@ -47,9 +47,10 @@ def stub_publish(monkeypatch):
 
 
 def _commission(cid, status=CommissionStatus.CLEARING, amount=100_000, reserve=10_000,
-                clearing_until=PAST, reserve_until=PAST, reserve_released_at=None, agent="a-1"):
+                clearing_until=PAST, reserve_until=PAST, reserve_released_at=None, agent="a-1",
+                kind=CommissionKind.BASE):
     return SimpleNamespace(
-        id=cid, verification_id="v-1", agent_id=agent, role="REGISTRY", tier="BASIC",
+        id=cid, verification_id="v-1", agent_id=agent, role="REGISTRY", tier="BASIC", kind=kind.value,
         status=status.value, amount_minor=amount, reserve_amount_minor=reserve,
         clearing_until=clearing_until, reserve_until=reserve_until,
         reserve_released_at=reserve_released_at, date_created=NOW,
@@ -121,3 +122,15 @@ class TestSweep:
         svc._commissions.list_clearing_due = AsyncMock(return_value=[])
         svc._commissions.list_reserve_due = AsyncMock(return_value=[])
         assert await svc.sweep_cleared() == 0
+
+
+class TestJobLineKind:
+    """§20.1 / D97: a remote bonus is its own ledger line, so the per-job breakdown says which
+    line is which rather than showing a task twice."""
+
+    def test_each_line_carries_its_kind(self):
+        svc = object.__new__(EarningsService)
+        base = svc._job_dto(_commission("c-1"), NOW)
+        bonus = svc._job_dto(_commission("c-2", amount=50_000, kind=CommissionKind.REMOTE_BONUS), NOW)
+        assert (base.kind, bonus.kind) == (CommissionKind.BASE, CommissionKind.REMOTE_BONUS)
+        assert bonus.model_dump(by_alias=True)["kind"] == CommissionKind.REMOTE_BONUS.value

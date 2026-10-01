@@ -54,3 +54,27 @@ class TestTaskHistory:
         with pytest.raises(ValidationException):
             await svc.task_history("task-1", "someone-else")
         svc._audit.get_activity_log.assert_not_awaited()
+
+
+class TestListEvidence:
+    """An agent reads evidence only on a task assigned to them: the listing carries fresh
+    read URLs, so an unowned task must never reach the evidence service."""
+
+    async def test_owner_gets_the_task_evidence(self):
+        task = SimpleNamespace(id="task-1", assigned_agent_id="agent-1")
+        svc = _svc(task)
+        svc._evidence = MagicMock()
+        svc._evidence.list_for_task = AsyncMock(return_value=["ev-1"])
+
+        assert await svc.list_evidence("task-1", "agent-1") == ["ev-1"]
+        svc._evidence.list_for_task.assert_awaited_once_with("task-1")
+
+    async def test_non_owner_is_rejected(self):
+        task = SimpleNamespace(id="task-1", assigned_agent_id="agent-1")
+        svc = _svc(task)
+        svc._evidence = MagicMock()
+        svc._evidence.list_for_task = AsyncMock()
+
+        with pytest.raises(ValidationException):
+            await svc.list_evidence("task-1", "someone-else")
+        svc._evidence.list_for_task.assert_not_awaited()

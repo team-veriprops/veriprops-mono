@@ -24,9 +24,13 @@ export interface AgentTask {
   assignmentMode?: TaskAssignmentMode;
   acceptDeadlineAt?: string;
   remoteBonusMinor?: number;
+  /** What one approved task of this role pays (NGN kobo) — a fixed per-role amount (§20.1). */
+  commissionMinor: number;
   submissionPayload?: Record<string, unknown>;
   rejectionReason?: string;
   evidenceCount: number;
+  /** The case is being closed and waits for Finance: stop work — every action is refused until it resumes. */
+  caseOnHold: boolean;
   assignedAt?: string;
   acceptedAt?: string;
   submittedAt?: string;

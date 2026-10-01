@@ -53,6 +53,7 @@ New top-level `frontend/e2e/` with `playwright.config.ts`, `global-setup.ts`, `f
 4. **Parallel by default, serial by tag.**
    - Specs own their data: `POST /dev/scenario` gives each one a fresh customer and fresh agents. That lets the suite run `fullyParallel` across workers.
    - A describe tagged `@serial` touches state other specs can see: the Mailpit inbox, a seeded persona's data, or the seeded customer's drafts. `pnpm e2e` (`frontend/e2e/run-lanes.mjs`) runs the parallel lane, then the serial lane: the per-engine `<engine>-serial` projects on one worker, reusing the parallel lane's seed. Nothing races a serial spec, and the serial lane still runs when the parallel lane fails. Playwright project dependencies would skip it instead.
+   - A describe tagged `@live` drives the real third parties on a deployed staging: a gateway's hosted checkout, Dojah, S3. Neither lane runs it. `pnpm e2e:live` runs it alone, on one Chromium worker, with no retries and no reset or seed, because staging is shared with human QA. The release-gate runbook is [live-integration-smoke.md](live-integration-smoke.md).
    - Risk tags pick engines: `@P0` on all six projects, `@P1`/`@P2` on `chromium-desktop` + `webkit-mobile`.
 
 **Helper layer to build once:** `login(page, persona)`, `waitReady(page)` (`__app_ready__`), `authSnapshot(page)`, `resetAndSeed()`, `api(persona)` (thin authenticated HTTP client for preconditions/teardown, mirroring `e2e/harness.py`), `mailpit(recipient)`, `stubPay(page)`, `runSweep(name)` (admin sweep triggers), `portalSwitch(page, persona)`.
@@ -217,7 +218,7 @@ Named because they are the "will this actually automate?" risks; each becomes a 
 
 ## 10. Out of scope
 
-- No CI wiring (`pull_requests.yml`/`e2e.yml`) — local/manual only for now.
+- The full six-engine matrix in CI. `e2e.yml` runs the suite on every PR and release, on `chromium-desktop` + `webkit-mobile` (one desktop and one mobile engine from different rendering families); all six engines stay a local/nightly run. The `@live` spec never runs in CI (§4).
 - Load/performance and security **pen-testing** (UAT covers only *functional* authorization per §6a; rate limits, including the public lookup's, are off under `DISABLE_RATE_LIMITING` in automation). Accessibility is **in scope** (§7), not deferred.
 - Global PRD §G exclusions (live gateways/KYC/storage/FX/disbursement, offline upload, image derivatives, chat attachments, Legal Opinion flag-off, unbuilt `TODO(gap)` routes, all post-MVP) — asserted against stubs or skipped, never as real behaviour; launch-gate business/legal items flagged as go-live blockers, not UAT.
 
@@ -229,6 +230,8 @@ Named because they are the "will this actually automate?" risks; each becomes a 
 
 
 ## 12. Implementation status
+
+**Now (2026-10-01):** 81 scenarios in 15 specs run on every PR in CI (`chromium-desktop` + `webkit-mobile`, 162 runs): dev contracts, auth, session, agent onboarding, the golden path (legs 1–5), chat, status pages, WhatsApp widget and handoff, and — added by the audit remediation's S9 — public lookup and sharing, after-the-report (disputes, re-checks, upgrades), earnings and payouts, data protection (erasure, consents, audit), roles and access (sub-role matrix, IDOR, invitations) and living with a case (tracking, PDF, notifications, held messages, admin notes). The 19 P0 scenarios pass on all six engines. `live-integrations.spec.ts` (`@live`) runs only on demand against staging. Still uncovered: reputation and coverage, analytics and broadcasts, pricing and config, referrals, `/about` and `/legal`. The record below is the first slice's, kept as its history.
 
 Built and verified green against a live local stack — **78/78 across the full six-permutation engine matrix** (Chromium/Firefox/WebKit × desktop/mobile), zero retries needed. Every scenario below is therefore *accepted* under §1's "green on all engines" rule.
 
@@ -261,8 +264,8 @@ Built and verified green against a live local stack — **78/78 across the full 
 
 **Known limitations**
 
-- **No CI wiring** (unchanged, §10) — local/manual runs.
+- (Since resolved: CI runs the suite on two engines, §10.)
 - Firefox's mobile project is a phone-sized viewport only — Playwright has no touch/`isMobile` emulation for Gecko.
 - The remaining 18 areas of §6, the §4 golden-path backbone, and the §8.2 seed extension (RBAC admins, pagination volume, fixture variants) are **not built yet**.
 
-**Next**: the §4 golden-path backbone (it produces the shared ids the branch specs consume), then the §8.2 seed extension, then P0 areas — Submission & Payment, Review/Trust/Release, Public Lookup, Disputes, Earnings/Payouts, Audit/Erasure.
+**Next** (as of the first slice; the golden path and the seed extension have since shipped — see *Now* above).

@@ -15,7 +15,7 @@ from sqlalchemy import Index
 
 from main.appodus_utils.db.models import live_unique_index
 
-from main.app.core.state.status import ReportRevisionKind, ReportState, VerificationTier
+from main.app.core.state.status import AgentRole, ReportRevisionKind, ReportState, VerificationTier
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime, JSONB_VARIANT
 
@@ -106,6 +106,14 @@ class ReportSectionDto(Object):
     is_legal_opinion: bool = False
 
 
+class CustomerReportActionsDto(Object):
+    """What the report's owner may do next (§19.2, §19.3) — decided here, rendered by the page."""
+
+    upgrade_tiers: List[VerificationTier] = []    # strictly higher tiers this case can move to
+    dispute_roles: List[AgentRole] = []           # parts of the work a dispute can name; the agent behind it is asked for a defence
+    dispute_min_description_chars: int = 0        # `dispute_min_description_chars`, as configured
+
+
 class CustomerReportDto(Object):
     """The customer-facing released report (§10.1). Same content object feeds the
     on-screen view and the PDF renderer, so they stay in parity."""
@@ -125,6 +133,7 @@ class CustomerReportDto(Object):
     sections: List[ReportSectionDto] = []
     legal_opinion_included: bool = False
     acknowledged: bool = False            # has the customer accepted the access gate (§10.1)
+    actions: Optional[CustomerReportActionsDto] = None  # the owner's next steps; absent on shared copies
 
 
 class AcknowledgeReportDto(Object):

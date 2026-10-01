@@ -33,6 +33,7 @@ OPERATIONS_ALLOWED = {
 
 FINANCE_ALLOWED = {
     Permission.APPROVE_PAYOUT,
+    Permission.REFUND_PAYMENT,   # retry a refund the gateway refused
     Permission.CONFIGURE_PRICING,
     Permission.CONFIRM_WIRE_PAYMENT,
     Permission.VIEW_ADMIN_PANEL,

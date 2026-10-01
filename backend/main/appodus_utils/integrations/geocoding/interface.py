@@ -1,4 +1,8 @@
-"""Geocoding provider facade (PRD §5.1). Swappable via settings.GEOCODING_PROVIDER."""
+"""Geocoding provider facade (PRD §5.1). Swappable via settings.GEOCODING_PROVIDER.
+
+``session_token`` groups one address search — its keystrokes and the place finally chosen —
+into one billed session with a live provider; a provider without sessions ignores it.
+"""
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
@@ -16,13 +20,11 @@ class IGeocoder(ABC):
         ...
 
     @abstractmethod
-    async def autocomplete(self, query: str, country: str = "NG") -> List[GeoSuggestion]:
+    async def autocomplete(
+        self, query: str, country: str = "NG", session_token: Optional[str] = None,
+    ) -> List[GeoSuggestion]:
         ...
 
     @abstractmethod
-    async def geocode(self, place_id: str) -> Optional[GeoLocation]:
-        ...
-
-    @abstractmethod
-    async def reverse_geocode(self, latitude: float, longitude: float) -> Optional[GeoLocation]:
+    async def geocode(self, place_id: str, session_token: Optional[str] = None) -> Optional[GeoLocation]:
         ...

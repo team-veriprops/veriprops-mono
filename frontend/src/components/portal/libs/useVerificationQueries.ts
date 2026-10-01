@@ -130,11 +130,20 @@ export function useQuoteQuery(tier: VerificationTier, currency: TransactionCurre
   });
 }
 
-export function useGeoAutocompleteQuery(q: string) {
+/** Address suggestions while the customer types; `enabled` is false once one is chosen. */
+export function useGeoAutocompleteQuery(q: string, sessionToken: string, enabled = true) {
   return useQuery({
-    queryKey: ["verification", "geo", q],
-    enabled: q.trim().length >= 2,
-    queryFn: async () => (await service.geoAutocomplete(q)).data ?? [],
+    queryKey: ["verification", "geo", sessionToken, q],
+    enabled: enabled && q.trim().length >= 2,
+    queryFn: async () => (await service.geoAutocomplete(q, sessionToken)).data ?? [],
+  });
+}
+
+/** The chosen place's coordinates. It also ends the search's billed session. */
+export function useGeoPlaceMutation() {
+  return useMutation({
+    mutationFn: ({ placeId, sessionToken }: { placeId: string; sessionToken: string }) =>
+      service.geoPlace(placeId, sessionToken),
   });
 }
 
@@ -160,6 +169,14 @@ export function useInitiatePaymentMutation() {
   return useMutation({
     mutationFn: ({ id, method, idempotencyKey }: { id: string; method: PaymentMethodKind; idempotencyKey: string }) =>
       service.initiatePayment(id, method, idempotencyKey),
+  });
+}
+
+export function useReconcilePaymentMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => service.reconcilePayment(id),
+    onSuccess: (_res, id) => qc.invalidateQueries({ queryKey: verificationKeys.detail(id) }),
   });
 }
 

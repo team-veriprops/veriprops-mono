@@ -42,6 +42,7 @@ class Permission(str, enum.Enum):
     VIEW_ANALYTICS = "VIEW_ANALYTICS"      # §18.1 Mission Control + analytics dashboards
     BROADCAST = "BROADCAST"                # §18.1 admin announcements to an audience
     MANAGE_COMPLIANCE = "MANAGE_COMPLIANCE"  # §19 NDPA erasure review/execute — SUPER only (irreversible)
+    REFUND_PAYMENT = "REFUND_PAYMENT"      # retry a refund the gateway refused (money leaves the account)
 
 
 # Role → permissions matrix. Super admins implicitly hold every permission.
@@ -60,6 +61,7 @@ _ROLE_MATRIX: dict[AdminSubRole, Set[Permission]] = {
     },
     AdminSubRole.FINANCE: {
         Permission.APPROVE_PAYOUT,
+        Permission.REFUND_PAYMENT,
         Permission.CONFIGURE_PRICING,
         Permission.CONFIRM_WIRE_PAYMENT,
         Permission.VIEW_ADMIN_PANEL,

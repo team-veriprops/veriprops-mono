@@ -26,7 +26,7 @@ from pydantic import BaseModel, ValidationError, model_validator
 from main.app.config.settings import settings
 from main.app.domain.channel.whatsapp.handoff.models import ACTION_INTENTS, HandoffIntent
 from main.appodus_utils import Utils
-from main.appodus_utils.config.settings import SECRET_PLACEHOLDER, Environment
+from main.appodus_utils.config.settings import Environment, is_configured_secret
 from main.appodus_utils.exception.exceptions import ExpectedDomainError
 
 # §26.5 pins the algorithm. Never widen this, and never let a token's own header choose.
@@ -130,17 +130,13 @@ def _generate_ephemeral_keys() -> HandoffKeys:
     return HandoffKeys(private_key=private_pem, public_key=public_pem)
 
 
-def _is_configured(value: Optional[str]) -> bool:
-    return bool((value or "").strip()) and (value or "").strip() != SECRET_PLACEHOLDER
-
-
 def handoff_keys() -> HandoffKeys:
     """The signing keypair: configured material, or an ephemeral pair outside production."""
     global _ephemeral_keys
 
     private_key = settings.WHATSAPP_HANDOFF_PRIVATE_KEY
     public_key = settings.WHATSAPP_HANDOFF_PUBLIC_KEY
-    if _is_configured(private_key) and _is_configured(public_key):
+    if is_configured_secret(private_key) and is_configured_secret(public_key):
         # A PEM survives a one-line env var as literal backslash-n; restore it.
         return HandoffKeys(
             private_key=private_key.replace("\\n", "\n"),

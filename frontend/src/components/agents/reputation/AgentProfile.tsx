@@ -66,7 +66,7 @@ export default function AgentProfile() {
                 </div>
               )}
               {p.coverageFlaggedForReview && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="text-xs text-amber-700 dark:text-amber-400">
                   Your coverage is unusually wide and is flagged for admin review.
                 </p>
               )}

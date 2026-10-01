@@ -12,6 +12,7 @@ from kink import inject
 
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
+from main.app.domain.commission_rule.margin import CommissionMarginGuard
 from main.app.domain.system_config.models import (
     CONFIG_DEFAULTS,
     CONFIG_DESCRIPTIONS,
@@ -19,6 +20,7 @@ from main.app.domain.system_config.models import (
     CreateSystemConfigDto,
     SystemConfig,
     SystemConfigDto,
+    effective_config_value,
 )
 from main.app.domain.system_config.repo import SystemConfigRepo
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -31,9 +33,15 @@ from main.appodus_utils.exception.exceptions import ValidationException
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
 @decorate_all_methods(method_trace_logger, exclude=["__init__"], exclude_startswith=["_"])
 class ConfigService:
-    def __init__(self, config_repo: SystemConfigRepo, audit_service: AuditLogService):
+    def __init__(
+        self,
+        config_repo: SystemConfigRepo,
+        audit_service: AuditLogService,
+        commission_margin_guard: CommissionMarginGuard,
+    ):
         self._config_repo = config_repo
         self._audit = audit_service
+        self._margin_guard = commission_margin_guard
 
     async def get_int(self, key: ConfigKey) -> int:
         raw = await self._raw(key)
@@ -47,8 +55,18 @@ class ConfigService:
         return str(await self._raw(key))
 
     async def set(self, key: ConfigKey, value: Any, admin_id: str) -> SystemConfig:
-        """Update (or create) a config value, coercing to the default's type."""
+        """Update (or create) a config value, coercing to the default's type. The two keys the
+        commission margin reads — the minimum margin and the remote bonus — must leave every tier
+        its margin at the current prices and commissions (§20.1 / D97)."""
         coerced = self._coerce(key, value)
+        if key == ConfigKey.COMMISSION_MIN_MARGIN_PCT:
+            if not 0 <= coerced <= 100:
+                raise ValidationException(message="The minimum margin must be between 0 and 100%.")
+            await self._margin_guard.check(min_margin_pct=coerced)
+        elif key == ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO:
+            if coerced < 0:
+                raise ValidationException(message="The remote bonus cannot be negative.")
+            await self._margin_guard.check(remote_bonus_minor=coerced)
         row = await self._config_repo.upsert(
             CreateSystemConfigDto(
                 key=key.value, value_json=coerced, description=CONFIG_DESCRIPTIONS.get(key),
@@ -81,9 +99,7 @@ class ConfigService:
 
     async def _raw(self, key: ConfigKey) -> Any:
         row = await self._config_repo.get_by_key(key.value)
-        if row is not None and row.value_json is not None:
-            return row.value_json
-        return CONFIG_DEFAULTS[key]
+        return effective_config_value(row.value_json if row is not None else None, key)
 
     def _coerce(self, key: ConfigKey, value: Any) -> Any:
         default = CONFIG_DEFAULTS[key]

@@ -9,6 +9,8 @@ from typing import Optional
 
 from sqlalchemy import Boolean, Column, Index, String
 
+from main.app.core.events.events import EventType
+from main.app.domain.notification_preference.catalogue import ChannelMode
 from main.appodus_utils.db.models import live_unique_index
 
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
@@ -51,12 +53,18 @@ class SearchNotificationPreferenceDto(InternalPageRequest, BaseQueryDto):
 
 
 class SetPreferenceDto(Object):
-    event_type: str
+    event_type: EventType
     email_enabled: bool = True
     sms_enabled: bool = True
 
 
 class PreferenceDto(Object):
-    event_type: str
+    """One event the user may change, as the preferences page shows it. `*_mode` says whether a
+    channel is unused, always sent, or the user's to switch; `*_enabled` is what will happen."""
+    event_type: EventType
+    label: str
+    description: str
+    email_mode: ChannelMode
+    sms_mode: ChannelMode
     email_enabled: bool
     sms_enabled: bool

@@ -23,15 +23,25 @@ export interface ReportDto {
   dateCreated: string;
 }
 
+/** How much a review conflict matters (backend `ConflictSeverity`): HIGH blocks release. */
+export enum ConflictSeverity {
+  HIGH = "HIGH",
+  MEDIUM = "MEDIUM",
+  LOW = "LOW",
+}
+
 export interface ReviewConflict {
-  severity: "HIGH" | "MEDIUM" | "LOW";
+  severity: ConflictSeverity;
   roles: AgentRole[];
   message: string;
 }
 
 export interface ReviewState {
   verificationId: string;
+  vid: string;
   status: VerificationStatus;
+  /** Whether the case can be closed from here (paid, unfinished, not already closing). */
+  canClose: boolean;
   tier?: VerificationTier;
   tasks: TaskDto[];
   conflicts: ReviewConflict[];

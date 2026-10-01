@@ -1,47 +1,28 @@
 "use client";
 
-import { useMemo } from "react";
-import { BellRing } from "lucide-react";
+import { BellRing, Lock } from "lucide-react";
 import {
   useNotificationPreferencesQuery,
   useSetPreferenceMutation,
 } from "./libs/useNotificationQueries";
+import { ChannelMode, type NotificationPreference } from "@/types/notification";
+import { getErrorMessage } from "@lib/errors";
 
-// Backend event types a user can opt out of by channel (§12.4). In-app can't be disabled.
-const EVENTS: { type: string; label: string; description: string }[] = [
-  { type: "PAYMENT_CONFIRMED", label: "Payment confirmed", description: "When your payment is received." },
-  { type: "STATUS_CHANGED", label: "Status updates", description: "When your verification advances a stage." },
-  { type: "AGENTS_ASSIGNED", label: "Agents assigned", description: "When our agents start work." },
-  { type: "REPORT_READY", label: "Report ready", description: "When your report is available." },
-  { type: "SLA_BREACHED", label: "Delays", description: "If a verification runs past its target date." },
-  { type: "NEW_JOB", label: "New jobs (agents)", description: "When a task is available for you." },
-  { type: "TASK_REJECTED", label: "Revision requests (agents)", description: "When an admin requests a revision." },
-];
+type Channel = "email" | "sms";
 
 /**
- * Per-event email/SMS opt-out (§12.4). Absence of a stored override means the platform
- * default (on) applies; toggling records the override. In-app delivery is always on.
+ * Per-event email/SMS opt-out (§12.4). The backend lists the events this user may change, their
+ * copy, and each channel's mode; this page renders exactly that. In-app delivery is always on.
  */
 export default function NotificationPreferences() {
-  const { data: prefs = [], isLoading } = useNotificationPreferencesQuery();
+  const { data: prefs = [], isLoading, isError, error } = useNotificationPreferencesQuery();
   const set = useSetPreferenceMutation();
 
-  const byType = useMemo(() => {
-    const map: Record<string, { emailEnabled: boolean; smsEnabled: boolean }> = {};
-    for (const p of prefs) map[p.eventType] = { emailEnabled: p.emailEnabled, smsEnabled: p.smsEnabled };
-    return map;
-  }, [prefs]);
-
-  function current(type: string) {
-    return byType[type] ?? { emailEnabled: true, smsEnabled: true };
-  }
-
-  function toggle(type: string, channel: "email" | "sms", value: boolean) {
-    const c = current(type);
+  function toggle(pref: NotificationPreference, channel: Channel, value: boolean) {
     set.mutate({
-      eventType: type,
-      emailEnabled: channel === "email" ? value : c.emailEnabled,
-      smsEnabled: channel === "sms" ? value : c.smsEnabled,
+      eventType: pref.eventType,
+      emailEnabled: channel === "email" ? value : pref.emailEnabled,
+      smsEnabled: channel === "sms" ? value : pref.smsEnabled,
     });
   }
 
@@ -53,51 +34,75 @@ export default function NotificationPreferences() {
           Notification preferences
         </h1>
       </div>
-      <p className="text-sm text-gray-500 mb-5">
+      <p className="text-sm text-brand-on-surface-variant mb-5">
         Choose how you hear from us. In-app notifications are always on.
       </p>
 
       {isLoading ? (
-        <p className="text-sm text-gray-400">Loading…</p>
+        <p className="text-sm text-brand-on-surface-variant">Loading…</p>
+      ) : isError ? (
+        <p role="alert" className="text-sm text-danger">
+          {getErrorMessage(error, "Could not load your notification preferences.")}
+        </p>
+      ) : prefs.length === 0 ? (
+        <p className="text-sm text-brand-on-surface-variant">There are no email or SMS notifications to change on your account.</p>
       ) : (
         <div className="rounded-xl border border-black/5 bg-white overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2.5 border-b border-black/5 text-xs font-semibold text-gray-400 uppercase">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2.5 border-b border-black/5 text-xs font-semibold text-brand-on-surface-variant uppercase">
             <span>Event</span>
             <span className="w-12 text-center">Email</span>
             <span className="w-12 text-center">SMS</span>
           </div>
-          {EVENTS.map((e) => {
-            const c = current(e.type);
-            return (
-              <div
-                key={e.type}
-                className="grid grid-cols-[1fr_auto_auto] gap-4 items-center px-4 py-3 border-b border-black/5 last:border-0"
-              >
-                <div>
-                  <p className="text-sm font-medium text-brand-navy">
-                    {e.label}
-                  </p>
-                  <p className="text-xs text-gray-400">{e.description}</p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="w-12 justify-self-center"
-                  checked={c.emailEnabled}
-                  onChange={(ev) => toggle(e.type, "email", ev.target.checked)}
-                  aria-label={`${e.label} email`}
-                />
-                <input
-                  type="checkbox"
-                  className="w-12 justify-self-center"
-                  checked={c.smsEnabled}
-                  onChange={(ev) => toggle(e.type, "sms", ev.target.checked)}
-                  aria-label={`${e.label} sms`}
-                />
+          {prefs.map((p) => (
+            <div
+              key={p.eventType}
+              className="grid grid-cols-[1fr_auto_auto] gap-4 items-center px-4 py-3 border-b border-black/5 last:border-0"
+            >
+              <div>
+                <p className="text-sm font-medium text-brand-navy">{p.label}</p>
+                <p className="text-xs text-brand-on-surface-variant">{p.description}</p>
               </div>
-            );
-          })}
+              <ChannelCell pref={p} channel="email" mode={p.emailMode} enabled={p.emailEnabled} onToggle={toggle} />
+              <ChannelCell pref={p} channel="sms" mode={p.smsMode} enabled={p.smsEnabled} onToggle={toggle} />
+            </div>
+          ))}
         </div>
       )}
     </div>
+  );
+}
+
+function ChannelCell({
+  pref, channel, mode, enabled, onToggle,
+}: {
+  pref: NotificationPreference;
+  channel: Channel;
+  mode: ChannelMode;
+  enabled: boolean;
+  onToggle: (pref: NotificationPreference, channel: Channel, value: boolean) => void;
+}) {
+  const name = `${pref.label} ${channel === "email" ? "email" : "SMS"}`;
+  if (mode === ChannelMode.OPTIONAL) {
+    return (
+      <input
+        type="checkbox"
+        className="w-12 justify-self-center"
+        checked={enabled}
+        onChange={(ev) => onToggle(pref, channel, ev.target.checked)}
+        aria-label={name}
+      />
+    );
+  }
+  if (mode === ChannelMode.REQUIRED) {
+    return (
+      <span className="w-12 flex justify-center text-brand-on-surface-variant" title="Always sent" aria-label={`${name}: always sent`}>
+        <Lock className="w-4 h-4" />
+      </span>
+    );
+  }
+  return (
+    <span className="w-12 text-center text-brand-on-surface-variant" aria-label={`${name}: not used`}>
+      —
+    </span>
   );
 }

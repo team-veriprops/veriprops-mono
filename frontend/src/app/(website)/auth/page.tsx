@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import AuthGateContainer from "@components/website/auth/AuthGateContainer";
 
 export const metadata: Metadata = {
@@ -7,6 +8,11 @@ export const metadata: Metadata = {
   robots: "noindex, follow",
 };
 
+// The container reads the query string (useSearchParams), which needs a Suspense boundary.
 export default function AuthGatePage() {
-  return <AuthGateContainer />;
+  return (
+    <Suspense>
+      <AuthGateContainer />
+    </Suspense>
+  );
 }

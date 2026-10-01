@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from main.app.core.state.status import AgentRole, VerificationTier
+from main.app.domain.commission.models import CommissionKind
 from main.appodus_utils import Object
 from main.appodus_utils.db.types.money import TransactionCurrency
 
@@ -33,6 +34,7 @@ class EarningJobDto(Object):
     verification_id: str
     role: AgentRole
     tier: VerificationTier
+    kind: CommissionKind      # the fixed commission, or a remote bonus paid as its own line
     amount_minor: int
     reserve_amount_minor: int
     status: str          # CLEARING / AVAILABLE / FROZEN / REVERSED

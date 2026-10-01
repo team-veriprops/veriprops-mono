@@ -56,7 +56,7 @@ export class VerificationService {
   // shape with the /stream SSE endpoint. Backend owns every label and SLA state.
 
   listMine(page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<VerificationListItem>>> {
-    return this.http.get(`/verifications?page=${page}&pageSize=${pageSize}`);
+    return this.http.get(`/verifications?page=${page}&page_size=${pageSize}`);
   }
 
   /** Portal home summary (§9) — backend-derived counts + most-recent verifications. */
@@ -69,7 +69,7 @@ export class VerificationService {
   }
 
   getEvidence(id: string, page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<CustomerEvidence>>> {
-    return this.http.get(`/verifications/${id}/evidence?page=${page}&pageSize=${pageSize}`);
+    return this.http.get(`/verifications/${id}/evidence?page=${page}&page_size=${pageSize}`);
   }
 
   /** SSE stream URL (§4.9). Consumed by EventSource in useVerificationStream. */
@@ -86,12 +86,15 @@ export class VerificationService {
     return this.http.get(`/verifications/quote?tier=${tier}&currency=${currency}`);
   }
 
-  geoAutocomplete(q: string): Promise<SuccessResponse<GeoSuggestion[]>> {
-    return this.http.get(`/verifications/geo/autocomplete?q=${encodeURIComponent(q)}`);
+  /** Address suggestions. `sessionToken` groups one search into one billed provider session. */
+  geoAutocomplete(q: string, sessionToken?: string): Promise<SuccessResponse<GeoSuggestion[]>> {
+    const session = sessionToken ? `&session_token=${encodeURIComponent(sessionToken)}` : "";
+    return this.http.get(`/verifications/geo/autocomplete?q=${encodeURIComponent(q)}${session}`);
   }
 
-  geoPlace(placeId: string): Promise<SuccessResponse<GeoLocation | null>> {
-    return this.http.get(`/verifications/geo/place/${placeId}`);
+  geoPlace(placeId: string, sessionToken?: string): Promise<SuccessResponse<GeoLocation | null>> {
+    const session = sessionToken ? `?session_token=${encodeURIComponent(sessionToken)}` : "";
+    return this.http.get(`/verifications/geo/place/${encodeURIComponent(placeId)}${session}`);
   }
 
   submit(id: string, payload: SubmitVerificationRequest): Promise<SuccessResponse<Verification>> {
@@ -111,6 +114,12 @@ export class VerificationService {
     return this.http.post(`/payments/initiate/${id}`, { method }, {
       headers: { "Idempotency-Key": idempotencyKey },
     });
+  }
+
+  /** On return from a hosted checkout (or a reload): the backend asks the gateway about the
+   *  verification's open payments and answers with the latest one. */
+  reconcilePayment(id: string): Promise<SuccessResponse<Payment | null>> {
+    return this.http.post(`/payments/reconcile/${id}`);
   }
 
   // Deterministic completion in local/test/dev (backend PAYMENT_STUB_MODE).

@@ -1,7 +1,7 @@
 """Dispute data access."""
 from __future__ import annotations
 
-from typing import List, Optional, Type
+from typing import List, Optional, Tuple, Type
 
 from kink import inject
 from sqlalchemy import desc, func, select
@@ -15,6 +15,8 @@ from main.app.domain.verification.dispute.models import (
     SearchDisputeDto,
     UpdateDisputeDto,
 )
+from main.app.domain.verification.models import Verification
+from main.appodus_utils.db.db_utils import hex_ref
 from main.appodus_utils.db.repo import GenericRepo
 
 
@@ -39,16 +41,18 @@ class DisputeRepo(
         )
         return list((await self._session.execute(stmt)).scalars().all())
 
-    async def list_open_for_agent(self, agent_id: str) -> List[Dispute]:
+    async def list_open_for_agent(self, agent_id: str) -> List[Tuple[Dispute, str]]:
+        """The agent's open disputes, each with its case's VID, newest first."""
         stmt = (
-            select(Dispute)
+            select(Dispute, Verification.vid)
+            .join(Verification, hex_ref(Verification.id) == Dispute.verification_id)
             .where(
                 Dispute.deleted.is_(False), Dispute.agent_id == agent_id,
                 Dispute.status == DisputeStatus.OPEN.value,
             )
             .order_by(desc(Dispute.date_created))
         )
-        return list((await self._session.execute(stmt)).scalars().all())
+        return [tuple(row) for row in (await self._session.execute(stmt)).all()]
 
     async def get_open_for_agent(self, dispute_id: str, agent_id: str) -> Optional[Dispute]:
         stmt = select(Dispute).where(
@@ -57,14 +61,15 @@ class DisputeRepo(
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def page_open(self, offset: int = 0, limit: int = 10):
-        base = select(Dispute).where(
-            Dispute.deleted.is_(False), Dispute.status == DisputeStatus.OPEN.value
+    async def page_open(self, offset: int = 0, limit: int = 10) -> Tuple[List[Tuple[Dispute, str]], int]:
+        """Open disputes with their case's VID, newest first, for the admin queue."""
+        base = (
+            select(Dispute, Verification.vid)
+            .join(Verification, hex_ref(Verification.id) == Dispute.verification_id)
+            .where(Dispute.deleted.is_(False), Dispute.status == DisputeStatus.OPEN.value)
         )
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
-        rows = (
-            await self._session.execute(
-                base.order_by(desc(Dispute.date_created)).offset(offset).limit(limit)
-            )
-        ).scalars().all()
-        return list(rows), int(total or 0)
+        rows = await self._session.execute(
+            base.order_by(desc(Dispute.date_created)).offset(offset).limit(limit)
+        )
+        return [tuple(row) for row in rows.all()], int(total or 0)

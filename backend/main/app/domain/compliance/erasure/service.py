@@ -24,6 +24,7 @@ from main.app.domain.compliance.erasure.models import (
     erasure_to_dto,
 )
 from main.app.domain.compliance.erasure.pseudonymiser import PiiPseudonymiser
+from main.app.domain.user.agent.kyc.service import KycService
 from main.app.domain.compliance.erasure.repo import DataErasureRequestRepo
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.system_config.service import ConfigService
@@ -60,12 +61,14 @@ class ErasureService:
         config_service: ConfigService,
         pseudonymiser: PiiPseudonymiser,
         audit_service: AuditLogService,
+        kyc_service: KycService,
     ):
         self._erasure_repo = erasure_repo
         self._users = user_repo
         self._config = config_service
         self._pseudonymiser = pseudonymiser
         self._audit = audit_service
+        self._kyc = kyc_service
 
     # ── Self-service (data subject) ───────────────────────────────
 
@@ -177,7 +180,12 @@ class ErasureService:
             raise _already_decided()
         row = executed
 
+        # The KYC photos are objects in storage, not rows: delete them first, then the
+        # pseudonymiser clears the keys that pointed at them.
+        images_deleted = await self._kyc.delete_images(row.subject_user_id)
         surfaces = await self._pseudonymiser.pseudonymise(row.subject_user_id, token)
+        if images_deleted:
+            surfaces = [*surfaces, "kyc_images"]
         self._audit.schedule(
             action=AuditActionType.DATA_ERASURE_EXECUTED,
             resource_type=_RESOURCE, resource_id=row.id, actor_id=admin_id,

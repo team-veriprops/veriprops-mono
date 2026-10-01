@@ -19,6 +19,8 @@ export enum TaskState {
   SUBMITTED = "SUBMITTED",
   REJECTED = "REJECTED",
   APPROVED = "APPROVED",
+  /** The case was closed before this task's work was delivered: no further work, no pay. */
+  CANCELLED = "CANCELLED",
 }
 
 export enum TaskAssignmentMode {
@@ -48,6 +50,12 @@ export enum CommissionStatus {
   AVAILABLE = "AVAILABLE",
   FROZEN = "FROZEN",
   REVERSED = "REVERSED",
+}
+
+/** What a commission line pays for (§20.1 / D97) — mirrors CommissionKind in commission/models.py. */
+export enum CommissionKind {
+  BASE = "BASE",
+  REMOTE_BONUS = "REMOTE_BONUS",
 }
 
 export enum ChargebackStatus {
@@ -156,6 +164,7 @@ export interface CommissionDto {
   agentId: string;
   role: AgentRole;
   tier: VerificationTier;
+  kind: CommissionKind;
   amountMinor: number;
   currency: TransactionCurrency;
   status: CommissionStatus;
@@ -184,9 +193,26 @@ export interface VerificationDetail {
   payments: AdminPaymentDto[];
   commissions: CommissionDto[];
   chargebacks: ChargebackDto[];
+  /** The most a close could return now (minor units); 0 for an unpaid case, which is cancelled instead. */
+  refundableMinor: number;
+  /** Why the case was closed (a `CloseReason`); with `onHold`, it waits for Finance's refund decision. */
+  closureReason?: string | null;
+  onHold: boolean;
+  /** Which way out the backend offers: an unpaid case is cancelled, a paid unfinished one closed. */
+  canCancel: boolean;
+  canClose: boolean;
   progressPercent: number;
   requiredTaskCount: number;
   approvedTaskCount: number;
+}
+
+/** What an approved refund did to the case's money (backend `RefundOutcome`). */
+export interface RefundOutcome {
+  refundedMinor: number;
+  /** Refunds the gateway refused: still paid, waiting in Finance's refunds-to-retry list. */
+  failedPaymentIds: string[];
+  /** Payments under a chargeback: the card issuer returns that money, so no refund is sent. */
+  heldPaymentIds: string[];
 }
 
 export interface VerificationListFilters {

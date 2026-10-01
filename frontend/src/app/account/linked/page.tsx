@@ -14,6 +14,7 @@ import { startOauthPopup } from "@components/website/auth/libs/auth/oauthPopup";
 import { OAuthFlowMode, SocialProvider } from "@components/website/auth/models";
 import { Button } from "@3rdparty/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
+import { getErrorMessage } from "@lib/errors";
 
 const PROVIDERS: { id: SocialProvider; label: string }[] = [
   { id: SocialProvider.GOOGLE, label: "Google" },
@@ -95,10 +96,7 @@ export default function LinkedAccountsPage() {
                     onClick={() =>
                       unlink.mutate(id, {
                         onSuccess: () => toast.success(`${label} unlinked.`),
-                        onError: () =>
-                          toast.error(
-                            "Could not unlink. Set a password first if this is your only sign-in method.",
-                          ),
+                        onError: (err) => toast.error(getErrorMessage(err, "Could not unlink. Set a password first if this is your only sign-in method.")),
                       })
                     }
                   >

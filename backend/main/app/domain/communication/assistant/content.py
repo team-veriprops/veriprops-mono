@@ -19,6 +19,7 @@ from __future__ import annotations
 import enum
 from typing import Optional
 
+from main.app.core.money_text import naira  # re-exported: the intake flow reads content.naira
 from main.app.config.settings import settings
 from main.app.core.state.status import VerificationTier
 from main.app.domain.communication.assistant.capabilities import ChannelAction
@@ -176,15 +177,6 @@ def _tier_label(tier: VerificationTier) -> str:
     return tier.value.capitalize()
 
 
-def naira(minor: int) -> str:
-    """Kobo → a readable naira amount. Whole naira: we do not price in kobo.
-
-    Public because the intake flow quotes tiers too, and two renderings of the same price
-    is exactly the drift D54 exists to prevent.
-    """
-    return f"₦{minor // 100:,}"
-
-
 # ─── Escalation, refusal and failure copy ─────────────────────────
 
 def _coverage_line(coverage: Coverage) -> str:
@@ -271,6 +263,30 @@ def unlinked_number() -> str:
         "If it belongs to someone else, they can share updates with you, or authorize you "
         "as a delegate from the case page on veriprops.ng — then I can keep you posted on "
         "its progress."
+    )
+
+
+def link_account_with_link(link: str) -> str:
+    """§26.4.4 WhatsApp→web — the link every "say \"link my account\"" refusal promises.
+
+    Carries the number, never a grant: the page still asks the person to sign in and to
+    enter the code we send to this number before anything is linked.
+    """
+    return (
+        "Here's your secure link to connect this number to your Veriprops account:\n"
+        f"{link}\n\n"
+        "Sign in (or create your account), then enter the code we send to this WhatsApp "
+        "number. It's good for 15 minutes and works once — say \"link my account\" for a "
+        "fresh one."
+    )
+
+
+def number_already_linked() -> str:
+    """"Link my account" from a number that already resolves to an account."""
+    return (
+        "This number is already linked to your Veriprops account, so I can see your "
+        "verifications.\n\n"
+        "Ask me for your status, pricing, or to start a verification."
     )
 
 

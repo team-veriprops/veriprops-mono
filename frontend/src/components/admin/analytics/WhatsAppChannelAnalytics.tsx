@@ -14,7 +14,7 @@ import { Card } from "@3rdparty/ui/card";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { MiniBarBreakdown } from "@components/ui/MiniBarBreakdown";
 import { StatCard, StatCardTone } from "@components/ui/StatCard";
-import { ChannelCount, WhatsAppChannelAnalytics as ChannelAnalytics } from "@/types/analytics";
+import { ChannelCount, WhatsAppChannelAnalytics as ChannelAnalytics, WhatsAppQualityRating } from "@/types/analytics";
 import {
   useSyncWhatsAppQualityMutation,
   useWhatsAppChannelAnalyticsQuery,
@@ -201,10 +201,10 @@ function conversionTone(rate: number, denominator: number): StatCardTone {
   return rate >= 0.25 ? "warning" : "danger";
 }
 
-function qualityTone(rating?: string): StatCardTone {
-  if (rating === "GREEN") return "success";
-  if (rating === "YELLOW") return "warning";
-  if (rating === "RED") return "danger";
+function qualityTone(rating?: WhatsAppQualityRating): StatCardTone {
+  if (rating === WhatsAppQualityRating.GREEN) return "success";
+  if (rating === WhatsAppQualityRating.YELLOW) return "warning";
+  if (rating === WhatsAppQualityRating.RED) return "danger";
   // UNKNOWN, or never synced. Deliberately not "success" — the absence of Meta's verdict
   // must never read as a clean bill of health (§26.11 treats this as a launch gate).
   return "warning";

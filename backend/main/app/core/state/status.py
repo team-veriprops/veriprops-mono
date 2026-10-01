@@ -38,6 +38,9 @@ class TaskState(str, enum.Enum):
     SUBMITTED = "SUBMITTED"
     REJECTED = "REJECTED"
     APPROVED = "APPROVED"
+    # The case was closed before this task's work was delivered (§6.4): no further work, no
+    # pay, and it no longer counts against the agent's task limit. Terminal.
+    CANCELLED = "CANCELLED"
 
 
 class ReportState(str, enum.Enum):

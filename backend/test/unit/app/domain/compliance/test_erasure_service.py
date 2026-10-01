@@ -70,12 +70,15 @@ def _make_svc(*, get_open=None, get_model=None, create=None, pseudonymise_surfac
     pseudonymiser.token_for = MagicMock(return_value="erased-abc123")
     pseudonymiser.pseudonymise = AsyncMock(return_value=pseudonymise_surfaces or ["users", "audit_logs"])
 
+    kyc = MagicMock()
+    kyc.delete_images = AsyncMock(return_value=0)
+
     audit = MagicMock()
     audit.schedule = MagicMock()
 
     svc = ErasureService(
         erasure_repo=repo, user_repo=users, config_service=config,
-        pseudonymiser=pseudonymiser, audit_service=audit,
+        pseudonymiser=pseudonymiser, audit_service=audit, kyc_service=kyc,
     )
     return svc, repo, pseudonymiser, audit
 
@@ -140,6 +143,16 @@ class TestExecute:
         assert kwargs["action"] == AuditActionType.DATA_ERASURE_EXECUTED
         assert kwargs["details"]["surfaces"] == ["users", "audit_logs"]
 
+    async def test_execute_deletes_the_subjects_kyc_photos_from_storage(self):
+        row = _row(ErasureRequestState.APPROVED)
+        svc, _, _, audit = _make_svc(get_model=AsyncMock(return_value=row))
+        svc._kyc.delete_images = AsyncMock(return_value=2)
+
+        await svc.execute("erasure-1", "admin-1")
+
+        svc._kyc.delete_images.assert_awaited_once_with("user-9")
+        assert "kyc_images" in audit.schedule.call_args.kwargs["details"]["surfaces"]
+
     async def test_execute_is_idempotent(self):
         row = _row(ErasureRequestState.EXECUTED)
         svc, _, pseudonymiser, _ = _make_svc(get_model=AsyncMock(return_value=row))
@@ -152,3 +165,23 @@ class TestExecute:
         svc, _, _, _ = _make_svc(get_model=AsyncMock(return_value=row))
         with pytest.raises(IllegalStateTransitionException):
             await svc.execute("erasure-1", "admin-1")
+
+
+class TestRejectNeedsAReason:
+    """The requester is told their erasure was refused and pointed at the reason (§19.1), so a
+    rejection without one would point at nothing."""
+
+    def test_a_rejection_must_carry_a_reason(self):
+        import pydantic
+
+        from main.app.domain.compliance.erasure.models import RejectErasureDto
+
+        with pytest.raises(pydantic.ValidationError):
+            RejectErasureDto()
+        with pytest.raises(pydantic.ValidationError):
+            RejectErasureDto(note="no")
+        assert RejectErasureDto(note="Active verification history.").note == "Active verification history."
+        # Whitespace is not a reason.
+        with pytest.raises(pydantic.ValidationError):
+            RejectErasureDto(note="      ")
+        assert RejectErasureDto(note="  Retained by law.  ").note == "Retained by law."

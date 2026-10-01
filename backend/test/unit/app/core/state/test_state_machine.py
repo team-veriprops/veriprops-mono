@@ -122,6 +122,7 @@ VERIFICATION_VALID: list[tuple[str, str]] = [
     ("UNDER_REVIEW", "COMPLETED"),
     ("UNDER_REVIEW", "IN_PROGRESS"),
     ("UNDER_REVIEW", "FAILED"),
+    ("UNDER_REVIEW", "CANCELLED"),  # a paid case closed while in review (§6.4)
     ("COMPLETED", "DISPUTED"),
     ("DISPUTED", "COMPLETED"),
     ("DISPUTED", "REFUNDED"),
@@ -242,15 +243,25 @@ class TestTaskStateMachine:
         # Verification completion is governed by the verification state machine (S31 release).
         assert task_state_machine.is_terminal("APPROVED") is False
 
-    def test_no_terminal_states(self):
-        assert TASK_TERMINAL == set()
+    def test_only_a_cancelled_task_is_terminal(self):
+        """A task cancelled because its case closed (§6.4) never moves again."""
+        assert TASK_TERMINAL == {"CANCELLED"}
+        assert task_state_machine.is_terminal("CANCELLED") is True
+
+    @pytest.mark.parametrize("state", ["PENDING", "ASSIGNED", "ACCEPTED", "IN_PROGRESS", "REJECTED"])
+    def test_undelivered_work_can_be_cancelled_when_the_case_closes(self, state):
+        task_state_machine.assert_can_transition(state, "CANCELLED", resource="Task")
+
+    @pytest.mark.parametrize("state", ["SUBMITTED", "APPROVED"])
+    def test_delivered_work_is_never_cancelled(self, state):
+        """Submitted work is paid when the case closes, so it keeps its state."""
+        with pytest.raises(Exception):
+            task_state_machine.assert_can_transition(state, "CANCELLED", resource="Task")
 
     def test_non_terminal_states(self):
         for s in ("PENDING", "ASSIGNED", "ACCEPTED", "IN_PROGRESS", "SUBMITTED", "REJECTED", "APPROVED"):
             assert task_state_machine.is_terminal(s) is False
 
-    def test_terminal_set_matches_constants(self):
-        assert TASK_TERMINAL == set()
 
     def test_transition_table_covers_all_states(self):
         all_states = {"PENDING", "ASSIGNED", "ACCEPTED", "IN_PROGRESS", "SUBMITTED", "REJECTED", "APPROVED"}

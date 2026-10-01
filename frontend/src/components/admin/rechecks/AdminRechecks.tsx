@@ -14,6 +14,8 @@ import {
 import { AgentRole } from "@/types/agent";
 import { Recheck } from "@/types/revision";
 import { Page } from "@/types/models";
+import { getErrorMessage } from "@lib/errors";
+import { formatMinor } from "@lib/utils";
 
 /**
  * Admin re-check queue (§14.1): approve (scoping which roles to redo) or reject a pending
@@ -43,8 +45,11 @@ export default function AdminRechecks() {
                 className="flex w-full items-center justify-between rounded-lg border p-3 text-left hover:bg-muted/50"
                 data-testid="recheck-row"
               >
-                <p className="truncate text-sm">{r.reason}</p>
-                <span className="text-xs text-muted-foreground">₦{(r.priceMinor / 100).toLocaleString()}</span>
+                <div className="min-w-0">
+                  {r.vid && <p className="font-mono text-xs text-muted-foreground">{r.vid}</p>}
+                  <p className="truncate text-sm">{r.reason}</p>
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">{formatMinor(r.priceMinor)}</span>
               </button>
             ))}
           </div>
@@ -83,7 +88,7 @@ function DecidePanel({ recheck, onDone }: { recheck: Recheck; onDone: () => void
           toast.success(approve ? "Re-check approved" : "Re-check rejected");
           onDone();
         },
-        onError: () => toast.error("Could not update the re-check."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not update the re-check.")),
       },
     );
   };

@@ -13,7 +13,7 @@ from kink import inject
 
 from main.app.core.events import DomainEvent, EventType, publish_domain_event
 from main.app.core.state.status import AgentRole, VerificationTier
-from main.app.domain.commission.models import Commission, CommissionStatus
+from main.app.domain.commission.models import Commission, CommissionKind, CommissionStatus
 from main.app.domain.commission.repo import CommissionRepo
 from main.app.domain.earnings.calc import derive_balance
 from main.app.domain.earnings.models import EarningJobDto, EarningsSummaryDto
@@ -112,7 +112,7 @@ class EarningsService:
         cleared = c.clearing_until is not None and now >= c.clearing_until
         return EarningJobDto(
             id=c.id, verification_id=c.verification_id, role=AgentRole(c.role),
-            tier=VerificationTier(c.tier), amount_minor=c.amount_minor,
+            tier=VerificationTier(c.tier), kind=CommissionKind(c.kind), amount_minor=c.amount_minor,
             reserve_amount_minor=c.reserve_amount_minor or 0, status=c.status,
             cleared=cleared, reserve_released=c.reserve_released_at is not None,
             clearing_until=c.clearing_until, reserve_until=c.reserve_until,

@@ -40,6 +40,7 @@ class MessageContext(str, Enum):
     DISPUTE_VERIFICATION_ID = "DISPUTE_VERIFICATION_ID"          # dispute_filed — VID of the disputed verification
     DISPUTE_RESOLUTION_OUTCOME = "DISPUTE_RESOLUTION_OUTCOME"    # dispute_resolved — REJECTED / FULL_REFUND / PARTIAL_RECHECK
     PAYOUT_HOLD_REASON = "PAYOUT_HOLD_REASON"                    # payout_held — admin-supplied hold reason
+    PAYOUT_REJECT_REASON = "PAYOUT_REJECT_REASON"                # payout_rejected — admin-supplied reason
     ABANDONMENT_VID = "ABANDONMENT_VID"                          # abandonment_recovery — VID of the abandoned verification
     SHARE_VID = "SHARE_VID"                                      # report_share — VID of the shared verification
     SHARE_URL = "SHARE_URL"                                      # report_share — tokenised link to the shared report
@@ -99,6 +100,7 @@ class MessageProviderName(str, Enum):
     AWS_SES = "AWS_SES"
     SMTP = "SMTP"       # Dev/test email capture via Mailpit
     MOCK_SMS = "MOCK_SMS"  # Dev/test SMS suppression (no real SMS sent)
+    QA_SINK = "QA_SINK"  # Staging: messages to QA fixtures, recorded and never sent
     WHATSAPP_STUB = "WHATSAPP_STUB"  # Dev/test/CI WhatsApp transport (records, never sends)
 
 
@@ -335,7 +337,7 @@ class WhatsappSectionRow(Object):
 class WhatsappSection(Object):
     """Section in a WhatsApp interactive message"""
     title: str = Field(..., max_length=24)
-    rows: List[WhatsappSectionRow] = Field(..., min_items=1, max_items=10)
+    rows: List[WhatsappSectionRow] = Field(..., min_length=1, max_length=10)
 
 
 class WhatsappPayload(Object):

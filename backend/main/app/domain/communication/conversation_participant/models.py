@@ -19,6 +19,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Index, String, text
 
+from main.app.domain.communication.chat_message.models import SenderKind
 from main.appodus_utils import BaseEntity, BaseQueryDto, Object, InternalPageRequest
 from main.appodus_utils.db.models import UTCDateTime
 
@@ -75,13 +76,13 @@ class ConversationParticipant(BaseEntity):
 class CreateConversationParticipantDto(Object):
     conversation_id: str
     user_id: str
-    role: Optional[str] = None
+    role: Optional[SenderKind] = None
     last_read_at: Optional[datetime] = None
     visible_from: Optional[datetime] = None
 
 
 class UpdateConversationParticipantDto(Object):
-    role: Optional[str] = None
+    role: Optional[SenderKind] = None
 
 
 class QueryConversationParticipantDto(BaseQueryDto):

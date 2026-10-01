@@ -11,6 +11,7 @@ from test.utils.repo_fakes import fake_claim_transition, fake_insert_or_get
 from main.app.config.settings import settings
 from main.app.core.state.status import AgentRole, TaskState, VerificationStatus, VerificationTier
 from main.app.domain.audit.models import AuditActionType
+from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.verification.task.models import TaskAssignmentMode
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.appodus_utils.db.session import db_session_ctx
@@ -56,10 +57,10 @@ def _task(role, state=TaskState.PENDING, agent=None, **over):
     return SimpleNamespace(**base)
 
 
-def _verification(status=VerificationStatus.PAID, tier=VerificationTier.STANDARD):
+def _verification(status=VerificationStatus.PAID, tier=VerificationTier.STANDARD, closure_reason=None):
     return SimpleNamespace(
         id="v-1", vid="VP-2026-0001", status=status.value, tier=tier.value,
-        customer_id="cust-1",
+        customer_id="cust-1", closure_reason=closure_reason,
     )
 
 
@@ -70,6 +71,8 @@ def _make_service(verification, tasks):
     svc._evidence = MagicMock()
     svc._user_service = MagicMock()
     svc._audit = MagicMock()
+    svc._config = MagicMock()
+    svc._config.get_int = AsyncMock(return_value=0)  # remote_job_bonus_ngn_kobo: no bonus
 
     svc._verification_repo.get_model = AsyncMock(return_value=verification)
     svc._verification_repo.update = AsyncMock()
@@ -326,6 +329,39 @@ class TestAgentExecution:
             await svc.submit(mine.id, "agent-9", _valid_payload(AgentRole.FIELD))
 
 
+class TestOnHold:
+    """A case being closed waits for Finance (§6.4): its agents cannot move their tasks and
+    admins cannot assign it — work done now could be for nothing."""
+
+    def _held(self, *tasks):
+        return _make_service(_verification(VerificationStatus.IN_PROGRESS, closure_reason="DUPLICATE"), list(tasks))
+
+    async def test_an_agent_cannot_accept(self):
+        pooled = _task(AgentRole.FIELD, TaskState.PENDING, in_pool=True)
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held(pooled).accept(pooled.id, "agent-1")
+
+    async def test_an_agent_cannot_start(self):
+        mine = _task(AgentRole.FIELD, TaskState.ACCEPTED, agent="agent-1")
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held(mine).start(mine.id, "agent-1")
+
+    async def test_an_agent_cannot_submit(self):
+        mine = _task(AgentRole.FIELD, TaskState.IN_PROGRESS, agent="agent-1")
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held(mine).submit(mine.id, "agent-1", _valid_payload(AgentRole.FIELD))
+
+    async def test_an_agent_cannot_decline(self):
+        mine = _task(AgentRole.FIELD, TaskState.ACCEPTED, agent="agent-1")
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held(mine).decline(mine.id, "agent-1", reason="too far")
+
+    async def test_an_admin_cannot_assign(self):
+        pending = _task(AgentRole.FIELD, TaskState.PENDING)
+        with pytest.raises(InvalidResourceStateException, match="on hold"):
+            await self._held(pending).assign("v-1", AgentRole.FIELD, "agent-1", "ops-1")
+
+
 class TestSweeps:
     async def test_no_show_returns_to_pending(self):
         stale = _task(AgentRole.REGISTRY, TaskState.ASSIGNED, agent="agent-1")
@@ -343,6 +379,17 @@ class TestSweeps:
         count = await svc.sweep_pool_starvation()
         assert count == 1
         assert stale.in_pool is False
+        assert stale.remote_bonus_minor is None  # the configured bonus is ₦0
+
+    async def test_pool_starvation_stamps_the_configured_remote_bonus(self):
+        """§11.4 / D97: the bonus is admin config (remote_job_bonus_ngn_kobo), read at the sweep."""
+        stale = _task(AgentRole.FIELD, TaskState.PENDING, in_pool=True)
+        svc = _make_service(_verification(), [stale])
+        svc._task_repo.list_pool_expired = AsyncMock(return_value=[stale])
+        svc._config.get_int = AsyncMock(return_value=500_000)
+        await svc.sweep_pool_starvation()
+        svc._config.get_int.assert_awaited_once_with(ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO)
+        assert stale.remote_bonus_minor == 500_000
 
 
 class TestAgentDashboardSummary:

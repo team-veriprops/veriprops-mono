@@ -10,6 +10,7 @@ import { usePricingQuery, useSetTierPriceMutation } from "./libs/usePricingQueri
 import { PricingTier, TierPricingView } from "@/types/pricing";
 import { VerificationTier } from "@/types/verification";
 import { formatMinor, humanizeEnumLabel } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 
 /**
  * Pricing config (§18.1, D36). Admin-editable per-tier price + itemized breakdown + the
@@ -38,7 +39,9 @@ export default function AdminPricing() {
               <ul className="space-y-1 text-sm">
                 {view.upgradeDeltas.map((d) => (
                   <li key={`${d.fromTier}-${d.toTier}`} className="flex justify-between">
-                    <span className="text-muted-foreground">{d.fromTier} → {d.toTier}</span>
+                    <span className="text-muted-foreground">
+                      {humanizeEnumLabel(d.fromTier)} → {humanizeEnumLabel(d.toTier)}
+                    </span>
                     <span className="font-medium tabular-nums">{formatMinor(d.deltaMinor)}</span>
                   </li>
                 ))}
@@ -61,8 +64,16 @@ function TierEditor({ tier }: { tier: PricingTier }) {
       toast.error("Invalid price", { description: "Enter a non-negative amount." });
       return;
     }
-    await setPriceMutation.mutateAsync({ tier: tier.tier as VerificationTier, priceNgnMinor: Math.round(major * 100) });
-    toast.success("Price updated", { description: `${humanizeEnumLabel(tier.tier)} now ${formatMinor(Math.round(major * 100))}.` });
+    const priceNgnMinor = Math.round(major * 100);
+    try {
+      await setPriceMutation.mutateAsync({ tier: tier.tier as VerificationTier, priceNgnMinor });
+    } catch (err) {
+      // A refusal (e.g. a price that leaves the agent commissions below the minimum margin)
+      // is shown in the backend's words; getErrorMessage keeps a 5xx's text off the screen.
+      toast.error(getErrorMessage(err, "Could not update the price."));
+      return;
+    }
+    toast.success("Price updated", { description: `${humanizeEnumLabel(tier.tier)} now ${formatMinor(priceNgnMinor)}.` });
   };
 
   return (

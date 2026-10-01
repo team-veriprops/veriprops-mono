@@ -14,10 +14,11 @@ import {
   useSetPublicVisibilityMutation,
   useSharesQuery,
 } from "@components/portal/libs/useShareQueries";
+import { useVerificationQuery } from "@components/portal/libs/useVerificationQueries";
 import { ShareType, Share } from "@/types/share";
 
 /**
- * Report sharing controls (§13.2): toggle public VID lookup, create a summary link, invite
+ * Report sharing controls (§13.2): turn the public VID lookup on or off, create a summary link, invite
  * a named recipient to the full report, and revoke any active share. Backend owns tokens,
  * expiry, and the summary allow-list.
  */
@@ -36,6 +37,8 @@ export function ReportShareModal({
   const createShare = useCreateShareMutation(verificationId);
   const revokeShare = useRevokeShareMutation(verificationId);
   const setPublic = useSetPublicVisibilityMutation(verificationId);
+  const { data: verification } = useVerificationQuery(open ? verificationId : null);
+  const isPublic = !!verification?.publicLookupEnabled;
   const [email, setEmail] = useState("");
 
   const active = (shares ?? []).filter((s) => s.active);
@@ -74,25 +77,27 @@ export function ReportShareModal({
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Public VID lookup */}
+          {/* Public VID lookup — shows where it stands, and can be turned off as well as on. */}
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div className="flex items-start gap-2">
               <Globe className="mt-0.5 size-4 text-muted-foreground" />
               <div>
-                <p className="text-sm font-medium">Public lookup</p>
+                <p className="text-sm font-medium">Public lookup is {isPublic ? "on" : "off"}</p>
                 <p className="text-xs text-muted-foreground">
-                  Anyone with the ID {vid} can see the summary at /verify/{vid}.
+                  {isPublic
+                    ? `Anyone with the ID ${vid} can see the summary at /verify/${vid}.`
+                    : `Turn it on to let anyone with the ID ${vid} see the summary at /verify/${vid}.`}
                 </p>
               </div>
             </div>
             <Button
               size="sm"
               variant="outline"
-              disabled={setPublic.isPending}
-              onClick={() => setPublic.mutate(true)}
-              data-testid="share-enable-public"
+              disabled={setPublic.isPending || verification == null}
+              onClick={() => setPublic.mutate(!isPublic)}
+              data-testid="share-public-toggle"
             >
-              Enable
+              {isPublic ? "Turn off" : "Turn on"}
             </Button>
           </div>
 

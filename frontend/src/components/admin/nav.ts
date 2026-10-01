@@ -14,6 +14,8 @@ export const adminNavItems: NavItem[] = [
   { title: "Agent Applications", href: ROUTES.ADMIN.AGENT_APPLICATIONS, icon: "userRoundKey" },
   { title: "Admin Team", href: ROUTES.ADMIN.TEAM, icon: "users" },
   { title: "Finance", href: ROUTES.ADMIN.FINANCE, icon: "dollarSign", section: "Finance" },
+  { title: "Payments", href: ROUTES.ADMIN.FINANCE_PAYMENTS, icon: "receipt" },
+  { title: "Refund approvals", href: ROUTES.ADMIN.FINANCE_REFUNDS, icon: "dollarSign" },
   { title: "Payouts", href: ROUTES.ADMIN.FINANCE_PAYOUTS, icon: "creditCard" },
   { title: "Commission Rules", href: ROUTES.ADMIN.COMMISSION_RULES, icon: "dollarSign" },
   { title: "Pricing", href: ROUTES.ADMIN.PRICING, icon: "tag" },

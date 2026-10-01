@@ -1,6 +1,6 @@
 import { AuthIntent } from "./auth/models";
 import { ROUTES, buildAuthUrl } from "@lib/routes";
-import type { PublicPricingTier } from "@/types/models";
+import { TransactionCurrency, type PublicPricingTier } from "@/types/models";
 import { VerificationTier } from "@/types/verification";
 
 /** Marketing copy for a verification tier. Its price is deliberately absent: the backend owns
@@ -326,20 +326,23 @@ export const footerLinks = {
   ] as FooterLink[],
 };
 
-export const fxRates: Record<string, { symbol: string; rate: number }> = {
-  NGN: { symbol: "₦", rate: 1 },
-  USD: { symbol: "$", rate: 0.00065 },
-  GBP: { symbol: "£", rate: 0.00052 },
-  EUR: { symbol: "€", rate: 0.00060 },
+export const fxRates: Record<TransactionCurrency, { symbol: string; rate: number }> = {
+  [TransactionCurrency.NGN]: { symbol: "₦", rate: 1 },
+  [TransactionCurrency.USD]: { symbol: "$", rate: 0.00065 },
+  [TransactionCurrency.GBP]: { symbol: "£", rate: 0.00052 },
+  [TransactionCurrency.EUR]: { symbol: "€", rate: 0.00060 },
 };
 
-export const currencies = ["NGN", "USD", "GBP", "EUR"] as const;
+/** The pricing section's currency picker, in display order. */
+export const currencies = [
+  TransactionCurrency.NGN, TransactionCurrency.USD, TransactionCurrency.GBP, TransactionCurrency.EUR,
+] as const;
 export type Currency = (typeof currencies)[number];
 
 export function formatPrice(priceNGN: number, currency: Currency): string {
   const { symbol, rate } = fxRates[currency];
   const amount = priceNGN * rate;
-  if (currency === "NGN") {
+  if (currency === TransactionCurrency.NGN) {
     return `${symbol}${(amount / 1000).toFixed(0)}k`;
   }
   return `${symbol}${amount.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;

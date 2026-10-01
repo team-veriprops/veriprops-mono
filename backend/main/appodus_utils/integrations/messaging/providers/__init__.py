@@ -4,6 +4,7 @@ from main.appodus_utils.integrations.messaging.providers.email.resend import Res
 from main.appodus_utils.integrations.messaging.providers.email.smtp import SmtpEmailProvider
 from main.appodus_utils.integrations.messaging.providers.push.firebase import FirebasePushProvider
 from main.appodus_utils.integrations.messaging.providers.push.web_push import WebPushProvider
+from main.appodus_utils.integrations.messaging.providers.qa_sink import QaSinkProvider
 from main.appodus_utils.integrations.messaging.providers.sms.mock import MockSmsProvider
 from main.appodus_utils.integrations.messaging.providers.sms.termii import TermiiSMSProvider
 from main.appodus_utils.integrations.messaging.providers.sms.twilio_sms import TwilioSMSProvider

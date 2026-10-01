@@ -6,9 +6,9 @@ pipeline through the admin sweep endpoint. Determinism against the default
 ``[60, 300, 900]`` backoff ladder comes from ``POST /dev/messages/rewind``, which pulls
 ``next_retry_at``/``expires_at`` into the past so each sweep fires immediately.
 
-Degrades cleanly (run stays green): warn-skips when Mailpit is unreachable, the docker
-CLI can't stop the container, or the backend runs ``ENABLE_OUT_MESSAGING=False`` (no
-bookkeeping row ever appears). Mailpit is ALWAYS restarted, even when a check fails.
+Off CI it degrades cleanly (run stays green): warn-skips when Mailpit is unreachable, the
+docker CLI can't stop the container, or the backend runs ``ENABLE_OUT_MESSAGING=False`` (no
+bookkeeping row ever appears). In CI (``CI=true``) each of those is a failure. Mailpit is ALWAYS restarted, even when a check fails.
 Runs after ``email`` because it takes SMTP down mid-stage.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ import uuid
 
 import httpx
 
-from .harness import Ctx, check, warn
+from .harness import Ctx, check, skip_unless_ci
 
 MAILPIT = "http://localhost:8025"
 MAILPIT_CONTAINER = os.environ.get("MAILPIT_CONTAINER", "veriprops-mono-mailpit-1")
@@ -70,11 +70,11 @@ def _sweep(ctx: Ctx) -> dict:
 
 def run(ctx: Ctx) -> None:
     if not _mailpit_reachable():
-        warn("Mailpit not reachable on :8025 — messaging-retry assertions skipped",
+        skip_unless_ci("Mailpit not reachable on :8025 — messaging-retry assertions skipped",
              "run `docker compose up -d mailpit` + ENABLE_OUT_MESSAGING=True to cover retries")
         return
     if not _docker("stop", MAILPIT_CONTAINER):
-        warn("docker CLI could not stop the Mailpit container — messaging-retry skipped",
+        skip_unless_ci("docker CLI could not stop the Mailpit container — messaging-retry skipped",
              f"container '{MAILPIT_CONTAINER}' (override via MAILPIT_CONTAINER)")
         return
 
@@ -92,7 +92,7 @@ def run(ctx: Ctx) -> None:
 
         reset_row = _row(ctx, reset_email)
         if not reset_row.get("found"):
-            warn("no message bookkeeping row — backend likely runs ENABLE_OUT_MESSAGING=False",
+            skip_unless_ci("no message bookkeeping row — backend likely runs ENABLE_OUT_MESSAGING=False",
                  "restart it with ENABLE_OUT_MESSAGING=True to cover the retry pipeline")
             return
         check("failed send is stored RETRYING with retry_count=0 and a next_retry_at",
@@ -145,7 +145,7 @@ def run(ctx: Ctx) -> None:
             time.sleep(1)
 
     if not _mailpit_reachable():
-        warn("Mailpit did not come back up — recovery assertions skipped")
+        skip_unless_ci("Mailpit did not come back up — recovery assertions skipped")
         return
 
     reset_inbox_before = _mailpit_count(f'to:"{reset_email}" subject:"reset"')

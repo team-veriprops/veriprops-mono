@@ -38,10 +38,10 @@ def mock_db_session():
     db_session_ctx.reset(token)
 
 
-def _service(matches):
+def _service(match):
     svc = object.__new__(CallbackService)
     svc._callback_repo = MagicMock()
-    svc._callback_repo.get_by_criterion = AsyncMock(return_value=matches)
+    svc._callback_repo.get_by_platform_event_type_and_external_id = AsyncMock(return_value=match)
     svc._callback_repo.update = AsyncMock(return_value=None)
     svc._callback_validator = MagicMock()
     return svc
@@ -58,7 +58,7 @@ def _event():
 
 
 async def test_raises_not_found_when_no_unhandled_callback_matches():
-    svc = _service(matches=[])
+    svc = _service(match=None)
 
     with pytest.raises(ResourceNotFoundException) as exc:
         await svc.update_callback__handle_time(_event())
@@ -73,8 +73,24 @@ async def test_raises_not_found_when_no_unhandled_callback_matches():
 async def test_updates_the_matched_callback_and_reports_success():
     match = MagicMock()
     match.id = "cb-1"
-    svc = _service(matches=[match])
+    svc = _service(match=match)
 
     assert await svc.update_callback__handle_time(_event()) is True
     svc._callback_repo.update.assert_awaited_once()
     assert svc._callback_repo.update.await_args.args[0] == "cb-1"
+
+
+async def test_the_lookup_is_scoped_to_the_event_platform():
+    """Another provider's unhandled callback with the same event type and external id must
+    never be the one updated. The generic criterion search drops `platform`, so the lookup
+    goes through the repo's dedicated platform-scoped query."""
+    svc = _service(match=None)
+
+    with pytest.raises(ResourceNotFoundException):
+        await svc.update_callback__handle_time(_event())
+
+    svc._callback_repo.get_by_platform_event_type_and_external_id.assert_awaited_once_with(
+        platform=IntegratedPlatform.ZOHO_DOC_SIGN,
+        event_type=CallbackType.CONTRACT_SIGNED,
+        external_id="ext-1",
+    )

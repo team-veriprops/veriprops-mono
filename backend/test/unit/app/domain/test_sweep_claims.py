@@ -254,6 +254,8 @@ class TestPoolStarvation:
         svc._task_repo.list_pool_expired = AsyncMock(return_value=[_snapshot(db, in_pool=True)])
         svc._task_repo.claim_transition = fake_claim_transition({"t-1": db})
         svc._audit = MagicMock()
+        svc._config = MagicMock()
+        svc._config.get_int = AsyncMock(return_value=0)
 
         assert await svc.sweep_pool_starvation() == 0
         svc._audit.schedule.assert_not_called()

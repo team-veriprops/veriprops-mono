@@ -14,8 +14,9 @@ from main.appodus_utils.config.bootstrap import base_di_bootstrap
 from main.appodus_utils.config.settings import Environment, WhatsAppProvider
 from main.appodus_utils.db.redis_utils import RedisUtils
 from main.appodus_utils.integrations.exception.exceptions import IntegrationFatalException
-from main.appodus_utils.integrations.messaging.models import Stat, MessageProviderName
+from main.appodus_utils.integrations.messaging.models import Stat, MessagePriority, MessageProviderName
 from main.appodus_utils.integrations.messaging.providers.models import IMessageProvider
+from main.appodus_utils.integrations.messaging.qa_recipients import is_qa_recipient
 from main.appodus_utils.integrations.messaging.services.cost_tracking import cost_tracker, CostRecord
 from main.appodus_utils.integrations.messaging.services.resilience import resilience_manager
 
@@ -25,6 +26,21 @@ logger: Logger = di['logger']
 _EPOCH = datetime.min.replace(tzinfo=timezone.utc)
 _STATS_KEY_PREFIX = "messaging_stats"
 _STATS_TTL = timedelta(hours=24)
+
+
+def _staging_fixture(message: UpsertMessageDto) -> bool:
+    """A message on staging addressed only to QA fixtures (`qa_recipients.py`)."""
+    if settings.ENVIRONMENT != Environment.STAGING:
+        return False
+    recipients = message.to.recipient if isinstance(message.to.recipient, list) else [message.to.recipient]
+    return all(is_qa_recipient(message.channel, r) for r in recipients)
+
+
+def _single_recipient(message: UpsertMessageDto) -> str:
+    """The one recipient of an SMS or WhatsApp message, which validation allows as a
+    one-element list."""
+    recipient = message.to.recipient
+    return recipient[0] if isinstance(recipient, list) else recipient
 
 
 class ProviderRoute:
@@ -121,6 +137,14 @@ class MessageRouter:
             "sms": {
                 "rules": [
                     {
+                        # Staging sends for real, and /dev/seed and /dev/scenario run there: a
+                        # QA fixture's address is recorded by the sink, never sent to its owner.
+                        "condition": _staging_fixture,
+                        "providers": [MessageProviderName.QA_SINK],
+                        "fallback_order": [],
+                        "exclusive": True,
+                    },
+                    {
                         # Test/dev/dev_personal: suppress all SMS. Single-path, no fallback.
                         # Exclusive=True prevents last-resort fallback to real SMS providers.
                         "condition": lambda msg: settings.ENVIRONMENT in {
@@ -131,12 +155,12 @@ class MessageRouter:
                         "exclusive": True,
                     },
                     {
-                        "condition": lambda msg: msg.recipient.startswith("+234"),
+                        "condition": lambda msg: _single_recipient(msg).startswith("+234"),
                         "providers": [MessageProviderName.TERMII_SMS, MessageProviderName.TWILIO_SMS],
                         "fallback_order": [MessageProviderName.TERMII_SMS, MessageProviderName.TWILIO_SMS],
                     },
                     {
-                        "condition": lambda msg: msg.priority == "high",
+                        "condition": lambda msg: msg.priority == MessagePriority.HIGH,
                         "providers": [MessageProviderName.TWILIO_SMS],
                         "fallback_order": [MessageProviderName.TWILIO_SMS, MessageProviderName.TERMII_SMS],
                     },
@@ -145,6 +169,14 @@ class MessageRouter:
             },
             "email": {
                 "rules": [
+                    {
+                        # Staging sends for real, and /dev/seed and /dev/scenario run there: a
+                        # QA fixture's address is recorded by the sink, never sent to its owner.
+                        "condition": _staging_fixture,
+                        "providers": [MessageProviderName.QA_SINK],
+                        "fallback_order": [],
+                        "exclusive": True,
+                    },
                     {
                         # Route to local Mailpit SMTP in dev/test/dev_personal envs.
                         # Production and staging always use external providers.
@@ -201,7 +233,9 @@ class MessageRouter:
                         "exclusive": True,
                     },
                 ],
-                "default": [MessageProviderName.WHATSAPP_STUB],
+                # Empty on purpose: the two exclusive rules above cover every setting,
+                # and the stub must never be a default for a live send.
+                "default": [],
             },
         }
 
@@ -270,23 +304,49 @@ class MessageRouter:
         if channel in self.routing_rules:
             for rule in self.routing_rules[channel]["rules"]:
                 if rule["condition"](message):
-                    for provider_name in rule["providers"]:
-                        route = self._get_route(provider_name, channel)
-                        if route and route in available_routes:
-                            if not resilience_manager.get_circuit_state(provider_name).get("open", False):
-                                return route.provider
+                    candidates = [
+                        route for route in (self._get_route(name, channel) for name in rule["providers"])
+                        if route and route in available_routes
+                    ]
+                    for route in candidates:
+                        if not resilience_manager.get_circuit_state(route.provider.name).get("open", False):
+                            return route.provider
+                    # An exclusive rule owns the message even while its circuit is open: the
+                    # send fails on that provider, and never falls through to another rule or
+                    # the default list (a test run reaching Termii, or a live WhatsApp send
+                    # being recorded by the stub).
+                    if rule.get("exclusive") and candidates:
+                        return candidates[0].provider
 
         # Default: open-circuit providers last, then descending success rate, then LRU.
         # last_used is None on cold start — substitute _EPOCH so None values
         # sort consistently rather than raising TypeError on comparison.
+        default_routes = self._default_routes(channel)
+        if not default_routes:
+            raise ValueError(f"No default providers available for channel: {channel}")
         return sorted(
-            available_routes,
+            default_routes,
             key=lambda r: (
                 resilience_manager.get_circuit_state(r.provider.name).get("open", False),
                 -r.success_rate,
                 r.stats.last_used or _EPOCH,
             )
         )[0].provider
+
+    def _default_routes(self, channel: str) -> List[ProviderRoute]:
+        """Routes a message may use when no rule claims it, in the channel's declared order.
+
+        Every provider is registered in every environment, including the mock and local ones
+        (MOCK_SMS, SMTP). Only a rule may route to those, so an unmatched message or a
+        last-resort fallback can never be "delivered" by a provider that sends nothing.
+        A channel without a declared default keeps every registered route.
+        """
+        registered = self.providers.get(channel, [])
+        rules = self.routing_rules.get(channel)
+        if not rules or "default" not in rules:
+            return list(registered)
+        by_name = {route.provider.name: route for route in registered}
+        return [by_name[name] for name in rules["default"] if name in by_name]
 
     async def _handle_fallback(
         self,
@@ -345,8 +405,8 @@ class MessageRouter:
                 f"Attempted: {attempted}"
             )
 
-        # Last resort: any remaining provider not yet attempted.
-        for route in self.providers.get(channel, []):
+        # Last resort: any remaining default provider not yet attempted.
+        for route in self._default_routes(channel):
             if route.provider.name in attempted:
                 continue
             attempted.append(route.provider.name)

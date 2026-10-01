@@ -5,6 +5,7 @@ from typing import List
 
 from main.app.core.state.status import VerificationTier
 from main.appodus_utils import Object
+from main.appodus_utils.integrations.kyc.models import GovIdType
 
 
 class PublicPricingTierDto(Object):
@@ -33,3 +34,6 @@ class PublicConfigDto(Object):
     whatsapp_display_number: str = ""
     # §26.4.1 kill switch for the floating chat widget.
     whatsapp_widget_enabled: bool = False
+    # The government IDs the agent wizard asks a photo of: the ones no KYC provider can
+    # match to a photo on file, so a reviewer compares the document with the selfie.
+    kyc_document_id_types: List[GovIdType] = []

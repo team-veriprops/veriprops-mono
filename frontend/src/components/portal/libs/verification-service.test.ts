@@ -28,6 +28,17 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
     expect(calls[0].config).toMatchObject({ headers: { "Idempotency-Key": "key-123" } });
   });
 
+  it("groups an address search into one provider session", async () => {
+    const { http, calls } = mockHttp();
+    const svc = new VerificationService(http);
+    await svc.geoAutocomplete("Lekki Phase 1", "sess-1");
+    await svc.geoPlace("ChIJ/x", "sess-1");
+    await svc.geoAutocomplete("Ikeja");
+    expect(calls[0].url).toBe("/verifications/geo/autocomplete?q=Lekki%20Phase%201&session_token=sess-1");
+    expect(calls[1].url).toBe("/verifications/geo/place/ChIJ%2Fx?session_token=sess-1");
+    expect(calls[2].url).toBe("/verifications/geo/autocomplete?q=Ikeja");
+  });
+
   it("requests a quote with tier + currency", async () => {
     const { http, calls } = mockHttp();
     await new VerificationService(http).quote(VerificationTier.STANDARD, TransactionCurrency.USD);
@@ -55,7 +66,7 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
   it("lists the customer's own verifications (paged)", async () => {
     const { http, calls } = mockHttp();
     await new VerificationService(http).listMine(1, 20);
-    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications?page=1&pageSize=20" });
+    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications?page=1&page_size=20" });
   });
 
   it("fetches the portal dashboard summary from /verifications/summary", async () => {
@@ -73,7 +84,7 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
   it("fetches the review-approved evidence feed (paged)", async () => {
     const { http, calls } = mockHttp();
     await new VerificationService(http).getEvidence("ver-1", 0, 10);
-    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications/ver-1/evidence?page=0&pageSize=10" });
+    expect(calls[0]).toMatchObject({ method: "get", url: "/verifications/ver-1/evidence?page=0&page_size=10" });
   });
 
   it("builds the proxied SSE stream URL", () => {
@@ -89,5 +100,12 @@ describe("VerificationService contract (mirrors /verifications + /payments)", ()
     expect(calls[0].url).toBe("/payments/initiate/ver-1");
     expect(calls[0].config).toMatchObject({ headers: { "Idempotency-Key": "pay-key" } });
     expect(calls[1]).toMatchObject({ url: "/payments/stub/confirm", body: { txRef: "VP-2026-ABC-xyz", succeeded: true } });
+  });
+
+  it("reconciles a verification's payments with the gateway on return from checkout", async () => {
+    const { http, calls } = mockHttp();
+    const svc = new VerificationService(http);
+    await svc.reconcilePayment("ver-1");
+    expect(calls[0]).toMatchObject({ method: "post", url: "/payments/reconcile/ver-1" });
   });
 });

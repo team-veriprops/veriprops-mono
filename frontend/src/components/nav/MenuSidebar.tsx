@@ -19,7 +19,8 @@ export type NavIconKey =
   | "tag"
   | "dollarSign"
   | "fileText"
-  | "megaphone";
+  | "megaphone"
+  | "receipt";
 
 export interface NavItem {
   title: string;

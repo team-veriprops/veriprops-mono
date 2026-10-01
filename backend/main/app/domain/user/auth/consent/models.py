@@ -54,7 +54,7 @@ class ConsentDocument(BaseEntity):
     signoff_status = Column(String(16), nullable=False, server_default=ConsentSignoffStatus.DRAFT.value)
 
     __table_args__ = (
-        UniqueConstraint("type", "consent_version", name="uq_consent_type_consent_version"),
+        UniqueConstraint("type", "consent_version", name="uq_consent_type_version"),
         Index("ix_consent_active_lookup", "type", "effective_at"),
     )
 

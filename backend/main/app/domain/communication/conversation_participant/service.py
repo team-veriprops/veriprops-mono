@@ -7,6 +7,7 @@ from typing import Optional
 from kink import inject
 from sqlalchemy.exc import IntegrityError
 
+from main.app.domain.communication.chat_message.models import SenderKind
 from main.app.domain.communication.conversation_participant.models import (
     ConversationParticipant,
     CreateConversationParticipantDto,
@@ -26,7 +27,7 @@ class ConversationParticipantService:
         self._participant_repo = participant_repo
 
     async def ensure_participant(
-        self, conversation_id: str, user_id: str, role: Optional[str] = None
+        self, conversation_id: str, user_id: str, role: Optional[SenderKind] = None
     ) -> ConversationParticipant:
         """Idempotently add a user to a thread (no-op if already a participant).
 

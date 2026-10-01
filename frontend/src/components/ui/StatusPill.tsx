@@ -5,7 +5,8 @@ export type StatusTone = "positive" | "warning" | "negative" | "active" | "muted
 
 const TONE_CLASS: Record<StatusTone, string> = {
   positive: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  warning: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  // amber-700 on the 10% tint measured just under AA (4.5:1) for this xs text; 800 clears it.
+  warning: "bg-amber-500/10 text-amber-800 dark:text-amber-400",
   negative: "bg-destructive/10 text-destructive",
   active: "bg-primary/10 text-primary",
   muted: "bg-muted text-muted-foreground",
@@ -36,6 +37,7 @@ const STATUS_TONE: Record<string, StatusTone> = {
   SUBMITTED: "warning",
   PAYMENT_PENDING: "warning",
   REQUESTED: "warning",
+  HELD: "warning",
   CLEARING: "warning",
   ON_HOLD: "warning",
   FROZEN: "warning",

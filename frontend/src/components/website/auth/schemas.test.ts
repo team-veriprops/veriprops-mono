@@ -7,6 +7,7 @@ import {
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  setPasswordSchema,
   RATE_LIMIT_LOCKOUT_AT,
   RATE_LIMIT_WARN_AT,
 } from "./schemas";
@@ -163,6 +164,25 @@ describe("resetPasswordSchema", () => {
         confirmPassword: "Sup3rSecure!",
       }),
     ).toMatchObject({ password: "Sup3rSecure!" });
+  });
+});
+
+describe("setPasswordSchema", () => {
+  const fresh = { password: "Sup3rSecure!", confirmPassword: "Sup3rSecure!" };
+
+  it("sets a first password without a current one", () => {
+    expect(setPasswordSchema(false).safeParse(fresh).success).toBe(true);
+  });
+
+  it("needs the current password to change an existing one", () => {
+    const result = setPasswordSchema(true).safeParse(fresh);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["currentPassword"]);
+    expect(setPasswordSchema(true).safeParse({ ...fresh, currentPassword: "Old-Passw0rd!" }).success).toBe(true);
+  });
+
+  it("still needs the confirmation to match", () => {
+    expect(setPasswordSchema(true).safeParse({ ...fresh, currentPassword: "x", confirmPassword: "other" }).success).toBe(false);
   });
 });
 

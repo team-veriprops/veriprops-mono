@@ -23,8 +23,8 @@ export function useReviewQuery(verificationId: string) {
 }
 
 /** Every review mutation returns the fresh review state; seed the cache from it. */
-function useReviewMutation<TArgs>(
-  fn: (args: TArgs) => Promise<{ data?: unknown }>,
+function useReviewMutation<TArgs, TData>(
+  fn: (args: TArgs) => Promise<{ data?: TData }>,
   verificationId: string,
 ) {
   const qc = useQueryClient();
@@ -67,12 +67,6 @@ export function useReleaseMutation(verificationId: string) {
   );
 }
 
-export function useFailMutation(verificationId: string) {
-  return useReviewMutation(
-    ({ reason }: { reason: string }) => reviewService.fail(verificationId, reason),
-    verificationId,
-  );
-}
 
 // ── Trust Score Weights ──
 export function useTrustWeightsQuery() {

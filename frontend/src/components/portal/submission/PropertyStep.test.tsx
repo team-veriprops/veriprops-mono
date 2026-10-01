@@ -6,6 +6,7 @@ import { EMPTY_SUBMISSION } from "./types";
 // Geo autocomplete rides TanStack Query — stub it so the component renders without a provider.
 vi.mock("@components/portal/libs/useVerificationQueries", () => ({
   useGeoAutocompleteQuery: () => ({ data: [] }),
+  useGeoPlaceMutation: () => ({ mutate: vi.fn() }),
 }));
 
 import PropertyStep from "./PropertyStep";

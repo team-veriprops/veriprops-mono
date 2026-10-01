@@ -5,7 +5,7 @@ import { Building2, LandPlot, MapPin } from "lucide-react";
 import { Input } from "@3rdparty/ui/input";
 import { Label } from "@3rdparty/ui/label";
 import { PropertyKind } from "@/types/verification";
-import { useGeoAutocompleteQuery } from "@components/portal/libs/useVerificationQueries";
+import { useGeoAutocompleteQuery, useGeoPlaceMutation } from "@components/portal/libs/useVerificationQueries";
 import { SelectableCard } from "@components/ui/SelectableCard";
 import { useDebounce } from "@hooks/useDebounce";
 import { SubmissionState } from "./types";
@@ -30,7 +30,22 @@ const OCCUPANCY = ["Occupied", "Vacant", "Under construction"];
 export default function PropertyStep({ value, onChange }: Props) {
   const [addressInput, setAddressInput] = useState(value.address);
   const debounced = useDebounce(addressInput, 300);
-  const { data: suggestions = [] } = useGeoAutocompleteQuery(debounced);
+  // One token per address search. Its keystrokes and the place-details lookup of the chosen
+  // suggestion bill as one session; choosing ends it, so the next search starts a new one.
+  const [geoSession, setGeoSession] = useState(() => crypto.randomUUID());
+  const choosing = addressInput !== value.address || !value.placeId;
+  const { data: suggestions = [] } = useGeoAutocompleteQuery(debounced, geoSession, choosing);
+  const geoPlace = useGeoPlaceMutation();
+
+  const choose = (placeId: string, description: string) => {
+    setAddressInput(description);
+    onChange({ address: description, placeId });
+    geoPlace.mutate({ placeId, sessionToken: geoSession }, {
+      // Only the coordinates: the state stays the customer's own choice from the canonical list.
+      onSuccess: (res) => res.data && onChange({ latitude: res.data.latitude, longitude: res.data.longitude }),
+    });
+    setGeoSession(crypto.randomUUID());
+  };
   const isLand = value.propertyType === PropertyKind.LAND;
 
   const setDetail = (key: string, v: string) =>
@@ -81,10 +96,7 @@ export default function PropertyStep({ value, onChange }: Props) {
                   <button
                     type="button"
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
-                    onClick={() => {
-                      setAddressInput(s.description);
-                      onChange({ address: s.description, placeId: s.placeId });
-                    }}
+                    onClick={() => choose(s.placeId, s.description)}
                   >
                     <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
                     <span className="truncate">{s.description}</span>
@@ -95,7 +107,7 @@ export default function PropertyStep({ value, onChange }: Props) {
           )}
         </div>
         {value.placeId && (
-          <p className="text-xs text-emerald-600 dark:text-emerald-400">✓ Location matched on the map</p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-400">✓ Location matched on the map</p>
         )}
       </div>
 

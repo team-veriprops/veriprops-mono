@@ -7,14 +7,17 @@ import { Input } from "@3rdparty/ui/input";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { PageShell } from "@components/ui/PageShell";
 import { humanizeEnumLabel } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
 import { CommissionRule } from "@/types/commission";
-import { AgentRole } from "@/types/agent";
-import { VerificationTier } from "@/types/verification";
 import { useCommissionRulesQuery, useSetCommissionRuleMutation } from "./libs/useFinanceQueries";
 
+/** Kobo per naira — amounts are stored in kobo and edited in naira. */
+const KOBO_PER_NAIRA = 100;
+
 /**
- * Commission Rules admin (§15.1 / D30): the agent commission rate per role × tier, editable
- * as a percentage of the tier price. Rates are stored in basis points; shown here as percent.
+ * Commission Rules admin (§20.1 / D97): the fixed amount one approved task pays an agent, per
+ * role. It does not vary by tier, so no job pays more for the same work — the agent sees this
+ * figure on the task before accepting it.
  */
 export default function CommissionRules() {
   const { data, isLoading, isError } = useCommissionRulesQuery();
@@ -22,7 +25,7 @@ export default function CommissionRules() {
   return (
     <PageShell
       title="Commission rules"
-      description="Agent share of the tier price, per role. Shown to the agent before they accept a job."
+      description="Fixed amount paid per approved task, the same on every tier. Shown to the agent before they accept a job."
       width="narrow"
     >
       <AsyncStateComponent<CommissionRule[]>
@@ -37,15 +40,14 @@ export default function CommissionRules() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="p-3">Tier</th>
                   <th className="p-3">Role</th>
-                  <th className="p-3">Rate (%)</th>
+                  <th className="p-3">Amount (₦)</th>
                   <th className="p-3" />
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {/* Key on the rate so a saved change remounts the row with fresh input state. */}
-                {rules.map((r) => <RuleRow key={`${r.id}-${r.rateBps}`} rule={r} />)}
+                {/* Key on the amount so a saved change remounts the row with fresh input state. */}
+                {rules.map((r) => <RuleRow key={`${r.id}-${r.amountNgnKobo}`} rule={r} />)}
               </tbody>
             </table>
           </div>
@@ -56,30 +58,33 @@ export default function CommissionRules() {
 }
 
 function RuleRow({ rule }: { rule: CommissionRule }) {
-  const [pct, setPct] = useState((rule.rateBps / 100).toString());
+  const [naira, setNaira] = useState((rule.amountNgnKobo / KOBO_PER_NAIRA).toString());
   const save = useSetCommissionRuleMutation();
 
-  const dirty = Math.round(Number(pct) * 100) !== rule.rateBps;
+  const kobo = Math.round(Number(naira) * KOBO_PER_NAIRA);
+  const dirty = kobo !== rule.amountNgnKobo;
 
   const submit = () => {
-    const bps = Math.round(Number(pct) * 100);
-    if (Number.isNaN(bps) || bps < 0 || bps > 10_000) {
-      toast.error("Enter a rate between 0 and 100%.");
+    if (naira.trim() === "" || Number.isNaN(kobo) || kobo < 0) {
+      toast.error("Enter an amount of ₦0 or more.");
       return;
     }
     save.mutate(
-      { tier: rule.tier as VerificationTier, role: rule.role as AgentRole, req: { rateBps: bps } },
-      { onSuccess: () => toast.success("Rate updated."), onError: () => toast.error("Could not update the rate.") },
+      { role: rule.role, req: { amountNgnKobo: kobo } },
+      {
+        onSuccess: () => toast.success("Commission updated."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not update the commission.")),
+      },
     );
   };
 
   return (
-    <tr data-testid={`rule-${rule.tier}-${rule.role}`}>
-      <td className="p-3 font-medium">{humanizeEnumLabel(rule.tier)}</td>
-      <td className="p-3">{humanizeEnumLabel(rule.role)}</td>
+    <tr data-testid={`rule-${rule.role}`}>
+      <td className="p-3 font-medium">{humanizeEnumLabel(rule.role)}</td>
       <td className="p-3">
-        <Input value={pct} inputMode="decimal" onChange={(e) => setPct(e.target.value)}
-          className="h-8 w-24" data-testid={`rule-input-${rule.tier}-${rule.role}`} />
+        <Input value={naira} inputMode="decimal" onChange={(e) => setNaira(e.target.value)}
+          aria-label={`${humanizeEnumLabel(rule.role)} commission in naira`}
+          className="h-8 w-32" data-testid={`rule-input-${rule.role}`} />
       </td>
       <td className="p-3 text-right">
         <Button size="sm" variant="outline" disabled={!dirty || save.isPending} onClick={submit}>Save</Button>

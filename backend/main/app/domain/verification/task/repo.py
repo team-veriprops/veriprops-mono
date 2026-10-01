@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.core.state.status import TaskState
+from main.app.domain.verification.models import Verification
 from main.app.domain.verification.task.models import (
     CreateTaskDto,
     QueryTaskDto,
@@ -17,6 +18,7 @@ from main.app.domain.verification.task.models import (
     UpdateTaskDto,
     VerificationTask,
 )
+from main.appodus_utils.db.db_utils import hex_ref
 from main.appodus_utils.db.repo import GenericRepo
 
 # States in which a task counts against an agent's active-task capacity (§6.5, §11.3).
@@ -106,8 +108,12 @@ class VerificationTaskRepo(
         return {state: int(count) for state, count in rows}
 
     async def list_pool_expired(self, now: datetime) -> List[VerificationTask]:
-        """Broadcast tasks still unclaimed past their pool timeout (§11.4 starvation)."""
-        stmt = select(VerificationTask).where(
+        """Broadcast tasks still unclaimed past their pool timeout (§11.4 starvation). A case on hold
+        for closing is left alone (§6.4)."""
+        stmt = select(VerificationTask).join(
+            Verification, hex_ref(Verification.id) == VerificationTask.verification_id,
+        ).where(
+            Verification.closure_reason.is_(None),
             VerificationTask.deleted.is_(False),
             VerificationTask.in_pool.is_(True),
             VerificationTask.state == TaskState.PENDING.value,
@@ -117,8 +123,12 @@ class VerificationTaskRepo(
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def list_accept_deadline_expired(self, now: datetime) -> List[VerificationTask]:
-        """Manually-assigned tasks the agent never accepted in time (§11.4 no-show)."""
-        stmt = select(VerificationTask).where(
+        """Manually-assigned tasks the agent never accepted in time (§11.4 no-show). A case on hold
+        for closing is left alone (§6.4)."""
+        stmt = select(VerificationTask).join(
+            Verification, hex_ref(Verification.id) == VerificationTask.verification_id,
+        ).where(
+            Verification.closure_reason.is_(None),
             VerificationTask.deleted.is_(False),
             VerificationTask.state == TaskState.ASSIGNED.value,
             VerificationTask.accept_deadline_at.is_not(None),

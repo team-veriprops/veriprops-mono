@@ -736,6 +736,8 @@ UUID/transaction gotchas as the S15/S16 gap-closure, all now fixed:
 
 ## Decision: D30 — Commission rules = per-role×tier table + admin CRUD (S19 / Phase 15)
 
+> **Superseded by D97** — the commission is now a fixed amount per role, not a share of the price.
+
 ### Context
 §15.1 wants the agent commission "admin-configured per role × tier," shown on job-accept. The base
 built at S10/S12 (D13) accrued a flat `AGENT_COMMISSION_SHARE (0.40) × trust-weight`.
@@ -2853,3 +2855,66 @@ guard a model declares is built with the same name, columns and predicate, and v
 
 ### Revisit
 At the next cycle boundary, under the same precondition.
+
+## Decision: D97 — an agent's commission is a fixed amount per role, not a share of the price
+
+### Context
+D30 paid a commission of `price_locked_minor × rate_bps / 10_000`, with a rate per role × tier.
+Because of that, the same work paid differently by tier: a REGISTRY task earned ₦20,000 on BASIC,
+₦19,200 on STANDARD and ₦36,000 on PREMIUM. Agents therefore had a reason to prefer the expensive
+jobs. The locked price is also the net amount after the referral discount, so a discounted case paid
+its agents less, and a fully discounted one paid them nothing. The owner asked for a fixed amount.
+The job-accept preview that D30 described had also never been built.
+
+### Chosen
+- **Keyed by role alone.** `commission_rules` holds one row per role with an `amount_ngn_kobo`, under
+  the live-only guard `uq_commission_rule_role`. There is no tier column, so no admin edit can bring
+  the bias back.
+- **Accrual reads the role only.** `CommissionRuleService.commission_minor(role)`. The old
+  `price <= 0` short-circuit is gone, because pay no longer depends on price.
+- **Defaults.** REGISTRY ₦20,000 · FIELD ₦14,400 · SURVEYOR ₦14,400 · LAWYER ₦36,000
+  (`DEFAULT_ROLE_COMMISSION_NGN_KOBO`). These are roughly what the BASIC/STANDARD tiers paid before.
+- **Shown before accept.** `AgentTaskDto.commission_minor` is set by the backend. The list reads every
+  role's figure in one query (`commission_by_role`). The task card and task page render it through
+  `TaskCommissionBadge`.
+- **`AGENT_COMMISSION_SHARE` is removed** from `Settings`. It survives only as a literal inside the
+  frozen `0001` and in `0002`'s downgrade.
+- **Migration `0002_fixed_agent_commission`** replaces the role × tier rows outright. This is an
+  owner-approved exception to the refuse-on-data-loss rule: the rows are superseded pricing
+  configuration, not records. A percentage of three different prices has no single fixed
+  equivalent, every admin edit to them is already in `audit_logs`, and the commissions they produced
+  are stored as amounts on `commissions`, which the migration does not touch.
+
+### Follow-ups, same cycle
+- **Minimum margin.** `commission_min_margin_pct` (system config, default 30). `CommissionMarginGuard`
+  (`commission_rule/margin.py`) runs before each of the three writes that can break the rule: a role's
+  commission, a tier's price, and the margin itself. It merges the proposed value over what is stored and
+  refuses with the tier and the figures. It reads repositories, not services, so the pricing, config and
+  commission services can all depend on it without a DI cycle. The two fallback rules it shares with those
+  services are single functions: `effective_tier_price` and `effective_config_value`.
+- **Old rates kept.** Before deleting, `0002` writes each replaced rate to `audit_logs`, with its default
+  and a `customised` flag. The waiver still applies, but nothing is lost.
+- **Remote bonus paid.** It used to be shown but never accrued. It is now its own ledger line
+  (`commissions.kind`: `BASE` / `REMOTE_BONUS`), and the double-accrual guard holds per task and kind.
+  `0002`'s downgrade refuses while any bonus line exists, rather than fold it into the old single-kind
+  ledger, where it would read as a second commission.
+- **The bonus is admin config, and counts toward the margin.** It was an env `Setting`
+  (`REMOTE_JOB_BONUS_MINOR`) that no admin could change and the guard could not refuse. It is now
+  `remote_job_bonus_ngn_kobo` in `system_config`, read by the pool-starvation sweep. The margin counts it
+  as the worst case: every role on a tier carrying it. Setting it is the guard's fourth write.
+- **The guard is enforced by CI, not by convention.** `test_margin_guard_coverage.py` is an AST scan of
+  `main/app`. It finds every write to the three repositories holding margin inputs, pins the known writers,
+  and checks that each calls the guard before writing. It also checks that both margin config keys reach
+  the guard inside `ConfigService.set`.
+
+### Tradeoffs
+- The admin can no longer pay more for a harder tier's version of a role. That is the point of the
+  change, but if PREMIUM work per role really is heavier, it now has to be priced into the tier
+  rather than into the agent's pay.
+- Counting the bonus once per role is deliberately pessimistic. A tier rarely has every task age out of
+  the pool, so the guard can refuse a bonus that would in practice have been affordable.
+- `test_migration_0001_live_uniqueness.py` now replays later revisions' `upgrade()` against its
+  recording `op`, so a guard a later revision renames still counts as "built".
+
+### Revisit
+When `0002` is folded into `0001` at the next squash, under D95's precondition.

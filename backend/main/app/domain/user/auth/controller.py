@@ -259,8 +259,13 @@ async def reset_password(
 
 
 @auth_router.post("/password/set", response_model=SuccessResponse[bool])
-async def set_password(req: SetPasswordDto, authorize: AuthJWT = Depends()):
+async def set_password(req: SetPasswordDto, request: Request, authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
-    await auth_service.set_password(user_id, req.password)
+    refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
+    await auth_service.set_password(
+        user_id, req.password,
+        current_password=req.current_password,
+        keep_session_hash=Utils.sha256(refresh_cookie) if refresh_cookie else None,
+    )
     return SuccessResponse[bool](data=True)

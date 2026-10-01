@@ -38,6 +38,11 @@ class AuditActionType(str, enum.Enum):
     PAYMENT_SUCCEEDED = "PAYMENT_SUCCEEDED"
     PAYMENT_FAILED = "PAYMENT_FAILED"
     PAYMENT_REFUNDED = "PAYMENT_REFUNDED"
+    # The gateway reported a charge that differs from the quote (amount, currency or
+    # reference); it was not settled.
+    PAYMENT_AMOUNT_MISMATCH = "PAYMENT_AMOUNT_MISMATCH"
+    # The gateway refused a refund; the payment stayed SUCCEEDED and awaits a finance retry.
+    PAYMENT_REFUND_FAILED = "PAYMENT_REFUND_FAILED"
     WIRE_PROOF_UPLOADED = "WIRE_PROOF_UPLOADED"
     WIRE_PROOF_CONFIRMED = "WIRE_PROOF_CONFIRMED"
     # ── Chargeback (§6a) ───────────────────────────────────────────
@@ -60,6 +65,10 @@ class AuditActionType(str, enum.Enum):
     PAYOUT_ADJUSTED = "PAYOUT_ADJUSTED"
     PAYOUT_REJECTED = "PAYOUT_REJECTED"
     PAYOUT_CANCELLED = "PAYOUT_CANCELLED"
+    PAYOUT_RETRIED = "PAYOUT_RETRIED"                  # finance sent a failed transfer back to the batch
+    PAYOUT_TRANSFER_SENT = "PAYOUT_TRANSFER_SENT"      # an attempt handed to the gateway
+    PAYOUT_PAID = "PAYOUT_PAID"                        # the bank took the transfer
+    PAYOUT_TRANSFER_FAILED = "PAYOUT_TRANSFER_FAILED"  # the transfer failed or was reversed
     # ── Admin control panel (§6.1) ─────────────────────────────────
     VERIFICATION_PAUSED = "VERIFICATION_PAUSED"
     VERIFICATION_RESUMED = "VERIFICATION_RESUMED"
@@ -85,6 +94,15 @@ class AuditActionType(str, enum.Enum):
     CONFLICT_DETECTED = "CONFLICT_DETECTED"
     REPORT_RELEASED = "REPORT_RELEASED"
     VERIFICATION_REFUNDED = "VERIFICATION_REFUNDED"
+    # Closing a paid case (§6.4): on hold while Finance decides the refund, or back to work.
+    VERIFICATION_ON_HOLD = "VERIFICATION_ON_HOLD"
+    VERIFICATION_HOLD_LIFTED = "VERIFICATION_HOLD_LIFTED"
+    # The refund-approval queue (§8.5, §18.1): every return of a customer's money.
+    REFUND_REQUESTED = "REFUND_REQUESTED"
+    REFUND_APPROVED = "REFUND_APPROVED"
+    REFUND_REJECTED = "REFUND_REJECTED"
+    # Finance refused an upheld dispute's refund: the dispute goes back to ops, open.
+    DISPUTE_REOPENED = "DISPUTE_REOPENED"
     # ── KYC ────────────────────────────────────────────────────────
     KYC_BVN_VERIFIED = "KYC_BVN_VERIFIED"
     KYC_SELFIE_RESOLVED = "KYC_SELFIE_RESOLVED"
@@ -224,3 +242,19 @@ class AdminActionLogPageDto(Object):
     total: int
     page: int
     page_size: int
+
+
+class AuditPackRowKind(str, enum.Enum):
+    """What one row of a verification's audit pack records (§19)."""
+
+    TRANSITION = "TRANSITION"
+    EVIDENCE = "EVIDENCE"
+    CONSENT = "CONSENT"
+    WHATSAPP_CONSENT = "WHATSAPP_CONSENT"
+
+
+class ConsentDecision(str, enum.Enum):
+    """Where a customer's consent stands, as an audit pack row states it."""
+
+    GRANTED = "GRANTED"
+    REVOKED = "REVOKED"

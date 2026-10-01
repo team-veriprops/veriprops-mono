@@ -14,7 +14,8 @@ from kink import inject
 from main.app.core.state.status import VerificationTier
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.verification.pricing import is_upgrade, price_ngn_kobo, upgrade_delta_kobo
+from main.app.domain.commission_rule.margin import CommissionMarginGuard
+from main.app.domain.verification.pricing import effective_tier_price, is_upgrade, upgrade_delta_kobo
 from main.app.domain.verification.pricing_config.line_item.models import (
     CreatePricingLineItemDto,
     PricingLineItem,
@@ -48,16 +49,18 @@ class PricingConfigService:
         tier_repo: PricingTierConfigRepo,
         line_item_repo: PricingLineItemRepo,
         audit_service: AuditLogService,
+        commission_margin_guard: CommissionMarginGuard,
     ):
         self._tiers = tier_repo
         self._line_items = line_item_repo
         self._audit = audit_service
+        self._margin_guard = commission_margin_guard
 
     async def tier_price_kobo(self, tier: VerificationTier) -> int:
         """The live contractual NGN price for a tier, in kobo — the single resolver every
         pricing path reads. Falls back to the static default if unconfigured."""
         row = await self._tiers.get_for_tier(tier.value)
-        return row.price_ngn_kobo if row is not None else price_ngn_kobo(tier)
+        return effective_tier_price(row.price_ngn_kobo if row is not None else None, tier)
 
     async def view(self) -> TierPricingViewDto:
         """The full admin pricing view: every tier's price + line items + upgrade deltas."""
@@ -73,6 +76,9 @@ class PricingConfigService:
         return TierPricingViewDto(tiers=tiers, upgrade_deltas=deltas)
 
     async def set_tier_price(self, tier: VerificationTier, price_minor: int, admin_id: str) -> PricingTierConfig:
+        """Set a tier's live price (§18.1). Refused when the tier's agent commissions would then
+        leave less than the minimum margin (§20.1 / D97)."""
+        await self._margin_guard.check(price_overrides={tier: price_minor})
         row = await self._tiers.upsert(
             CreatePricingTierConfigDto(tier=tier.value, price_ngn_kobo=price_minor).model_dump(by_alias=False),
             ["price_ngn_kobo"],

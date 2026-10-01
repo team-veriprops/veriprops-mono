@@ -75,6 +75,16 @@ async def test_email_opt_out_is_honoured():
     assert MessageChannel.SMS in channels
 
 
+@pytest.mark.parametrize("event_type", [EventType.REPORT_READY, EventType.ACCOUNT_SUSPENDED, EventType.ACCOUNT_REACTIVATED])
+async def test_a_required_email_is_sent_even_after_an_opt_out(event_type):
+    """The delivered report's durable record, and the only channel that reaches a suspended
+    account, cannot hang on a messaging preference."""
+    svc = _service(email_ok=False, sms_ok=False)
+    await svc.create_for_event(DomainEvent(type=event_type, verification_id="v-1", recipient_user_ids=("cust-1",)))
+
+    assert svc._dispatcher.dispatch.call_args[0][2] == [MessageChannel.EMAIL]
+
+
 async def test_chat_only_event_creates_no_notification():
     svc = _service()
     await svc.create_for_event(DomainEvent(

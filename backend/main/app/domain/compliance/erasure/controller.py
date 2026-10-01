@@ -15,7 +15,7 @@ from libre_fastapi_jwt import AuthJWT
 from main.app.domain.compliance.erasure.models import (
     DataErasureRequestDto,
     RequestErasureDto,
-    ResolveErasureDto,
+    RejectErasureDto,
     erasure_to_dto as _to_dto,
 )
 from main.app.domain.compliance.erasure.service import ErasureService
@@ -73,7 +73,7 @@ async def approve_erasure(request_id: str, admin_id: str = Depends(_guard)):
 
 
 @admin_erasure_router.post("/{request_id}/reject", response_model=SuccessResponse[DataErasureRequestDto])
-async def reject_erasure(request_id: str, req: ResolveErasureDto, admin_id: str = Depends(_guard)):
+async def reject_erasure(request_id: str, req: RejectErasureDto, admin_id: str = Depends(_guard)):
     row = await erasure_service.reject(request_id, admin_id, req.note)
     return SuccessResponse[DataErasureRequestDto](data=_to_dto(row))
 

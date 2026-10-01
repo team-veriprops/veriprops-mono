@@ -1,3 +1,4 @@
+import type { GovIdType } from "@/types/agent";
 import type { VerificationTier } from "@/types/verification";
 
 export enum TransactionCurrency {
@@ -239,14 +240,14 @@ export interface PaginationMeta{
   nextPage?: number;      // Next page number, if any
 }
 
+/** A list request's client-side state: pagination and a search string, which list endpoints
+ *  accept as `page`/`page_size`/`query`. `orderBy` is DataTable's sort-header state only; no
+ *  list endpoint accepts a client sort (the backend's `order_by` is server-set).
+ *  TODO(gap): client-driven sorting on DataTable lists is not wired to any endpoint — PRD "Known Gaps & Roadmap". */
 export interface PageRequest {
   page?: number;                  // Default: 0
   pageSize?: number;            // Default: 10
-  // total_page?: number;           // Total record pages
-  queryFields?: string;         // Comma-separated list of return fields
-  exactStringValues?: boolean; // Default: true
   orderBy?: string;             // e.g. "username asc, firstname desc"
-  where?: string;                // e.g. "dateCreated >="
   query?: string;                // e.g A four bedroom duplex in enugu state
 }
 
@@ -319,4 +320,7 @@ export interface PublicConfig {
   whatsappDisplayNumber?: string;
   // §26.4.1 floating chat widget kill switch.
   whatsappWidgetEnabled?: boolean;
+  // The government IDs the agent wizard asks a photo of (a reviewer compares it with the
+  // selfie); the backend owns which ones a provider can match on its own.
+  kycDocumentIdTypes?: GovIdType[];
 }

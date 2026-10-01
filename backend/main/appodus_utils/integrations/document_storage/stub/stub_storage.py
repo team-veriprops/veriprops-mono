@@ -9,7 +9,7 @@ evidence rows) is exercised end-to-end without a real bucket.
 """
 from __future__ import annotations
 
-from typing import BinaryIO, Union
+from typing import BinaryIO, Optional, Union
 
 from kink import inject
 
@@ -30,6 +30,7 @@ class StubDocumentStorageProvider(IDocumentStorageProvider):
         file_bytes: Union[bytes, BinaryIO],
         metadata: dict,
         encrypted: bool = False,
+        content_type: Optional[str] = None,
     ) -> str:
         # Drain a file-like body so callers behave identically to the real provider.
         if hasattr(file_bytes, "read"):
@@ -44,3 +45,6 @@ class StubDocumentStorageProvider(IDocumentStorageProvider):
 
     async def delete(self, key: str, bucket: str) -> None:
         return None
+
+    async def delete_prefix(self, prefix: str, bucket: str) -> int:
+        return 0

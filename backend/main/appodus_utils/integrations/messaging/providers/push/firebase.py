@@ -12,7 +12,8 @@ from kink import inject, di
 from main.app.config.settings import settings
 from main.app.domain.message.models import UpsertMessageDto
 from main.appodus_utils.db.types.money import Money, TransactionCurrency
-from main.appodus_utils.integrations.exception.exceptions import IntegrationException
+from main.appodus_utils.config.service_account import load_service_account_info
+from main.appodus_utils.integrations.exception.exceptions import IntegrationException, IntegrationFatalException
 from main.appodus_utils.integrations.messaging.models import (
     MessageChannel,
     MessageProviderName,
@@ -34,12 +35,23 @@ class FirebasePushProvider(PushNotificationProvider):
     Uses firebase-admin SDK (sync) via asyncio.to_thread.
     Single token: messaging.send() → returns message ID string.
     Multiple tokens: messaging.send_each_for_multicast() → BatchResponse.
+
+    The Firebase app is initialised on the first push send, not at construction: the router
+    builds every provider when messaging loads, and a missing key must fail a push send
+    rather than every email and SMS.
     """
 
-    def __init__(self):
-        if not firebase_admin._apps:
-            cred = firebase_admin.credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
-            firebase_admin.initialize_app(cred)
+    @staticmethod
+    def _ensure_app() -> None:
+        if firebase_admin._apps:
+            return
+        try:
+            info = load_service_account_info(settings.FIREBASE_CREDENTIALS_JSON_B64, settings.FIREBASE_CREDENTIALS_PATH)
+        except ValueError as e:
+            raise IntegrationFatalException("Firebase push is not configured.") from e
+        if info is None:
+            raise IntegrationFatalException("Firebase push is not configured.")
+        firebase_admin.initialize_app(firebase_admin.credentials.Certificate(info))
 
     @property
     def name(self) -> MessageProviderName:
@@ -57,6 +69,7 @@ class FirebasePushProvider(PushNotificationProvider):
         return Money(value=Decimal("0.0"), currency=TransactionCurrency.NGN)
 
     async def send_message(self, message: UpsertMessageDto) -> UpsertMessageDto:
+        self._ensure_app()
         payload: PushPayload = message.payload
         token = message.to.recipient
 

@@ -15,9 +15,11 @@ export enum RecheckStatus {
 export interface Recheck {
   id: string;
   verificationId: string;
+  /** The case's reference — set on the admin queue, where it names the row. */
+  vid?: string | null;
   reason: string;
   documents?: unknown[];
-  scopeRoles?: string[];
+  scopeRoles?: AgentRole[];
   status: RecheckStatus;
   priceMinor: number;
   paymentId?: string;
@@ -82,6 +84,8 @@ export enum DisputeType {
 export interface Dispute {
   id: string;
   verificationId: string;
+  /** The case's reference, so a queue row says which case the dispute is about. */
+  vid?: string | null;
   disputeType: DisputeType;
   description: string;
   evidence?: unknown[];

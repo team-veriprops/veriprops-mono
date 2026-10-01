@@ -40,10 +40,9 @@ class CommissionRuleRepo(
         stmt = select(CommissionRule).where(CommissionRule.deleted.is_(False))
         return list((await self._session.execute(stmt)).scalars().all())
 
-    async def get_for_role_tier(self, role: str, tier: str) -> Optional[CommissionRule]:
+    async def get_for_role(self, role: str) -> Optional[CommissionRule]:
         stmt = select(CommissionRule).where(
             CommissionRule.deleted.is_(False),
             CommissionRule.role == role,
-            CommissionRule.tier == tier,
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()

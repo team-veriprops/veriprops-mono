@@ -1,38 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
-import { Input } from "@3rdparty/ui/input";
-import { SubmitButton } from "@components/ui/form/SubmitButton";
-import PasswordStrengthMeter from "@components/website/auth/PasswordStrengthMeter";
-import { useSetPasswordMutation } from "@components/website/auth/libs/useAuthQueries";
-import { resetPasswordSchema, type ResetPasswordValues } from "@components/website/auth/schemas";
-import { getErrorMessage } from "@lib/errors";
+import SetPasswordForm from "@components/website/auth/password/SetPasswordForm";
 
 export default function AccountPasswordPage() {
-  const [showPassword, setShowPassword] = useState(false);
-  const setPassword = useSetPasswordMutation();
-  const form = useForm<ResetPasswordValues>({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: { password: "", confirmPassword: "" },
-    mode: "onBlur",
-  });
-  const password = useWatch({ control: form.control, name: "password" });
-
-  const onSubmit = async (values: ResetPasswordValues) => {
-    try {
-      await setPassword.mutateAsync({ password: values.password });
-      form.reset();
-      toast.success("Password updated.");
-    } catch (err) {
-      toast.error(getErrorMessage(err, "Could not set your password. Please try again."));
-    }
-  };
-
   return (
     <div className="max-w-xl mx-auto px-4 md:px-8 py-8" data-testid="account-password">
       <header className="mb-6">
@@ -45,68 +17,17 @@ export default function AccountPasswordPage() {
         </p>
       </header>
 
-      {/* method="post" so that a submit landing before hydration cannot put the new password
-          in the URL — see SubmitButton. */}
-      <form
-        className="space-y-5"
-        method="post"
-        onSubmit={form.handleSubmit(onSubmit)}
-        noValidate
-        data-testid="account-password-form"
-      >
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-brand-navy">
-            New password
-          </label>
-          <div className="relative">
-            <Input
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              data-testid="account-password-input"
-              {...form.register("password")}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((s) => !s)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-on-surface-variant"
-            >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          {form.formState.errors.password && (
-            <p className="text-xs text-danger">
-              {form.formState.errors.password.message}
-            </p>
-          )}
-          <PasswordStrengthMeter password={password} />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-brand-navy">
-            Confirm password
-          </label>
-          <Input
-            type={showPassword ? "text" : "password"}
-            autoComplete="new-password"
-            data-testid="account-password-confirm"
-            {...form.register("confirmPassword")}
-          />
-          {form.formState.errors.confirmPassword && (
-            <p className="text-xs text-danger">
-              {form.formState.errors.confirmPassword.message}
-            </p>
-          )}
-        </div>
-
-        <SubmitButton
-          disabled={setPassword.isPending}
-          data-testid="account-password-submit"
-          className="w-full"
-        >
-          {setPassword.isPending ? "Saving…" : "Save password"}
-        </SubmitButton>
-      </form>
+      <SetPasswordForm
+        testIds={{
+          form: "account-password-form",
+          current: "account-password-current",
+          input: "account-password-input",
+          confirm: "account-password-confirm",
+          submit: "account-password-submit",
+        }}
+        submitClassName="w-full"
+        onSaved={() => toast.success("Password saved. Every other device has been signed out.")}
+      />
     </div>
   );
 }

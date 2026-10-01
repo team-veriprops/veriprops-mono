@@ -16,7 +16,8 @@ import uuid
 from .harness import TEST_OTP, Ctx, check, consent_version_for, idem_key, signup_fresh_user
 
 # The seeded customer's verified number (`/dev/seed`) — no other account may claim it.
-_SEEDED_CUSTOMER_NUMBER = {"countryCode": "NG", "dialCode": "+234", "phone": "8030000001"}
+# The seeded customer's number: `qa_local_phone(1)`, in the QA range staging sinks.
+_SEEDED_CUSTOMER_NUMBER = {"countryCode": "NG", "dialCode": "+234", "phone": "8100000001"}
 
 
 def run(ctx: Ctx) -> None:
@@ -147,6 +148,14 @@ def run(ctx: Ctx) -> None:
     r = fresh.post("/payments/stub/confirm", json={"tx_ref": tx_ref, "succeeded": True})
     check("stub gateway confirmed the payment → PAID (§4.6)", r.status_code == 200
           and r.json()["data"].get("processed") is True, f"http {r.status_code}: {r.text[:160]}")
+
+    # 6a. The pay page's return check reads where the payment stands; only the owner may ask.
+    r = fresh.post(f"/payments/reconcile/{ctx.vid_id}")
+    check("the pay page's return check reports the settled payment (§5.4)",
+          r.status_code == 200 and r.json()["data"]["status"] == "SUCCEEDED", f"http {r.status_code}: {r.text[:160]}")
+    r = ctx.seed_customer.post(f"/payments/reconcile/{ctx.vid_id}")
+    check("another customer cannot reconcile someone else's case (§6a)", 400 <= r.status_code < 500,
+          f"http {r.status_code}")
 
     # 7. Payment moves the verification out of the customer's hands into the work pipeline.
     status = fresh.get(f"/verifications/{ctx.vid_id}").json()["data"]["status"]

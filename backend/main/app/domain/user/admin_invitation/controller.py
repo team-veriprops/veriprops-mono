@@ -10,13 +10,20 @@ from main.app.domain.user.admin_invitation.models import (
     InviteAdminRequestDto,
     InvitePreviewDto,
 )
+from main.app.config.settings import settings
 from main.app.domain.user.admin_invitation.service import AdminInvitationService
+from main.app.domain.user.auth.session.service import SessionService
+from main.app.domain.user.service import UserService
+from main.appodus_utils import Utils
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
 from main.appodus_utils.common.client_utils import ClientUtils
 from main.appodus_utils.db.models import Page, SuccessResponse
 
 admin_invitation_router = APIRouter(prefix="/admins/invitations", tags=["Admin Invitations"])
+logger = di["logger"]
 invitation_service: AdminInvitationService = di[AdminInvitationService]
+session_service: SessionService = di[SessionService]
+user_service: UserService = di[UserService]
 
 
 @admin_invitation_router.post("", response_model=SuccessResponse[dict])
@@ -32,8 +39,8 @@ async def invite_admin(
     )
     domain = ClientUtils.get_referer_domain(request)
     invite_url = f"{domain}/auth/admin-invite/{raw_token}"
-    # The link is returned to the inviting Super Admin to deliver (email template
-    # wiring is a follow-up; in dev the admin shares the link directly).
+    # The link is returned to the inviting Super Admin to deliver.
+    # TODO(gap): admin-invitation email — no template sends the link yet — PRD "Known Gaps & Roadmap".
     return SuccessResponse[dict](data={"inviteUrl": invite_url})
 
 
@@ -64,8 +71,25 @@ async def preview_invitation(token: str):
 
 
 @admin_invitation_router.post("/accept", response_model=SuccessResponse[dict])
-async def accept_invitation(token: str = Body(..., embed=True), authorize: AuthJWT = Depends()):
+async def accept_invitation(request: Request, token: str = Body(..., embed=True), authorize: AuthJWT = Depends()):
+    """Take up an admin invitation, and re-mint this session as the admin it now is.
+
+    The session's claims are copied from the user record when it is issued, so without the
+    rotation the new admin's token still says customer and every admin route turns them away
+    until they sign in again — the same reason taking up the customer hat rotates (§3.2).
+    """
     await authorize.jwt_required()
     user_id = str(authorize.get_jwt_subject())
     sub_role = await invitation_service.accept(token, user_id)
+    # Best-effort, like the agent-application grant: the elevation is already committed, and the
+    # invitation is spent, so a failed rotation must not turn the accept into an error the user
+    # cannot retry. Their next sign-in carries the admin claims either way.
+    refresh_cookie = request.cookies.get(settings.AUTHJWT_REFRESH_COOKIE_KEY)
+    try:
+        await session_service.rotate_current_session(
+            await user_service.get_user_model(user_id), authorize,
+            Utils.sha256(refresh_cookie) if refresh_cookie else None,
+        )
+    except Exception:  # noqa: BLE001 — reported, never fatal
+        logger.opt(exception=True).warning("Could not rotate the session after an admin invitation was accepted")
     return SuccessResponse[dict](data={"subRole": sub_role.value})

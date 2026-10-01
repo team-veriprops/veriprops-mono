@@ -14,6 +14,7 @@ from typing import Dict, Iterable
 
 from sqlalchemy import text
 
+from main.appodus_utils.db.types.money import TransactionCurrency
 from main.app.config.settings import settings
 from main.app.core.state.status import AgentRole
 from main.app.domain.user.agent.coverage.models import AgentCoverage
@@ -27,11 +28,11 @@ from main.app.domain.user.auth.consent.models import REQUIRED_SIGNUP_CONSENTS, U
 from main.app.domain.user.auth.session.models import UserPersona, UserType
 from main.app.domain.user.models import AdminSubRole, User
 from main.appodus_utils import Utils
+# Fixture contact details come from ranges the messaging router sinks on staging.
+from main.appodus_utils.integrations.messaging.qa_recipients import QA_EMAIL_DOMAIN
 
 # The password every QA account shares (non-prod only).
 QA_PASSWORD = "Test1234!"
-# A non-special-use domain — the email validator rejects reserved TLDs like `.test`.
-QA_EMAIL_DOMAIN = "veriprops.io"
 
 
 def new_entity(model, **fields):
@@ -57,13 +58,6 @@ def unique_qa_email(prefix: str) -> str:
     return f"{prefix}-{secrets.token_hex(4)}@{QA_EMAIL_DOMAIN}"
 
 
-def unique_local_phone() -> str:
-    """A Nigerian local number unique to one fixture.
-
-    Sharing a verified phone across accounts is the §17.1 anti-farming signal, so a fixture
-    that reused one would quietly void any referral behaviour a spec asserts on."""
-    return f"81{secrets.randbelow(10 ** 8):08d}"
-
 
 @lru_cache(maxsize=None)
 def fixture_password_hash(password: str) -> str:
@@ -86,7 +80,7 @@ def add_verified_user(
         email=email, email_normalized=email, email_verified=True,
         phone_country_code="NG", phone_dial_code="+234", phone=phone_local,
         phone_e164=f"+234{phone_local}", phone_verified=phone_verified,
-        country_of_residence="NG", timezone="Africa/Lagos", preferred_currency="NGN",
+        country_of_residence="NG", timezone="Africa/Lagos", preferred_currency=TransactionCurrency.NGN.value,
         user_type=UserType.USER.value, personas=[persona] if persona else [], trust_status="TRUSTED",
         password_hash=fixture_password_hash(password),
     )

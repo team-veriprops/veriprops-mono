@@ -16,6 +16,7 @@ import {
 import { AgentRole } from "@/types/agent";
 import { Dispute, DisputeOutcome, ResolveDisputeRequest } from "@/types/revision";
 import { Page } from "@/types/models";
+import { getErrorMessage } from "@lib/errors";
 
 const OUTCOME_LABEL: Record<DisputeOutcome, string> = {
   [DisputeOutcome.REJECTED]: "Reject — back to Completed",
@@ -52,6 +53,7 @@ export default function AdminDisputes() {
                 data-testid="dispute-row"
               >
                 <div className="min-w-0">
+                  {d.vid && <p className="font-mono text-xs text-muted-foreground">{d.vid}</p>}
                   <p className="text-sm font-medium">{humanizeEnumLabel(d.disputeType)}</p>
                   <p className="truncate text-xs text-muted-foreground">{d.description}</p>
                 </div>
@@ -100,7 +102,7 @@ function ResolvePanel({ dispute, onDone }: { dispute: Dispute; onDone: () => voi
           toast.success("Dispute resolved");
           onDone();
         },
-        onError: () => toast.error("Could not resolve the dispute."),
+        onError: (err) => toast.error(getErrorMessage(err, "Could not resolve the dispute.")),
       },
     );
   };

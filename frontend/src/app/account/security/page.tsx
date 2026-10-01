@@ -17,6 +17,7 @@ const RISK_EVENTS = new Set<string>([
   SecurityEventType.LOGIN_FAILURE,
   SecurityEventType.ACCOUNT_LOCKED,
   SecurityEventType.OTP_FAILURE,
+  SecurityEventType.PASSWORD_CHANGE_REFUSED,
 ]);
 
 export default function SecurityActivityPage() {

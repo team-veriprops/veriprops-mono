@@ -9,13 +9,19 @@ from typing import Type, List, Optional, Dict, Any, Union
 
 from fastapi.encoders import jsonable_encoder
 from kink import di
-from sqlalchemy import Row
+from sqlalchemy import Row, String, cast, func
 
 from main.appodus_utils import Utils
 from main.appodus_utils.db.models import ModelType, QuerySchemaType, SearchSchemaType, Page, PaginationMeta, SuccessResponse
 from main.appodus_utils.exception.exceptions import AppodusBaseException
 
 logger: Logger = di['logger']
+
+
+def hex_ref(uuid_column):
+    """A UUID primary key in the 32-char hex form that reference columns store, for comparing
+    or joining the two in SQL (``hex_ref(Verification.id) == Payment.verification_id``)."""
+    return func.replace(cast(uuid_column, String), "-", "")
 
 
 class DbUtils:
@@ -30,7 +36,7 @@ class DbUtils:
             search_dto.deleted = False
 
         where_conditions: List = []
-        exclusion = {'platform', 'page', 'page_size', 'query_fields', 'exact_string_values', 'ocr', 'order_by', 'where'}
+        exclusion = {'platform', 'page', 'page_size', 'query_fields', 'ocr', 'order_by', 'where'}
         # The flexible query controls live only on InternalPageRequest-derived DTOs.
         # A client-facing PageRequest DTO won't have them — read via getattr so it never
         # carries a wire-supplied `where`.

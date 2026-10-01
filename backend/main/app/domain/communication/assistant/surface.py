@@ -169,6 +169,12 @@ class AssistantSurface(Protocol):
         """Answer STOP or START (only called when `handles_consent_keywords`)."""
         ...
 
+    async def link_account(
+        self, engine: "AssistantEngine", session: "AssistantSession", party: AssistantParty
+    ) -> BotReply:
+        """Answer "link my account" (§26.4.4): the surface that has something to link does it."""
+        ...
+
     async def non_text_turn(
         self, engine: "AssistantEngine", session: "AssistantSession", party: AssistantParty, kind: InboundKind
     ) -> BotReply:

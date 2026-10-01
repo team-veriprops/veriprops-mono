@@ -11,6 +11,8 @@ const result: { data: FinanceSummary | null; isLoading: boolean; isError: boolea
 vi.mock("./libs/useFinanceSummaryQuery", () => ({
   useFinanceSummaryQuery: () => result,
 }));
+// The refunds-to-retry section has its own test (RefundRetries.test.tsx).
+vi.mock("./RefundRetries", () => ({ default: () => null }));
 
 import AdminFinance from "./AdminFinance";
 

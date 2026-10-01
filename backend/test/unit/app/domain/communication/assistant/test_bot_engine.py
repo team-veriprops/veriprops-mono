@@ -938,6 +938,31 @@ async def test_the_pay_link_is_never_issued_to_an_unlinked_number():
     assert "link my account" in reply.text
 
 
+async def test_link_my_account_sends_an_unlinked_number_the_signed_link():
+    """§26.4.4 WhatsApp→web — every refusal to an unlinked number says "link my account",
+    so asking must hand over the link, not repeat the refusal."""
+    session = _session()
+    engine, _sent = _engine(session, intent=BotIntent.LINK_ACCOUNT, user_id=None)
+    engine.surface._whatsapp_link_service.issue_link_invitation = AsyncMock(return_value="tok-link")
+
+    reply = await engine.handle(_inbound("link my account"), MagicMock())
+
+    engine.surface._whatsapp_link_service.issue_link_invitation.assert_awaited_once_with(PHONE)
+    assert "/wa/link/tok-link" in reply.text
+    assert "I can't share" not in reply.text  # the refusal is not simply repeated
+
+
+async def test_link_my_account_from_a_linked_number_says_it_is_already_linked():
+    session = _session()
+    engine, _sent = _engine(session, intent=BotIntent.LINK_ACCOUNT, user_id=USER_ID)
+    engine.surface._whatsapp_link_service.issue_link_invitation = AsyncMock()
+
+    reply = await engine.handle(_inbound("link my account"), MagicMock())
+
+    engine.surface._whatsapp_link_service.issue_link_invitation.assert_not_awaited()
+    assert "already linked" in reply.text
+
+
 async def test_a_customer_with_nothing_to_pay_for_is_told_so_without_a_link():
     session = _session()
     case = _FakeVerificationRow("VP-2026-0001", VerificationStatus.IN_PROGRESS)

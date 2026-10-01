@@ -114,8 +114,8 @@ git:
   dirty: false
 
 next_action: "None — cycle 2 is complete. Launch is gated on the external §26.11 items in
-              docs/whatsapp-launch-runbook.md. The MASTER-PRD §7 incorporation and the
-              'Known Gaps & Roadmap' row for D83's google_drive package remain as doc tasks."
+              docs/whatsapp-launch-runbook.md. The MASTER-PRD §7 incorporation remains a doc
+              task; the §G row for D83's google_drive package now exists."
 
 started_at: "2026-08-31"
 last_checkpoint: "2026-09-03: S10.0 made §26.3.4's pay and report handoffs reachable; S10 built

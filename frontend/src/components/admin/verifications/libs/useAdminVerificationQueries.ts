@@ -5,6 +5,7 @@ import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { httpClient } from "@/containers";
 import { AgentRole } from "@/types/agent";
 import { AdminNoteCategory, VerificationListFilters } from "@/types/adminVerification";
+import { CloseCaseRequest, CloseReason } from "@/types/closure";
 import { AdminVerificationService } from "./admin-verification-service";
 
 const service = new AdminVerificationService(httpClient);
@@ -45,8 +46,8 @@ export function useAdminVerificationDetailQuery(verificationId: string) {
 }
 
 /** Every detail mutation returns the fresh detail; we seed the cache from the response. */
-function useDetailMutation<TArgs = void>(
-  fn: (args: TArgs) => Promise<{ data?: unknown }>,
+function useDetailMutation<TArgs = void, TData = unknown>(
+  fn: (args: TArgs) => Promise<{ data?: TData }>,
   verificationId: string,
 ) {
   const qc = useQueryClient();
@@ -80,6 +81,28 @@ export function useCancelMutation(verificationId: string) {
     ({ reason }: { reason: string }) => service.cancel(verificationId, reason),
     verificationId,
   );
+}
+
+/** The backend's quote for closing a paid case: re-read whenever the reason or amount changes. */
+export function useClosureQuoteQuery(verificationId: string, reason: CloseReason, amountMinor: number | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: [...adminVerificationKeys.detail(verificationId), "closure-quote", reason, amountMinor],
+    queryFn: async () => (await service.closureQuote(verificationId, reason, amountMinor)).data ?? null,
+    enabled,
+    retry: false,
+  });
+}
+
+export function useCloseCaseMutation(verificationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (request: CloseCaseRequest) => service.close(verificationId, request),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminVerificationKeys.detail(verificationId) });
+      qc.invalidateQueries({ queryKey: ["admin", "verifications"] });
+      qc.invalidateQueries({ queryKey: ["admin", "review"] });
+    },
+  });
 }
 
 export function useSetDelayMutation(verificationId: string) {

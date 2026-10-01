@@ -2,6 +2,9 @@
 .claude/settings.local.json
 .playwright-cli
 
+# Service-account keys: loaded from Doppler (*_JSON_B64); a local copy must never be committed
+backend/service_accounts/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -763,6 +763,15 @@ class FileUtils:
 
 
     @staticmethod
+    def sniff_mime(file_bytes: bytes) -> Optional[str]:
+        """The MIME type the content's magic bytes prove, or ``None`` when they prove nothing.
+
+        Only the leading bytes are read. A client-declared type is never consulted, because
+        it is whatever the uploader chose to claim."""
+        kind = filetype.guess(file_bytes[:4096])
+        return kind.mime if kind else None
+
+    @staticmethod
     async def detect_mime(
             upload_file: Optional[UploadFile] = None,
         file_path: Optional[str] = None,
@@ -774,13 +783,12 @@ class FileUtils:
         if upload_file:
             file_bytes = await upload_file.read(4096)
 
-            kind = filetype.guess(file_bytes)
-
             # Reset stream pointer
             await upload_file.seek(0)
 
-            if kind:
-                return kind.mime
+            mime = FileUtils.sniff_mime(file_bytes)
+            if mime:
+                return mime
 
             raise ValueError("Unable to detect file type")
 
@@ -793,10 +801,9 @@ class FileUtils:
             with open(path, "rb") as f:
                 file_bytes = f.read(4096)
 
-            kind = filetype.guess(file_bytes)
-
-            if kind:
-                return kind.mime
+            mime = FileUtils.sniff_mime(file_bytes)
+            if mime:
+                return mime
 
             raise ValueError("Unable to detect file type")
 

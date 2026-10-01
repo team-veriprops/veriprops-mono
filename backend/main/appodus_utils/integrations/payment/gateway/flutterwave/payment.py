@@ -4,332 +4,174 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loguru import Logger
 
-from httpx import AsyncClient
 from kink import di, inject
 
 from main.app.config.settings import IntegratedPlatform, settings
-from main.appodus_utils.integrations.payment.gateway.interface import IPaymentGateway
-from main.appodus_utils.integrations.payment.gateway.models import (PaymentInitRequest, RefundRequest, BankTransferRequest,
-                                                          BankTransferResponse, GenericPaymentGatewayResponse,
-                                                          TransferFeeResponse, CountryBanksResponse, TransferFeeRequest)
-from main.appodus_utils.integrations.payment.gateway.paystack.models import CreateRecipientRequest, CreateRecipientResponse
+from decimal import ROUND_HALF_UP, Decimal
+from typing import List, Optional
 
-httpx_client: AsyncClient = di[AsyncClient]
+from main.appodus_utils.db.types.money import TransactionCurrency
+from main.appodus_utils.integrations.exception.exceptions import IntegrationException
+from main.appodus_utils.integrations.payment.gateway.http import GatewayHttp, GatewayNotFound
+from main.appodus_utils.integrations.payment.gateway.interface import IPaymentGateway, ITransferGateway
+from main.appodus_utils.integrations.payment.gateway.models import (
+    GatewayAccount,
+    GatewayBank,
+    GatewayCharge,
+    GatewayChargeStatus,
+    GatewayTransfer,
+    GatewayTransferStatus,
+    HostedCheckoutRequest,
+    TransferRequest,
+    to_major_units,
+    to_minor_units,
+)
+
 logger: Logger = di["logger"]
 
 
+# Flutterwave v3 charge statuses; anything else (pending, or a status added later) is PENDING.
+_FLW_STATUS = {"successful": GatewayChargeStatus.SUCCEEDED, "failed": GatewayChargeStatus.FAILED}
+# Flutterwave v3 transfer statuses (NEW, PENDING, SUCCESSFUL, FAILED); NEW/PENDING are in flight.
+_FLW_TRANSFER_STATUS = {"SUCCESSFUL": GatewayTransferStatus.SUCCEEDED, "FAILED": GatewayTransferStatus.FAILED}
+# The country Flutterwave lists a currency's banks under.
+_FLW_TRANSFER_COUNTRY = {TransactionCurrency.NGN: "NG"}
+
+
+def _flw_ok(body: dict) -> bool:
+    return body.get("status") == "success"
+
+
+def _flw_no_transaction(status_code: int, body: dict) -> bool:
+    """Flutterwave answers a reference it never charged with 400/404 "No transaction was found"."""
+    return status_code in (400, 404) and "no transaction" in str(body.get("message", "")).lower()
+
+
 @inject
-class FlutterwavePaymentGateway(IPaymentGateway):
+class FlutterwavePaymentGateway(IPaymentGateway, ITransferGateway):
+    """Flutterwave v3. Amounts are major units on the wire (1500.5 = ₦1,500.50)."""
 
     def __init__(self):
-        self.base_url = settings.FLUTTERWAVE_BASE_URL
-        self.headers = {"Authorization": f"Bearer {settings.FLUTTERWAVE_SECRET_KEY}", "Content-Type": "application/json",
-                        "Accept": "application/json"}
+        self._http = GatewayHttp("Flutterwave", settings.FLUTTERWAVE_BASE_URL, settings.FLUTTERWAVE_SECRET_KEY, _flw_ok)
+
     @property
     def platform(self) -> IntegratedPlatform:
         return IntegratedPlatform.FLUTTERWAVE
 
-    async def initialize_payment(self, payment_request: PaymentInitRequest) -> str:
-        """
-        Initializes a new payment session using Flutterwave /v3/payments.
-
-        ✅ Required Fields in Payload:
-        - `tx_ref` (str): Unique transaction reference
-        - `amount` (str or float): Amount to be paid
-        - `currency` (str): Currency code (e.g. "NGN")
-        - `redirect_url` (str): URL to redirect to after payment
-        - `customer.email` (str)
-        - `customer.phonenumber` (str)
-        - `customer.name` (str)
-        - `customizations.title` (str)
-        - `customizations.description` (str)
-
-        🔁 Sample Request:
-        {
-            "tx_ref": "unique_tx_ref_123",
-            "amount": "1000",
-            "currency": "NGN",
-            "redirect_url": "https://yourdomain.com/payment-callback",
+    async def create_hosted_checkout(self, request: HostedCheckoutRequest) -> str:
+        """POST /payments → ``data.link``, the Flutterwave Standard hosted page."""
+        data = await self._http.request("POST", "/payments", action="open the checkout", json={
+            "tx_ref": request.reference,
+            "amount": to_major_units(request.amount_minor),
+            "currency": request.currency.value,
+            "redirect_url": request.redirect_url,
             "customer": {
-                "email": "customer@email.com",
-                "phonenumber": "08012345678",
-                "name": "Customer Name"
+                "email": request.customer_email,
+                "phonenumber": request.customer_phone,
+                "name": request.customer_name,
             },
-            "customizations": {
-                "title": "Payment for Property",
-                "description": "Downpayment for Plot 4A"
-            }
-        }
+            "customizations": {"title": request.title, "description": request.description},
+        })
+        return data["link"]
 
-        ✅ Sample Response (partial):
-        {
-            "status": "success",
-            "message": "Payment link created",
-            "data": {
-                "link": "https://checkout.flutterwave.com/link/tx-123abc"
-            }
-        }
+    async def get_charge(self, reference: str) -> Optional[GatewayCharge]:
+        """GET /transactions/verify_by_reference?tx_ref=… (the id-keyed /verify needs Flutterwave's id)."""
+        try:
+            data = await self._http.request(
+                "GET", "/transactions/verify_by_reference", action="check the payment",
+                params={"tx_ref": reference}, not_found_when=_flw_no_transaction,
+            )
+        except GatewayNotFound:
+            return None
+        return GatewayCharge(
+            reference=data["tx_ref"],
+            gateway_transaction_id=str(data["id"]),
+            gateway_reference=str(data.get("flw_ref") or data["id"]),
+            status=_FLW_STATUS.get(str(data.get("status", "")).lower(), GatewayChargeStatus.PENDING),
+            # `amount` is what was asked for; `charged_amount` adds any fee the customer bore.
+            amount_minor=to_minor_units(data["amount"]),
+            currency=TransactionCurrency(data["currency"]),
+        )
 
-        Returns:
-            str: Payment checkout URL
-        """
-        payload_dict = payment_request.model_dump(exclude_none=True)
+    async def refund_charge(self, reference: str, amount_minor: int, reason: Optional[str]) -> None:
+        """POST /transactions/{id}/refund — Flutterwave refunds by its own transaction id."""
+        charge = await self.get_charge(reference)
+        if charge is None:
+            raise IntegrationException("Could not refund the payment: the gateway has no record of it.")
+        await self._http.request(
+            "POST", f"/transactions/{charge.gateway_transaction_id}/refund", action="refund the payment",
+            json={"amount": to_major_units(amount_minor), "comments": reason},
+        )
 
-        response = await httpx_client.post(f"{self.base_url}/payments", headers=self.headers, json=payload_dict)
+    # ── Transfers ────────────────────────────────────────────────
 
-        response.raise_for_status()
-        response_data = GenericPaymentGatewayResponse(**response.json())
-        if response_data.data is None:
-            raise ValueError("Flutterwave /payments response carried no data payload")
-        return response_data.data["link"]
+    async def list_banks(self, currency: TransactionCurrency) -> List[GatewayBank]:
+        """GET /banks/{country}. Flutterwave lists banks by country; NGN is Nigeria."""
+        country = _FLW_TRANSFER_COUNTRY.get(currency)
+        if country is None:
+            raise IntegrationException(f"Could not list banks: {currency.value} transfers are not supported.")
+        data = await self._http.request("GET", f"/banks/{country}", action="list the banks")
+        return [GatewayBank(code=str(b["code"]), name=b["name"]) for b in data or []]
 
-    async def verify_payment(self, reference: str) -> GenericPaymentGatewayResponse:
-        """
-        Verifies a transaction via /v3/transactions/{reference}/verify.
+    async def resolve_account(self, bank_code: str, account_number: str) -> Optional[GatewayAccount]:
+        """POST /accounts/resolve → the name the bank holds for the account."""
+        try:
+            data = await self._http.request(
+                "POST", "/accounts/resolve", action="check the bank account",
+                json={"account_number": account_number, "account_bank": bank_code},
+                not_found_when=_flw_account_unknown,
+            )
+        except GatewayNotFound:
+            return None
+        return GatewayAccount(bank_code=bank_code, account_number=account_number, account_name=data["account_name"])
 
-        ✅ Required:
-        - `reference` (str): Unique transaction reference ID
+    async def quote_fee(self, amount_minor: int, currency: TransactionCurrency) -> int:
+        """GET /transfers/fee — Flutterwave quotes each currency's fee as a value or a percentage."""
+        data = await self._http.request(
+            "GET", "/transfers/fee", action="quote the transfer fee",
+            params={"amount": to_major_units(amount_minor), "currency": currency.value, "type": "account"},
+        )
+        quote = next((q for q in data or [] if q.get("currency") == currency.value), None)
+        if quote is None:
+            raise IntegrationException("Could not quote the transfer fee: the gateway returned no fee for the currency.")
+        if quote.get("fee_type") == "percentage":
+            return int((Decimal(amount_minor) * Decimal(str(quote["fee"])) / 100).to_integral_value(rounding=ROUND_HALF_UP))
+        return to_minor_units(quote["fee"])
 
-        ✅ Sample Response:
-        {
-            "status": "success",
-            "message": "Transaction fetched successfully",
-            "data": {
-                "id": 334,
-                "tx_ref": "unique_tx_ref_123",
-                "flw_ref": "FLW-M03K-3021a2",
-                "amount": 1000,
-                "currency": "NGN",
-                "status": "successful",
-                "payment_type": "card",
-                ...
-            }
-        }
+    async def send_transfer(self, request: TransferRequest) -> GatewayTransfer:
+        """POST /transfers, in major units, straight to the account (no beneficiary record)."""
+        data = await self._http.request("POST", "/transfers", action="send the transfer", json={
+            "account_bank": request.bank_code,
+            "account_number": request.account_number,
+            "amount": to_major_units(request.amount_minor),
+            "currency": request.currency.value,
+            "debit_currency": request.currency.value,
+            "narration": request.narration,
+            "reference": request.reference,
+            "beneficiary_name": request.account_name,
+        })
+        return _flw_transfer(data)
 
-        Returns:
-            dict: Verification result
-        """
-        response = await httpx_client.get(f"{self.base_url}/transactions/{reference}/verify", headers=self.headers)
-        response.raise_for_status()
-        return GenericPaymentGatewayResponse(**response.json())
+    async def get_transfer(self, reference: str) -> Optional[GatewayTransfer]:
+        """GET /transfers?reference=… (the id-keyed GET /transfers/{id} needs Flutterwave's id)."""
+        data = await self._http.request(
+            "GET", "/transfers", action="check the transfer", params={"reference": reference},
+        )
+        match = next((t for t in data or [] if t.get("reference") == reference), None)
+        return None if match is None else _flw_transfer(match)
 
-    async def refund_transaction(self, payload: RefundRequest) -> GenericPaymentGatewayResponse:
-        """
-        Issues a refund using /v3/refunds.
 
-        ✅ Required Fields:
-        - `transaction_id` (str): ID of original transaction
-        - `amount` (float): Refund amount (can be partial)
+def _flw_account_unknown(status_code: int, body: dict) -> bool:
+    """Flutterwave answers an account it cannot resolve with a 4xx "invalid account"."""
+    return status_code in (400, 404, 422)
 
-        🔁 Sample Request:
-        {
-            "transaction_id": "1234567",
-            "amount": 1000,
-            "comments": "Customer changed mind"
-        }
 
-        ✅ Sample Response:
-        {
-            "status": "success",
-            "message": "Refund Queued Successfully",
-            "data": {
-                "id": 122,
-                "status": "pending"
-            }
-        }
-
-        Returns:
-            dict: Refund status
-        """
-        response = await httpx_client.post(f"{self.base_url}/refunds", headers=self.headers, json=payload)
-        response.raise_for_status()
-        return GenericPaymentGatewayResponse(**response.json())
-
-    async def _create_recipient(self, payload: CreateRecipientRequest) -> CreateRecipientResponse:
-        """
-        Creates a transfer beneficiary on Flutterwave via the /v3/beneficiaries endpoint.
-
-        ✅ Required Fields:
-        - `account_number` (str): Recipient’s bank account number
-        - `account_bank` (str): Bank code of the recipient’s bank (e.g. "044" for GTBank)
-        - `currency` (str): Currency to be used, e.g. "NGN"
-        - `name` (str): Full name of the beneficiary (mapped to `beneficiary_name` in Flutterwave)
-
-        🔁 Sample Request Payload:
-        {
-            "account_number": "0690000031",
-            "account_bank": "044",
-            "currency": "NGN",
-            "beneficiary_name": "John Doe"
-        }
-
-        ✅ Sample Successful Response:
-        {
-            "status": "success",
-            "message": "Beneficiary created",
-            "data": {
-                "id": 129829,
-                "account_number": "0690000031",
-                "account_bank": "044",
-                "beneficiary_name": "John Doe",
-                "date_created": "2023-06-01T12:00:00.000Z",
-                "currency": "NGN"
-            }
-        }
-
-        ⚠️ Notes:
-        - Flutterwave does not use `type` or `recipient_code` like Paystack.
-        - Instead, the response includes an internal `id` used to reference the beneficiary.
-
-        Returns:
-            CreateRecipientResponse: Pydantic model with `status`, `message`, and `data` fields.
-        """
-        payload_dict = payload.model_dump()
-        payload_dict["beneficiary_name"] = payload.name
-
-        url = f"{self.base_url}/beneficiaries"
-        response = await httpx_client.post(url, headers=self.headers, json=payload_dict)
-        response.raise_for_status()
-        return CreateRecipientResponse(**response.json())
-
-    async def initialize_bank_transfer(self, payload: BankTransferRequest) -> BankTransferResponse:
-        """
-        Initiates a single bank transfer via /v3/transfers.
-
-        ✅ Required Fields in Payload:
-        - `account_bank` (str): Bank code (e.g., '044' for GTBank)
-        - `account_number` (str): Recipient's account number
-        - `amount` (float): Amount to send
-        - `currency` (str): Currency (e.g., "NGN")
-        - `narration` (str): Description of purpose
-        - `reference` (str): Unique transfer reference
-        - `debit_currency` (str): e.g. "NGN"
-        - `callback_url` (optional): Webhook notification URL
-
-        🔁 Sample Request:
-        {
-            "account_bank": "044",
-            "account_number": "0690000031",
-            "amount": 5000,
-            "narration": "Vendor payout",
-            "currency": "NGN",
-            "reference": "unique-ref-001",
-            "callback_url": "https://yourdomain.com/webhook",
-            "debit_currency": "NGN"
-        }
-
-        ✅ Sample Response:
-        {
-            "message": "Transfer initiated",
-            "data": {
-                "id": 2198381,
-                "account_number": "0690000031",
-                "bank_code": "044",
-                "full_name": "DOE JOHN",
-                "date_created": "2024-06-16T12:00:00.000Z",
-                "currency": "NGN",
-                "amount": 5000,
-                "fee": 10,
-                "status": "NEW",
-                "reference": "unique-ref-001"
-            }
-        }
-
-        Returns:
-            dict: Flutterwave transfer response
-        """
-        # Create Recipient
-        if not payload.recipient_code:
-            create_recipient_dto = CreateRecipientRequest(type="nuban", name=payload.fullname,
-                                                          account_number=payload.account_number,
-                                                          bank_code=payload.account_bank, currency=payload.currency)
-
-            created_recipient = await self._create_recipient(create_recipient_dto)
-            payload.recipient_code = created_recipient.data.recipient_code
-
-        payload_dict = payload.model_dump()
-        payload_dict["recipient"] = payload.recipient_code
-        response = await httpx_client.post(f"{self.base_url}/transfers", headers=self.headers,
-                                           json=payload_dict)
-        response.raise_for_status()
-        return BankTransferResponse(**response.json())
-
-    async def retry_failed_bank_transfer(self, transfer_ref_id: str) -> GenericPaymentGatewayResponse:
-        """
-        Resends a webhook notification for a previously failed or hanging transfer.
-
-        ✅ Required:
-        - `transfer_ref_id` (str): The unique transfer reference
-
-        ✅ Sample Response:
-        {
-            "status": "success",
-            "message": "Transfer webhook resent"
-        }
-
-        Returns:
-            dict: Webhook retry result
-        """
-        url = f"{self.base_url}/transfers/{transfer_ref_id}/resend-hook"
-        response = await httpx_client.post(url, headers=self.headers)
-        response.raise_for_status()
-        return GenericPaymentGatewayResponse(**response.json())
-
-    async def get_transfer_fee(self, payload: TransferFeeRequest) -> TransferFeeResponse:
-        """
-        Fetches the estimated Flutterwave transfer fee using /v3/transfers/fee.
-
-        ✅ Required Query Params:
-        - `amount` (float): Amount to send
-        - `currency` (str): Currency (default: "NGN")
-
-        🔁 Sample Request:
-        /transfers/fee?amount=5000&currency=NGN
-
-        ✅ Sample Response:
-        {
-            "status": "success",
-            "message": "Fee fetched",
-            "data": {
-                "currency": "NGN",
-                "amount": 5000,
-                "fee": 10
-            }
-        }
-
-        Returns:
-            dict: Fee estimate
-        """
-        url = f"{self.base_url}/transfers/fee"
-        response = await httpx_client.get(url, headers=self.headers, params=payload.model_dump())
-        response.raise_for_status()
-        return TransferFeeResponse(**response.json())
-
-    async def get_all_country_banks(self, country_code: str) -> CountryBanksResponse:
-        """
-        Gets a list of all banks in a given country using /v3/banks/{country_code}.
-
-        ✅ Required:
-        - `country_code` (str): ISO country code, e.g., "NG" for Nigeria
-
-        ✅ Sample Response:
-        {
-            "status": "success",
-            "message": "Banks retrieved",
-            "data": [
-                {
-                    "id": 1,
-                    "code": "044",
-                    "name": "GTBank"
-                },
-                ...
-            ]
-        }
-
-        Returns:
-            dict: List of banks
-        """
-        url = f"{self.base_url}/banks/{country_code}"
-        response = await httpx_client.get(url, headers=self.headers)
-        response.raise_for_status()
-        return CountryBanksResponse(**response.json())
+def _flw_transfer(data: dict) -> GatewayTransfer:
+    status = _FLW_TRANSFER_STATUS.get(str(data.get("status", "")).upper(), GatewayTransferStatus.PENDING)
+    return GatewayTransfer(
+        reference=data["reference"],
+        gateway_transfer_id=str(data["id"]),
+        status=status,
+        amount_minor=to_minor_units(data["amount"]),
+        failure_reason=(data.get("complete_message") or None) if status == GatewayTransferStatus.FAILED else None,
+    )

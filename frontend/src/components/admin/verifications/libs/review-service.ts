@@ -34,9 +34,6 @@ export class ReviewService {
     return this.http.post(`${this.base}/${verificationId}/release`, { reason });
   }
 
-  fail(verificationId: string, reason: string): Promise<SuccessResponse<ReviewState>> {
-    return this.http.post(`${this.base}/${verificationId}/fail`, { reason });
-  }
 }
 
 /** Trust Score Weights admin CRUD (§8.3 / D14). */

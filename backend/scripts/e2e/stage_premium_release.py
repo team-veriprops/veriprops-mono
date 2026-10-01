@@ -8,7 +8,7 @@ PARTIAL_RECHECK (upheld) dispute that reopens the LAWYER and produces the v3 REC
 """
 from __future__ import annotations
 
-from .harness import MINIMAL_PNG, Ctx, check
+from .harness import Ctx, MINIMAL_PNG, accrued_commissions, check, commission_by_role
 from .stage_execution import ROLE_PAYLOADS
 
 
@@ -61,6 +61,11 @@ def run(ctx: Ctx) -> None:
           released["report"] is not None and released["report"]["reportVersion"] >= 2,
           f"version={released['report'] and released['report']['reportVersion']}")
     v2_version = released["report"]["reportVersion"]
+    rules = commission_by_role(admin)
+    accrued = accrued_commissions(admin, vid_id)
+    check("the PREMIUM case pays each role the same fixed commission as STANDARD did (§20.1/D97)",
+          accrued.get("LAWYER") == rules["LAWYER"] and accrued.get("REGISTRY") == rules["REGISTRY"],
+          f"accrued={accrued} rules={rules}")
     report = customer.get(f"/verifications/{vid_id}/report").json()["data"]
     check("customer report reflects the PREMIUM tier after upgrade (§14.2)",
           report.get("tier") == "PREMIUM", f"tier={report.get('tier')}")
@@ -105,3 +110,17 @@ def run(ctx: Ctx) -> None:
     check("the v3 report is marked as a RECHECK revision (§14)",
           v3["report"].get("revisionKind") == "RECHECK",
           f"kind={v3['report'].get('revisionKind')}")
+
+    # 6. An admin reopens an approved task after release (§8.4): the live report no longer
+    #    describes the case, so it is superseded until the reworked task is released again.
+    reopened = admin.post(f"/admin/review/{vid_id}/tasks/LAWYER/reopen").json()["data"]
+    l_state = next(t["state"] for t in reopened["tasks"] if t["role"] == "LAWYER")
+    check("reopening a released task sends it back to the agent (§8.4)",
+          reopened["status"] == "IN_PROGRESS" and l_state == "IN_PROGRESS" and reopened.get("report") is None,
+          f"verification={reopened['status']} lawyer={l_state} report={reopened.get('report')}")
+    lawyer.post(f"/agents/tasks/{l_task['id']}/submit", json={"payload": ROLE_PAYLOADS["LAWYER"]}).raise_for_status()
+    admin.post(f"/admin/review/{vid_id}/tasks/LAWYER/approve", json={"quality": 95}).raise_for_status()
+    v4 = admin.post(f"/admin/review/{vid_id}/release", json={"reason": "Legal opinion revised after reopen."}).json()["data"]
+    check("the reworked task releases the next report version (§8.4)",
+          v4["status"] == "COMPLETED" and v4["report"]["reportVersion"] > v3["report"]["reportVersion"],
+          f"status={v4['status']}")

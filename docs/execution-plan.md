@@ -80,7 +80,7 @@ WA-23, WA-24, WA-25, part of WA-22
 ### Dependencies — S2 (send OTP via facade), S3 (signed web link for WA→web)
 ### Files Impacted
 `WhatsAppLink` entity + migration; linking endpoints under user/auth; account-settings UI;
-`otp_auth` template registry stub use; `TODO(gap): SMS fallback` (D46).
+`otp_auth` template registry stub use; SMS fallback deferred by D46, since delivered by D60.
 ### Tests Required
 unit: 1:1 enforcement, re-link, cold-thread; e2e both directions under deterministic OTP.
 ### Risk — High (auth) → small batch

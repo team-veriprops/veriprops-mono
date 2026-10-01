@@ -38,6 +38,7 @@ from main.app.domain.channel.whatsapp.handoff.tokens import (
     HandoffTokenError,
 )
 from main.app.domain.channel.whatsapp.handoff.view_models import (
+    HandoffPaymentStatusDto,
     HandoffContextDto,
     HandoffPaymentDto,
 )
@@ -47,8 +48,11 @@ from main.app.domain.verification.service import VerificationService
 from main.appodus_utils.common.rate_limit import RateLimiter
 from main.appodus_utils.db.models import SuccessResponse
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
+from main.app.domain.payment.models import PaymentStatus, payment_to_dto
 
 handoff_router = APIRouter(prefix="/public/wa/handoff", tags=["WhatsApp Handoff"])
+# Public page a WhatsApp handoff's hosted checkout returns to (frontend app/wa/pay/return).
+WA_PAY_RETURN_PATH = "/wa/pay/return"
 handoff_service: HandoffTokenService = di[HandoffTokenService]
 verification_service: VerificationService = di[VerificationService]
 payment_service: PaymentService = di[PaymentService]
@@ -139,12 +143,30 @@ async def initiate_payment(request: Request):
         # One payment per handoff, so a double-submit on a flaky mobile connection
         # cannot open two charges for the same case.
         idempotency_key=f"wa-handoff-{grant.jti}",
+        # The customer holds a grant, not a session: the portal pay page would be a login wall.
+        return_path=WA_PAY_RETURN_PATH,
     )
     return SuccessResponse[HandoffPaymentDto](data=HandoffPaymentDto(
         tx_ref=payment.tx_ref,
         checkout_url=payment.checkout_url,
+        checkout_kind=payment_to_dto(payment).checkout_kind,
         amount_minor=payment.amount_minor,
         currency=payment.currency,
+    ))
+
+
+@handoff_router.post("/pay/reconcile", response_model=SuccessResponse[HandoffPaymentStatusDto])
+async def reconcile_payment(request: Request):
+    """Where the handoff's payment stands, asked by the page the hosted checkout returns to.
+
+    Grant-scoped like `pay/initiate`: the case comes from the grant, and a late or lost
+    webhook still settles the charge here."""
+    grant = read_grant(request, HandoffIntent.PAY)
+    if grant is None:
+        raise ResourceNotFoundException(resource=TOKEN_REJECTED_MESSAGE)
+    payment = await payment_service.reconcile_for_handoff(grant.case_id)
+    return SuccessResponse[HandoffPaymentStatusDto](data=HandoffPaymentStatusDto(
+        status=PaymentStatus(payment.status) if payment else None,
     ))
 
 

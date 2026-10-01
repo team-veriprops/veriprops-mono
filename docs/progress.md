@@ -1,4 +1,705 @@
-# Progress Tracker — Playwright UAT suite (cycle 3)
+# Progress Tracker — Audit remediation (2026-09-27)
+
+status: **S0–S9 complete — the remediation is ready for its PR.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
+
+Scope, stages S0–S9 and the user's decisions are in the audit plan (`~/.claude/plans/any-pending-issues-task-polymorphic-duckling.md`). In short:
+
+- **S1:** untrack the service-account keys, fix SMS routing, fix S3 upload.
+- **S2:** correctness bugs.
+- **S3:** live payment on both gateways.
+- **S4:** live payouts.
+- **S5:** Dojah and Places, plus the prod boot guards.
+- **S6:** live smoke.
+- **S7:** convention debt.
+- **S8:** backend tests.
+- **S9:** Playwright P0/P1.
+
+A parallel session holds uncommitted fixed-commission work, with migration `0002_fixed_agent_commission`, in the main checkout. This branch rebases onto it before the PR, and the S4 migration chains after it.
+
+## Stage 0 — baseline (the regression reference every later stage must keep green)
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| ruff | `ruff check .` | clean |
+| mypy | `mypy main` | clean, 604 files |
+| pytest | `pytest -q -p no:cacheprovider` (`APPODUS_ACTIVE_ENV=test`) | **2615 passed** |
+| drive-through | `python scripts/e2e_drive_through.py` against `veriprops_e2e` | **554/554 passed**, 0 WARN (matches the 2026-09-25 count) |
+| eslint | `pnpm lint` | clean |
+| types | `pnpm exec tsc --noEmit` | clean |
+| vitest | `pnpm test --maxWorkers=2` | **776 passed**, 122 files |
+| build | `NEXT_PUBLIC_ENVIRONMENT=test API_BASE_URL=http://localhost:8000 pnpm build` | green; the rewrite targets `localhost:8000` |
+| Playwright | `UAT_ENGINES=chromium-desktop,webkit-mobile node e2e/run-lanes.mjs` | **114/114 passed**: parallel lane 105 first attempt + 1 flaky (7.1 min), serial lane 8/8 (3.2 min) |
+
+**Pre-existing failures:** none.
+
+**Pre-existing flake:** UAT-AGENT-02 on webkit-mobile failed once and passed on retry.
+
+- `fillResidenceStep` (`e2e/helpers/signup.ts:135`) waited 15s for `signup-residence-form` after step 2's Continue.
+- The failure screenshot shows step 2 complete, with the email verified, the phone entered and no error shown. The step just hadn't advanced yet.
+- Logged here instead of fixed in another stage.
+- It recurred in the S1 gate on two webkit-mobile tests (UAT-AGENT-03 and the signup accessibility check), both at the same wait, and both passed on retry. S1 doesn't touch signup. The pattern repeats, so S9 should find out why the step doesn't advance, rather than re-marking the test as flaky.
+
+**Environment notes:**
+
+- The first pytest attempt crashed with an internal `MemoryError` after 1491 tests, while pytest was building a traceback. It came from memory pressure on this machine, not from a test. A clean re-run passed all 2615.
+- `veriprops_test` is stamped `0002_fixed_agent_commission` by the parallel session, so this branch runs its live stack against `veriprops_e2e`, which is at head `0019_sla_breach_marker`.
+
+## S1 — keys out of git, SMS routing, evidence storage
+
+**Service-account keys.**
+
+- `backend/service_accounts/*.json` are untracked and gitignored, and are no longer bundled into the Vercel function (`vercel.json`).
+- The keys now load from Doppler as base64 JSON (`GOOGLE_SERVICE_ACCOUNT_JSON_B64`, `FIREBASE_CREDENTIALS_JSON_B64`, both in `SECRET_ENV_KEYS`), through the shared `config/service_account.load_service_account_info`. A local key file stays as a fallback.
+- Firebase initialises on the first push send, so a missing key can no longer break the message router.
+- A new hygiene tripwire fails if any tracked file holds private-key material. It was verified to flag `HEAD`'s two key files.
+- `NOTES.md` no longer lists test-user passwords.
+- **User action:** rotate both keys in GCP/Firebase, then put the new ones in Doppler `stg`/`prd` as base64. The old keys remain in git history, which is not purged by decision.
+
+**SMS routing.**
+
+- The +234 rule read `msg.recipient`, which doesn't exist, so every staging/prod SMS raised before reaching a provider. The HIGH-priority rule compared an int enum with `"high"`. Both are fixed, and a single recipient passed as a one-element list is handled.
+- **Also found and fixed:** an unmatched message and the last-resort fallback could pick `MOCK_SMS`, which is registered in every environment. That would mark a foreign-number SMS, or an SMS sent while Termii and Twilio were both down, as SENT without delivering it. Both paths are now confined to the channel's declared `default` list, and WhatsApp's default no longer names the stub.
+- **From review:** an exclusive rule whose provider's circuit was open fell through to later rules. In test/dev, a tripped `MOCK_SMS`/`SMTP` breaker could then reach Termii or Resend. In production, a tripped Cloud API breaker could record a WhatsApp send in the stub. An exclusive rule now holds at selection time too.
+
+**Evidence storage.**
+
+- `put_object` no longer passes `ExtraArgs`, which S3 rejected, or an ACL, which ACL-disabled buckets reject.
+- Errors now answer with a safe sentence (`IntegrationException`, 502) instead of boto's own text.
+- Agent evidence reads now regenerate presigned URLs valid for `AWS_S3_PRESIGNED_URL_EXPIRES`, where they used to serve an expired stored one.
+- **Also found and fixed:** `GET /agents/tasks/{id}/evidence` had no ownership check, so any signed-in user could list any task's evidence. It now goes through `VerificationTaskService.list_evidence`, which requires the requesting agent to own the task. This had to land together with the fresh URLs, which would otherwise have handed out working links to other people's evidence.
+- **From review:** the stored Content-Type is what the bytes prove (`FileUtils.sniff_mime`), limited to an evidence-format allowlist; anything else is stored as a download. Every file used to be tagged `application/pdf`. Passing the client's claimed type through, as the first S1 draft did, would have let an HTML or SVG "photo" run script on the bucket's origin.
+- R2 support (`AWS_S3_ENDPOINT_URL`) was drafted and then dropped: R2 needs different region and encryption handling, it has not been tested, and nobody has asked for it.
+
+**Deferred from review:** upload presigns twice, and the listing presigns items one at a time. That is a small efficiency cost, not a bug.
+
+**Gate.**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 2653 passed (+38) |
+| ruff, mypy | clean (605 files) |
+| drive-through | 554/554 |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114 on the first attempt. The run before the review fixes had 2 flaky, both at the signup wait above. |
+
+The frontend is unchanged, so the S0 vitest and build results carry over.
+
+## S2 — correctness bugs
+
+**Backend.**
+
+- **Webhook callback lookups.** `CallbackRepo` called the sync ORM's `session.query` on an `AsyncSession`, so every Google Drive notification's "already recorded?" check raised AttributeError. Both lookups now run as awaited `select`s scoped to live, unhandled rows.
+- **From review:** `update_callback__handle_time` found its row through the generic criterion search, which drops `platform` (`db_utils` excludes it). One provider's event could overwrite another provider's unhandled callback. The lookup now uses the platform-scoped repo query.
+- **Double-mounted webhooks.** `webhook_router` was included twice, in `veriprops.py` and in `domain/__init__.py`. It is now mounted once. `test_route_table.py` fails if any `(method, path)` is mounted twice.
+- **Dead code removed** (each grepped repo-wide first):
+  - the never-mounted `messagin_router` module;
+  - an unused duplicate `MessageValidator` (`messaging/services/validation.py`);
+  - the empty `main/app/exception/` package;
+  - the empty `utils_router`;
+  - the inert `exact_string_values` query control, which nothing ever read.
+
+**Frontend.**
+
+- **`pageSize=` on the wire.** Five service calls sent `pageSize=`, which FastAPI ignores; it binds `page_size`. They only appeared to work because each caller's size matched the endpoint's default. Their tests asserted the wrong URL. All are fixed, and `api-query-contract.test.ts` fails on a camelCase page size in a query string or a `URLSearchParams` key.
+- **Toasts that dropped the error.** Sixteen mutation `onError` handlers, plus three `catch` blocks found in review, showed a fixed sentence and threw the error away. That lost the backend's 4xx explanation and the 5xx support reference. They all go through `getErrorMessage(err, "<old sentence>")` now, and `error-toast-contract.test.ts` catches both forms.
+- **Suspense boundaries.** `/auth`, `/auth/login`, `/auth/signup` and the OAuth callback are wrapped in `<Suspense>`, following the repo convention. The first three are prerendered static pages, so the layout now prerenders while only the form waits for hydration.
+- The client `PageRequest` type no longer carries the server-only `queryFields`/`where`/`exactStringValues`.
+- `ui/ShareModal.tsx` and its store are deleted. They were never rendered, and the "share referral" action only showed a success toast without sending anything.
+
+**New gap (both halves):** DataTable sort headers set `orderBy`, but no list endpoint accepts a client sort. Recorded as `TODO(gap)` in `types/models.ts` plus a §G.2 row.
+
+**Deferred to S7:** a single shared page-query serializer for the 8+ services that each build `?page=…&page_size=…` by hand. That was a review suggestion; the regex guard covers the drift in the meantime.
+
+**Gate.**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 2660 passed (+7) |
+| ruff, mypy | clean (600 files, down from 605 after the deletions) |
+| eslint, tsc | clean |
+| vitest | 778 passed (+2 contract guards) |
+| build | green; rewrites target `localhost:8000` |
+| drive-through | 554/554 |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114, 1 flaky (UAT-AUTH-12, the same signup wait). It has now appeared in 3 of 4 gate runs, so S9 must investigate it. |
+
+## S3 — live payment collection and refunds (both gateways)
+
+**Before S3 on staging/prod:** `PAYMENT_STUB_MODE=false` produced an empty checkout URL, the stub confirm 404'd, and both webhooks called a `PaymentService` method that did not exist. Every verification stuck at `PAYMENT_PENDING`, and refunds never reached a gateway.
+
+**What the gateway docs showed, beyond the audit** (Flutterwave checked live; Paystack's pages block automated fetches, so its contract is from its long-documented scheme and is flagged for sandbox confirmation):
+
+- Flutterwave's `verif-hash` is the dashboard secret hash sent **verbatim**, so the HMAC check rejected every genuine webhook.
+- Paystack signs with the **secret key**. The `PAYSTACK_WEBHOOK_SECRET` the code used does not exist at Paystack, so every genuine webhook would have failed too. The setting is removed.
+- Flutterwave verifies by our reference at `GET /transactions/verify_by_reference?tx_ref=`. The code called the id-keyed `/transactions/{ref}/verify`.
+- Flutterwave refunds are `POST /transactions/{id}/refund`, which needs its own transaction id. The code posted a pydantic model to `/refunds`.
+- Flutterwave chargeback webhooks cite the charge only by `flw_ref`, and must be enabled by Flutterwave support.
+- Paystack's mapper read a field that does not exist (`request.metadata`), so every Paystack checkout would have raised.
+- The payment keys defaulted to the literal `"random"`. They now default to the `CHANGE_ME` placeholder, which the signature checks treat as unconfigured.
+
+**What exists now:**
+
+- **Gateway contract.** One provider-neutral contract (`create_hosted_checkout` / `get_charge` / `refund_charge`) with minor units inside, and a shared `GatewayHttp` that maps every failure to a safe `IntegrationException`.
+- **Settlement.** `confirm_from_gateway` settles only from the gateway's own answer, and only when reference, amount and currency match the quote.
+- **Return path.** `POST /payments/reconcile/{verification_id}` is the return-path check. On mount the pay page asks the backend where the payment stands, sends a hosted charge to the gateway's page, polls briefly while it is unsettled, and uses a fresh double-tap key after a failure. Before, a retry replayed the failed payment.
+- **Chargebacks.** Both gateways route to `record_chargeback`. Migration `0003_payment_gateway_ref` adds `payments.gateway_reference`, which is additive and chained after `0002`.
+- **Refunds (user decision: keep what succeeded).** Payments are refunded one at a time. A refusal puts that payment alone back to `SUCCEEDED`, and finance retries it from a new "Refunds to retry" card (`REFUND_PAYMENT`, FINANCE).
+- **Also fixed:** `PaymentDto.purpose` was never populated. The base webhook handler slept with the blocking `time.sleep` between retries.
+- **Also shared:** `is_configured_secret` replaces two private copies, and `hex_ref` replaces a private copy in the pseudonymiser.
+- **Rebase.** S3 started by rebasing this branch onto the commission commit `030afb6`, so the migration chain is real. The only conflicts were `task/controller.py` and `CommissionRules.tsx`, and both kept both sides.
+
+**Stage review fixes** (`/code-review high`, 10 findings; 9 fixed, 1 documented):
+
+- **Abandoned checkouts.** A customer who left a hosted checkout without paying was stuck on "Confirming…" for good. Once polling is spent, the page now offers "Return to checkout" (the same charge) and "Start a new payment" (a fresh key).
+- **Chargebacks.** A payment under a chargeback is never re-settled from the gateway, never refunded (it is held in `RefundOutcome.held_payment_ids`), and never listed or retried. The issuer is already returning that money.
+- **Repeat failures.** A FAILED payment that the gateway still calls failed is not counted again on each visit.
+- **Mismatch audits.** A mismatch is audited once per charge (an idempotency claim on `…:MISMATCH`) instead of on every poll and redelivery.
+- **Refund ordering.** The dispute FULL_REFUND refund is now the last step of its transaction, so a later failure can no longer roll back a refund that had already left at the gateway. `refund()` documents this contract; the review-fail path already met it.
+- **Reconcile.** It asks only about the latest payment and tolerates a gateway error, so one bad lookup no longer aborts the pay page's check.
+- **WhatsApp handoff.** A hosted checkout from a handoff now returns to the public `/wa/pay/return`, which asks the grant-scoped `POST /public/wa/handoff/pay/reconcile`. Before, the customer was sent back to a portal page that needs a session they do not have.
+- **Stub secondary charges.** The stub confirm now routes through reconcile, so a stub upgrade or re-check payment no longer strands the customer on "Processing".
+- **Polling.** Polls no longer overlap: the next one is scheduled only once the previous answer is in.
+- **Documented, not coded.** A refund whose response times out is treated as refused and listed for retry. Both gateways refuse a refund beyond what remains on the charge, so a retry after an accepted refund is declined rather than paid twice. This is flagged on register rows 1 and 2 for sandbox confirmation.
+
+**Deferred:** the Paystack transfer fee and transfer retry are payout concerns, so they move to S4.
+
+**Gate** (after the review fixes, on the rebased branch):
+
+| Gate | Result |
+| --- | --- |
+| pytest | 2791 passed (+85 over the post-rebase 2706) |
+| ruff, mypy | clean (603 files) |
+| eslint, tsc | clean |
+| vitest | 802 passed (+14 over the post-rebase 788) |
+| build | green; `/wa/pay/return` prerendered; rewrites target `localhost:8000` |
+| migration | `veriprops_e2e` upgraded `0019 → 0002 → 0003`; `downgrade -1` then `upgrade head` round-trips; single head |
+| drive-through | 567/567 (the commission work added 13 checks to the old 554) |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114 on the first attempt |
+
+**New flake to watch:** the first S3 browser run had UAT-GP-03 on webkit-mobile wait 15s for the FIELD review card to show "Rejected" after the admin clicked Reject; it passed on retry. S3 does not touch review, but the rebased commission commit does, so S9 should check whether this recurs.
+
+## S4 — live payouts (both gateways)
+
+**Before S4:** approval marked a payout `PAID` and nothing left the platform. There was no bank code, the account name was whatever the agent typed, and transfer webhooks were ignored. The gateway transfer code was unreachable, and it was wrong: Flutterwave's "create beneficiary" parsed a Paystack response shape, Paystack's fee and retry raised `NotImplementedException`, and both sent float amounts.
+
+**What the gateway docs showed** (Flutterwave from its llms.txt markdown pages; Paystack from its public OpenAPI repo, because paystack.com blocks automated fetches):
+
+- **Bank list.**
+  - Paystack: `GET /bank?currency=NGN`, cursor-paged.
+  - Flutterwave: `GET /banks/NG`.
+- **Account lookup.**
+  - Paystack: `GET /bank/resolve`.
+  - Flutterwave: `POST /accounts/resolve`.
+  - Both return the bank-held `account_name`.
+- **Sending.**
+  - Paystack sends to a recipient code (`POST /transferrecipient`, then `POST /transfer`). The reference must be lowercase `[a-z0-9_-]`, 16 characters or more. **Transfer OTP must be disabled** on the account.
+  - Flutterwave sends straight to an account (`POST /transfers`, in major units). It refuses a duplicate reference. **Server IPs must be whitelisted**, which is a problem for Vercel's changing IPs.
+- **Looking a transfer up by our reference.**
+  - Paystack: `GET /transfer/verify/{ref}`.
+  - Flutterwave: `GET /transfers?reference=`.
+- **Fees.** Flutterwave quotes through `GET /transfers/fee`. Paystack has no fee API, so its NGN table (₦10 / ₦25 / ₦50) is in code.
+
+**User decisions:**
+
+- A failed transfer keeps its funds reserved. Finance retries or rejects it.
+- **The fee is deducted from the agent.**
+- The unused one-time beneficiary path is removed.
+- Stub mode runs the same approve → disburse flow.
+
+**What exists now:**
+
+- **Gateway contract.** `ITransferGateway` (`list_banks`, `resolve_account`, `quote_fee`, `send_transfer`, `get_transfer`) on both adapters, plus a `StubTransferGateway`. The stub has two documented unhappy account numbers: `0000000000` is unknown and `0000009999` declines. `GatewayDeclined` (a refusal) is told apart from an unreachable gateway or a 5xx, because only a refusal proves no money moved.
+- **Bank accounts.** A saved account holds the bank-resolved name, `bank_code`, and the resolving `provider`. Bank codes only mean something to the gateway whose list they came from. New endpoints:
+  - `GET /agents/payouts/banks`;
+  - `POST /agents/payouts/bank-accounts/resolve`, rate-limited because it reveals a name;
+  - `POST /agents/payouts/quote`.
+- **Payout lifecycle.** `REQUESTED → APPROVED → PROCESSING → PAID`, with `FAILED` for finance to retry or reject. The actions each status allows are one table, `ACTION_FROM_STATUSES`, and DTOs carry `allowedActions`.
+- **Disbursement.** `PayoutDisbursementService.run` is called by the daily `payout_disbursement` sweep (10:00 Lagos) and by `POST /admin/payouts/disburse`, and is bounded per call. Each payout is claimed in its own `INDEPENDENT` transaction under a per-attempt reference **before** the gateway is called.
+- **Webhooks.** Transfer webhooks only call `settle_from_gateway`.
+- **Migration `0004_payout_transfers`.** It is additive and chained after `0003`.
+- **Notifications.** New events `PAYOUT_PAID` and `PAYOUT_REJECTED`, each with an email template.
+- **Screens.**
+  - Agent: a bank select, then "Check account" (the bank's name, read-only), then Save; the withdrawal shows Review (fee, "You'll receive"), then Confirm.
+  - Finance: a "Disburse N approved (₦total)" button, and a decision panel driven by `allowedActions` that shows the transfer's trail and the gateway's reason for a failure.
+
+**Stage review fixes** (`/code-review high`, 10 findings; 9 fixed, 1 answered):
+
+- **Batch resilience.** A claimed payout that can't become a transfer (adjusted below its fee, or with no bank code) is failed with a reason. Any fault in one payout is logged and never stops the batch.
+- **Adjustments.** An adjustment carried by approve or hold gets the same "must stay above the fee" check as `adjust()`.
+- **No double payment.**
+  - A retry first asks the gateway about the failed attempt. One that actually went through is settled `PAID`. One still pending, or that can't be checked, is refused.
+  - A late success for the current attempt moves `FAILED` to `PAID`.
+- **In-flight transfers.** The button stays enabled while transfers are in flight ("Check N transfers with the bank"). On serverless it is the only thing that reconciles.
+- **Legacy payouts.** A payout from before 0004 has no bank code. It can't be approved or retried; finance rejects it.
+- **Dev scenario.** It writes its beneficiaries as fixture rows, and never asks a possibly live gateway to resolve a made-up number.
+- **Audit.** The finance user who presses Disburse is the actor on each `PAYOUT_TRANSFER_SENT`.
+- **Decline reasons.** The gateway's own reason for a decline reaches finance's view of the payout, never the exception text.
+- **Copy.** No "daily run" promise to agents, since every environment is serverless today.
+- **Answered, not changed.** The review doubted that Flutterwave filters transfers by `reference`. Its "Get all transfers" reference documents the `reference` query parameter.
+
+**Gate** (after the review fixes):
+
+| Gate | Result |
+| --- | --- |
+| pytest | 2918 passed (+127) |
+| ruff, mypy | clean (606 files) |
+| eslint, tsc | clean |
+| vitest | 817 passed (+15) |
+| build | green; rewrites target `localhost:8000` |
+| migration | `0004` upgrades, `downgrade -1` and `upgrade head` round-trip on `veriprops_e2e`; single head. A schema diff of `payouts` and `agent_bank_accounts` against the models shows nothing from 0004 (only 0001's index-name drift, see below) |
+| drive-through | 580/580 (+13: bank list, lookup and refusal, fee, paid, declined → retried → rejected, notifications, balances) |
+| Playwright (chromium-desktop + webkit-mobile) | 113/114. The failure is **UAT-AGENT-03 on webkit-mobile**, waiting for `signup-residence-form` after signup step 2. It is the recurring signup flake, and this time it failed its retry too. It passes 3/3 in isolation. S4 touches no signup code |
+| manual (playwright-cli, 390px) | agent Withdrawals: review shows ₦1,000 − ₦10 fee = ₦990; "Check account" shows the bank-held name; no console errors |
+
+**For S7 (found here, not S4's):** `alembic check` reports index-name drift across the 0001 schema (`ix_<table>_agent` vs the models' `ix_<table>_agent_id`, missing `ix_<table>_deleted`, unique constraints vs unique indexes). It is pre-existing and harmless to queries, but a column-level parity check can't pass until it is reconciled.
+
+**For S9:** the signup-residence flake has now appeared in 4 of 5 gate runs, and failed both attempts here under the parallel lane load.
+
+## S5 — part 1: schema parity (user request, pulled forward from S7)
+
+**Before:** `alembic check` against a database migrated to head reported 142 differences between the models and the schema. All of them came from the squashed `0001`:
+
+- 58 unique indexes on `id` that duplicate the primary key's own index;
+- 54 `deleted` indexes that the models declared and 4 the database had;
+- 10 columns with a unique constraint *and* a plain index;
+- 7 indexes under other names;
+- 34 declared lookup indexes that were never built, including `notifications.user_id` and `commissions.agent_id`;
+- 5 database-only indexes;
+- 1 type mismatch.
+
+**Now:** migration `0005_schema_parity` and matching model edits leave zero differences.
+
+- **Dropped as waste.** The redundant `id` indexes, the `deleted` indexes, and `callbacks.handled`. `BaseEntity` no longer declares an index on `id` or `deleted`.
+- **Uniqueness.** Each constraint-plus-index pair becomes one unique index. `ON CONFLICT (column)` targets it the same way.
+- **Renamed** to `ix_<table>_<column>`.
+- **Missing lookup indexes created.**
+- **Database-only indexes declared** in their models where queries use them: `devices.user_id`, `callbacks.external_id`, `broadcasts.created_by`, and WhatsApp inbound `(kind, received_at)`.
+- **`oauth_identities.raw_profile`** is TEXT in the model, as in the database.
+
+**Guard:** the backend CI `migrations` job now runs `alembic check` after its up/down/up round trip. `test_migration_0005_schema_parity.py` pins the model-side rules.
+
+**Verified:**
+
+- `veriprops_e2e`: 0004 → 0005 → check clean. `downgrade -1` restores exactly the 58 `id` and 4 `deleted` indexes. `upgrade` is clean again.
+- A fresh database runs base → head → base → head, and `alembic check` exits 0, as CI will.
+- pytest 2921. Drive-through 580/580 on the new schema, which covers the `ON CONFLICT` paths.
+
+## S5 — part 2: live identity checks, address search, and the production boot guard
+
+**Before S5:** staging and production ran the KYC and geocoding stubs. In production the KYC stub approved any BVN, so anyone could become a verified agent, and address search offered three fixture addresses. The Dojah and Places adapters raised on every call. No selfie was ever captured.
+
+**User decisions:**
+
+- Passport, driver's licence and voter's card stay, and go to manual review. The review shows the selfie and the document photo **side by side with a draggable centre divider**.
+- Staging switches to live Dojah (sandbox host) and Google Places, mirroring production.
+
+**Consequence the user accepted with the review view:** the photos are now **kept**, where the platform previously stored no biometrics:
+
+- storage is private and encrypted;
+- reviewers see the photos only through 5-minute links;
+- erasure deletes them;
+- the wizard's saved draft never holds one.
+
+The PRD states this.
+
+**What exists now:**
+
+- **Dojah.** Liveness first, then a BVN/NIN selfie match plus a name check. Other IDs go to review after liveness. A Dojah that is down, unpaid or unconfigured is an outage (a safe 5xx), never an applicant who failed. The reference is random, never derived from the identity number.
+- **Selfies stay out of logs.** Selfies travel as `SecretStr`, because the trace loggers print method arguments.
+- **Wizard.**
+  - A selfie is required on every path, taken with the camera (front on phones, webcam on desktop) or uploaded. It is resized, re-encoded as JPEG and EXIF-stripped in the browser.
+  - The document photo is required for the IDs the backend names in public config (`kycDocumentIdTypes`).
+  - A resumed draft reopens at the identity step to retake the photos.
+- **Photo storage.** Photos are stored *before* the paid Dojah call, so a storage failure costs nothing. Erasure deletes the user's whole `kyc/{user}/` folder (new `delete_prefix`), which reaches photos from a submission that rolled back.
+- **Places.** Autocomplete and place details, each with a field mask. One session token per search, closed by the details call on selection, which fills the coordinates.
+- **Production boot guard.** Payments, storage (with AWS keys), Dojah on its production host, and Places, each with its keys, or no boot. Every missing piece is named in one error. Staging is free.
+- **Enums.** `KycProvider` and `GeoProvider` moved to `appodus_utils/config/providers.py`, so the settings are enum-typed. That retires the documented "stay `str`" exception.
+- **Migration `0006_kyc_images`** (additive). Two §G rows closed: live Dojah KYC, and live document storage, whose `TODO(gap)` was stale since S1.
+
+**Stage review fixes** (`/code-review high`, 10 findings, all fixed):
+
+- **Orphaned photos.** Fixed by upload-first plus erasure by prefix.
+- **Boot guard.** It checks the AWS keys.
+- **Places 400s.** A place-details 400 is a logged configuration fault, not "no such place".
+- **Places session.** The session token was never closed with a details call, and a pick fired one more billed autocomplete. Both fixed.
+- **Dojah 400s.** A 400 that is not "not found" is an outage.
+- **NIN names.** The name fields are read under both namings.
+- **Wizard rules.** The wizard waits for the backend's ID-type rules before judging the step complete.
+- **Reversible reference.** The unsalted hash of an 11-digit number (brute-forceable) became a random reference.
+- **Image checks** reuse `FileUtils.sniff_mime`, JPEG only.
+- **Enum literals** are gone (the provider enums moved).
+
+**Gate** (after the review fixes):
+
+| Gate | Result |
+| --- | --- |
+| pytest | 3012 passed (+91 over the schema-parity commit's 2921) |
+| ruff, mypy | clean (607 files) |
+| eslint, tsc | clean |
+| vitest | 838 passed (+21) |
+| build | green; rewrites target `localhost:8000` |
+| migration | `0006` upgrades, `downgrade -1` and `upgrade head` round-trip on `veriprops_e2e`; `alembic check` reports nothing |
+| drive-through | 580/580, plus a new check that the reviewer's detail carries the selfie link (68/68 on the prefix through agent onboarding) |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114. UAT-AGENT-05 on webkit-mobile needed its retry, waiting for `signup-consent-form`: the signup-wait flake family already logged for S9, not the new selfie step, which every onboarding spec uploaded through on both engines |
+
+**Not verified in a browser:** the reviewer's side-by-side view with real images. The stub storage serves placeholder URLs locally, so the component tests pin its structure, and the drive-through pins the links. It needs the S6 staging run with real storage.
+
+**Not done, and noted:** the property step fills only the coordinates from Google. Its `state` is the customer's own pick from the canonical list, and Google's naming ("Lagos", "Federal Capital Territory") may not match its slugs.
+
+## S6 — the live smoke, the `@live` spec, and the release-gate runbook
+
+**Before S6:** nothing ever called a real sandbox. The contract tests pin each adapter to the provider's documented shapes. Whether the adapters work against the real APIs was unknown.
+
+**What exists now:**
+
+- **`backend/scripts/live_smoke.py`**
+  - One probe per integration, calling the app's own adapters with Doppler `stg`'s keys:
+    - both gateways' checkout and charge read-back;
+    - banks, resolve and fee, plus an optional ₦100 transfer with the duplicate-reference check;
+    - S3 put, read, fresh link and delete-by-prefix;
+    - Resend, Mailjet and SES;
+    - Termii and Twilio;
+    - Meta: number health, templates and `hello_world`;
+    - five intents;
+    - Dojah liveness and BVN match, plus an unknown BVN;
+    - Places suggest and resolve in one session.
+  - It refuses production, live gateway keys and Dojah's production host before any probe runs.
+  - It exits 0 only when every selected probe passed. A SKIP (missing key or recipient) exits 3, "incomplete", so the gate can't go green on probes that didn't run.
+- **`@live` Playwright spec** (`e2e/specs/live-integrations.spec.ts`, `pnpm e2e:live`, against `UAT_BASE_URL`).
+  - The tests:
+    - **UAT-LIVE-01:** pay on the hosted checkout with the gateway's sandbox card, get to PAID through the webhook, then fail the case and see the refund accepted.
+    - **UAT-LIVE-02:** the report PDF from the deployment.
+    - **UAT-LIVE-03:** a passport application through Dojah liveness, and the reviewer sees both photos loaded from S3, with the divider working.
+  - Both CI lanes exclude it. It runs on one worker with no retries and no reset or seed, because staging is shared.
+  - A missing credential fails the test, and an empty lane fails the run.
+  - The card-filling steps find fields the way a person reads them, and are **unverified until the first staging run**. The user chose fully automated filling over a tester paying by hand.
+- **Runbook** [live-integration-smoke.md](live-integration-smoke.md): one-time setup (Doppler `stg`, keys, dashboards, test assets), both parts, what to confirm on the first run, and updating this register.
+
+**Found and fixed along the way:**
+
+- **Every committed backend env file loaded some blank values as their comment text.** python-dotenv reads `KEY=    # note` as the value "# note". In production and staging that made `BRAND_SUPPORT_PHONE` the literal text "# E.164 digits, no + (blank = none)", printed into every message that shows it. In `.env.test` it made the gateway keys look configured. The fix moves the comment onto its own line. A hygiene test now loads every backend env file with python-dotenv itself, the parser the app uses.
+- **QA fixtures got real addresses on staging.**
+  - `/dev/seed` and `/dev/scenario` gave fixtures real-looking Nigerian numbers (`81…`/`803…`) and `@veriprops.io` emails. On staging, where messaging is live, a scenario's notifications would have reached whoever owns them. The `@live` spec would have done this on every run.
+  - Fixture contact details now come from `messaging/qa_recipients.py`: `@veriprops.io` and `+234 8100…`.
+  - On staging, the first exclusive SMS and email rule hands a message for them to the new `QaSinkProvider`, which records it and sends nothing. Local runs keep Mailpit and the SMS mock.
+- **The admin was told "Verification failed & refunded" even when the gateway refused the refund.**
+  - The fail response now carries the `RefundOutcome`, and `failSummary` says what happened: refunded, refused and waiting in Finance, or held because a chargeback is already returning the money.
+  - UAT-LIVE-01 asserts the exact "refunded" sentence.
+
+**Stage review fixes** (`/code-review high`, 10 findings; 9 fixed, 1 answered):
+
+- **Texting strangers.** Fixed by the QA sink above.
+- **An all-SKIP run or a skipped live test exited 0.** Both now fail or read as incomplete.
+- **The S3 probe could leave its object behind on a failed check.** It now deletes in `finally`.
+- **The transfer probes took `transfers()`, which hands out the stub under `PAYMENT_STUB_MODE`.** They now resolve the named gateway, and a test pins it.
+- **The card fields appended text on a retry.** They are cleared first, and the helper waits for the card channel to render.
+- **Bare `assert`s vanish under `python -O`.** They are now `check()`.
+- **Enum and route literals.** The `Gateway` enum became `PaymentMethod`, the `/confirmed` regex became `ROUTES.PORTAL.VERIFICATION_CONFIRMED`, and the production env-file name comes from `Environment.PRODUCTION`.
+- **Answered:** "the refunds-to-retry list never shows the VID". It does: every `tx_ref` begins with the VID. Its paging (oldest first) was a real weakness, though. The admin's toast now tells the truth about the refund, so the spec uses the toast instead.
+
+**Logged for S7:**
+
+- **An admin cancel of a paid case starts no refund.** `admin/service.py cancel` writes CANCELLED and audits `refund_pending: True`. Its comment says "refund executes in S12", but no refund was ever wired. Only "Fail & refund" refunds. A user decision is needed: should cancel after payment refund, or be refused in favour of fail?
+- **`ROUTES.ADMIN.FINANCE_PAYMENTS` has no page behind it.** Nothing shows a single payment's status.
+
+**Gate:**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 3055 passed (+43) |
+| ruff, mypy | clean (609 files) |
+| eslint, tsc | clean |
+| vitest | 842 passed (+4) |
+| build | green; rewrites target `localhost:8000` |
+| migrations | none in S6; `veriprops_e2e` stays at `0006` |
+| drive-through | 581/581 (the seed's new phone range included) |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114, every test passing first time (no retries). Locally, UAT-LIVE-02 passes against the stack through the live lane, proving the staging-safe helpers (sign-in without automation hooks, hydration waits, `/dev/scenario`), and UAT-LIVE-03 without credentials fails, naming `UAT_LIVE_ADMIN_EMAIL` |
+| `live_smoke.py`, no keys | 14 probes, all SKIP with the missing key named, exit 3 (incomplete) |
+| `@live` lane isolation | 0 `@live` tests in the parallel and serial lanes; the live lane lists exactly UAT-LIVE-01..03 and refuses to start without `UAT_BASE_URL` |
+
+**Not run:** the live smoke and the `@live` spec against staging. There is no Doppler `stg` config and no sandbox key yet, so nothing in the register moves to `SANDBOX-PASSED` in this stage.
+
+## S7 — convention debt, and closing a paid case through Finance
+
+**Planned convention work, done:**
+
+- **Enum literals.**
+  - Chat participant roles now use `SenderKind`.
+  - Conflict severity has a new `ConflictSeverity` enum, mirrored on the frontend.
+  - Other new enums: `AdminTeamState` for the admin-team audit, and `AuditPackRowKind` / `ConsentDecision` for the audit pack.
+  - The currency defaults and the re-check decision now use their enums.
+  - On the frontend: the invitation status, `WhatsAppQualityRating`, and the pricing currencies are derived from `TransactionCurrency`.
+  - Tests pin every wire value that stays the same.
+- **`FinanceService`.** The summary moved out of the controller, pinned by a test.
+- **Deprecated APIs.** `asyncio.get_event_loop` became `get_running_loop`. The shared HTTP client's exit-time close now works both inside the app loop and at exit. Pydantic `min_items`/`max_items` became `min_length`/`max_length`.
+- **Silent excepts.** A failed real-time push now logs once (`log_fault_once`). The settings serialisation fallbacks stay silent: they fall back to the next strategy rather than swallow a fault, and they run before logging exists.
+- **Dead code.**
+  - `webhook_replay_handler` was declared on the interface, implemented five times as a no-op, and never called; it is removed. The dead Google Drive package keeps its copy, per D83.
+  - Dead routes are removed: `PROJECTS`, `SETTINGS`, `ADMIN.CONFIG`, `ADMIN.PAYOUTS` and `FINANCE_COMMISSIONS`.
+  - `routes.pages.test.ts` now fails if any declared route lacks a page, apart from the `TODO(gap)` allowlist.
+- **§G and doc hygiene.**
+  - The duplicate python-jose gap marker in `test-requirements.txt` is now a pointer.
+  - The Google Drive client's plain TODO is now a `TODO(gap)` on the dead-package row.
+  - The "SMS fallback" gap references are stale (D60 delivered it) and are corrected.
+  - `uat-strategy.md` §10 and §12 now show today's counts and the CI wiring.
+  - `runtime-state.yaml` and the README's open-work section are updated.
+
+**User decisions (2026-09-29/30), found while doing S7:** an admin could cancel a paid case and no refund was ever started. The user chose **option 2**, a proper close flow, with every customer money outflow approved by Finance:
+
+- **Finance payments page** (`/admin/finance/payments`): every charge, searchable by reference or VID, with wildcards escaped, and filterable by status. It shows the refunded amount, any refund still owed, and chargebacks.
+- **Refund approvals** (`payment/refund_request/`, migration `0007_refund_requests`):
+  - Closing a paid case, an upheld dispute and a charge that lands on a closed case each file a request; nothing sends money directly.
+  - Finance approves or rejects at `/admin/finance/refunds`. A rejection needs a reason, and approving asks for an explicit confirmation stating the amount.
+  - Refunds can be partial: the amount is spread across the case's charges, oldest first, in each charge's own currency.
+  - A charge whose gateway refuses a refund records what it still owes (`refund_due_minor`). Finance's retry list is built from that record, and a retry sends exactly that amount. The migration backfills what the old list showed.
+  - A late charge refunds itself only (`payment_id`) and is filed on its own, so it never collides with another request. Revenue now counts what a partial refund kept.
+- **Closing a paid case** (`verification/closure/`):
+  - The PRD refund table is a pure policy:
+    - a withdrawal before work starts is refunded less the surcharge; after work starts, nothing;
+    - a duplicate, or "we cannot deliver" (which ends `FAILED`), is refunded in full;
+    - fraud gets nothing;
+    - an inaccessible property gets an amount the admin enters on evidence.
+  - The admin confirms a backend quote showing the refund, how the case ends and each agent's outcome.
+  - If money is owed, the case goes on hold: agents cannot act, admins cannot assign or decide in review, the sweeps skip it, and everyone is told. Agents see the hold on the task.
+  - If Finance approves: submitted work is paid, other tasks become the new terminal `CANCELLED` state (which frees agents' task limits), and the refund is sent last.
+  - If Finance rejects: the hold lifts. For an upheld dispute, the dispute reopens for ops.
+  - Cancel is now for unpaid cases only. "Fail & refund" is folded into Close (report review opens it on "cannot deliver"). Screens ask the backend which way out applies.
+
+**Stage review** (`/code-review high`, 10 findings, all fixed):
+
+- a held case could still be released, leaving its refund request stuck forever;
+- an upheld dispute marked the case REFUNDED and reversed commissions before Finance approved;
+- a late charge refunded the case's oldest charge instead of itself;
+- a charge already owing a refused refund could be refunded again, wiping the debt;
+- a late charge could collide with another pending request and fail its webhook;
+- audit rows recorded post-claim states;
+- partial refunds dropped kept money from revenue;
+- close amounts were labelled ₦ instead of the case's currency;
+- the payments page guessed "refused refund" instead of reading `refundDueMinor`;
+- the agent task list and the admin detail made extra per-row queries.
+
+**Logged, not done:**
+
+- The erasure queue still uses `window.confirm`/`prompt` instead of `ConfirmDialog`.
+- The admin list searches (users, team, verifications) do not escape `%`/`_`.
+- The lawyer's `risk_level` is free text, so the HIGH-risk conflict fires only on exactly "high".
+- `AdminVerificationDetail` keeps a local `formatMinor` that differs slightly from the shared one.
+
+**Gate:**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 3155 passed (+100) |
+| ruff, mypy | clean (622 files) |
+| eslint, tsc | clean |
+| vitest | 874 passed (+32) |
+| build | green; rewrites target `localhost:8000` |
+| migration `0007` | upgrade, `downgrade -1` and upgrade round-trip twice on `veriprops_e2e`; `alembic check` reports nothing |
+| drive-through | 592/592. New checks: paid cancel refused, quote, hold, reject resumes, approve refunds, payments list, late charge, "cannot deliver" closes FAILED with tasks cancelled |
+| Playwright (chromium-desktop + webkit-mobile) | 105/106; the one failure is UAT-AGENT-05 on webkit-mobile (both attempts), the known webkit signup-funnel flake where Continue doesn't advance past the phone step, which S9 investigates. Not in S7's area. Also verified: commit b575ae1 passes on its own (pytest 3057, mypy 609 files, vitest 842, tsc, eslint) |
+
+## S8 — backend tests, a route-permission guard, and the drive-through's missing endpoints
+
+**Planned work, done:**
+
+- **Unit tests for the eleven untested modules.** ReportService (release, supersede, version labels), acknowledgement, OAuth identity, the social-provider factory and Facebook (respx), signup draft, the user and message validators, the notification dispatcher and the states canon. Dead code found while writing them was deleted instead of tested: the device service, validator and repo (the `Device` table stays, marked as part of the Push-delivery gap), three message-validator methods that would have crashed with a TypeError, `UserValidator.get_by_email_or_raise`, `ReportService._set_released_at`, and a 903-line unused frontend copy of the states list.
+- **`test_router_permissions.py`.** Table-driven off the live route table (609 cases):
+  - every route not listed in `PUBLIC` refuses an anonymous caller;
+  - a route that validates its body first must authenticate before any other await;
+  - every admin route refuses a customer;
+  - every permission-guarded route refuses each sub-role without that permission.
+
+  A mutation check (session check removed from one handler) fails it.
+- **Drive-through: 592 → 685 checks.** A new `account` stage covers:
+  - signup draft, profile completion, the customer persona;
+  - password change, OAuth links, the security log, the cross-portal summary;
+  - legal documents and consent history, notification preferences, read receipts;
+  - address lookup and the portal summary.
+
+  Existing stages gain the admin user directory, the admin list's filters, notes, trust weights, line items, dispute detail and the agent's defence, the recheck queue, payout cancel/hold/adjust, earnings jobs, the agent profile, the case team thread and the chat stream, a reopen after release, reconcile, refund retries, erasure detail, delegate revoke, and the handoff reconcile/release. The email and messaging-retry stages now **fail in CI** instead of warn-skipping (`skip_unless_ci`).
+
+**Defects the new checks found, fixed:**
+
+- **Password change needed no current password** and left every other session signed in (user decision: require it and sign out the others). A wrong one is refused and logged as `PASSWORD_CHANGE_REFUSED` on its own commit. Both password pages now share one `SetPasswordForm`.
+- **Notification preferences were decided by the frontend** (user decision: the backend owns the catalogue). Seven hardcoded events meant other email/SMS events couldn't be opted out; every row showed an SMS toggle; any string was stored; and **the report email, documented as unconditional, could be switched off**, as could the suspension email. Now:
+  - `required_email` on the rule is honoured by the router;
+  - `catalogue.py` derives the offer from the rule table, per audience;
+  - PUT accepts only those events;
+  - the page renders each channel as a toggle, a lock or a dash.
+- **"link my account" on WhatsApp looped.** Every refusal told an unlinked number to say it, and saying it repeated the refusal: the WhatsApp→web link was never sent. The surface now mints the signed `/wa/link/<token>` link, or says the number is already linked.
+- **Adding an admin note returned 500** (a UUID in the audit details). Every engine now writes JSON through `json_serialize` (UUID, datetime, enum and Decimal in wire form; anything else still refused).
+- **The note response didn't show the note.** Autoflush is off, so the list now flushes first.
+- **The admin verification list took free-text `status`/`tier`.** A typo silently matched nothing; they are now enums and refused with 422.
+- **An order-dependent test** (pre-existing on HEAD): kink answers from `_memoized_services` before `_services`, so a `di._services` override was ignored once any earlier test resolved the real service. There is now one `override_service` helper for all eight sites.
+- The permission test's own `PUBLIC` list wrongly contained the two `from-token` link routes. They need a session, and the static check now covers them.
+
+**Logged, not done:**
+
+- Pricing line items are not checked against the tier price, so a quote's breakdown can fail to add up to its total.
+- The consent-history endpoint returns its own page shape instead of `Page[T]`.
+- Other create-then-list-in-one-request paths may miss rows the same way the notes did (autoflush off).
+- Agent-side ownership (IDOR) is enforced in services against the database, so it is left to S9's `rbac` spec rather than the unit guard.
+
+**Stage review** (`/code-review high`): no finding in the S8 changes. All ten findings are in the fixed-commission commit `030afb6` (the parallel session's work this branch is rebased onto). They are for the user to schedule:
+
+1. The margin guard takes no advisory lock, so a concurrent price cut and commission raise can each pass and together breach the minimum margin.
+2. The commission shown before an agent accepts is re-read at release rather than locked to the task.
+3. The margin is measured against list price, while discounts (`max_discount_percent`, unguarded) can leave a case paying out more than it keeps.
+4. `0002`'s downgrade deletes admin-set commissions without a `refuse_if_rows` guard.
+5. The remote-bonus config key is entered in kobo beside a naira key.
+6. The breach message rounds and floors oddly.
+7. `0002` doesn't insert the two new config rows, which the fresh build has.
+8. The guard duplicates the service's commission and config reads.
+9. `list_all` bypasses `effective_config_value`.
+10. Accrual queries the rule once per task.
+
+**Gate:**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 3843 passed (+688) |
+| ruff, mypy | clean (621 files) |
+| eslint, tsc | clean |
+| vitest | 883 passed (+9) |
+| build | green |
+| drive-through | 685/685 |
+| Playwright (chromium-desktop + webkit-mobile) | 114/114 (8 serial + 106 parallel); UAT-AGENT-03 flaked once on webkit-mobile (the known signup flake, S9) and passed on retry. The changed UAT-AUTH-14 passes on both. |
+
+## S9 — Playwright P0/P1 specs, and the WebKit signup flake's root cause
+
+**The flake, found rather than retried.**
+- **Primary cause:** on a phone-sized viewport, a full-width success toast ("Email verified successfully!") sat over the signup step's Continue button. Playwright retried while the toast blocked the hit test, clicked as it animated, and the tap landed on the toast; a user tapping Continue hits it the same way.
+  - Fix: toasts appear top-centre on phones (`AppToaster`).
+- **Second cause:** after an agent application is submitted, the app refreshes the session (briefly showing the new status) and then reloads the page. The spec asserted in between.
+  - Fix: `withFullReload` in the e2e helpers.
+- **Proof:**
+  - Under 6 workers, 3 of 30 runs had failed before the fix; afterwards 30 of 30 passed.
+  - At CI's 2 workers, 40 of 40 passed.
+  - The remaining stalls appeared only at 6 workers on this machine, where WebKit stops producing animation frames.
+
+**New specs.**
+
+| Tier | Spec | Covers |
+| --- | --- | --- |
+| P0 | `public-lookup` | public VID lookup on and off; summary link and revoke; named recipient behind the disclaimer; no oracle for unknown VIDs and links; no PII on public pages |
+| P0 | `aftermarket` | a dispute naming the survey reaches the surveyor, whose defence the admin reads before deciding; re-check scoped and approved; upgrade paid and the tier raised |
+| P0 | `payouts` | withdrawal approved and paid out; held then rejected; cancelled by the agent; new account saved under the bank's name |
+| P0 | `compliance` | erasure refused with a reason; erasure approved and executed after confirmation, then sign-in refused; consent history and download; audit trail |
+| P0 | `rbac` | Finance and Operations each turned away from the other's area; a customer cannot open another customer's case; an invitation accepted only by its own account |
+| P1 | `case-life` | tracking and activity; report only after release; report PDF; notifications read and cleared; held message approved; admin case search and note |
+
+- The 19 P0 scenarios pass on all six engines.
+- The 5 P1 scenarios pass on both CI engines.
+
+**Defects the specs found, fixed:**
+- **Public lookup could only be enabled:** the modal offered no off control and never showed the current state, and the customer DTO didn't carry the flag.
+- **No customer dispute could reach an agent:** the dialog never sent the disputed part.
+  - User decision: the customer optionally names it from roles the backend lists.
+  - The backend also supplies the allowed upgrade tiers and the minimum dispute length, replacing frontend constants.
+  - The backend now refuses a role the case doesn't have.
+- **An accepted admin invitation still carried customer claims,** so the new admin was bounced to the portal. Accept now rotates the session (best-effort), and the page refreshes and reloads.
+- **Admin and agent queues didn't name their cases:** rechecks and disputes now carry the VID, and the recheck queue uses the shared money formatter.
+- **Dialogs taller than a phone screen didn't scroll,** so the share modal's Revoke was unreachable.
+- **Erasure used `window.confirm`/`prompt`, and a rejection could have no reason:**
+  - the screens now use `ConfirmDialog`;
+  - the backend requires a trimmed reason;
+  - `ConfirmDialog` stays open until its action succeeds, so a refused request keeps what was typed.
+- **A held payout told the agent nothing.** The agent now sees "under review"; Finance's note stays internal.
+- **Accessibility:**
+  - contrast failures across the app (emerald/amber-600 text, the warning `StatusPill`, grey copy, the WhatsApp continue button);
+  - unread notifications had no text alternative;
+  - the held queue printed raw enum names.
+- **Local email sends stalled on `localhost`** (IPv6 first on Windows); `.env.test` and the settings default now use `127.0.0.1`.
+
+**Stage review** (`/code-review high`, 10 findings, all fixed):
+- `ConfirmDialog` closed before its action settled;
+- the invite rotation could turn a committed accept into an error;
+- the erasure reason length was duplicated on the frontend;
+- a whitespace reason passed;
+- dispute roles were unvalidated;
+- a failed session refresh reported a successful accept as failed;
+- the PDF path built owner actions it never used;
+- a detail invalidation refetched every query for the case;
+- `AppToaster` carried a dead offset;
+- the share toggle's `aria-pressed` contradicted its label.
+
+**Logged, not done:**
+- **Signup drafts persist the password in plain text,** in localStorage and in `signup_drafts.payload` (needs a decision).
+- **Admin invitations are not emailed** (now a §G row and `TODO(gap)`).
+- **A send-now broadcast emails every recipient inside the request.** About 1s per local SMTP send; at production scale it would time out. Needs a queued fan-out.
+- **Pricing line items** aren't checked against the tier price.
+- **Consent history** returns its own page shape rather than `Page[T]`.
+
+**Gate:**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 3853 passed |
+| ruff, mypy | clean (621 files) |
+| eslint, tsc | clean |
+| vitest | 890 passed |
+| build | green (e2e env) |
+| drive-through | 685/685 |
+| Playwright (chromium-desktop + webkit-mobile, full suite) | 162/162 (154 parallel + 8 serial), no retries needed; P0 specs also 76/76 across the other four engines |
+
+## Third-party sandbox test register
+
+This register lists every third-party integration still stubbed, or not yet proven live. It is created in S0 and updated at the close of every stage, so the sandbox runs can be done together once keys land in Doppler `stg`.
+
+- **Mode** is how staging and prod run today; test and dev run every integration on stubs.
+- **Status** is one of `STUBBED`, `CONTRACT-TESTED`, `SANDBOX-PASSED` or `BLOCKED(<reason>)`.
+- Each row is exercised live by a `live_smoke.py` probe or a `@live` test (built in S6; runbook [live-integration-smoke.md](live-integration-smoke.md)):
+  - rows 1–2 (collection opens and reads back): probes `flutterwave`, `paystack`; the payment, webhook and refund: `@live` UAT-LIVE-01;
+  - rows 4–6: `flutterwave_transfers`, `paystack_transfers` (`--send-transfer` sends ₦100);
+  - rows 7–8: `dojah` (with `--selfie`), and the reviewer's view: UAT-LIVE-03;
+  - row 9: `places`;
+  - row 10: `s3`, and the KYC photos through their links: UAT-LIVE-03;
+  - rows 11–12: `sms_termii`, `sms_twilio`;
+  - row 13: `email_resend`, `email_mailjet`, `email_ses`;
+  - row 14: `whatsapp`;
+  - row 15: `intent`;
+  - the report PDF on the deployed runtime: UAT-LIVE-02.
+- Run it with `doppler run --config stg -- python scripts/live_smoke.py --only <probe>`. A row becomes `SANDBOX-PASSED` only from a run where its probe printed PASS.
+
+| # | Integration | Mode stg / prd (today) | Automated coverage | Sandbox test still to run | Needs (who) | Stage | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Flutterwave collection | wired in S3 (hosted checkout, verify-by-reference, verbatim `verif-hash`, refund by id) | `test_gateway_contracts.py`, `test_payment_webhooks.py`, `test_payment_gateway_flow.py` | init → hosted checkout with a test card → `verif-hash` webhook → verify → PAID; failed card → FAILED; refund → REFUNDED | FLW test public/secret keys + secret hash; webhook URL registered to staging (user). Also confirm a second refund of a refunded charge is declined | S3 | CONTRACT-TESTED |
+| 2 | Paystack collection | wired in S3 (signature keyed by the **secret key** — confirm in sandbox) | `test_gateway_contracts.py`, `test_payment_webhooks.py` | same flow with a Paystack test card; `x-paystack-signature`; refund | Paystack test secret key; webhook URL (user). Also confirm a second refund of a refunded charge is declined | S3 | CONTRACT-TESTED |
+| 3 | Chargebacks (both gateways) | wired in S3: Paystack `charge.dispute.create` by reference; Flutterwave `chargeback.initiated` by `flw_ref` | `test_payment_webhooks.py`, `test_payment_gateway_flow.py` | sandbox dispute event → Chargeback row | dashboard dispute simulation, if offered; Flutterwave chargeback webhooks enabled by FLW support (user) | S3 | CONTRACT-TESTED |
+| 4 | Bank list + account resolve | wired in S4: Paystack `GET /bank?currency=NGN` (cursor-paged, transfer-capable only) + `GET /bank/resolve`; Flutterwave `GET /banks/NG` + `POST /accounts/resolve`. The saved name is the bank's | `test_transfer_contracts.py`, `test_bank_account_service.py`; drive-through (stub) | list banks; resolve a documented test account (Flutterwave `0690000032`/044); an unknown number → refused | gateway test keys (user) | S4 | CONTRACT-TESTED |
+| 5 | Batch payout disbursement | wired in S4: approve → APPROVED; button/daily sweep claims → `send_transfer` under a per-attempt reference → webhook or lookup → PAID; a decline → FAILED (funds reserved) → finance retry/reject | `test_payout_disbursement.py`, `test_transfer_contracts.py`, `test_payment_webhooks.py`; drive-through (stub: paid, declined, retried, rejected) | button → transfer → `transfer.completed`/`transfer.success` → PAID; a failing test account → FAILED; retry; a `transfer.reversed` → FAILED. Confirm a duplicate reference is refused | test keys with transfers enabled; **Paystack transfer OTP disabled**; **Flutterwave server-IP whitelist** (a problem on Vercel's changing IPs); webhook URLs (user) | S4 | CONTRACT-TESTED |
+| 6 | Transfer fee (both) / retry | wired in S4: Flutterwave `GET /transfers/fee`; Paystack from its published NGN table (₦10 / ₦25 / ₦50), which has no API. Retry is a new attempt under a new reference, after the gateway confirms the last one failed | `test_transfer_contracts.py`, `test_payout_service.py` | quote on both gateways vs the dashboard's charged fee; a retried transfer lands once | test keys (user). Re-check Paystack's table if its pricing changes | S4 | CONTRACT-TESTED |
+| 7 | Dojah BVN/NIN selfie match | wired in S5: `/kyc/{bvn,nin}/verify` with the selfie (threshold sent at Dojah's floor, 50; ≥80 verifies, 50–79 and a name mismatch go to review); passport/licence/voter's card go to a reviewer. stg on the sandbox host, prd on `api.dojah.io` (prod refuses the sandbox) | `test_dojah_kyc.py`, `test_kyc_service.py`, `test_stub_kyc.py`; drive-through (stub) | sandbox BVN `22222222222` and NIN `70123456789` with a test selfie → VERIFIED; an unknown number → FAILED; confirm which name fields `/kyc/nin/verify` returns (both variants are read) and how an unknown number is answered (404 vs 400 "not found") | Dojah sandbox AppId + secret key (user) | S5 | CONTRACT-TESTED |
+| 8 | Dojah selfie liveness | wired in S5: `/api/v1/ml/liveness` before every identity call; no face, several faces or not live → FAILED with our sentence; photos kept privately for the reviewer (side-by-side view), deleted by erasure | `test_dojah_kyc.py`, `test_kyc_service.py`, `test_erasure_service.py`, `KycPhotoCompare.test.tsx`; Playwright onboarding uploads a real JPEG | a live selfie → pass; a photo of a photo → fail; a group photo → fail | Dojah sandbox (user) | S5 | CONTRACT-TESTED |
+| 9 | Google Places (New) | wired in S5: `places:autocomplete` (Nigeria only) + place details on selection, field masks on both, one session token per search; key in a header | `test_google_places.py`, `verification-service.test.ts` | type "Lekki" → suggestions → pick one → coordinates filled; check the billing console shows one session | Places API (New) key restricted to that API and the staging server (user) | S5 | CONTRACT-TESTED |
+| 10 | S3 evidence storage | fixed in S1 (valid `put_object`, real MIME, fresh presigned reads) | `test_s3_storage.py` (botocore Stubber: put, presign, delete, safe failure) | put (image + PDF MIME) → presign → GET 200 → delete | AWS staging bucket + IAM keys (user) | S1 | CONTRACT-TESTED |
+| 11 | SMS Termii | routing fixed in S1 | routing: `test_router_sms_routing.py`; Termii HTTP adapter: none; live probe `sms_termii` | OTP to a +234 test number → delivered. Confirm Termii accepts the number with its leading `+` (the adapter sends E.164 as given) | Termii key + sender ID, test handset (user) | S1 | STUBBED |
+| 12 | SMS Twilio fallback | routing fixed in S1 (Termii down → Twilio; never the mock) | routing: `test_router_sms_routing.py`; Twilio adapter: none | non-NG number, and Termii forced down → Twilio | Twilio SID/token/number (user) | S1 | STUBBED |
+| 13 | Email Resend → Mailjet → SES | wired | Mailpit in drive-through (SMTP only); `test_resend_provider.py`, `test_aws_ses_provider.py`; live probes `email_*` | one email per provider to a test inbox; force a Resend failure → fallback | Resend/Mailjet/SES keys, verified domain (user) | S6 | STUBBED |
+| 14 | WhatsApp Meta `send_message` + templates | wired (D88 test number on stg) | signature checks in drive-through; live probe `whatsapp` (number health, template directory, `hello_world`) | template to Meta's test number; free text inside the 24h window | Meta test number, WABA id, token (user) | S6 | STUBBED |
+| 15 | Intent (DeepSeek) | wired | `test_live_intent_adapters.py`; live probe `intent` | 5 fixed utterances → expected intents; bad key → UNKNOWN | `INTENT_API_KEY` in stg (user) | S6 | STUBBED |
+| 16 | OAuth Google / Facebook / Apple | Google OK; FB/Apple `mock_value` | none live | full login on staging per provider | real FB app id; Apple team/key/client id + p8 key (user) | I-5 | STUBBED |
+| 17 | Firebase push | credentials load at startup, no tokens stored | none | — | — | §G | BLOCKED(feature not built) |
+| 18 | FX live rates | hardcoded rates | none | — | OpenExchangeRates key when the gap is picked up | §G | BLOCKED(deferred gap) |
+| 19 | Zoho DocSign / Google Drive | not in any live flow | none | — | — | — | BLOCKED(unused) |
+
+**User actions gathered from the audit:**
+
+- Rotate the Firebase and contracts service-account keys (they are tracked in git), plus any credentials recorded in memory.
+- **Create the Doppler `stg` config.** `veriprops-verf-backend` has only `dev`, `dev_personal`, `dev_test`, `prd` and `preview`, as checked in S6. Then put its service tokens in the GitHub `staging` Environment: `deploy.yml` and `live_smoke.py` both expect it.
+- Load the sandbox keys above into Doppler `stg`, and the live keys into `prd`. **Production refuses to boot** without Dojah (production host), Places, AWS and the active gateway's keys (S5).
+- Restrict the Places key to Places API (New) and the server.
+- On the gateway dashboards:
+  - register the webhook URLs (`https://<host>/api/webhooks/{flutterwave,paystack}`);
+  - disable the Paystack transfer OTP;
+  - decide on Flutterwave's server-IP whitelist against Vercel's changing IPs;
+  - ask Flutterwave support to enable chargeback webhooks.
+- Run the release gate on staging once the keys land ([live-integration-smoke.md](live-integration-smoke.md)). It includes the only check of the reviewer's KYC photo view with real storage.
+- Correct the `.env.prod:18` origin.
+- Set up branch protection and the Cloudflare edge-auth Transform Rule.
+- Clear the WhatsApp launch gates and the `docs/handoff-token-pen-check.md` items.
+
+---
+
+## Progress Tracker — Playwright UAT suite (cycle 3)
 
 status: **Slices 0–5 and both side tracks are complete, committed and released.** The full six-engine matrix passes on the first attempt (see the closeout section). The migration chain is folded back into `0001` (D96).
 

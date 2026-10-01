@@ -1,9 +1,10 @@
 """Seed/registry parity guard.
 
-All reference data is seeded by migration `0001_initial_schema` through pure
+Reference data is seeded by migration `0001_initial_schema` (and, for the fixed per-role
+commission, `0002_fixed_agent_commission`) through pure
 row-builder functions that translate the app-side registries into raw column
 values (there is no app-startup seeder). These tests pin that translation —
-enum members reduced to `.value`, JSON encoding, the commission-rate math —
+enum members reduced to `.value`, JSON encoding, the per-role commission amounts —
 so registry drift or a mistranslated builder fails CI without needing a DB.
 Raw DB strings are asserted deliberately (wire/DB-string compatibility).
 """
@@ -11,10 +12,8 @@ import importlib.util
 import json
 from pathlib import Path
 
-from main.app.config.settings import settings
-from main.app.core.state.dependencies import roles_for_tier
-from main.app.core.state.status import VerificationTier
-from main.app.domain.commission_rule.models import BPS_PER_PERCENT
+from main.app.core.state.status import AgentRole
+from main.app.domain.commission_rule.models import DEFAULT_ROLE_COMMISSION_NGN_KOBO
 from main.app.domain.system_config.models import CONFIG_DEFAULTS, CONFIG_DESCRIPTIONS
 from main.app.domain.user.auth.consent.content import LEGAL_DOCUMENT_CONTENT
 from main.app.domain.verification.pricing import TIER_PRICE_NGN_KOBO
@@ -24,15 +23,18 @@ from main.app.domain.verification.scoring.models import DEFAULT_TRUST_WEIGHTS
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 
 
-def _load_initial_migration():
-    migration_path = _BACKEND_ROOT / "main" / "alembic" / "versions" / "0001_initial_schema.py"
-    spec = importlib.util.spec_from_file_location("veriprops_initial_migration", migration_path)
+def _load_migration(filename: str, module_name: str):
+    migration_path = _BACKEND_ROOT / "main" / "alembic" / "versions" / filename
+    spec = importlib.util.spec_from_file_location(module_name, migration_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-_migration = _load_initial_migration()
+_migration = _load_migration("0001_initial_schema.py", "veriprops_initial_migration")
+_commission_migration = _load_migration(
+    "0002_fixed_agent_commission.py", "veriprops_fixed_agent_commission_migration"
+)
 
 
 def test_consent_rows_match_content_registry():
@@ -69,17 +71,11 @@ def test_system_config_rows_cover_every_key():
         assert rows[key.value]["description"] == CONFIG_DESCRIPTIONS.get(key)
 
 
-def test_commission_rates_reproduce_flat_model():
-    rows = {(r["role"], r["tier"]): r["rate_bps"] for r in _migration._commission_rule_rows()}
-    # Every tier's full role set (TIER_ROLES) gets a rate — D30 equivalence with
-    # the old roles_for_tier seeding loop.
-    assert set(rows) == {
-        (role.value, tier.value) for tier in VerificationTier for role in roles_for_tier(tier)
-    }
-    for tier, role_weights in DEFAULT_TRUST_WEIGHTS.items():
-        for role, weight in role_weights.items():
-            expected = round(weight * BPS_PER_PERCENT * settings.AGENT_COMMISSION_SHARE)
-            assert rows[(role.value, tier.value)] == expected
+def test_commission_rows_pay_every_role_its_fixed_default():
+    # D97: one fixed amount per role, no tier — every AgentRole is seeded exactly once.
+    rows = {r["role"]: r["amount_ngn_kobo"] for r in _commission_migration._commission_rule_rows()}
+    assert rows == {role.value: amount for role, amount in DEFAULT_ROLE_COMMISSION_NGN_KOBO.items()}
+    assert set(rows) == {role.value for role in AgentRole}
 
 
 def test_pricing_rows_match_tier_prices():
@@ -93,3 +89,23 @@ def test_pricing_rows_match_tier_prices():
         assert item["label"] == "Verification service fee"
         assert item["amount_minor"] == price
         assert item["sort_order"] == 0
+
+
+def test_replaced_rates_are_snapshotted_with_their_default_and_whether_they_were_edited():
+    # D97: 0002 replaces the D30 role×tier rates outright, so each one is written to the audit
+    # log first — the value, the default it was seeded at, and whether an admin had changed it.
+    stored = [
+        {"id": "r-basic", "role": "REGISTRY", "tier": "BASIC", "rate_bps": 4000},     # the default
+        {"id": "r-prem", "role": "LAWYER", "tier": "PREMIUM", "rate_bps": 1500},      # edited (default 1200)
+    ]
+    rows = {r["resource_id"]: r for r in _commission_migration._snapshot_rows(stored)}
+    assert set(rows) == {"r-basic", "r-prem"}
+    for row in rows.values():
+        assert (row["action"], row["resource_type"], row["actor_id"]) == (
+            "ADMIN_CONFIG_CHANGED", "commission_rule", None)
+    assert rows["r-basic"]["details"] == {
+        "role": "REGISTRY", "tier": "BASIC", "rate_bps": 4000, "default_rate_bps": 4000,
+        "customised": False, "superseded_by": "0002_fixed_agent_commission",
+    }
+    assert rows["r-prem"]["details"]["default_rate_bps"] == 1200
+    assert rows["r-prem"]["details"]["customised"] is True

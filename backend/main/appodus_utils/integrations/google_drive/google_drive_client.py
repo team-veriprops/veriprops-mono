@@ -12,6 +12,8 @@ from googleapiclient.errors import HttpError
 from kink import di, inject
 
 from main.app.config.settings import settings
+from main.appodus_utils.config.service_account import load_service_account_info
+from main.appodus_utils.integrations.exception.exceptions import IntegrationFatalException
 
 logger: Logger = di['logger']
 
@@ -30,10 +32,15 @@ def _drive_failure(action: str, error: HttpError) -> HTTPException:
 class GoogleDriveClient:
     def __init__(self):
         self.SCOPES = ['https://www.googleapis.com/auth/documents', 'https://www.googleapis.com/auth/drive']
-        # TODO: Consider using Workload Identity Federation instead of this Service key file
-        self.service_account_file = settings.GOOGLE_SERVICE_ACCOUNT_FILE
-        self.credentials = service_account.Credentials.from_service_account_file(self.service_account_file,
-                                                                                 scopes=self.SCOPES)
+        # TODO(gap): only the dead google_drive webhook package uses this client (§G, D83). If it
+        # is revived, authenticate with Workload Identity Federation, not a service-account key.
+        try:
+            info = load_service_account_info(settings.GOOGLE_SERVICE_ACCOUNT_JSON_B64, settings.GOOGLE_SERVICE_ACCOUNT_FILE)
+        except ValueError as e:
+            raise IntegrationFatalException("Google Drive is not configured.") from e
+        if info is None:
+            raise IntegrationFatalException("Google Drive is not configured.")
+        self.credentials = service_account.Credentials.from_service_account_info(info, scopes=self.SCOPES)
 
         self._docs_service = build('docs', 'v1', credentials=self.credentials)
         self._drive_service = build('drive', 'v3', credentials=self.credentials)
