@@ -1,6 +1,6 @@
 # Progress Tracker — Audit remediation (2026-09-27)
 
-status: **S0–S8 complete; S9 (Playwright P0/P1 + the webkit signup flake) next.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
+status: **S0–S9 complete — the remediation is ready for its PR.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
 
 Scope, stages S0–S9 and the user's decisions are in the audit plan (`~/.claude/plans/any-pending-issues-task-polymorphic-duckling.md`). In short:
 
@@ -562,6 +562,83 @@ The PRD states this.
 | build | green |
 | drive-through | 685/685 |
 | Playwright (chromium-desktop + webkit-mobile) | 114/114 (8 serial + 106 parallel); UAT-AGENT-03 flaked once on webkit-mobile (the known signup flake, S9) and passed on retry. The changed UAT-AUTH-14 passes on both. |
+
+## S9 — Playwright P0/P1 specs, and the WebKit signup flake's root cause
+
+**The flake, found rather than retried.**
+- **Primary cause:** on a phone-sized viewport, a full-width success toast ("Email verified successfully!") sat over the signup step's Continue button. Playwright retried while the toast blocked the hit test, clicked as it animated, and the tap landed on the toast; a user tapping Continue hits it the same way.
+  - Fix: toasts appear top-centre on phones (`AppToaster`).
+- **Second cause:** after an agent application is submitted, the app refreshes the session (briefly showing the new status) and then reloads the page. The spec asserted in between.
+  - Fix: `withFullReload` in the e2e helpers.
+- **Proof:**
+  - Under 6 workers, 3 of 30 runs had failed before the fix; afterwards 30 of 30 passed.
+  - At CI's 2 workers, 40 of 40 passed.
+  - The remaining stalls appeared only at 6 workers on this machine, where WebKit stops producing animation frames.
+
+**New specs.**
+
+| Tier | Spec | Covers |
+| --- | --- | --- |
+| P0 | `public-lookup` | public VID lookup on and off; summary link and revoke; named recipient behind the disclaimer; no oracle for unknown VIDs and links; no PII on public pages |
+| P0 | `aftermarket` | a dispute naming the survey reaches the surveyor, whose defence the admin reads before deciding; re-check scoped and approved; upgrade paid and the tier raised |
+| P0 | `payouts` | withdrawal approved and paid out; held then rejected; cancelled by the agent; new account saved under the bank's name |
+| P0 | `compliance` | erasure refused with a reason; erasure approved and executed after confirmation, then sign-in refused; consent history and download; audit trail |
+| P0 | `rbac` | Finance and Operations each turned away from the other's area; a customer cannot open another customer's case; an invitation accepted only by its own account |
+| P1 | `case-life` | tracking and activity; report only after release; report PDF; notifications read and cleared; held message approved; admin case search and note |
+
+- The 19 P0 scenarios pass on all six engines.
+- The 5 P1 scenarios pass on both CI engines.
+
+**Defects the specs found, fixed:**
+- **Public lookup could only be enabled:** the modal offered no off control and never showed the current state, and the customer DTO didn't carry the flag.
+- **No customer dispute could reach an agent:** the dialog never sent the disputed part.
+  - User decision: the customer optionally names it from roles the backend lists.
+  - The backend also supplies the allowed upgrade tiers and the minimum dispute length, replacing frontend constants.
+  - The backend now refuses a role the case doesn't have.
+- **An accepted admin invitation still carried customer claims,** so the new admin was bounced to the portal. Accept now rotates the session (best-effort), and the page refreshes and reloads.
+- **Admin and agent queues didn't name their cases:** rechecks and disputes now carry the VID, and the recheck queue uses the shared money formatter.
+- **Dialogs taller than a phone screen didn't scroll,** so the share modal's Revoke was unreachable.
+- **Erasure used `window.confirm`/`prompt`, and a rejection could have no reason:**
+  - the screens now use `ConfirmDialog`;
+  - the backend requires a trimmed reason;
+  - `ConfirmDialog` stays open until its action succeeds, so a refused request keeps what was typed.
+- **A held payout told the agent nothing.** The agent now sees "under review"; Finance's note stays internal.
+- **Accessibility:**
+  - contrast failures across the app (emerald/amber-600 text, the warning `StatusPill`, grey copy, the WhatsApp continue button);
+  - unread notifications had no text alternative;
+  - the held queue printed raw enum names.
+- **Local email sends stalled on `localhost`** (IPv6 first on Windows); `.env.test` and the settings default now use `127.0.0.1`.
+
+**Stage review** (`/code-review high`, 10 findings, all fixed):
+- `ConfirmDialog` closed before its action settled;
+- the invite rotation could turn a committed accept into an error;
+- the erasure reason length was duplicated on the frontend;
+- a whitespace reason passed;
+- dispute roles were unvalidated;
+- a failed session refresh reported a successful accept as failed;
+- the PDF path built owner actions it never used;
+- a detail invalidation refetched every query for the case;
+- `AppToaster` carried a dead offset;
+- the share toggle's `aria-pressed` contradicted its label.
+
+**Logged, not done:**
+- **Signup drafts persist the password in plain text,** in localStorage and in `signup_drafts.payload` (needs a decision).
+- **Admin invitations are not emailed** (now a §G row and `TODO(gap)`).
+- **A send-now broadcast emails every recipient inside the request.** About 1s per local SMTP send; at production scale it would time out. Needs a queued fan-out.
+- **Pricing line items** aren't checked against the tier price.
+- **Consent history** returns its own page shape rather than `Page[T]`.
+
+**Gate:**
+
+| Gate | Result |
+| --- | --- |
+| pytest | 3853 passed |
+| ruff, mypy | clean (621 files) |
+| eslint, tsc | clean |
+| vitest | 890 passed |
+| build | green (e2e env) |
+| drive-through | 685/685 |
+| Playwright (chromium-desktop + webkit-mobile, full suite) | 162/162 (154 parallel + 8 serial), no retries needed; P0 specs also 76/76 across the other four engines |
 
 ## Third-party sandbox test register
 
