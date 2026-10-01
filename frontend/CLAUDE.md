@@ -282,9 +282,12 @@ UAT_BASE_URL=https://staging.veriprops.ng pnpm e2e:live   # @live only, on stagi
 - **Wait for hydration before typing, and judge only against a build.** A form's first field can lose what is
   typed into it: the server-rendered input accepts text, then React hydrates, and the controlled input is reset to
   its empty `defaultValue` — the box comes back blank with "required" showing while later fields keep their values.
-  It is loud against `pnpm dev:https` (WebKit especially) and rare but real against a production build, so
-  `waitForHydration(page, testId)` (`e2e/helpers/app.ts`, waits for React's `__reactProps$` key on the node) goes
-  before the first `fill` of every form. Deliberately **not** a refill-until-it-sticks loop: that would absorb a
+  It is loud against `pnpm dev:https` (WebKit especially) and real against a production build too (UAT-PAY-01 failed
+  every CI attempt: the amount was wiped when the bank select re-rendered the form). `__app_ready__` only says the
+  *root* hydrated — every route sits below the root `loading.tsx` Suspense boundary — so `waitReady` (and with it
+  `goto`/`waitForPage`/`withFullReload`) also waits until every `input, select, textarea, button` on the page carries
+  React's `__reactProps$` key. A control that streams in *later* still needs `waitForHydration(page, testId)` before
+  its first `fill`. Deliberately **not** a refill-until-it-sticks loop: that would absorb a
   genuine regression. docs/uat-strategy.md §9 is the rule — author specs against the dev server, judge green/red
   only against `pnpm build` + the standalone server behind `e2e/tls/Caddyfile`.
 - **WebKit can drop a click on a control that has just swapped in.** Seen on the signup step's `Verify` button in CI and locally (reproducible only right after the drive-through, and not under instrumentation): Playwright reports the click performed on a visible, enabled, stable button, yet no request leaves the page and the button never enters its sending state. A user simply taps again. `openOtpDialog` repeats the click only while it has provably had **no** effect; any effect — sending, an error, the dialog — ends the retrying and decides the outcome, so a send that fails or hangs still fails. Don't widen this into retrying after an outcome, which would hide a real regression. CI uploads the Playwright report on every run, so a recurrence leaves its first-attempt trace.

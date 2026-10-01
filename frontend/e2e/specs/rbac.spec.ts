@@ -42,9 +42,11 @@ test.describe("UAT-RBAC — roles and access @P0", () => {
       ROUTES.PORTAL.VERIFICATION_DETAIL(theirs.verificationId),
       ROUTES.PORTAL.VERIFICATION_REPORT(theirs.verificationId),
     ]) {
-      await intruder.goto(path, { waitUntil: "domcontentloaded" });
-      // Turned away or told there is nothing there — never shown the case.
-      await expect(intruder.locator("body")).not.toContainText(theirs.vid, { timeout: 15_000 });
+      // The case API refuses with 403 and the client lands on the access-denied page. Waiting for
+      // that page is what makes the checks below meaningful, and keeps the late redirect from
+      // aborting the next navigation.
+      await expectTurnedAway(intruder, path);
+      await expect(intruder.locator("body")).not.toContainText(theirs.vid);
       await expect(intruder.locator("body")).not.toContainText("12 Scenario Close");
     }
   });
