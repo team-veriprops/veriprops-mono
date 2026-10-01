@@ -85,9 +85,10 @@ class DecideRecheckDto(Object):
 class RecheckDto(Object):
     id: str
     verification_id: str
+    vid: Optional[str] = None            # the case's reference; set on the admin queue, where it names the row
     reason: str
     documents: Optional[List[Any]] = None
-    scope_roles: Optional[List[str]] = None
+    scope_roles: Optional[List[AgentRole]] = None
     status: RecheckStatus
     price_minor: int
     payment_id: Optional[str] = None

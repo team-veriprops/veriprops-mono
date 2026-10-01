@@ -5,6 +5,7 @@ import { Payout, PayoutAction, PayoutStatus } from "@/types/payout";
 
 /** What an agent is told while their payout waits on finance or the bank. */
 const STATUS_NOTE: Partial<Record<PayoutStatus, string>> = {
+  [PayoutStatus.HELD]: "Our finance team is reviewing this withdrawal before it goes out.",
   [PayoutStatus.APPROVED]: "Goes out in the next payout run.",
   [PayoutStatus.PROCESSING]: "Sent to your bank; waiting for it to confirm.",
   // The funds are still reserved: finance retries the transfer or releases them.

@@ -38,7 +38,7 @@ export default function AdminFinance() {
           {/* Hero: collected revenue is the single headline figure. */}
           <Card className="p-6">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Collected revenue</p>
-            <p className="mt-1 text-4xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+            <p className="mt-1 text-4xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
               {formatMinor(summary.revenueMinor) ?? "—"}
             </p>
           </Card>

@@ -28,7 +28,7 @@ import { UserPersona } from "@components/website/auth/models";
 
 import { expect, test } from "../fixtures";
 import { expectNoA11yViolations } from "../helpers/a11y";
-import { goto, waitForHydration, waitForPage, waitReady } from "../helpers/app";
+import { goto, waitForHydration, waitForPage, waitReady, withFullReload } from "../helpers/app";
 import { ScenarioStage } from "../helpers/scenario";
 import { NewAccount, signUpViaUi } from "../helpers/signup";
 import { openNavItem } from "../helpers/ui";
@@ -78,7 +78,8 @@ async function applyAsAgent(page: Page, bvn: string): Promise<void> {
   await expect(page.getByTestId("agent-apply-review")).toBeVisible();
   await page.getByTestId("agent-apply-truthfulness").click();
   await page.getByTestId("agent-apply-terms").click();
-  await page.getByTestId("agent-apply-submit").click();
+  // Submitting grants the AGENT persona and reloads the page (`navigateAfterPersonaChange`).
+  await withFullReload(page, () => page.getByTestId("agent-apply-submit").click());
 
   await expect(page.getByTestId("agent-status-card")).toBeVisible();
 }
@@ -186,7 +187,8 @@ test.describe("UAT-AGENT — agent onboarding @P1", () => {
     await expectNoA11yViolations(page);
     await page.getByTestId("agent-apply-truthfulness").click();
     await page.getByTestId("agent-apply-terms").click();
-    await page.getByTestId("agent-apply-submit").click();
+    // Submitting grants the AGENT persona and reloads the page (`navigateAfterPersonaChange`).
+    await withFullReload(page, () => page.getByTestId("agent-apply-submit").click());
 
     // ── Outcome: the gate lifts, and the applicant is told where they stand ─
     const statusCard = page.getByTestId("agent-status-card");

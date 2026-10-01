@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
 import { ShareService } from "./share-service";
 import { CreateShareRequest } from "@/types/share";
+import { verificationKeys } from "./useVerificationQueries";
 
 const service = new ShareService(httpClient);
 
@@ -36,11 +37,16 @@ export function useRevokeShareMutation(verificationId: string) {
   });
 }
 
+/** Turn the public VID lookup on or off. The case itself carries the flag, so it is refetched. */
 export function useSetPublicVisibilityMutation(verificationId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (enabled: boolean) => service.setPublicVisibility(verificationId, enabled),
-    onSuccess: () => qc.invalidateQueries({ queryKey: shareKeys.list(verificationId) }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: shareKeys.list(verificationId) }),
+        qc.invalidateQueries({ queryKey: verificationKeys.detail(verificationId), exact: true }),
+      ]),
   });
 }
 

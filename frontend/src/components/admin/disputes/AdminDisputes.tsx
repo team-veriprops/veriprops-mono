@@ -53,6 +53,7 @@ export default function AdminDisputes() {
                 data-testid="dispute-row"
               >
                 <div className="min-w-0">
+                  {d.vid && <p className="font-mono text-xs text-muted-foreground">{d.vid}</p>}
                   <p className="text-sm font-medium">{humanizeEnumLabel(d.disputeType)}</p>
                   <p className="truncate text-xs text-muted-foreground">{d.description}</p>
                 </div>

@@ -8,12 +8,13 @@ import { toast } from "sonner";
 import { ROUTES, buildAuthUrl } from "@lib/routes";
 import { AuthIntent } from "@components/website/auth/models";
 import { AdminInvitationStatus, InviteAcceptScenario } from "@/types/admin";
-import { useCurrentSession } from "@components/website/auth/libs/useAuthQueries";
+import { useCurrentSession, useRefreshSession } from "@components/website/auth/libs/useAuthQueries";
 import {
   useAcceptInvitationMutation,
   useInvitePreviewQuery,
 } from "@components/admin/libs/useAdminQueries";
 import { getErrorMessage } from "@lib/errors";
+import { navigateAfterPersonaChange } from "@lib/session-navigation";
 
 /**
  * Admin invite acceptance (PRD §4.1). Routes the three scenarios:
@@ -24,6 +25,7 @@ export default function AdminInviteAcceptContainer({ token }: { token: string })
   const { data: preview, isLoading, isError } = useInvitePreviewQuery(token);
   const { data: session } = useCurrentSession();
   const accept = useAcceptInvitationMutation();
+  const refreshSession = useRefreshSession();
   const [accepted, setAccepted] = useState(false);
 
   const acceptRedirect = `${ROUTES.AUTH.GATE}/admin-invite/${token}`;
@@ -38,7 +40,11 @@ export default function AdminInviteAcceptContainer({ token }: { token: string })
       await accept.mutateAsync(token);
       setAccepted(true);
       toast.success("You're now an admin", { description: `Role: ${preview.subRole}` });
-      router.push(ROUTES.ADMIN.DASHBOARD);
+      // Accepting rotated the session with the admin role; refresh the persisted copy, then load the
+      // admin area fresh — the router's cached prefetches were turned away before the grant. The
+      // refresh is best-effort: the accept already succeeded, and the reload re-reads the session.
+      await refreshSession().catch(() => undefined);
+      navigateAfterPersonaChange(ROUTES.ADMIN.DASHBOARD);
     } catch (err) {
       toast.error(getErrorMessage(err, "Could not accept invitation"));
     }

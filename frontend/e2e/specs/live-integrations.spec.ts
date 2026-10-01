@@ -163,7 +163,11 @@ test.describe("UAT-LIVE — third-party journeys on staging @live", () => {
     await expect(page.getByTestId("agent-apply-review")).toBeVisible();
     await page.getByTestId("agent-apply-truthfulness").click();
     await page.getByTestId("agent-apply-terms").click();
+    // Submitting grants the AGENT persona and reloads the page (`navigateAfterPersonaChange`);
+    // asserting before that reload lands races it.
+    const reloaded = page.waitForEvent("load", { timeout: 60_000 });
     await page.getByTestId("agent-apply-submit").click();
+    await reloaded; // staging has no automation ready-gate, so the load itself is the signal
     await expect(page.getByTestId("agent-status-card")).toContainText("Pending review");
 
     // ── The reviewer: both photos, from private storage, side by side ───────

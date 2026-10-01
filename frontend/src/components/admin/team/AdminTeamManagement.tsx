@@ -199,7 +199,7 @@ export default function AdminTeamManagement() {
             {invite.isPending ? "Creating…" : "Create invitation"}
           </Button>
           {inviteUrl && (
-            <div className="rounded-lg border border-border p-3 text-sm">
+            <div className="rounded-lg border border-border p-3 text-sm" data-testid="admin-invite-link">
               <p className="mb-1 text-muted-foreground">Invitation link (share with the invitee):</p>
               <CopyText text={inviteUrl} />
             </div>

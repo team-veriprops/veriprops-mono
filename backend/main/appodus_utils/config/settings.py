@@ -278,7 +278,7 @@ class AppodusBaseSettings(BaseSettings):
     MESSAGING_RETRY_INTERVALS_SECONDS: List[int] = [60, 300, 900]
 
     # SMTP (Mailpit in dev/test — auto-selected when ENVIRONMENT is not prod/staging)
-    SMTP_HOST: Optional[str] = "localhost"
+    SMTP_HOST: Optional[str] = "127.0.0.1"
     SMTP_PORT: int = 1025
     SMTP_USERNAME: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None

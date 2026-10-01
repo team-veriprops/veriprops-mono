@@ -195,7 +195,7 @@ function BankAccounts() {
                 <li key={a.id} className="flex items-center justify-between gap-2 p-3 text-sm">
                   <span className="truncate">
                     {a.bankName} · {a.accountNumber} · {a.accountName}
-                    {a.isDefault && <span className="ml-2 text-xs text-emerald-600">default</span>}
+                    {a.isDefault && <span className="ml-2 text-xs text-emerald-700">default</span>}
                   </span>
                   <button aria-label="Remove account" className="text-muted-foreground hover:text-red-600"
                     onClick={() => remove.mutate(a.id)}>
@@ -224,7 +224,7 @@ function BankAccounts() {
       {resolved ? (
         <div className="space-y-2">
           <p className="flex items-center gap-2 rounded-md border bg-muted/40 p-2 text-sm" data-testid="bank-resolved-name">
-            <CheckCircle2 className="size-4 text-emerald-600" aria-hidden />
+            <CheckCircle2 className="size-4 text-emerald-700" aria-hidden />
             <span><span className="text-muted-foreground">Account name: </span>{resolved.accountName}</span>
           </p>
           <p className="text-xs text-muted-foreground">

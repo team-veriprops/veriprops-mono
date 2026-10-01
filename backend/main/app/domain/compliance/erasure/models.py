@@ -8,8 +8,10 @@ retained (§4.11). Statuses follow ``ErasureRequestState``.
 """
 from __future__ import annotations
 
+from pydantic import StringConstraints
+
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
 from sqlalchemy import Column, Index, String, Text
 
@@ -74,9 +76,10 @@ class RequestErasureDto(Object):
     reason: Optional[str] = None
 
 
-class ResolveErasureDto(Object):
-    """Admin reject/execute note."""
-    note: Optional[str] = None
+class RejectErasureDto(Object):
+    """Why an erasure request was refused. The requester is notified and pointed at it, so it is
+    required."""
+    note: Annotated[str, StringConstraints(strip_whitespace=True, min_length=5, max_length=500)]
 
 
 class DataErasureRequestDto(Object):

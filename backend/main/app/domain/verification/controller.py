@@ -51,6 +51,7 @@ def _to_dto(v: Verification) -> VerificationDto:
         paid_at=v.paid_at,
         sla_due_date=v.sla_due_date,
         draft_step=v.draft_step or 0,
+        public_lookup_enabled=bool(v.public_lookup_enabled),
     )
 
 

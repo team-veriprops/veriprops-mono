@@ -91,13 +91,13 @@ export default function TierStep({ tier, currency, onChange }: Props) {
                       <span>{ngn}{major(quote.priceNgnMinor)}</span>
                     </div>
                     {quote.firstTimeDiscountMinor > 0 && (
-                      <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                      <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
                         <span>First-time discount</span>
                         <span>−{ngn}{major(quote.firstTimeDiscountMinor)}</span>
                       </div>
                     )}
                     {quote.referralCreditAppliedMinor > 0 && (
-                      <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                      <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
                         <span>Referral credit</span>
                         <span>−{ngn}{major(quote.referralCreditAppliedMinor)}</span>
                       </div>

@@ -801,7 +801,9 @@ must match); already admin → friendly message.
 
 An invitation is used once. Acceptance and revocation both start from `PENDING`, so if they land together
 exactly one stands: a revoked invitation elevates no one, and an accepted one cannot be revoked (removing an
-admin is its own action). Revoking an already-revoked invitation is harmless.
+admin is its own action). Revoking an already-revoked invitation is harmless. Accepting rotates the
+accepting session to the ADMIN claims, so the new admin reaches the admin area without signing in again. The
+link is handed to the inviting Super Admin to pass on — no invitation email yet (§G).
 
 ### 9.2 The sanctioned elevation path
 
@@ -1305,7 +1307,7 @@ numeric score. `PublicLookupState` drives the render: `SHARED` (summary) / `PRIV
 | Mode | Who sees | Content |
 |---|---|---|
 | Private (default — no share row) | Customer only | Full report |
-| Public (`public_lookup_enabled` flag) | Anyone with the VID | Summary |
+| Public (`public_lookup_enabled` flag — the owner turns it on and off from the share controls, which show where it stands) | Anyone with the VID | Summary |
 | `LINK_SUMMARY` | Anyone with the tokenised link | Summary |
 | `NAMED_FULL` | A specific emailed recipient | **Full report**, after a one-time disclaimer acknowledgement |
 
@@ -1341,7 +1343,10 @@ preserved), SLA due date recomputed, next release ships `v3.0`. Idempotent on re
   commissions**, and fires a system notification.
 - **Agent dispute-defence:** when a dispute targets an agent's task, the agent gets a bounded response
   window (`agent_dispute_defence_hours`, default 48) that the admin sees before resolving — admin-mediated;
-  the agent never learns the customer's identity.
+  the agent never learns the customer's identity. The customer names the disputed part when filing, optionally:
+  the report lists the case's roles (backend-supplied, with the upgrade tiers and the minimum description
+  length), and "not sure / the whole report" leaves it with the admin. Admin and agent queues show each
+  dispute's VID.
 - Outcomes (`DisputeOutcome`), each with a mandatory resolution note delivered verbatim:
   `REJECTED` → `COMPLETED` (commissions unfreeze) · `FULL_REFUND` → `REFUNDED` (commission reversal, and a
   full refund request for Finance's approval, §20.5) · `PARTIAL_RECHECK` → `IN_PROGRESS` (free scoped re-check; next release `v2.0`).
@@ -1533,7 +1538,7 @@ actor, role, from→to, timestamp, IP, note, and per-item evidence hashes on evi
 
 Self-service: the data subject opens a request from Account → Data & privacy (one open request per subject,
 server-enforced). Review/approve/execute is gated on `MANAGE_COMPLIANCE` (**SUPER-only**; execute is
-confirm-guarded and idempotent). Execution runs `PiiPseudonymiser`: a deterministic per-subject opaque token
+confirm-guarded and idempotent; a rejection requires a reason, which the requester is shown). Execution runs `PiiPseudonymiser`: a deterministic per-subject opaque token
 replaces the subject's PII across **eight surfaces in one transaction** — `users` (name/email/phone/avatar/
 password → login impossible), `audit_logs` (actor → token, IP nulled, **events retained**),
 `device_sessions` (+revoked), `security_events`, `user_consents`, `oauth_identities`, `kyc_records`,
@@ -2009,6 +2014,7 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Cartographic Nigeria map paths (schematic geo-grid today) | `frontend/src/components/agents/reputation/NigeriaCoverageMap.tsx` |
 | Dead vendored `google_drive` webhook package: `repo.py`/`service.py`/`validator.py` import modules that do not exist, so only `model.py` loads — and it registers `g_drive_webhook_subscriptions` with no migration builder. Inert (nothing reaches it); kept and marked rather than deleted, per D83. Pick up = remove the package (with `GoogleDriveClient`, its only user of a service-account key), or fix the imports, give the table a migration, and move the client to Workload Identity Federation | `backend/main/appodus_utils/domain/webhook/google_drive/model.py`, `backend/main/appodus_utils/integrations/google_drive/google_drive_client.py` |
 | `python-jose` → PyJWT: jose hard-depends on `ecdsa` (PYSEC-2026-1325, timing side channel, no fixed release). Not exploitable here — the `[cryptography]` extra routes every sign/verify (RS256 handoff + OAuth, Apple's ES256 client secret) through `cryptography` — but the Dependabot alert stays open until the five `from jose import` sites (OAuth Google/Apple, WhatsApp handoff grant/tokens, `appodus_utils/common/commons.py`) move to PyJWT | `backend/requirements.txt` |
+| Admin-invitation email (§9.1): the invite link is returned to the inviting Super Admin to deliver; no email template sends it | `backend/main/app/domain/user/admin_invitation/controller.py` |
 | Declared-but-unbuilt routes: admin content CMS (how-it-works / FAQs / testimonials / spotlights / area insights), fraud-flags, dispute/broadcast/task detail pages, portal payments page | `frontend/src/lib/routes.ts` |
 
 ### G.3 Launch gates (business/legal — not code)

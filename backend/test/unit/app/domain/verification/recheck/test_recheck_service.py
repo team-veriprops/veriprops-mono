@@ -149,3 +149,23 @@ class TestOnPaymentConfirmed:
         svc = _service(recheck=recheck)
         await svc.on_payment_confirmed("pay-1")
         svc._reviews.reopen_task.assert_not_called()
+
+
+class TestAdminQueue:
+    """The admin queue names the case each re-check is for (§19.1) — a reason and a price alone
+    cannot be acted on."""
+
+    async def test_each_pending_recheck_carries_its_case_vid(self):
+        from datetime import datetime, timezone
+        from types import SimpleNamespace as NS
+
+        svc = _service()
+        row = NS(id="r1", verification_id="v1", reason="Plot mismatch", documents=None, scope_roles=None,
+                 status=RecheckStatus.PENDING.value, price_minor=500_000, payment_id=None,
+                 decision_note=None, date_created=datetime.now(timezone.utc))
+        svc._recheck_repo.page_pending = AsyncMock(return_value=([(row, "VP-2026-ABC123")], 1))
+        svc._recheck_repo._db_utils = MagicMock(build_page=lambda items, total, page, size: NS(items=items))
+
+        page = await svc.page_pending(0, 10)
+
+        assert [(r.vid, r.reason) for r in page.items] == [("VP-2026-ABC123", "Plot mismatch")]

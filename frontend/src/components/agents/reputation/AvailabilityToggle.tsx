@@ -55,7 +55,7 @@ export function AvailabilityToggle({
         })}
       </div>
       {atCapacity && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
+        <p className="text-xs text-amber-700 dark:text-amber-400">
           You&apos;re at your active-task limit, so you show as Unavailable ({effective}) until a task frees up.
         </p>
       )}

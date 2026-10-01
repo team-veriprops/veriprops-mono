@@ -73,7 +73,7 @@ export default function SessionRecoveryOverlay() {
           <div
             className={cn(
               "flex h-12 w-12 items-center justify-center rounded-full",
-              expired ? "bg-amber-100 text-amber-600" : "bg-brand-viridian-light text-brand-viridian"
+              expired ? "bg-amber-100 text-amber-700" : "bg-brand-viridian-light text-brand-viridian"
             )}
           >
             {expired ? (

@@ -110,7 +110,7 @@ function PlatformAnalytics() {
           <AsyncStateComponent<Revenue> data={revenue.data} isLoading={revenue.isLoading} isError={revenue.isError}>
             {(rev) => (
               <>
-                <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
                   {formatMinor(rev.totalMinor)} total
                 </p>
                 <BarChart

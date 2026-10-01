@@ -71,6 +71,7 @@ function DefenceCard({ dispute }: { dispute: Dispute }) {
   return (
     <div className="space-y-3 rounded-lg border p-4" data-testid="agent-dispute-card">
       <div>
+        {dispute.vid && <p className="font-mono text-xs text-muted-foreground">{dispute.vid}</p>}
         <p className="text-sm font-medium">
           {humanizeEnumLabel(dispute.disputeType)}
           {dispute.targetRole ? ` · ${humanizeEnumLabel(dispute.targetRole)}` : ""}
@@ -86,7 +87,7 @@ function DefenceCard({ dispute }: { dispute: Dispute }) {
         data-testid="agent-defence-text"
       />
       {done ? (
-        <p className="text-xs text-emerald-600">Your response has been recorded.</p>
+        <p className="text-xs text-emerald-700">Your response has been recorded.</p>
       ) : (
         <Button onClick={send} disabled={submit.isPending} data-testid="agent-defence-submit">
           {submit.isPending ? "Sending…" : "Send response"}

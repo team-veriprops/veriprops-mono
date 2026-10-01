@@ -107,7 +107,7 @@ export default function PropertyStep({ value, onChange }: Props) {
           )}
         </div>
         {value.placeId && (
-          <p className="text-xs text-emerald-600 dark:text-emerald-400">✓ Location matched on the map</p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-400">✓ Location matched on the map</p>
         )}
       </div>
 

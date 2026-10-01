@@ -17,8 +17,8 @@ const STATUS_LABEL: Record<ReferralCreditStatus, string> = {
 };
 
 const STATUS_TONE: Record<ReferralCreditStatus, string> = {
-  [ReferralCreditStatus.PENDING]: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  [ReferralCreditStatus.CLEARED]: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  [ReferralCreditStatus.PENDING]: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  [ReferralCreditStatus.CLEARED]: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   [ReferralCreditStatus.VOID]: "bg-muted text-muted-foreground",
 };
 

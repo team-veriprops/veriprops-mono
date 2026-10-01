@@ -214,7 +214,9 @@ class TestTestEnvContract:
         assert env["REPORT_PDF_STUB_MODE"] == "true"
 
     def test_mailpit_smtp(self, env):
-        assert env["SMTP_HOST"] == "localhost"
+        # The IPv4 loopback, not `localhost`: on Windows `localhost` tries ::1 first, which
+        # stalls every host-run send to Mailpit (backend/CLAUDE.md, "Serverless-aware DB engine").
+        assert env["SMTP_HOST"] == "127.0.0.1"
         assert env["SMTP_PORT"] == "1025"
 
 

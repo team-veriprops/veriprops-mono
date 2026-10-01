@@ -39,7 +39,8 @@ export default function WhatsAppContinueButton({
       data-testid="wa-continue"
       className={cn(
         "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium",
-        "text-[#128C7E] bg-[#25D366]/12 hover:bg-[#25D366]/20 transition-colors",
+        // WhatsApp's dark teal: the lighter #128C7E fell under AA (4.5:1) on this tint at xs size.
+        "text-[#075E54] bg-[#25D366]/12 hover:bg-[#25D366]/20 transition-colors",
         className,
       )}
     >

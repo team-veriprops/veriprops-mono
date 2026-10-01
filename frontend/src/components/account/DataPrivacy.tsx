@@ -1,9 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@3rdparty/ui/button";
 import { Badge } from "@3rdparty/ui/badge";
 import { cn } from "@lib/utils";
+import { getErrorMessage } from "@lib/errors";
+import { ConfirmDialog } from "@components/ui/ConfirmDialog";
 import { DataErasureRequest, ErasureRequestStatus } from "@/types/erasure";
 import {
   useMyErasureRequestsQuery,
@@ -26,20 +30,16 @@ const STATUS_VARIANT: Record<ErasureRequestStatus, "default" | "secondary" | "de
 export default function DataPrivacy() {
   const { data, isLoading } = useMyErasureRequestsQuery();
   const request = useRequestErasureMutation();
+  const [confirming, setConfirming] = useState(false);
 
   const requests: DataErasureRequest[] = data ?? [];
   const open = requests.find((r) => OPEN_STATES.has(r.status));
 
-  const submit = () => {
-    if (
-      window.confirm(
-        "Request erasure of your personal data under the NDPA? An admin will review it. " +
-          "Once carried out, your identifying details are permanently removed and you will no longer be able to sign in.",
-      )
-    ) {
-      request.mutate(undefined);
-    }
-  };
+  const submit = () =>
+    request.mutate(undefined, {
+      onSuccess: () => setConfirming(false),
+      onError: (err) => toast.error(getErrorMessage(err, "Could not send your erasure request.")),
+    });
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-8 py-8" data-testid="data-privacy">
@@ -77,7 +77,7 @@ export default function DataPrivacy() {
                 <p className={cn("text-sm mb-3 text-brand-on-surface-variant")}>
                   You can request that we erase your personal data. This action is reviewed by our team.
                 </p>
-                <Button variant="destructive" onClick={submit} disabled={request.isPending} data-testid="request-erasure">
+                <Button variant="destructive" onClick={() => setConfirming(true)} disabled={request.isPending} data-testid="request-erasure">
                   {request.isPending ? "Submitting…" : "Request data erasure"}
                 </Button>
               </div>
@@ -85,6 +85,21 @@ export default function DataPrivacy() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Request erasure of your data?"
+        description={
+          "An admin will review it under the NDPA. Once carried out, your identifying details are " +
+          "permanently removed and you will no longer be able to sign in."
+        }
+        confirmLabel="Request erasure"
+        destructive
+        pending={request.isPending}
+        testId="erasure-request"
+        onConfirm={submit}
+      />
 
       {requests.length > 0 && (
         <div className="mt-6">

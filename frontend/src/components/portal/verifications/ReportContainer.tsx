@@ -116,7 +116,7 @@ function Header({ report, verificationId }: { report: CustomerReport; verificati
           <Share2 className="size-4" /> Share
         </Button>
       </div>
-      <ReportActions verificationId={verificationId} tier={report.tier} />
+      {report.actions && <ReportActions verificationId={verificationId} actions={report.actions} />}
       <ReportShareModal
         verificationId={verificationId}
         vid={report.vid}

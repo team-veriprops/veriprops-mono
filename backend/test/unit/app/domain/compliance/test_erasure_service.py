@@ -165,3 +165,23 @@ class TestExecute:
         svc, _, _, _ = _make_svc(get_model=AsyncMock(return_value=row))
         with pytest.raises(IllegalStateTransitionException):
             await svc.execute("erasure-1", "admin-1")
+
+
+class TestRejectNeedsAReason:
+    """The requester is told their erasure was refused and pointed at the reason (§19.1), so a
+    rejection without one would point at nothing."""
+
+    def test_a_rejection_must_carry_a_reason(self):
+        import pydantic
+
+        from main.app.domain.compliance.erasure.models import RejectErasureDto
+
+        with pytest.raises(pydantic.ValidationError):
+            RejectErasureDto()
+        with pytest.raises(pydantic.ValidationError):
+            RejectErasureDto(note="no")
+        assert RejectErasureDto(note="Active verification history.").note == "Active verification history."
+        # Whitespace is not a reason.
+        with pytest.raises(pydantic.ValidationError):
+            RejectErasureDto(note="      ")
+        assert RejectErasureDto(note="  Retained by law.  ").note == "Retained by law."

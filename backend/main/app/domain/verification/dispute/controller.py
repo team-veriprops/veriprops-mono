@@ -53,8 +53,7 @@ async def list_disputes(verification_id: str, authorize: AuthJWT = Depends()):
 async def my_open_disputes(authorize: AuthJWT = Depends()):
     await authorize.jwt_required()
     agent_id = str(authorize.get_jwt_subject())
-    rows = await dispute_service.list_open_for_agent(agent_id)
-    return SuccessResponse[List[DisputeDto]](data=[_to_dto(d) for d in rows])
+    return SuccessResponse[List[DisputeDto]](data=await dispute_service.list_open_for_agent(agent_id))
 
 
 @agent_dispute_router.post("/{dispute_id}/defence", response_model=SuccessResponse[DisputeDto])

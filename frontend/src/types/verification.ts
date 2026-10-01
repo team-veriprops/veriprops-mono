@@ -139,6 +139,8 @@ export interface Verification {
   paidAt?: string;
   slaDueDate?: string;
   draftStep: number;
+  /** Whether anyone with the VID can see the public summary at `/verify/<vid>` (§13.1). */
+  publicLookupEnabled?: boolean | null;
 }
 
 export interface VerificationDraft {

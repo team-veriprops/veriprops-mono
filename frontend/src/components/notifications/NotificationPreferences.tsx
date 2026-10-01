@@ -34,21 +34,21 @@ export default function NotificationPreferences() {
           Notification preferences
         </h1>
       </div>
-      <p className="text-sm text-gray-500 mb-5">
+      <p className="text-sm text-brand-on-surface-variant mb-5">
         Choose how you hear from us. In-app notifications are always on.
       </p>
 
       {isLoading ? (
-        <p className="text-sm text-gray-400">Loading…</p>
+        <p className="text-sm text-brand-on-surface-variant">Loading…</p>
       ) : isError ? (
         <p role="alert" className="text-sm text-danger">
           {getErrorMessage(error, "Could not load your notification preferences.")}
         </p>
       ) : prefs.length === 0 ? (
-        <p className="text-sm text-gray-500">There are no email or SMS notifications to change on your account.</p>
+        <p className="text-sm text-brand-on-surface-variant">There are no email or SMS notifications to change on your account.</p>
       ) : (
         <div className="rounded-xl border border-black/5 bg-white overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2.5 border-b border-black/5 text-xs font-semibold text-gray-400 uppercase">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2.5 border-b border-black/5 text-xs font-semibold text-brand-on-surface-variant uppercase">
             <span>Event</span>
             <span className="w-12 text-center">Email</span>
             <span className="w-12 text-center">SMS</span>
@@ -60,7 +60,7 @@ export default function NotificationPreferences() {
             >
               <div>
                 <p className="text-sm font-medium text-brand-navy">{p.label}</p>
-                <p className="text-xs text-gray-400">{p.description}</p>
+                <p className="text-xs text-brand-on-surface-variant">{p.description}</p>
               </div>
               <ChannelCell pref={p} channel="email" mode={p.emailMode} enabled={p.emailEnabled} onToggle={toggle} />
               <ChannelCell pref={p} channel="sms" mode={p.smsMode} enabled={p.smsEnabled} onToggle={toggle} />
@@ -95,13 +95,13 @@ function ChannelCell({
   }
   if (mode === ChannelMode.REQUIRED) {
     return (
-      <span className="w-12 flex justify-center text-gray-400" title="Always sent" aria-label={`${name}: always sent`}>
+      <span className="w-12 flex justify-center text-brand-on-surface-variant" title="Always sent" aria-label={`${name}: always sent`}>
         <Lock className="w-4 h-4" />
       </span>
     );
   }
   return (
-    <span className="w-12 text-center text-gray-300" aria-label={`${name}: not used`}>
+    <span className="w-12 text-center text-brand-on-surface-variant" aria-label={`${name}: not used`}>
       —
     </span>
   );

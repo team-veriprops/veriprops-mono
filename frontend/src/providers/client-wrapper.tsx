@@ -1,12 +1,12 @@
 "use client";
 
-import { Toaster } from "@components/3rdparty/ui/sonner";
+import AppToaster from "@components/ui/AppToaster";
 import { isAutomationEnvironment } from "@lib/automation";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import ConsentReacceptanceModal from "@components/website/auth/ConsentReacceptanceModal";
-import WhatsAppWidget, { WHATSAPP_WIDGET_CLEARANCE_PX } from "@components/website/WhatsAppWidget";
+import WhatsAppWidget from "@components/website/WhatsAppWidget";
 import SessionRecoveryOverlay from "@components/website/auth/SessionRecoveryOverlay";
 import SignOutOverlay from "@components/website/auth/SignOutOverlay";
 import { useProactiveSessionRefresh } from "@components/website/auth/libs/useProactiveSessionRefresh";
@@ -71,12 +71,7 @@ export function ClientWrapperProvider({ children }: { children: React.ReactNode 
         <WhatsAppWidget />
         {/* </LoadScript> */}
       </QueryClientProvider>
-      {/* The WhatsApp widget holds the bottom-right corner on every page, so toasts stack
-          above it rather than underneath it. */}
-      <Toaster
-        offset={{ bottom: WHATSAPP_WIDGET_CLEARANCE_PX }}
-        mobileOffset={{ bottom: WHATSAPP_WIDGET_CLEARANCE_PX }}
-      />
+      <AppToaster />
     </ThemeProvider>
   );
 }

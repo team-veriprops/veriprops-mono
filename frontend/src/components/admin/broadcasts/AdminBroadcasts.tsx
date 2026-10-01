@@ -18,8 +18,8 @@ import { humanizeEnumLabel } from "@lib/utils";
 
 const STATUS_TONE: Record<BroadcastStatus, string> = {
   [BroadcastStatus.DRAFT]: "bg-muted text-muted-foreground",
-  [BroadcastStatus.SCHEDULED]: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  [BroadcastStatus.SENT]: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  [BroadcastStatus.SCHEDULED]: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  [BroadcastStatus.SENT]: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   [BroadcastStatus.CANCELLED]: "bg-red-500/10 text-red-600 dark:text-red-400",
 };
 

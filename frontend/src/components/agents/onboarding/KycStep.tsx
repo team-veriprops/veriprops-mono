@@ -150,7 +150,7 @@ export default function KycStep({ value, onChange, photos, onPhotosChange, docum
 
       {/* What happens to the photos — they are not part of a saved draft. */}
       <div className="flex items-start gap-2.5 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
-        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
         <span>
           Your photos are sent securely to check your identity and kept privately for the reviewer of your
           application. They aren&apos;t saved with your progress, so if you come back later you&apos;ll take them again.

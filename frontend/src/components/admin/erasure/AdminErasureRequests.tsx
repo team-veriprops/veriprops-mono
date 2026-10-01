@@ -1,12 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { CheckCircle2, XCircle, Trash2, Clock } from "lucide-react";
+import { toast } from "sonner";
 import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Action, Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import { PageShell } from "@components/ui/PageShell";
 import { StatusPill } from "@components/ui/StatusPill";
 import { AttentionChip } from "@components/ui/AttentionChip";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { ConfirmDialog } from "@components/ui/ConfirmDialog";
+import { Label } from "@3rdparty/ui/label";
+import { Textarea } from "@3rdparty/ui/textarea";
+import { getErrorMessage } from "@lib/errors";
 import { humanizeEnumLabel } from "@lib/utils";
 import { Page } from "@/types/models";
 import { DataErasureRequest, ErasureRequestStatus } from "@/types/erasure";
@@ -74,6 +80,11 @@ export default function AdminErasureRequests() {
   const approve = useApproveErasureMutation();
   const reject = useRejectErasureMutation();
   const execute = useExecuteErasureMutation();
+  // The row a destructive decision is being confirmed for, and the reason typed for a rejection.
+  const [rejecting, setRejecting] = useState<DataErasureRequest | null>(null);
+  const [executing, setExecuting] = useState<DataErasureRequest | null>(null);
+  const [reason, setReason] = useState("");
+  const failed = (fallback: string) => (err: unknown) => toast.error(getErrorMessage(err, fallback));
 
   const dataPage: Page<DataErasureRequest & Record<string, unknown>> = (data as
     | Page<DataErasureRequest & Record<string, unknown>>
@@ -89,7 +100,7 @@ export default function AdminErasureRequests() {
       label: "Approve",
       icon: CheckCircle2,
       shown: (item) => item.status === ErasureRequestStatus.PENDING,
-      onClick: (item) => approve.mutate(item.id),
+      onClick: (item) => approve.mutate(item.id, { onError: failed("Could not approve the request.") }),
     },
     {
       label: "Reject",
@@ -97,8 +108,8 @@ export default function AdminErasureRequests() {
       variant: "destructive",
       shown: (item) => item.status === ErasureRequestStatus.PENDING,
       onClick: (item) => {
-        const note = window.prompt("Reason for rejecting this erasure request (shown to the requester):") ?? undefined;
-        reject.mutate({ id: item.id, note });
+        setReason("");
+        setRejecting(item);
       },
     },
     {
@@ -106,15 +117,7 @@ export default function AdminErasureRequests() {
       icon: Trash2,
       variant: "destructive",
       shown: (item) => item.status === ErasureRequestStatus.APPROVED,
-      onClick: (item) => {
-        if (
-          window.confirm(
-            "This permanently pseudonymises the subject's personal data (§4.11). It cannot be undone. Proceed?",
-          )
-        ) {
-          execute.mutate(item.id);
-        }
-      },
+      onClick: (item) => setExecuting(item),
     },
   ];
 
@@ -144,6 +147,54 @@ export default function AdminErasureRequests() {
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
+      />
+
+      <ConfirmDialog
+        open={rejecting != null}
+        onOpenChange={(o) => !o && setRejecting(null)}
+        title="Reject this erasure request?"
+        description="The requester is told it was refused and shown your reason."
+        confirmLabel="Reject request"
+        destructive
+        pending={reject.isPending}
+        confirmDisabled={reason.trim() === ""}
+        testId="erasure-reject"
+        onConfirm={() =>
+          rejecting &&
+          reject.mutate(
+            { id: rejecting.id, note: reason.trim() },
+            { onSuccess: () => setRejecting(null), onError: failed("Could not reject the request.") },
+          )
+        }
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="erasure-reject-reason">Reason (shown to the requester)</Label>
+          <Textarea
+            id="erasure-reject-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            data-testid="erasure-reject-reason"
+          />
+        </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={executing != null}
+        onOpenChange={(o) => !o && setExecuting(null)}
+        title="Erase this person's data?"
+        description="This permanently pseudonymises the subject's personal data (§4.11). It cannot be undone."
+        confirmLabel="Erase permanently"
+        destructive
+        pending={execute.isPending}
+        testId="erasure-execute"
+        onConfirm={() =>
+          executing &&
+          execute.mutate(executing.id, {
+            onSuccess: () => setExecuting(null),
+            onError: failed("Could not carry out the erasure."),
+          })
+        }
       />
     </PageShell>
   );

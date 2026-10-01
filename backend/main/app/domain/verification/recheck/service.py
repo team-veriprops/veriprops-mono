@@ -185,11 +185,11 @@ class RecheckService:
         rows, total = await self._recheck_repo.page_pending(offset=page * page_size, limit=page_size)
         dtos = [
             RecheckDto(
-                id=r.id, verification_id=r.verification_id, reason=r.reason, documents=r.documents,
+                id=r.id, verification_id=r.verification_id, vid=vid, reason=r.reason, documents=r.documents,
                 scope_roles=r.scope_roles, status=RecheckStatus(r.status), price_minor=r.price_minor,
                 payment_id=r.payment_id, decision_note=r.decision_note, date_created=r.date_created,
             )
-            for r in rows
+            for r, vid in rows
         ]
         return self._recheck_repo._db_utils.build_page(dtos, total, page, page_size)
 

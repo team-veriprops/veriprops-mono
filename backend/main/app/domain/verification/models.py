@@ -178,6 +178,7 @@ class VerificationDto(Object):
     paid_at: Optional[datetime] = None
     sla_due_date: Optional[date] = None
     draft_step: int = 0
+    public_lookup_enabled: bool = False  # anyone with the VID sees the public summary (§13.1)
 
 
 class PriceRefreshDto(Object):

@@ -61,7 +61,7 @@ def _dispute(status=DisputeStatus.OPEN, agent_id="agent-1"):
         dispute_type=DisputeType.INACCURATE_FINDING.value, description=_LONG, evidence=None,
         status=status.value, target_role=AgentRole.SURVEYOR.value, agent_id=agent_id,
         agent_defence_text=None, agent_defence_at=None, resolution_outcome=None,
-        resolution_note=None, date_created=Utils.datetime_now(),
+        resolution_note=None, resolved_at=None, date_created=Utils.datetime_now(),
     )
 
 
@@ -134,6 +134,18 @@ class TestOpen:
         svc = _service(report=_report(days_ago=40), window_days=30)
         with pytest.raises(ValidationException):
             await svc.open("v-1", "cust-1", _open_dto())
+
+    async def test_a_part_the_case_does_not_have_is_refused_before_anything_changes(self, monkeypatch):
+        """A STANDARD case has no lawyer: naming one would park a dispute on no one."""
+        import main.app.domain.verification.dispute.service as mod
+        monkeypatch.setattr(mod, "publish_domain_event", AsyncMock())
+        v = _verification()
+        svc = _service(verification=v)
+        with pytest.raises(ValidationException):
+            await svc.open("v-1", "cust-1", OpenDisputeDto(
+                dispute_type=DisputeType.INACCURATE_FINDING, description=_LONG, target_role=AgentRole.LAWYER))
+        assert v.status == VerificationStatus.COMPLETED.value
+        svc._commissions.freeze_for_verification.assert_not_awaited()
 
     async def test_open_blocked_when_not_completed(self, monkeypatch):
         import main.app.domain.verification.dispute.service as mod
@@ -243,3 +255,23 @@ class TestResolve:
         svc = _service(verification=v, dispute=_dispute(status=DisputeStatus.OPEN))
         with pytest.raises(ValidationException):
             await svc.resolve("d-1", ResolveDisputeDto(outcome=DisputeOutcome.REJECTED, note="  "), "admin-1")
+
+
+class TestQueuesNameTheirCase:
+    """A dispute in a queue says which case it is about (§19.3): the admin deciding it and the
+    agent answering it both need the reference — a VID, not the customer's identity."""
+
+    async def test_the_admin_queue_carries_each_dispute_vid(self):
+        svc = _service()
+        svc._dispute_repo.page_open = AsyncMock(return_value=([(_dispute(), "VP-2026-ABC123")], 1))
+        svc._dispute_repo._db_utils = MagicMock(build_page=lambda items, total, page, size: SimpleNamespace(items=items))
+
+        page = await svc.page_open(0, 10)
+
+        assert [d.vid for d in page.items] == ["VP-2026-ABC123"]
+
+    async def test_the_agent_list_carries_each_dispute_vid(self):
+        svc = _service()
+        svc._dispute_repo.list_open_for_agent = AsyncMock(return_value=[(_dispute(), "VP-2026-ABC123")])
+
+        assert [d.vid for d in await svc.list_open_for_agent("agent-1")] == ["VP-2026-ABC123"]
