@@ -688,7 +688,7 @@ public pages crawlable; VID lookup pages `noindex` unless publicly shared.
 ## 7. Auth, Accounts & Sessions
 
 **Where:** backend `app/domain/user/auth/` (service, `otp_service.py`, `oauth/`, `session/`, `consent/`,
-`signup_draft/`, `cross_portal/`); frontend `frontend/src/app/(website)/auth/` +
+`cross_portal/`); frontend `frontend/src/app/(website)/auth/` +
 `frontend/src/components/website/auth/`.
 
 ### 7.1 Signup
@@ -702,8 +702,10 @@ A 4-step wizard — **Account → Verify → Residence → Consent** (`SignupCon
   required at signup too. Never detect OTP behaviour from `ENVIRONMENT` — read `OTP_MODE` (§25.1).
 - **Residence step** collects country/location; **Consent step** records `PLATFORM_TERMS` +
   `PRIVACY_POLICY` (versioned, §2.6).
-- **Resumable drafts:** server-side (`signup_drafts`, normalised-email key) + localStorage mirror;
-  cross-device resume prefers the server copy.
+- **Resumable drafts, same device only (D98):** a localStorage draft (`libs/signupDraft.ts`) restores
+  the names, email, phone and residence, and the wizard reopens on Account. It never holds the password
+  or the verified flags, so a resumed signup re-enters the password and re-verifies. The server keeps
+  no signup draft.
 - Referral capture via `?ref` (invalid codes ignored); server-side password strength check (length,
   diversity, common-password blocklist); device fingerprint captured for the security log.
 

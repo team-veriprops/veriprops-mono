@@ -6,7 +6,8 @@ migration under the same name — `insert_or_get` targets it by columns and pred
 must agree exactly. Pinned in both directions, with no database: each `_create_<table>()` builder
 runs against a recording stand-in for alembic's `op`, and then every additive revision after `0001`
 replays its `upgrade()` against the same stand-in, so a guard a later revision drops or creates
-(`0002_fixed_agent_commission` re-keys `commission_rules` by role) is folded into what "built" means.
+(`0002_fixed_agent_commission` re-keys `commission_rules` by role), or takes with a dropped table
+(`0008_drop_signup_drafts`), is folded into what "built" means.
 
 `0001`'s revision id is the last revision folded into it, so a database already stamped there is
 left alone by the squash (backend/CLAUDE.md, "Squashing the chain back into 0001").
@@ -65,20 +66,21 @@ def _record_builders():
 
 
 def _replay_later_revisions():
-    """Run each later revision's `upgrade()` against a recording `op`; return the index names it
-    dropped and the create_index calls it made, in order."""
-    dropped, created = [], []
+    """Run each later revision's `upgrade()` against a recording `op`; return the index names and
+    table names it dropped and the create_index calls it made, in order."""
+    dropped, dropped_tables, created = [], [], []
     for revision in _later_revisions():
         recorder = MagicMock()
         revision.op = recorder
         revision.upgrade()
         dropped += [call.args[0] for call in recorder.drop_index.call_args_list]
+        dropped_tables += [call.args[0] for call in recorder.drop_table.call_args_list]
         created += [call for call in recorder.create_index.call_args_list if isinstance(call.args[0], str)]
-    return dropped, created
+    return dropped, dropped_tables, created
 
 
 _MODULE, _TABLES, _INDEXES, _UNIQUE_CONSTRAINTS = _record_builders()
-_DROPPED_LATER, _CREATED_LATER = _replay_later_revisions()
+_DROPPED_LATER, _TABLES_DROPPED_LATER, _CREATED_LATER = _replay_later_revisions()
 
 
 def _partial_unique(call) -> bool:
@@ -99,7 +101,7 @@ _MODEL_GUARDS = _model_partial_uniques()
 _BUILT_GUARDS = {
     call.args[0]: (call.args[1], list(call.args[2]), call.kwargs["postgresql_where"])
     for call in _INDEXES
-    if _partial_unique(call) and call.args[0] not in _DROPPED_LATER
+    if _partial_unique(call) and call.args[0] not in _DROPPED_LATER and call.args[1] not in _TABLES_DROPPED_LATER
 }
 _BUILT_GUARDS.update({
     call.args[0]: (call.args[1], list(call.args[2]), call.kwargs["postgresql_where"])

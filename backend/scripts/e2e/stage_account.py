@@ -1,6 +1,6 @@
 """Stage — the account a user manages for themself (§1–§3, §9, §12.4).
 
-Every self-service surface outside the verification pipeline: the resumable signup draft,
+Every self-service surface outside the verification pipeline: the absent server signup draft,
 profile completion, the customer persona, setting and changing a password (and what that
 does to other sessions), linked social providers, the security log, the cross-portal summary,
 legal documents and consent history, notification preferences and read receipts, address
@@ -31,19 +31,15 @@ def run(ctx: Ctx) -> None:
 
 
 def _signup_draft() -> None:
-    """A half-finished signup resumes where it stopped, keyed by the email (§1.1)."""
+    """A half-finished signup resumes from the browser alone; the server holds nothing (§1.1).
+
+    Anything keyed on an email before the account exists is readable by whoever types that
+    email, so the server must not offer a draft to read back at all.
+    """
     anon = client()
-    email = f"QA-Draft-{uuid.uuid4().hex[:6]}@Veriprops.io"
-    saved = anon.put("/users/auth/signup/draft", json={"email": email, "step": 2, "payload": {"firstName": "Ada"}})
-    check("a signup draft is saved before any account exists (§1.1)", saved.status_code == 200,
-          f"http {saved.status_code}: {saved.text[:160]}")
-    resumed = anon.get("/users/auth/signup/draft", params={"email": email.lower()}).json()["data"]
-    check("the draft resumes at its step with its answers, whatever the email's case (§1.1)",
-          resumed is not None and resumed["step"] == 2 and resumed["payload"] == {"firstName": "Ada"},
-          f"draft={resumed}")
-    anon.delete("/users/auth/signup/draft", params={"email": email}).raise_for_status()
-    gone = anon.get("/users/auth/signup/draft", params={"email": email}).json()["data"]
-    check("a discarded draft no longer resumes (§1.1)", gone is None, f"draft={gone}")
+    probe = anon.get("/users/auth/signup/draft", params={"email": "qa-draft@veriprops.io"})
+    check("the server keeps no signup draft an anonymous caller could read back (§1.1)",
+          probe.status_code in (404, 405), f"http {probe.status_code}: {probe.text[:160]}")
 
 
 def _identity_surfaces(account) -> None:

@@ -335,7 +335,6 @@ class Settings(AppodusBaseSettings):
     SCHEDULER_SWEEP_INTERVAL_SECONDS: int = 15 * 60
 
     # Draft & abandonment lifetimes
-    SIGNUP_DRAFT_TTL_DAYS: int = 7               # resume-signup draft retention
     AGENT_APPLICATION_DRAFT_TTL_DAYS: int = 30   # agent-application draft retention
     VERIFICATION_ABANDONMENT_AGE_HOURS: int = 24 # age after which an unpaid verification is swept
     IDEMPOTENCY_KEY_TTL_HOURS: int = 24          # replay window for stored idempotency keys

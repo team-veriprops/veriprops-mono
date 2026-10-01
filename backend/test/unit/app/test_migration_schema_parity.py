@@ -12,6 +12,7 @@ guard reads the builders of **every** migration in `versions/`, not just the fir
 """
 import importlib.util
 from pathlib import Path
+from unittest.mock import MagicMock
 
 # Importing these packages registers every model onto BaseEntity.metadata,
 # exactly mirroring what alembic/env.py does to build the autogenerate target.
@@ -31,12 +32,21 @@ def _load_migration(migration_path: Path):
     return module
 
 
+def _tables_dropped_by(module) -> set[str]:
+    """The tables an additive migration's `upgrade()` drops, replayed against a recording `op`."""
+    recorder = MagicMock()
+    module.op = recorder
+    module.upgrade()
+    return {call.args[0] for call in recorder.drop_table.call_args_list}
+
+
 def _builder_tables() -> set[str]:
-    """Every table any migration creates.
+    """Every table the migration chain leaves standing at head.
 
     A migration declares its tables either through a `_TABLE_BUILDERS` list (the squashed
     initial schema) or through `_create_<table>()` helpers called directly from
-    `upgrade()` (the additive migrations that followed).
+    `upgrade()` (the additive migrations that followed). A later migration that drops a
+    table (`0008_drop_signup_drafts`) takes it back out, in chain order.
     """
     versions_dir = _BACKEND_ROOT / "main" / "alembic" / "versions"
     tables: set[str] = set()
@@ -51,6 +61,7 @@ def _builder_tables() -> set[str]:
                 for name in dir(module)
                 if name.startswith("_create_") and callable(getattr(module, name))
             )
+            tables -= _tables_dropped_by(module)
     return tables
 
 

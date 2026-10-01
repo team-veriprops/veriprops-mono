@@ -2918,3 +2918,35 @@ The job-accept preview that D30 described had also never been built.
 
 ### Revisit
 When `0002` is folded into `0001` at the next squash, under D95's precondition.
+
+## Decision: D98 — a half-finished signup resumes from the browser alone
+
+### Context
+§7.1 kept a server-side signup draft keyed on the normalised email, through
+`PUT/GET/DELETE /users/auth/signup/draft`. These routes had to be unauthenticated, because no account
+exists yet. As a result, anyone who typed an email could read its draft for seven days, with no rate
+limit. The draft's payload held the wizard's values, including the **password in plain text**, plus
+the name and phone. Discarding a draft only soft-deleted the row. The cross-device resume it existed
+for never worked either: the frontend fetched the server copy only when this browser already had a
+local draft.
+
+### Chosen
+- **No server draft.** The `signup_draft` domain, its routes and `SIGNUP_DRAFT_TTL_DAYS` are removed.
+  Migration `0008_drop_signup_drafts` drops the table, which purges every stored password. Its
+  downgrade recreates the table empty.
+- **Same-device resume.** `libs/signupDraft.ts` writes every draft through an allowlist: names,
+  email, phone and residence. The password and the verified flags never reach storage. A stored
+  draft carrying anything else, such as a legacy draft holding the password, is rewritten when read,
+  so existing browsers are purged too.
+- **A resumed signup opens on Account** with the fields filled in, asks for the password again and
+  re-verifies email and phone. The server's OTP marker lasts 30 minutes, so verified flags restored
+  from an older draft would only fail at submit.
+
+### Tradeoffs
+- Resume no longer crosses devices. It never actually did.
+- A returning user retypes the password and redoes the OTPs. That is a small cost against storing a
+  credential anywhere it can be read back.
+
+### Revisit
+Cross-device resume, if it is ever wanted, must be keyed on something the user has proved control
+of, such as a token emailed after the OTP, and never on an email alone.

@@ -1,7 +1,7 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { LegalDocument, Page, PublicConfig, SuccessResponse } from "@/types/models";
-import { AuthIntent, AuthSession, ConsentDocument, CrossPortalSummary, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SignupDraft, SocialProvider, UserConsent } from "@components/website/auth/models";
+import { AuthIntent, AuthSession, ConsentDocument, CrossPortalSummary, DeviceSession, OAuthFlowMode, OtpChannel, SecurityEvent, SocialProvider, UserConsent } from "@components/website/auth/models";
 /**
  * Frontend-facing auth API. Endpoint paths follow the convention used elsewhere
  * in the app (`/users/auth/...` — see FetchHttpClient.refreshToken). Backend is
@@ -225,24 +225,5 @@ export class AuthService {
   // consent re-acceptance modal) instead of navigating to /legal/[slug].
   getLegalDocument(slug: string): Promise<SuccessResponse<LegalDocument>> {
     return this.http.get(`${this.base}/consents/documents/${slug}`);
-  }
-
-  // ── Resumable signup draft (server-side keyed on email) ─────────
-  saveSignupDraft(payload: SignupDraft): Promise<SuccessResponse<SignupDraft>> {
-    return this.http.put(`${this.base}/signup/draft`, {
-      email: payload.email,
-      step: payload.step,
-      payload: payload.payload,
-    });
-  }
-
-  getSignupDraft(email: string): Promise<SuccessResponse<SignupDraft | null>> {
-    const qs = new URLSearchParams({ email }).toString();
-    return this.http.get(`${this.base}/signup/draft?${qs}`);
-  }
-
-  discardSignupDraft(email: string): Promise<SuccessResponse<boolean>> {
-    const qs = new URLSearchParams({ email }).toString();
-    return this.http.delete(`${this.base}/signup/draft?${qs}`);
   }
 }

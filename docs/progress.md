@@ -622,7 +622,7 @@ The PRD states this.
 - the share toggle's `aria-pressed` contradicted its label.
 
 **Logged, not done:**
-- **Signup drafts persist the password in plain text,** in localStorage and in `signup_drafts.payload` (needs a decision).
+- ~~**Signup drafts persist the password in plain text,** in localStorage and in `signup_drafts.payload`.~~ Fixed in the pending-issues cycle (D98): the server draft and its table are dropped (`0008`), and the local draft keeps no password.
 - **Admin invitations are not emailed** (now a §G row and `TODO(gap)`).
 - **A send-now broadcast emails every recipient inside the request.** About 1s per local SMTP send; at production scale it would time out. Needs a queued fan-out.
 - **Pricing line items** aren't checked against the tier price.
@@ -805,7 +805,7 @@ status: **Slices 0–5 and both side tracks are complete, committed and released
 
 - **Scenarios** (each signs up a brand-new account, so they own their data and run in parallel):
   - UAT-AUTH-09: the four-step funnel (Account → Verify → Residence → Consent) ends on the new-verification wizard, because a new customer has no verification yet.
-  - UAT-AUTH-10: a half-finished signup resumes, restoring the typed email.
+  - UAT-AUTH-10: a half-finished signup resumes on Account, restoring the typed name and email but never the password, which is absent from localStorage (D98).
   - UAT-AUTH-11: signing up through a **real** referral code (read from `/referrals/me`) costs the invitee nothing. The referrer's credit only exists after the invitee's first payment clears the chargeback window, so that assertion belongs to the referral spec — not faked here with an API check.
   - UAT-AUTH-12: `?intent=agent` lands in the agent portal with the AGENT persona.
   - UAT-AUTH-13: every step is scanned for a11y, including the OTP dialog while open.

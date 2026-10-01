@@ -1,7 +1,6 @@
 """Resumable agent-application wizard draft service (PRD §3.1).
 
-Owns the one-active-draft-per-user lifecycle: load, upsert, and discard (mirrors
-``auth/signup_draft``). The parent ``AgentService`` delegates draft discard here
+Owns the one-active-draft-per-user lifecycle: load, upsert, and discard. The parent ``AgentService`` delegates draft discard here
 once an application is submitted.
 """
 from __future__ import annotations
