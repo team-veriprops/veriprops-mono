@@ -866,7 +866,8 @@ and details; the Property entity is created/linked here (§4.3).
   seeded from static defaults — currently ₦50,000 / ₦120,000 / ₦300,000; provisional pending business
   sign-off, §G). `PricingConfigService.tier_price_kobo` is the single resolver every pricing path reads
   (quote, submit, re-check, upgrade); admin edits take effect on the **next quote**, never on an existing
-  lock.
+  lock. A tier's price and its line items are **one save** (`PUT /admin/pricing/tiers/{tier}`): items, when
+  present, must add up to the price, so the breakdown customers see never totals an old price (D99).
 - Quotes show the NGN amount as the prominent, certain figure; foreign figures are indicative
   (§4.4). First-time and referral discounts auto-apply, capped at `max_discount_percent` (§22).
 
@@ -1369,15 +1370,21 @@ An agent's commission is a **fixed amount per role**, admin-configured in the `c
 price paid, so no job pays more for the same work and a referral-discounted case still pays its agents in
 full (D97, superseding D30's per-role×tier share of the price). Seeded defaults: REGISTRY ₦20,000 · FIELD
 ₦14,400 · SURVEYOR ₦14,400 · LAWYER ₦36,000. The amount shows on the agent's task card and task page
-(`commissionMinor`) **before** the agent commits. Accrual happens at report release per approved task, with a
-double-accrual guard (a re-released re-check never accrues twice).
+(`commissionMinor`) **before** the agent commits, and is **locked when the agent accepts**
+(`verification_tasks.commission_minor`): a later rate change does not move what that task pays. A task taken
+back from its agent (decline, no-show reclaim, reassignment) loses the lock and is re-offered at the then-live
+rate (D99). Accrual happens at report release per approved task, at the locked rate (the live rate for a task
+accepted before the lock existed), with a double-accrual guard (a re-released re-check never accrues twice).
 
 **Minimum margin.** For every tier, what the roles it requires can be paid must leave at least
-`commission_min_margin_pct` (30%) of the tier's price. That is the worst case: each role's fixed commission
-plus the remote bonus. `CommissionMarginGuard` refuses any of the four changes that could break this, naming
-the tier and the figures: a role's commission, a tier's price, the minimum margin, or the remote bonus.
-`test_margin_guard_coverage.py` fails CI on any writer of those values that skips the guard. The seeded
-defaults (bonus ₦0) leave BASIC 60%, STANDARD ~59% and PREMIUM ~72%.
+`commission_min_margin_pct` (30%) of what the tier **collects** (D99). Both sides are the worst case. What it
+collects is the price after the largest discount a customer can get: the first-time discount, topped up by
+referral credit to the combined cap. What it pays is each role's fixed commission plus the remote bonus.
+`CommissionMarginGuard` refuses any of the six changes that could break this, naming the tier and the figures:
+a role's commission, a tier's price, the minimum margin, the remote bonus, the first-time discount or the
+discount cap. It holds one global lock, so two concurrent saves cannot each pass against the other's stale
+value. `test_margin_guard_coverage.py` fails CI on any writer of those values that skips the guard. The seeded
+defaults (bonus ₦0, 25% worst-case discount) leave BASIC ~47%, STANDARD ~46% and PREMIUM ~62% of the net.
 
 **Remote bonus.** A task that ages out of the open pool is stamped with the admin-set flat bonus
 `remote_job_bonus_ngn_kobo` (system config, default ₦0), counted against the margin as above. It shows beside
@@ -1960,16 +1967,16 @@ without a redeploy:
 | `agent_dispute_defence_hours` | 48 | Agent's window to respond to a dispute on their task |
 | `commission_clearance_days` | 7 | Days after approval before the commission bulk is withdrawable |
 | `commission_reserve_pct` | 10 | % of commission held until the chargeback window closes |
-| `commission_min_margin_pct` | 30 | % of each tier's price its agents' worst-case pay (commissions + remote bonus) must leave (§20.1) |
-| `remote_job_bonus_ngn_kobo` | 0 | Flat bonus (kobo) on a task that ages out of the open pool, paid as its own commission line (§20.1) |
+| `commission_min_margin_pct` | 30 | % of what each tier collects after the largest discount that its agents' worst-case pay (commissions + remote bonus) must leave (§20.1) |
+| `remote_job_bonus_ngn_kobo` | 0 | Flat bonus (stored in kobo, entered in naira) on a task that ages out of the open pool, paid as its own commission line (§20.1) |
 | `chargeback_window_days` | 120 | Card-chargeback window (reserve release; referral-credit clearance) |
 | `task_sla_hours` | 48 | Accept→submit target feeding the timeliness metric |
 | `agent_low_performance_threshold` | 40 | Composite below which ranking visibility is reduced |
 | `agent_top_agent_accuracy_threshold` | 90 | Accuracy at/above which the Top Agent badge is earned |
 | `agent_wide_coverage_states` | 6 | Coverage state-count above which an agent is flagged for review |
-| `first_time_discount_percent` | 10 | Auto discount on a customer's first verification |
+| `first_time_discount_percent` | 10 | Auto discount on a customer's first verification; margin-guarded (§20.1) |
 | `referral_credit_ngn` | 5,000 | Referrer credit (whole NGN) on invitee's first payment |
-| `max_discount_percent` | 25 | Combined discount cap |
+| `max_discount_percent` | 25 | Combined discount cap; margin-guarded (§20.1) |
 | `cancellation_surcharge_pct` | 20 | Surcharge on cancellation after assignment |
 | `pii_retention_days` | 2555 | PII retention before the NDPA erasure window (≈7 years) |
 | `erasure_request_review_sla_days` | 30 | SLA to review an erasure request |

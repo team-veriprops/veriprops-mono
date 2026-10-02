@@ -1,6 +1,7 @@
 """ReviewService (§8): approve/reject, the explicit release gate (flip→APPROVED +
 report + commissions + COMPLETED), reopen, and fail+refund. Deps mocked, no DB."""
 from contextlib import asynccontextmanager
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -8,6 +9,7 @@ import pytest
 
 from main.app.core.state.status import AgentRole, TaskState, VerificationStatus, VerificationTier
 from main.app.domain.commission.models import CommissionKind
+from main.app.domain.commission_rule.service import CommissionRuleService
 from main.app.domain.verification.review.service import ReviewService
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import (
@@ -41,7 +43,7 @@ def _task(role, state=TaskState.SUBMITTED, review=None, payload=None, agent="age
         assigned_agent_id=agent, review_decision=review, review_quality=100,
         submission_payload=payload or {"ok": True}, rejection_reason=None,
         in_pool=False, assignment_mode=None, decline_count=0,
-        submitted_at=None, approved_at=None, remote_bonus_minor=None,
+        submitted_at=None, approved_at=None, remote_bonus_minor=None, commission_minor=None,
     )
 
 
@@ -106,6 +108,8 @@ def _make_service(verification, tasks):
     svc._commissions.accrue = AsyncMock()
     svc._commissions.get_live_for_task = AsyncMock(return_value=None)
     svc._commission_rules.commission_minor = AsyncMock(return_value=100000)
+    # The real lock-or-live rule, over the mocked live rate.
+    svc._commission_rules.payable_minor = partial(CommissionRuleService.payable_minor, svc._commission_rules)
     # commission_clearance_days / commission_reserve_pct / chargeback_window_days
     svc._config.get_int = AsyncMock(return_value=10)
     svc._reports.release = AsyncMock(return_value=SimpleNamespace(id="rep-1", report_version=1))
@@ -333,6 +337,20 @@ class TestCommissionAccrual:
         assert paid == fixed
         for call in svc._commission_rules.commission_minor.await_args_list:
             assert call.args == (call.args[0],)  # role only — the price is not an input
+
+    async def test_accrual_pays_the_rate_locked_at_accept(self):
+        """An admin changed the role's commission after the agent accepted: the agent is paid
+        what the task card showed when they took it, not the new rate (§12.1 / §20.1)."""
+        tasks = _standard_tasks(review="APPROVED")
+        tasks[0].commission_minor = 1_750_000
+        svc = _make_service(_verification(), tasks)
+        await svc.release("v-1", "admin-1")
+        paid = {dto.task_id: dto.amount_minor
+                for dto in (c.args[0] for c in svc._commissions.accrue.await_args_list)}
+        assert paid[tasks[0].id] == 1_750_000
+        # A task accepted before the lock existed falls back to the live rate.
+        assert paid[tasks[1].id] == paid[tasks[2].id] == 100000
+        assert svc._commission_rules.commission_minor.await_count == 2
 
     async def test_a_remote_bonus_is_paid_as_its_own_ledger_line(self):
         """§20.1 / D97: an aging pool task's bonus accrues beside the fixed commission, on the

@@ -2950,3 +2950,53 @@ local draft.
 ### Revisit
 Cross-device resume, if it is ever wanted, must be keyed on something the user has proved control
 of, such as a token emailed after the OTP, and never on an email alone.
+
+## Decision: D99 — the commission margin holds under concurrency and discounts; a task pays what was accepted
+
+### Context
+A review of D97 found four gaps. Two concurrent margin-affecting saves (a commission raise and a price
+cut, say) each passed the guard against the other's stale value, and together could breach the
+margin. The guard measured the margin on the list price, but agents are paid in full on a discounted
+case, so a 25% discount came out of the platform's share alone. The agent's task card showed the
+role's rate before accept, but accrual read the live rate at release, so an admin's later change moved
+what the agent had agreed to. And a tier's price and its customer-facing line items were saved
+through two routes, so a price change left the breakdown adding up to the old price.
+
+### Chosen
+- **One lock.** `CommissionMarginGuard.check` opens with `advisory_xact_lock("commission_margin")`.
+  Every writer checks and writes in one transaction, so saves take turns. A writer that also needs its
+  own lock takes it after the check, never before, so no two saves can deadlock.
+- **The margin is measured on the net (owner decision, 2026-10-01).** The rule is now
+  `net − paid ≥ min% × net`, where *net* is the price after the largest discount a customer can get:
+  the first-time discount, topped up by referral credit to the combined cap (`worst_case_net_minor`,
+  which reuses `apply_discounts`). The first-time and max-discount percentages are guarded writes too,
+  validated to 0–100, and the coverage scan pins both. The seeded defaults still pass: the tightest is
+  Standard, at 46% of its net.
+- **Locked at accept.** `verification_tasks.commission_minor` (migration `0009_task_commission_lock`)
+  is written in `accept`'s claim. Decline, the no-show reclaim and reassignment clear it, so the next
+  agent locks the then-live rate. Accrual and the task card read it through
+  `payable_commission_minor`, which falls back to the live rate when there is no lock. The column is
+  not backfilled: an older task is paid the live rate, as before. The downgrade refuses while an unpaid
+  task holds a lock.
+- **`0002`'s downgrade refuses** while any fixed amount differs from its seeded default. The D97
+  waiver covered only the upgrade.
+- **One pricing write.** `PUT /admin/pricing/tiers/{tier}` takes `{priceNgnMinor, lineItems[]}`.
+  Items, when present, must add up to the price, and an empty list means no breakdown. The
+  `/line-items` route is gone, and the admin page edits both in one form.
+- **Units are declared by the backend.** `ConfigUnit` per key (`CONFIG_UNITS`) lets the settings page
+  show and take the kobo-stored remote bonus in naira, without knowing the keys. Key descriptions are
+  code-owned; the copy seeded on a row is only a fallback.
+
+### Tradeoffs
+- Measuring on the worst-case net is stricter. Under the defaults, a ₦5,000 remote bonus is now refused,
+  because it leaves Standard at 29%. The drive-through uses ₦3,000.
+- The global lock serialises all margin-affecting saves. These are rare admin edits, so this costs
+  nothing in practice.
+- A stored configuration that already breaches the new rule is not repaired. Each later
+  margin-affecting save is refused until the breach is fixed. The admin sees which tier breaches and
+  by how much.
+- The re-check fee (`recheck_price_pct`) is not counted, because a re-check spawns no commissioned
+  task today.
+
+### Revisit
+When `0009` is folded into `0001` at the next squash, under D95's precondition.

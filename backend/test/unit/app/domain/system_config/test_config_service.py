@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from main.app.domain.system_config.models import CONFIG_DEFAULTS, ConfigKey
+from main.app.domain.system_config.models import CONFIG_DEFAULTS, ConfigKey, ConfigUnit
 from main.app.domain.system_config.service import ConfigService
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.exception.exceptions import ValidationException
@@ -124,3 +124,65 @@ class TestRemoteBonus:
         with pytest.raises(ValidationException):
             await svc.set(ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO, 9_000_000, "admin-1")
         svc._config_repo.upsert.assert_not_awaited()
+
+
+class TestDiscounts:
+    """A discount lowers what a case collects while its agents are still paid in full, so both
+    discount percentages are guarded writes like the margin itself (§17.1, §20.1 / D97)."""
+
+    @pytest.mark.parametrize("key, override", [
+        (ConfigKey.FIRST_TIME_DISCOUNT_PERCENT, "first_time_pct"),
+        (ConfigKey.MAX_DISCOUNT_PERCENT, "max_discount_pct"),
+    ])
+    async def test_a_new_discount_is_checked_against_the_margin_before_it_is_stored(self, key, override):
+        svc, _ = _service()
+        await svc.set(key, "15", "admin-1")
+        svc._margin_guard.check.assert_awaited_once_with(**{override: 15})
+        assert svc._config_repo.upsert.await_args.args[0]["value_json"] == 15
+
+    @pytest.mark.parametrize("key", [ConfigKey.FIRST_TIME_DISCOUNT_PERCENT, ConfigKey.MAX_DISCOUNT_PERCENT])
+    @pytest.mark.parametrize("value", [-1, 101])
+    async def test_a_discount_outside_0_to_100_is_refused(self, key, value):
+        svc, _ = _service()
+        with pytest.raises(ValidationException):
+            await svc.set(key, value, "admin-1")
+        svc._margin_guard.check.assert_not_awaited()
+        svc._config_repo.upsert.assert_not_awaited()
+
+    async def test_a_discount_that_breaks_the_margin_is_never_stored(self):
+        svc, _ = _service()
+        svc._margin_guard.check = AsyncMock(side_effect=ValidationException(message="below the margin"))
+        with pytest.raises(ValidationException):
+            await svc.set(ConfigKey.MAX_DISCOUNT_PERCENT, 80, "admin-1")
+        svc._config_repo.upsert.assert_not_awaited()
+
+
+class TestUnits:
+    """Each key declares its unit so the admin screen can show money in naira while the store
+    keeps kobo — the backend, not the page, knows which keys are money."""
+
+    async def test_the_remote_bonus_is_declared_in_minor_currency(self):
+        svc, _ = _service()
+        svc._config_repo.list_all = AsyncMock(return_value=[])
+        units = {item.key: item.unit for item in await svc.list_all()}
+        assert units[ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO] == ConfigUnit.MINOR_CURRENCY
+        assert units[ConfigKey.REFERRAL_CREDIT_NGN] == ConfigUnit.MAJOR_CURRENCY
+        assert units[ConfigKey.MAX_DISCOUNT_PERCENT] == ConfigUnit.PERCENT
+        assert units[ConfigKey.DISPUTE_WINDOW_DAYS] is None
+
+    async def test_the_code_owned_description_wins_over_the_seeded_copy(self):
+        # Migration 0001 seeded each row with the description of its day ("…, in kobo, …"); the
+        # admin types naira now, so the stale copy must not be what they read.
+        svc, _ = _service()
+        svc._config_repo.list_all = AsyncMock(return_value=[SimpleNamespace(
+            key=ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO.value, value_json=0,
+            description="Flat bonus, in kobo, paid …", date_updated=None,
+        )])
+        bonus = next(i for i in await svc.list_all() if i.key == ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO)
+        assert "kobo" not in bonus.description
+
+    async def test_the_unit_travels_as_camel_case(self):
+        svc, _ = _service()
+        svc._config_repo.list_all = AsyncMock(return_value=[])
+        bonus = next(i for i in await svc.list_all() if i.key == ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO)
+        assert bonus.model_dump(by_alias=True, mode="json")["unit"] == "MINOR_CURRENCY"

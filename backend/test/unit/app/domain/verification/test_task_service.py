@@ -52,6 +52,7 @@ def _task(role, state=TaskState.PENDING, agent=None, **over):
         pool_expires_at=None,
         accept_deadline_at=None,
         remote_bonus_minor=None,
+        commission_minor=None,
     )
     base.update(over)
     return SimpleNamespace(**base)
@@ -73,6 +74,8 @@ def _make_service(verification, tasks):
     svc._audit = MagicMock()
     svc._config = MagicMock()
     svc._config.get_int = AsyncMock(return_value=0)  # remote_job_bonus_ngn_kobo: no bonus
+    svc._commission_rules = MagicMock()
+    svc._commission_rules.commission_minor = AsyncMock(return_value=1_440_000)  # the role's live rate
 
     svc._verification_repo.get_model = AsyncMock(return_value=verification)
     svc._verification_repo.update = AsyncMock()
@@ -327,6 +330,44 @@ class TestAgentExecution:
         svc = _make_service(_verification(), [mine])
         with pytest.raises(ValidationException):
             await svc.submit(mine.id, "agent-9", _valid_payload(AgentRole.FIELD))
+
+
+class TestCommissionLock:
+    """What a task pays is fixed when its agent accepts it (§12.1 / §20.1): an admin changing a
+    role's commission later must not move the figure the agent agreed to. The lock belongs to
+    that agent — a task taken back from them is re-offered at the then-live rate."""
+
+    async def test_accepting_locks_the_roles_live_commission(self):
+        pooled = _task(AgentRole.FIELD, TaskState.PENDING, in_pool=True)
+        svc = _make_service(_verification(), [pooled])
+        task = await svc.accept(pooled.id, "agent-1")
+        svc._commission_rules.commission_minor.assert_awaited_once_with(AgentRole.FIELD)
+        assert task.commission_minor == 1_440_000
+
+    async def test_accepting_a_manual_assignment_locks_it_too(self):
+        assigned = _task(AgentRole.REGISTRY, TaskState.ASSIGNED, agent="agent-1")
+        svc = _make_service(_verification(), [assigned])
+        task = await svc.accept(assigned.id, "agent-1")
+        assert task.commission_minor == 1_440_000
+
+    async def test_declining_releases_the_lock(self):
+        mine = _task(AgentRole.FIELD, TaskState.ACCEPTED, agent="agent-1", commission_minor=1_000_000)
+        svc = _make_service(_verification(), [mine])
+        task = await svc.decline(mine.id, "agent-1", reason="too far")
+        assert task.commission_minor is None
+
+    async def test_a_no_show_reclaim_releases_the_lock(self):
+        stale = _task(AgentRole.REGISTRY, TaskState.ASSIGNED, agent="agent-1", commission_minor=1_000_000)
+        svc = _make_service(_verification(status=VerificationStatus.IN_PROGRESS), [stale])
+        svc._task_repo.list_accept_deadline_expired = AsyncMock(return_value=[stale])
+        await svc.sweep_no_show()
+        assert stale.commission_minor is None
+
+    async def test_reassigning_releases_the_lock(self):
+        assigned = _task(AgentRole.REGISTRY, TaskState.ASSIGNED, agent="agent-0", commission_minor=1_000_000)
+        svc = _make_service(_verification(status=VerificationStatus.IN_PROGRESS), [assigned])
+        task = await svc.assign("v-1", AgentRole.REGISTRY, "agent-9", "admin-1")
+        assert task.commission_minor is None
 
 
 class TestOnHold:

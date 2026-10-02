@@ -13,7 +13,8 @@ of three different prices has no single fixed-amount equivalent. Nothing is lost
 before the delete, every rate is written to ``audit_logs`` (``ADMIN_CONFIG_CHANGED`` on
 ``commission_rule``) with the default it was seeded at and whether an admin had changed it, so an
 edited rate can be read back and re-entered as an amount. The commissions those rates produced are
-stored as amounts on ``commissions`` and are not touched.
+stored as amounts on ``commissions`` and are not touched. The downgrade has no such exception: it
+refuses while any fixed amount differs from its seeded default.
 
 ``commissions`` also gains ``kind`` (``BASE`` / ``REMOTE_BONUS``): the remote bonus an aging pool
 task carries is paid as its own ledger line beside the task's fixed commission, so earnings can
@@ -138,6 +139,18 @@ def _clear_rules() -> None:
     op.execute(f"DELETE FROM {_TABLE}")
 
 
+def _refuse_customised_amounts() -> None:
+    # Going down, the exception above does not apply: a role still at its seeded amount loses
+    # nothing (the seed would put it back), but an amount an admin set has no D30 equivalent and
+    # would vanish. Refuse while any live rule differs from its default.
+    defaults = ", ".join(f"('{row['role']}', {row['amount_ngn_kobo']})" for row in _commission_rule_rows())
+    AlembicUtils.refuse_if_rows(
+        f"SELECT count(*) FROM {_TABLE} WHERE deleted = false "
+        f"AND (role, amount_ngn_kobo) NOT IN ({defaults})",
+        "admin-set fixed commissions have no equivalent in the pre-0002 role x tier rates",
+    )
+
+
 def _rekey_by_role() -> None:
     op.drop_index(_ROLE_TIER_GUARD, table_name=_TABLE)
     op.drop_column(_TABLE, "rate_bps")
@@ -181,6 +194,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    _refuse_customised_amounts()
     _drop_commission_kind()
     _clear_rules()
     _rekey_by_role_and_tier()

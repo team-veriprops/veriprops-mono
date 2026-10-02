@@ -12,7 +12,9 @@ from .harness import Ctx, check, consent_version_for, stub_pay
 
 
 # ₦5,000 — small enough to leave every tier its minimum margin on the seeded prices.
-_REMOTE_BONUS = 500_000
+# ₦3,000: under the seeded 25% discount cap, ₦5,000 across Standard's three roles would leave it
+# below the 30% margin on what it collects, and the guard would refuse it.
+_REMOTE_BONUS = 300_000
 
 
 def _ops_task(ctx: Ctx, role: str) -> dict:

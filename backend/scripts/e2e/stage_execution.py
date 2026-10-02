@@ -84,6 +84,14 @@ def run(ctx: Ctx) -> None:
         # Accept → start → capture evidence → submit (§12.1, §12.2, §12.3).
         accepted = agent.post(f"/agents/tasks/{task_id}/accept").json()["data"]
         check(f"{role} agent accepted the task (§12.1)", accepted["state"] == "ACCEPTED")
+        if role == "REGISTRY":
+            # The rate is locked at accept: a later rule change does not move what this task pays.
+            admin.put(f"/admin/commission-rules/{role}", json={"amountNgnKobo": original + 100}).raise_for_status()
+            card = agent.get("/agents/tasks").json()["data"]["items"]
+            shown = next(t for t in card if t["id"] == task_id)["commissionMinor"]
+            admin.put(f"/admin/commission-rules/{role}", json={"amountNgnKobo": original}).raise_for_status()
+            check("an accepted task keeps the commission locked at accept (§12.1/§20.1)",
+                  shown == commissions[role], f"shown={shown} locked={commissions[role]}")
         started = agent.post(f"/agents/tasks/{task_id}/start").json()["data"]
         check(f"{role} agent started the task (§12.2)", started["state"] == "IN_PROGRESS")
 

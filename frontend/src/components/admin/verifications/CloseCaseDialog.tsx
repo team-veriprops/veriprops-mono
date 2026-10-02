@@ -10,10 +10,10 @@ import { Textarea } from "@3rdparty/ui/textarea";
 import DetailDrawer from "@components/ui/DetailDrawer";
 import { ConfirmDialog } from "@components/ui/ConfirmDialog";
 import { getErrorMessage } from "@lib/errors";
-import { formatMinor, humanizeEnumLabel } from "@lib/utils";
+import { formatMinor, humanizeEnumLabel, majorToMinor } from "@lib/utils";
 import { CloseReason } from "@/types/closure";
 import { TransactionCurrency } from "@/types/models";
-import { CLOSE_REASONS, closeOutcomeMessage, closureConfirmation, majorToMinor } from "./libs/closure";
+import { CLOSE_REASONS, closeOutcomeMessage, closureConfirmation } from "./libs/closure";
 import { useCloseCaseMutation, useClosureQuoteQuery } from "./libs/useAdminVerificationQueries";
 
 const NOTE_MIN = 5;

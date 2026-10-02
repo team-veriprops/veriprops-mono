@@ -20,15 +20,13 @@ describe("PricingService contract (mirrors app/domain/verification/pricing_confi
     expect(calls[0]).toMatchObject({ method: "get", url: "/admin/pricing" });
   });
 
-  it("sets a tier price", async () => {
+  it("saves a tier's price and line items in one call", async () => {
     const { http, calls } = mockHttp();
-    await new PricingService(http).setTierPrice(VerificationTier.BASIC, 6_000_000);
-    expect(calls[0]).toMatchObject({ method: "put", url: "/admin/pricing/tiers/BASIC", body: { priceNgnMinor: 6_000_000 } });
-  });
-
-  it("sets line items", async () => {
-    const { http, calls } = mockHttp();
-    await new PricingService(http).setLineItems(VerificationTier.STANDARD, [{ label: "Fee", amountMinor: 100 }]);
-    expect(calls[0]).toMatchObject({ method: "put", url: "/admin/pricing/tiers/STANDARD/line-items" });
+    const lineItems = [{ label: "Fee", amountMinor: 6_000_000 }];
+    await new PricingService(http).setTierPricing(VerificationTier.BASIC, 6_000_000, lineItems);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      method: "put", url: "/admin/pricing/tiers/BASIC", body: { priceNgnMinor: 6_000_000, lineItems },
+    });
   });
 });

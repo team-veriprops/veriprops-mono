@@ -11,8 +11,7 @@ from kink import di
 
 from main.app.core.state.status import VerificationTier
 from main.app.domain.verification.pricing_config.models import (
-    SetLineItemsDto,
-    SetTierPriceDto,
+    SetTierPricingDto,
     TierPricingViewDto,
 )
 from main.app.domain.verification.pricing_config.service import PricingConfigService
@@ -30,20 +29,11 @@ async def get_pricing(_admin_id: str = Depends(require_permission(Permission.CON
 
 
 @admin_pricing_router.put("/tiers/{tier}", response_model=SuccessResponse[TierPricingViewDto])
-async def set_tier_price(
+async def set_tier_pricing(
     tier: VerificationTier,
-    req: SetTierPriceDto,
+    req: SetTierPricingDto,
     admin_id: str = Depends(require_permission(Permission.CONFIGURE_PRICING)),
 ):
-    await pricing_service.set_tier_price(tier, req.price_ngn_minor, admin_id)
-    return SuccessResponse[TierPricingViewDto](data=await pricing_service.view())
-
-
-@admin_pricing_router.put("/tiers/{tier}/line-items", response_model=SuccessResponse[TierPricingViewDto])
-async def set_line_items(
-    tier: VerificationTier,
-    req: SetLineItemsDto,
-    admin_id: str = Depends(require_permission(Permission.CONFIGURE_PRICING)),
-):
-    await pricing_service.set_line_items(tier, req.line_items, admin_id)
+    """A tier's price and its line items, saved together (§18.1)."""
+    await pricing_service.set_tier_pricing(tier, req.price_ngn_minor, req.line_items, admin_id)
     return SuccessResponse[TierPricingViewDto](data=await pricing_service.view())

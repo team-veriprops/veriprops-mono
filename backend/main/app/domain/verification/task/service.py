@@ -24,6 +24,7 @@ from main.app.core.state.machine import task_state_machine
 from main.app.core.state.status import AgentRole, TaskState, VerificationStatus, VerificationTier
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
+from main.app.domain.commission_rule.service import CommissionRuleService
 from main.app.domain.user.auth.session.models import UserPersona
 from main.app.domain.user.service import UserService
 from main.app.domain.verification.closure.policy import is_on_hold
@@ -70,6 +71,7 @@ class VerificationTaskService:
         user_service: UserService,
         audit_service: AuditLogService,
         config_service: ConfigService,
+        commission_rule_service: CommissionRuleService,
     ):
         self._task_repo = task_repo
         self._verification_repo = verification_repo
@@ -77,6 +79,7 @@ class VerificationTaskService:
         self._user_service = user_service
         self._audit = audit_service
         self._config = config_service
+        self._commission_rules = commission_rule_service
 
     # ── Instantiation (§4.2 dependency-aware) ─────────────────────
 
@@ -271,7 +274,9 @@ class VerificationTaskService:
         await self._assert_capacity(agent_id)
         self._assert_task_transition(task.state, TaskState.ACCEPTED)
         # Claimed on the state and ownership this decision was made on: of two agents
-        # accepting one pool task, the second finds it no longer unassigned PENDING.
+        # accepting one pool task, the second finds it no longer unassigned PENDING. The
+        # role's live commission is locked in the same statement (§20.1): what the card
+        # showed is what the task pays, whatever the rate does later.
         accepted = await self._task_repo.claim_transition(
             task.id, [task.state], TaskState.ACCEPTED, status_column=_STATE,
             expect={"assigned_agent_id": task.assigned_agent_id, "in_pool": task.in_pool},
@@ -279,6 +284,7 @@ class VerificationTaskService:
             assignment_mode=task.assignment_mode or TaskAssignmentMode.BROADCAST.value,
             in_pool=False,
             accepted_at=Utils.datetime_now(),
+            commission_minor=await self._commission_rules.commission_minor(AgentRole(task.role)),
         )
         if accepted is None:
             raise InvalidResourceStateException(resource="task", message="This task has already been taken.")
@@ -304,7 +310,7 @@ class VerificationTaskService:
         declined = await self._task_repo.claim_transition(
             task.id, [TaskState.ASSIGNED, TaskState.ACCEPTED], TaskState.PENDING, status_column=_STATE,
             expect={"assigned_agent_id": agent_id}, increments={"decline_count": 1},
-            in_pool=True, assigned_agent_id=None,
+            in_pool=True, assigned_agent_id=None, commission_minor=None,
         )
         if declined is None:
             raise InvalidResourceStateException(resource="task", message="This task has already moved on.")
@@ -524,7 +530,7 @@ class VerificationTaskService:
         reclaimed = await self._task_repo.claim_transition(
             task.id, [task.state], TaskState.PENDING, status_column=_STATE,
             expect={"assigned_agent_id": task.assigned_agent_id}, increments={"decline_count": 1},
-            in_pool=False, assigned_agent_id=None,
+            in_pool=False, assigned_agent_id=None, commission_minor=None,
         )
         if reclaimed is None:
             return False
@@ -592,6 +598,9 @@ class VerificationTaskService:
         # first materialised by the assignment itself) a same-transaction re-fetch by id
         # can return None — the get-after-create gotcha.
         now = Utils.datetime_now()
+        # A (re)assigned task waits on its agent's accept, which locks the commission anew; a
+        # rate locked by a previous agent is theirs, not the new one's (§20.1).
+        task.commission_minor = None
         task.assigned_at = now
         task.accept_deadline_at = now + timedelta(hours=settings.TASK_NO_SHOW_TIMEOUT_HOURS)
 

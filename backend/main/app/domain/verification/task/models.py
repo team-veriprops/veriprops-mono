@@ -66,6 +66,10 @@ class VerificationTask(BaseEntity):
     decline_count = Column(Integer, nullable=False, server_default="0")
     # Optional flat remote-job bonus attached to an aging/hard-to-reach task (§11.3).
     remote_bonus_minor = Column(BigInteger, nullable=True)
+    # The role's commission locked when the current agent accepted (§12.1 / §20.1): later
+    # rate changes don't move what they agreed to. Null until accepted, and cleared when the
+    # task is taken back from them; a null at accrual pays the live rate.
+    commission_minor = Column(BigInteger, nullable=True)
 
     assigned_at = Column(UTCDateTime, nullable=True)
     accepted_at = Column(UTCDateTime, nullable=True)
@@ -198,8 +202,8 @@ class AgentTaskDto(Object):
     assignment_mode: Optional[TaskAssignmentMode] = None
     accept_deadline_at: Optional[datetime] = None
     remote_bonus_minor: Optional[int] = None
-    # What one approved task of this role pays the agent (NGN kobo) — a fixed per-role amount,
-    # shown before accept (§12.1 / §20.1).
+    # What this task pays the agent (NGN kobo): the role's fixed amount, shown before accept and
+    # locked at accept (§12.1 / §20.1).
     commission_minor: int = 0
     submission_payload: Optional[Dict[str, Any]] = None
     rejection_reason: Optional[str] = None

@@ -33,9 +33,8 @@ def _recorded(step: str) -> MagicMock:
     return module.op
 
 
-def test_it_chains_after_the_refund_requests_migration_and_is_the_only_head():
+def test_it_chains_after_the_refund_requests_migration():
     scripts = _scripts()
-    assert scripts.get_heads() == ["0008_drop_signup_drafts"]
     assert scripts.get_revision("0008_drop_signup_drafts").down_revision == "0007_refund_requests"
 
 

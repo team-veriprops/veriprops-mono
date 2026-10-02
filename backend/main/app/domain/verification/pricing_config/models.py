@@ -59,16 +59,16 @@ class PricingTierDto(Object):
     line_items: List[PricingLineItemDto] = []
 
 
-class SetTierPriceDto(Object):
-    price_ngn_minor: int
-
-
 class LineItemInputDto(Object):
     label: str
     amount_minor: int
 
 
-class SetLineItemsDto(Object):
+class SetTierPricingDto(Object):
+    """A tier's price and its itemised breakdown, saved together (§18.1). The items, when
+    present, must add up to the price; an empty list leaves the tier without a breakdown."""
+
+    price_ngn_minor: int
     line_items: List[LineItemInputDto] = []
 
 

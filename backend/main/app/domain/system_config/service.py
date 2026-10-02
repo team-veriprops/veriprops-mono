@@ -16,6 +16,7 @@ from main.app.domain.commission_rule.margin import CommissionMarginGuard
 from main.app.domain.system_config.models import (
     CONFIG_DEFAULTS,
     CONFIG_DESCRIPTIONS,
+    CONFIG_UNITS,
     ConfigKey,
     CreateSystemConfigDto,
     SystemConfig,
@@ -55,18 +56,24 @@ class ConfigService:
         return str(await self._raw(key))
 
     async def set(self, key: ConfigKey, value: Any, admin_id: str) -> SystemConfig:
-        """Update (or create) a config value, coercing to the default's type. The two keys the
-        commission margin reads — the minimum margin and the remote bonus — must leave every tier
-        its margin at the current prices and commissions (§20.1 / D97)."""
+        """Update (or create) a config value, coercing to the default's type. The four keys the
+        commission margin reads — the minimum margin, the remote bonus and the two discount
+        percentages — must leave every tier its margin at the current prices and commissions
+        (§20.1 / D97)."""
         coerced = self._coerce(key, value)
         if key == ConfigKey.COMMISSION_MIN_MARGIN_PCT:
-            if not 0 <= coerced <= 100:
-                raise ValidationException(message="The minimum margin must be between 0 and 100%.")
+            self._require_percent(coerced, "The minimum margin")
             await self._margin_guard.check(min_margin_pct=coerced)
         elif key == ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO:
             if coerced < 0:
                 raise ValidationException(message="The remote bonus cannot be negative.")
             await self._margin_guard.check(remote_bonus_minor=coerced)
+        elif key == ConfigKey.FIRST_TIME_DISCOUNT_PERCENT:
+            self._require_percent(coerced, "The first-time discount")
+            await self._margin_guard.check(first_time_pct=coerced)
+        elif key == ConfigKey.MAX_DISCOUNT_PERCENT:
+            self._require_percent(coerced, "The discount cap")
+            await self._margin_guard.check(max_discount_pct=coerced)
         row = await self._config_repo.upsert(
             CreateSystemConfigDto(
                 key=key.value, value_json=coerced, description=CONFIG_DESCRIPTIONS.get(key),
@@ -82,7 +89,9 @@ class ConfigService:
         return row
 
     async def list_all(self) -> List[SystemConfigDto]:
-        """Every known key at its effective value (stored row, else default)."""
+        """Every known key at its effective value (stored row, else default), with its unit.
+        The description is code-owned: the copy seeded on a row goes stale as the rule it
+        describes changes, so the row's is only a fallback for a key with none in code."""
         stored = {c.key: c for c in await self._config_repo.list_all()}
         out: List[SystemConfigDto] = []
         for key in ConfigKey:
@@ -90,7 +99,8 @@ class ConfigService:
             out.append(SystemConfigDto(
                 key=key,
                 value=row.value_json if row is not None else CONFIG_DEFAULTS.get(key),
-                description=(row.description if row is not None else None) or CONFIG_DESCRIPTIONS.get(key),
+                unit=CONFIG_UNITS.get(key),
+                description=CONFIG_DESCRIPTIONS.get(key) or (row.description if row is not None else None),
                 date_updated=row.date_updated if row is not None else None,
             ))
         return out
@@ -100,6 +110,11 @@ class ConfigService:
     async def _raw(self, key: ConfigKey) -> Any:
         row = await self._config_repo.get_by_key(key.value)
         return effective_config_value(row.value_json if row is not None else None, key)
+
+    @staticmethod
+    def _require_percent(value: int, what: str) -> None:
+        if not 0 <= value <= 100:
+            raise ValidationException(message=f"{what} must be between 0 and 100%.")
 
     def _coerce(self, key: ConfigKey, value: Any) -> Any:
         default = CONFIG_DEFAULTS[key]

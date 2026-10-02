@@ -14,9 +14,15 @@ def run(ctx: Ctx) -> None:
 
     # ── Phase-18 pricing exit criterion (§18.2, D36) ─────────────
     pricing = admin.get("/admin/pricing").json()["data"]
-    basic_before = next(t for t in pricing["tiers"] if t["tier"] == "BASIC")["priceNgnMinor"]
+    basic = next(t for t in pricing["tiers"] if t["tier"] == "BASIC")
+    basic_before = basic["priceNgnMinor"]
+    basic_items = _restorable_items(basic)
     new_price = basic_before + 111_100  # ₦1,111 bump, distinctive
-    admin.put("/admin/pricing/tiers/BASIC", json={"priceNgnMinor": new_price}).raise_for_status()
+    # The price and its breakdown are one edit (§18.1): the bump carries a breakdown that adds up.
+    admin.put("/admin/pricing/tiers/BASIC", json={
+        "priceNgnMinor": new_price,
+        "lineItems": [{"label": "Verification service fee", "amountMinor": new_price}],
+    }).raise_for_status()
     fresh_quote = customer.get("/verifications/quote", params={"tier": "BASIC", "currency": "NGN"}).json()["data"]
     check("admin price edit reflects in the NEXT quote (§18.2 exit criterion)",
           fresh_quote["priceNgnMinor"] == new_price,
@@ -35,7 +41,8 @@ def run(ctx: Ctx) -> None:
           locked["priceLockedMinor"] != new_price)
 
     # Put the price back: /dev/reset keeps pricing, so a bump left here outlives the run.
-    restored = admin.put("/admin/pricing/tiers/BASIC", json={"priceNgnMinor": basic_before})
+    restored = admin.put("/admin/pricing/tiers/BASIC",
+                         json={"priceNgnMinor": basic_before, "lineItems": basic_items})
     back = next(t for t in admin.get("/admin/pricing").json()["data"]["tiers"]
                 if t["tier"] == "BASIC")["priceNgnMinor"]
     check("the BASIC price is restored after the pricing checks",
@@ -194,14 +201,34 @@ def _trust_score_weights(admin) -> None:
     check("saving a valid map keeps the tier valid (§8.3)", kept["valid"] and kept["totalPercent"] == 100)
 
 
+def _restorable_items(tier: dict) -> list:
+    """The tier's line items in the shape a save takes, so the run can put them back. Items saved
+    before price and breakdown became one edit may not add up to the price, and a save now refuses
+    that; such a tier is restored with one item covering the whole price."""
+    items = [{"label": li["label"], "amountMinor": li["amountMinor"]} for li in tier["lineItems"]]
+    if items and sum(i["amountMinor"] for i in items) != tier["priceNgnMinor"]:
+        return [{"label": "Verification service fee", "amountMinor": tier["priceNgnMinor"]}]
+    return items
+
+
 def _line_items(admin, customer) -> None:
-    """A tier's itemised breakdown is replaced as a set (§18.1), and restored afterwards."""
+    """A tier's itemised breakdown is saved with its price and must add up to it (§18.1); the
+    tier is restored afterwards."""
     tier = next(t for t in admin.get("/admin/pricing").json()["data"]["tiers"] if t["tier"] == "STANDARD")
-    before = [{"label": li["label"], "amountMinor": li["amountMinor"]} for li in tier["lineItems"]]
-    replacement = [{"label": "Registry search", "amountMinor": 100_000}, {"label": "Field visit", "amountMinor": 200_000}]
-    saved = admin.put("/admin/pricing/tiers/STANDARD/line-items", json={"lineItems": replacement}).json()["data"]
+    price = tier["priceNgnMinor"]
+    before = {"priceNgnMinor": price, "lineItems": _restorable_items(tier)}
+    replacement = [{"label": "Registry search", "amountMinor": price - 200_000},
+                   {"label": "Field visit", "amountMinor": 200_000}]
+    saved = admin.put("/admin/pricing/tiers/STANDARD",
+                      json={"priceNgnMinor": price, "lineItems": replacement}).json()["data"]
     standard = next(t for t in saved["tiers"] if t["tier"] == "STANDARD")
     check("a tier's line items are replaced as a set, in order (§18.1)",
           [(li["label"], li["amountMinor"]) for li in standard["lineItems"]]
-          == [("Registry search", 100_000), ("Field visit", 200_000)], f"items={standard['lineItems']}")
-    admin.put("/admin/pricing/tiers/STANDARD/line-items", json={"lineItems": before}).raise_for_status()
+          == [("Registry search", price - 200_000), ("Field visit", 200_000)], f"items={standard['lineItems']}")
+    mismatched = admin.put("/admin/pricing/tiers/STANDARD", json={
+        "priceNgnMinor": price + 100_000, "lineItems": replacement})
+    after = next(t for t in admin.get("/admin/pricing").json()["data"]["tiers"] if t["tier"] == "STANDARD")
+    check("line items that do not add up to the price are refused, and change nothing (§18.1)",
+          mismatched.status_code == 422 and after["priceNgnMinor"] == price,
+          f"http {mismatched.status_code} price={after['priceNgnMinor']}")
+    admin.put("/admin/pricing/tiers/STANDARD", json=before).raise_for_status()

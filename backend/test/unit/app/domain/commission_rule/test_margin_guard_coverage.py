@@ -1,7 +1,7 @@
 """Every write that can break the commission margin goes through the guard (§20.1 / D97).
 
-A tier's margin depends on four stored values: the roles' fixed commissions, the tier prices, the
-minimum margin and the remote bonus. `CommissionMarginGuard` refuses a change that would breach
+A tier's margin depends on six stored values: the roles' fixed commissions, the tier prices, the
+minimum margin, the remote bonus and the two discount percentages. `CommissionMarginGuard` refuses a change that would breach
 it, but only when the writer calls it — so a new writer that forgets is exactly the defect that
 lets the two admin screens drift into paying agents more than the platform keeps. This scan finds
 every write to the three repositories holding those values, in `main/app`, with no database, and
@@ -25,11 +25,14 @@ _WRITE_METHODS = {"upsert", "create", "create_return_model", "update", "insert_o
 # (class, method) → the writer's reason to exist. Each must call the guard before writing.
 _GUARDED_WRITERS: Dict[Tuple[str, str], str] = {
     ("CommissionRuleService", "set_rule"): "a role's fixed commission",
-    ("PricingConfigService", "set_tier_price"): "a tier's price",
-    ("ConfigService", "set"): "the minimum margin and the remote bonus (among other keys)",
+    ("PricingConfigService", "set_tier_pricing"): "a tier's price (with its line items)",
+    ("ConfigService", "set"): "the minimum margin, the remote bonus and the discounts (among other keys)",
 }
 # The config keys whose writes must reach the guard inside ConfigService.set.
-_MARGIN_CONFIG_KEYS = {"COMMISSION_MIN_MARGIN_PCT", "REMOTE_JOB_BONUS_NGN_KOBO"}
+_MARGIN_CONFIG_KEYS = {
+    "COMMISSION_MIN_MARGIN_PCT", "REMOTE_JOB_BONUS_NGN_KOBO",
+    "FIRST_TIME_DISCOUNT_PERCENT", "MAX_DISCOUNT_PERCENT",
+}
 
 
 def _classes() -> Iterator[Tuple[Path, ast.ClassDef]]:
@@ -127,8 +130,8 @@ def test_each_writer_checks_the_margin_before_it_writes():
         )
 
 
-def test_config_writes_of_both_margin_keys_reach_the_guard():
-    """ConfigService.set writes every key; the guard must run for the two the margin reads."""
+def test_config_writes_of_every_margin_key_reach_the_guard():
+    """ConfigService.set writes every key; the guard must run for the four the margin reads."""
     guarded_keys: Set[str] = set()
     for node in ast.walk(_method("ConfigService", "set")):
         if isinstance(node, ast.If) and any(_guard_calls(stmt) for stmt in node.body):
