@@ -16,6 +16,7 @@ from typing import Optional, Union
 
 from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.integrations.messaging.models import EmailRecipient, MessageRequestRecipient, MessageContext
+from main.appodus_utils.integrations.messaging.service import dispatch_delivered
 
 from kink import di, inject
 
@@ -190,15 +191,6 @@ def recipient_for(channel: OtpChannel, *, email: Optional[str], dial_code: Optio
     return PhoneNumber(dial_code=dial_code, number=phone)
 
 
-def _dispatch_completed(result) -> bool:
-    """A dispatch counts as delivered once at least one channel reported success.
-
-    `send_bulk` buckets failures rather than raising, so an all-channels-failed dispatch returns
-    normally — the successes list is the only thing that distinguishes it from a real send.
-    """
-    return bool(result is not None and result.successes)
-
-
 async def send_verification_msg(
         recipient: Union[EmailRecipient, PhoneNumber],
         code: str,
@@ -230,7 +222,7 @@ async def send_verification_msg(
         elif isinstance(recipient, EmailRecipient):
             firstname, _, lastname = Utils.parse_fullname(str(recipient.fullname))
 
-            return _dispatch_completed(await account_security_messages.send_direct_email_verification_message(
+            return dispatch_delivered(await account_security_messages.send_direct_email_verification_message(
                 recipient=MessageRequestRecipient(
                     fullname=recipient.fullname,
                     email=recipient.email
@@ -245,7 +237,7 @@ async def send_verification_msg(
                 expires_at=expires_at
             ))
         else:
-            return _dispatch_completed(await account_security_messages.send_direct_phone_verification_message(
+            return dispatch_delivered(await account_security_messages.send_direct_phone_verification_message(
                 recipient=MessageRequestRecipient(
                     phone=recipient
                 ),
@@ -285,7 +277,7 @@ async def _send_whatsapp_otp_with_sms_fallback(
     """
     context = {MessageContext.OTP: code, MessageContext.VALIDITY: _validity_label()}
     try:
-        return _dispatch_completed(
+        return dispatch_delivered(
             await account_security_messages.send_whatsapp_link_verification_message(
                 recipient=MessageRequestRecipient(phone=recipient),
                 context=context,
@@ -298,7 +290,7 @@ async def _send_whatsapp_otp_with_sms_fallback(
             recipient.international_number, e,
         )
 
-    return _dispatch_completed(
+    return dispatch_delivered(
         await account_security_messages.send_direct_phone_verification_message(
             recipient=MessageRequestRecipient(phone=recipient),
             context=context,

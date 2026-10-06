@@ -1,11 +1,13 @@
-Subject: {{ FULL_NAME }} Has Invited you to Join {{ BRAND }} as an Admin
+Subject: {{ INVITER_NAME }} has invited you to join {{ BRAND }} as an admin
 
-Hello {{ FIRST_NAME }},
+Hello{% if FIRST_NAME %} {{ FIRST_NAME }}{% endif %},
 
-{{ FULL_NAME }} Has Invited you to Join {{ BRAND }} as an Admin.
-Follow the link <a href="{{ LINK }}">{{ LINK }}</a> to complete your onboarding.
+{{ INVITER_NAME }} has invited you to join the {{ BRAND }} admin team as a {{ ADMIN_ROLE }} admin.
+Follow the link <a href="{{ LINK }}">{{ LINK }}</a> to accept the invitation.
 
-This link will expire in: {{ VALIDITY}}
+This link will expire in: {{ VALIDITY }}
+
+If you weren't expecting this invitation, you can ignore this email.
 
 Best regards,
 Team {{ BRAND }}

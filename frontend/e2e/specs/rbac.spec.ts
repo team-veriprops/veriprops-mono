@@ -2,8 +2,8 @@
  * UAT — roles and access (PRD §4, §6a, docs/uat-strategy.md §4).
  *
  * Each admin sub-role reaches its own work and is turned away from the rest; a customer can never
- * open another customer's case, however they come by its id; and an admin invitation can be taken
- * up only by the account it was issued to.
+ * open another customer's case, however they come by its id; and an admin invitation, emailed to
+ * the invitee (§9.1), can be taken up only by the account it was issued to.
  */
 import { Page } from "@playwright/test";
 
@@ -51,10 +51,11 @@ test.describe("UAT-RBAC — roles and access @P0", () => {
     }
   });
 
-  test("UAT-RBAC-04 · an admin invitation is taken up only by the account it was issued to", async ({
+  test("UAT-RBAC-04 · an emailed admin invitation is taken up only by the account it was issued to", async ({
     scenario,
     pageFor,
     adminPage,
+    mail,
   }) => {
     const invited = (await scenario(ScenarioStage.DRAFT)).customer;
     const stranger = (await scenario(ScenarioStage.DRAFT)).customer;
@@ -68,9 +69,13 @@ test.describe("UAT-RBAC — roles and access @P0", () => {
     await adminPage.getByRole("option", { name: /finance/i }).click();
     await adminPage.getByTestId("admin-invite-submit").click();
 
-    // The Super Admin is handed the link to pass on (no invitation email yet — PRD §G).
-    const link = (await adminPage.getByTestId("admin-invite-link").innerText()).match(/https?:\/\/\S+/)![0];
-    const path = new URL(link).pathname;
+    // The invitee is emailed the link, and the Super Admin is told so (§9.1). The screen offers
+    // the same link, so either copy reaches the same invitation.
+    await expect(adminPage.getByTestId("admin-invite-emailed")).toBeVisible();
+    const shown = (await adminPage.getByTestId("admin-invite-link").innerText()).match(/https?:\/\/\S+/)![0];
+    const emailed = await mail.link(invited.email, { pathContains: "/auth/admin-invite/" });
+    const path = new URL(emailed).pathname;
+    expect(path).toBe(new URL(shown).pathname);
 
     // Someone else signed in cannot use the link.
     const wrong = await pageFor(stranger);

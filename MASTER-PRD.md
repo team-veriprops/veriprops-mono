@@ -805,7 +805,10 @@ An invitation is used once. Acceptance and revocation both start from `PENDING`,
 exactly one stands: a revoked invitation elevates no one, and an accepted one cannot be revoked (removing an
 admin is its own action). Revoking an already-revoked invitation is harmless. Accepting rotates the
 accepting session to the ADMIN claims, so the new admin reaches the admin area without signing in again. The
-link is handed to the inviting Super Admin to pass on — no invitation email yet (§G).
+invitee is emailed the link (`new_admin_user_invite`: who invited them, the sub-role, the link and its validity),
+and delivery retries stop when the invitation expires. The link is also returned to the inviting Super Admin
+with `emailSent`; when the email did not go out, the team screen says so and the Super Admin passes the link
+on by hand.
 
 ### 9.2 The sanctioned elevation path
 
@@ -2023,7 +2026,6 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Cartographic Nigeria map paths (schematic geo-grid today) | `frontend/src/components/agents/reputation/NigeriaCoverageMap.tsx` |
 | Dead vendored `google_drive` webhook package: `repo.py`/`service.py`/`validator.py` import modules that do not exist, so only `model.py` loads — and it registers `g_drive_webhook_subscriptions` with no migration builder. Inert (nothing reaches it); kept and marked rather than deleted, per D83. Pick up = remove the package (with `GoogleDriveClient`, its only user of a service-account key), or fix the imports, give the table a migration, and move the client to Workload Identity Federation | `backend/main/appodus_utils/domain/webhook/google_drive/model.py`, `backend/main/appodus_utils/integrations/google_drive/google_drive_client.py` |
 | `python-jose` → PyJWT: jose hard-depends on `ecdsa` (PYSEC-2026-1325, timing side channel, no fixed release). Not exploitable here — the `[cryptography]` extra routes every sign/verify (RS256 handoff + OAuth, Apple's ES256 client secret) through `cryptography` — but the Dependabot alert stays open until the five `from jose import` sites (OAuth Google/Apple, WhatsApp handoff grant/tokens, `appodus_utils/common/commons.py`) move to PyJWT | `backend/requirements.txt` |
-| Admin-invitation email (§9.1): the invite link is returned to the inviting Super Admin to deliver; no email template sends it | `backend/main/app/domain/user/admin_invitation/controller.py` |
 | Declared-but-unbuilt routes: admin content CMS (how-it-works / FAQs / testimonials / spotlights / area insights), fraud-flags, dispute/broadcast/task detail pages, portal payments page | `frontend/src/lib/routes.ts` |
 
 ### G.3 Launch gates (business/legal — not code)

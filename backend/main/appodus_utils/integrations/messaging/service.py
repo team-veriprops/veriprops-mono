@@ -39,6 +39,16 @@ class BulkSendResult:
     failures: List[Exception] = field(default_factory=list)
 
 
+def dispatch_delivered(result: Optional[BulkSendResult]) -> bool:
+    """A dispatch counts as delivered once at least one channel reported success.
+
+    `send_bulk` buckets failures rather than raising, so an all-channels-failed dispatch returns
+    normally — the successes list is the only thing that distinguishes it from a real send.
+    None (nothing dispatched: no usable channel, or outbound messaging off) is not delivered.
+    """
+    return bool(result is not None and result.successes)
+
+
 @inject
 class MessagingService:
     def __init__(
