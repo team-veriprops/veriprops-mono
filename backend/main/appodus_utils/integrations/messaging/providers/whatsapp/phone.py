@@ -11,9 +11,7 @@ missing one from silently failing an identity lookup.
 """
 from __future__ import annotations
 
-
-def digits_of(number: str) -> str:
-    return "".join(ch for ch in (number or "") if ch.isdigit())
+from main.appodus_utils.integrations.messaging.phone import digits_of
 
 
 def to_e164(number: str) -> str:

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import String, cast, desc, literal, select, func, or_, type_coerce, update as sa_update
+from sqlalchemy import String, cast, desc, literal, select, func, type_coerce, update as sa_update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from main.app.domain.user.models import (
 )
 from main.appodus_utils import Utils
 from main.appodus_utils.db.repo import GenericRepo
+from main.appodus_utils.db.search import contains_text
 from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.integrations.messaging.models import UserContactDto, PushToken, EmailRecipient
 
@@ -58,15 +59,9 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         conditions = [User.deleted.is_(False), User.user_type == UserType.ADMIN.value]
         if sub_role_filter is not None:
             conditions.append(User.admin_sub_role == sub_role_filter.value)
-        if query and query.strip():
-            like = f"%{query.strip()}%"
-            conditions.append(
-                or_(
-                    User.first_name.ilike(like),
-                    User.last_name.ilike(like),
-                    User.email.ilike(like),
-                )
-            )
+        search = contains_text(query, User.first_name, User.last_name, User.email)
+        if search is not None:
+            conditions.append(search)
         stmt = select(User).where(*conditions)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
@@ -98,16 +93,9 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
             # personas is a JSON list of enum values; a quoted-substring match is
             # dialect-portable (JSONB @> is Postgres-only) and safe on enum input.
             conditions.append(cast(User.personas, String).like(f'%"{persona}"%'))
-        if query and query.strip():
-            like = f"%{query.strip()}%"
-            conditions.append(
-                or_(
-                    User.first_name.ilike(like),
-                    User.last_name.ilike(like),
-                    User.email.ilike(like),
-                    User.phone_e164.ilike(like),
-                )
-            )
+        search = contains_text(query, User.first_name, User.last_name, User.email, User.phone_e164)
+        if search is not None:
+            conditions.append(search)
         base = select(User).where(*conditions)
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
         rows = (

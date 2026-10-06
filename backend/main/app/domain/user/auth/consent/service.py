@@ -19,10 +19,11 @@ from main.app.domain.user.auth.consent.models import (
     LegalDocumentSummaryDto,
     REQUIRED_SIGNUP_CONSENTS,
     UserConsentHistoryItemDto,
-    UserConsentHistoryPageDto,
 )
 from main.app.domain.user.auth.consent.repo import ConsentDocumentRepo, UserConsentRepo
 from main.appodus_utils import Utils
+from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.db.models import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -115,8 +116,9 @@ class ConsentService:
     # ── S57 — R19.4 consent history ──────────────────────────────────────────
 
     async def list_for_user(
-        self, user_id: str, page: int = 0, page_size: int = 20
-    ) -> UserConsentHistoryPageDto:
+        self, user_id: str, page: int = 0, page_size: int = 10
+    ) -> Page[UserConsentHistoryItemDto]:
+        """One page of the user's consent acceptances, newest first (R19.4)."""
         rows, total = await self._user_consent_repo.list_for_user(
             user_id=user_id, offset=page * page_size, limit=page_size
         )
@@ -130,7 +132,7 @@ class ConsentService:
             )
             for r in rows
         ]
-        return UserConsentHistoryPageDto(items=items, total=total, page=page, page_size=page_size)
+        return DbUtils.build_page(items, total, page, page_size)
 
     async def export_for_user_csv(self, user_id: str) -> bytes:
         rows, _ = await self._user_consent_repo.list_for_user(

@@ -17,6 +17,7 @@ import { Page } from "@playwright/test";
 
 import { ROUTES } from "@lib/routes";
 import { AgentRole } from "@/types/agent";
+import { LegalRiskLevel, ROLE_FORM_FIELDS } from "@/types/agentTask";
 import { VerificationTier } from "@/types/verification";
 
 import { expect, test } from "../fixtures";
@@ -154,7 +155,7 @@ const FINDINGS: Record<AgentRole, Record<string, string>> = {
   },
   [AgentRole.LAWYER]: {
     legal_opinion: "The title chain is coherent and unencumbered.",
-    risk_level: "LOW",
+    risk_level: LegalRiskLevel.LOW,
     recommendation: "PROCEED",
   },
 };
@@ -162,10 +163,16 @@ const FINDINGS: Record<AgentRole, Record<string, string>> = {
 const REWORK_REASON = "The frontage photo is too dark to read the house number — please retake it.";
 const REVIEW_QUALITY = "95";
 
-/** Type this role's findings into the submission form. */
+/** Enter this role's findings into the submission form: typed, or picked where the field is a fixed set. */
 async function fillFindings(page: Page, role: AgentRole): Promise<void> {
   for (const [field, value] of Object.entries(FINDINGS[role])) {
-    await page.getByTestId(`field-${field}`).fill(value);
+    const declared = ROLE_FORM_FIELDS[role].find((f) => f.key === field);
+    if (declared?.options) {
+      await page.getByTestId(`field-${field}`).click();
+      await page.getByTestId(`field-${field}-${value}`).click();
+    } else {
+      await page.getByTestId(`field-${field}`).fill(value);
+    }
   }
 }
 

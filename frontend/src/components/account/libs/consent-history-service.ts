@@ -1,7 +1,7 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
-import { SuccessResponse } from "@/types/models";
-import { UserConsentHistoryPage } from "@/types/consentHistory";
+import { Page, SuccessResponse } from "@/types/models";
+import { UserConsentHistoryItem } from "@/types/consentHistory";
 
 /**
  * Versioned consent history API (PRD §19.1 / R19.4). Mirrors the S57 routes in
@@ -10,7 +10,7 @@ import { UserConsentHistoryPage } from "@/types/consentHistory";
 export class ConsentHistoryService {
   constructor(private readonly http: HttpClient) {}
 
-  history(page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<UserConsentHistoryPage>> {
+  history(page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<Page<UserConsentHistoryItem>>> {
     return this.http.get(`/users/auth/consents/history?page=${page}&page_size=${pageSize}`);
   }
 

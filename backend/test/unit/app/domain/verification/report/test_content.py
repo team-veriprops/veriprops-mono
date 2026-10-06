@@ -75,3 +75,24 @@ class TestLegalOpinionGate:
         legal = next(s for s in c.sections if s.is_legal_opinion)
         assert c.legal_opinion_included is True
         assert "title is sound" in legal.body
+
+
+class TestRiskSummary:
+    def _summary(self, enabled):
+        findings = {
+            "REGISTRY": {"title_search_result": "clean"}, "FIELD": {"ok": True}, "SURVEYOR": {"ok": True},
+            "LAWYER": {"legal_opinion": "sound", "risk_level": "HIGH", "recommendation": "hold"},
+        }
+        content = build_report_content(report=_report(findings=findings), vid="VP-1",
+                                       tier=VerificationTier.PREMIUM, address=None,
+                                       legal_opinion_enabled=enabled)
+        return next(s for s in content.sections if s.key == "risk_summary").body
+
+    def test_the_lawyers_risk_level_reads_as_words(self):
+        assert self._summary(enabled=True) == "Legal Opinion: High"
+
+    def test_the_lawyers_risk_level_is_withheld_with_the_legal_opinion(self):
+        """The risk level is part of the legal opinion, so the D18 gate holds it back too."""
+        body = self._summary(enabled=False)
+        assert "Legal Opinion" not in body
+        assert body.startswith("Overall trust score 95/100")

@@ -377,7 +377,7 @@ class VerificationTaskService:
         every required task is SUBMITTED (§2.5)."""
         task = await self._get_owned_task(task_id, agent_id)
         await self._assert_case_not_on_hold(task)
-        validate_submission(AgentRole(task.role), payload)
+        payload = validate_submission(AgentRole(task.role), payload)
         if await self._evidence.count_for_task(Utils.uuid_to_hex(task.id)) == 0:
             raise ValidationException(
                 message="At least one evidence item is required before submitting."

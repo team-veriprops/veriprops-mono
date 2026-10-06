@@ -147,9 +147,10 @@ class TestAdminInbox:
         for stmt in captured_statements:
             # The pyformat dialect escapes a literal % as %%.
             sql = _sql(stmt).replace("%%", "%")
-            assert "conversations.external_ref ILIKE '%ada%'" in sql
-            assert "conversations.subject ILIKE '%ada%'" in sql
-            assert "users.email ILIKE '%ada%'" in sql
+            # The typed text is matched as written: its own wildcards are escaped.
+            assert "conversations.external_ref ILIKE '%' || 'ada' || '%' ESCAPE '/'" in sql
+            assert "conversations.subject ILIKE '%' || 'ada' || '%' ESCAPE '/'" in sql
+            assert "users.email ILIKE '%' || 'ada' || '%' ESCAPE '/'" in sql
 
     async def test_the_owner_is_only_resolved_for_support_threads(self, captured_statements):
         """A case thread's `created_by` is whoever opened it first — often an admin — so it

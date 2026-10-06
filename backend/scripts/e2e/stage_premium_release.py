@@ -46,6 +46,11 @@ def run(ctx: Ctx) -> None:
         files={"file": ("legal-opinion.png", MINIMAL_PNG, "image/png")},
         data={"kind": "DOCUMENT"},
     ).raise_for_status()
+    off_scale = lawyer.post(f"/agents/tasks/{l_task['id']}/submit",
+                            json={"payload": {**ROLE_PAYLOADS["LAWYER"], "risk_level": "somewhat high"}})
+    check("a risk level outside Low/Medium/High is refused in words, and the task stays open (§12.2)",
+          off_scale.status_code == 422 and "Low, Medium, High" in off_scale.text,
+          f"http {off_scale.status_code}: {off_scale.text[:180]}")
     submitted = lawyer.post(f"/agents/tasks/{l_task['id']}/submit",
                             json={"payload": ROLE_PAYLOADS["LAWYER"]}).json()["data"]
     check("LAWYER executes and submits the legal-opinion task (§12.2)",

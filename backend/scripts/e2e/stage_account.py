@@ -91,6 +91,10 @@ def _legal_and_consents(account) -> None:
     types = [i["documentType"] for i in history["items"]]
     check("the consent history lists every acceptance, the re-acceptance included (§19)",
           types.count("PLATFORM_TERMS") >= 2 and "PRIVACY_POLICY" in types, f"types={types}")
+    meta = history.get("meta") or {}
+    check("the consent history is a standard page, counted in full (pagination convention)",
+          meta.get("page") == 0 and meta.get("total", 0) >= len(types) and meta.get("pageSize") == 10,
+          f"meta={meta}")
 
 
 def _password(account, email: str) -> None:

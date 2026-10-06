@@ -36,6 +36,15 @@ class TaskAssignmentMode(str, enum.Enum):
     BROADCAST = "BROADCAST"  # open pool, first-accept-wins
 
 
+class LegalRiskLevel(str, enum.Enum):
+    """The lawyer's overall risk rating on their submission (§12.2). The agent's form offers
+    exactly these values, and a HIGH rating raises an advisory review conflict (§8.2)."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
 class ReviewDecision(str, enum.Enum):
     """Admin review outcome recorded on ``VerificationTask.review_decision`` (§8.3).
     Distinct from ``TaskState`` — the decision is the admin's verdict on a SUBMITTED task,

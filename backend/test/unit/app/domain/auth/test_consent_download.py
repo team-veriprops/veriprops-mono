@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from main.app.domain.user.auth.consent.service import ConsentService
+from main.appodus_utils.db.models import Page
 from main.appodus_utils.db.session import db_session_ctx
 
 
@@ -49,25 +50,29 @@ def _make_svc(list_for_user=None):
 
 
 class TestListForUser:
-    async def test_paginates_and_returns_items(self):
+    async def test_it_returns_the_standard_page_shape(self):
+        """The history is a Page[T] like every other list, so the screen pages it the same way."""
         rows = [_make_consent_row(), _make_consent_row(doc_type="PRIVACY_POLICY")]
-        svc = _make_svc(list_for_user=AsyncMock(return_value=(rows, 5)))
+        list_for_user = AsyncMock(return_value=(rows, 5))
+        svc = _make_svc(list_for_user=list_for_user)
 
-        result = await svc.list_for_user("user-1", page=0, page_size=2)
+        result = await svc.list_for_user("user-1", page=1, page_size=2)
 
-        assert result.total == 5
-        assert result.page == 0
-        assert result.page_size == 2
-        assert len(result.items) == 2
-        assert result.items[0].document_type == "PLATFORM_TERMS"
+        assert isinstance(result, Page)
+        assert (result.meta.page, result.meta.page_size, result.meta.total) == (1, 2, 5)
+        assert result.meta.total_pages == 3
+        assert [i.document_type for i in result.items] == ["PLATFORM_TERMS", "PRIVACY_POLICY"]
+        list_for_user.assert_awaited_once_with(user_id="user-1", offset=2, limit=2)
 
-    async def test_empty_history_returns_empty_list(self):
-        svc = _make_svc(list_for_user=AsyncMock(return_value=([], 0)))
+    async def test_it_defaults_to_the_first_page_of_ten(self):
+        list_for_user = AsyncMock(return_value=([], 0))
+        svc = _make_svc(list_for_user=list_for_user)
 
         result = await svc.list_for_user("user-1")
 
-        assert result.total == 0
         assert result.items == []
+        assert (result.meta.page, result.meta.page_size, result.meta.total) == (0, 10, 0)
+        list_for_user.assert_awaited_once_with(user_id="user-1", offset=0, limit=10)
 
 
 class TestExportForUserCsv:

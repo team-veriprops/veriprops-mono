@@ -9,8 +9,10 @@ from datetime import datetime, timezone
 
 from sqlalchemy.sql.elements import BinaryExpression
 
+from main.app.config.settings import IntegratedPlatform
 from main.app.domain.message.models import Message, QueryMessageDto, SearchMessageDto
 from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.domain.webhook.callback.model import Callback, QueryCallbackDto, SearchCallbackDto
 from main.appodus_utils.integrations.messaging.models import MessageStatus
 
 
@@ -42,6 +44,20 @@ class TestWhereCriterion:
         ))
         rendered = [str(c) for c in criterion]
         assert sum("next_retry_at" in c for c in rendered) == 1
+
+    def test_a_platform_filter_applies(self):
+        """`platform` is a real column on callbacks. It used to sit in the exclusion set beside the
+        paging controls, so a search by platform silently returned every platform's rows."""
+        criterion = DbUtils(model=Callback, query_qto=QueryCallbackDto).build_search_criterion(
+            SearchCallbackDto(platform=IntegratedPlatform.ZOHO_DOC_SIGN)
+        )
+        rendered = [str(c.compile(compile_kwargs={"literal_binds": True})) for c in criterion]
+        assert f"callbacks.platform = '{IntegratedPlatform.ZOHO_DOC_SIGN.value}'" in rendered
+
+    def test_paging_controls_never_become_column_filters(self):
+        criterion = _criterion(SearchMessageDto(page=3, page_size=50, status=MessageStatus.FAILED))
+        rendered = " | ".join(str(c) for c in criterion)
+        assert "page" not in rendered
 
     def test_multiple_comma_separated_conditions(self):
         criterion = _criterion(SearchMessageDto(

@@ -1,7 +1,7 @@
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import Uuid, cast, desc, func, or_, select
+from sqlalchemy import Uuid, cast, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.user.agent.profile.models import (
@@ -12,6 +12,7 @@ from main.app.domain.user.agent.profile.models import (
     UpdateAgentProfileDto,
 )
 from main.appodus_utils.db.repo import GenericRepo
+from main.appodus_utils.db.search import contains_text
 
 
 @inject
@@ -78,13 +79,8 @@ class AgentProfileRepo(
             # user_id is stored as str(user.id); cast it back to UUID to match the native User.id
             # PK (a bare `User.id == AgentProfile.user_id` raises uuid = varchar on Postgres).
             from main.app.domain.user.models import User
-            like = f"%{query.strip()}%"
             base = base.join(User, User.id == cast(AgentProfile.user_id, Uuid)).where(
-                or_(
-                    User.first_name.ilike(like),
-                    User.last_name.ilike(like),
-                    User.email.ilike(like),
-                )
+                contains_text(query, User.first_name, User.last_name, User.email)
             )
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
         rows = (

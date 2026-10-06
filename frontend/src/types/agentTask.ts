@@ -61,8 +61,27 @@ export interface EvidenceItem {
   uploadedAt: string;
 }
 
+/**
+ * The lawyer's overall risk rating (§12.2). Mirrors `LegalRiskLevel` in
+ * app/domain/verification/task/models.py, which validates it and raises a review conflict on
+ * HIGH (§8.2); `test_legal_risk_level_parity.py` pins the two together.
+ */
+export enum LegalRiskLevel {
+  LOW = "LOW",
+  MEDIUM = "MEDIUM",
+  HIGH = "HIGH",
+}
+
+export interface RoleFormField {
+  key: string;
+  label: string;
+  required: boolean;
+  /** A fixed set of answers, offered as a select; the backend refuses any other value. */
+  options?: string[];
+}
+
 // The per-role submission form fields (mirrors the backend validator's required set, §12.2).
-export const ROLE_FORM_FIELDS: Record<AgentRole, { key: string; label: string; required: boolean }[]> = {
+export const ROLE_FORM_FIELDS: Record<AgentRole, RoleFormField[]> = {
   [AgentRole.REGISTRY]: [
     { key: "registered_owner", label: "Registered owner", required: true },
     { key: "title_search_result", label: "Title search result", required: true },
@@ -81,7 +100,7 @@ export const ROLE_FORM_FIELDS: Record<AgentRole, { key: string; label: string; r
   ],
   [AgentRole.LAWYER]: [
     { key: "legal_opinion", label: "Legal opinion", required: true },
-    { key: "risk_level", label: "Risk level", required: true },
+    { key: "risk_level", label: "Risk level", required: true, options: Object.values(LegalRiskLevel) },
     { key: "recommendation", label: "Recommendation", required: true },
   ],
 };

@@ -478,10 +478,12 @@ The PRD states this.
 
 **Logged, not done:**
 
-- The erasure queue still uses `window.confirm`/`prompt` instead of `ConfirmDialog`.
-- The admin list searches (users, team, verifications) do not escape `%`/`_`.
-- The lawyer's `risk_level` is free text, so the HIGH-risk conflict fires only on exactly "high".
-- `AdminVerificationDetail` keeps a local `formatMinor` that differs slightly from the shared one.
+- ~~The admin list searches (users, team, verifications) do not escape `%`/`_`.~~ Fixed in the
+  2026-10 pending-issues cycle: every search goes through `appodus_utils/db/search.contains_text`.
+- ~~The lawyer's `risk_level` is free text, so the HIGH-risk conflict fires only on exactly "high".~~
+  Fixed in the same cycle: it is now the `LegalRiskLevel` enum.
+- ~~`AdminVerificationDetail` keeps a local `formatMinor` that differs slightly from the shared one.~~
+  Fixed in the same cycle.
 
 **Gate:**
 

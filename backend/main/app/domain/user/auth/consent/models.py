@@ -182,10 +182,3 @@ class UserConsentHistoryItemDto(Object):
     accepted_at: datetime
     ip_address: Optional[str] = None
     device_fingerprint: Optional[str] = None
-
-
-class UserConsentHistoryPageDto(Object):
-    items: List[UserConsentHistoryItemDto]
-    total: int
-    page: int
-    page_size: int

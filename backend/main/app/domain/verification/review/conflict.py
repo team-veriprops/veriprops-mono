@@ -12,11 +12,11 @@ import enum
 from typing import Any, Dict, List, Optional
 
 from main.app.core.state.status import AgentRole
+from main.app.domain.verification.task.models import LegalRiskLevel
 
 # Keywords that indicate a title defect in the registry findings.
 _ENCUMBRANCE_MARKERS = ("encumbr", "dispute", "caveat", "lien", "lis pendens", "not clean")
 _PROCEED_MARKERS = ("proceed", "no objection", "clear to")
-_HIGH_RISK = ("high",)
 
 
 class ConflictSeverity(str, enum.Enum):
@@ -66,7 +66,9 @@ def detect_conflicts(submissions: Dict[AgentRole, Optional[Dict[str, Any]]]) -> 
                 severity=ConflictSeverity.HIGH, roles=[AgentRole.REGISTRY, AgentRole.LAWYER],
                 message="Registry flags a title encumbrance but the legal opinion recommends proceeding.",
             ))
-        if _text(lawyer, "risk_level").strip() in _HIGH_RISK:
+        # Advisory only: a HIGH rating asks the admin to look, it does not block release.
+        # Upper-cased so submissions stored before the level was an enum ("high") still count.
+        if _text(lawyer, "risk_level").strip().upper() == LegalRiskLevel.HIGH.value:
             conflicts.append(ReviewConflict(
                 severity=ConflictSeverity.MEDIUM, roles=[AgentRole.LAWYER],
                 message="Lawyer flagged a HIGH legal risk — review before release.",

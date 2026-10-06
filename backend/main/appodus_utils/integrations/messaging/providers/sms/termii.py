@@ -10,6 +10,7 @@ from main.appodus_utils.db.types.money import Money, TransactionCurrency
 from main.appodus_utils.integrations.exception.exceptions import IntegrationAuthenticationException, \
     IntegrationInsufficientBalanceException, IntegrationException, IntegrationRateLimitException
 from main.appodus_utils.integrations.messaging.models import MessageChannel, MessageProviderName, MessageStatus
+from main.appodus_utils.integrations.messaging.phone import digits_of
 from main.appodus_utils.integrations.messaging.providers.models import IMessageProvider
 from main.appodus_utils import Utils
 
@@ -40,7 +41,8 @@ class TermiiSMSProvider(IMessageProvider):
     async def send_message(self, message: UpsertMessageDto) -> UpsertMessageDto:
         url = f"{self.BASE_URL}/sms/send"
         payload = {
-            "to": message.to.recipient,
+            # Termii takes the number as digits in international form, without the "+".
+            "to": digits_of(message.to.recipient),
             "from": message.payload.sender_id,
             "sms": message.payload.text,
             "type": "unicode" if message.payload.unicode else "plain",

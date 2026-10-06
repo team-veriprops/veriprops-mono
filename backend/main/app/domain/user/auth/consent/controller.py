@@ -10,11 +10,11 @@ from main.app.domain.user.auth.consent.models import (
     LegalDocumentDto,
     LegalDocumentListDto,
     MissingConsentsDto,
-    UserConsentHistoryPageDto,
+    UserConsentHistoryItemDto,
 )
 from main.app.domain.user.auth.consent.service import ConsentService
 from main.appodus_utils.common.client_utils import ClientUtils
-from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.db.models import Page, SuccessResponse
 from main.appodus_utils.exception.exceptions import ResourceNotFoundException
 
 consent_router = APIRouter(prefix="/consents", tags=["Consents"])
@@ -73,10 +73,10 @@ async def accept_consents(
 
 # ── S57 — R19.4 consent history ─────────────────────────────────────────────
 
-@consent_router.get("/history", response_model=SuccessResponse[UserConsentHistoryPageDto])
+@consent_router.get("/history", response_model=SuccessResponse[Page[UserConsentHistoryItemDto]])
 async def list_consent_history(
     page: int = Query(default=0, ge=0),
-    page_size: int = Query(default=20, ge=1, le=100),
+    page_size: int = Query(default=10, ge=1, le=100),
     authorize: AuthJWT = Depends(),
 ):
     await authorize.jwt_required()

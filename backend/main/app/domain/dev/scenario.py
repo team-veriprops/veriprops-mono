@@ -60,6 +60,7 @@ from main.app.domain.verification.recheck.service import RecheckService
 from main.app.domain.verification.review.service import ReviewService
 from main.app.domain.verification.service import VerificationService
 from main.app.domain.verification.task.evidence.models import EvidenceKind
+from main.app.domain.verification.task.models import LegalRiskLevel
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.appodus_utils import Object, Utils
 from main.appodus_utils.db.session import get_db_session_from_context
@@ -109,7 +110,7 @@ ROLE_SUBMISSIONS: Dict[AgentRole, dict] = {
                       "summary": "Site visit uneventful."},
     AgentRole.SURVEYOR: {"area_sqm": 648, "beacon_status": "ALL_PRESENT",
                          "summary": "Beacons match the survey plan."},
-    AgentRole.LAWYER: {"legal_opinion": "Title chain is coherent.", "risk_level": "LOW",
+    AgentRole.LAWYER: {"legal_opinion": "Title chain is coherent.", "risk_level": LegalRiskLevel.LOW.value,
                        "recommendation": "PROCEED", "summary": "No encumbrances found."},
 }
 
