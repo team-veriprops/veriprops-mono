@@ -3000,3 +3000,50 @@ through two routes, so a price change left the breakdown adding up to the old pr
 
 ### Revisit
 When `0009` is folded into `0001` at the next squash, under D95's precondition.
+
+## Decision: D100 — a Cloudflare Cron Worker is the sweeps' clock (D12 follow-up)
+
+### Context
+D12 put the sweeps on an in-process APScheduler and named the condition under which that stops
+holding: serverless. Every deployed environment is Vercel serverless, where a function is frozen
+between requests, so no sweep ran on its own anywhere. Message retries, scheduled broadcasts, the
+daily payout batch, SLA breaches and commission clearance ran only when an admin pressed a sweep
+button.
+
+### Chosen
+- **One registry.** `app/jobs/registry.py` declares every job once, as a name, its `check_*`
+  entrypoint and an APScheduler trigger. Nothing else holds a cadence.
+- **One tick, two clocks.** `app/jobs/tick.py` runs every registry job that is due, in order. The
+  Cloudflare Cron Worker (`infra/cloudflare/sweep-cron/`, `* * * * *`) calls it through
+  `POST /api/internal/sweeps/tick` on the backend's own API host. The in-process scheduler, kept for
+  local and long-running hosts, now holds one job: the same tick, every minute.
+- **Due is decided from a shared clock.** `scheduled_job_runs` (migration `0010`) keeps each job's
+  `last_run_at`. A job is due when its trigger's next fire time after that anchor has passed. A job
+  never run is anchored at its row's creation, so a new job waits one interval, and the 10:00 Lagos
+  payout batch never fires at whatever hour a deploy happened.
+- **Claim before run.** The tick takes the job with a compare-and-set on `last_run_at`, committed on
+  its own (`INDEPENDENT`), before the job starts. Concurrent runners, such as the Worker and a
+  scheduler, or one scheduler per worker process, therefore run each fire once. `exclusive_job`
+  still stops two runs overlapping, and each sweep still claims its rows.
+- **Authorised by a secret, disabled without one.** The Worker sends `x-sweep-secret`, compared in
+  constant time against `SWEEP_TRIGGER_SECRET`. A blank or placeholder secret makes the endpoint
+  answer 404. Production and staging refuse to boot without the secret (user's choice), because
+  there it is the only thing that runs the sweeps. The Worker also sends `x-edge-auth` where the
+  environment enforces edge auth, since its subrequest may not pass the zone's Transform Rule.
+- **Bounded.** The tick starts no new job after `SWEEP_TICK_BUDGET_SECONDS` (240), inside Vercel's
+  300-second limit. The remaining jobs stay due for the next minute's tick.
+
+### Tradeoffs
+- A job that fails after its claim waits for its next fire time, as a scheduler would. The admin
+  sweep buttons still run any sweep on demand.
+- A tick does not interrupt a job already running when the budget runs out. A single job slower
+  than about 60 seconds would still be stopped at 300.
+- The backend's API host becomes the Worker's target. The "everything through the Next.js proxy" rule
+  is about the frontend's own calls, and a long tick through the frontend's rewrite would add a hop
+  and its timeout.
+- The deploy now depends on a Doppler key (`SWEEP_TRIGGER_SECRET`) in `prd` and `stg`, and on one
+  `wrangler deploy` per environment.
+
+### Revisit
+When staging and production move to Docker, the in-process scheduler can run the tick there. The
+Worker can then be retired or kept as a second clock, which the claim makes safe.

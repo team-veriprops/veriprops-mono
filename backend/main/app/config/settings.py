@@ -82,7 +82,18 @@ class Settings(AppodusBaseSettings):
         "DOJAH_PRIVATE_KEY",
         "SUPER_ADMIN_PASSWORD",
         "EDGE_AUTH_SECRET",
+        "SWEEP_TRIGGER_SECRET",
     })
+
+    # External sweep trigger (D12 follow-up). The Cloudflare Cron Worker calls
+    # `POST /internal/sweeps/tick` every minute with `SWEEP_TRIGGER_HEADER: <SWEEP_TRIGGER_SECRET>`.
+    # Blank/placeholder disables the endpoint (404); prod and staging refuse to boot without it,
+    # because there it is the only thing that runs the sweeps.
+    SWEEP_TRIGGER_SECRET: str = ""
+    SWEEP_TRIGGER_HEADER: str = "x-sweep-secret"
+    # A tick starts no new job after this many seconds, keeping it inside the function's
+    # 300s limit (backend/vercel.json maxDuration) with room for the job already running.
+    SWEEP_TICK_BUDGET_SECONDS: int = 240
 
     # Edge auth — closes the direct-origin bypass around the Cloudflare proxy
     # (*.vercel.app deployment URLs on Vercel, the raw origin IP on self-hosted).
@@ -380,6 +391,25 @@ class Settings(AppodusBaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _enforce_sweep_trigger_in_deployed_envs(self) -> "Settings":
+        """Production and staging must be able to run their sweeps, or do not start.
+
+        Both are serverless, where the in-process scheduler cannot be trusted to fire, so
+        message retries, scheduled broadcasts, the payout batch, SLA breaches and commission
+        clearance run only when the Cloudflare Cron Worker calls the tick — which answers 404
+        until this secret is set. Booting without it would look healthy while nothing
+        time-driven ever happened.
+        """
+        if self.ENVIRONMENT not in (Environment.PRODUCTION, Environment.STAGING):
+            return self
+        if not is_configured_secret(self.SWEEP_TRIGGER_SECRET):
+            raise ValueError(
+                f"SWEEP_TRIGGER_SECRET is not set in '{self.ENVIRONMENT.value}'. Without it the "
+                "sweep tick is disabled and no scheduled job ever runs. Set it in Doppler, and "
+                "give the same value to this environment's sweep-cron Worker."
+            )
+        return self
 
     @model_validator(mode="after")
     def _enforce_live_integrations_in_production(self) -> "Settings":

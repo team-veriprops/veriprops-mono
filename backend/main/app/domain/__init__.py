@@ -56,6 +56,8 @@ from main.app.domain.finance.controller import finance_router
 from main.app.domain.payment.controller import admin_payment_router, payment_router
 from main.app.domain.payment.refund_request.controller import refund_request_router
 
+from main.app.domain.scheduled_job.controller import sweep_router
+
 from main.appodus_utils.integrations.webhook import webhook_router
 from main.app.domain.audit.controller import audit_router
 from main.app.domain.compliance.erasure.controller import (
@@ -115,6 +117,8 @@ router.include_router(audit_router)
 router.include_router(erasure_router)
 router.include_router(admin_erasure_router)
 router.include_router(webhook_router)
+# The Cloudflare Cron Worker's door to the sweeps; 404 unless SWEEP_TRIGGER_SECRET is set.
+router.include_router(sweep_router)
 
 # Dev/QA reset+seed — first production gate: the router only mounts in non-prod. The
 # handlers also call `_require_non_prod()` (404 in prod) as the second gate.

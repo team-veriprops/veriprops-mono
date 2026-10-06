@@ -42,6 +42,7 @@ def _settings(env=Environment.PRODUCTION, **over):
         WHATSAPP_PROVIDER=WhatsAppProvider.META,
         WHATSAPP_PHONE_NUMBER_ID="111111111111111",
         WHATSAPP_BUSINESS_ACCOUNT_ID="222222222222222",
+        SWEEP_TRIGGER_SECRET="a-strong-sweep-secret",
         **_LIVE,
     )
     base.update(over)

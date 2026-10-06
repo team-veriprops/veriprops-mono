@@ -1,0 +1,32 @@
+# Veriprops sweep-cron Worker — calls the backend's sweep tick every minute (src/index.js).
+#
+# One Worker per app environment; always deploy with an explicit --env, because the top level
+# has no TICK_URL and a bare deploy would only ever fail:
+#
+#   wrangler deploy --env dev
+#   wrangler secret put SWEEP_TRIGGER_SECRET --env dev     # = Doppler dev SWEEP_TRIGGER_SECRET
+#   wrangler secret put EDGE_AUTH_SECRET --env dev         # only where the backend enforces edge auth
+#
+# Repeat for staging and production. The backend refuses to boot on staging/production without
+# its SWEEP_TRIGGER_SECRET, and answers 404 to the tick wherever it is unset.
+
+name = "veriprops-sweep-cron"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Inherited by every environment below. One minute is the finest cadence in the backend's job
+# registry; the backend decides which jobs are actually due on each tick.
+[triggers]
+crons = ["* * * * *"]
+
+[env.dev]
+name = "veriprops-sweep-cron-dev"
+vars = { TICK_URL = "https://api-dev.veriprops.ng/api/internal/sweeps/tick" }
+
+[env.staging]
+name = "veriprops-sweep-cron-staging"
+vars = { TICK_URL = "https://api-staging.veriprops.ng/api/internal/sweeps/tick" }
+
+[env.production]
+name = "veriprops-sweep-cron-production"
+vars = { TICK_URL = "https://api.veriprops.ng/api/internal/sweeps/tick" }

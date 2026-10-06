@@ -67,6 +67,7 @@ PUBLIC = {
     ("POST", "/api/webhooks/{platform}"): "provider webhook, signature-verified",
     ("POST", "/api/payments/stub/confirm"): "stub checkout, 404 unless PAYMENT_STUB_MODE",
     ("POST", "/api/payments/chargebacks/stub/flag"): "stub gateway, 404 unless PAYMENT_STUB_MODE",
+    ("POST", "/api/internal/sweeps/tick"): "Cloudflare Cron, authorised by SWEEP_TRIGGER_SECRET; 404 unless set",
 }
 # Dev doors are unmounted in production and 404 there too (CLAUDE.md "Dev endpoints").
 _DEV_PREFIX = "/api/dev/"

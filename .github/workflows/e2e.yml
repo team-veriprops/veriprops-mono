@@ -60,6 +60,8 @@ jobs:
       # To enable webhooks drive_through
       WHATSAPP_APP_SECRET_KEY: "WHATSAPP_APP_SECRET_KEY"
       WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN: "WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN"
+      # Throwaway: enables POST /internal/sweeps/tick for the drive-through's sweep_tick stage
+      SWEEP_TRIGGER_SECRET: "e2e-sweep-trigger-secret"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -961,8 +961,14 @@ fast agent cannot hoard jobs.
 
 ### 11.4 Scheduled sweeps
 
-Idempotent, claim-based background jobs (APScheduler; disabled under `ENVIRONMENT=test`, each also
-triggerable via a dev/admin endpoint for deterministic tests): **no-show timeout** (accepted but idle →
+Idempotent, claim-based background jobs, each also triggerable via a dev/admin endpoint for
+deterministic tests. Every job is declared once with its cadence in a job registry; a **sweep tick**
+runs whichever are due. On the deployed (serverless) environments a Cloudflare Cron Worker calls the
+tick every minute through `POST /internal/sweeps/tick` (authorised by `SWEEP_TRIGGER_SECRET`, 404
+without it; production and staging refuse to boot without it); elsewhere the in-process scheduler
+calls the same tick, and it is disabled under `ENVIRONMENT=test`. Each job's run is claimed on a shared
+clock (`scheduled_job_runs`) before it starts, so any number of clocks run each fire once (D100).
+The jobs: **no-show timeout** (accepted but idle →
 back to `PENDING`, admin alerted, logged against performance), **pool timeout / starvation backstop**
 (unclaimed broadcasts escalate to targeted assignment), **SLA-breach detection** (publishes `SLA_BREACHED`
 once per verification — the verification is claimed via `sla_breach_notified_at` before the event goes
@@ -1231,7 +1237,8 @@ welcome disclosure are shared, so the two surfaces never describe the product di
   one atomic conditional update (so a second call, another tab, or the sweep can never answer it twice) and
   runs phase two in that request. `ConversationDto.assistantPending` drives a typing indicator, so a page
   reloaded mid-turn asks again rather than waiting silently. `check_pending_assistant_turns` (a 1-minute
-  sweep) is the backstop for once environments stop being serverless-only — not relied on today.
+  sweep, run by the sweep tick — §11.4) is the backstop for an orphaned claim; the client's own retry
+  stays the path.
 - **Per-case pinning.** On a case's own customer thread, "my status" or "how do I pay?" never asks which
   case — the party is pinned to that verification, read from the thread itself, never from the request.
 - **Console parity.** The take-over rule (D57) generalises to any thread the assistant answers: a person

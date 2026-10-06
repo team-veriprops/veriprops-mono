@@ -280,3 +280,27 @@ class TestMessageDeterminismHelpers:
     async def test_rewind_missing_row_reports_not_rewound(self):
         out, _ = await self._call("rewind_message", None, "nobody@veriprops.io")
         assert out == {"rewound": False, "id": None}
+
+
+class TestSweepDeterminismHelpers:
+    """/dev/sweeps/rewind backs the drive-through's sweep-tick checks: it makes one job due
+    now by moving only its `last_run_at`, so a tick runs that job and no other."""
+
+    async def test_rewind_moves_only_the_named_jobs_last_run(self):
+        import uuid
+        from types import SimpleNamespace
+        row = SimpleNamespace(id=uuid.uuid4())
+        out, sql = await TestMessageDeterminismHelpers._call("rewind_sweep", row, "expired_key_value_cleanup")
+        set_clause, where = sql.split("WHERE")
+        assert "UPDATE scheduled_job_runs SET last_run_at = now() - interval '1 day'" in set_clause
+        assert "name = :name" in where
+        assert out == {"rewound": True}
+
+    async def test_rewind_of_a_job_not_yet_seen_reports_not_rewound(self):
+        out, _ = await TestMessageDeterminismHelpers._call("rewind_sweep", None, "never_ticked")
+        assert out == {"rewound": False}
+
+    def test_reset_clears_the_job_clock(self):
+        # A reset hands back a clean clock: every job re-anchors at the next tick, so the
+        # drive-through's first tick deterministically finds nothing due.
+        assert "scheduled_job_runs" in _RESET_TABLES

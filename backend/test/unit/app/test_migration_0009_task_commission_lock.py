@@ -1,6 +1,6 @@
 """Migration 0009 gives each task the commission its agent accepted it at, additively.
 
-It must chain after 0008, leave one head, add exactly the nullable column the ORM declares — a
+It must chain after 0008, add exactly the nullable column the ORM declares — a
 task accepted before it ran has no lock and is paid the live rate — and drop only that column on
 the way down.
 """
@@ -35,10 +35,8 @@ def _recorded(step: str):
     return recorder
 
 
-def test_it_chains_after_the_signup_drafts_migration_and_is_the_only_head():
-    scripts = _scripts()
-    assert scripts.get_heads() == [_REVISION]
-    assert scripts.get_revision(_REVISION).down_revision == "0008_drop_signup_drafts"
+def test_it_chains_after_the_signup_drafts_migration():
+    assert _scripts().get_revision(_REVISION).down_revision == "0008_drop_signup_drafts"
 
 
 def test_the_model_declares_a_nullable_amount():

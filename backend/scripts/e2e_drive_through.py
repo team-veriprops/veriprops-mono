@@ -11,7 +11,8 @@ declined re-check, upheld dispute) → referral earn+spend → pricing/analytics
 hardening → pool/no-show/starvation + pause/delay/cancel/fail + chargeback → audit pack +
 NDPA erasure (reject + execute) → the WhatsApp channel (signature-verified Meta webhook,
 redelivery dedup, console inbound under the same fraud scan, and a handoff link carried all
-the way to a PAID case) → Mailpit email delivery + password reset → outbound-message
+the way to a PAID case) → the external sweep tick (secret, due-only runs, one run per
+fire) → Mailpit email delivery + password reset → outbound-message
 failure→retry→threshold→expiry pipeline (stops/starts the Mailpit container via the docker
 CLI; warn-skips without docker, fails in CI). Prints PASS/FAIL per step; exits non-zero on any failure.
 
@@ -62,6 +63,7 @@ from e2e import (
     stage_review_release,
     stage_session_refresh,
     stage_sharing,
+    stage_sweep_tick,
     stage_tracking,
     stage_whatsapp,
 )
@@ -86,6 +88,7 @@ STAGES = [
     ("ops_unhappy", stage_ops_unhappy),              # §6/§11.3/§8.5/§6a — pool, lifecycle, chargeback
     ("compliance", stage_compliance),                # S23 — audit pack, erasure reject + execute
     ("whatsapp", stage_whatsapp),                    # §26 S1–S11 — the channel end to end
+    ("sweep_tick", stage_sweep_tick),                # D12 follow-up — Cloudflare Cron tick, claim-once
     ("email", stage_email),                          # Mailpit delivery + password reset (warn-skips off CI)
     ("messaging_retry", stage_messaging_retry),      # failure→retry→threshold→expiry (warn-skips off CI)
 ]
