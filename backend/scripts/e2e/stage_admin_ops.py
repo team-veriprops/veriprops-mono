@@ -6,7 +6,7 @@ locked prices stay untouched), the server-derived analytics endpoints, broadcast
 """
 from __future__ import annotations
 
-from .harness import QA_PASSWORD, Ctx, check, login, login_status, signup_fresh_user
+from .harness import QA_PASSWORD, Ctx, check, login, login_status, signup_fresh_user, skip_unless_ci
 
 
 def run(ctx: Ctx) -> None:
@@ -76,7 +76,12 @@ def run(ctx: Ctx) -> None:
         "scheduledAt": "2020-01-01T00:00:00Z"}).json()["data"]
     check("scheduled broadcast is SCHEDULED (§18.1)", scheduled["status"] == "SCHEDULED")
     swept = admin.post("/admin/broadcasts/sweeps/scheduled").json()["data"]
-    check("scheduled-broadcast sweep sends due ones (§18.1)", swept["sent"] >= 1, f"sent={swept['sent']}")
+    check("scheduled-broadcast sweep starts due ones and fans them out (§18.1)",
+          swept["started"] >= 1 and swept["pages"] >= 1, str(swept))
+    after_sweep = admin.get(f"/admin/broadcasts/{scheduled['id']}").json()["data"]
+    check("a small scheduled broadcast is SENT once its pages are out, with nothing left to do (§18.1)",
+          after_sweep["status"] == "SENT" and after_sweep["allowedActions"] == []
+          and after_sweep["recipientsEnqueued"] == after_sweep["recipientCount"] >= 1, str(after_sweep))
 
     # ── Broadcast hardening (§18.1, D37): audience resolution, idempotency, cancel guard ──
     preview = admin.get("/admin/broadcasts/preview", params={"audience": "CUSTOMERS"}).json()["data"]
@@ -93,6 +98,7 @@ def run(ctx: Ctx) -> None:
         notes = c.get("/notifications").json()["data"]["items"]
         check(f"{who} customer received the CUSTOMERS announcement (§18.1)",
               any(n.get("title") == "Announcement" for n in notes))
+    _check_broadcast_email_is_queued_then_drained(ctx, admin)
     replay = admin.post(f"/admin/broadcasts/{cust_bc['id']}/send").json()["data"]
     seeded_count = len([n for n in ctx.seed_customer.get("/notifications").json()["data"]["items"]
                         if n.get("title") == "Announcement"])
@@ -232,3 +238,23 @@ def _line_items(admin, customer) -> None:
           mismatched.status_code == 422 and after["priceNgnMinor"] == price,
           f"http {mismatched.status_code} price={after['priceNgnMinor']}")
     admin.put("/admin/pricing/tiers/STANDARD", json=before).raise_for_status()
+
+
+def _check_broadcast_email_is_queued_then_drained(ctx: Ctx, admin) -> None:
+    """A broadcast's email is queued for the message drain, never sent inside the fan-out
+    (`delivery=QUEUED`): the row is PENDING with a due time, and the drain sends it."""
+    def latest() -> dict:
+        return ctx.root.get("/dev/messages/latest", params={"recipient": ctx.customer_email}).json()["data"]
+
+    queued = latest()
+    if not queued.get("found"):
+        skip_unless_ci("no outbound message rows — broadcast queue checks skipped",
+                       "run the backend with ENABLE_OUT_MESSAGING=True to cover queued delivery")
+        return
+    check("a broadcast email is queued, not sent in the request (§18.1, delivery=QUEUED)",
+          queued["status"] == "pending" and queued["next_retry_at_set"], str(queued))
+    drained = admin.post("/messages/sweeps/retries").json()["data"]
+    check("the message drain sends queued emails (§18.1)", drained["processed"] >= 1, str(drained))
+    sent = latest()
+    check("…and the queued broadcast email is now SENT", sent["id"] == queued["id"] and sent["status"] == "sent",
+          str(sent))

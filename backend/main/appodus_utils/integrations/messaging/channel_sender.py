@@ -71,7 +71,8 @@ class MessageDispatcher:
         }
 
     async def dispatch_bulk(self,
-                            requests: List[MultiChannelMessageRequest]) -> BulkSendResult:
+                            requests: List[MultiChannelMessageRequest],
+                            queued: bool = False) -> BulkSendResult:
         """
                 Process multiple send requests across different channels.
 
@@ -111,10 +112,14 @@ class MessageDispatcher:
                 )
             )
 
+        # Queued: stored for the drain, sent within a minute rather than in this request.
+        if queued:
+            return await self.messaging_service.enqueue_bulk(message_requests)
         return await self.messaging_service.send_bulk(message_requests)
 
     async def dispatch_to_channels(self,
-                                   request: MultiChannelMessageRequest) -> BulkSendResult:
+                                   request: MultiChannelMessageRequest,
+                                   queued: bool = False) -> BulkSendResult:
         """
         Send a single message through multiple channels.
 
@@ -127,7 +132,7 @@ class MessageDispatcher:
         Note:
             This is a convenience method that wraps send_bulk for a single request
         """
-        return await self.dispatch_bulk([request])
+        return await self.dispatch_bulk([request], queued=queued)
 
     def _get_channel_sender(self, channel: MessageChannel) -> 'MessageChannelHandler':
         """Get sender instance for the specified channel."""

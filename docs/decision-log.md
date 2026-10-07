@@ -3047,3 +3047,50 @@ button.
 ### Revisit
 When staging and production move to Docker, the in-process scheduler can run the tick there. The
 Worker can then be retired or kept as a second clock, which the claim makes safe.
+
+## Decision: D101 — a broadcast is fanned out in pages, and its emails are queued for the drain
+
+### Context
+"Send now" resolved every recipient and published one event naming all of them, and the
+notification subscriber then sent each recipient's email inside the same request. On a serverless
+function that request times out long before a large audience is reached, and a timeout part-way
+left the broadcast marked SENT with an unknown share of its audience told.
+
+### Chosen
+- **SENDING, then pages.** Sending claims DRAFT/SCHEDULED → `SENDING` and records the audience size.
+  `UserRepo.list_recipient_ids_page` walks the audience in keyset pages (id order, the audience
+  filter in SQL, `BROADCAST_FANOUT_PAGE_SIZE` = 500). Each page advances
+  `broadcasts.fanout_cursor` with a claim pinned to the cursor it read, then publishes **one**
+  `BROADCAST_ANNOUNCEMENT` event for that page, so the bus stays the single entry point and two
+  runners never send one page. The last page moves the broadcast to `SENT`. Migration `0011` adds
+  the cursor and `recipients_enqueued`.
+- **The first page in the request** (user's choice). "Send now" sends page one inside a savepoint:
+  an audience within one page is SENT when the request returns, and a failed page rolls back alone
+  and is retried from the same cursor by the `broadcast_fanout` job (every sweep tick, at most
+  `BROADCAST_FANOUT_MAX_PAGES_PER_RUN` pages, one transaction per page).
+- **Queued delivery.** `NotificationRule.delivery = QUEUED` (on `BROADCAST_ANNOUNCEMENT` only)
+  makes the dispatcher call `MessagingService.enqueue_bulk`: each email is rendered as a send would
+  be and stored PENDING with `next_retry_at` = now, **in the caller's transaction**
+  (`MessageQueueService`). A queued row is an intention, not a record of a send, so it rolls back
+  with the page that wrote it and a retried page never queues an email twice.
+- **One drain.** `process_retries` became `drain_due_messages`: PENDING or RETRYING rows whose
+  `next_retry_at` has passed, at most `MESSAGING_DRAIN_BATCH_SIZE`, under the
+  `MESSAGING_BULK_CONCURRENCY` semaphore, each leased first (`lease_due`). An ordinary send still in
+  flight is PENDING with no `next_retry_at`, so the drain never touches it. A queued row that fails
+  lands on the first rung of the ladder, exactly as an immediate send would.
+- **Stop during SENDING** (user's choice). Cancel is allowed from SENDING; pages not yet sent are
+  dropped, recipients already reached keep their notice, and emails already queued still go out.
+- **The backend says what an admin may do.** `BroadcastDto.allowedActions` comes from
+  `ACTION_FROM_STATUSES`, the table the service's claims also read; the list shows "N of M recipients
+  reached" (user's choice: reach, not email delivery counts).
+
+### Tradeoffs
+- The event bus stays best-effort per subscriber: if the notification subscriber fails part-way
+  through a page, those recipients miss that notice. The page is not retried for it.
+- A broadcast's emails go out within about a minute of their page, not inside the request.
+- `recipient_count` is the audience counted when sending began; a user who joins mid-send is
+  reached too, so a finished broadcast can show slightly more reached than counted.
+
+### Revisit
+When staging and production move to Docker, the in-process scheduler runs the same tick, and the
+page size and drain batch can be tuned to the host rather than to a function's time limit.

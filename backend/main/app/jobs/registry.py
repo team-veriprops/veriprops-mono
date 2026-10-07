@@ -22,6 +22,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from main.app.jobs.tasks import (
     check_abandoned_drafts,
+    check_broadcast_fanout,
     check_commission_clearance,
     check_expired_key_values,
     check_message_retries,
@@ -68,10 +69,13 @@ JOB_REGISTRY: Tuple[ScheduledJob, ...] = (
     # Growth sweeps (§17.1): abandonment recovery (hourly) + referral-credit clearance (daily-ish).
     ScheduledJob("abandonment_recovery_check", check_abandoned_drafts, _every(60)),
     ScheduledJob("referral_credit_check", check_referral_credits, _every(180)),
-    # Scheduled admin broadcasts (§18.1): send those whose time has passed.
+    # Scheduled admin broadcasts (§18.1): start those whose time has passed.
     ScheduledJob("scheduled_broadcast_check", check_scheduled_broadcasts, _every(5)),
-    # Outbound-message retries: re-dispatch RETRYING rows whose next_retry_at has passed.
-    # Every minute — the first ladder rung defaults to 60s, so a slower sweep would stretch it.
+    # Broadcast fan-out (§18.1): the next pages of every SENDING broadcast. Before the drain, so
+    # the emails a page queues go out in the same tick.
+    ScheduledJob("broadcast_fanout", check_broadcast_fanout, _every(1)),
+    # The message drain: queued deliveries (a broadcast's emails) and RETRYING rows whose
+    # next_retry_at has passed. Every minute — the first ladder rung defaults to 60s.
     ScheduledJob("message_retry_check", check_message_retries, _every(1)),
     # Assistant turns left pending when a customer's tab closed before asking for them (D93).
     # The backstop, not the path: the client re-issues the turn itself on reload.

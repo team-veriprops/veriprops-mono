@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Optional, Type
+from typing import List, Optional, Type
 
 from kink import inject
 from sqlalchemy import and_, select, update
@@ -15,6 +15,15 @@ from main.appodus_utils.integrations.messaging.models import MessageStatus
 # Timestamp columns that must be bound as datetimes, not the ISO strings a JSON-mode
 # dump produces.
 _DATETIME_COLUMNS = ("scheduled_at", "next_retry_at", "expires_at", "sent_at", "delivered_at")
+# Statuses whose rows the drain sends once `next_retry_at` passes: queued deliveries and retries.
+_DUE_STATUSES = (MessageStatus.PENDING.value, MessageStatus.RETRYING.value)
+
+
+def message_row_to_dto(row: Message) -> QueryMessageDto:
+    """A row as its DTO. Validated from a plain dict: the before-validator coerces the UUID
+    primary key to its hex form only on dict input (from_attributes bypasses it, and the UUID
+    then fails the str-typed id field)."""
+    return QueryMessageDto.model_validate({column.key: getattr(row, column.key) for column in row.__table__.columns})
 
 
 @inject
@@ -30,20 +39,40 @@ class MessageRepo(GenericRepo[Message, UpsertMessageDto, UpsertMessageDto, Query
         )
         return (await self._session.execute(stmt)).scalars().first()
 
-    async def lease_retry(self, message_id: str, now: datetime, until: datetime) -> bool:
-        """Take a due retry for this run: push its `next_retry_at` to *until*, only while it
-        is still RETRYING and due. Whether this run got it.
+    async def list_due(self, now: datetime, limit: int) -> List[QueryMessageDto]:
+        """Rows whose turn to be sent has come, oldest turn first — the drain's batch.
 
-        Two overlapping retry sweeps (another worker, the admin endpoint) list the same due
-        rows; only the one whose update lands re-sends. A run that dies mid-send leaves the
-        row due again once *until* passes, so the message is not stranded.
+        Two kinds: a queued delivery (PENDING, written by `MessagingService.enqueue_bulk`) and a
+        retry (RETRYING). Both carry `next_retry_at`. An ordinary send still in flight is PENDING
+        with no `next_retry_at`, and `NULL <= now` is never true, so the drain never touches it.
+        """
+        stmt = (
+            select(Message)
+            .where(
+                Message.deleted.is_(False),
+                Message.status.in_(_DUE_STATUSES),
+                Message.next_retry_at <= now,
+            )
+            .order_by(Message.next_retry_at)
+            .limit(limit)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [message_row_to_dto(row) for row in rows]
+
+    async def lease_due(self, message_id: str, now: datetime, until: datetime) -> bool:
+        """Take a due row for this run: push its `next_retry_at` to *until*, only while it is
+        still queued or retrying, and due. Whether this run got it.
+
+        Two overlapping drains (another worker, the admin endpoint) list the same due rows; only
+        the one whose update lands sends. A run that dies mid-send leaves the row due again once
+        *until* passes, so the message is not stranded.
         """
         stmt = (
             update(Message)
             .where(
                 Message.id == self._ensure_uuid(message_id),
                 Message.deleted.is_(False),
-                Message.status == MessageStatus.RETRYING.value,
+                Message.status.in_(_DUE_STATUSES),
                 Message.next_retry_at <= now,
             )
             .values(next_retry_at=until)

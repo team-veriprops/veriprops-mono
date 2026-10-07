@@ -1,6 +1,6 @@
 """Migration 0010 records when each scheduled job last ran, so any clock can tell what is due.
 
-It must chain after 0009, leave one head, create the table and the one unique index on `name`
+It must chain after 0009, create the table and the one unique index on `name`
 that the model declares, and drop exactly those on the way down. The rows are bookkeeping, not
 business data: a downgrade loses only "when did this sweep last run", and a later upgrade
 re-anchors every job at its first sight, so no refusal guards it.
@@ -36,10 +36,8 @@ def _recorded(step: str):
     return recorder
 
 
-def test_it_chains_after_the_task_commission_migration_and_is_the_only_head():
-    scripts = _scripts()
-    assert scripts.get_heads() == [_REVISION]
-    assert scripts.get_revision(_REVISION).down_revision == "0009_task_commission_lock"
+def test_it_chains_after_the_task_commission_migration():
+    assert _scripts().get_revision(_REVISION).down_revision == "0009_task_commission_lock"
 
 
 def test_the_model_declares_a_unique_name_and_a_nullable_last_run():

@@ -43,13 +43,15 @@ class BaseMessageSender:
             category: MessageCategory,
             default_channels: List[MessageChannel],
             extra_context: Dict[str, Any] = None,
-            expires_at: Optional[datetime] = None
+            expires_at: Optional[datetime] = None,
+            queued: bool = False,
     ) -> None:
         """Core method to handle all message sending logic.
 
         ``expires_at`` bounds the delivery-retry window for time-bound content
         (e.g. an OTP is useless past its validity) — leave None for messages
-        that should ride the full retry ladder.
+        that should ride the full retry ladder. ``queued`` stores the message for the
+        drain instead of sending it now (a rule with ``delivery=QUEUED``).
         """
         recipient, template_context = await self._message_recipient_builder.build_recipient_and_context(
             recipient_user_id, context_modules
@@ -64,7 +66,8 @@ class BaseMessageSender:
             context=template_context,
             category=category,
             default_channels=default_channels,
-            expires_at=expires_at
+            expires_at=expires_at,
+            queued=queued,
         )
 
     async def _send_direct_message(self,
@@ -73,7 +76,8 @@ class BaseMessageSender:
                                    context: Dict[str, Any],
                                    category: MessageCategory,
                                    default_channels: List[MessageChannel],
-                                   expires_at: Optional[datetime] = None) -> Optional["BulkSendResult"]:
+                                   expires_at: Optional[datetime] = None,
+                                   queued: bool = False) -> Optional["BulkSendResult"]:
         """Dispatch *template* to *recipient*, returning the dispatch outcome.
 
         The result is returned rather than discarded so a caller can tell whether delivery
@@ -105,10 +109,10 @@ class BaseMessageSender:
         if settings.ENABLE_OUT_MESSAGING:
             # Dispatch is awaited rather than backgrounded: the row is persisted before the
             # send (see "Message bookkeeping & delivery retries"), so a transient failure is
-            # already recorded as RETRYING and re-driven by MessagingService.process_retries.
+            # already recorded as RETRYING and re-driven by MessagingService.drain_due_messages.
             # Backgrounding would buy latency at the cost of losing that outcome on a worker
             # that goes away mid-request.
-            return await self._messaging_dispatcher.dispatch_to_channels(request)
+            return await self._messaging_dispatcher.dispatch_to_channels(request, queued=queued)
         else:
             cc = [r.email for r in recipient.cc_recipient]
             bcc = [r.email for r in recipient.bcc_recipient]

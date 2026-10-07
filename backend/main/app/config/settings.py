@@ -340,6 +340,9 @@ class Settings(AppodusBaseSettings):
     AGENT_MAX_ACTIVE_TASKS: int = 5             # capacity cap enforced on assign/accept
     TASK_NO_SHOW_TIMEOUT_HOURS: int = 12        # manual-assign accept deadline
     TASK_POOL_TIMEOUT_HOURS: int = 24           # broadcast starvation timeout
+    # Admin broadcasts (§18.1): recipients reached per fan-out page, and pages one run takes.
+    BROADCAST_FANOUT_PAGE_SIZE: int = 500
+    BROADCAST_FANOUT_MAX_PAGES_PER_RUN: int = 10
 
     # Background scheduler (PRD §6.4/§11.4) — disabled in test; sweeps invoked directly.
     SCHEDULER_ENABLED: bool = True

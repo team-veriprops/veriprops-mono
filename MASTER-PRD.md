@@ -1278,7 +1278,10 @@ revision request · commission cleared (in-app only — the positive-movement al
 dispute defence window. Admin: SLA breach · conflict flags · agent no-show · fraud-held messages · dispute
 filed · broadcast announcements. Email/SMS render through the `VERIFICATION_*` template set
 (`AvailableTemplate`); external dispatch is bookkept in the `messages` table with a retry ladder
-(`MESSAGING_RETRY_INTERVALS_SECONDS = [60, 300, 900]`) swept by the scheduler.
+(`MESSAGING_RETRY_INTERVALS_SECONDS = [60, 300, 900]`). A rule may queue its email/SMS instead of sending it
+at once (`delivery=QUEUED`, the broadcast today): the row is stored PENDING and due, in the event's own
+transaction. The **message drain** (every sweep tick, ≤ `MESSAGING_DRAIN_BATCH_SIZE` rows,
+`MESSAGING_BULK_CONCURRENCY` at a time) sends queued rows and due retries alike, leasing each first (D101).
 
 ### 17.3 Chat-vs-notification routing
 
@@ -1520,8 +1523,14 @@ itself is untargeted accept-by-id today, so per-agent pool-feed reduction is a f
 - **System configuration** — the typed `ConfigKey` key-value store (§R), seeded idempotently, RBAC-gated
   CRUD at `/admin/config/system`.
 - **Broadcasts** — compose → preview reach → send now or schedule (swept), audiences All / Admins /
-  Customers / Agents; fan-out publishes one `BROADCAST_ANNOUNCEMENT` event and the notification subscriber
-  does the rest.
+  Customers / Agents. Sending moves a broadcast to **SENDING** with its audience size, then fans it out in
+  keyset pages of 500 users: each page advances a cursor with a claim and publishes **one**
+  `BROADCAST_ANNOUNCEMENT` event for its recipients, whose emails are **queued** (`delivery=QUEUED`) for the
+  message drain rather than sent in the fan-out; the last page moves it to SENT. "Send now" sends the first
+  page in the request (in a savepoint, so a failed page is retried by the next sweep tick, never doubled);
+  later pages come from the `broadcast_fanout` job every tick. The admin list shows "N of M recipients
+  reached" while SENDING and offers only the actions the backend allows; Stop (cancel) during SENDING drops
+  the pages not yet sent (D101).
 - **Finance** — payments/commissions summaries and the payout approval panel (§20.4).
 
 ---

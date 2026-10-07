@@ -21,7 +21,7 @@ from main.app.domain.notification.models import (
 )
 from main.app.domain.notification.dispatcher import NotificationDispatcher
 from main.app.domain.notification.repo import NotificationRepo
-from main.app.domain.notification.rules import rule_for
+from main.app.domain.notification.rules import NotificationDelivery, rule_for
 from main.app.domain.notification_preference.service import NotificationPreferenceService
 from main.appodus_utils import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -88,7 +88,10 @@ class NotificationService:
         if not channels:
             return
         try:
-            await self._dispatcher.dispatch(user_id, rule.template, channels, external_context(event))
+            await self._dispatcher.dispatch(
+                user_id, rule.template, channels, external_context(event),
+                queued=rule.delivery == NotificationDelivery.QUEUED,
+            )
         except Exception:  # noqa: BLE001 — external send is best-effort, never fatal
             pass
 

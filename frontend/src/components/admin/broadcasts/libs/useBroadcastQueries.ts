@@ -2,7 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/containers";
-import { BroadcastAudience, ComposeBroadcastRequest } from "@/types/broadcast";
+import { BroadcastAudience, BroadcastStatus, ComposeBroadcastRequest } from "@/types/broadcast";
+import { SHORT_REFETCH_INTERVAL_MS } from "@lib/config/app";
 import { BroadcastService } from "./broadcast-service";
 
 const service = new BroadcastService(httpClient);
@@ -17,6 +18,11 @@ export function useBroadcastsQuery(page = 0, status?: string) {
   return useQuery({
     queryKey: broadcastKeys.list(page, status),
     queryFn: async () => (await service.list(page, 10, status)).data ?? null,
+    // A SENDING broadcast moves one page per sweep tick; poll until none on the page is.
+    refetchInterval: (query) =>
+      query.state.data?.items.some((b) => b.status === BroadcastStatus.SENDING)
+        ? SHORT_REFETCH_INTERVAL_MS
+        : false,
   });
 }
 

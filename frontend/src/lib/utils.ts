@@ -77,6 +77,9 @@ export const formatMoney = (money: Money | null) => {
     }).format(money.getValue());
 };
 
+/** A whole-number count with thousands separators ("1,500"), for audience and item totals. */
+export const formatCount = (count: number) => new Intl.NumberFormat("en-NG").format(count ?? 0);
+
 /**
  * Format an integer minor-unit amount (kobo) as currency. Backend money crosses the wire
  * in minor units (§4.4); this converts to major units and delegates to {@link formatMoney}.

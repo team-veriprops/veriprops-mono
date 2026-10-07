@@ -23,6 +23,7 @@ EXPECTED_JOBS = {
     "abandonment_recovery_check": 60,
     "referral_credit_check": 180,
     "scheduled_broadcast_check": 5,
+    "broadcast_fanout": 1,
     "message_retry_check": 1,
     "assistant_pending_turn_check": 1,
     "expired_key_value_cleanup": 60,
@@ -40,6 +41,13 @@ def test_every_sweep_is_registered_once():
     names = [job.name for job in JOB_REGISTRY]
     assert len(names) == len(set(names))
     assert set(names) == set(EXPECTED_JOBS) | set(EXPECTED_DAILY_JOBS)
+
+
+def test_a_broadcast_is_started_fanned_out_and_drained_in_one_tick():
+    """The tick runs jobs in registry order: a due scheduled broadcast is claimed, its pages
+    are fanned out (queuing its emails), and the drain sends them — all in the same minute."""
+    names = [job.name for job in JOB_REGISTRY]
+    assert names.index("scheduled_broadcast_check") < names.index("broadcast_fanout") < names.index("message_retry_check")
 
 
 def test_interval_jobs_fire_one_interval_after_their_anchor():

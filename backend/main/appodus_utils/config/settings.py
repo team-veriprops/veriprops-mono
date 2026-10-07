@@ -271,6 +271,9 @@ class AppodusBaseSettings(BaseSettings):
     MESSAGING_CATEGORIES: List[str] = []
     MESSAGING_RPS_LIMIT: int = 20
     MESSAGING_BULK_CONCURRENCY: int = 10
+    # Rows one drain sends (queued deliveries and due retries). A drain runs once a minute from the
+    # sweep tick, so this caps a minute's outbound volume from the queue.
+    MESSAGING_DRAIN_BATCH_SIZE: int = 500
     # Backoff ladder for re-dispatching failed outbound messages; the retry
     # threshold is the list length (a message fails permanently after that many
     # retries, or earlier if its expires_at horizon would be crossed).

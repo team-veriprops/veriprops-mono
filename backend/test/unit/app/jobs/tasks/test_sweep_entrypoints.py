@@ -81,7 +81,7 @@ CASES = [
     pytest.param(
         SweepCase(message_retry_sweeps, "check_message_retries",
                   message_retry_sweeps.MessageRetrySweepJobs, "run_message_retry_sweep",
-                  "_messaging_service", "process_retries",
+                  "_messaging_service", "drain_due_messages",
                   {"dispatched": 2, "failed": 0}, {"dispatched": 0, "failed": 0}),
         id="message_retry",
     ),

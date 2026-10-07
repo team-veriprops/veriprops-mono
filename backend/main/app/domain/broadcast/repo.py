@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Tuple, Type
+from typing import List, Optional, Tuple, Type
 
 from kink import inject
 from sqlalchemy import func, select
@@ -41,6 +41,16 @@ class BroadcastRepo(
             Broadcast.scheduled_at <= now,
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def oldest_sending(self) -> Optional[Broadcast]:
+        """The broadcast that has waited longest for its next fan-out page, if any is SENDING."""
+        stmt = (
+            select(Broadcast)
+            .where(Broadcast.deleted.is_(False), Broadcast.status == BroadcastStatus.SENDING.value)
+            .order_by(Broadcast.date_updated.asc().nulls_first(), Broadcast.date_created)
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).scalars().first()
 
     async def page_all(self, page: int, page_size: int, status: str | None = None) -> Tuple[List[Broadcast], int]:
         conditions = [Broadcast.deleted.is_(False)]

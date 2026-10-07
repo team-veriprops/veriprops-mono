@@ -5,13 +5,12 @@ if TYPE_CHECKING:
     from loguru import Logger
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from kink import inject, di
 
-from main.appodus_utils import Page
 from main.app.domain.message.models import QueryMessageDto, _UpdateMessageDto, SearchMessageDto, UpsertMessageDto
-from main.app.domain.message.repo import MessageRepo
+from main.app.domain.message.repo import MessageRepo, message_row_to_dto
 from main.app.domain.message.validator import MessageValidator
 from main.appodus_utils.integrations.messaging.models import MessageStatus
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -40,11 +39,7 @@ class MessageService:
         # Column-filtered create: the Upsert DTO carries wire-only fields (sandbox_mode)
         # the stock GenericRepo create path would TypeError on.
         row = await self._message_repo.create_from_upsert(message)
-        # Validate from a plain dict — the CamelModel before-validator coerces the
-        # UUID primary key to its hex form only on dict input (from_attributes
-        # bypasses it and the UUID then fails the str-typed id field).
-        data = {column.key: getattr(row, column.key) for column in row.__table__.columns}
-        return QueryMessageDto.model_validate(data)
+        return message_row_to_dto(row)
 
     async def get_message_by_id(self, message_id: str) -> Optional[QueryMessageDto]:
         await self._message_validator.should_exist_by_id(message_id)
@@ -104,35 +99,19 @@ class MessageService:
 
         return True
 
-    async def lease_retry(self, message_id: str, now: datetime, until: datetime) -> bool:
-        """Claim a due retry for this sweep run; committed at once, so an overlapping run
-        sees it before this one sends."""
-        return await self._message_repo.lease_retry(message_id, now, until)
+    async def lease_due(self, message_id: str, now: datetime, until: datetime) -> bool:
+        """Claim a due row for this drain run; committed at once, so an overlapping run sees it
+        before this one sends."""
+        return await self._message_repo.lease_due(message_id, now, until)
 
     async def mark_message_failed(self, message_id: str, error: str) -> bool:
         """Permanent failure — the retry sweep never picks the message up again."""
         return await self.update_message_status(message_id, MessageStatus.FAILED, error)
 
-    async def get_pending_messages(self, limit: int = 100) -> Page[QueryMessageDto]:
-        page_size = limit
-        search_dto = SearchMessageDto(page=0, page_size=page_size,
-                                      status=MessageStatus.PENDING,
-                                      order_by="priority, date_created",
-                                      )
-
-        return await self._message_repo.get_page(search_dto)
-
-    async def get_retry_ready_messages(self, ready_before: datetime, limit: int = 100) -> Page[QueryMessageDto]:
-        """RETRYING messages whose next_retry_at has passed — the retry-sweep batch.
+    async def get_due_messages(self, now: datetime, limit: int) -> List[QueryMessageDto]:
+        """Queued deliveries and retries whose `next_retry_at` has passed — the drain's batch.
         The retry threshold is enforced at scheduling time, not here."""
-        search_dto = SearchMessageDto(page=0, page_size=limit,
-                                      status=MessageStatus.RETRYING,
-                                      next_retry_at=ready_before,
-                                      order_by="next_retry_at",
-                                      where="next_retry_at <= "
-                                      )
-
-        return await self._message_repo.get_page(search_dto)
+        return await self._message_repo.list_due(now, limit)
 
     async def delete_processed(self, older_than: datetime) -> int:
         search_dto = SearchMessageDto(page=0, page_size=100,
@@ -142,3 +121,23 @@ class MessageService:
                                       )
 
         return await self._message_repo.soft_delete_by_criterion(search_dto)
+
+
+@inject
+@decorate_all_methods(transactional(session_policy=TransactionSessionPolicy.FALLBACK_NEW),
+                      exclude=['__init__'], exclude_startswith='_')
+@decorate_all_methods(method_trace_logger, exclude=['__init__'], exclude_startswith='_')
+class MessageQueueService:
+    """Writes a queued delivery in the **caller's** transaction.
+
+    Unlike `MessageService`, whose rows record a send that already happened and so must survive
+    their caller, a queued row is only an intention: the drain sends it later. It belongs to the
+    work that queued it, and rolls back with it — so a broadcast page that fails and is retried
+    queues its emails once, not twice.
+    """
+
+    def __init__(self, message_repo: MessageRepo):
+        self._message_repo = message_repo
+
+    async def enqueue(self, message: UpsertMessageDto) -> None:
+        await self._message_repo.create_from_upsert(message)
