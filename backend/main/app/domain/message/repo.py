@@ -99,4 +99,8 @@ class MessageRepo(GenericRepo[Message, UpsertMessageDto, UpsertMessageDto, Query
         row.version = 1
         row.date_created = Utils.datetime_now()
         self._session.add(row)
+        # Flushed now: a send nested inside another independent transaction (a payout settled in
+        # `PayoutDisbursementService._settle`) shares that session, and every later step checks
+        # the row exists. With autoflush off, an unflushed row would be invisible to that check.
+        await self._session.flush()
         return row
