@@ -588,6 +588,17 @@ directly. Subscribers fan out:
 Implemented as an in-process synchronous dispatcher backed by the existing DB — not Kafka. A new channel
 (e.g. WhatsApp) is a new subscriber, not a rewrite. Redis multi-instance fan-out is deferred (§G).
 
+- **Each subscriber runs in its own savepoint** in the publisher's transaction. A failing subscriber rolls back
+  only its own writes. The fault is logged once, and the other subscribers still run. Subscribers do not swallow
+  their own exceptions; the bus owns that.
+- **An `atomic` event reverses the contract.** The first subscriber failure propagates, so the publisher's work
+  rolls back with it. A broadcast fan-out page uses this, so a page either reaches every recipient or is
+  retried whole (§23, D102).
+- **Delivery mode per rule.** The notification rule table chooses how each email/SMS leaves. By default it is
+  dispatched inline. A rule marked `delivery=QUEUED` is stored as a PENDING `messages` row in the event's own
+  transaction, and the message drain sends it on the sweep tick (§17.2, §11.4). The broadcast uses this, so a
+  large audience never sends inside one request.
+
 ### 4.9 Real-time transport — SSE throughout
 
 One transport: **SSE** for all server→client pushes; sends are ordinary HTTP POST. Two emitters:

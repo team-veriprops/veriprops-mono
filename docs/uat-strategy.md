@@ -83,6 +83,7 @@ The codebase has **no general business clock**. Time-dependent state is producib
 
 - **Backdated seed fixtures** — `seed()` crafts the SLA-overdue primary verification and the ops-verification tasks with already-blown deadlines.
 - **Trigger endpoints** — admin sweeps `POST /admin/verifications/sweeps/no-show`, `.../pool-starvation`, the SLA-breach sweep, `POST /messages/sweeps/retries`, plus `POST /dev/messages/rewind` (pulls `next_retry_at`/`expires_at` into the past). Claim-based and idempotent, so a spec drives them directly in setup.
+- **The sweep tick** — `POST /internal/sweeps/tick` (header `x-sweep-secret`; 404 while `SWEEP_TRIGGER_SECRET` is unset) runs every registered job that is due, exactly as the deployed Cloudflare Cron Worker does (D100). `POST /dev/sweeps/rewind?name=<job>` makes one job due now, so a scenario can rewind it and then tick, without waiting out the job's interval. The message drain (queued broadcast emails, D101) and the broadcast fan-out run only through the tick. `/dev/reset` clears the job clock.
 
 **SSE / real-time:** assert on the **resulting DOM state** (via `__app_ready__`/re-render and the 60s poll fallback), not on the raw event stream. Live-update scenarios trigger the change through one persona's action and assert another persona's already-open page reflects it within the poll window.
 

@@ -1,3 +1,35 @@
+# Progress Tracker — Pending issues after PR #26 (2026-10-01 → 07)
+
+status: **Stages 1–8 complete.** Stage 1 shipped as PR #27, and the dev deploy migrated 0002 → 0007. Stages 2–8 are on `fix/pending-issues`, one commit group per stage, in one PR to `dev`.
+
+| Stage | Change | Migration | Decision |
+| --- | --- | --- | --- |
+| 1 | Spec hydration races (UAT-PAY-01/03, UAT-RBAC-03); `waitForHydration` audit | — | — |
+| 2 | Server signup drafts dropped (they leaked the plaintext password); same-device resume without the password | `0008_drop_signup_drafts` | D98 |
+| 3 | Commission margin under a lock and on the worst-case net price; commission locked at accept; one tier save for price + line items; remote bonus in naira | `0009_task_commission_lock` | D99 |
+| 4 | Escaped LIKE search, consent history `Page[T]`, `LegalRiskLevel`, one `formatMinor`, Termii digits-only, `platform`/`ocr` criteria | — | — |
+| 5 | Admin invitations emailed (`emailSent`), §G row closed | — | — |
+| 6 | Sweep tick + Cloudflare Cron Worker, `JOB_REGISTRY`, one run per fire | `0010` | D100 |
+| 7 | Paged broadcast fan-out, `delivery=QUEUED`, message drain | `0011_broadcast_fanout` | D101 |
+| 7b | Bus savepoints + `atomic` events, atomic broadcast pages, job retries; payout email recorded as SENT | `0012_retries` | D102 |
+| 8 | Docs (MASTER-PRD §4.8, this file, uat-strategy) and the PR | — | — |
+
+**Final gate on the branch head:**
+
+| Gate | Result |
+| --- | --- |
+| pytest | **4031 passed** (2615 at the audit's S0 baseline) |
+| ruff, mypy | clean (625 files) |
+| eslint, tsc | clean |
+| vitest | **920 passed**, 151 files |
+| alembic | round trip + `alembic check` on `veriprops_e2e`, head `0012_retries` |
+| drive-through | **703/703** (new checks: invite email, sweep tick, broadcast drain, payout email SENT) |
+| Playwright (chromium-desktop + webkit-mobile, HTTPS, full suite) | **162/162**, no retries |
+
+**User actions** are listed in the PR body. The new ones this cycle: put `SWEEP_TRIGGER_SECRET` in each backend Doppler config (staging and production refuse to boot without it), and add the repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for `deploy-sweep-cron`. The sandbox register below gains row 20, the Worker.
+
+---
+
 # Progress Tracker — Audit remediation (2026-09-27)
 
 status: **S0–S9 complete — the remediation is ready for its PR.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
@@ -625,10 +657,10 @@ The PRD states this.
 
 **Logged, not done:**
 - ~~**Signup drafts persist the password in plain text,** in localStorage and in `signup_drafts.payload`.~~ Fixed in the pending-issues cycle (D98): the server draft and its table are dropped (`0008`), and the local draft keeps no password.
-- **Admin invitations are not emailed** (now a §G row and `TODO(gap)`).
-- **A send-now broadcast emails every recipient inside the request.** About 1s per local SMTP send; at production scale it would time out. Needs a queued fan-out.
-- **Pricing line items** aren't checked against the tier price.
-- **Consent history** returns its own page shape rather than `Page[T]`.
+- ~~**Admin invitations are not emailed.**~~ Fixed in the pending-issues cycle: the invite is emailed, and the copy link stays as a fallback (`emailSent`).
+- ~~**A send-now broadcast emails every recipient inside the request.**~~ Fixed in the same cycle (D101/D102): the broadcast fans out in atomic pages, and its emails are queued for the sweep tick's drain.
+- ~~**Pricing line items** aren't checked against the tier price.~~ Fixed in the same cycle (D99): the price and its items are one save, and the items must sum to the price.
+- ~~**Consent history** returns its own page shape rather than `Page[T]`.~~ Fixed in the same cycle.
 
 **Gate:**
 
@@ -673,7 +705,7 @@ This register lists every third-party integration still stubbed, or not yet prov
 | 8 | Dojah selfie liveness | wired in S5: `/api/v1/ml/liveness` before every identity call; no face, several faces or not live → FAILED with our sentence; photos kept privately for the reviewer (side-by-side view), deleted by erasure | `test_dojah_kyc.py`, `test_kyc_service.py`, `test_erasure_service.py`, `KycPhotoCompare.test.tsx`; Playwright onboarding uploads a real JPEG | a live selfie → pass; a photo of a photo → fail; a group photo → fail | Dojah sandbox (user) | S5 | CONTRACT-TESTED |
 | 9 | Google Places (New) | wired in S5: `places:autocomplete` (Nigeria only) + place details on selection, field masks on both, one session token per search; key in a header | `test_google_places.py`, `verification-service.test.ts` | type "Lekki" → suggestions → pick one → coordinates filled; check the billing console shows one session | Places API (New) key restricted to that API and the staging server (user) | S5 | CONTRACT-TESTED |
 | 10 | S3 evidence storage | fixed in S1 (valid `put_object`, real MIME, fresh presigned reads) | `test_s3_storage.py` (botocore Stubber: put, presign, delete, safe failure) | put (image + PDF MIME) → presign → GET 200 → delete | AWS staging bucket + IAM keys (user) | S1 | CONTRACT-TESTED |
-| 11 | SMS Termii | routing fixed in S1 | routing: `test_router_sms_routing.py`; Termii HTTP adapter: none; live probe `sms_termii` | OTP to a +234 test number → delivered. Confirm Termii accepts the number with its leading `+` (the adapter sends E.164 as given) | Termii key + sender ID, test handset (user) | S1 | STUBBED |
+| 11 | SMS Termii | routing fixed in S1 | routing: `test_router_sms_routing.py`; Termii HTTP adapter: none; live probe `sms_termii` | OTP to a +234 test number → delivered. Confirm Termii accepts the digits-only number (since the pending-issues cycle the adapter sends `digits_of(E.164)`, e.g. `2348012345678`) | Termii key + sender ID, test handset (user) | S1 | STUBBED |
 | 12 | SMS Twilio fallback | routing fixed in S1 (Termii down → Twilio; never the mock) | routing: `test_router_sms_routing.py`; Twilio adapter: none | non-NG number, and Termii forced down → Twilio | Twilio SID/token/number (user) | S1 | STUBBED |
 | 13 | Email Resend → Mailjet → SES | wired | Mailpit in drive-through (SMTP only); `test_resend_provider.py`, `test_aws_ses_provider.py`; live probes `email_*` | one email per provider to a test inbox; force a Resend failure → fallback | Resend/Mailjet/SES keys, verified domain (user) | S6 | STUBBED |
 | 14 | WhatsApp Meta `send_message` + templates | wired (D88 test number on stg) | signature checks in drive-through; live probe `whatsapp` (number health, template directory, `hello_world`) | template to Meta's test number; free text inside the 24h window | Meta test number, WABA id, token (user) | S6 | STUBBED |
@@ -682,6 +714,7 @@ This register lists every third-party integration still stubbed, or not yet prov
 | 17 | Firebase push | credentials load at startup, no tokens stored | none | — | — | §G | BLOCKED(feature not built) |
 | 18 | FX live rates | hardcoded rates | none | — | OpenExchangeRates key when the gap is picked up | §G | BLOCKED(deferred gap) |
 | 19 | Zoho DocSign / Google Drive | not in any live flow | none | — | — | — | BLOCKED(unused) |
+| 20 | Cloudflare sweep Cron Worker (D100) | `deploy.yml` `deploy-sweep-cron` ships it per environment and re-sets its secrets from the backend Doppler config; the backend refuses to boot on stg/prd without `SWEEP_TRIGGER_SECRET` | `infra/cloudflare/sweep-cron/test/index.test.js` (backend CI `sweep-cron` job); tick endpoint unit tests; drive-through `sweep_tick` stage (local clock) | the deployed Worker fires every minute → `200` from `/api/internal/sweeps/tick` in the Worker logs; confirm `x-edge-auth` passes once the Transform Rule is on; a staging broadcast drains through it | repo secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; `SWEEP_TRIGGER_SECRET` in each backend Doppler config (user) | pending-issues S6 | CONTRACT-TESTED |
 
 **User actions gathered from the audit:**
 
