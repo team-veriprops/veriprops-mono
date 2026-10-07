@@ -26,6 +26,10 @@ class FakeClaims:
     def __init__(self, answers):
         self.answers = answers
         self.asked: List[str] = []
+        self.failed: List[str] = []
+
+    async def record_failure(self, job: ScheduledJob) -> None:
+        self.failed.append(job.name)
 
     async def claim_if_due(self, job: ScheduledJob) -> JobClaim:
         self.asked.append(job.name)
@@ -76,6 +80,7 @@ async def test_a_failing_job_is_reported_and_the_rest_still_run(claims):
 
     assert ran == ["a", "b"]
     assert _outcomes(result) == {"a": SweepJobOutcome.FAILED, "b": SweepJobOutcome.RAN}
+    assert claims.failed == ["a"]  # retried soon, not at its next normal run
 
 
 async def test_a_failure_never_carries_its_text_into_the_summary(claims):

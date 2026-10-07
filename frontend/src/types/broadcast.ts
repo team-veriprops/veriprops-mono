@@ -14,6 +14,8 @@ export enum BroadcastStatus {
   SENDING = "SENDING",
   SENT = "SENT",
   CANCELLED = "CANCELLED",
+  /** One fan-out page kept failing; everyone reached before it keeps their notice. */
+  FAILED = "FAILED",
 }
 
 /** What an admin may do to a broadcast — the backend lists them per row (`allowedActions`). */

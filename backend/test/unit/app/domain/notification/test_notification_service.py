@@ -104,6 +104,36 @@ async def test_a_queued_rule_dispatches_queued_and_an_immediate_one_does_not():
     assert svc._dispatcher.dispatch.call_args.kwargs["queued"] is False
 
 
+async def test_a_failed_email_is_logged_and_the_next_recipient_still_gets_theirs(monkeypatch):
+    from main.app.domain.notification import service as notification_module
+
+    faults = []
+    monkeypatch.setattr(notification_module, "log_fault_once", lambda exc, where, **_: faults.append(where))
+    svc = _service()
+    svc._dispatcher.dispatch = AsyncMock(side_effect=[RuntimeError("smtp"), None])
+
+    # An email-only event: no WhatsApp branch to reach for a delegate.
+    await svc.create_for_event(DomainEvent(
+        type=EventType.STATUS_CHANGED, verification_id="v-1", recipient_user_ids=("u-1", "u-2"),
+    ))
+
+    assert svc._dispatcher.dispatch.await_count == 2
+    assert len(faults) == 1
+
+
+async def test_on_an_atomic_event_a_failed_email_fails_the_publish():
+    """A broadcast page is atomic: a recipient whose email could not be queued fails the page,
+    which then rolls back and is retried whole, rather than leaving that recipient out."""
+    svc = _service()
+    svc._dispatcher.dispatch = AsyncMock(side_effect=RuntimeError("db"))
+
+    with pytest.raises(RuntimeError):
+        await svc.create_for_event(DomainEvent(
+            type=EventType.BROADCAST_ANNOUNCEMENT, recipient_user_ids=("u-1",),
+            data={"subject": "S", "body": "B"}, atomic=True,
+        ))
+
+
 async def test_chat_only_event_creates_no_notification():
     svc = _service()
     await svc.create_for_event(DomainEvent(

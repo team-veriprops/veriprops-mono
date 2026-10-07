@@ -1,14 +1,15 @@
 # Veriprops sweep-cron Worker — calls the backend's sweep tick every minute (src/index.js).
 #
-# One Worker per app environment; always deploy with an explicit --env, because the top level
-# has no TICK_URL and a bare deploy would only ever fail:
+# deploy.yml's deploy-sweep-cron job deploys it on every push to dev/staging/master, after the
+# backend, and re-sets its secrets from the backend Doppler config. By hand, always pass --env:
+# the top level has no TICK_URL, so a bare deploy would only ever fail.
 #
 #   wrangler deploy --env dev
 #   wrangler secret put SWEEP_TRIGGER_SECRET --env dev     # = Doppler dev SWEEP_TRIGGER_SECRET
 #   wrangler secret put EDGE_AUTH_SECRET --env dev         # only where the backend enforces edge auth
 #
-# Repeat for staging and production. The backend refuses to boot on staging/production without
-# its SWEEP_TRIGGER_SECRET, and answers 404 to the tick wherever it is unset.
+# The backend refuses to boot on staging/production without its SWEEP_TRIGGER_SECRET, and
+# answers 404 to the tick wherever it is unset.
 
 name = "veriprops-sweep-cron"
 main = "src/index.js"

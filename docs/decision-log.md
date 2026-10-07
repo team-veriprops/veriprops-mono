@@ -3094,3 +3094,38 @@ left the broadcast marked SENT with an unknown share of its audience told.
 ### Revisit
 When staging and production move to Docker, the in-process scheduler runs the same tick, and the
 page size and drain batch can be tuned to the host rather than to a function's time limit.
+
+## Decision: D102 — bus failures are isolated and logged, broadcast pages are atomic, failed jobs retry soon
+
+### Context
+D100 and D101 shipped with four stated limits. Reviewing them found a fifth, older one in the bus
+itself: `EventBus.publish` and every subscriber caught exceptions and dropped them without a log
+line, and a subscriber whose database write failed left the publisher's transaction aborted, so
+the publisher then failed at commit. "Best-effort" was neither silent-safe nor actually
+best-effort.
+
+### Chosen (all at the user's request)
+- **Isolated and logged.** Each subscriber runs in its own savepoint whenever a transaction is
+  open; a failure rolls back only that subscriber's writes and is logged once (`log_fault_once`).
+  Subscribers no longer catch their own errors (a guard test enforces it), and
+  `NotificationService` logs a recipient's failed email, WhatsApp milestone or delegate send.
+- **Atomic events.** `DomainEvent.atomic` reverses the contract for one event: the first failure
+  propagates, and `NotificationService` re-raises a recipient's failure. Broadcast pages publish
+  atomically, inside a savepoint (`_fanout_page_guarded`): a failed page rolls back whole and is
+  retried from the same cursor; `broadcasts.fanout_failures` counts consecutive failures, and at
+  `BROADCAST_FANOUT_MAX_FAILURES` (5) the broadcast becomes `FAILED`, keeping everyone reached.
+- **Exact reach.** The last page sets `recipient_count` to the number actually reached.
+- **Failed jobs retry soon.** A job that raises gets `scheduled_job_runs.retry_at` =
+  `SCHEDULED_JOB_RETRY_SECONDS` (300) later, never later than its next fire time; a claim clears
+  it. Migration `0012_retries` adds both columns and refuses to downgrade while a broadcast is
+  FAILED.
+- **The Worker deploys with the app.** `deploy.yml`'s `deploy-sweep-cron` job runs after
+  `deploy-backend`, deploys to the matching wrangler environment and re-sets the Worker's secrets
+  from the backend Doppler config each time. Needs `CLOUDFLARE_API_TOKEN` and
+  `CLOUDFLARE_ACCOUNT_ID`; nothing waits on it.
+
+### Tradeoffs
+- One SAVEPOINT/RELEASE pair per subscriber per event while a transaction is open.
+- A FAILED broadcast has no resume action; the admin composes a new one for those not reached.
+- Faults that were silent now log at ERROR. The first deploy may surface existing ones; each is a
+  real fault that used to vanish.

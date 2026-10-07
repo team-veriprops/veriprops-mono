@@ -13,10 +13,15 @@ Sending is two steps, so a broadcast to every user never runs inside one request
    subscriber writes their in-app entries and queues their emails for the message drain. The
    last page moves the broadcast to SENT.
 
-"Send now" runs the first page inside the request, in a savepoint: an audience that fits one page
-is SENT when the request returns, and a page that fails there rolls back alone (cursor, in-app
-entries and queued emails together), leaving the broadcast SENDING for the next tick to retry
-from the same cursor. Later pages run from the `broadcast_fanout` job on every sweep tick.
+Every page runs in a savepoint and publishes its event **atomically**: if any listener fails
+(an in-app write, a queued email), the whole page rolls back — cursor, notices and queued emails
+together — and is retried from the same cursor, so no recipient is silently left out. Consecutive
+failures are counted on the broadcast; at `BROADCAST_FANOUT_MAX_FAILURES` it becomes FAILED
+rather than retried forever, with everyone reached so far keeping their notice.
+
+"Send now" runs the first page inside the request: an audience that fits one page is SENT when
+the request returns. Later pages, and any retry, run from the `broadcast_fanout` job on every
+sweep tick.
 """
 from __future__ import annotations
 
@@ -105,7 +110,7 @@ class BroadcastService:
             resource_type="broadcast", resource_id=claimed.id, actor_id=admin_id,
             details={"action": "send_now"},
         )
-        await self._fanout_page_in_savepoint(claimed)
+        await self._fanout_page_guarded(claimed)
         return await self._get(broadcast_id)
 
     async def cancel(self, broadcast_id: str, admin_id: str) -> Broadcast:
@@ -146,12 +151,13 @@ class BroadcastService:
         return started
 
     async def fanout_next_page(self) -> bool:
-        """Send the next page of the broadcast that has waited longest. Whether anything moved:
-        False when nothing is SENDING, or another runner took this page first."""
+        """Send the next page of the broadcast that has waited longest. Whether a page went out:
+        False when nothing is SENDING, another runner took this page first, or the page failed
+        (counted, and retried by a later run)."""
         broadcast = await self._broadcast_repo.oldest_sending()
         if broadcast is None:
             return False
-        return await self._fanout_page(broadcast)
+        return await self._fanout_page_guarded(broadcast)
 
     async def run_scheduled_sweep(self, max_pages: Optional[int] = None) -> Dict[str, int]:
         """The admin trigger: start due scheduled broadcasts, then fan out up to *max_pages*."""
@@ -180,7 +186,7 @@ class BroadcastService:
         recipient_count = await self._count(BroadcastAudience(broadcast.audience))
         return await self._broadcast_repo.claim_transition(
             broadcast.id, from_statuses, BroadcastStatus.SENDING,
-            recipient_count=recipient_count, recipients_enqueued=0, fanout_cursor=None,
+            recipient_count=recipient_count, recipients_enqueued=0, fanout_cursor=None, fanout_failures=0,
         )
 
     async def _fanout_page(self, broadcast: Broadcast) -> bool:
@@ -188,7 +194,8 @@ class BroadcastService:
 
         The cursor advances with a claim pinned to the cursor this page was read from, before
         the event goes out, so a concurrent runner that read the same cursor loses the claim and
-        sends nothing. Whether this call moved the broadcast.
+        sends nothing. The event is atomic: a listener failure raises out of here. Whether this
+        call moved the broadcast.
         """
         page_size = settings.BROADCAST_FANOUT_PAGE_SIZE
         user_type, persona = _AUDIENCE_FILTER[BroadcastAudience(broadcast.audience)]
@@ -197,8 +204,12 @@ class BroadcastService:
         )
         last_page = len(recipients) < page_size
         values = {"fanout_cursor": recipients[-1]} if recipients else {}
+        values["fanout_failures"] = 0
         if last_page:
+            # Pinned to the cursor read, the count read is exact: the audience as reached,
+            # including anyone who joined after sending began.
             values["sent_at"] = Utils.datetime_now()
+            values["recipient_count"] = (broadcast.recipients_enqueued or 0) + len(recipients)
         claimed = await self._broadcast_repo.claim_transition(
             broadcast.id, [BroadcastStatus.SENDING], BroadcastStatus.SENT if last_page else None,
             expect={"fanout_cursor": broadcast.fanout_cursor},
@@ -212,15 +223,26 @@ class BroadcastService:
                 type=EventType.BROADCAST_ANNOUNCEMENT,
                 recipient_user_ids=tuple(recipients),
                 data={"subject": broadcast.subject, "body": broadcast.body},
+                atomic=True,
             ))
         return True
 
-    async def _fanout_page_in_savepoint(self, broadcast: Broadcast) -> None:
-        """The first page, sent inside the request that started the broadcast. A failure rolls
-        back this page alone and is logged; the broadcast stays SENDING at the same cursor, so
-        the next tick sends the page instead."""
+    async def _fanout_page_guarded(self, broadcast: Broadcast) -> bool:
+        """One page in a savepoint. A failure rolls the page back whole, is logged, and counts
+        against the broadcast: the next attempt starts from the same cursor, and at
+        `BROADCAST_FANOUT_MAX_FAILURES` the broadcast is FAILED. Whether the page went out."""
+        # Read before the savepoint: rolling it back expires the row, and an async session cannot
+        # lazy-load an expired attribute afterwards.
+        broadcast_id, cursor = broadcast.id, broadcast.fanout_cursor
+        failures = broadcast.fanout_failures or 0
         try:
             async with get_db_session_from_context().begin_nested():
-                await self._fanout_page(broadcast)
-        except Exception as exc:  # noqa: BLE001 — the tick retries the page
-            log_fault_once(exc, f"broadcast {broadcast.id}: inline fan-out page")
+                return await self._fanout_page(broadcast)
+        except Exception as exc:  # noqa: BLE001 — counted below; a later run retries the page
+            log_fault_once(exc, f"broadcast {broadcast_id}: fan-out page after {cursor or 'the start'}")
+        give_up = failures + 1 >= settings.BROADCAST_FANOUT_MAX_FAILURES
+        await self._broadcast_repo.claim_transition(
+            broadcast_id, [BroadcastStatus.SENDING], BroadcastStatus.FAILED if give_up else None,
+            expect={"fanout_cursor": cursor}, increments={"fanout_failures": 1},
+        )
+        return False

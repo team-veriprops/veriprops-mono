@@ -109,3 +109,15 @@ async def test_a_whatsapp_receipt_refreshes_the_thread_and_counter():
         assert events == [UserEventType.CHAT_MESSAGE, UserEventType.CHAT_UNREAD]
     finally:
         di[UserEventEmitter] = original
+
+
+def test_no_subscriber_swallows_its_own_failure():
+    """The bus isolates each subscriber in a savepoint and logs its fault once, and an atomic
+    event needs the failure to reach it. A subscriber that catches and drops its own error
+    defeats both — the fault vanishes without a log line, and an atomic publish never learns
+    it failed."""
+    import inspect
+
+    from main.app.core.events import subscribers
+
+    assert "except Exception" not in inspect.getsource(subscribers)

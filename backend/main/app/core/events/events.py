@@ -91,6 +91,11 @@ class DomainEvent:
     ``data`` carries SSE payload + notification/template context. ``type`` is optional: a pure
     UI-refresh nudge (SSE re-emit with no notification) carries only ``sse_event`` and leaves
     ``type`` as ``None`` — the notification subscriber skips it.
+
+    ``atomic`` flips the bus's contract for this one event: instead of best-effort per
+    subscriber, the first subscriber failure propagates to the publisher, whose work then
+    rolls back with it. For an event that is one step of retryable work, where a recipient
+    silently left out is worse than retrying the step (a broadcast fan-out page).
     """
 
     type: Optional[EventType] = None
@@ -99,3 +104,4 @@ class DomainEvent:
     actor_id: Optional[str] = None
     sse_event: Optional[str] = None
     data: dict = field(default_factory=dict)
+    atomic: bool = False

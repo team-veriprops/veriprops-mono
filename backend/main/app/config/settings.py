@@ -94,6 +94,8 @@ class Settings(AppodusBaseSettings):
     # A tick starts no new job after this many seconds, keeping it inside the function's
     # 300s limit (backend/vercel.json maxDuration) with room for the job already running.
     SWEEP_TICK_BUDGET_SECONDS: int = 240
+    # A job that raised is due again this many seconds later (never later than its next run).
+    SCHEDULED_JOB_RETRY_SECONDS: int = 300
 
     # Edge auth — closes the direct-origin bypass around the Cloudflare proxy
     # (*.vercel.app deployment URLs on Vercel, the raw origin IP on self-hosted).
@@ -343,6 +345,8 @@ class Settings(AppodusBaseSettings):
     # Admin broadcasts (§18.1): recipients reached per fan-out page, and pages one run takes.
     BROADCAST_FANOUT_PAGE_SIZE: int = 500
     BROADCAST_FANOUT_MAX_PAGES_PER_RUN: int = 10
+    # Consecutive failed attempts at one fan-out page before the broadcast is marked FAILED.
+    BROADCAST_FANOUT_MAX_FAILURES: int = 5
 
     # Background scheduler (PRD §6.4/§11.4) — disabled in test; sweeps invoked directly.
     SCHEDULER_ENABLED: bool = True

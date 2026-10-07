@@ -10,7 +10,8 @@ const STATUS_TONE: Record<BroadcastStatus, string> = {
   [BroadcastStatus.SCHEDULED]: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   [BroadcastStatus.SENDING]: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
   [BroadcastStatus.SENT]: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  [BroadcastStatus.CANCELLED]: "bg-red-500/10 text-red-600 dark:text-red-400",
+  [BroadcastStatus.CANCELLED]: "bg-muted text-muted-foreground",
+  [BroadcastStatus.FAILED]: "bg-red-500/10 text-red-600 dark:text-red-400",
 };
 
 /** How far the broadcast has reached its audience, in the words its status calls for. */
@@ -24,6 +25,8 @@ function reach(b: Broadcast): string {
       return `${formatCount(b.recipientsEnqueued || b.recipientCount)} recipients`;
     case BroadcastStatus.CANCELLED:
       return b.recipientsEnqueued > 0 ? `stopped after ${reached} of ${audience} recipients` : "not sent";
+    case BroadcastStatus.FAILED:
+      return `failed after ${reached} of ${audience} recipients`;
     default:
       return "not sent yet";
   }

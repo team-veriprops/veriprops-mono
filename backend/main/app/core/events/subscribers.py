@@ -27,11 +27,8 @@ async def realtime_subscriber(event: DomainEvent) -> None:
     """Re-emit the verification-keyed SSE push (S13 preservation)."""
     if not event.verification_id or not event.sse_event:
         return
-    try:
-        emitter = di[VerificationEventEmitter]
-        emitter.publish(event.verification_id, VerificationEventType(event.sse_event), event.data)
-    except Exception:  # noqa: BLE001
-        pass
+    emitter = di[VerificationEventEmitter]
+    emitter.publish(event.verification_id, VerificationEventType(event.sse_event), event.data)
 
 
 async def notification_subscriber(event: DomainEvent) -> None:
@@ -54,36 +51,31 @@ async def chat_counter_subscriber(event: DomainEvent) -> None:
     """
     if event.type not in _CHAT_REFRESH_EVENTS:
         return
-    try:
-        emitter = di[UserEventEmitter]
-        for user_id in event.recipient_user_ids:
-            emitter.publish(user_id, UserEventType.CHAT_MESSAGE, event.data)
-            emitter.publish(user_id, UserEventType.CHAT_UNREAD, {})
-    except Exception:  # noqa: BLE001
-        pass
+    emitter = di[UserEventEmitter]
+    for user_id in event.recipient_user_ids:
+        emitter.publish(user_id, UserEventType.CHAT_MESSAGE, event.data)
+        emitter.publish(user_id, UserEventType.CHAT_UNREAD, {})
 
 
 async def chat_autopost_subscriber(event: DomainEvent) -> None:
-    """Auto-post the status change into the customer↔admin thread (§11.1). Best-effort — the
-    notification + SSE already fire; this is the human-readable thread breadcrumb."""
+    """Auto-post the status change into the customer↔admin thread (§11.1). Best-effort through
+    the bus (its own savepoint, fault logged) — the notification + SSE already fire; this is
+    the human-readable thread breadcrumb."""
     if event.type != EventType.STATUS_CHANGED or not event.verification_id:
         return
     if not event.recipient_user_ids:
         return
-    try:
-        from main.app.core.state.status import VerificationStatus
-        from main.app.domain.communication.service import CommunicationService
-        from main.app.domain.verification.tracking.labels import customer_status_label
+    from main.app.core.state.status import VerificationStatus
+    from main.app.domain.communication.service import CommunicationService
+    from main.app.domain.verification.tracking.labels import customer_status_label
 
-        customer_id = event.recipient_user_ids[0]
-        status = event.data.get("status")
-        label = customer_status_label(VerificationStatus(status)) if status else "updated"
-        comms = di[CommunicationService]
-        await comms.auto_post_customer(
-            event.verification_id, customer_id, f"Status update: {label}"
-        )
-    except Exception:  # noqa: BLE001 — auto-post is a best-effort breadcrumb, never fatal
-        pass
+    customer_id = event.recipient_user_ids[0]
+    status = event.data.get("status")
+    label = customer_status_label(VerificationStatus(status)) if status else "updated"
+    comms = di[CommunicationService]
+    await comms.auto_post_customer(
+        event.verification_id, customer_id, f"Status update: {label}"
+    )
 
 
 async def channel_analytics_subscriber(event: DomainEvent) -> None:
@@ -94,20 +86,18 @@ async def channel_analytics_subscriber(event: DomainEvent) -> None:
     with it — and it also keeps the WhatsApp channel out of the payment path entirely,
     which is where it belongs: payment does not care that a case began in a chat.
 
-    The recorder itself decides whether this case is the channel's (it checks for an
+    A failure here never fails the confirmed payment: the bus runs every subscriber in its own
+    savepoint and logs the fault. The recorder itself decides whether this case is the channel's (it checks for an
     earlier fact about the same verification), so the platform's web payments pass through
     here and are counted into nothing.
     """
     if event.type != EventType.PAYMENT_CONFIRMED or not event.verification_id:
         return
-    try:
-        from main.app.domain.channel.whatsapp.analytics.recorder import ChannelEventRecorder
+    from main.app.domain.channel.whatsapp.analytics.recorder import ChannelEventRecorder
 
-        recorder = di[ChannelEventRecorder]
-        customer_id = event.recipient_user_ids[0] if event.recipient_user_ids else None
-        await recorder.record_payment_if_channel_case(event.verification_id, customer_id)
-    except Exception:  # noqa: BLE001 — a metric must never fail a confirmed payment
-        pass
+    recorder = di[ChannelEventRecorder]
+    customer_id = event.recipient_user_ids[0] if event.recipient_user_ids else None
+    await recorder.record_payment_if_channel_case(event.verification_id, customer_id)
 
 
 def register_subscribers(bus: EventBus) -> None:

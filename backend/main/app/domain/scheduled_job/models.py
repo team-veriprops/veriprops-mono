@@ -45,6 +45,8 @@ class ScheduledJobRun(BaseEntity):
     name = Column(String(64), nullable=False, unique=True, index=True)
     # When the last claimed run started. None until the job first runs.
     last_run_at = Column(UTCDateTime, nullable=True)
+    # Set when that run raised: the job is due again from here, sooner than its next fire time.
+    retry_at = Column(UTCDateTime, nullable=True)
 
 
 # ─── DTOs ─────────────────────────────────────────────────────────

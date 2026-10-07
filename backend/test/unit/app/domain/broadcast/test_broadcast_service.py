@@ -72,29 +72,37 @@ def page_size(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def savepoints():
-    """`begin_nested` on the context session; records each savepoint and whether it rolled back."""
-    entered: List[str] = []
-
-    class _Savepoint:
-        async def __aenter__(self):
-            entered.append("open")
-
-        async def __aexit__(self, exc_type, exc, tb):
-            entered.append("rolled back" if exc_type else "released")
-            return False
-
-    db_session_ctx.get().begin_nested = lambda: _Savepoint()
-    return entered
+    """The fate of each savepoint, in order; `_service` wires `begin_nested` to append here."""
+    return []
 
 
 def _row(status=BroadcastStatus.DRAFT, audience=BroadcastAudience.ALL, **over):
     base = dict(id="b-1", audience=audience.value, subject="S", body="B", status=status.value,
-                sent_at=None, recipient_count=0, recipients_enqueued=0, fanout_cursor=None, deleted=False)
+                sent_at=None, recipient_count=0, recipients_enqueued=0, fanout_cursor=None,
+                fanout_failures=0, deleted=False)
     base.update(over)
     return SimpleNamespace(**base)
 
 
-def _service(row=None):
+def _savepoint_over(row, fates: List[str]):
+    """`begin_nested` as Postgres behaves: a savepoint that rolls back restores the row to what
+    it was when the savepoint opened (the fake claim edits the row in memory)."""
+    class _Savepoint:
+        async def __aenter__(self):
+            self._before = dict(vars(row)) if row is not None else {}
+            fates.append("open")
+
+        async def __aexit__(self, exc_type, exc, tb):
+            if exc_type and row is not None:
+                vars(row).clear()
+                vars(row).update(self._before)
+            fates.append("rolled back" if exc_type else "released")
+            return False
+
+    return lambda: _Savepoint()
+
+
+def _service(row=None, fates: Optional[List[str]] = None):
     svc = object.__new__(BroadcastService)
     svc._broadcast_repo = AsyncMock()
     svc._broadcast_repo.get_model = AsyncMock(return_value=row)
@@ -103,6 +111,7 @@ def _service(row=None):
     svc._broadcast_repo.claim_transition = fake_claim_transition(lambda _id: row)
     svc._users = FakeUsers()
     svc._audit = MagicMock()
+    db_session_ctx.get().begin_nested = _savepoint_over(row, fates if fates is not None else [])
     return svc
 
 
@@ -139,12 +148,13 @@ class TestPreview:
 class TestSendNow:
     async def test_claims_sending_records_the_audience_and_sends_the_first_page_inline(self, published, savepoints):
         row = _row()
-        await _service(row).send_now("b-1", "admin-1")
+        await _service(row, savepoints).send_now("b-1", "admin-1")
 
         assert row.status == BroadcastStatus.SENDING.value
         assert row.recipient_count == 5
         assert _recipients(published) == [["u-1", "u-2"]]
         assert published[0].type == EventType.BROADCAST_ANNOUNCEMENT
+        assert published[0].atomic is True  # a listener's failure fails the page, not a recipient
         assert row.fanout_cursor == "u-2" and row.recipients_enqueued == 2
         assert savepoints == ["open", "released"]
 
@@ -157,15 +167,17 @@ class TestSendNow:
         assert _recipients(published) == [["u-1"]]
         assert row.recipients_enqueued == row.recipient_count == 1
 
-    async def test_a_failed_inline_page_leaves_it_sending_for_the_tick(self, monkeypatch, published, savepoints):
+    async def test_a_failed_inline_page_leaves_it_sending_for_the_tick(self, monkeypatch, savepoints):
         row = _row()
-        svc = _service(row)
+        svc = _service(row, savepoints)
         monkeypatch.setattr(broadcast_module, "publish_domain_event", AsyncMock(side_effect=RuntimeError("boom")))
 
         result = await svc.send_now("b-1", "admin-1")  # the request still succeeds
 
         assert result.status == BroadcastStatus.SENDING.value
         assert savepoints == ["open", "rolled back"]
+        # The page was undone whole, and the failure counted against the broadcast.
+        assert (row.fanout_cursor, row.recipients_enqueued, row.fanout_failures) == (None, 0, 1)
 
     async def test_resending_a_sending_or_sent_broadcast_fans_out_nothing(self, published):
         for status in (BroadcastStatus.SENDING, BroadcastStatus.SENT):
@@ -187,7 +199,7 @@ class TestFanOut:
 
         assert _recipients(published) == [["u-1", "u-2"], ["u-3", "u-4"], ["u-5"]]
         assert row.status == BroadcastStatus.SENT.value
-        assert row.recipients_enqueued == 5
+        assert row.recipients_enqueued == row.recipient_count == 5
 
     async def test_an_audience_that_fills_its_last_page_exactly_finishes_on_an_empty_page(self, published):
         row = _row(BroadcastStatus.SENDING, audience=BroadcastAudience.AGENTS, recipient_count=2)
@@ -218,6 +230,46 @@ class TestFanOut:
         assert await svc.fanout_next_page() is False
         assert row.status == BroadcastStatus.CANCELLED.value
         assert _recipients(published) == [["u-1", "u-2"]]
+
+
+    async def test_the_audience_count_becomes_the_number_actually_reached(self, published):
+        """Counted when sending began; a user who joined mid-send is reached too, and the finished
+        broadcast says so."""
+        row = _row(BroadcastStatus.SENDING, recipient_count=4)
+        svc = _service(row)
+
+        while await svc.fanout_next_page():
+            pass
+
+        assert row.recipients_enqueued == row.recipient_count == 5
+
+    async def test_a_failed_page_is_undone_counted_and_retried_from_the_same_cursor(self, monkeypatch, published, savepoints):
+        row = _row(BroadcastStatus.SENDING, fanout_cursor="u-2", recipients_enqueued=2, recipient_count=5)
+        svc = _service(row, savepoints)
+        monkeypatch.setattr(broadcast_module, "publish_domain_event", AsyncMock(side_effect=RuntimeError("db")))
+
+        assert await svc.fanout_next_page() is False   # the run stops; nothing more this tick
+        assert (row.status, row.fanout_cursor, row.recipients_enqueued, row.fanout_failures) == (
+            BroadcastStatus.SENDING.value, "u-2", 2, 1)
+
+        monkeypatch.setattr(broadcast_module, "publish_domain_event",
+                            AsyncMock(side_effect=lambda e: published.append(e)))
+        assert await svc.fanout_next_page() is True
+        assert _recipients(published) == [["u-3", "u-4"]]
+        assert row.fanout_failures == 0                 # a good page clears the count
+
+    async def test_a_page_that_keeps_failing_fails_the_broadcast(self, monkeypatch):
+        monkeypatch.setattr(settings, "BROADCAST_FANOUT_MAX_FAILURES", 3)
+        row = _row(BroadcastStatus.SENDING, fanout_cursor="u-2", recipients_enqueued=2, recipient_count=5)
+        svc = _service(row)
+        monkeypatch.setattr(broadcast_module, "publish_domain_event", AsyncMock(side_effect=RuntimeError("bad")))
+
+        for _ in range(3):
+            await svc.fanout_next_page()
+
+        assert row.status == BroadcastStatus.FAILED.value
+        assert (row.fanout_failures, row.recipients_enqueued) == (3, 2)
+        assert await svc.fanout_next_page() is False    # no longer SENDING: nothing to retry
 
 
 class TestScheduledSweep:
@@ -258,6 +310,7 @@ class TestCancelAndActions:
         (BroadcastStatus.SENDING, [BroadcastAction.CANCEL]),
         (BroadcastStatus.SENT, []),
         (BroadcastStatus.CANCELLED, []),
+        (BroadcastStatus.FAILED, []),
     ])
     def test_the_backend_says_which_actions_a_status_allows(self, status, actions):
         assert allowed_actions(status) == actions

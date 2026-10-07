@@ -40,12 +40,13 @@ def _service(row, *, wins: bool = True):
     repo = MagicMock()
     repo.insert_or_get = AsyncMock(return_value=(row, False))
     repo.claim_run = AsyncMock(return_value=wins)
+    repo.set_retry_at = AsyncMock()
     svc._scheduled_job_run_repo = repo
     return svc, repo
 
 
-def _row(*, last_run_at=None, date_created=NOW - timedelta(days=1)):
-    return SimpleNamespace(name="job", last_run_at=last_run_at, date_created=date_created)
+def _row(*, last_run_at=None, date_created=NOW - timedelta(days=1), retry_at=None):
+    return SimpleNamespace(name="job", last_run_at=last_run_at, date_created=date_created, retry_at=retry_at)
 
 
 @pytest.fixture(autouse=True)
@@ -111,3 +112,39 @@ async def test_the_claim_commits_in_its_own_transaction(independent_sessions):
     await svc.claim_if_due(_every(5))
 
     assert len(independent_sessions) == 1
+
+
+class TestRetryAfterFailure:
+    """A job that raised is due again after `SCHEDULED_JOB_RETRY_SECONDS`, never later than its
+    normal next run — so the daily payout batch is retried within minutes, not tomorrow."""
+
+    async def test_a_failure_schedules_a_retry_soon(self, monkeypatch):
+        from main.app.config.settings import settings
+        monkeypatch.setattr(settings, "SCHEDULED_JOB_RETRY_SECONDS", 300)
+        daily = ScheduledJob(name="job", run=_noop, trigger=CronTrigger(hour=10, minute=0, timezone="Africa/Lagos"))
+        svc, repo = _service(_row(last_run_at=NOW))
+
+        await svc.record_failure(daily)
+
+        repo.set_retry_at.assert_awaited_once_with("job", NOW + timedelta(seconds=300))
+
+    async def test_the_retry_never_waits_past_the_normal_next_run(self, monkeypatch):
+        from main.app.config.settings import settings
+        monkeypatch.setattr(settings, "SCHEDULED_JOB_RETRY_SECONDS", 300)
+        svc, repo = _service(_row(last_run_at=NOW))
+
+        await svc.record_failure(_every(1))
+
+        repo.set_retry_at.assert_awaited_once_with("job", NOW + timedelta(minutes=1))
+
+    async def test_a_job_whose_retry_time_has_come_is_due_before_its_next_run(self):
+        row = _row(last_run_at=NOW - timedelta(minutes=10), retry_at=NOW - timedelta(seconds=1))
+        svc, repo = _service(row)
+
+        assert await svc.claim_if_due(_every(60)) == JobClaim.CLAIMED
+        repo.claim_run.assert_awaited_once_with("job", expected_last_run_at=row.last_run_at, at=NOW)
+
+    async def test_a_retry_not_yet_due_waits(self):
+        svc, _ = _service(_row(last_run_at=NOW - timedelta(minutes=10), retry_at=NOW + timedelta(minutes=1)))
+
+        assert await svc.claim_if_due(_every(60)) == JobClaim.NOT_DUE

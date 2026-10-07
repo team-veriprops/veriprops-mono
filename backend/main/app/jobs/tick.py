@@ -5,7 +5,8 @@ the in-process scheduler every minute — so whether a job runs is decided by it
 `scheduled_job_runs` (`ScheduledJobRunService.claim_if_due`), never by which runner fired.
 
 Jobs run one after another in registry order, each in its own transaction under its own
-`exclusive_job` lock. A job that raises is logged and reported, and the tick moves on. Once the
+`exclusive_job` lock. A job that raises is logged, reported, and made due again after
+`SCHEDULED_JOB_RETRY_SECONDS`; the tick moves on. Once the
 time budget is spent the tick starts nothing more: the remaining jobs keep their claims for the
 next tick, which keeps a slow run inside the serverless function's time limit.
 """
@@ -58,5 +59,8 @@ async def run_sweep_tick(
         if claim != JobClaim.CLAIMED:
             results.append(SweepJobResultDto(name=job.name, outcome=_UNCLAIMED_OUTCOME[claim]))
             continue
-        results.append(await _run(job))
+        result = await _run(job)
+        if result.outcome == SweepJobOutcome.FAILED:
+            await claims.record_failure(job)
+        results.append(result)
     return SweepTickResultDto(jobs=results)

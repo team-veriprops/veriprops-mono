@@ -53,4 +53,13 @@ describe("BroadcastRow", () => {
     }));
     expect(html).toContain("stopped after 500 of 4,200 recipients");
   });
+
+  it("says where a failed send stopped, and offers nothing", () => {
+    const html = render(broadcast({
+      status: BroadcastStatus.FAILED, recipientCount: 4200, recipientsEnqueued: 1000, allowedActions: [],
+    }));
+    expect(html).toContain("failed after 1,000 of 4,200 recipients");
+    expect(html).not.toContain("broadcast-send-b-1");
+    expect(html).not.toContain("broadcast-cancel-b-1");
+  });
 });

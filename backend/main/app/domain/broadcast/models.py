@@ -31,6 +31,7 @@ class BroadcastStatus(str, enum.Enum):
     SENDING = "SENDING"      # claimed; the fan-out is reaching its audience page by page
     SENT = "SENT"
     CANCELLED = "CANCELLED"
+    FAILED = "FAILED"        # one page kept failing; the recipients reached so far keep their notice
 
 
 class BroadcastAction(str, enum.Enum):
@@ -68,6 +69,8 @@ class Broadcast(BaseEntity):
     # Recipients the fan-out has reached so far, and the last user id it sent to (keyset cursor).
     recipients_enqueued = Column(Integer, nullable=False, default=0, server_default="0")
     fanout_cursor = Column(String(36), nullable=True)
+    # Consecutive failed attempts at the page after the cursor; reset by a page that succeeds.
+    fanout_failures = Column(Integer, nullable=False, default=0, server_default="0")
     # created_by (the composing admin) is inherited from BaseEntity — set via the create DTO.
     # status index is declared inline (index=True) → ix_broadcasts_status, matching the migration.
 

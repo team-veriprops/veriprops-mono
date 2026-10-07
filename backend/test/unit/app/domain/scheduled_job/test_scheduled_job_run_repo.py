@@ -52,3 +52,11 @@ async def test_a_run_job_is_claimed_only_while_its_last_run_is_unchanged():
     await repo.claim_run("job", expected_last_run_at=AT, at=AT)
 
     assert "scheduled_job_runs.last_run_at = %(last_run_at_1)s" in _sql()
+
+
+async def test_a_claim_clears_any_pending_retry():
+    repo = _repo("job")
+
+    await repo.claim_run("job", expected_last_run_at=AT, at=AT)
+
+    assert "retry_at=%(retry_at)s" in _sql().replace(" ", "")

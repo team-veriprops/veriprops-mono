@@ -1,6 +1,6 @@
 """Migration 0011 gives a broadcast a fan-out cursor and a count of recipients reached.
 
-It must chain after 0010, leave one head, add exactly the two columns the model declares (the
+It must chain after 0010, add exactly the two columns the model declares (the
 cursor nullable, the count defaulting to 0 so existing broadcasts read as "none reached"), and
 drop only those on the way down — refusing while a broadcast is mid-send, because dropping its
 cursor would strand it half-delivered with nothing to resume from.
@@ -35,10 +35,8 @@ def _recorded(step: str):
     return recorder
 
 
-def test_it_chains_after_the_job_clock_migration_and_is_the_only_head():
-    scripts = _scripts()
-    assert scripts.get_heads() == [_REVISION]
-    assert scripts.get_revision(_REVISION).down_revision == "0010_scheduled_job_runs"
+def test_it_chains_after_the_job_clock_migration():
+    assert _scripts().get_revision(_REVISION).down_revision == "0010_scheduled_job_runs"
 
 
 def test_the_model_declares_both_columns():

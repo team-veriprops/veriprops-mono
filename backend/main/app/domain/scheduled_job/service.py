@@ -1,10 +1,12 @@
 """Claims a scheduled job's next fire for one runner (D12 follow-up)."""
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from kink import inject
 
+from main.app.config.settings import settings
 from main.app.domain.scheduled_job.models import JobClaim
 from main.app.domain.scheduled_job.repo import ScheduledJobRunRepo
 from main.appodus_utils import Utils
@@ -28,7 +30,9 @@ class ScheduledJobRunService:
     The claim commits in its **own** transaction before the job starts, so a concurrent tick
     sees the row already moved and stands down instead of running the same fire again. The
     job's `exclusive_job` lock only stops two runs overlapping; this stops them repeating.
-    A job that fails after its claim waits for its next fire time, like a scheduler would.
+    A job that raises after its claim is due again after `SCHEDULED_JOB_RETRY_SECONDS`
+    (`record_failure`), never later than its next fire time — so a daily batch is retried
+    within minutes, not the next day.
     """
 
     def __init__(self, scheduled_job_run_repo: ScheduledJobRunRepo):
@@ -41,9 +45,20 @@ class ScheduledJobRunService:
         # (or for its time of day), rather than firing the moment it is deployed.
         anchor = row.last_run_at or row.date_created
         next_fire = job.next_fire_after(anchor)
-        if next_fire is None or next_fire > now:
+        retry_due = row.retry_at is not None and row.retry_at <= now
+        if not retry_due and (next_fire is None or next_fire > now):
             return JobClaim.NOT_DUE
         won = await self._scheduled_job_run_repo.claim_run(
             job.name, expected_last_run_at=row.last_run_at, at=now,
         )
         return JobClaim.CLAIMED if won else JobClaim.CLAIMED_ELSEWHERE
+
+    async def record_failure(self, job: ScheduledJob) -> None:
+        """The run this tick claimed raised: retry it soon, but never later than its next run."""
+        row, _ = await self._scheduled_job_run_repo.insert_or_get({"name": job.name}, ["name"])
+        failed_at = row.last_run_at or Utils.datetime_now()
+        retry_at = failed_at + timedelta(seconds=settings.SCHEDULED_JOB_RETRY_SECONDS)
+        next_fire = job.next_fire_after(failed_at)
+        if next_fire is not None and next_fire < retry_at:
+            retry_at = next_fire
+        await self._scheduled_job_run_repo.set_retry_at(job.name, retry_at)

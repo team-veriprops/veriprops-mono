@@ -15,6 +15,7 @@ from main.app.domain.scheduled_job.models import (
     SearchScheduledJobRunDto,
     UpdateScheduledJobRunDto,
 )
+from main.appodus_utils import Utils
 from main.appodus_utils.db.repo import GenericRepo
 
 
@@ -52,7 +53,17 @@ class ScheduledJobRunRepo(
                 ScheduledJobRun.name == name,
                 last_run_at.is_(None) if expected_last_run_at is None else last_run_at == expected_last_run_at,
             )
-            .values(last_run_at=at, date_updated=at, version=ScheduledJobRun.version + 1)
+            # A claimed run supersedes any retry pending from the run before it.
+            .values(last_run_at=at, retry_at=None, date_updated=at, version=ScheduledJobRun.version + 1)
             .returning(ScheduledJobRun.name)
         )
         return (await self._session.execute(stmt)).scalar() is not None
+
+    async def set_retry_at(self, name: str, retry_at: datetime) -> None:
+        """Make the job due again at *retry_at* — its last run raised."""
+        stmt = (
+            update(ScheduledJobRun)
+            .where(ScheduledJobRun.deleted.is_(False), ScheduledJobRun.name == name)
+            .values(retry_at=retry_at, date_updated=Utils.datetime_now(), version=ScheduledJobRun.version + 1)
+        )
+        await self._session.execute(stmt)

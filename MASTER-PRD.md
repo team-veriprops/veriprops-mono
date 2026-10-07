@@ -967,7 +967,7 @@ runs whichever are due. On the deployed (serverless) environments a Cloudflare C
 tick every minute through `POST /internal/sweeps/tick` (authorised by `SWEEP_TRIGGER_SECRET`, 404
 without it; production and staging refuse to boot without it); elsewhere the in-process scheduler
 calls the same tick, and it is disabled under `ENVIRONMENT=test`. Each job's run is claimed on a shared
-clock (`scheduled_job_runs`) before it starts, so any number of clocks run each fire once (D100).
+clock (`scheduled_job_runs`) before it starts, so any number of clocks run each fire once (D100). A job that raises is retried after five minutes, never later than its next normal run (D102).
 The jobs: **no-show timeout** (accepted but idle →
 back to `PENDING`, admin alerted, logged against performance), **pool timeout / starvation backstop**
 (unclaimed broadcasts escalate to targeted assignment), **SLA-breach detection** (publishes `SLA_BREACHED`
@@ -1530,7 +1530,7 @@ itself is untargeted accept-by-id today, so per-agent pool-feed reduction is a f
   page in the request (in a savepoint, so a failed page is retried by the next sweep tick, never doubled);
   later pages come from the `broadcast_fanout` job every tick. The admin list shows "N of M recipients
   reached" while SENDING and offers only the actions the backend allows; Stop (cancel) during SENDING drops
-  the pages not yet sent (D101).
+  the pages not yet sent (D101). A page is atomic: if any listener fails it rolls back whole and is retried; after five consecutive failures the broadcast is FAILED, and "failed after N of M" shows how far it got (D102).
 - **Finance** — payments/commissions summaries and the payout approval panel (§20.4).
 
 ---
