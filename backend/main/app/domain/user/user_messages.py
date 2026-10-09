@@ -38,15 +38,19 @@ class AccountSecurityMessages(BaseMessageSender):
         )
 
 
-    async def send_direct_admin_user_invite_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any]):
-        await self._send_direct_message(
+    async def send_direct_admin_user_invite_message(self, recipient: MessageRequestRecipient,  context: dict[MessageContext, Any],
+                                                    expires_at: Optional[datetime] = None):
+        """The §9.1 invitation link, emailed to the invitee. Returns the dispatch outcome so the
+        inviting Super Admin can be told whether to pass the link on by hand."""
+        return await self._send_direct_message(
             recipient=recipient,
             template=AvailableTemplate.NEW_ADMIN_USER_INVITE,
             context=context,
             category=MessageCategory.ONBOARDING,
             default_channels=[
                 MessageChannel.EMAIL
-            ]
+            ],
+            expires_at=expires_at
         )
 
 

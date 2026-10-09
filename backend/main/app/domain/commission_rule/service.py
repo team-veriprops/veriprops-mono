@@ -8,7 +8,7 @@ from ``DEFAULT_ROLE_COMMISSION_NGN_KOBO``.
 """
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from kink import inject
 
@@ -22,6 +22,14 @@ from main.appodus_utils.decorators.decorate_all_methods import decorate_all_meth
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.exception.exceptions import ValidationException
+
+
+def payable_commission_minor(locked_minor: Optional[int], live_minor: int) -> int:
+    """What a task pays its agent: the rate locked when they accepted it, else the role's live
+    rate — for a task not yet accepted, or one accepted before the lock existed (§12.1/§20.1).
+    The one rule accrual and the agent's task card both apply."""
+    return int(locked_minor) if locked_minor is not None else live_minor
+
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
@@ -44,6 +52,13 @@ class CommissionRuleService:
         """The fixed commission (NGN kobo) one approved task of *role* pays — 0 if unconfigured."""
         rule = await self._rule_repo.get_for_role(role.value)
         return int(rule.amount_ngn_kobo) if rule is not None else 0
+
+    async def payable_minor(self, role: AgentRole, locked_minor: Optional[int]) -> int:
+        """What one task of *role* pays, given the rate it locked at accept (None if none);
+        reads the live rate only when there is no lock."""
+        if locked_minor is not None:
+            return payable_commission_minor(locked_minor, 0)
+        return await self.commission_minor(role)
 
     async def commission_by_role(self) -> Dict[AgentRole, int]:
         """Every role's fixed commission in one read (0 where unconfigured) — for lists that

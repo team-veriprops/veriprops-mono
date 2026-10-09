@@ -140,6 +140,12 @@ def run(ctx: Ctx) -> None:
     outcome = admin.post("/admin/payouts/disburse").json()["data"]
     check("the batch pays one transfer and records the declined one",
           outcome["paid"] >= 1 and outcome["failed"] >= 1 and outcome["remaining"] == 0, f"outcome={outcome}")
+    # Each transfer settles in its own independent transaction, and the agent's email is sent
+    # inside it: its bookkeeping row must be found there and marked SENT, not left PENDING.
+    mail = ctx.root.get("/dev/messages/latest", params={"recipient": "qa-agent-registry@"}).json()["data"]
+    if mail.get("found"):
+        check("the payout email sent inside the settlement is recorded as SENT", mail["status"] == "sent",
+              str(mail))
     finance_view = {p["id"]: p for p in admin.get("/admin/payouts?page_size=50").json()["data"]["items"]}
     check("the paid transfer is PAID with its reference", finance_view[payout["id"]]["status"] == "PAID"
           and bool(finance_view[payout["id"]]["transferReference"]), str(finance_view[payout["id"]]))

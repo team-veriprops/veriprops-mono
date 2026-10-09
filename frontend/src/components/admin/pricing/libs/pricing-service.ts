@@ -15,11 +15,11 @@ export class PricingService {
     return this.http.get(`/admin/pricing`);
   }
 
-  setTierPrice(tier: VerificationTier, priceNgnMinor: number): Promise<SuccessResponse<TierPricingView>> {
-    return this.http.put(`/admin/pricing/tiers/${tier}`, { priceNgnMinor });
-  }
-
-  setLineItems(tier: VerificationTier, lineItems: LineItemInput[]): Promise<SuccessResponse<TierPricingView>> {
-    return this.http.put(`/admin/pricing/tiers/${tier}/line-items`, { lineItems });
+  /** A tier's price and its itemised breakdown, saved together; the items must add up to the
+   *  price (an empty list leaves the tier without a breakdown). */
+  setTierPricing(
+    tier: VerificationTier, priceNgnMinor: number, lineItems: LineItemInput[],
+  ): Promise<SuccessResponse<TierPricingView>> {
+    return this.http.put(`/admin/pricing/tiers/${tier}`, { priceNgnMinor, lineItems });
   }
 }

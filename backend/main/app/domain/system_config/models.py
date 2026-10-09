@@ -54,6 +54,28 @@ class ConfigKey(str, enum.Enum):
     OFFLINE_RESPONSE_HOURS = "offline_response_hours"           # response time the bot states outside cover
 
 
+class ConfigUnit(str, enum.Enum):
+    """What a config value counts, declared here so the admin screen can render it without
+    knowing the keys: money shows in naira, whichever unit the store keeps it in."""
+
+    MINOR_CURRENCY = "MINOR_CURRENCY"  # kobo stored; the admin reads and types naira
+    MAJOR_CURRENCY = "MAJOR_CURRENCY"  # whole naira stored and shown
+    PERCENT = "PERCENT"
+
+
+# Keys with no entry are plain counts (days, hours, characters, …).
+CONFIG_UNITS: dict[ConfigKey, ConfigUnit] = {
+    ConfigKey.RECHECK_PRICE_PCT: ConfigUnit.PERCENT,
+    ConfigKey.COMMISSION_RESERVE_PCT: ConfigUnit.PERCENT,
+    ConfigKey.COMMISSION_MIN_MARGIN_PCT: ConfigUnit.PERCENT,
+    ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO: ConfigUnit.MINOR_CURRENCY,
+    ConfigKey.FIRST_TIME_DISCOUNT_PERCENT: ConfigUnit.PERCENT,
+    ConfigKey.REFERRAL_CREDIT_NGN: ConfigUnit.MAJOR_CURRENCY,
+    ConfigKey.MAX_DISCOUNT_PERCENT: ConfigUnit.PERCENT,
+    ConfigKey.CANCELLATION_SURCHARGE_PCT: ConfigUnit.PERCENT,
+}
+
+
 # Seeded defaults (idempotent, by migration 0001). Values are stored as JSON scalars.
 CONFIG_DEFAULTS: dict[ConfigKey, Any] = {
     ConfigKey.DISPUTE_WINDOW_DAYS: 30,
@@ -94,15 +116,15 @@ CONFIG_DESCRIPTIONS: dict[ConfigKey, str] = {
     ConfigKey.COMMISSION_CLEARANCE_DAYS: "Days after task approval before the bulk of a commission becomes withdrawable.",
     ConfigKey.COMMISSION_RESERVE_PCT: "Percentage of a commission retained in reserve until the chargeback window closes.",
     ConfigKey.CHARGEBACK_WINDOW_DAYS: "Card-chargeback window; the commission reserve is released only after it passes.",
-    ConfigKey.COMMISSION_MIN_MARGIN_PCT: "Minimum share of each tier's price left after paying its agents' fixed commissions and any remote bonus; price, commission and bonus edits that would breach it are refused.",
-    ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO: "Flat bonus, in kobo, paid on top of the commission for a task that ages out of the open pool unclaimed (0 = none). Counted against every tier's minimum margin.",
+    ConfigKey.COMMISSION_MIN_MARGIN_PCT: "Minimum share of what each tier collects after the largest discount, left after paying its agents' fixed commissions and any remote bonus; price, commission, bonus and discount edits that would breach it are refused.",
+    ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO: "Flat bonus paid on top of the commission for a task that ages out of the open pool unclaimed (0 = none). Counted against every tier's minimum margin.",
     ConfigKey.TASK_SLA_HOURS: "Target hours from task acceptance to submission, used for the agent timeliness metric.",
     ConfigKey.AGENT_LOW_PERFORMANCE_THRESHOLD: "Composite score below which an agent's job-feed visibility is reduced.",
     ConfigKey.AGENT_TOP_AGENT_ACCURACY_THRESHOLD: "Accuracy score at/above which an agent earns the Top Agent badge.",
     ConfigKey.AGENT_WIDE_COVERAGE_STATES: "Number of declared coverage states above which coverage is flagged for admin review.",
-    ConfigKey.FIRST_TIME_DISCOUNT_PERCENT: "Percentage auto-discount applied to a customer's first verification.",
-    ConfigKey.REFERRAL_CREDIT_NGN: "Referrer credit, in whole NGN, earned when an invitee's first payment clears.",
-    ConfigKey.MAX_DISCOUNT_PERCENT: "Cap on the combined first-time + referral discount as a percentage of the price.",
+    ConfigKey.FIRST_TIME_DISCOUNT_PERCENT: "Percentage auto-discount applied to a customer's first verification. Counted against every tier's minimum margin.",
+    ConfigKey.REFERRAL_CREDIT_NGN: "Referrer credit earned when an invitee's first payment clears.",
+    ConfigKey.MAX_DISCOUNT_PERCENT: "Cap on the combined first-time + referral discount as a percentage of the price. Counted against every tier's minimum margin.",
     ConfigKey.CANCELLATION_SURCHARGE_PCT: "Surcharge percentage applied when a verification is cancelled after assignment.",
     ConfigKey.PII_RETENTION_DAYS: "Days personal data is retained before it is eligible for NDPA erasure (pseudonymisation).",
     ConfigKey.ERASURE_REQUEST_REVIEW_SLA_DAYS: "Target days for an admin to review a submitted data-erasure request.",
@@ -160,6 +182,7 @@ class SearchSystemConfigDto(InternalPageRequest, BaseQueryDto):
 class SystemConfigDto(Object):
     key: ConfigKey
     value: Any = None
+    unit: Optional[ConfigUnit] = None   # None: a plain count
     description: Optional[str] = None
     date_updated: Optional[datetime] = None
 

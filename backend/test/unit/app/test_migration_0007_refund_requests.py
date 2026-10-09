@@ -1,6 +1,6 @@
 """Migration 0007 adds the refund-approval queue, what a charge still owes, and why a case closed.
 
-It must chain after 0006, leave one head, create what the models declare, and backfill what
+It must chain after 0006, create what the models declare, and backfill what
 today's refunds-to-retry list shows as owed — so no refused refund drops off Finance's list.
 """
 from pathlib import Path
@@ -22,10 +22,8 @@ def _scripts() -> ScriptDirectory:
     return ScriptDirectory.from_config(config)
 
 
-def test_it_chains_after_the_kyc_images_migration_and_is_the_only_head():
-    scripts = _scripts()
-    assert scripts.get_heads() == ["0007_refund_requests"]
-    assert scripts.get_revision("0007_refund_requests").down_revision == "0006_kyc_images"
+def test_it_chains_after_the_kyc_images_migration():
+    assert _scripts().get_revision("0007_refund_requests").down_revision == "0006_kyc_images"
 
 
 def test_the_models_declare_what_the_migration_creates():

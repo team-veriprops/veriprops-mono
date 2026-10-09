@@ -36,8 +36,6 @@ from main.app.domain.user.auth.service import AuthService
 from main.app.domain.user.auth.session.controller import session_router
 from main.app.domain.user.auth.session.models import AuthSessionDto, UserPersona
 from main.app.domain.user.auth.session.service import SessionService
-from main.app.domain.user.auth.signup_draft.controller import signup_draft_router
-from main.app.domain.user.auth.signup_draft.service import SignupDraftService
 from main.app.domain.user.service import UserService
 from main.appodus_utils import RouterUtils, Utils
 from main.appodus_utils.common.client_utils import ClientUtils
@@ -50,7 +48,6 @@ auth_service: AuthService = di[AuthService]
 # consent_service: ConsentService = di[ConsentService]
 session_service: SessionService = di[SessionService]
 user_service: UserService = di[UserService]
-signup_draft_service: SignupDraftService = di[SignupDraftService]
 # otp_delivery: OtpDeliveryService = di[OtpDeliveryService]
 # kv: KeyValueService = di[KeyValueService]
 
@@ -61,7 +58,6 @@ RouterUtils.add_routers(auth_router, [
     cross_portal_router,
     oauth_router,
     session_router,
-    signup_draft_router,
 ])
 
 logger: Logger = di["logger"]
@@ -109,12 +105,6 @@ async def signup(
         )
     except Exception:
         logger.opt(exception=True).warning("Could not send welcome message after signup")
-
-    # Server-side signup draft is no longer needed once the account is created.
-    try:
-        await signup_draft_service.discard(req.email)
-    except Exception:
-        logger.opt(exception=True).warning("Could not discard signup draft after successful signup")
     return SuccessResponse[AuthSessionDto](data=session)
 
 

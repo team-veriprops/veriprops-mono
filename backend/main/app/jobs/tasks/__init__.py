@@ -5,7 +5,11 @@ argument-less ``check_*`` entrypoint(s) that APScheduler runs; cadence and
 registration live in ``app/jobs/scheduled.py``.
 """
 from main.app.jobs.tasks.assistant_sweeps import AssistantSweepJobs, check_pending_assistant_turns
-from main.app.jobs.tasks.broadcast_sweeps import BroadcastSweepJobs, check_scheduled_broadcasts
+from main.app.jobs.tasks.broadcast_sweeps import (
+    BroadcastSweepJobs,
+    check_broadcast_fanout,
+    check_scheduled_broadcasts,
+)
 from main.app.jobs.tasks.earnings_sweeps import EarningsSweepJobs, check_commission_clearance
 from main.app.jobs.tasks.growth_sweeps import (
     GrowthSweepJobs,
@@ -37,6 +41,7 @@ __all__ = [
     "TaskSweepJobs",
     "WhatsAppInboundSweepJobs",
     "check_abandoned_drafts",
+    "check_broadcast_fanout",
     "check_commission_clearance",
     "check_expired_key_values",
     "check_message_retries",

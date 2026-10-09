@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from typing import Optional, Dict, Any, Union
 
-from pydantic import model_validator, Field, HttpUrl, ConfigDict
+from pydantic import model_validator, Field, HttpUrl, ConfigDict, field_serializer
 from sqlalchemy import (Column,
                         Index,
                         String,
@@ -167,10 +167,11 @@ class UpsertMessageDto(MessageBaseDto):
             data.pop("extras", None)
         return cls(**data)
 
+    @field_serializer("scheduled_at", "next_retry_at", "expires_at", "sent_at", "delivered_at", when_used="json")
+    def _iso_datetime(self, value: Optional[datetime]) -> Optional[str]:
+        return value.isoformat() if value is not None else None
+
     model_config = ConfigDict(
-        json_encoders={
-            datetime: lambda v: v.isoformat()
-        },
         json_schema_extra={
             "example": {
                 "id": "msg_123",

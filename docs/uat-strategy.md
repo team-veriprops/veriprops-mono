@@ -83,6 +83,7 @@ The codebase has **no general business clock**. Time-dependent state is producib
 
 - **Backdated seed fixtures** — `seed()` crafts the SLA-overdue primary verification and the ops-verification tasks with already-blown deadlines.
 - **Trigger endpoints** — admin sweeps `POST /admin/verifications/sweeps/no-show`, `.../pool-starvation`, the SLA-breach sweep, `POST /messages/sweeps/retries`, plus `POST /dev/messages/rewind` (pulls `next_retry_at`/`expires_at` into the past). Claim-based and idempotent, so a spec drives them directly in setup.
+- **The sweep tick** — `POST /internal/sweeps/tick` (header `x-sweep-secret`; 404 while `SWEEP_TRIGGER_SECRET` is unset) runs every registered job that is due, exactly as the deployed Cloudflare Cron Worker does (D100). `POST /dev/sweeps/rewind?name=<job>` makes one job due now, so a scenario can rewind it and then tick, without waiting out the job's interval. The message drain (queued broadcast emails, D101) and the broadcast fan-out run only through the tick. `/dev/reset` clears the job clock.
 
 **SSE / real-time:** assert on the **resulting DOM state** (via `__app_ready__`/re-render and the 60s poll fallback), not on the raw event stream. Live-update scenarios trigger the change through one persona's action and assert another persona's already-open page reflects it within the poll window.
 
@@ -111,7 +112,7 @@ The codebase has **no general business clock**. Time-dependent state is producib
 **Per-area inventory** (each expands into a matrix like above; **EXCLUDE** = assert stub or skip, never assert as real):
 
 1. **Marketing & Public (§6, P2)** — landing sections; `/about`, `/sample-report`, `/legal/[slug]`; CTA intent (`?intent=verify|agent`) preserved through auth; currency toggle display-only (assert against backend quote, not marketing copy).
-2. **Auth & Sessions (§7, P0)** — signup 4-step wizard + resume; login + lockout; forgot/reset (Mailpit token, single-use, session-invalidating); OAuth `__oauth_complete__` lifecycle + email-collision rejection; devices list/revoke/"log out all"; account area (`/account/*`); route protection + portal priority Admin→Agent→Customer.
+2. **Auth & Sessions (§7, P0)** — signup 4-step wizard + same-device resume (password never stored, D98); login + lockout; forgot/reset (Mailpit token, single-use, session-invalidating); OAuth `__oauth_complete__` lifecycle + email-collision rejection; devices list/revoke/"log out all"; account area (`/account/*`); route protection + portal priority Admin→Agent→Customer.
 3. **Agent Onboarding & KYC (§8, P1)** — apply wizard (`agent-apply-*`) roles→KYC(**stub**)→credentials→terms; PENDING blocks jobs until admin approval.
 4. **Admin RBAC (§9, P1)** — invite accept (3 cases, Mailpit token); team matrix, deactivate, change sub-role, no self-target, only SUPER grants SUPER; **negative:** non-SUPER forbidden from `/admin/config/system`, invitations, erasure execute.
 5. **Submission & Payment (§10, P0)** — wizard + lazy idempotent draft + one-unpaid-in-flight + autosave + cross-device resume; pay page price-lock interstitial, phone gate, card **stub** + NGN transfer `PENDING_TRANSFER`; PAID→TRUSTED + PAYMENT_CONFIRMED. **EXCLUDE:** live gateways.

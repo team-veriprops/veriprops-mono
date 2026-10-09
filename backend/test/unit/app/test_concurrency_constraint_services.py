@@ -1,7 +1,5 @@
 """Services that the live-only unique guards rely on.
 
-- A signup draft is one statement keyed on the live email: an abandoned (soft-deleted) or
-  expired draft never blocks a new one, and two concurrent saves can't both insert.
 - An OAuth signup's placeholder phone is not a real number, so it is never stored as one.
   Every OAuth user used to share `+2340000000000`.
 - An upgrade's idempotency key is unique only while that upgrade is PENDING.
@@ -13,11 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.dialects import postgresql
 
-from main.app.domain.user.auth.signup_draft.repo import SignupDraftRepo
 from main.app.domain.user.models import OAUTH_PLACEHOLDER_PHONE
 from main.app.domain.user.service import UserService
 from main.app.domain.verification.upgrade.repo import UpgradeRepo
-from main.appodus_utils import Utils
 from main.appodus_utils.db.session import db_session_ctx
 
 
@@ -49,21 +45,6 @@ def session():
 
 def _sql(stmt) -> str:
     return " ".join(str(stmt.compile(dialect=postgresql.dialect())).split())
-
-
-# ── Signup drafts ─────────────────────────────────────────────────────
-
-
-async def test_saving_a_draft_is_one_upsert_on_the_live_email(session):
-    repo = SignupDraftRepo(db=None)
-
-    await repo.upsert_active(email="ada@example.com", step=2, payload="{}", expires_at=Utils.datetime_now())
-
-    sql = _sql(session.statements[0])
-    assert sql.startswith("INSERT INTO signup_drafts")
-    assert "ON CONFLICT (email) WHERE deleted = false DO UPDATE SET step = excluded.step" in sql
-    assert "expires_at = excluded.expires_at" in sql and "payload = excluded.payload" in sql
-    assert "RETURNING" in sql
 
 
 # ── OAuth placeholder phone ───────────────────────────────────────────

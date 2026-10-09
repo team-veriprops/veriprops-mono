@@ -6,7 +6,7 @@ coverage (role-differentiated), and capacity, then ordering by the composite sco
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 from kink import inject
 
@@ -25,6 +25,7 @@ from main.app.domain.user.agent.coverage.models import (
 from main.app.domain.user.agent.coverage.repo import AgentCoverageRepo
 from main.app.domain.user.agent.credential.repo import AgentCredentialRepo
 from main.app.domain.user.agent.credential.rules import active_roles
+from main.app.domain.user.agent.eligibility import covers_area, ineligibility
 from main.app.domain.user.agent.profile.models import (
     AgentApplicationStatus,
     AvailabilityStatus,
@@ -51,10 +52,6 @@ from main.appodus_utils.db.locks import advisory_xact_lock
 
 # Advisory-lock namespace: one replacement of an agent's coverage at a time.
 _COVERAGE_LOCK = "agent_coverage"
-
-# Roles that are genuinely location-bound (§16.1): coverage must match the property area.
-# Registry / Lawyer work is effectively remote, so coverage does not gate their matching.
-_LOCATION_BOUND_ROLES = {AgentRole.FIELD, AgentRole.SURVEYOR}
 
 
 @inject
@@ -180,7 +177,7 @@ class AgentReputationService:
         verification = await self._verifications.get_model(verification_id)
         if verification is None:
             raise ResourceNotFoundException(resource="verification")
-        area_state = await self._property_state(verification.property_id)
+        area_state = await self._properties.state_of(verification.property_id)
 
         low_threshold = await self._config.get_int(ConfigKey.AGENT_LOW_PERFORMANCE_THRESHOLD)
         top_threshold = await self._config.get_int(ConfigKey.AGENT_TOP_AGENT_ACCURACY_THRESHOLD)
@@ -189,12 +186,11 @@ class AgentReputationService:
         candidates: List[SuggestedAgentDto] = []
         for profile in await self._profiles.list_by_status(AgentApplicationStatus.APPROVED.value):
             creds = await self._credentials.list_for_user(profile.user_id)
-            if role not in active_roles(profile.approved_roles or [], creds, today):
-                continue  # role not approved or its credential is suspended/expired
             coverage = await self._coverage.list_for_user(profile.user_id)
-            covers = self._covers_area(coverage, area_state)
-            if role in _LOCATION_BOUND_ROLES and not covers:
-                continue  # Field/Surveyor must be in-area
+            # The pool's own rule: role cleared, credential current, and in area for Field/Surveyor.
+            if ineligibility(profile, creds, coverage, role, area_state, today, require_coverage=True):
+                continue
+            covers = covers_area(coverage, area_state)
             active_count = await self._tasks.count_active_for_agent(profile.user_id)
             if active_count >= settings.AGENT_MAX_ACTIVE_TASKS:
                 continue  # at capacity (§6.5)
@@ -221,24 +217,11 @@ class AgentReputationService:
         task_sla_hours = await self._config.get_int(ConfigKey.TASK_SLA_HOURS)
         return compute_metrics(tasks, task_sla_hours)
 
-    async def _property_state(self, property_id: Optional[str]) -> Optional[str]:
-        if not property_id:
-            return None
-        prop = await self._properties.get_model(property_id)
-        return prop.state if prop is not None else None
-
     async def _agent_name(self, user_id: str) -> str:
         from kink import di
         from main.app.domain.user.service import UserService
         user = await di[UserService].get_user_model(user_id)
         return f"{user.first_name} {user.last_name}".strip() if user else ""
-
-    @staticmethod
-    def _covers_area(coverage, area_state: Optional[str]) -> bool:
-        if not area_state:
-            return True  # unknown area — don't exclude
-        target = area_state.strip().lower()
-        return any((c.state or "").strip().lower() == target for c in coverage)
 
     @staticmethod
     def _effective_availability(set_value: str, active_count: int) -> AvailabilityStatus:

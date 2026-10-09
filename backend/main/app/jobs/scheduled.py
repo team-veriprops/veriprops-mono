@@ -1,18 +1,15 @@
-"""Background scheduler wiring (PRD §11.4 timeout sweeps, §6.4 SLA shedding).
+"""The in-process sweep runner, for local and long-running hosts.
 
-The individual sweep tasks — job wrappers plus their ``check_*`` entrypoints —
-live one-file-per-concern under ``app/jobs/tasks/``. This module owns the
-APScheduler instance, registers every entrypoint with its cadence (kept together
-here so all cadences are visible in one place), and exposes start/stop for the
-app lifespan.
+What runs, and when, is declared in ``app/jobs/registry.py``; this module only supplies a
+clock. It holds a single APScheduler job that calls the sweep tick (``app/jobs/tick.py``) every
+minute — the same tick the Cloudflare Cron Worker calls on the deployed serverless
+environments, where an in-process scheduler cannot be trusted to fire. Because both runners
+claim each due job on ``scheduled_job_runs`` before running it, any number of them (the Worker,
+one scheduler per worker process) run each fire once.
 
-The scheduler is skipped under the test environment; tests invoke the sweep
-methods (or the admin dev sweep endpoint) directly for determinism (decision-log
-D12: sweeps are claim-based and idempotent, safe alongside request traffic).
-
-Every worker process starts this scheduler, so every job fires once per worker. Each
-job wrapper takes its own `job:<name>` lock first (`app/jobs/exclusive.py`) and skips
-the tick when another worker holds it, so a sweep runs once per tick.
+The scheduler is skipped under the test environment; tests invoke the sweep methods (or the
+admin dev sweep endpoints) directly for determinism (decision-log D12: sweeps are claim-based
+and idempotent, safe alongside request traffic).
 """
 from __future__ import annotations
 
@@ -21,21 +18,9 @@ from typing import TYPE_CHECKING
 from kink import di
 
 from main.app.config.settings import settings
+from main.app.domain.scheduled_job.models import SweepJobOutcome
 from main.appodus_utils.config.settings import Environment
-from main.app.jobs.tasks import (
-    check_abandoned_drafts,
-    check_commission_clearance,
-    check_expired_key_values,
-    check_message_retries,
-    check_payout_disbursement,
-    check_pending_assistant_turns,
-    check_referral_credits,
-    check_scheduled_broadcasts,
-    check_sla_breaches,
-    check_task_no_show_timeouts,
-    check_task_pool_timeouts,
-    check_unprocessed_whatsapp_inbound,
-)
+from main.app.jobs.tick import run_sweep_tick
 
 if TYPE_CHECKING:
     from loguru import Logger
@@ -45,35 +30,19 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 logger: Logger = di['logger']
 scheduler: AsyncIOScheduler = AsyncIOScheduler()
 
+TICK_JOB_ID = "sweep_tick"
 
-# Register task-monitor background jobs (pool timeout + no-show reclaim) + SLA-breach sweep.
-scheduler.add_job(check_task_pool_timeouts, "interval", minutes=15, id="pool_timeout_check")
-scheduler.add_job(check_task_no_show_timeouts, "interval", minutes=15, id="no_show_check")
-scheduler.add_job(check_sla_breaches, "interval", minutes=30, id="sla_breach_check")
-scheduler.add_job(check_commission_clearance, "interval", minutes=60, id="commission_clearance_check")
-# Approved payouts leave as bank transfers once a day, mid-morning Lagos time, when banks are
-# settling (§15.1). Finance's "disburse" button runs the same batch on demand.
-scheduler.add_job(
-    check_payout_disbursement, "cron", hour=10, minute=0, timezone="Africa/Lagos", id="payout_disbursement",
-)
-# Growth sweeps (§17.1): abandonment recovery (hourly) + referral-credit clearance (daily-ish).
-scheduler.add_job(check_abandoned_drafts, "interval", minutes=60, id="abandonment_recovery_check")
-scheduler.add_job(check_referral_credits, "interval", minutes=180, id="referral_credit_check")
-# Scheduled admin broadcasts (§18.1): send those whose time has passed.
-scheduler.add_job(check_scheduled_broadcasts, "interval", minutes=5, id="scheduled_broadcast_check")
-# Outbound-message retries: re-dispatch RETRYING rows whose next_retry_at has passed.
-# Every minute — the first ladder rung defaults to 60s, so a slower sweep would stretch it.
-scheduler.add_job(check_message_retries, "interval", minutes=1, id="message_retry_check")
-# Assistant turns left pending when a customer's tab closed before asking for them (D93).
-# The backstop, not the path: every environment is serverless today, where this cannot run.
-scheduler.add_job(check_pending_assistant_turns, "interval", minutes=1, id="assistant_pending_turn_check")
-# Expired OTP codes, rate-limit windows and OAuth states left in the SQL key/value store.
-scheduler.add_job(check_expired_key_values, "interval", minutes=60, id="expired_key_value_cleanup")
-# Inbound WhatsApp messages journalled but never surfaced (a failure after the journal write).
-# The backstop: the number's next message catches these up on its own.
-scheduler.add_job(
-    check_unprocessed_whatsapp_inbound, "interval", minutes=5, id="unprocessed_whatsapp_inbound_check"
-)
+
+async def _scheduled_tick() -> None:
+    result = await run_sweep_tick()
+    acted = [job for job in result.jobs if job.outcome in (SweepJobOutcome.RAN, SweepJobOutcome.FAILED)]
+    if acted:
+        logger.info("sweep tick: {}", ", ".join(f"{job.name}={job.outcome.value}" for job in acted))
+
+
+# One minute is the finest cadence in the registry; APScheduler's default max_instances=1 skips
+# a minute rather than overlap a tick still running.
+scheduler.add_job(_scheduled_tick, "interval", minutes=1, id=TICK_JOB_ID)
 
 
 def start_scheduler():

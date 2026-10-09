@@ -13,12 +13,11 @@ function mockHttp() {
 }
 
 describe("ConsentHistoryService contract (mirrors app/domain/user/auth/consent/controller.py)", () => {
-  it("fetches paged consent history", async () => {
+  it("fetches one page of consent history, forwarding page and page_size", async () => {
     const { http, calls } = mockHttp();
-    await new ConsentHistoryService(http).history(0, 20);
+    await new ConsentHistoryService(http).history(2, 20);
     expect(calls[0]).toMatchObject({ method: "get" });
-    expect(calls[0].url).toContain("/users/auth/consents/history?");
-    expect(calls[0].url).toContain("page=0");
+    expect(calls[0].url).toBe("/users/auth/consents/history?page=2&page_size=20");
   });
 
   it("builds the proxied CSV download link", () => {

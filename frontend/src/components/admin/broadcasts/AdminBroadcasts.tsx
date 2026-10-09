@@ -6,22 +6,15 @@ import { Megaphone, Plus } from "lucide-react";
 import { Button } from "@3rdparty/ui/button";
 import { Card } from "@3rdparty/ui/card";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
+import BroadcastRow from "./BroadcastRow";
 import {
   useBroadcastsQuery,
   useCancelBroadcastMutation,
   useSendBroadcastMutation,
 } from "./libs/useBroadcastQueries";
-import { Broadcast, BroadcastStatus } from "@/types/broadcast";
+import { Broadcast } from "@/types/broadcast";
 import { Page } from "@/types/models";
 import { ROUTES } from "@lib/routes";
-import { humanizeEnumLabel } from "@lib/utils";
-
-const STATUS_TONE: Record<BroadcastStatus, string> = {
-  [BroadcastStatus.DRAFT]: "bg-muted text-muted-foreground",
-  [BroadcastStatus.SCHEDULED]: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  [BroadcastStatus.SENT]: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  [BroadcastStatus.CANCELLED]: "bg-red-500/10 text-red-600 dark:text-red-400",
-};
 
 /** Broadcast management (§18.1) — the audience announcements list + row actions. */
 export default function AdminBroadcasts() {
@@ -52,30 +45,12 @@ export default function AdminBroadcasts() {
             <ul className="space-y-2">
               {pageData.items.map((b) => (
                 <li key={b.id}>
-                  <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 space-y-1">
-                      <p className="truncate font-medium text-foreground">{b.subject}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {b.audience} · {b.recipientCount} recipients
-                        {b.scheduledAt ? ` · scheduled ${new Date(b.scheduledAt).toLocaleString()}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_TONE[b.status]}`}>
-                        {humanizeEnumLabel(b.status)}
-                      </span>
-                      {(b.status === BroadcastStatus.DRAFT || b.status === BroadcastStatus.SCHEDULED) && (
-                        <>
-                          <Button size="sm" variant="outline" onClick={() => sendMutation.mutate(b.id)} disabled={sendMutation.isPending}>
-                            Send now
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => cancelMutation.mutate(b.id)} disabled={cancelMutation.isPending}>
-                            Cancel
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </Card>
+                  <BroadcastRow
+                    broadcast={b}
+                    onSend={(id) => sendMutation.mutate(id)}
+                    onCancel={(id) => cancelMutation.mutate(id)}
+                    busy={sendMutation.isPending || cancelMutation.isPending}
+                  />
                 </li>
               ))}
             </ul>
@@ -91,7 +66,7 @@ export default function AdminBroadcasts() {
         <Button
           variant="outline"
           size="sm"
-          disabled={!data || data.items.length < 10}
+          disabled={!data || page + 1 >= data.meta.totalPages}
           onClick={() => setPage((p) => p + 1)}
         >
           Next

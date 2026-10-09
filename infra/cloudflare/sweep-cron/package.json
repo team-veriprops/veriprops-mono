@@ -1,0 +1,9 @@
+{
+  "name": "veriprops-sweep-cron",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Cron Worker that calls the backend's sweep tick every minute.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

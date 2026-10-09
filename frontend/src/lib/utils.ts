@@ -77,12 +77,28 @@ export const formatMoney = (money: Money | null) => {
     }).format(money.getValue());
 };
 
+/** A whole-number count with thousands separators ("1,500"), for audience and item totals. */
+export const formatCount = (count: number) => new Intl.NumberFormat("en-NG").format(count ?? 0);
+
 /**
  * Format an integer minor-unit amount (kobo) as currency. Backend money crosses the wire
  * in minor units (§4.4); this converts to major units and delegates to {@link formatMoney}.
  */
 export const formatMinor = (minor: number, currency: TransactionCurrency = TransactionCurrency.NGN) =>
   formatMoney(Money.from({ value: (minor ?? 0) / 100, currency }));
+
+/**
+ * An amount an admin typed in major units (naira) as minor units (kobo), the unit the backend
+ * stores; undefined when the text is not a valid non-negative amount with at most two decimals.
+ */
+export function majorToMinor(text: string): number | undefined {
+  const clean = text.replace(/,/g, "").trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(clean)) return undefined;
+  return Math.round(Number(clean) * 100);
+}
+
+/** A stored minor-unit amount as the major-unit text an input is prefilled with — the inverse of {@link majorToMinor}. */
+export const minorToMajorText = (minor: number | null | undefined): string => String((minor ?? 0) / 100);
 
 export const formatMoneyFxAware = (currency: TransactionCurrency, money: Money | null) => {
     const formattedMoney = convertMoney(money)

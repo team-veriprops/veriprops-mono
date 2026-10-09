@@ -1,7 +1,8 @@
 """Resumable agent-application wizard draft (PRD §3.1).
 
-One active draft per user (mirrors ``auth/signup_draft``): the 4-step wizard's
-payload is persisted so the applicant can resume where they left off.
+One active draft per signed-in user: the 4-step wizard's payload is persisted so the
+applicant can resume where they left off. Keyed on the authenticated user, never on
+anything a stranger could type, so only its owner can read it back.
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from main.appodus_utils.db.models import UTCDateTime
 # ─── ORM ──────────────────────────────────────────────────────────
 
 class AgentApplicationDraft(BaseEntity):
-    """Resumable wizard state, one active draft per user (mirrors signup_drafts)."""
+    """Resumable wizard state, one active draft per user."""
 
     __tablename__ = "agent_application_drafts"
 

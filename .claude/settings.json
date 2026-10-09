@@ -37,8 +37,6 @@
     "deny": [
       "Read(node_modules/**)",
       "Read(frontend/node_modules/**)",
-      "Read(.next/**)",
-      "Read(frontend/.next/**)",
       "Read(**/__pycache__/**)",
       "Read(**/.venv/**)",
       "Read(frontend/dist/**)",

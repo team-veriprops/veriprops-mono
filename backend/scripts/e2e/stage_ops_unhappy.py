@@ -12,7 +12,9 @@ from .harness import Ctx, check, consent_version_for, stub_pay
 
 
 # ₦5,000 — small enough to leave every tier its minimum margin on the seeded prices.
-_REMOTE_BONUS = 500_000
+# ₦3,000: under the seeded 25% discount cap, ₦5,000 across Standard's three roles would leave it
+# below the 30% margin on what it collects, and the guard would refuse it.
+_REMOTE_BONUS = 300_000
 
 
 def _ops_task(ctx: Ctx, role: str) -> dict:
@@ -70,6 +72,10 @@ def run(ctx: Ctx) -> None:
     fld_bonus = next(t for t in detail_tasks if t["role"] == "FIELD").get("remoteBonusMinor")
     check("the escalated task carries the admin-set remote bonus (§11.4/§20.1)",
           fld_bonus == _REMOTE_BONUS, f"remoteBonusMinor={fld_bonus}")
+    self_serve = ctx.agent("FIELD").post(f"/agents/tasks/{fld['id']}/accept")
+    check("an escalated task waits for an admin to target it; no agent self-accepts it (§11.3)",
+          self_serve.status_code == 422 and "admin" in self_serve.json()["error"]["message"],
+          f"http {self_serve.status_code}")
     admin.put(bonus_key, json={"value": 0}).raise_for_status()  # config outlives the run too
 
     # 3. Decline → back to pool → first-accept-wins re-claim (§12.1).
@@ -83,6 +89,18 @@ def run(ctx: Ctx) -> None:
     srv = _ops_task(ctx, "SURVEYOR")
     check("decline registers a strike on the task (§12.1)", srv["declineCount"] >= 1,
           f"declines={srv['declineCount']}")
+    # The pool is first-accept-wins, but only among agents who qualify (§11.3).
+    not_agent = ctx.seed_customer.post(f"/agents/tasks/{s_id}/accept")
+    check("a customer can't take a pool task by its id (§11.3)",
+          not_agent.status_code == 422 and "approved agent" in not_agent.json()["error"]["message"],
+          f"http {not_agent.status_code}")
+    wrong_role = ctx.agent("REGISTRY").post(f"/agents/tasks/{s_id}/accept")
+    check("an agent not cleared for the role can't take its pool task (§11.3/§3.3a)",
+          wrong_role.status_code == 422 and "SURVEYOR" in wrong_role.json()["error"]["message"],
+          f"http {wrong_role.status_code}")
+    still = _ops_task(ctx, "SURVEYOR")
+    check("those refusals leave the task in the pool", still["inPool"] is True and still["state"] == "PENDING",
+          f"state={still['state']} in_pool={still['inPool']}")
     reclaimed = surveyor.post(f"/agents/tasks/{s_id}/accept").json()["data"]
     check("pooled task is claimed first-accept-wins (§12.1)",
           reclaimed["state"] == "ACCEPTED" and reclaimed["inPool"] is False)

@@ -1,7 +1,7 @@
 """Admin invitation service (PRD §4.1, decision-log D10)."""
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 from kink import inject
@@ -11,6 +11,7 @@ from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.admin_invitation.models import (
     AdminInvitation,
+    AdminInvitationIssuedDto,
     AdminInvitationStatus,
     AdminInvitationSummaryDto,
     CreateAdminInvitationDto,
@@ -21,6 +22,7 @@ from main.app.domain.user.admin_invitation.repo import AdminInvitationRepo
 from main.app.domain.user.models import AdminSubRole, UpdateUserDto
 from main.app.domain.user.auth.session.models import UserType
 from main.app.domain.user.service import UserService
+from main.app.domain.user.user_messages import AccountSecurityMessages
 from main.appodus_utils import Utils
 from main.appodus_utils.db.models import Page, PaginationMeta
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -32,6 +34,9 @@ from main.appodus_utils.exception.exceptions import (
     InvalidTokenException,
     ResourceNotFoundException,
 )
+from main.appodus_utils.exception.faults import log_fault_once
+from main.appodus_utils.integrations.messaging.models import MessageContext, MessageRequestRecipient
+from main.appodus_utils.integrations.messaging.service import dispatch_delivered
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
@@ -42,23 +47,31 @@ class AdminInvitationService:
         invitation_repo: AdminInvitationRepo,
         user_service: UserService,
         audit_service: AuditLogService,
+        account_security_messages: AccountSecurityMessages,
     ):
         self._invitation_repo = invitation_repo
         self._user_service = user_service
         self._audit_service = audit_service
+        self._account_security_messages = account_security_messages
 
     async def invite(
         self,
         email: str,
         sub_role: AdminSubRole,
         invited_by: str,
+        link_base: str,
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
         ip_address: Optional[str] = None,
-    ) -> str:
-        """Create an invitation; returns the raw token for the caller to email."""
+    ) -> AdminInvitationIssuedDto:
+        """Create an invitation and email its link to the invitee.
+
+        *link_base* is the origin the Super Admin is working on, so the link opens the same
+        deployment. The link is returned either way, with whether the email went out.
+        """
         raw_token = Utils.random_str(36)
         token_hash = Utils.sha256(raw_token)
+        expires_at = Utils.datetime_now() + timedelta(hours=settings.ADMIN_INVITE_TTL_HOURS)
         invitation = await self._invitation_repo.create_return_model(CreateAdminInvitationDto(
             email=email,
             email_normalized=email.strip().lower(),
@@ -67,7 +80,7 @@ class AdminInvitationService:
             sub_role=sub_role,
             token_hash=token_hash,
             invited_by=invited_by,
-            expires_at=Utils.datetime_now() + timedelta(hours=settings.ADMIN_INVITE_TTL_HOURS),
+            expires_at=expires_at,
         ))
         self._audit_service.schedule(
             action=AuditActionType.ADMIN_INVITED,
@@ -77,7 +90,12 @@ class AdminInvitationService:
             details={"email": email, "sub_role": sub_role.value},
             ip_address=ip_address,
         )
-        return raw_token
+        invite_url = f"{link_base}/auth/admin-invite/{raw_token}"
+        email_sent = await self._email_invitation(
+            email=email, first_name=first_name, last_name=last_name, sub_role=sub_role,
+            invited_by=invited_by, invite_url=invite_url, expires_at=expires_at,
+        )
+        return AdminInvitationIssuedDto(invite_url=invite_url, email_sent=email_sent)
 
     async def preview(self, raw_token: str) -> InvitePreviewDto:
         invitation = await self._require_invitation(raw_token)
@@ -181,6 +199,44 @@ class AdminInvitationService:
             )
 
     # ── helpers ───────────────────────────────────────────────────
+    async def _email_invitation(
+        self,
+        email: str,
+        first_name: Optional[str],
+        last_name: Optional[str],
+        sub_role: AdminSubRole,
+        invited_by: str,
+        invite_url: str,
+        expires_at: datetime,
+    ) -> bool:
+        """Email the invitee their link; True only when a channel reported it sent.
+
+        Best-effort: the invitation already exists and its link goes back to the Super Admin,
+        so a failed send means "pass it on by hand", never a failed invitation. Delivery
+        retries stop when the invitation expires, since the link dies with it.
+        """
+        try:
+            inviter = await self._user_service.get_user_model(invited_by)
+            inviter_name = f"{inviter.first_name} {inviter.last_name}".strip()
+            invitee_name = " ".join(filter(None, [first_name, last_name])) or None
+            result = await self._account_security_messages.send_direct_admin_user_invite_message(
+                recipient=MessageRequestRecipient(email=email, fullname=invitee_name),
+                context={
+                    MessageContext.FIRST_NAME: first_name,
+                    MessageContext.LAST_NAME: last_name,
+                    MessageContext.FULL_NAME: invitee_name,
+                    MessageContext.INVITER_NAME: inviter_name,
+                    MessageContext.ADMIN_ROLE: sub_role.value.replace("_", " ").title(),
+                    MessageContext.LINK: invite_url,
+                    MessageContext.VALIDITY: f"{settings.ADMIN_INVITE_TTL_HOURS} hours",
+                },
+                expires_at=expires_at,
+            )
+            return dispatch_delivered(result)
+        except Exception as exc:  # noqa: BLE001 — reported, never fatal
+            log_fault_once(exc, "admin invitation email")
+            return False
+
     async def _require_invitation(self, raw_token: str) -> AdminInvitation:
         invitation = await self._invitation_repo.get_by_token_hash(Utils.sha256(raw_token))
         if not invitation:

@@ -34,7 +34,9 @@ class NotificationDispatcher(BaseMessageSender):
         template: AvailableTemplate,
         channels: List[MessageChannel],
         extra_context: Optional[Dict[str, Any]] = None,
+        queued: bool = False,
     ) -> None:
+        """``queued`` stores the message for the drain rather than sending it now."""
         if not channels:
             return
         await self._send_message(
@@ -44,4 +46,5 @@ class NotificationDispatcher(BaseMessageSender):
             category=MessageCategory.TRANSACTION,
             default_channels=channels,
             extra_context=extra_context or None,
+            queued=queued,
         )

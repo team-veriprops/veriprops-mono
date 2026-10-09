@@ -92,6 +92,17 @@ class InviteAdminRequestDto(Object):
     sub_role: AdminSubRole
 
 
+class AdminInvitationIssuedDto(Object):
+    """A new invitation's link, and whether the invitee was emailed it.
+
+    The link is always returned: when the email did not go out, the inviting Super Admin
+    passes it on by hand.
+    """
+
+    invite_url: str
+    email_sent: bool
+
+
 class AdminInvitationSummaryDto(Object):
     id: str
     email: str

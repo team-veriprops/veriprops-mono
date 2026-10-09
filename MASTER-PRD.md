@@ -588,6 +588,17 @@ directly. Subscribers fan out:
 Implemented as an in-process synchronous dispatcher backed by the existing DB — not Kafka. A new channel
 (e.g. WhatsApp) is a new subscriber, not a rewrite. Redis multi-instance fan-out is deferred (§G).
 
+- **Each subscriber runs in its own savepoint** in the publisher's transaction. A failing subscriber rolls back
+  only its own writes. The fault is logged once, and the other subscribers still run. Subscribers do not swallow
+  their own exceptions; the bus owns that.
+- **An `atomic` event reverses the contract.** The first subscriber failure propagates, so the publisher's work
+  rolls back with it. A broadcast fan-out page uses this, so a page either reaches every recipient or is
+  retried whole (§23, D102).
+- **Delivery mode per rule.** The notification rule table chooses how each email/SMS leaves. By default it is
+  dispatched inline. A rule marked `delivery=QUEUED` is stored as a PENDING `messages` row in the event's own
+  transaction, and the message drain sends it on the sweep tick (§17.2, §11.4). The broadcast uses this, so a
+  large audience never sends inside one request.
+
 ### 4.9 Real-time transport — SSE throughout
 
 One transport: **SSE** for all server→client pushes; sends are ordinary HTTP POST. Two emitters:
@@ -688,7 +699,7 @@ public pages crawlable; VID lookup pages `noindex` unless publicly shared.
 ## 7. Auth, Accounts & Sessions
 
 **Where:** backend `app/domain/user/auth/` (service, `otp_service.py`, `oauth/`, `session/`, `consent/`,
-`signup_draft/`, `cross_portal/`); frontend `frontend/src/app/(website)/auth/` +
+`cross_portal/`); frontend `frontend/src/app/(website)/auth/` +
 `frontend/src/components/website/auth/`.
 
 ### 7.1 Signup
@@ -702,8 +713,10 @@ A 4-step wizard — **Account → Verify → Residence → Consent** (`SignupCon
   required at signup too. Never detect OTP behaviour from `ENVIRONMENT` — read `OTP_MODE` (§25.1).
 - **Residence step** collects country/location; **Consent step** records `PLATFORM_TERMS` +
   `PRIVACY_POLICY` (versioned, §2.6).
-- **Resumable drafts:** server-side (`signup_drafts`, normalised-email key) + localStorage mirror;
-  cross-device resume prefers the server copy.
+- **Resumable drafts, same device only (D98):** a localStorage draft (`libs/signupDraft.ts`) restores
+  the names, email, phone and residence, and the wizard reopens on Account. It never holds the password
+  or the verified flags, so a resumed signup re-enters the password and re-verifies. The server keeps
+  no signup draft.
 - Referral capture via `?ref` (invalid codes ignored); server-side password strength check (length,
   diversity, common-password blocklist); device fingerprint captured for the security log.
 
@@ -803,7 +816,10 @@ An invitation is used once. Acceptance and revocation both start from `PENDING`,
 exactly one stands: a revoked invitation elevates no one, and an accepted one cannot be revoked (removing an
 admin is its own action). Revoking an already-revoked invitation is harmless. Accepting rotates the
 accepting session to the ADMIN claims, so the new admin reaches the admin area without signing in again. The
-link is handed to the inviting Super Admin to pass on — no invitation email yet (§G).
+invitee is emailed the link (`new_admin_user_invite`: who invited them, the sub-role, the link and its validity),
+and delivery retries stop when the invitation expires. The link is also returned to the inviting Super Admin
+with `emailSent`; when the email did not go out, the team screen says so and the Super Admin passes the link
+on by hand.
 
 ### 9.2 The sanctioned elevation path
 
@@ -864,7 +880,8 @@ and details; the Property entity is created/linked here (§4.3).
   seeded from static defaults — currently ₦50,000 / ₦120,000 / ₦300,000; provisional pending business
   sign-off, §G). `PricingConfigService.tier_price_kobo` is the single resolver every pricing path reads
   (quote, submit, re-check, upgrade); admin edits take effect on the **next quote**, never on an existing
-  lock.
+  lock. A tier's price and its line items are **one save** (`PUT /admin/pricing/tiers/{tier}`): items, when
+  present, must add up to the price, so the breakdown customers see never totals an old price (D99).
 - Quotes show the NGN amount as the prominent, certain figure; foreign figures are indicative
   (§4.4). First-time and referral discounts auto-apply, capped at `max_discount_percent` (§22).
 
@@ -953,10 +970,24 @@ When enabled, tasks are broadcast to qualifying agents at `PAID`; **first accept
 (`PENDING → ACCEPTED`), everyone else sees "no longer available". The accept path re-checks capacity so a
 fast agent cannot hoard jobs.
 
+**Who qualifies** is one rule, shared by the pool, manual assignment and the suggested-agents ranking
+(D103): an approved agent application; the role cleared by an admin, with its required credential
+current (§3.3a); and, for the location-bound Field and Surveyor roles, coverage of the property's state.
+A pool accept must meet all three. An admin's assignment, and the agent's accept of it, check the first
+two only, because sending an agent out of area is a deliberate remote job. A task the starvation sweep
+took off the pool waits for an admin to target it; no agent can self-accept it. Every other action on a
+task is open only to the agent it belongs to.
+
 ### 11.4 Scheduled sweeps
 
-Idempotent, claim-based background jobs (APScheduler; disabled under `ENVIRONMENT=test`, each also
-triggerable via a dev/admin endpoint for deterministic tests): **no-show timeout** (accepted but idle →
+Idempotent, claim-based background jobs, each also triggerable via a dev/admin endpoint for
+deterministic tests. Every job is declared once with its cadence in a job registry; a **sweep tick**
+runs whichever are due. On the deployed (serverless) environments a Cloudflare Cron Worker calls the
+tick every minute through `POST /internal/sweeps/tick` (authorised by `SWEEP_TRIGGER_SECRET`, 404
+without it; production and staging refuse to boot without it); elsewhere the in-process scheduler
+calls the same tick, and it is disabled under `ENVIRONMENT=test`. Each job's run is claimed on a shared
+clock (`scheduled_job_runs`) before it starts, so any number of clocks run each fire once (D100). A job that raises is retried after five minutes, never later than its next normal run (D102).
+The jobs: **no-show timeout** (accepted but idle →
 back to `PENDING`, admin alerted, logged against performance), **pool timeout / starvation backstop**
 (unclaimed broadcasts escalate to targeted assignment), **SLA-breach detection** (publishes `SLA_BREACHED`
 once per verification — the verification is claimed via `sla_breach_notified_at` before the event goes
@@ -1225,7 +1256,8 @@ welcome disclosure are shared, so the two surfaces never describe the product di
   one atomic conditional update (so a second call, another tab, or the sweep can never answer it twice) and
   runs phase two in that request. `ConversationDto.assistantPending` drives a typing indicator, so a page
   reloaded mid-turn asks again rather than waiting silently. `check_pending_assistant_turns` (a 1-minute
-  sweep) is the backstop for once environments stop being serverless-only — not relied on today.
+  sweep, run by the sweep tick — §11.4) is the backstop for an orphaned claim; the client's own retry
+  stays the path.
 - **Per-case pinning.** On a case's own customer thread, "my status" or "how do I pay?" never asks which
   case — the party is pinned to that verification, read from the thread itself, never from the request.
 - **Console parity.** The take-over rule (D57) generalises to any thread the assistant answers: a person
@@ -1265,7 +1297,10 @@ revision request · commission cleared (in-app only — the positive-movement al
 dispute defence window. Admin: SLA breach · conflict flags · agent no-show · fraud-held messages · dispute
 filed · broadcast announcements. Email/SMS render through the `VERIFICATION_*` template set
 (`AvailableTemplate`); external dispatch is bookkept in the `messages` table with a retry ladder
-(`MESSAGING_RETRY_INTERVALS_SECONDS = [60, 300, 900]`) swept by the scheduler.
+(`MESSAGING_RETRY_INTERVALS_SECONDS = [60, 300, 900]`). A rule may queue its email/SMS instead of sending it
+at once (`delivery=QUEUED`, the broadcast today): the row is stored PENDING and due, in the event's own
+transaction. The **message drain** (every sweep tick, ≤ `MESSAGING_DRAIN_BATCH_SIZE` rows,
+`MESSAGING_BULK_CONCURRENCY` at a time) sends queued rows and due retries alike, leasing each first (D101).
 
 ### 17.3 Chat-vs-notification routing
 
@@ -1367,15 +1402,21 @@ An agent's commission is a **fixed amount per role**, admin-configured in the `c
 price paid, so no job pays more for the same work and a referral-discounted case still pays its agents in
 full (D97, superseding D30's per-role×tier share of the price). Seeded defaults: REGISTRY ₦20,000 · FIELD
 ₦14,400 · SURVEYOR ₦14,400 · LAWYER ₦36,000. The amount shows on the agent's task card and task page
-(`commissionMinor`) **before** the agent commits. Accrual happens at report release per approved task, with a
-double-accrual guard (a re-released re-check never accrues twice).
+(`commissionMinor`) **before** the agent commits, and is **locked when the agent accepts**
+(`verification_tasks.commission_minor`): a later rate change does not move what that task pays. A task taken
+back from its agent (decline, no-show reclaim, reassignment) loses the lock and is re-offered at the then-live
+rate (D99). Accrual happens at report release per approved task, at the locked rate (the live rate for a task
+accepted before the lock existed), with a double-accrual guard (a re-released re-check never accrues twice).
 
 **Minimum margin.** For every tier, what the roles it requires can be paid must leave at least
-`commission_min_margin_pct` (30%) of the tier's price. That is the worst case: each role's fixed commission
-plus the remote bonus. `CommissionMarginGuard` refuses any of the four changes that could break this, naming
-the tier and the figures: a role's commission, a tier's price, the minimum margin, or the remote bonus.
-`test_margin_guard_coverage.py` fails CI on any writer of those values that skips the guard. The seeded
-defaults (bonus ₦0) leave BASIC 60%, STANDARD ~59% and PREMIUM ~72%.
+`commission_min_margin_pct` (30%) of what the tier **collects** (D99). Both sides are the worst case. What it
+collects is the price after the largest discount a customer can get: the first-time discount, topped up by
+referral credit to the combined cap. What it pays is each role's fixed commission plus the remote bonus.
+`CommissionMarginGuard` refuses any of the six changes that could break this, naming the tier and the figures:
+a role's commission, a tier's price, the minimum margin, the remote bonus, the first-time discount or the
+discount cap. It holds one global lock, so two concurrent saves cannot each pass against the other's stale
+value. `test_margin_guard_coverage.py` fails CI on any writer of those values that skips the guard. The seeded
+defaults (bonus ₦0, 25% worst-case discount) leave BASIC ~47%, STANDARD ~46% and PREMIUM ~62% of the net.
 
 **Remote bonus.** A task that ages out of the open pool is stamped with the admin-set flat bonus
 `remote_job_bonus_ngn_kobo` (system config, default ₦0), counted against the margin as above. It shows beside
@@ -1501,8 +1542,14 @@ itself is untargeted accept-by-id today, so per-agent pool-feed reduction is a f
 - **System configuration** — the typed `ConfigKey` key-value store (§R), seeded idempotently, RBAC-gated
   CRUD at `/admin/config/system`.
 - **Broadcasts** — compose → preview reach → send now or schedule (swept), audiences All / Admins /
-  Customers / Agents; fan-out publishes one `BROADCAST_ANNOUNCEMENT` event and the notification subscriber
-  does the rest.
+  Customers / Agents. Sending moves a broadcast to **SENDING** with its audience size, then fans it out in
+  keyset pages of 500 users: each page advances a cursor with a claim and publishes **one**
+  `BROADCAST_ANNOUNCEMENT` event for its recipients, whose emails are **queued** (`delivery=QUEUED`) for the
+  message drain rather than sent in the fan-out; the last page moves it to SENT. "Send now" sends the first
+  page in the request (in a savepoint, so a failed page is retried by the next sweep tick, never doubled);
+  later pages come from the `broadcast_fanout` job every tick. The admin list shows "N of M recipients
+  reached" while SENDING and offers only the actions the backend allows; Stop (cancel) during SENDING drops
+  the pages not yet sent (D101). A page is atomic: if any listener fails it rolls back whole and is retried; after five consecutive failures the broadcast is FAILED, and "failed after N of M" shows how far it got (D102).
 - **Finance** — payments/commissions summaries and the payout approval panel (§20.4).
 
 ---
@@ -1958,16 +2005,16 @@ without a redeploy:
 | `agent_dispute_defence_hours` | 48 | Agent's window to respond to a dispute on their task |
 | `commission_clearance_days` | 7 | Days after approval before the commission bulk is withdrawable |
 | `commission_reserve_pct` | 10 | % of commission held until the chargeback window closes |
-| `commission_min_margin_pct` | 30 | % of each tier's price its agents' worst-case pay (commissions + remote bonus) must leave (§20.1) |
-| `remote_job_bonus_ngn_kobo` | 0 | Flat bonus (kobo) on a task that ages out of the open pool, paid as its own commission line (§20.1) |
+| `commission_min_margin_pct` | 30 | % of what each tier collects after the largest discount that its agents' worst-case pay (commissions + remote bonus) must leave (§20.1) |
+| `remote_job_bonus_ngn_kobo` | 0 | Flat bonus (stored in kobo, entered in naira) on a task that ages out of the open pool, paid as its own commission line (§20.1) |
 | `chargeback_window_days` | 120 | Card-chargeback window (reserve release; referral-credit clearance) |
 | `task_sla_hours` | 48 | Accept→submit target feeding the timeliness metric |
 | `agent_low_performance_threshold` | 40 | Composite below which ranking visibility is reduced |
 | `agent_top_agent_accuracy_threshold` | 90 | Accuracy at/above which the Top Agent badge is earned |
 | `agent_wide_coverage_states` | 6 | Coverage state-count above which an agent is flagged for review |
-| `first_time_discount_percent` | 10 | Auto discount on a customer's first verification |
+| `first_time_discount_percent` | 10 | Auto discount on a customer's first verification; margin-guarded (§20.1) |
 | `referral_credit_ngn` | 5,000 | Referrer credit (whole NGN) on invitee's first payment |
-| `max_discount_percent` | 25 | Combined discount cap |
+| `max_discount_percent` | 25 | Combined discount cap; margin-guarded (§20.1) |
 | `cancellation_surcharge_pct` | 20 | Surcharge on cancellation after assignment |
 | `pii_retention_days` | 2555 | PII retention before the NDPA erasure window (≈7 years) |
 | `erasure_request_review_sla_days` | 30 | SLA to review an erasure request |
@@ -2013,8 +2060,6 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Role-specific agent dashboard variants (one unified dashboard today) | `frontend/src/components/agents/dashboard/AgentDashboard.tsx` |
 | Cartographic Nigeria map paths (schematic geo-grid today) | `frontend/src/components/agents/reputation/NigeriaCoverageMap.tsx` |
 | Dead vendored `google_drive` webhook package: `repo.py`/`service.py`/`validator.py` import modules that do not exist, so only `model.py` loads — and it registers `g_drive_webhook_subscriptions` with no migration builder. Inert (nothing reaches it); kept and marked rather than deleted, per D83. Pick up = remove the package (with `GoogleDriveClient`, its only user of a service-account key), or fix the imports, give the table a migration, and move the client to Workload Identity Federation | `backend/main/appodus_utils/domain/webhook/google_drive/model.py`, `backend/main/appodus_utils/integrations/google_drive/google_drive_client.py` |
-| `python-jose` → PyJWT: jose hard-depends on `ecdsa` (PYSEC-2026-1325, timing side channel, no fixed release). Not exploitable here — the `[cryptography]` extra routes every sign/verify (RS256 handoff + OAuth, Apple's ES256 client secret) through `cryptography` — but the Dependabot alert stays open until the five `from jose import` sites (OAuth Google/Apple, WhatsApp handoff grant/tokens, `appodus_utils/common/commons.py`) move to PyJWT | `backend/requirements.txt` |
-| Admin-invitation email (§9.1): the invite link is returned to the inviting Super Admin to deliver; no email template sends it | `backend/main/app/domain/user/admin_invitation/controller.py` |
 | Declared-but-unbuilt routes: admin content CMS (how-it-works / FAQs / testimonials / spotlights / area insights), fraud-flags, dispute/broadcast/task detail pages, portal payments page | `frontend/src/lib/routes.ts` |
 
 ### G.3 Launch gates (business/legal — not code)

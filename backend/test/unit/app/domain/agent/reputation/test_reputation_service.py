@@ -8,7 +8,7 @@ import pytest
 from main.app.core.state.status import AgentRole
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.user.agent.coverage.models import AgentCoverageInputDto
-from main.app.domain.user.agent.profile.models import AvailabilityStatus
+from main.app.domain.user.agent.profile.models import AgentApplicationStatus, AvailabilityStatus
 from main.app.domain.user.agent.reputation.metrics import AgentMetrics
 from main.app.domain.user.agent.reputation.service import AgentReputationService
 from main.appodus_utils.db.session import db_session_ctx
@@ -49,7 +49,7 @@ def _metrics(composite=80, accuracy=4.5, avg_quality=90):
 
 def _profile(uid, roles=("FIELD",), availability=AvailabilityStatus.GREEN):
     return SimpleNamespace(id=f"p-{uid}", user_id=uid, approved_roles=list(roles),
-                           availability=availability.value)
+                           availability=availability.value, status=AgentApplicationStatus.APPROVED.value)
 
 
 def _make_service(**overrides):
@@ -74,7 +74,7 @@ class TestSuggestedAgents:
     async def test_ranks_by_composite_and_filters(self):
         svc = _make_service()
         svc._verifications.get_model = AsyncMock(return_value=SimpleNamespace(property_id="prop-1"))
-        svc._properties.get_model = AsyncMock(return_value=SimpleNamespace(state="lagos"))
+        svc._properties.state_of = AsyncMock(return_value="lagos")
         svc._profiles.list_by_status = AsyncMock(return_value=[
             _profile("a-hi"), _profile("a-lo"), _profile("a-registry", roles=("REGISTRY",)),
             _profile("a-fullcap"),
@@ -97,7 +97,7 @@ class TestSuggestedAgents:
     async def test_field_agent_out_of_area_excluded(self):
         svc = _make_service()
         svc._verifications.get_model = AsyncMock(return_value=SimpleNamespace(property_id="prop-1"))
-        svc._properties.get_model = AsyncMock(return_value=SimpleNamespace(state="lagos"))
+        svc._properties.state_of = AsyncMock(return_value="lagos")
         svc._profiles.list_by_status = AsyncMock(return_value=[_profile("a-1")])
         svc._coverage.list_for_user = AsyncMock(return_value=[SimpleNamespace(state="kano")])
         svc._tasks.count_active_for_agent = AsyncMock(return_value=0)
@@ -108,7 +108,7 @@ class TestSuggestedAgents:
     async def test_registry_agent_not_location_bound(self):
         svc = _make_service()
         svc._verifications.get_model = AsyncMock(return_value=SimpleNamespace(property_id="prop-1"))
-        svc._properties.get_model = AsyncMock(return_value=SimpleNamespace(state="lagos"))
+        svc._properties.state_of = AsyncMock(return_value="lagos")
         svc._profiles.list_by_status = AsyncMock(return_value=[_profile("a-1", roles=("REGISTRY",))])
         svc._coverage.list_for_user = AsyncMock(return_value=[SimpleNamespace(state="kano")])
         svc._tasks.count_active_for_agent = AsyncMock(return_value=0)

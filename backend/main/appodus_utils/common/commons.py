@@ -23,7 +23,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response
 from httpx import Headers
 from jinja2 import Template
-from jose import jwt
+import jwt
 from passlib.context import CryptContext
 from starlette import status
 from starlette.requests import Request

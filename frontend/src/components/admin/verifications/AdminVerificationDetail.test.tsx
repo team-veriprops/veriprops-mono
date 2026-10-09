@@ -2,8 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentRole } from "@/types/agent";
 import { VerificationStatus, VerificationTier } from "@/types/verification";
-import { SlaHealth, TaskState, VerificationDetail } from "@/types/adminVerification";
+import { ChargebackStatus, SlaHealth, TaskState, VerificationDetail } from "@/types/adminVerification";
+import { TransactionCurrency } from "@/types/models";
 import { attributeFor, isNamed } from "@/test-utils/markup";
+import { formatMinor } from "@lib/utils";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }));
@@ -107,6 +109,21 @@ describe("AdminVerificationDetail", () => {
     const html = markup({ canClose: false, canCancel: true });
     expect(html).toContain('data-testid="cancel-submit"');
     expect(html).not.toContain('data-testid="close-case-open"');
+  });
+
+  it("formats money with the app's one formatter, and a chargeback with no amount as a dash", () => {
+    const chargeback = {
+      id: "cb1",
+      paymentId: "p1",
+      verificationId: "v1",
+      status: ChargebackStatus.FLAGGED,
+      currency: TransactionCurrency.NGN,
+      dateCreated: "2026-09-20",
+    };
+    const html = markup({ chargebacks: [{ ...chargeback, amountMinor: 1_500_000 }, { ...chargeback, id: "cb2" }] });
+    const lines = [...html.replaceAll("<!-- -->", "").matchAll(/<span class="text-sm">([^<]*)<\/span>/g)].map((m) => m[1]);
+
+    expect(lines).toEqual([`${formatMinor(1_500_000)} — —`, "— — —"]);
   });
 
   it("shows a case waiting for Finance as on hold, with nothing left to close", () => {

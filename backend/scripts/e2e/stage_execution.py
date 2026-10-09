@@ -84,6 +84,14 @@ def run(ctx: Ctx) -> None:
         # Accept → start → capture evidence → submit (§12.1, §12.2, §12.3).
         accepted = agent.post(f"/agents/tasks/{task_id}/accept").json()["data"]
         check(f"{role} agent accepted the task (§12.1)", accepted["state"] == "ACCEPTED")
+        if role == "REGISTRY":
+            # The rate is locked at accept: a later rule change does not move what this task pays.
+            admin.put(f"/admin/commission-rules/{role}", json={"amountNgnKobo": original + 100}).raise_for_status()
+            card = agent.get("/agents/tasks").json()["data"]["items"]
+            shown = next(t for t in card if t["id"] == task_id)["commissionMinor"]
+            admin.put(f"/admin/commission-rules/{role}", json={"amountNgnKobo": original}).raise_for_status()
+            check("an accepted task keeps the commission locked at accept (§12.1/§20.1)",
+                  shown == commissions[role], f"shown={shown} locked={commissions[role]}")
         started = agent.post(f"/agents/tasks/{task_id}/start").json()["data"]
         check(f"{role} agent started the task (§12.2)", started["state"] == "IN_PROGRESS")
 
@@ -97,6 +105,8 @@ def run(ctx: Ctx) -> None:
         listed = agent.get(f"/agents/tasks/{task_id}/evidence").json()["data"]
         check(f"{role} evidence is listed for the task (§12.3)",
               any(e["id"] == evidence["id"] for e in listed), f"count={len(listed)}")
+        if role == roles[0]:
+            _another_agent_cannot_touch(ctx, task_id, owner_role=role, other_role=roles[1])
 
         submitted = agent.post(f"/agents/tasks/{task_id}/submit",
                                json={"payload": ROLE_PAYLOADS[role]}).json()["data"]
@@ -113,3 +123,27 @@ def run(ctx: Ctx) -> None:
     summary = ctx.agent(role).get("/agents/tasks/summary").json()["data"]
     check("the agent summary counts their submitted work (§12)",
           summary["submitted"] >= 1 and summary["assigned"] >= 0, f"summary={summary}")
+
+
+def _another_agent_cannot_touch(ctx: Ctx, task_id: str, *, owner_role: str, other_role: str) -> None:
+    """Every agent action on a task is checked against the database's owner, not the caller's
+    claim: a second, fully approved agent reaches none of it — not the evidence's signed links,
+    not the history, not a single state change."""
+    other = ctx.agent(other_role)
+    attempts = {
+        "start": other.post(f"/agents/tasks/{task_id}/start"),
+        "decline": other.post(f"/agents/tasks/{task_id}/decline", json={"reason": "not mine"}),
+        "upload evidence": other.post(
+            f"/agents/tasks/{task_id}/evidence",
+            files={"file": ("intruder.png", MINIMAL_PNG, "image/png")}, data={"kind": "PHOTO"},
+        ),
+        "read evidence": other.get(f"/agents/tasks/{task_id}/evidence"),
+        "read history": other.get(f"/agents/tasks/{task_id}/history"),
+        "submit": other.post(f"/agents/tasks/{task_id}/submit", json={"payload": ROLE_PAYLOADS[owner_role]}),
+    }
+    reached = {name: r.status_code for name, r in attempts.items() if not 400 <= r.status_code < 500}
+    check(f"another agent can't act on or read the {owner_role} task by its id (IDOR)",
+          not reached, f"reached={reached}")
+    owned = ctx.agent(owner_role).get("/agents/tasks").json()["data"]["items"]
+    state = next(t["state"] for t in owned if t["id"] == task_id)
+    check("the owner's task is untouched by those attempts", state == "IN_PROGRESS", f"state={state}")

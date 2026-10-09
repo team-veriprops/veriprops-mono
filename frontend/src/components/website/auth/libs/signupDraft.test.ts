@@ -4,34 +4,34 @@ import {
   loadLocalDraft,
   loadActiveLocalDraft,
   clearLocalDraft,
+  type SignupDraftFields,
 } from "./signupDraft";
-import type { SignupDraft } from "../models";
 
-function makeDraft(overrides?: Partial<SignupDraft>): SignupDraft {
-  return {
-    email: "test@example.com",
-    step: 1,
-    payload: { email: "test@example.com", firstName: "Ada", lastName: "Obi" },
-    dateUpdated: "2026-01-01T00:00:00.000Z",
-    ...overrides,
-  };
-}
+const FIELDS: SignupDraftFields = {
+  email: "test@example.com",
+  firstName: "Ada",
+  lastName: "Obi",
+  countryCode: "NG",
+  dialCode: "+234",
+  phone: "8012345678",
+};
+
+const storedValues = () =>
+  Array.from({ length: localStorage.length }, (_, i) => localStorage.getItem(localStorage.key(i)!) ?? "");
 
 beforeEach(() => {
   localStorage.clear();
 });
 
 describe("saveLocalDraft + loadLocalDraft", () => {
-  it("round-trips a draft", () => {
-    const draft = makeDraft();
-    saveLocalDraft(draft);
-    expect(loadLocalDraft(draft.email)).toEqual(draft);
+  it("round-trips the draft's fields", () => {
+    saveLocalDraft("test@example.com", FIELDS);
+    expect(loadLocalDraft("test@example.com")?.fields).toEqual(FIELDS);
   });
 
   it("is case-insensitive for email lookup", () => {
-    const draft = makeDraft({ email: "Ada@example.com" });
-    saveLocalDraft(draft);
-    expect(loadLocalDraft("ADA@EXAMPLE.COM")).toEqual(draft);
+    saveLocalDraft("Ada@example.com", FIELDS);
+    expect(loadLocalDraft("ADA@EXAMPLE.COM")?.fields.firstName).toBe("Ada");
   });
 
   it("returns null for an unknown email", () => {
@@ -39,11 +39,55 @@ describe("saveLocalDraft + loadLocalDraft", () => {
   });
 
   it("overwrites when saved twice", () => {
-    const first = makeDraft({ step: 1 });
-    const second = makeDraft({ step: 2 });
-    saveLocalDraft(first);
-    saveLocalDraft(second);
-    expect(loadLocalDraft("test@example.com")?.step).toBe(2);
+    saveLocalDraft("test@example.com", { ...FIELDS, firstName: "First" });
+    saveLocalDraft("test@example.com", { ...FIELDS, firstName: "Second" });
+    expect(loadLocalDraft("test@example.com")?.fields.firstName).toBe("Second");
+  });
+});
+
+describe("what never reaches storage", () => {
+  it("drops the password and the verified flags on save", () => {
+    saveLocalDraft("test@example.com", {
+      ...FIELDS,
+      password: "Secret1234!",
+      emailVerified: true,
+      phoneVerified: true,
+    } as SignupDraftFields);
+
+    const stored = storedValues().join("\n");
+    expect(stored).not.toContain("Secret1234!");
+    expect(stored).not.toContain("password");
+    expect(stored).not.toContain("Verified");
+    expect(loadLocalDraft("test@example.com")?.fields).toEqual(FIELDS);
+  });
+
+  it("purges the password from a legacy draft when it is read", () => {
+    localStorage.setItem(
+      "veriprops-signup-draft:legacy@example.com",
+      JSON.stringify({
+        email: "legacy@example.com",
+        step: 2,
+        payload: { email: "legacy@example.com", firstName: "Ada", password: "Secret1234!", emailVerified: true },
+        dateUpdated: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+    localStorage.setItem("veriprops-signup-draft:active-email", "legacy@example.com");
+
+    const draft = loadActiveLocalDraft();
+
+    expect(draft?.fields).toEqual({ email: "legacy@example.com", firstName: "Ada" });
+    expect(storedValues().join("\n")).not.toContain("Secret1234!");
+  });
+
+  it("purges a legacy draft that is not the active one too", () => {
+    localStorage.setItem(
+      "veriprops-signup-draft:other@example.com",
+      JSON.stringify({ email: "other@example.com", payload: { password: "Secret1234!" } }),
+    );
+
+    loadActiveLocalDraft();
+
+    expect(storedValues().join("\n")).not.toContain("Secret1234!");
   });
 });
 
@@ -53,27 +97,24 @@ describe("loadActiveLocalDraft", () => {
   });
 
   it("returns the most-recently saved draft", () => {
-    const draft = makeDraft({ step: 2 });
-    saveLocalDraft(draft);
-    expect(loadActiveLocalDraft()?.step).toBe(2);
+    saveLocalDraft("a@example.com", { email: "a@example.com" });
+    saveLocalDraft("b@example.com", { email: "b@example.com" });
+    expect(loadActiveLocalDraft()?.email).toBe("b@example.com");
   });
 });
 
 describe("clearLocalDraft", () => {
   it("removes the draft and clears the active pointer", () => {
-    const draft = makeDraft();
-    saveLocalDraft(draft);
-    clearLocalDraft(draft.email);
-    expect(loadLocalDraft(draft.email)).toBeNull();
+    saveLocalDraft("test@example.com", FIELDS);
+    clearLocalDraft("test@example.com");
+    expect(loadLocalDraft("test@example.com")).toBeNull();
     expect(loadActiveLocalDraft()).toBeNull();
   });
 
   it("does not clear a different email's draft", () => {
-    const a = makeDraft({ email: "a@example.com", payload: { email: "a@example.com" } });
-    const b = makeDraft({ email: "b@example.com", payload: { email: "b@example.com" } });
-    saveLocalDraft(a);
-    saveLocalDraft(b);
+    saveLocalDraft("a@example.com", { email: "a@example.com" });
+    saveLocalDraft("b@example.com", { email: "b@example.com" });
     clearLocalDraft("a@example.com");
-    expect(loadLocalDraft("b@example.com")).toEqual(b);
+    expect(loadLocalDraft("b@example.com")?.email).toBe("b@example.com");
   });
 });

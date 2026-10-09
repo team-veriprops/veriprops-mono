@@ -32,7 +32,16 @@ async def test_sends_the_template_to_the_user_on_exactly_the_chosen_channels():
         category=MessageCategory.TRANSACTION,
         default_channels=[MessageChannel.EMAIL, MessageChannel.SMS],
         extra_context={"vid": "VP-1"},
+        queued=False,
     )
+
+
+async def test_a_queued_notification_is_handed_on_as_queued():
+    dispatcher = _dispatcher()
+
+    await dispatcher.dispatch("u1", _TEMPLATE, [MessageChannel.EMAIL], {"vid": "VP-1"}, queued=True)
+
+    assert dispatcher._send_message.call_args.kwargs["queued"] is True
 
 
 async def test_no_chosen_channel_sends_nothing():

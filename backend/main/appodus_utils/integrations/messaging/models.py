@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 
 from kink import di
-from pydantic import Field, field_validator, model_validator, HttpUrl, EmailStr, ConfigDict
+from pydantic import Field, field_serializer, field_validator, model_validator, HttpUrl, EmailStr, ConfigDict
 
 from main.appodus_utils import Object
 from main.appodus_utils.db.types.phone import PhoneNumber
@@ -46,6 +46,8 @@ class MessageContext(str, Enum):
     SHARE_URL = "SHARE_URL"                                      # report_share — tokenised link to the shared report
     BROADCAST_SUBJECT = "BROADCAST_SUBJECT"                      # admin_broadcast — subject line
     BROADCAST_BODY_HTML = "BROADCAST_BODY_HTML"                  # admin_broadcast — HTML body
+    INVITER_NAME = "INVITER_NAME"                                # new_admin_user_invite — the Super Admin who invited
+    ADMIN_ROLE = "ADMIN_ROLE"                                    # new_admin_user_invite — the sub-role offered, as words
 
 
 class PushProviderType(str, Enum):
@@ -857,10 +859,11 @@ class MessageRequest(Object):
 
         return self
 
+    @field_serializer("schedule_at", "expires_at", when_used="json")
+    def _iso_datetime(self, value: Optional[datetime]) -> Optional[str]:
+        return value.isoformat() if value is not None else None
+
     model_config = ConfigDict(
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        },
         json_schema_extra = {
             "examples": [
                 {

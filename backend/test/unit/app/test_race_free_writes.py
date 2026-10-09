@@ -104,19 +104,40 @@ def lock(monkeypatch):
     return _patch
 
 
-async def test_replacing_a_tiers_line_items_takes_the_tiers_lock(lock):
+async def test_replacing_a_tiers_pricing_takes_the_tiers_lock_after_the_margin_check(lock):
     import main.app.domain.verification.pricing_config.service as module
     from main.app.domain.verification.pricing_config.service import PricingConfigService
     from main.app.core.state.status import VerificationTier
 
     held = lock(module)
+    order = []
+    held.side_effect = lambda name: order.append(name)
     svc = object.__new__(PricingConfigService)
+    svc._margin_guard = MagicMock(check=AsyncMock(side_effect=lambda **_: order.append("margin")))
+    svc._tiers = MagicMock(upsert=AsyncMock(return_value=SimpleNamespace(id="pt-1")))
     svc._line_items = MagicMock(list_for_tier=AsyncMock(return_value=[]), create_return_model=AsyncMock())
     svc._audit = MagicMock()
 
-    await svc.set_line_items(VerificationTier.BASIC, [], "admin-1")
+    await svc.set_tier_pricing(VerificationTier.BASIC, 5_000_000, [], "admin-1")
 
-    held.assert_awaited_once_with("pricing_line_items:BASIC")
+    # The margin check takes the global margin lock first; every writer acquires the two in
+    # this order, so no pair of saves can deadlock.
+    assert order == ["margin", "pricing_line_items:BASIC"]
+
+
+async def test_the_margin_guard_takes_the_global_margin_lock(lock):
+    import main.app.domain.commission_rule.margin as module
+    from main.app.domain.commission_rule.margin import CommissionMarginGuard
+
+    held = lock(module)
+    guard = object.__new__(CommissionMarginGuard)
+    guard._commission_rule_repo = MagicMock(list_all=AsyncMock(return_value=[]))
+    guard._pricing_tier_config_repo = MagicMock(list_all=AsyncMock(return_value=[]))
+    guard._system_config_repo = MagicMock(get_by_key=AsyncMock(return_value=None))
+
+    await guard.check()
+
+    held.assert_awaited_once_with("commission_margin")
 
 
 async def test_replacing_a_tiers_weight_map_takes_the_tiers_lock(lock):

@@ -15,13 +15,13 @@ import {
 } from "@3rdparty/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@3rdparty/ui/card";
 import { toast } from "sonner";
-import { CopyText } from "@components/ui/CopyText";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
+import InvitationIssuedNotice from "./InvitationIssuedNotice";
 import DetailDrawer, { DetailDrawerWidth } from "@components/ui/DetailDrawer";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
 import { humanizeEnumLabel } from "@lib/utils";
 import { Page } from "@/types/models";
-import { AdminInvitationStatus, AdminMember, AdminSubRole } from "@/types/admin";
+import { AdminInvitationIssued, AdminInvitationStatus, AdminMember, AdminSubRole } from "@/types/admin";
 import {
   useAdminInvitationsQuery,
   useAdminTeamQuery,
@@ -68,7 +68,7 @@ export default function AdminTeamManagement() {
   const [inviteLastName, setInviteLastName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<AdminSubRole>(AdminSubRole.OPERATIONS);
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [issued, setIssued] = useState<{ invitation: AdminInvitationIssued; email: string } | null>(null);
   const [pendingRole, setPendingRole] = useState<AdminSubRole | undefined>();
 
   const { data: team, isLoading, isError, error } = useAdminTeamQuery(page, PAGE_SIZE, query, subRole);
@@ -105,16 +105,23 @@ export default function AdminTeamManagement() {
       firstName: inviteFirstName.trim() || undefined,
       lastName: inviteLastName.trim() || undefined,
     });
-    setInviteUrl(res.data?.inviteUrl ?? null);
+    const invitation = res.data;
+    setIssued(invitation ? { invitation, email: inviteEmail } : null);
     setInviteFirstName("");
     setInviteLastName("");
     setInviteEmail("");
-    toast.success("Invitation created", { description: "Share the link with the invitee." });
+    if (invitation?.emailSent) {
+      toast.success("Invitation sent", { description: `We emailed the invitation to ${inviteEmail}.` });
+    } else {
+      toast.warning("Invitation created, but not emailed", {
+        description: "Copy the link and send it to the invitee yourself.",
+      });
+    }
   };
 
   const closeInvite = () => {
     setInviteOpen(false);
-    setInviteUrl(null);
+    setIssued(null);
   };
 
   const onChangeRole = async () => {
@@ -198,12 +205,7 @@ export default function AdminTeamManagement() {
           >
             {invite.isPending ? "Creating…" : "Create invitation"}
           </Button>
-          {inviteUrl && (
-            <div className="rounded-lg border border-border p-3 text-sm" data-testid="admin-invite-link">
-              <p className="mb-1 text-muted-foreground">Invitation link (share with the invitee):</p>
-              <CopyText text={inviteUrl} />
-            </div>
-          )}
+          {issued && <InvitationIssuedNotice issued={issued.invitation} email={issued.email} />}
         </div>
       </DetailDrawer>
 

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from main.app.config.settings import settings
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.user.admin_invitation.models import (
     AdminInvitationStatus,
@@ -20,6 +21,8 @@ from main.appodus_utils.exception.exceptions import (
     ForbiddenException,
     InvalidTokenException,
 )
+from main.appodus_utils.integrations.messaging.models import MessageContext
+from main.appodus_utils.integrations.messaging.service import BulkSendResult
 from test.utils.repo_fakes import fake_claim_transition
 
 
@@ -39,15 +42,36 @@ def mock_db_session():
     db_session_ctx.reset(token)
 
 
-def _make_service():
+LINK_BASE = "https://app.example.com"
+
+
+def _delivered() -> BulkSendResult:
+    return BulkSendResult(total=1, processing_time=0.0, successes=[MagicMock()])
+
+
+def _make_service(send_result=None):
     svc = object.__new__(AdminInvitationService)
     svc._invitation_repo = MagicMock()
     svc._user_service = MagicMock()
     svc._audit_service = MagicMock()
+    svc._account_security_messages = MagicMock()
+    svc._account_security_messages.send_direct_admin_user_invite_message = AsyncMock(
+        return_value=send_result if send_result is not None else _delivered()
+    )
+    svc._user_service.get_user_model = AsyncMock(
+        return_value=SimpleNamespace(first_name="Sam", last_name="Super", email="super@example.com")
+    )
     svc._invitation_repo.create_return_model = AsyncMock(return_value=SimpleNamespace(id="inv-1"))
     svc._invitation_repo.update = AsyncMock()
     svc._invitation_repo.get_model = AsyncMock(return_value=SimpleNamespace(id="inv-1", accepted_at=None))
     return svc
+
+
+async def _invite(svc, **over):
+    kwargs = dict(email="new@example.com", sub_role=AdminSubRole.OPERATIONS, invited_by="super-1",
+                  link_base=LINK_BASE)
+    kwargs.update(over)
+    return await svc.invite(**kwargs)
 
 
 def _invitation(**over):
@@ -68,20 +92,77 @@ def _invitation(**over):
 class TestInvite:
     async def test_creates_and_audits(self):
         svc = _make_service()
-        raw = await svc.invite("new@example.com", AdminSubRole.OPERATIONS, invited_by="super-1")
-        assert isinstance(raw, str) and len(raw) >= 20
-        svc._invitation_repo.create_return_model.assert_awaited_once()
+        issued = await _invite(svc)
+        token = issued.invite_url.rsplit("/", 1)[-1]
+        assert issued.invite_url == f"{LINK_BASE}/auth/admin-invite/{token}"
+        assert len(token) >= 20
+        # Only the hash is stored; the raw token lives in the link alone.
+        create_dto = svc._invitation_repo.create_return_model.call_args.args[0]
+        assert create_dto.token_hash == Utils.sha256(token)
         assert svc._audit_service.schedule.call_args.kwargs["action"] == AuditActionType.ADMIN_INVITED
 
     async def test_persists_first_and_last_name(self):
         svc = _make_service()
-        await svc.invite(
-            "new@example.com", AdminSubRole.OPERATIONS, invited_by="super-1",
-            first_name="Ada", last_name="Lovelace",
-        )
+        await _invite(svc, first_name="Ada", last_name="Lovelace")
         create_dto = svc._invitation_repo.create_return_model.call_args.args[0]
         assert create_dto.first_name == "Ada"
         assert create_dto.last_name == "Lovelace"
+
+
+class TestInvitationEmail:
+    async def test_emails_the_link_to_the_invitee(self):
+        svc = _make_service()
+        issued = await _invite(svc, first_name="Ada", last_name="Lovelace")
+
+        assert issued.email_sent is True
+        send = svc._account_security_messages.send_direct_admin_user_invite_message
+        send.assert_awaited_once()
+        kwargs = send.call_args.kwargs
+        assert kwargs["recipient"].email == "new@example.com"
+        context = kwargs["context"]
+        # The greeting names the invitee; the inviter is a separate key.
+        assert context[MessageContext.FIRST_NAME] == "Ada"
+        assert context[MessageContext.INVITER_NAME] == "Sam Super"
+        assert context[MessageContext.ADMIN_ROLE] == "Operations"
+        assert context[MessageContext.LINK] == issued.invite_url
+        assert context[MessageContext.VALIDITY] == f"{settings.ADMIN_INVITE_TTL_HOURS} hours"
+
+    async def test_delivery_stops_when_the_invitation_expires(self):
+        svc = _make_service()
+        before = Utils.datetime_now()
+        await _invite(svc)
+        expires_at = svc._account_security_messages.send_direct_admin_user_invite_message.call_args.kwargs[
+            "expires_at"
+        ]
+        create_dto = svc._invitation_repo.create_return_model.call_args.args[0]
+        assert expires_at == create_dto.expires_at
+        assert expires_at >= before + timedelta(hours=settings.ADMIN_INVITE_TTL_HOURS)
+
+    async def test_an_unnamed_invitee_is_greeted_without_a_name(self):
+        svc = _make_service()
+        await _invite(svc)
+        context = svc._account_security_messages.send_direct_admin_user_invite_message.call_args.kwargs["context"]
+        assert context[MessageContext.FIRST_NAME] is None
+
+    async def test_a_send_that_reached_no_channel_is_reported_unsent(self):
+        svc = _make_service(send_result=BulkSendResult(total=1, processing_time=0.0, failures=[RuntimeError()]))
+        issued = await _invite(svc)
+        assert issued.email_sent is False
+        assert issued.invite_url  # the link is still handed back to pass on
+
+    async def test_outbound_messaging_off_is_reported_unsent(self):
+        svc = _make_service()
+        svc._account_security_messages.send_direct_admin_user_invite_message = AsyncMock(return_value=None)
+        assert (await _invite(svc)).email_sent is False
+
+    async def test_a_failing_send_never_fails_the_invitation(self):
+        svc = _make_service()
+        svc._account_security_messages.send_direct_admin_user_invite_message = AsyncMock(
+            side_effect=RuntimeError("smtp down")
+        )
+        issued = await _invite(svc)
+        assert issued.email_sent is False
+        svc._invitation_repo.create_return_model.assert_awaited_once()
 
 
 class TestPreview:

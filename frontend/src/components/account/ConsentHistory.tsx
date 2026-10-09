@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { Loader2, Download, FileText } from "lucide-react";
 import { Button } from "@3rdparty/ui/button";
 import ListPager from "@components/ui/ListPager";
@@ -9,15 +8,12 @@ import { cn, humanizeEnumLabel } from "@lib/utils";
 import { UserConsentHistoryItem } from "@/types/consentHistory";
 import { useConsentHistoryQuery, consentHistoryService } from "./libs/useConsentHistoryQueries";
 
-const PAGE_SIZE = DEFAULT_HISTORY_PAGE_SIZE;
-
 /** Account → Consents (§19.1 / R19.4). Versioned consent history + CSV download. */
 export default function ConsentHistory() {
   const [page, setPage] = useState(0);
   const { data, isLoading, isError } = useConsentHistoryQuery(page);
   const items: UserConsentHistoryItem[] = data?.items ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = data?.meta.totalPages ?? 0;
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-8 py-8" data-testid="consent-history">

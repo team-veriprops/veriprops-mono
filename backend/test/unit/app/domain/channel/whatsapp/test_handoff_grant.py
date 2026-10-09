@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import timedelta
 from types import SimpleNamespace
 
-from jose import jwt
+import jwt
 
 from main.app.config.settings import settings
 from main.app.domain.channel.whatsapp.handoff.grant import (
@@ -134,7 +134,7 @@ class TestReadGrant:
     def test_carries_no_session_material(self):
         # Completing the action must never amount to logging in (§26.5).
         _, cookie = _issue()
-        payload = jwt.get_unverified_claims(cookie.value)
+        payload = jwt.decode(cookie.value, options={"verify_signature": False})
         assert set(payload) == {"jti", "case", "sub", "intent", "exp"}
 
 

@@ -71,7 +71,7 @@ export async function signOut(page: Page): Promise<void> {
       }
       await expect(signOutItem).toBeVisible({ timeout: 2_000 });
     }).toPass({ timeout: 15_000 });
-    await signOutItem.click();
+    await pressSignOut(page, signOutItem);
   } else {
     const signOutItem = page.getByTestId("sidebar-signout");
     // The drawer stays mounted and slides in, so its contents keep a box on the page and read as
@@ -82,12 +82,35 @@ export async function signOut(page: Page): Promise<void> {
       await drawerToggle.click();
       await expect(signOutItem).toBeInViewport({ timeout: 2_000 });
     }).toPass({ timeout: 15_000 });
-    await signOutItem.click();
+    await pressSignOut(page, signOutItem);
   }
-  // The press must be acknowledged before the redirect lands, on either layout — the desktop
-  // menu item unmounts as the menu closes, so the overlay is the only thing that can say so.
-  await expect(page.getByTestId("signout-overlay")).toBeVisible();
   await waitForPage(page, (url) => url.pathname === ROUTES.AUTH.LOGIN, { timeout: 30_000 });
+  // The press must be acknowledged before the redirect lands, on either layout: the desktop menu
+  // item unmounts as the menu closes, so the overlay is the only thing that can say so.
+  const acknowledged = await page.evaluate((key) => sessionStorage.getItem(key), OVERLAY_SEEN_KEY);
+  expect(acknowledged, "the sign-out overlay acknowledged the press before the redirect").toBe("1");
+}
+
+const OVERLAY_SEEN_KEY = "__uat_signout_overlay_seen__";
+
+/**
+ * Press a sign-out control, recording whether the busy overlay was put on screen. The overlay lives
+ * only from the press to the redirect, which locally can be a frame or two — shorter than any
+ * polling assertion's interval, so watching for it from the test races the redirect. A page-side
+ * observer sees the insertion itself, and sessionStorage carries the record across the full-document
+ * redirect to the login page, where `signOut` reads it.
+ */
+async function pressSignOut(page: Page, control: Locator): Promise<void> {
+  await page.evaluate((key) => {
+    const selector = '[data-testid="signout-overlay"]';
+    sessionStorage.removeItem(key);
+    const record = () => {
+      if (document.querySelector(selector)) sessionStorage.setItem(key, "1");
+    };
+    new MutationObserver(record).observe(document.documentElement, { childList: true, subtree: true });
+    record();
+  }, OVERLAY_SEEN_KEY);
+  await control.click();
 }
 
 /**

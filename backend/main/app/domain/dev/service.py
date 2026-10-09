@@ -103,6 +103,9 @@ _RESET_TABLES = [
     # call site had been deleted. `whatsapp_number_health` is *not* cleared: it caches
     # Meta's verdict on the number, which is reference-like and survives a scenario.
     "whatsapp_channel_events",
+    # The sweep clock. Cleared so every job re-anchors at the next tick, and a drive-through's
+    # first tick deterministically finds nothing due.
+    "scheduled_job_runs",
 ]
 
 
@@ -358,6 +361,20 @@ class DevSeedService:
             {"frag": f"%{recipient}%"},
         )).first()
         return {"rewound": row is not None, "id": row.id.hex if row else None}
+
+    async def rewind_sweep(self, name: str) -> Dict[str, Any]:
+        """Make the scheduled job *name* due now by moving its ``last_run_at`` a day back, so
+        the next sweep tick runs it and no other. Touches ONLY that timestamp: the claim that
+        follows stays owned by the tick under test. A job no tick has seen yet has no row."""
+        session = get_db_session_from_context()
+        row = (await session.execute(
+            text(
+                "UPDATE scheduled_job_runs SET last_run_at = now() - interval '1 day' "
+                "WHERE name = :name AND deleted = false RETURNING id"
+            ),
+            {"name": name},
+        )).first()
+        return {"rewound": row is not None}
 
     # ── WhatsApp channel (PRD §26, D43) ────────────────────────────
 

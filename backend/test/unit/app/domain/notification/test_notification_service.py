@@ -7,7 +7,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from main.app.core.events.events import DomainEvent, EventType
-from main.app.domain.notification.rules import rule_for
+from main.app.domain.notification.rules import NotificationDelivery, rule_for
 from main.app.domain.notification.service import NotificationService
 from main.appodus_utils.db.session import db_session_ctx
 from main.appodus_utils.integrations.messaging.models import MessageChannel
@@ -83,6 +83,55 @@ async def test_a_required_email_is_sent_even_after_an_opt_out(event_type):
     await svc.create_for_event(DomainEvent(type=event_type, verification_id="v-1", recipient_user_ids=("cust-1",)))
 
     assert svc._dispatcher.dispatch.call_args[0][2] == [MessageChannel.EMAIL]
+
+
+def test_only_the_broadcast_queues_its_external_delivery():
+    """A broadcast reaches thousands of users at once, so its email is queued for the drain
+    rather than sent inside the fan-out; every other event still sends at once."""
+    queued = {event for event in EventType if rule_for(event).delivery == NotificationDelivery.QUEUED}
+    assert queued == {EventType.BROADCAST_ANNOUNCEMENT}
+
+
+async def test_a_queued_rule_dispatches_queued_and_an_immediate_one_does_not():
+    svc = _service()
+    await svc.create_for_event(DomainEvent(type=EventType.BROADCAST_ANNOUNCEMENT, recipient_user_ids=("u-1",),
+                                           data={"subject": "S", "body": "B"}))
+    assert svc._dispatcher.dispatch.call_args.kwargs["queued"] is True
+
+    svc = _service()
+    await svc.create_for_event(DomainEvent(type=EventType.PAYMENT_CONFIRMED, verification_id="v-1",
+                                           recipient_user_ids=("u-1",)))
+    assert svc._dispatcher.dispatch.call_args.kwargs["queued"] is False
+
+
+async def test_a_failed_email_is_logged_and_the_next_recipient_still_gets_theirs(monkeypatch):
+    from main.app.domain.notification import service as notification_module
+
+    faults = []
+    monkeypatch.setattr(notification_module, "log_fault_once", lambda exc, where, **_: faults.append(where))
+    svc = _service()
+    svc._dispatcher.dispatch = AsyncMock(side_effect=[RuntimeError("smtp"), None])
+
+    # An email-only event: no WhatsApp branch to reach for a delegate.
+    await svc.create_for_event(DomainEvent(
+        type=EventType.STATUS_CHANGED, verification_id="v-1", recipient_user_ids=("u-1", "u-2"),
+    ))
+
+    assert svc._dispatcher.dispatch.await_count == 2
+    assert len(faults) == 1
+
+
+async def test_on_an_atomic_event_a_failed_email_fails_the_publish():
+    """A broadcast page is atomic: a recipient whose email could not be queued fails the page,
+    which then rolls back and is retried whole, rather than leaving that recipient out."""
+    svc = _service()
+    svc._dispatcher.dispatch = AsyncMock(side_effect=RuntimeError("db"))
+
+    with pytest.raises(RuntimeError):
+        await svc.create_for_event(DomainEvent(
+            type=EventType.BROADCAST_ANNOUNCEMENT, recipient_user_ids=("u-1",),
+            data={"subject": "S", "body": "B"}, atomic=True,
+        ))
 
 
 async def test_chat_only_event_creates_no_notification():

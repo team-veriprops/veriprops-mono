@@ -48,11 +48,3 @@ export function closeOutcomeMessage(result: ClosureResult): string {
   }
   return `Case closed as ${humanizeEnumLabel(result.status).toLowerCase()}. Nothing was refunded.`;
 }
-
-/** An amount typed by an admin in major units (naira), in minor units (kobo); undefined when it
- * is not a valid amount. */
-export function majorToMinor(text: string): number | undefined {
-  const clean = text.replace(/,/g, "").trim();
-  if (!/^\d+(\.\d{1,2})?$/.test(clean)) return undefined;
-  return Math.round(Number(clean) * 100);
-}

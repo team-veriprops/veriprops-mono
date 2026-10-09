@@ -18,11 +18,9 @@ import subprocess
 import time
 import uuid
 
-import httpx
-
 from .harness import Ctx, check, skip_unless_ci
+from .mailpit import count_mail as _mailpit_count, mailpit_reachable as _mailpit_reachable
 
-MAILPIT = "http://localhost:8025"
 MAILPIT_CONTAINER = os.environ.get("MAILPIT_CONTAINER", "veriprops-mono-mailpit-1")
 
 
@@ -32,22 +30,6 @@ def _docker(*args: str) -> bool:
                               timeout=60).returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
-
-
-def _mailpit_reachable() -> bool:
-    try:
-        httpx.get(f"{MAILPIT}/api/v1/messages", params={"limit": 1}, timeout=5).raise_for_status()
-        return True
-    except httpx.HTTPError:
-        return False
-
-
-def _mailpit_count(query: str) -> int:
-    try:
-        r = httpx.get(f"{MAILPIT}/api/v1/search", params={"query": query}, timeout=10)
-        return len(r.json().get("messages") or [])
-    except httpx.HTTPError:
-        return -1
 
 
 def _row(ctx: Ctx, recipient: str) -> dict:

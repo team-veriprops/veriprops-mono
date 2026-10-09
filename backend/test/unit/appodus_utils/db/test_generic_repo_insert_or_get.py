@@ -81,17 +81,17 @@ async def test_a_partial_unique_index_is_targeted_by_name(captured):
     A hand-written predicate that merely means the same (`deleted IS false` for an index
     on `deleted = false`) is rejected by Postgres: it must prove the predicates match.
     """
-    from main.app.domain.user.auth.signup_draft.models import SignupDraft
+    from main.app.domain.system_config.models import SystemConfig
 
-    repo = GenericRepo(db=None, model=SignupDraft, query_qto=_Dto)
+    repo = GenericRepo(db=None, model=SystemConfig, query_qto=_Dto)
     captured["results"] = [None, object()]
 
-    await repo.insert_or_get({"email": "a@example.com"}, unique_index="uq_signup_drafts_email")
+    await repo.insert_or_get({"key": "k"}, unique_index="uq_system_config_key")
 
     insert_sql = _sql(captured["statements"][0])
-    assert "ON CONFLICT (email) WHERE deleted = false DO NOTHING" in insert_sql
+    assert "ON CONFLICT (key) WHERE deleted = false DO NOTHING" in insert_sql
     reread = _sql(captured["statements"][1])
-    assert "signup_drafts.email = %(email_1)s" in reread and "deleted = false" in reread
+    assert "system_config.key = %(key_1)s" in reread and "deleted = false" in reread
 
 
 def test_an_unknown_index_name_fails_loudly():

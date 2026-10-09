@@ -14,6 +14,7 @@ from main.app.domain.verification.models import (
     Verification,
 )
 from main.appodus_utils.db.repo import GenericRepo
+from main.appodus_utils.db.search import contains_text
 
 # Pre-payment statuses a customer can still return to and complete (§17.1 abandonment).
 _UNPAID_STATUSES = (
@@ -206,8 +207,9 @@ class VerificationRepo(
             conditions.append(Verification.status == status)
         if tier:
             conditions.append(Verification.tier == tier)
-        if query and query.strip():
-            conditions.append(Verification.vid.ilike(f"%{query.strip()}%"))
+        search = contains_text(query, Verification.vid)
+        if search is not None:
+            conditions.append(search)
         if due_before:
             conditions.append(Verification.sla_due_date.is_not(None))
             conditions.append(Verification.sla_due_date <= due_before)

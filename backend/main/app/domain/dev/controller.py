@@ -73,6 +73,14 @@ async def rewind_message(recipient: str, rewind_expiry: bool = False):
     return SuccessResponse[dict](data=await service.rewind_message(recipient, rewind_expiry))
 
 
+@dev_router.post("/sweeps/rewind", response_model=SuccessResponse[dict])
+async def rewind_sweep(name: str):
+    """Make one scheduled job due now, so the next `POST /internal/sweeps/tick` runs it —
+    the drive-through's way to watch a tick run a job without waiting out its interval."""
+    _require_non_prod()
+    return SuccessResponse[dict](data=await service.rewind_sweep(name))
+
+
 # ── WhatsApp channel (PRD §26, D43) ────────────────────────────────
 # The stub transport has no external counterpart to drive it, so these two endpoints are
 # how an automated run plays both sides of a conversation: inject what a customer

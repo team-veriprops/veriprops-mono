@@ -87,13 +87,13 @@ class TestMessageRetries:
         svc.router = AsyncMock()
         svc.router.send_message = AsyncMock(side_effect=lambda m: m)
         svc.message_service = AsyncMock()
-        svc.message_service.get_retry_ready_messages = AsyncMock(return_value=SimpleNamespace(items=[ours, theirs]))
+        svc.message_service.get_due_messages = AsyncMock(return_value=[ours, theirs])
         # The other run leased the second row first.
-        svc.message_service.lease_retry = AsyncMock(side_effect=lambda message_id, now, until: message_id == ours.id)
+        svc.message_service.lease_due = AsyncMock(side_effect=lambda message_id, now, until: message_id == ours.id)
         svc.rate_limiter = AsyncMock()
         svc.throttler = Throttler(rps_limit=10_000)
 
-        stats = await svc.process_retries()
+        stats = await svc.drain_due_messages()
 
         assert [c.args[0] for c in svc.router.send_message.await_args_list] == [ours]
         assert stats["processed"] == 1
@@ -104,16 +104,32 @@ class TestMessageRetries:
         mock_db_session.execute = AsyncMock(return_value=result)
         now = datetime.now(timezone.utc)
 
-        leased = await MessageRepo(db=None).lease_retry(uuid.uuid4().hex, now, now + timedelta(minutes=5))
+        leased = await MessageRepo(db=None).lease_due(uuid.uuid4().hex, now, now + timedelta(minutes=5))
 
         assert leased is False
         stmt = mock_db_session.execute.await_args.args[0]
         sql = " ".join(str(stmt.compile(dialect=postgresql.dialect())).split())
         assert sql.startswith("UPDATE messages SET next_retry_at=")
-        assert "messages.status = %(status_1)s" in sql
+        # Queued (PENDING) and retrying rows alike; an in-flight send has no next_retry_at.
+        assert "messages.status IN (__[POSTCOMPILE_status_1])" in sql
         # Only a row still due is leased; one already leased by another run is in the future.
         assert "messages.next_retry_at <= %(next_retry_at_1)s" in sql
         assert "RETURNING messages.id" in sql
+
+    async def test_the_due_list_takes_queued_and_retrying_rows_but_never_an_in_flight_send(self, mock_db_session):
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        mock_db_session.execute = AsyncMock(return_value=result)
+        now = datetime.now(timezone.utc)
+
+        await MessageRepo(db=None).list_due(now, 50)
+
+        stmt = mock_db_session.execute.await_args.args[0]
+        sql = " ".join(str(stmt.compile(dialect=postgresql.dialect())).split())
+        assert "messages.status IN (__[POSTCOMPILE_status_1])" in sql
+        assert "messages.next_retry_at <= %(next_retry_at_1)s" in sql  # NULL never compares true
+        assert "ORDER BY messages.next_retry_at" in sql
+        assert "LIMIT %(param_1)s" in sql
 
 
 # ── Broadcasts ────────────────────────────────────────────────────
@@ -122,7 +138,7 @@ class TestMessageRetries:
 def _broadcast(status):
     return SimpleNamespace(
         id="b-1", audience="ALL", subject="s", body="b", status=status.value,
-        sent_at=None, recipient_count=None, deleted=False,
+        sent_at=None, recipient_count=None, recipients_enqueued=0, fanout_cursor=None, deleted=False,
     )
 
 
@@ -135,7 +151,8 @@ def _broadcast_service(db_row, read):
     svc._broadcast_repo.list_due_scheduled = AsyncMock(return_value=[read])
     svc._broadcast_repo.claim_transition = fake_claim_transition({"b-1": db_row})
     svc._users = AsyncMock()
-    svc._users.list_recipient_rows = AsyncMock(return_value=[("u-1", "USER", ["CUSTOMER"])])
+    svc._users.count_recipients = AsyncMock(return_value=1)
+    svc._users.list_recipient_ids_page = AsyncMock(return_value=["u-1"])
     svc._audit = MagicMock()
     return svc
 
@@ -157,14 +174,13 @@ class TestBroadcasts:
         assert out.status == BroadcastStatus.SENT.value
         assert events == []
 
-    async def test_the_sender_claims_then_records_the_audience(self, events):
+    async def test_the_sweep_claims_then_records_the_audience(self, events):
         db = _broadcast(BroadcastStatus.SCHEDULED)
         svc = _broadcast_service(db, read=_snapshot(db))
 
         assert await svc.sweep_scheduled_broadcasts() == 1
-        assert (db.status, db.recipient_count) == (BroadcastStatus.SENT.value, 1)
-        assert db.sent_at is not None
-        assert len(events) == 1
+        assert (db.status, db.recipient_count) == (BroadcastStatus.SENDING.value, 1)
+        assert events == []  # the fan-out job sends the pages
 
     async def test_cancel_cannot_land_on_a_broadcast_just_sent(self):
         db = _broadcast(BroadcastStatus.SENT)

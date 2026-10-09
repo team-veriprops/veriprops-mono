@@ -2918,3 +2918,245 @@ The job-accept preview that D30 described had also never been built.
 
 ### Revisit
 When `0002` is folded into `0001` at the next squash, under D95's precondition.
+
+## Decision: D98 — a half-finished signup resumes from the browser alone
+
+### Context
+§7.1 kept a server-side signup draft keyed on the normalised email, through
+`PUT/GET/DELETE /users/auth/signup/draft`. These routes had to be unauthenticated, because no account
+exists yet. As a result, anyone who typed an email could read its draft for seven days, with no rate
+limit. The draft's payload held the wizard's values, including the **password in plain text**, plus
+the name and phone. Discarding a draft only soft-deleted the row. The cross-device resume it existed
+for never worked either: the frontend fetched the server copy only when this browser already had a
+local draft.
+
+### Chosen
+- **No server draft.** The `signup_draft` domain, its routes and `SIGNUP_DRAFT_TTL_DAYS` are removed.
+  Migration `0008_drop_signup_drafts` drops the table, which purges every stored password. Its
+  downgrade recreates the table empty.
+- **Same-device resume.** `libs/signupDraft.ts` writes every draft through an allowlist: names,
+  email, phone and residence. The password and the verified flags never reach storage. A stored
+  draft carrying anything else, such as a legacy draft holding the password, is rewritten when read,
+  so existing browsers are purged too.
+- **A resumed signup opens on Account** with the fields filled in, asks for the password again and
+  re-verifies email and phone. The server's OTP marker lasts 30 minutes, so verified flags restored
+  from an older draft would only fail at submit.
+
+### Tradeoffs
+- Resume no longer crosses devices. It never actually did.
+- A returning user retypes the password and redoes the OTPs. That is a small cost against storing a
+  credential anywhere it can be read back.
+
+### Revisit
+Cross-device resume, if it is ever wanted, must be keyed on something the user has proved control
+of, such as a token emailed after the OTP, and never on an email alone.
+
+## Decision: D99 — the commission margin holds under concurrency and discounts; a task pays what was accepted
+
+### Context
+A review of D97 found four gaps. Two concurrent margin-affecting saves (a commission raise and a price
+cut, say) each passed the guard against the other's stale value, and together could breach the
+margin. The guard measured the margin on the list price, but agents are paid in full on a discounted
+case, so a 25% discount came out of the platform's share alone. The agent's task card showed the
+role's rate before accept, but accrual read the live rate at release, so an admin's later change moved
+what the agent had agreed to. And a tier's price and its customer-facing line items were saved
+through two routes, so a price change left the breakdown adding up to the old price.
+
+### Chosen
+- **One lock.** `CommissionMarginGuard.check` opens with `advisory_xact_lock("commission_margin")`.
+  Every writer checks and writes in one transaction, so saves take turns. A writer that also needs its
+  own lock takes it after the check, never before, so no two saves can deadlock.
+- **The margin is measured on the net (owner decision, 2026-10-01).** The rule is now
+  `net − paid ≥ min% × net`, where *net* is the price after the largest discount a customer can get:
+  the first-time discount, topped up by referral credit to the combined cap (`worst_case_net_minor`,
+  which reuses `apply_discounts`). The first-time and max-discount percentages are guarded writes too,
+  validated to 0–100, and the coverage scan pins both. The seeded defaults still pass: the tightest is
+  Standard, at 46% of its net.
+- **Locked at accept.** `verification_tasks.commission_minor` (migration `0009_task_commission_lock`)
+  is written in `accept`'s claim. Decline, the no-show reclaim and reassignment clear it, so the next
+  agent locks the then-live rate. Accrual and the task card read it through
+  `payable_commission_minor`, which falls back to the live rate when there is no lock. The column is
+  not backfilled: an older task is paid the live rate, as before. The downgrade refuses while an unpaid
+  task holds a lock.
+- **`0002`'s downgrade refuses** while any fixed amount differs from its seeded default. The D97
+  waiver covered only the upgrade.
+- **One pricing write.** `PUT /admin/pricing/tiers/{tier}` takes `{priceNgnMinor, lineItems[]}`.
+  Items, when present, must add up to the price, and an empty list means no breakdown. The
+  `/line-items` route is gone, and the admin page edits both in one form.
+- **Units are declared by the backend.** `ConfigUnit` per key (`CONFIG_UNITS`) lets the settings page
+  show and take the kobo-stored remote bonus in naira, without knowing the keys. Key descriptions are
+  code-owned; the copy seeded on a row is only a fallback.
+
+### Tradeoffs
+- Measuring on the worst-case net is stricter. Under the defaults, a ₦5,000 remote bonus is now refused,
+  because it leaves Standard at 29%. The drive-through uses ₦3,000.
+- The global lock serialises all margin-affecting saves. These are rare admin edits, so this costs
+  nothing in practice.
+- A stored configuration that already breaches the new rule is not repaired. Each later
+  margin-affecting save is refused until the breach is fixed. The admin sees which tier breaches and
+  by how much.
+- The re-check fee (`recheck_price_pct`) is not counted, because a re-check spawns no commissioned
+  task today.
+
+### Revisit
+When `0009` is folded into `0001` at the next squash, under D95's precondition.
+
+## Decision: D100 — a Cloudflare Cron Worker is the sweeps' clock (D12 follow-up)
+
+### Context
+D12 put the sweeps on an in-process APScheduler and named the condition under which that stops
+holding: serverless. Every deployed environment is Vercel serverless, where a function is frozen
+between requests, so no sweep ran on its own anywhere. Message retries, scheduled broadcasts, the
+daily payout batch, SLA breaches and commission clearance ran only when an admin pressed a sweep
+button.
+
+### Chosen
+- **One registry.** `app/jobs/registry.py` declares every job once, as a name, its `check_*`
+  entrypoint and an APScheduler trigger. Nothing else holds a cadence.
+- **One tick, two clocks.** `app/jobs/tick.py` runs every registry job that is due, in order. The
+  Cloudflare Cron Worker (`infra/cloudflare/sweep-cron/`, `* * * * *`) calls it through
+  `POST /api/internal/sweeps/tick` on the backend's own API host. The in-process scheduler, kept for
+  local and long-running hosts, now holds one job: the same tick, every minute.
+- **Due is decided from a shared clock.** `scheduled_job_runs` (migration `0010`) keeps each job's
+  `last_run_at`. A job is due when its trigger's next fire time after that anchor has passed. A job
+  never run is anchored at its row's creation, so a new job waits one interval, and the 10:00 Lagos
+  payout batch never fires at whatever hour a deploy happened.
+- **Claim before run.** The tick takes the job with a compare-and-set on `last_run_at`, committed on
+  its own (`INDEPENDENT`), before the job starts. Concurrent runners, such as the Worker and a
+  scheduler, or one scheduler per worker process, therefore run each fire once. `exclusive_job`
+  still stops two runs overlapping, and each sweep still claims its rows.
+- **Authorised by a secret, disabled without one.** The Worker sends `x-sweep-secret`, compared in
+  constant time against `SWEEP_TRIGGER_SECRET`. A blank or placeholder secret makes the endpoint
+  answer 404. Production and staging refuse to boot without the secret (user's choice), because
+  there it is the only thing that runs the sweeps. The Worker also sends `x-edge-auth` where the
+  environment enforces edge auth, since its subrequest may not pass the zone's Transform Rule.
+- **Bounded.** The tick starts no new job after `SWEEP_TICK_BUDGET_SECONDS` (240), inside Vercel's
+  300-second limit. The remaining jobs stay due for the next minute's tick.
+
+### Tradeoffs
+- A job that fails after its claim waits for its next fire time, as a scheduler would. The admin
+  sweep buttons still run any sweep on demand.
+- A tick does not interrupt a job already running when the budget runs out. A single job slower
+  than about 60 seconds would still be stopped at 300.
+- The backend's API host becomes the Worker's target. The "everything through the Next.js proxy" rule
+  is about the frontend's own calls, and a long tick through the frontend's rewrite would add a hop
+  and its timeout.
+- The deploy now depends on a Doppler key (`SWEEP_TRIGGER_SECRET`) in `prd` and `stg`, and on one
+  `wrangler deploy` per environment.
+
+### Revisit
+When staging and production move to Docker, the in-process scheduler can run the tick there. The
+Worker can then be retired or kept as a second clock, which the claim makes safe.
+
+## Decision: D101 — a broadcast is fanned out in pages, and its emails are queued for the drain
+
+### Context
+"Send now" resolved every recipient and published one event naming all of them, and the
+notification subscriber then sent each recipient's email inside the same request. On a serverless
+function that request times out long before a large audience is reached, and a timeout part-way
+left the broadcast marked SENT with an unknown share of its audience told.
+
+### Chosen
+- **SENDING, then pages.** Sending claims DRAFT/SCHEDULED → `SENDING` and records the audience size.
+  `UserRepo.list_recipient_ids_page` walks the audience in keyset pages (id order, the audience
+  filter in SQL, `BROADCAST_FANOUT_PAGE_SIZE` = 500). Each page advances
+  `broadcasts.fanout_cursor` with a claim pinned to the cursor it read, then publishes **one**
+  `BROADCAST_ANNOUNCEMENT` event for that page, so the bus stays the single entry point and two
+  runners never send one page. The last page moves the broadcast to `SENT`. Migration `0011` adds
+  the cursor and `recipients_enqueued`.
+- **The first page in the request** (user's choice). "Send now" sends page one inside a savepoint:
+  an audience within one page is SENT when the request returns, and a failed page rolls back alone
+  and is retried from the same cursor by the `broadcast_fanout` job (every sweep tick, at most
+  `BROADCAST_FANOUT_MAX_PAGES_PER_RUN` pages, one transaction per page).
+- **Queued delivery.** `NotificationRule.delivery = QUEUED` (on `BROADCAST_ANNOUNCEMENT` only)
+  makes the dispatcher call `MessagingService.enqueue_bulk`: each email is rendered as a send would
+  be and stored PENDING with `next_retry_at` = now, **in the caller's transaction**
+  (`MessageQueueService`). A queued row is an intention, not a record of a send, so it rolls back
+  with the page that wrote it and a retried page never queues an email twice.
+- **One drain.** `process_retries` became `drain_due_messages`: PENDING or RETRYING rows whose
+  `next_retry_at` has passed, at most `MESSAGING_DRAIN_BATCH_SIZE`, under the
+  `MESSAGING_BULK_CONCURRENCY` semaphore, each leased first (`lease_due`). An ordinary send still in
+  flight is PENDING with no `next_retry_at`, so the drain never touches it. A queued row that fails
+  lands on the first rung of the ladder, exactly as an immediate send would.
+- **Stop during SENDING** (user's choice). Cancel is allowed from SENDING; pages not yet sent are
+  dropped, recipients already reached keep their notice, and emails already queued still go out.
+- **The backend says what an admin may do.** `BroadcastDto.allowedActions` comes from
+  `ACTION_FROM_STATUSES`, the table the service's claims also read; the list shows "N of M recipients
+  reached" (user's choice: reach, not email delivery counts).
+
+### Tradeoffs
+- The event bus stays best-effort per subscriber: if the notification subscriber fails part-way
+  through a page, those recipients miss that notice. The page is not retried for it.
+- A broadcast's emails go out within about a minute of their page, not inside the request.
+- `recipient_count` is the audience counted when sending began; a user who joins mid-send is
+  reached too, so a finished broadcast can show slightly more reached than counted.
+
+### Revisit
+When staging and production move to Docker, the in-process scheduler runs the same tick, and the
+page size and drain batch can be tuned to the host rather than to a function's time limit.
+
+## Decision: D102 — bus failures are isolated and logged, broadcast pages are atomic, failed jobs retry soon
+
+### Context
+D100 and D101 shipped with four stated limits. Reviewing them found a fifth, older one in the bus
+itself: `EventBus.publish` and every subscriber caught exceptions and dropped them without a log
+line, and a subscriber whose database write failed left the publisher's transaction aborted, so
+the publisher then failed at commit. "Best-effort" was neither silent-safe nor actually
+best-effort.
+
+### Chosen (all at the user's request)
+- **Isolated and logged.** Each subscriber runs in its own savepoint whenever a transaction is
+  open; a failure rolls back only that subscriber's writes and is logged once (`log_fault_once`).
+  Subscribers no longer catch their own errors (a guard test enforces it), and
+  `NotificationService` logs a recipient's failed email, WhatsApp milestone or delegate send.
+- **Atomic events.** `DomainEvent.atomic` reverses the contract for one event: the first failure
+  propagates, and `NotificationService` re-raises a recipient's failure. Broadcast pages publish
+  atomically, inside a savepoint (`_fanout_page_guarded`): a failed page rolls back whole and is
+  retried from the same cursor; `broadcasts.fanout_failures` counts consecutive failures, and at
+  `BROADCAST_FANOUT_MAX_FAILURES` (5) the broadcast becomes `FAILED`, keeping everyone reached.
+- **Exact reach.** The last page sets `recipient_count` to the number actually reached.
+- **Failed jobs retry soon.** A job that raises gets `scheduled_job_runs.retry_at` =
+  `SCHEDULED_JOB_RETRY_SECONDS` (300) later, never later than its next fire time; a claim clears
+  it. Migration `0012_retries` adds both columns and refuses to downgrade while a broadcast is
+  FAILED.
+- **The Worker deploys with the app.** `deploy.yml`'s `deploy-sweep-cron` job runs after
+  `deploy-backend`, deploys to the matching wrangler environment and re-sets the Worker's secrets
+  from the backend Doppler config each time. Needs `CLOUDFLARE_API_TOKEN` and
+  `CLOUDFLARE_ACCOUNT_ID`; nothing waits on it.
+
+### Tradeoffs
+- One SAVEPOINT/RELEASE pair per subscriber per event while a transaction is open.
+- A FAILED broadcast has no resume action; the admin composes a new one for those not reached.
+- Faults that were silent now log at ERROR. The first deploy may surface existing ones; each is a
+  real fault that used to vanish.
+
+## Decision: D103 — only a qualifying agent may take a task; one rule decides who qualifies
+
+### Context
+The suggested-agents ranking filtered by approval, role, credential and coverage, but nothing else
+did. `POST /agents/tasks/{id}/accept` checked only that the caller was logged in, so anyone holding
+a pool task's id (a customer, a rejected applicant, an agent without the role, or one whose
+credential had lapsed) could accept it, then start it, upload evidence and submit findings. A task
+the starvation sweep took off the pool, which is meant for admin targeting, could be self-accepted
+by any agent. Admin assignment never checked that the assignee was an approved agent with the role.
+No UI exposed the pool, so the gap needed an id obtained elsewhere, but the rule was the server's
+to keep.
+
+### Chosen
+- **One rule** in `user/agent/eligibility.py` (`ineligibility`, `AgentEligibility`): an APPROVED
+  application; the role among `approved_roles` and active under §3.3a (credential current); and,
+  where the caller requires coverage, coverage of the property's state for Field/Surveyor. The
+  suggested-agents ranking, the pool accept and the assignment all call it.
+- **Pool accept:** all three. **Accepting one's own assignment:** approval and role (a credential
+  that lapsed since the assignment refuses the accept). **Admin assignment:** approval and role;
+  out of area is allowed because a remote job is deliberate and carries the remote bonus.
+- **Off the pool and unassigned:** no self-accept; it waits for an admin.
+- Refusals are 422s whose message says why (not an approved agent / role not cleared or credential
+  lapsed / outside coverage), worded for the agent or the admin.
+
+### Tradeoffs
+- An agent with a task in hand whose credential lapses keeps working it; only new accepts are
+  refused. Suspending in-flight work is a separate decision.
+- Agent ownership refusals stay 422s with their message rather than the customer side's 403,
+  because the frontend sends a 403 to `/forbidden`, and an agent meets this honestly when an admin
+  reassigns a task while the page is open.

@@ -21,12 +21,13 @@ from main.app.domain.notification.models import (
 )
 from main.app.domain.notification.dispatcher import NotificationDispatcher
 from main.app.domain.notification.repo import NotificationRepo
-from main.app.domain.notification.rules import rule_for
+from main.app.domain.notification.rules import NotificationDelivery, rule_for
 from main.app.domain.notification_preference.service import NotificationPreferenceService
 from main.appodus_utils import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
+from main.appodus_utils.exception.faults import log_fault_once
 from main.appodus_utils.integrations.messaging.models import MessageChannel
 
 
@@ -88,9 +89,12 @@ class NotificationService:
         if not channels:
             return
         try:
-            await self._dispatcher.dispatch(user_id, rule.template, channels, external_context(event))
-        except Exception:  # noqa: BLE001 — external send is best-effort, never fatal
-            pass
+            await self._dispatcher.dispatch(
+                user_id, rule.template, channels, external_context(event),
+                queued=rule.delivery == NotificationDelivery.QUEUED,
+            )
+        except Exception as exc:  # noqa: BLE001 — one recipient's email never stops the next
+            self._recipient_failed(event, exc, f"{event.type.value}: email/SMS to {user_id}")
 
     # ── WhatsApp milestones (§26.6.2, D65) ─────────────────────────────
     #
@@ -108,8 +112,8 @@ class NotificationService:
             await self._milestones().send_customer_milestone(
                 user_id, event.verification_id, rule.whatsapp_template
             )
-        except Exception:  # noqa: BLE001 — a milestone never breaks the emitting transaction
-            pass
+        except Exception as exc:  # noqa: BLE001 — a milestone never breaks the emitting transaction
+            self._recipient_failed(event, exc, f"{event.type.value}: WhatsApp milestone to {user_id}")
 
     async def _dispatch_delegates(self, event: DomainEvent, rule) -> None:
         """The §26.4.5 audience: a case's authorized delegate hears the same four moments.
@@ -122,8 +126,17 @@ class NotificationService:
             return
         try:
             await self._delegates().notify_milestone(event.verification_id)
-        except Exception:  # noqa: BLE001 — same best-effort posture as every other fan-out
-            pass
+        except Exception as exc:  # noqa: BLE001 — same best-effort posture as every other fan-out
+            self._recipient_failed(event, exc, f"{event.type.value}: delegate milestone")
+
+    @staticmethod
+    def _recipient_failed(event: DomainEvent, exc: Exception, where: str) -> None:
+        """One recipient's external delivery failed. Normally that recipient alone misses it and
+        the fault is logged once; on an atomic event the whole publish fails, so the publisher's
+        work (a broadcast page) rolls back and is retried rather than leaving them out."""
+        if event.atomic:
+            raise exc
+        log_fault_once(exc, where)
 
     @staticmethod
     def _delegates():

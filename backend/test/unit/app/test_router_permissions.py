@@ -56,9 +56,6 @@ PUBLIC = {
     ("POST", "/api/users/auth/sessions"): "sign-in",
     ("POST", "/api/users/auth/sessions/current"): "refresh, authorised by the refresh cookie",
     ("DELETE", "/api/users/auth/sessions/current"): "sign-out must clear cookies even without a session",
-    ("PUT", "/api/users/auth/signup/draft"): "signup before an account exists",
-    ("GET", "/api/users/auth/signup/draft"): "signup before an account exists",
-    ("DELETE", "/api/users/auth/signup/draft"): "signup before an account exists",
     ("POST", "/api/users/auth/signup"): "signup",
     ("POST", "/api/users/auth/otp/send"): "OTP for signup / sign-in",
     ("POST", "/api/users/auth/otp/verify"): "OTP for signup / sign-in",
@@ -70,6 +67,7 @@ PUBLIC = {
     ("POST", "/api/webhooks/{platform}"): "provider webhook, signature-verified",
     ("POST", "/api/payments/stub/confirm"): "stub checkout, 404 unless PAYMENT_STUB_MODE",
     ("POST", "/api/payments/chargebacks/stub/flag"): "stub gateway, 404 unless PAYMENT_STUB_MODE",
+    ("POST", "/api/internal/sweeps/tick"): "Cloudflare Cron, authorised by SWEEP_TRIGGER_SECRET; 404 unless set",
 }
 # Dev doors are unmounted in production and 404 there too (CLAUDE.md "Dev endpoints").
 _DEV_PREFIX = "/api/dev/"

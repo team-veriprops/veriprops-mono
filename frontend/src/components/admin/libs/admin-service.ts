@@ -1,6 +1,7 @@
 import { HttpClient } from "@lib/FetchHttpClient";
 import { Page, SuccessResponse } from "@/types/models";
 import {
+  AdminInvitationIssued,
   AdminInvitationSummary,
   AdminSubRole,
   AdminTeamPage,
@@ -22,7 +23,7 @@ export class AdminService {
     subRole: AdminSubRole,
     firstName?: string,
     lastName?: string,
-  ): Promise<SuccessResponse<{ inviteUrl: string }>> {
+  ): Promise<SuccessResponse<AdminInvitationIssued>> {
     return this.http.post(`${this.base}/invitations`, { email, subRole, firstName, lastName });
   }
 

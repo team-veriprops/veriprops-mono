@@ -20,10 +20,9 @@ import {
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
-import { humanizeEnumLabel } from "@lib/utils";
+import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 import { VerificationStatusBadge } from "@components/portal/verifications/VerificationStatusBadge";
 import { VerificationStatus } from "@/types/verification";
-import { TransactionCurrency } from "@/types/models";
 import {
   AdminNoteCategory,
   ChargebackDto,
@@ -47,16 +46,6 @@ import {
 } from "./libs/useAdminVerificationQueries";
 import { CloseCaseDialog } from "./CloseCaseDialog";
 import { CLOSE_REASONS } from "./libs/closure";
-
-const formatMinor = (minor?: number, currency: TransactionCurrency = TransactionCurrency.NGN) =>
-  minor === undefined
-    ? "—"
-    : new Intl.NumberFormat("en-NG", {
-        style: "currency",
-        currency,
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(minor / 100);
 
 const SLA_LABEL: Record<SlaHealth, string> = {
   [SlaHealth.ON_TRACK]: "On track",
@@ -175,7 +164,8 @@ function ChargebackCard({
     <div className="rounded-lg border border-destructive/40 p-3" data-testid="chargeback-card">
       <div className="flex items-center justify-between">
         <span className="text-sm">
-          {formatMinor(chargeback.amountMinor, chargeback.currency)} — {chargeback.reason ?? "—"}
+          {chargeback.amountMinor == null ? "—" : formatMinor(chargeback.amountMinor, chargeback.currency)} —{" "}
+          {chargeback.reason ?? "—"}
         </span>
         <Badge variant="destructive">{humanizeEnumLabel(chargeback.status)}</Badge>
       </div>

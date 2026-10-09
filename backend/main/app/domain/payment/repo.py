@@ -1,7 +1,7 @@
 from typing import List, Optional, Tuple, Type
 
 from kink import inject
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.payment.models import (
@@ -15,6 +15,7 @@ from main.app.domain.payment.models import (
 from main.app.domain.verification.models import Verification
 from main.appodus_utils.db.db_utils import hex_ref
 from main.appodus_utils.db.repo import GenericRepo
+from main.appodus_utils.db.search import contains_text
 
 
 @inject
@@ -71,12 +72,9 @@ class PaymentRepo(
         criteria = [Payment.deleted.is_(False)]
         if status is not None:
             criteria.append(Payment.status == status.value)
-        if query and query.strip():
-            text = query.strip()
-            criteria.append(or_(
-                Payment.tx_ref.icontains(text, autoescape=True),
-                Verification.vid.icontains(text, autoescape=True),
-            ))
+        search = contains_text(query, Payment.tx_ref, Verification.vid)
+        if search is not None:
+            criteria.append(search)
         joined = (
             select(Payment, Verification.vid)
             .join(Verification, hex_ref(Verification.id) == Payment.verification_id)

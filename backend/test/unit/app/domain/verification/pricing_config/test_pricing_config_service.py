@@ -55,47 +55,84 @@ class TestTierPriceResolution:
         assert await svc.tier_price_kobo(VerificationTier.BASIC) == TIER_PRICE_NGN_KOBO[VerificationTier.BASIC]
 
 
-class TestSetTierPrice:
-    async def test_updates_existing_row(self):
+def _items(*amounts):
+    return [LineItemInputDto(label=f"Item {n}", amount_minor=amount) for n, amount in enumerate(amounts)]
+
+
+def _writable(svc):
+    """Repos that record the tier row and the replaced line items."""
+    rows = [SimpleNamespace(id="pt-1", tier=VerificationTier.BASIC.value, price_ngn_kobo=5_000_000, deleted=False)]
+    svc._tiers.upsert = fake_upsert(
+        lambda values: first_matching(rows, tier=values["tier"]),
+        lambda values: rows.append(SimpleNamespace(id="pt-new", deleted=False, **values)) or rows[-1],
+    )
+    svc._line_items.list_for_tier = AsyncMock(return_value=[SimpleNamespace(id="li-old")])
+    svc._line_items.soft_delete = AsyncMock()
+    svc._line_items.create_return_model = AsyncMock(
+        side_effect=lambda dto: SimpleNamespace(id="li-new", **dto.model_dump()))
+    return rows
+
+
+class TestSetTierPricing:
+    """A tier's price and its itemised breakdown are one edit (§18.1): saved apart, a price
+    change left the customer-facing breakdown adding up to the old price."""
+
+    async def test_writes_the_price_and_replaces_the_items_together(self):
         svc = _make_service()
-        rows = [SimpleNamespace(id="pt-1", tier=VerificationTier.BASIC.value, price_ngn_kobo=5_000_000, deleted=False)]
-        svc._tiers.upsert = fake_upsert(
-            lambda values: first_matching(rows, tier=values["tier"]),
-            lambda values: rows.append(SimpleNamespace(id="pt-new", deleted=False, **values)) or rows[-1],
-        )
-        row = await svc.set_tier_price(VerificationTier.BASIC, 7_000_000, "admin-1")
-        assert (row.id, row.price_ngn_kobo) == ("pt-1", 7_000_000)
+        rows = _writable(svc)
+        await svc.set_tier_pricing(VerificationTier.BASIC, 7_000_000, _items(3_000_000, 4_000_000), "admin-1")
+        assert rows[0].price_ngn_kobo == 7_000_000
         # One statement on the live tier key, so a concurrent first save can't insert twice.
         assert svc._tiers.upsert.await_args.kwargs == {"unique_index": "uq_pricing_tier_config_tier"}
+        svc._line_items.soft_delete.assert_awaited_once_with("li-old")
+        written = [c.args[0] for c in svc._line_items.create_return_model.await_args_list]
+        assert [(w.amount_minor, w.sort_order) for w in written] == [(3_000_000, 0), (4_000_000, 1)]
         svc._audit.schedule.assert_called_once()
+
+    async def test_no_items_leaves_the_tier_without_a_breakdown(self):
+        svc = _make_service()
+        _writable(svc)
+        await svc.set_tier_pricing(VerificationTier.BASIC, 7_000_000, [], "admin-1")
+        svc._line_items.soft_delete.assert_awaited_once_with("li-old")
+        svc._line_items.create_return_model.assert_not_awaited()
+
+    async def test_items_that_do_not_add_up_to_the_price_are_refused(self):
+        svc = _make_service()
+        _writable(svc)
+        with pytest.raises(ValidationException, match="add up"):
+            await svc.set_tier_pricing(VerificationTier.BASIC, 7_000_000, _items(3_000_000, 3_999_999), "admin-1")
+        svc._tiers.upsert.assert_not_awaited()
+        svc._line_items.soft_delete.assert_not_awaited()
+
+    @pytest.mark.parametrize("price, items", [(-1, []), (7_000_000, _items(7_000_001, -1))])
+    async def test_negative_amounts_are_refused(self, price, items):
+        svc = _make_service()
+        _writable(svc)
+        with pytest.raises(ValidationException):
+            await svc.set_tier_pricing(VerificationTier.BASIC, price, items, "admin-1")
+        svc._tiers.upsert.assert_not_awaited()
+
+    async def test_a_blank_label_is_refused(self):
+        svc = _make_service()
+        _writable(svc)
+        items = [LineItemInputDto(label="  ", amount_minor=7_000_000)]
+        with pytest.raises(ValidationException):
+            await svc.set_tier_pricing(VerificationTier.BASIC, 7_000_000, items, "admin-1")
 
     async def test_the_proposed_price_is_checked_against_the_commission_margin(self):
         svc = _make_service()
-        svc._tiers.upsert = AsyncMock(return_value=SimpleNamespace(id="pt-1"))
-        await svc.set_tier_price(VerificationTier.BASIC, 7_000_000, "admin-1")
+        _writable(svc)
+        await svc.set_tier_pricing(VerificationTier.BASIC, 7_000_000, [], "admin-1")
         svc._margin_guard.check.assert_awaited_once_with(price_overrides={VerificationTier.BASIC: 7_000_000})
 
-    async def test_a_price_that_breaks_the_margin_is_never_written(self):
+    async def test_a_price_that_breaks_the_margin_writes_nothing(self):
         svc = _make_service()
-        svc._tiers.upsert = AsyncMock()
+        _writable(svc)
         svc._margin_guard.check = AsyncMock(side_effect=ValidationException(message="below the margin"))
         with pytest.raises(ValidationException):
-            await svc.set_tier_price(VerificationTier.BASIC, 1, "admin-1")
+            await svc.set_tier_pricing(VerificationTier.BASIC, 1, _items(1), "admin-1")
         svc._tiers.upsert.assert_not_awaited()
-
-
-class TestSetLineItems:
-    async def test_replaces_line_items(self):
-        svc = _make_service()
-        svc._line_items.list_for_tier = AsyncMock(return_value=[SimpleNamespace(id="li-old")])
-        svc._line_items.soft_delete = AsyncMock()
-        svc._line_items.create_return_model = AsyncMock(side_effect=lambda dto: SimpleNamespace(id="li-new", **dto.model_dump()))
-        items = [LineItemInputDto(label="Registry search", amount_minor=2_000_000),
-                 LineItemInputDto(label="Field visit", amount_minor=3_000_000)]
-        written = await svc.set_line_items(VerificationTier.STANDARD, items, "admin-1")
-        svc._line_items.soft_delete.assert_awaited_once_with("li-old")
-        assert len(written) == 2
-        assert written[0].sort_order == 0 and written[1].sort_order == 1
+        svc._line_items.soft_delete.assert_not_awaited()
 
 
 class TestView:

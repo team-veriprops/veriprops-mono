@@ -236,12 +236,35 @@ export default function AgentTaskDetail({ taskId }: { taskId: string }) {
                     {f.label}
                     {f.required && <span className="text-destructive"> *</span>}
                   </Label>
-                  <Input
-                    id={`${fieldIdPrefix}-${f.key}`}
-                    value={form[f.key] ?? ""}
-                    onChange={(e) => setForm((s) => ({ ...s, [f.key]: e.target.value }))}
-                    data-testid={`field-${f.key}`}
-                  />
+                  {f.options ? (
+                    <Select
+                      value={form[f.key] ?? ""}
+                      onValueChange={(v) => setForm((s) => ({ ...s, [f.key]: v }))}
+                    >
+                      <SelectTrigger
+                        id={`${fieldIdPrefix}-${f.key}`}
+                        className="w-full sm:w-56"
+                        aria-label={f.label}
+                        data-testid={`field-${f.key}`}
+                      >
+                        <SelectValue placeholder="Choose…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {f.options.map((option) => (
+                          <SelectItem key={option} value={option} data-testid={`field-${f.key}-${option}`}>
+                            {humanizeEnumLabel(option)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      id={`${fieldIdPrefix}-${f.key}`}
+                      value={form[f.key] ?? ""}
+                      onChange={(e) => setForm((s) => ({ ...s, [f.key]: e.target.value }))}
+                      data-testid={`field-${f.key}`}
+                    />
+                  )}
                 </div>
               ))}
               <Button

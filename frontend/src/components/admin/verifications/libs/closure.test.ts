@@ -7,7 +7,7 @@ import { VerificationStatus } from "@/types/verification";
 
 import { TransactionCurrency } from "@/types/models";
 
-import { CLOSE_REASONS, closeOutcomeMessage, closureConfirmation, majorToMinor } from "./closure";
+import { CLOSE_REASONS, closeOutcomeMessage, closureConfirmation } from "./closure";
 
 const quote = (over: Partial<ClosureQuote> = {}): ClosureQuote => ({
   reason: CloseReason.CUSTOMER_WITHDREW,
@@ -63,19 +63,5 @@ describe("closeOutcomeMessage", () => {
   it("tells the admin the case closed with nothing refunded", () => {
     expect(closeOutcomeMessage({ status: VerificationStatus.CANCELLED, onHold: false, refundMinor: 0, currency: TransactionCurrency.NGN }))
       .toMatch(/closed.*Nothing was refunded/);
-  });
-});
-
-describe("majorToMinor", () => {
-  it.each([
-    ["5000", 500_000],
-    ["5,000.50", 500_050],
-    ["0", 0],
-  ])("reads %s as %i kobo", (text, minor) => {
-    expect(majorToMinor(text)).toBe(minor);
-  });
-
-  it.each(["", "abc", "-1", "1.234"])("refuses %s", (text) => {
-    expect(majorToMinor(text)).toBeUndefined();
   });
 });

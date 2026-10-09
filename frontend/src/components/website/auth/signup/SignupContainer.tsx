@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useHydrated } from "@hooks/useHydrated";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthShell from "../AuthShell";
@@ -11,30 +12,28 @@ import AccountBasicsStep from "./AccountBasicsStep";
 import VerifyEmailPhoneStep from "./VerifyEmailPhoneStep";
 import ResidenceStep from "./ResidenceStep";
 import ConsentStep from "./ConsentStep";
-import { authService, useSignupMutation } from "../libs/useAuthQueries";
+import { useSignupMutation } from "../libs/useAuthQueries";
 import type { VerifyStepValues } from "./VerifyEmailPhoneStep";
 import {
   SignupStep1Values,
   SignupStep2Values,
   SignupStep3Values,
 } from "../schemas";
-import { UserConsent, SignupDraft, AuthIntent } from "@components/website/auth/models";
+import { UserConsent, AuthIntent } from "@components/website/auth/models";
 import {
   loadActiveLocalDraft,
   loadLocalDraft,
   saveLocalDraft,
   clearLocalDraft,
+  type SignupDraftFields,
 } from "../libs/signupDraft";
 import { ROUTES, isAuthIntent } from "@lib/routes";
-import { DEFAULT_DIAL_CODE } from "@lib/config/app";
 import { resolvePostAuthRedirect } from "@components/website/auth/libs/auth/redirect";
 import { getDeviceFingerprint } from "@components/website/auth/libs/auth/fingerprint";
 import { getErrorMessage } from "@lib/errors";
 import { findCountry } from "@components/website/auth/libs/auth/locale";
 
 const STEPS = ["Account", "Verify", "Residence", "Consent"];
-
-type DraftPayload = Partial<SignupStep1Values & SignupStep2Values & SignupStep3Values>;
 
 export default function SignupContainer() {
   const router = useRouter();
@@ -54,7 +53,12 @@ export default function SignupContainer() {
   const [step2, setStep2] = useState<SignupStep2Values | null>(null);
   const [step3, setStep3] = useState<SignupStep3Values | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [resumed, setResumed] = useState(false);
+  // What this browser kept of an earlier, unfinished signup, read once hydrated (localStorage
+  // is unavailable during SSR). It only ever pre-fills the forms: the signup resumes on
+  // Account, the password is asked for again and the email/phone are verified again.
+  const hydrated = useHydrated();
+  const resumedDraft = useMemo(() => (hydrated ? loadActiveLocalDraft() : null), [hydrated]);
+  const draftFields = resumedDraft?.fields;
 
   // Pre-populate step 1 from URL params (admin invite flow); only used when
   // there is no draft to restore.
@@ -63,12 +67,28 @@ export default function SignupContainer() {
     return { email: emailParam, firstName: firstNameParam, lastName: lastNameParam, password: "" };
   }, [emailParam, firstNameParam, lastNameParam]);
 
+  const draftStep1: SignupStep1Values | null = resumedDraft
+    ? {
+        firstName: draftFields?.firstName ?? "",
+        lastName: draftFields?.lastName ?? "",
+        email: draftFields?.email ?? resumedDraft.email,
+        password: "",
+      }
+    : null;
+
   // Derive step 3 defaults from the phone country code chosen in step 2.
   // Left unmemoized (a plain derived value) — React Compiler auto-memoizes
   // this at build time, and a manual useMemo here couldn't agree with the
   // compiler's own (more precise) dependency inference.
   const step3Defaults = ((): Partial<SignupStep3Values> | undefined => {
     if (step3) return step3;
+    if (draftFields?.countryOfResidence) {
+      return {
+        countryOfResidence: draftFields.countryOfResidence,
+        timezone: draftFields.timezone,
+        preferredCurrency: draftFields.preferredCurrency,
+      };
+    }
     if (!step2?.countryCode) return undefined;
     const info = findCountry(step2.countryCode);
     if (!info) return undefined;
@@ -81,81 +101,15 @@ export default function SignupContainer() {
 
   const signupMutation = useSignupMutation();
 
-  // Restore draft on mount: server takes precedence (cross-device), with
-  // localStorage as the offline mirror.
-  useEffect(() => {
-    let cancelled = false;
-    const applyDraft = (draft: SignupDraft) => {
-      const payload = draft.payload as DraftPayload;
-      if (payload.email) {
-        setStep1({
-          firstName: payload.firstName ?? "",
-          lastName: payload.lastName ?? "",
-          email: payload.email,
-          password: payload.password ?? "",
-        } as SignupStep1Values);
-      }
-      if (payload.emailVerified && payload.phoneVerified) {
-        setStep2({
-          countryCode: payload.countryCode ?? "NG",
-          dialCode: payload.dialCode ?? DEFAULT_DIAL_CODE,
-          phone: payload.phone ?? "",
-          emailVerified: true,
-          phoneVerified: true,
-        });
-      }
-      if (payload.countryOfResidence) {
-        setStep3({
-          countryOfResidence: payload.countryOfResidence,
-          timezone: payload.timezone!,
-          preferredCurrency: payload.preferredCurrency!,
-        });
-      }
-      setStep(Math.max(0, Math.min(STEPS.length - 1, draft.step)));
-      setResumed(true);
-    };
-
-    const localDraft = loadActiveLocalDraft();
-    (async () => {
-      // Try server first when we know the email (from a local mirror). If the
-      // server has a fresher copy, apply that; otherwise fall back to local.
-      if (localDraft?.email) {
-        try {
-          const res = await authService.getSignupDraft(localDraft.email);
-          const remote = res.data;
-          if (cancelled) return;
-          if (remote && remote.dateUpdated >= localDraft.dateUpdated) {
-            applyDraft(remote);
-            return;
-          }
-        } catch {
-          // Server unavailable — local mirror is the next-best thing.
-        }
-        if (!cancelled) applyDraft(localDraft);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const persistDraft = (next: { step: number; payload: DraftPayload }) => {
-    if (!next.payload.email) return;
-    const draft: SignupDraft = {
-      email: next.payload.email,
-      step: next.step,
-      payload: next.payload,
-      dateUpdated: new Date().toISOString(),
-    };
-    saveLocalDraft(draft);
-    // Fire-and-forget server sync. Non-fatal: localStorage is sufficient for
-    // resume-on-same-device, server adds cross-device resume.
-    authService
-      .saveSignupDraft(draft)
-      .catch(() => { /* tolerate offline / first-load */ });
+  // `saveLocalDraft` keeps only the draft's allowlisted fields, so the password and the
+  // verified flags in these step values never reach storage.
+  const persistDraft = (fields: SignupDraftFields) => {
+    if (fields.email) saveLocalDraft(fields.email, fields);
   };
 
   const handleStep1 = (values: SignupStep1Values) => {
     setStep1(values);
-    persistDraft({ step: 1, payload: { ...values } });
+    persistDraft({ ...draftFields, ...values });
     setStep(1);
   };
 
@@ -170,19 +124,13 @@ export default function SignupContainer() {
       phoneVerified: true,
     };
     setStep2(next);
-    persistDraft({
-      step: 2,
-      payload: { ...(step1 ?? {}), ...next } as DraftPayload,
-    });
+    persistDraft({ ...draftFields, ...step1, ...next });
     setStep(2);
   };
 
   const handleStep3 = (values: SignupStep3Values) => {
     setStep3(values);
-    persistDraft({
-      step: 3,
-      payload: { ...(step1 ?? {}), ...(step2 ?? {}), ...values } as DraftPayload,
-    });
+    persistDraft({ ...draftFields, ...step1, ...step2, ...values });
     setStep(3);
   };
 
@@ -209,7 +157,6 @@ export default function SignupContainer() {
       });
 
       clearLocalDraft(step1.email);
-      authService.discardSignupDraft(step1.email).catch(() => undefined);
 
       const user = result.data?.user;
       const dest = user
@@ -245,7 +192,12 @@ export default function SignupContainer() {
 
       {step === 0 && (
         <>
-          <AccountBasicsStep defaultValues={step1 ?? urlStep1 ?? undefined} onSubmit={handleStep1} />
+          {/* Keyed on the restore so the form re-reads its defaults once the draft loads. */}
+          <AccountBasicsStep
+            key={resumedDraft ? "resumed" : "fresh"}
+            defaultValues={step1 ?? draftStep1 ?? urlStep1 ?? undefined}
+            onSubmit={handleStep1}
+          />
           <AuthDivider />
           <SocialAuthButtons verb="Sign up with" intent={intent} />
         </>
@@ -255,9 +207,9 @@ export default function SignupContainer() {
         <VerifyEmailPhoneStep
           defaults={{
             email: step1.email,
-            countryCode: step2?.countryCode,
-            dialCode: step2?.dialCode,
-            phone: step2?.phone,
+            countryCode: step2?.countryCode ?? draftFields?.countryCode,
+            dialCode: step2?.dialCode ?? draftFields?.dialCode,
+            phone: step2?.phone ?? draftFields?.phone,
           }}
           onSubmit={handleStep2}
           onBack={() => setStep(0)}
@@ -281,12 +233,12 @@ export default function SignupContainer() {
         />
       )}
 
-      {resumed && step > 0 && (
+      {resumedDraft && step === 0 && (
         <p
           className="mt-6 text-xs text-center text-brand-on-surface-variant"
           data-testid="signup-resumed"
         >
-          We restored your previous progress.
+          We restored your previous progress. Choose your password again to continue.
         </p>
       )}
 

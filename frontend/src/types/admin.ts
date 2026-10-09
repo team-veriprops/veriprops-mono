@@ -44,6 +44,12 @@ export interface AdminTeamPage {
   pageSize: number;
 }
 
+/** A new invitation's link, and whether the backend emailed it to the invitee (§9.1). */
+export interface AdminInvitationIssued {
+  inviteUrl: string;
+  emailSent: boolean;
+}
+
 export interface AdminInvitationSummary {
   id: string;
   email: string;

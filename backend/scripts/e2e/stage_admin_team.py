@@ -1,13 +1,28 @@
 """Stage 3 — admin invitation & RBAC (S8 §4).
 
-SUPER invites a new admin (the invite URL carries the raw token in-body — dev contract),
-the invitee accepts and re-logs-in to pick up the ADMIN claims, then the RBAC boundaries
+SUPER invites a new admin (the invite URL carries the raw token in-body, and the same link
+is emailed to the invitee — checked in Mailpit), the invitee accepts and re-logs-in to pick up the ADMIN claims, then the RBAC boundaries
 are asserted both ways: OPERATIONS holds APPROVE_AGENT but not INVITE_ADMIN (SUPER-only),
 sub-role changes are SUPER-gated, revoked invitations die, and deactivation demotes to USER.
 """
 from __future__ import annotations
 
-from .harness import QA_PASSWORD, Ctx, check, login, signup_fresh_user
+from .harness import QA_PASSWORD, Ctx, check, login, signup_fresh_user, skip_unless_ci
+from .mailpit import message_text, wait_for_mail
+
+
+def _check_invitation_email(invitee_email: str, token: str, *, email_sent: bool) -> None:
+    """The invitee is emailed the same link the Super Admin was handed (§9.1)."""
+    if not email_sent:
+        skip_unless_ci("admin invitation reported emailSent=false — email assertions skipped",
+                       "run Mailpit + ENABLE_OUT_MESSAGING=True to cover the invitation email")
+        return
+    messages = wait_for_mail(f'to:"{invitee_email}" subject:"invited you"')
+    check("invitee receives the admin invitation email (§9.1)", len(messages) > 0,
+          f"inbox for {invitee_email}")
+    if messages:
+        check("the invitation email carries the invite link (§9.1)",
+              f"/auth/admin-invite/{token}" in message_text(messages[0]["ID"]))
 
 
 def run(ctx: Ctx) -> None:
@@ -23,6 +38,7 @@ def run(ctx: Ctx) -> None:
     token = invite_url.rstrip("/").split("/")[-1]
     check("SUPER issues an admin invitation with an in-body invite URL (§4.1)", bool(token),
           f"url={invite_url}")
+    _check_invitation_email(invitee_email, token, email_sent=invited.get("emailSent") is True)
 
     preview = ctx.root.get(f"/users/admins/invitations/preview/{token}").json()["data"]
     check("unauthenticated preview resolves the invite (EXISTING_USER, §4.1)",

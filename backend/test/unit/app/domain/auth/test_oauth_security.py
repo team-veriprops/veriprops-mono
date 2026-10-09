@@ -3,17 +3,14 @@
 Covers:
 - consume_state single-use replay protection
 - resolve_frontend_origin allowlist enforcement (unlisted origins rejected)
-- Google ID token JWKS-based signature verification (audience, issuer, signature)
-- Google JWKS Redis caching and key-rotation fallback
-- Apple JWKS Redis caching and key-rotation fallback
+- Google and Apple ID tokens verified through the shared verifier (test_oauth_id_token.py)
+- Apple's ES256 client secret
 - OAuth state stored with explicit 10-minute TTL
 """
-import json
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from jose import exceptions as jose_exceptions
 
 from main.appodus_utils.exception.exceptions import ForbiddenException
 
@@ -28,19 +25,6 @@ def _make_request(origin: str = None, referer: str = None):
     if referer:
         req.headers["referer"] = referer
     return req
-
-
-_FAKE_JWKS = {"keys": [{"kty": "RSA", "kid": "key-1", "n": "n-value", "e": "AQAB", "alg": "RS256", "use": "sig"}]}
-_FAKE_CLAIMS = {
-    "sub": "google-uid-123",
-    "email": "user@example.com",
-    "email_verified": True,
-    "given_name": "Ada",
-    "family_name": "W",
-    "iss": "https://accounts.google.com",
-    "aud": "google-client-id",
-}
-_FAKE_APPLE_JWKS = {"keys": [{"kty": "RSA", "kid": "apple-key-1", "n": "n-value", "e": "AQAB", "alg": "RS256"}]}
 
 
 # ── consume_state — replay protection ─────────────────────────────────────────
@@ -121,149 +105,66 @@ async def test_resolve_frontend_origin_accepts_listed():
     assert result == "https://veriprops.ng"
 
 
-# ── Google ID token — audience / signature rejection ─────────────────────────
+# ── Google / Apple — ID tokens go through the shared verifier ────────────────
+# The verifier itself (key choice by kid, signature, audience, issuer, at_hash, key rotation)
+# is tested with real keys in test_oauth_id_token.py.
 
-async def test_google_token_wrong_audience_rejected():
-    with patch("main.app.domain.user.auth.oauth.providers.google.RedisUtils") as mock_redis, \
-         patch("main.app.domain.user.auth.oauth.providers.google.jwt") as mock_jwt:
-        mock_redis.get_redis = AsyncMock(return_value=json.dumps(_FAKE_JWKS))
-        mock_jwt.decode.side_effect = jose_exceptions.JWTClaimsError("Invalid audience")
+async def test_google_verifies_against_its_keys_and_both_issuer_forms():
+    from main.app.domain.user.auth.oauth.providers import google
 
-        from main.app.domain.user.auth.oauth.providers.google import _verify_google_id_token
-        with pytest.raises(jose_exceptions.JWTClaimsError):
-            await _verify_google_id_token("fake.jwt.token", "fake-access-token", "wrong-client-id")
+    with patch.object(google, "verify_id_token", new_callable=AsyncMock, return_value={"sub": "g-1"}) as verify:
+        claims = await google._verify_google_id_token("id.jwt", "access-1", "google-client-id")
 
-
-async def test_google_token_invalid_signature_rejected():
-    with patch("main.app.domain.user.auth.oauth.providers.google.RedisUtils") as mock_redis, \
-         patch("main.app.domain.user.auth.oauth.providers.google.jwt") as mock_jwt:
-        mock_redis.get_redis = AsyncMock(return_value=json.dumps(_FAKE_JWKS))
-        mock_jwt.decode.side_effect = jose_exceptions.JWTError("Signature verification failed")
-
-        from main.app.domain.user.auth.oauth.providers.google import _verify_google_id_token
-        with pytest.raises(jose_exceptions.JWTError):
-            await _verify_google_id_token("tampered.jwt.token", "fake-access-token", "google-client-id")
+    assert claims == {"sub": "g-1"}
+    verify.assert_awaited_once_with(
+        "id.jwt", google.GOOGLE_KEYS, audience="google-client-id",
+        issuer=("accounts.google.com", "https://accounts.google.com"), access_token="access-1",
+    )
+    assert google.GOOGLE_KEYS.cache_key == "oauth:jwks:google"
 
 
-# ── Google JWKS — caching ─────────────────────────────────────────────────────
+async def test_apple_verifies_against_its_keys_and_issuer():
+    from main.app.domain.user.auth.oauth.providers import apple
 
-async def test_google_jwks_cached_on_second_call():
-    """JWKS endpoint fetched once; second _get_google_jwks call uses Redis."""
-    get_count = 0
+    with patch.object(apple, "verify_id_token", new_callable=AsyncMock, return_value={"sub": "a-1"}) as verify:
+        await apple._decode_apple_id_token("id.jwt", "access-1", "com.veriprops.app")
 
-    async def fake_get_redis(key):
-        nonlocal get_count
-        get_count += 1
-        return json.dumps(_FAKE_JWKS) if get_count > 1 else None
-
-    mock_http_response = MagicMock()
-    mock_http_response.json.return_value = _FAKE_JWKS
-    mock_http_response.raise_for_status = MagicMock()
-
-    with patch("main.app.domain.user.auth.oauth.providers.google.RedisUtils") as mock_redis, \
-         patch("main.app.domain.user.auth.oauth.providers.google.httpx_client") as mock_client:
-        mock_redis.get_redis = AsyncMock(side_effect=fake_get_redis)
-        mock_redis.set_redis = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_http_response)
-
-        from main.app.domain.user.auth.oauth.providers.google import _get_google_jwks
-        await _get_google_jwks()  # cache miss — fetches from Google
-        await _get_google_jwks()  # cache hit — no HTTP call
-
-    assert mock_client.get.call_count == 1
+    verify.assert_awaited_once_with(
+        "id.jwt", apple.APPLE_KEYS, audience="com.veriprops.app",
+        issuer="https://appleid.apple.com", access_token="access-1",
+    )
+    assert apple.APPLE_KEYS.cache_key == "oauth:jwks:apple"
 
 
-async def test_google_jwks_refetched_on_kid_miss():
-    """Unknown kid causes cache invalidation and a single re-fetch."""
-    mock_http_response = MagicMock()
-    mock_http_response.json.return_value = _FAKE_JWKS
-    mock_http_response.raise_for_status = MagicMock()
+async def test_apples_client_secret_is_an_es256_jwt_under_the_teams_key_id():
+    import jwt
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
 
-    decode_calls = 0
+    from main.app.domain.user.auth.oauth.providers import apple
+    from main.app.domain.user.auth.oauth.providers.models import OAuthCallbackRequestDto
 
-    def fake_decode(*args, **kwargs):
-        nonlocal decode_calls
-        decode_calls += 1
-        if decode_calls == 1:
-            raise jose_exceptions.JWKError("Key not found")
-        return _FAKE_CLAIMS
+    key = ec.generate_private_key(ec.SECP256R1())
+    pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                            serialization.NoEncryption()).decode()
+    provider = object.__new__(apple.AppleAuthProvider)
+    provider._client_id, provider._iss, provider._private_key, provider._key_id = (
+        "com.veriprops.app", "TEAM123", pem, "KEY123",
+    )
+    token_response = MagicMock()
+    token_response.json.return_value = {"id_token": "id.jwt", "access_token": "access-1"}
+    token_response.raise_for_status = MagicMock()
 
-    with patch("main.app.domain.user.auth.oauth.providers.google.RedisUtils") as mock_redis, \
-         patch("main.app.domain.user.auth.oauth.providers.google.httpx_client") as mock_client, \
-         patch("main.app.domain.user.auth.oauth.providers.google.jwt") as mock_jwt:
-        mock_redis.get_redis = AsyncMock(return_value=json.dumps(_FAKE_JWKS))
-        mock_redis.set_redis = AsyncMock()
-        mock_redis.delete = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_http_response)
-        mock_jwt.decode.side_effect = fake_decode
+    with patch.object(apple, "httpx_client") as client, \
+         patch.object(apple, "_decode_apple_id_token", new_callable=AsyncMock,
+                      return_value={"sub": "a-1", "email": "a@privaterelay.appleid.com", "email_verified": True}):
+        client.post = AsyncMock(return_value=token_response)
+        await provider.verify(OAuthCallbackRequestDto(code="c", redirect_uri="https://x/cb", code_verifier="v"), _make_request())
 
-        from main.app.domain.user.auth.oauth.providers.google import _verify_google_id_token
-        result = await _verify_google_id_token("some.jwt.token", "fake-access-token", "google-client-id")
-
-    mock_redis.delete.assert_called_once_with("oauth:jwks:google")
-    mock_client.get.assert_called_once()
-    assert result == _FAKE_CLAIMS
-
-
-# ── Apple JWKS — caching ──────────────────────────────────────────────────────
-
-async def test_apple_jwks_cached_on_second_call():
-    """Apple JWKS endpoint fetched once; second _get_apple_jwks call uses Redis."""
-    get_count = 0
-
-    async def fake_get_redis(key):
-        nonlocal get_count
-        get_count += 1
-        return json.dumps(_FAKE_APPLE_JWKS) if get_count > 1 else None
-
-    mock_http_response = MagicMock()
-    mock_http_response.json.return_value = _FAKE_APPLE_JWKS
-    mock_http_response.raise_for_status = MagicMock()
-
-    with patch("main.app.domain.user.auth.oauth.providers.apple.RedisUtils") as mock_redis, \
-         patch("main.app.domain.user.auth.oauth.providers.apple.httpx_client") as mock_client:
-        mock_redis.get_redis = AsyncMock(side_effect=fake_get_redis)
-        mock_redis.set_redis = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_http_response)
-
-        from main.app.domain.user.auth.oauth.providers.apple import _get_apple_jwks
-        await _get_apple_jwks()  # cache miss — fetches from Apple
-        await _get_apple_jwks()  # cache hit — no HTTP call
-
-    assert mock_client.get.call_count == 1
-
-
-async def test_apple_jwks_refetched_on_kid_miss():
-    """Unknown Apple kid causes cache invalidation and a single re-fetch."""
-    mock_http_response = MagicMock()
-    mock_http_response.json.return_value = _FAKE_APPLE_JWKS
-    mock_http_response.raise_for_status = MagicMock()
-
-    fake_apple_claims = {"sub": "apple-uid-456", "email": "user@privaterelay.appleid.com", "email_verified": True}
-    decode_calls = 0
-
-    def fake_decode(*args, **kwargs):
-        nonlocal decode_calls
-        decode_calls += 1
-        if decode_calls == 1:
-            raise jose_exceptions.JWKError("Key not found")
-        return fake_apple_claims
-
-    with patch("main.app.domain.user.auth.oauth.providers.apple.RedisUtils") as mock_redis, \
-         patch("main.app.domain.user.auth.oauth.providers.apple.httpx_client") as mock_client, \
-         patch("main.app.domain.user.auth.oauth.providers.apple.jwt") as mock_jwt:
-        mock_redis.get_redis = AsyncMock(return_value=json.dumps(_FAKE_APPLE_JWKS))
-        mock_redis.set_redis = AsyncMock()
-        mock_redis.delete = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_http_response)
-        mock_jwt.decode.side_effect = fake_decode
-
-        from main.app.domain.user.auth.oauth.providers.apple import _decode_apple_id_token
-        result = await _decode_apple_id_token("apple.id.token", "fake-access-token", "com.veriprops.app")
-
-    mock_redis.delete.assert_called_once_with("oauth:jwks:apple")
-    mock_client.get.assert_called_once()
-    assert result == fake_apple_claims
+    secret = client.post.call_args.kwargs["data"]["client_secret"]
+    assert jwt.get_unverified_header(secret) == {"alg": "ES256", "kid": "KEY123", "typ": "JWT"}
+    claims = jwt.decode(secret, key.public_key(), algorithms=["ES256"], audience="https://appleid.apple.com")
+    assert (claims["iss"], claims["sub"]) == ("TEAM123", "com.veriprops.app")
 
 
 # ── OAuth state TTL ───────────────────────────────────────────────────────────

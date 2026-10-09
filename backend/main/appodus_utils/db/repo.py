@@ -45,15 +45,17 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
         return get_db_session_from_context()
 
     async def _flush_pending(self) -> None:
-        """Write the session's pending edits before a statement that reloads rows.
+        """Write the session's pending edits before a statement that reads or reloads rows.
 
-        Sessions run with autoflush off, and `populate_existing` replaces a loaded row with the
-        database's copy — so an edit made in memory just before (a status set on the same row a
-        moment earlier) would be silently discarded. Flushing first keeps it.
+        Sessions run with autoflush off, so a row created earlier in the request is invisible
+        to a query until it is flushed (a note added, then the list returned without it). And
+        `populate_existing` replaces a loaded row with the database's copy, so an edit made in
+        memory just before would be silently discarded. Flushing first avoids both.
         """
         await self._session.flush()
 
     async def exists_by_id(self, _id: str) -> bool:
+        await self._flush_pending()
         _id: uuid.UUID = self._ensure_uuid(_id)
         stmt = select(literal(True)).where(
             self._model.deleted.is_(False), self._model.id == _id
@@ -62,6 +64,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
         return result.scalar() is not None
 
     async def exists_by_criterion(self, search_dto: SearchSchemaType) -> bool:
+        await self._flush_pending()
         criterion = self._db_utils.build_search_criterion(search_dto)
         stmt = select(literal(True)).where(*criterion)
         result = await self._session.execute(stmt)
@@ -406,6 +409,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
         return Utils.hex_to_uuid(_id) if isinstance(_id, str) else _id
 
     async def _get(self, _id: Union[str, uuid.UUID]) -> Optional[ModelType]:
+        await self._flush_pending()
         _id = self._ensure_uuid(_id)
         stmt = select(self._model).where(self._model.id == _id, self._model.deleted.is_(False))
         result = await self._session.execute(stmt)
@@ -418,6 +422,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
 
     async def _get_model_by_id(self, _id: Union[str, uuid.UUID], query_fields: Optional[str],
                                include_deleted: bool = False) -> tuple[Optional[ModelType], bool]:
+        await self._flush_pending()
         _id = self._ensure_uuid(_id)
         row = None
         lean = bool(query_fields)
@@ -426,7 +431,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
             if select_columns:
                 stmt = select(*select_columns).where(self._model.id == _id)
                 if not include_deleted:
-                    stmt.where(self._model.deleted.is_(False))
+                    stmt = stmt.where(self._model.deleted.is_(False))
                 result = await self._session.execute(stmt)
                 row = self._db_utils.create_entity_model(query_fields, result.first())
         else:
@@ -438,6 +443,7 @@ class GenericRepo(Generic[ModelType, CreateSchemaType, UpdateSchemaType, QuerySc
         return row, lean
 
     async def _search_rows(self, search_dto: SearchSchemaType) -> tuple[list, list, int, int, bool]:
+        await self._flush_pending()
         page = search_dto.page
         page_size = search_dto.page_size
         offset = page * page_size

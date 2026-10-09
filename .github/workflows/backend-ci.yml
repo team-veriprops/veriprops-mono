@@ -31,6 +31,7 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              - 'infra/cloudflare/sweep-cron/**'
               - '.github/workflows/backend-ci.yml'
               - 'docker-compose.yml'
 
@@ -126,9 +127,26 @@ jobs:
       - name: Models and migrations agree
         run: alembic check
 
+  # The Cloudflare Cron Worker that calls the backend's sweep tick: its own unit tests, no
+  # dependencies beyond Node's built-in runner.
+  sweep-cron:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: infra/cloudflare/sweep-cron
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test
+
   summary:
     if: always()
-    needs: [changes, lint, typecheck, test, migrations]
+    needs: [changes, lint, typecheck, test, migrations, sweep-cron]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

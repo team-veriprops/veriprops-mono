@@ -1,3 +1,36 @@
+# Progress Tracker — Pending issues after PR #26 (2026-10-01 → 07)
+
+status: **Stages 1–9 complete.** Stage 1 shipped as PR #27, and the dev deploy migrated 0002 → 0007. Stages 2–9 are on `fix/pending-issues`, one commit group per stage, in one PR to `dev`.
+
+| Stage | Change | Migration | Decision |
+| --- | --- | --- | --- |
+| 1 | Spec hydration races (UAT-PAY-01/03, UAT-RBAC-03); `waitForHydration` audit | — | — |
+| 2 | Server signup drafts dropped (they leaked the plaintext password); same-device resume without the password | `0008_drop_signup_drafts` | D98 |
+| 3 | Commission margin under a lock and on the worst-case net price; commission locked at accept; one tier save for price + line items; remote bonus in naira | `0009_task_commission_lock` | D99 |
+| 4 | Escaped LIKE search, consent history `Page[T]`, `LegalRiskLevel`, one `formatMinor`, Termii digits-only, `platform`/`ocr` criteria | — | — |
+| 5 | Admin invitations emailed (`emailSent`), §G row closed | — | — |
+| 6 | Sweep tick + Cloudflare Cron Worker, `JOB_REGISTRY`, one run per fire | `0010` | D100 |
+| 7 | Paged broadcast fan-out, `delivery=QUEUED`, message drain | `0011_broadcast_fanout` | D101 |
+| 7b | Bus savepoints + `atomic` events, atomic broadcast pages, job retries; payout email recorded as SENT | `0012_retries` | D102 |
+| 8 | Docs (MASTER-PRD §4.8, this file, uat-strategy) and the PR | — | — |
+| 9 | Every remaining issue: only a qualifying agent takes a task (one eligibility rule); generic repo reads flush first (and a lean read by id no longer returns deleted rows); the suite fails on a swallowed subscriber fault (60 found, in 4 files); python-jose → PyJWT with one OAuth ID-token verifier; the D97 config rows on every database; margin % never rounds up to the minimum; config list via `effective_config_value`; pytest warnings 940 → 0. The six-engine run found two more, both fixed: `/dev/scenario` drew QA phone numbers blind from a million-number range and collided on `uq_users_phone_e164` (UAT-RBAC-04's 500), now `free_qa_local_phones`; and the sign-out helper polled for an overlay that lives a frame or two (UAT-SESS-04), now recorded page-side across the redirect | `0013_d97_config_rows` | D103 |
+
+**Final gate on the branch head:**
+
+| Gate | Result |
+| --- | --- |
+| pytest | **4080 passed, 0 warnings** (was 940 warnings; 2615 tests at the audit's S0 baseline) |
+| ruff, mypy | clean (627 files) |
+| eslint, tsc | clean (no frontend change in Stage 9) |
+| vitest | **920 passed**, 151 files |
+| alembic | round trip + `alembic check` on `veriprops_e2e`, head `0013_d97_config_rows` |
+| drive-through | **709/709** (new checks: invite email, sweep tick, broadcast drain, payout email SENT, agent IDOR, pool eligibility) |
+| Playwright (HTTPS, full suite, **all six engines**) | **362/362**, no retries (parallel lane 338, serial lane 24) |
+
+**User actions** are listed in the PR body. The new ones this cycle: put `SWEEP_TRIGGER_SECRET` in each backend Doppler config (staging and production refuse to boot without it), and add the repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for `deploy-sweep-cron`. The sandbox register below gains row 20, the Worker.
+
+---
+
 # Progress Tracker — Audit remediation (2026-09-27)
 
 status: **S0–S9 complete — the remediation is ready for its PR.** Branch `chore/audit-remediation` off `dev` at `c20f387`, worked in the worktree `.claude/worktrees/audit-remediation`. All stages go to `dev` as one PR at the end, with commits grouped per stage.
@@ -478,10 +511,12 @@ The PRD states this.
 
 **Logged, not done:**
 
-- The erasure queue still uses `window.confirm`/`prompt` instead of `ConfirmDialog`.
-- The admin list searches (users, team, verifications) do not escape `%`/`_`.
-- The lawyer's `risk_level` is free text, so the HIGH-risk conflict fires only on exactly "high".
-- `AdminVerificationDetail` keeps a local `formatMinor` that differs slightly from the shared one.
+- ~~The admin list searches (users, team, verifications) do not escape `%`/`_`.~~ Fixed in the
+  2026-10 pending-issues cycle: every search goes through `appodus_utils/db/search.contains_text`.
+- ~~The lawyer's `risk_level` is free text, so the HIGH-risk conflict fires only on exactly "high".~~
+  Fixed in the same cycle: it is now the `LegalRiskLevel` enum.
+- ~~`AdminVerificationDetail` keeps a local `formatMinor` that differs slightly from the shared one.~~
+  Fixed in the same cycle.
 
 **Gate:**
 
@@ -533,10 +568,13 @@ The PRD states this.
 
 **Logged, not done:**
 
-- Pricing line items are not checked against the tier price, so a quote's breakdown can fail to add up to its total.
-- The consent-history endpoint returns its own page shape instead of `Page[T]`.
-- Other create-then-list-in-one-request paths may miss rows the same way the notes did (autoflush off).
-- Agent-side ownership (IDOR) is enforced in services against the database, so it is left to S9's `rbac` spec rather than the unit guard.
+- ~~Pricing line items are not checked against the tier price.~~ Fixed in the pending-issues cycle (D99).
+- ~~The consent-history endpoint returns its own page shape instead of `Page[T]`.~~ Fixed in the same cycle.
+- ~~Other create-then-list-in-one-request paths may miss rows (autoflush off).~~ Fixed in Stage 9 of
+  that cycle: every generic read flushes first.
+- ~~Agent-side ownership (IDOR) is left to S9's `rbac` spec.~~ Covered in Stage 9: unit tests on every
+  owned action, drive-through checks that a second agent reaches none of them, and D103's
+  eligibility rule on accept and assign.
 
 **Stage review** (`/code-review high`): no finding in the S8 changes. All ten findings are in the fixed-commission commit `030afb6` (the parallel session's work this branch is rebased onto). They are for the user to schedule:
 
@@ -550,6 +588,12 @@ The PRD states this.
 8. The guard duplicates the service's commission and config reads.
 9. `list_all` bypasses `effective_config_value`.
 10. Accrual queries the rule once per task.
+
+Outcome (pending-issues cycle): 1–5 fixed in Stage 3 (D99). 6, 7 and 9 fixed in Stage 9 (the
+percentage is cut to one decimal, never rounded up; migration `0013`; `effective_config_value`). 10 is
+fixed by the accept-time lock, since a task now pays its locked figure and reads the rule only when it
+has none. 8 is kept by design: the guard reads repositories so all three writing services can depend on
+it without an import cycle (see `commission_rule/margin.py`).
 
 **Gate:**
 
@@ -622,11 +666,11 @@ The PRD states this.
 - the share toggle's `aria-pressed` contradicted its label.
 
 **Logged, not done:**
-- **Signup drafts persist the password in plain text,** in localStorage and in `signup_drafts.payload` (needs a decision).
-- **Admin invitations are not emailed** (now a §G row and `TODO(gap)`).
-- **A send-now broadcast emails every recipient inside the request.** About 1s per local SMTP send; at production scale it would time out. Needs a queued fan-out.
-- **Pricing line items** aren't checked against the tier price.
-- **Consent history** returns its own page shape rather than `Page[T]`.
+- ~~**Signup drafts persist the password in plain text,** in localStorage and in `signup_drafts.payload`.~~ Fixed in the pending-issues cycle (D98): the server draft and its table are dropped (`0008`), and the local draft keeps no password.
+- ~~**Admin invitations are not emailed.**~~ Fixed in the pending-issues cycle: the invite is emailed, and the copy link stays as a fallback (`emailSent`).
+- ~~**A send-now broadcast emails every recipient inside the request.**~~ Fixed in the same cycle (D101/D102): the broadcast fans out in atomic pages, and its emails are queued for the sweep tick's drain.
+- ~~**Pricing line items** aren't checked against the tier price.~~ Fixed in the same cycle (D99): the price and its items are one save, and the items must sum to the price.
+- ~~**Consent history** returns its own page shape rather than `Page[T]`.~~ Fixed in the same cycle.
 
 **Gate:**
 
@@ -671,7 +715,7 @@ This register lists every third-party integration still stubbed, or not yet prov
 | 8 | Dojah selfie liveness | wired in S5: `/api/v1/ml/liveness` before every identity call; no face, several faces or not live → FAILED with our sentence; photos kept privately for the reviewer (side-by-side view), deleted by erasure | `test_dojah_kyc.py`, `test_kyc_service.py`, `test_erasure_service.py`, `KycPhotoCompare.test.tsx`; Playwright onboarding uploads a real JPEG | a live selfie → pass; a photo of a photo → fail; a group photo → fail | Dojah sandbox (user) | S5 | CONTRACT-TESTED |
 | 9 | Google Places (New) | wired in S5: `places:autocomplete` (Nigeria only) + place details on selection, field masks on both, one session token per search; key in a header | `test_google_places.py`, `verification-service.test.ts` | type "Lekki" → suggestions → pick one → coordinates filled; check the billing console shows one session | Places API (New) key restricted to that API and the staging server (user) | S5 | CONTRACT-TESTED |
 | 10 | S3 evidence storage | fixed in S1 (valid `put_object`, real MIME, fresh presigned reads) | `test_s3_storage.py` (botocore Stubber: put, presign, delete, safe failure) | put (image + PDF MIME) → presign → GET 200 → delete | AWS staging bucket + IAM keys (user) | S1 | CONTRACT-TESTED |
-| 11 | SMS Termii | routing fixed in S1 | routing: `test_router_sms_routing.py`; Termii HTTP adapter: none; live probe `sms_termii` | OTP to a +234 test number → delivered. Confirm Termii accepts the number with its leading `+` (the adapter sends E.164 as given) | Termii key + sender ID, test handset (user) | S1 | STUBBED |
+| 11 | SMS Termii | routing fixed in S1 | routing: `test_router_sms_routing.py`; Termii HTTP adapter: none; live probe `sms_termii` | OTP to a +234 test number → delivered. Confirm Termii accepts the digits-only number (since the pending-issues cycle the adapter sends `digits_of(E.164)`, e.g. `2348012345678`) | Termii key + sender ID, test handset (user) | S1 | STUBBED |
 | 12 | SMS Twilio fallback | routing fixed in S1 (Termii down → Twilio; never the mock) | routing: `test_router_sms_routing.py`; Twilio adapter: none | non-NG number, and Termii forced down → Twilio | Twilio SID/token/number (user) | S1 | STUBBED |
 | 13 | Email Resend → Mailjet → SES | wired | Mailpit in drive-through (SMTP only); `test_resend_provider.py`, `test_aws_ses_provider.py`; live probes `email_*` | one email per provider to a test inbox; force a Resend failure → fallback | Resend/Mailjet/SES keys, verified domain (user) | S6 | STUBBED |
 | 14 | WhatsApp Meta `send_message` + templates | wired (D88 test number on stg) | signature checks in drive-through; live probe `whatsapp` (number health, template directory, `hello_world`) | template to Meta's test number; free text inside the 24h window | Meta test number, WABA id, token (user) | S6 | STUBBED |
@@ -680,6 +724,7 @@ This register lists every third-party integration still stubbed, or not yet prov
 | 17 | Firebase push | credentials load at startup, no tokens stored | none | — | — | §G | BLOCKED(feature not built) |
 | 18 | FX live rates | hardcoded rates | none | — | OpenExchangeRates key when the gap is picked up | §G | BLOCKED(deferred gap) |
 | 19 | Zoho DocSign / Google Drive | not in any live flow | none | — | — | — | BLOCKED(unused) |
+| 20 | Cloudflare sweep Cron Worker (D100) | `deploy.yml` `deploy-sweep-cron` ships it per environment and re-sets its secrets from the backend Doppler config; the backend refuses to boot on stg/prd without `SWEEP_TRIGGER_SECRET` | `infra/cloudflare/sweep-cron/test/index.test.js` (backend CI `sweep-cron` job); tick endpoint unit tests; drive-through `sweep_tick` stage (local clock) | the deployed Worker fires every minute → `200` from `/api/internal/sweeps/tick` in the Worker logs; confirm `x-edge-auth` passes once the Transform Rule is on; a staging broadcast drains through it | repo secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; `SWEEP_TRIGGER_SECRET` in each backend Doppler config (user) | pending-issues S6 | CONTRACT-TESTED |
 
 **User actions gathered from the audit:**
 
@@ -805,7 +850,7 @@ status: **Slices 0–5 and both side tracks are complete, committed and released
 
 - **Scenarios** (each signs up a brand-new account, so they own their data and run in parallel):
   - UAT-AUTH-09: the four-step funnel (Account → Verify → Residence → Consent) ends on the new-verification wizard, because a new customer has no verification yet.
-  - UAT-AUTH-10: a half-finished signup resumes, restoring the typed email.
+  - UAT-AUTH-10: a half-finished signup resumes on Account, restoring the typed name and email but never the password, which is absent from localStorage (D98).
   - UAT-AUTH-11: signing up through a **real** referral code (read from `/referrals/me`) costs the invitee nothing. The referrer's credit only exists after the invitee's first payment clears the chargeback window, so that assertion belongs to the referral spec — not faked here with an API check.
   - UAT-AUTH-12: `?intent=agent` lands in the agent portal with the AGENT persona.
   - UAT-AUTH-13: every step is scanned for a11y, including the OTP dialog while open.
@@ -1226,7 +1271,8 @@ cut the first one short.
 5. **2.2 h for the parallel lane is slow.** Try the native Caddy path
    (`UAT_UPSTREAM=localhost:3001 caddy run --config e2e/tls/Caddyfile`, see
    `docs/uat-strategy.md`), which skips Docker Desktop's container→host hop — the likely cost.
-6. Outside this track: GitHub reports 44 Dependabot alerts (4 critical) on the default branch.
+6. ~~Outside this track: GitHub reports 44 Dependabot alerts (4 critical) on the default branch.~~
+   Resolved: on 2026-10-08 GitHub listed 87 alerts, all `fixed`, none open.
 
 ### Runtime state left behind (concurrency track)
 
@@ -1422,7 +1468,8 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
 
 - Native Caddy (pending item 5): skipped by user decision. Given the timing above, re-measure
   before investing in it.
-- `python-jose` → PyJWT (MASTER-PRD §G.2).
+- ~~`python-jose` → PyJWT (MASTER-PRD §G.2).~~ Done in the pending-issues cycle (Stage 9); `ecdsa`
+  is no longer installed.
 - CI hardware is still unmeasured against these budgets.
 
 ### Follow-on: 0018/0019 folded into `0001` (D96, 2026-09-26)

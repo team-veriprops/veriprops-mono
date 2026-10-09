@@ -52,8 +52,17 @@
 #     including dashboard instant-rollbacks, and only the dashboard can express
 #     the www redirect.
 #
+# Sweep clock (D100): deploy-sweep-cron ships infra/cloudflare/sweep-cron to the
+#   wrangler environment named like the GitHub Environment (dev/staging/production)
+#   and re-sets its secrets from the backend Doppler config on every deploy, so the
+#   Worker's SWEEP_TRIGGER_SECRET (and EDGE_AUTH_SECRET, where set) can never drift
+#   from the backend's. It runs after deploy-backend (the backend must accept the
+#   secret before the Worker ticks) and nothing waits on it: a failure there marks
+#   the run red without holding back the app.
+#
 # Required repo secrets: VERCEL_TOKEN, VERCEL_ORG_ID,
-#   VERCEL_PROJECT_ID_BACKEND, VERCEL_PROJECT_ID_FRONTEND.
+#   VERCEL_PROJECT_ID_BACKEND, VERCEL_PROJECT_ID_FRONTEND,
+#   CLOUDFLARE_API_TOKEN (Workers Scripts:Edit), CLOUDFLARE_ACCOUNT_ID.
 # Required environment-scoped secrets (in each of the production/staging/dev
 #   GitHub Environments): DOPPLER_TOKEN_BACKEND, DOPPLER_TOKEN_FRONTEND —
 #   read-only Doppler service tokens for the matching config (prd/stg/dev).
@@ -175,3 +184,43 @@ jobs:
           url=$(vercel deploy --yes --cwd frontend --token "$VERCEL_TOKEN" "${env_args[@]}")
           echo "deployed $url"
           vercel alias set "$url" "$ALIAS" --token "$VERCEL_TOKEN"
+
+  deploy-sweep-cron:
+    needs: [deploy-backend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ github.ref_name == 'master' && 'production' || github.ref_name == 'staging' && 'staging' || 'dev' }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_BACKEND }}
+      WORKER_ENV: ${{ github.ref_name == 'master' && 'production' || github.ref_name == 'staging' && 'staging' || 'dev' }}
+    defaults:
+      run:
+        working-directory: infra/cloudflare/sweep-cron
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: dopplerhq/cli-action@v3
+      - name: Install Wrangler
+        run: npm install -g wrangler@4
+      - name: Deploy the Worker
+        run: wrangler deploy --env "$WORKER_ENV"
+      # Secrets go through stdin, never argv or the log. An unset sweep secret fails the job:
+      # the Worker would tick into a 404 forever. Edge auth is optional, as on the backend.
+      - name: Set the Worker's secrets from Doppler
+        run: |
+          sweep=$(doppler secrets get SWEEP_TRIGGER_SECRET --plain 2>/dev/null || true)
+          if [ -z "$sweep" ] || [ "$sweep" = "CHANGE_ME" ]; then
+            echo "::error::SWEEP_TRIGGER_SECRET is not set in this environment's backend Doppler config"
+            exit 1
+          fi
+          printf '%s' "$sweep" | wrangler secret put SWEEP_TRIGGER_SECRET --env "$WORKER_ENV"
+          edge=$(doppler secrets get EDGE_AUTH_SECRET --plain 2>/dev/null || true)
+          if [ -n "$edge" ] && [ "$edge" != "CHANGE_ME" ]; then
+            printf '%s' "$edge" | wrangler secret put EDGE_AUTH_SECRET --env "$WORKER_ENV"
+          else
+            wrangler secret delete EDGE_AUTH_SECRET --env "$WORKER_ENV" --force >/dev/null 2>&1 || true
+          fi

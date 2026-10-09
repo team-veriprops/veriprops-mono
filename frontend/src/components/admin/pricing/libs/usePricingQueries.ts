@@ -19,20 +19,12 @@ export function usePricingQuery() {
   });
 }
 
-export function useSetTierPriceMutation() {
+export function useSetTierPricingMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ tier, priceNgnMinor }: { tier: VerificationTier; priceNgnMinor: number }) =>
-      service.setTierPrice(tier, priceNgnMinor),
-    onSuccess: (res) => qc.setQueryData(pricingKeys.all(), res.data),
-  });
-}
-
-export function useSetLineItemsMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ tier, lineItems }: { tier: VerificationTier; lineItems: LineItemInput[] }) =>
-      service.setLineItems(tier, lineItems),
+    mutationFn: ({ tier, priceNgnMinor, lineItems }: {
+      tier: VerificationTier; priceNgnMinor: number; lineItems: LineItemInput[];
+    }) => service.setTierPricing(tier, priceNgnMinor, lineItems),
     onSuccess: (res) => qc.setQueryData(pricingKeys.all(), res.data),
   });
 }

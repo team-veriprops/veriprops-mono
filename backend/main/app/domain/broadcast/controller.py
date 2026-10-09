@@ -15,6 +15,7 @@ from main.app.domain.broadcast.models import (
     BroadcastPreviewDto,
     BroadcastStatus,
     ComposeBroadcastDto,
+    allowed_actions,
 )
 from main.app.domain.broadcast.service import BroadcastService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
@@ -26,10 +27,12 @@ _guard = require_permission(Permission.BROADCAST)
 
 
 def _dto(b: Broadcast) -> BroadcastDto:
+    status = BroadcastStatus(b.status)
     return BroadcastDto(
         id=b.id, audience=BroadcastAudience(b.audience), subject=b.subject, body=b.body,
-        status=BroadcastStatus(b.status), scheduled_at=b.scheduled_at, sent_at=b.sent_at,
-        recipient_count=b.recipient_count or 0, date_created=b.date_created,
+        status=status, scheduled_at=b.scheduled_at, sent_at=b.sent_at,
+        recipient_count=b.recipient_count or 0, recipients_enqueued=b.recipients_enqueued or 0,
+        allowed_actions=allowed_actions(status), date_created=b.date_created,
     )
 
 
@@ -75,7 +78,7 @@ async def cancel_broadcast(broadcast_id: str, admin_id: str = Depends(_guard)):
 
 @broadcast_router.post("/sweeps/scheduled", response_model=SuccessResponse[dict])
 async def sweep_scheduled(_admin_id: str = Depends(_guard)):
-    """Send scheduled broadcasts whose time has passed (§18.1). Runs on a schedule in
-    non-test envs; this endpoint triggers it on demand (idempotent)."""
-    sent = await broadcast_service.sweep_scheduled_broadcasts()
-    return SuccessResponse[dict](data={"sent": sent})
+    """Start scheduled broadcasts whose time has passed and fan out pending pages (§18.1):
+    `{started, pages}`. The sweep tick runs both every minute; this endpoint triggers them on
+    demand (idempotent — every start and page is a claim)."""
+    return SuccessResponse[dict](data=await broadcast_service.run_scheduled_sweep())

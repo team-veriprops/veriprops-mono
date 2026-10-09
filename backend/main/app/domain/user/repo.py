@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import String, cast, desc, literal, select, func, or_, type_coerce, update as sa_update
+from sqlalchemy import String, cast, desc, literal, select, func, type_coerce, update as sa_update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from main.app.domain.user.models import (
 )
 from main.appodus_utils import Utils
 from main.appodus_utils.db.repo import GenericRepo
+from main.appodus_utils.db.search import contains_text
 from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.integrations.messaging.models import UserContactDto, PushToken, EmailRecipient
 
@@ -41,14 +42,42 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_recipient_rows(self) -> List[tuple]:
-        """(user_id_str, user_type, personas) for every active user — the broadcast audience
-        resolver (§18.1). User ids are the 36-char str form used by notifications."""
-        stmt = select(User.id, User.user_type, User.personas).where(User.deleted.is_(False))
-        return [
-            (str(uid), ut, list(personas or []))
-            for uid, ut, personas in (await self._session.execute(stmt)).all()
-        ]
+    @staticmethod
+    def _recipient_conditions(user_type: Optional[UserType], persona: Optional[UserPersona]) -> list:
+        """Live users, narrowed to a user type and/or a persona (a JSONB containment) in SQL."""
+        conditions = [User.deleted.is_(False)]
+        if user_type is not None:
+            conditions.append(User.user_type == user_type.value)
+        if persona is not None:
+            conditions.append(type_coerce(User.personas, JSONB).contains([persona.value]))
+        return conditions
+
+    async def list_recipient_ids_page(
+        self,
+        after: Optional[str],
+        limit: int,
+        *,
+        user_type: Optional[UserType] = None,
+        persona: Optional[UserPersona] = None,
+    ) -> List[str]:
+        """One keyset page of a broadcast audience (§18.1): the next *limit* user ids after
+        *after*, in id order, as the 36-char str form notifications key on.
+
+        Keyset rather than offset, so a page is the same set however often it is asked for, and
+        a user who signs up mid-send lands on a later page instead of shifting every page after.
+        """
+        conditions = self._recipient_conditions(user_type, persona)
+        if after is not None:
+            conditions.append(User.id > self._ensure_uuid(after))
+        stmt = select(User.id).where(*conditions).order_by(User.id).limit(limit)
+        return [str(uid) for uid in (await self._session.execute(stmt)).scalars().all()]
+
+    async def count_recipients(
+        self, *, user_type: Optional[UserType] = None, persona: Optional[UserPersona] = None,
+    ) -> int:
+        """The size of the audience `list_recipient_ids_page` walks."""
+        stmt = select(func.count(User.id)).where(*self._recipient_conditions(user_type, persona))
+        return (await self._session.execute(stmt)).scalar_one()
 
     async def list_admins(
         self,
@@ -58,15 +87,9 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         conditions = [User.deleted.is_(False), User.user_type == UserType.ADMIN.value]
         if sub_role_filter is not None:
             conditions.append(User.admin_sub_role == sub_role_filter.value)
-        if query and query.strip():
-            like = f"%{query.strip()}%"
-            conditions.append(
-                or_(
-                    User.first_name.ilike(like),
-                    User.last_name.ilike(like),
-                    User.email.ilike(like),
-                )
-            )
+        search = contains_text(query, User.first_name, User.last_name, User.email)
+        if search is not None:
+            conditions.append(search)
         stmt = select(User).where(*conditions)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
@@ -98,16 +121,9 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
             # personas is a JSON list of enum values; a quoted-substring match is
             # dialect-portable (JSONB @> is Postgres-only) and safe on enum input.
             conditions.append(cast(User.personas, String).like(f'%"{persona}"%'))
-        if query and query.strip():
-            like = f"%{query.strip()}%"
-            conditions.append(
-                or_(
-                    User.first_name.ilike(like),
-                    User.last_name.ilike(like),
-                    User.email.ilike(like),
-                    User.phone_e164.ilike(like),
-                )
-            )
+        search = contains_text(query, User.first_name, User.last_name, User.email, User.phone_e164)
+        if search is not None:
+            conditions.append(search)
         base = select(User).where(*conditions)
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
         rows = (

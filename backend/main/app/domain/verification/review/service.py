@@ -321,8 +321,9 @@ class ReviewService:
 
     async def accrue_commissions(self, verification: Verification, tasks: List[VerificationTask]) -> None:
         """Accrue CLEARING commission lines per approved task (§20.1/D97): the role's fixed
-        admin-set amount — independent of the tier and the price paid, so a discounted case pays
-        its agents in full — plus, as its own line, any remote bonus the task carried. Both clear
+        admin-set amount as locked when the agent accepted (the live rate for a task accepted
+        before the lock existed) — independent of the tier and the price paid, so a discounted
+        case pays its agents in full — plus, as its own line, any remote bonus the task carried. Both clear
         on the two-stage schedule (§15.2/D31): the bulk after ``commission_clearance_days``, a
         ``commission_reserve_pct`` reserve after the chargeback window. Idempotent on a
         re-release: a line already live for the task is never accrued again (the S18
@@ -336,9 +337,8 @@ class ReviewService:
         for t in tasks:
             if not t.assigned_agent_id:
                 continue
-            role = AgentRole(t.role)
-            await self._accrue_line(verification, t, CommissionKind.BASE,
-                                    await self._commission_rules.commission_minor(role), schedule)
+            amount = await self._commission_rules.payable_minor(AgentRole(t.role), t.commission_minor)
+            await self._accrue_line(verification, t, CommissionKind.BASE, amount, schedule)
             await self._accrue_line(verification, t, CommissionKind.REMOTE_BONUS,
                                     t.remote_bonus_minor or 0, schedule)
 

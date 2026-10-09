@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { TaskState } from "@/types/adminVerification";
 import { AgentRole } from "@/types/agent";
 import { VerificationTier } from "@/types/verification";
-import { AgentTask } from "@/types/agentTask";
+import { AgentTask, LegalRiskLevel, ROLE_FORM_FIELDS } from "@/types/agentTask";
 import { Page } from "@/types/models";
 import { attributeFor, isNamed } from "@/test-utils/markup";
 import { formatMinor } from "@lib/utils";
@@ -125,6 +125,24 @@ describe("AgentTaskDetail", () => {
     expect(isNamed(html, "evidence-file")).toBe(true);
     // A Radix trigger is a <button>, so it carries its own name (axe `button-name`).
     expect(attributeFor(html, "evidence-kind", "aria-label")).toBeTruthy();
+  });
+
+  /**
+   * The risk level is one of a fixed set the backend validates, and a HIGH rating raises a
+   * review conflict (§8.2). Free text let "very high" through without the conflict firing.
+   */
+  it("asks the lawyer for a risk level from the backend's set, not free text", () => {
+    const html = markupFor(taskIn(TaskState.IN_PROGRESS, { role: AgentRole.LAWYER, tier: VerificationTier.PREMIUM }));
+
+    expect(attributeFor(html, "field-risk_level", "role")).toBe("combobox");
+    expect(attributeFor(html, "field-risk_level", "aria-label")).toBe("Risk level");
+    // Free-text findings stay inputs.
+    expect(isNamed(html, "field-legal_opinion")).toBe(true);
+  });
+
+  it("offers exactly the backend's risk levels", () => {
+    const lawyer = ROLE_FORM_FIELDS[AgentRole.LAWYER].find((f) => f.key === "risk_level");
+    expect(lawyer?.options).toEqual(Object.values(LegalRiskLevel));
   });
 
   it("tells the agent their submission is with the reviewer", () => {

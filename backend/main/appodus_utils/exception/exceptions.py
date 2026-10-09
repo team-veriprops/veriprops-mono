@@ -157,7 +157,7 @@ class ValidationException(AppodusBaseException):
     def __init__(self, errors: list = None, message: str = None, context: Optional[ExceptionContext] = None):
         super().__init__(
             message=message or "Validation failed",
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="VALIDATION_ERROR",
             context=context
         )
@@ -167,7 +167,7 @@ class TemplateRenderingException(AppodusBaseException):
     def __init__(self, message: str = None, context: Optional[ExceptionContext] = None):
         super().__init__(
             message=message or "Template rendering failed",
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="TEMPLATE_RENDERING_ERROR",
             context=context
         )

@@ -35,6 +35,7 @@ from main.appodus_utils.decorators.decorate_all_methods import decorate_all_meth
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
 from main.appodus_utils.db.locks import advisory_xact_lock
+from main.appodus_utils.exception.exceptions import ValidationException
 
 # Advisory-lock namespace: one replacement of a tier's line items at a time.
 _LINE_ITEMS_LOCK = "pricing_line_items"
@@ -75,46 +76,53 @@ class PricingConfigService:
                     deltas.append(UpgradeDeltaDto(from_tier=current, to_tier=target, delta_minor=delta))
         return TierPricingViewDto(tiers=tiers, upgrade_deltas=deltas)
 
-    async def set_tier_price(self, tier: VerificationTier, price_minor: int, admin_id: str) -> PricingTierConfig:
-        """Set a tier's live price (§18.1). Refused when the tier's agent commissions would then
-        leave less than the minimum margin (§20.1 / D97)."""
+    async def set_tier_pricing(
+        self, tier: VerificationTier, price_minor: int, items: List[LineItemInputDto], admin_id: str
+    ) -> PricingTierConfig:
+        """Set a tier's live price and replace its itemised breakdown, as one edit (§18.1).
+
+        Saved apart, a price change left the breakdown customers see adding up to the old price,
+        so the items, when there are any, must add up to the new one. Refused when the tier's
+        agent commissions would then leave less than the minimum margin (§20.1 / D97).
+
+        Two saves of one tier take turns (the margin lock, then the tier's own): interleaved,
+        each would soft-delete the old items and leave both new sets live.
+        """
+        self._validate_pricing(price_minor, items)
         await self._margin_guard.check(price_overrides={tier: price_minor})
+        await advisory_xact_lock(f"{_LINE_ITEMS_LOCK}:{tier.value}")
         row = await self._tiers.upsert(
             CreatePricingTierConfigDto(tier=tier.value, price_ngn_kobo=price_minor).model_dump(by_alias=False),
             ["price_ngn_kobo"],
             unique_index="uq_pricing_tier_config_tier",
         )
+        for existing in await self._line_items.list_for_tier(tier.value):
+            await self._line_items.soft_delete(existing.id)
+        for order, item in enumerate(items):
+            await self._line_items.create_return_model(CreatePricingLineItemDto(
+                tier=tier.value, label=item.label.strip(), amount_minor=item.amount_minor, sort_order=order,
+            ))
         self._audit.schedule(
             action=AuditActionType.ADMIN_CONFIG_CHANGED,
             resource_type="pricing_tier_config", resource_id=row.id, actor_id=admin_id,
-            details={"tier": tier.value, "price_ngn_kobo": price_minor},
+            details={"tier": tier.value, "price_ngn_kobo": price_minor, "line_items": len(items)},
         )
         return row
 
-    async def set_line_items(
-        self, tier: VerificationTier, items: List[LineItemInputDto], admin_id: str
-    ) -> List[PricingLineItem]:
-        """Replace a tier's line items (§18.1). Soft-deletes the old set, writes the new one.
-
-        Replacements of one tier take turns: interleaved, two saves would each soft-delete
-        the old set and leave both new sets live.
-        """
-        await advisory_xact_lock(f"{_LINE_ITEMS_LOCK}:{tier.value}")
-        for existing in await self._line_items.list_for_tier(tier.value):
-            await self._line_items.soft_delete(existing.id)
-        written: List[PricingLineItem] = []
-        for order, item in enumerate(items):
-            written.append(await self._line_items.create_return_model(CreatePricingLineItemDto(
-                tier=tier.value, label=item.label, amount_minor=item.amount_minor, sort_order=order,
-            )))
-        self._audit.schedule(
-            action=AuditActionType.ADMIN_CONFIG_CHANGED,
-            resource_type="pricing_line_items", resource_id=tier.value, actor_id=admin_id,
-            details={"tier": tier.value, "count": len(items)},
-        )
-        return written
-
     # ── helpers ───────────────────────────────────────────────────
+
+    @staticmethod
+    def _validate_pricing(price_minor: int, items: List[LineItemInputDto]) -> None:
+        if price_minor < 0:
+            raise ValidationException(message="The price cannot be negative.")
+        if any(item.amount_minor < 0 for item in items):
+            raise ValidationException(message="A line item cannot be negative.")
+        if any(not item.label.strip() for item in items):
+            raise ValidationException(message="Every line item needs a label.")
+        # No amounts in the message: `naira` shows whole naira, so a few kobo out would read
+        # as "₦70,000, not ₦70,000".
+        if items and sum(item.amount_minor for item in items) != price_minor:
+            raise ValidationException(message="The line items must add up to exactly the tier's price.")
 
     async def _tier_dto(self, tier: VerificationTier) -> PricingTierDto:
         return PricingTierDto(

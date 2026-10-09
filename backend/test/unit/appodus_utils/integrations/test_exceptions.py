@@ -52,6 +52,6 @@ class TestIntegrationExceptionEnvelope:
     def test_a_rejected_payload_is_422_not_502(self):
         exc = IntegrationValidationException("bad payload")
 
-        assert exc.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert exc.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert exc.code == "INTEGRATION_VALIDATION_ERROR"
         assert "bad payload" in str(exc)

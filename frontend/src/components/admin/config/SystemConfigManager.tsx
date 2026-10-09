@@ -9,14 +9,15 @@ import {
   useSetSystemConfigMutation,
   useSystemConfigQuery,
 } from "@components/admin/config/libs/useSystemConfigQueries";
-import { ConfigKey, SystemConfigItem } from "@/types/systemConfig";
+import { ConfigKey, ConfigUnit, SystemConfigItem } from "@/types/systemConfig";
 import { getErrorMessage } from "@lib/errors";
-import { humanizeEnumLabel } from "@lib/utils";
+import { humanizeEnumLabel, majorToMinor, minorToMajorText } from "@lib/utils";
 
 /**
  * Admin system-config CRUD (§14/§18.5, D28). Backend owns defaults, coercion and validation;
  * each row is a typed business knob (dispute window, re-check pricing, commission margin, remote
- * bonus, …). A refused save shows the backend's reason.
+ * bonus, …). The backend declares each key's unit, so money stored in kobo is read and typed in
+ * naira here. A refused save shows the backend's reason.
  */
 export default function SystemConfigManager() {
   const { data, isLoading, isError } = useSystemConfigQuery();
@@ -45,18 +46,38 @@ export default function SystemConfigManager() {
   );
 }
 
+/** How a value is shown and typed, by the unit the backend declares for its key. */
+const UNIT_INPUT: Record<ConfigUnit, { prefix?: string; suffix?: string }> = {
+  [ConfigUnit.MINOR_CURRENCY]: { prefix: "₦" },
+  [ConfigUnit.MAJOR_CURRENCY]: { prefix: "₦" },
+  [ConfigUnit.PERCENT]: { suffix: "%" },
+};
+
+/** The text the input starts from: money stored in kobo is typed in naira. */
+function initialText(item: SystemConfigItem): string {
+  return item.unit === ConfigUnit.MINOR_CURRENCY ? minorToMajorText(Number(item.value)) : String(item.value ?? "");
+}
+
+/** The value to send, in the unit the backend stores; undefined when the text is not valid. */
+function toStoredValue(item: SystemConfigItem, text: string): number | undefined {
+  if (item.unit === ConfigUnit.MINOR_CURRENCY) return majorToMinor(text);
+  const num = Number(text);
+  return text.trim() === "" || Number.isNaN(num) ? undefined : num;
+}
+
 function ConfigRow({ item }: { item: SystemConfigItem }) {
-  const [value, setValue] = useState(String(item.value ?? ""));
+  const [value, setValue] = useState(() => initialText(item));
   const setConfig = useSetSystemConfigMutation();
-  const dirty = value !== String(item.value ?? "");
+  const dirty = value !== initialText(item);
+  const affix = item.unit ? UNIT_INPUT[item.unit] : {};
   const save = () => {
-    const num = Number(value);
-    if (Number.isNaN(num)) {
-      toast.error("Enter a valid number.");
+    const stored = toStoredValue(item, value);
+    if (stored === undefined) {
+      toast.error(item.unit === ConfigUnit.MINOR_CURRENCY ? "Enter an amount in naira." : "Enter a valid number.");
       return;
     }
     setConfig.mutate(
-      { key: item.key as ConfigKey, value: num },
+      { key: item.key as ConfigKey, value: stored },
       {
         onSuccess: () => toast.success("Setting saved"),
         // A refusal (e.g. a remote bonus or minimum margin the commission margin cannot meet)
@@ -72,12 +93,16 @@ function ConfigRow({ item }: { item: SystemConfigItem }) {
         {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
       </div>
       <div className="flex items-center gap-2">
+        {affix.prefix && <span className="text-sm text-muted-foreground">{affix.prefix}</span>}
         <Input
           className="w-28"
+          inputMode="decimal"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          aria-label={humanizeEnumLabel(item.key)}
           data-testid={`config-${item.key}`}
         />
+        {affix.suffix && <span className="text-sm text-muted-foreground">{affix.suffix}</span>}
         <Button size="sm" disabled={!dirty || setConfig.isPending} onClick={save}>
           Save
         </Button>

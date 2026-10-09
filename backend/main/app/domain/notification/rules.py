@@ -8,11 +8,19 @@ domains are not built yet (dispute/payout/re-check) are declared but not yet pub
 """
 from __future__ import annotations
 
+import enum
 from dataclasses import dataclass
 from typing import Dict, Optional
 
 from main.app.core.events.events import EventType
 from main.appodus_utils.integrations.messaging.templating.models import AvailableTemplate
+
+
+class NotificationDelivery(str, enum.Enum):
+    """When a rule's email/SMS leaves."""
+
+    IMMEDIATE = "IMMEDIATE"   # sent while the event is handled
+    QUEUED = "QUEUED"         # stored for the message drain, sent within a minute by the sweep tick
 
 
 @dataclass(frozen=True)
@@ -42,6 +50,10 @@ class NotificationRule:
     template: Optional[AvailableTemplate] = None
     whatsapp: bool = False
     whatsapp_template: Optional[AvailableTemplate] = None
+    # QUEUED for an event that reaches a whole audience at once: its email/SMS rows are written
+    # in the event's transaction and sent by the drain, so the fan-out never waits on a provider.
+    # Preferences, `required_email` and the in-app entry are unaffected.
+    delivery: NotificationDelivery = NotificationDelivery.IMMEDIATE
 
 
 _T = AvailableTemplate
@@ -99,8 +111,11 @@ RULES: Dict[EventType, NotificationRule] = {
     EventType.ABANDONMENT_RECOVERY: NotificationRule(
         in_app=False, email=True, template=_T.VERIFICATION_ABANDONMENT_RECOVERY
     ),
-    # Admin broadcast to an audience (§18.1): in-app + email, per-recipient (S22).
-    EventType.BROADCAST_ANNOUNCEMENT: NotificationRule(email=True, template=_T.ADMIN_BROADCAST),
+    # Admin broadcast to an audience (§18.1): in-app + email, per-recipient (S22). Queued: one
+    # event carries a whole fan-out page, and its emails go out through the drain.
+    EventType.BROADCAST_ANNOUNCEMENT: NotificationRule(
+        email=True, template=_T.ADMIN_BROADCAST, delivery=NotificationDelivery.QUEUED,
+    ),
     # Admin
     EventType.CONFLICT_FLAGGED: NotificationRule(in_app=True),
     EventType.AGENT_NO_SHOW: NotificationRule(in_app=True),

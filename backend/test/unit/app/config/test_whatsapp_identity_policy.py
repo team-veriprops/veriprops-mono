@@ -35,6 +35,7 @@ def _settings(**over):
         OTP_MODE=OtpMode.RANDOM,
         AUTHJWT_SECRET_KEY="a-strong-unique-key",
         WHATSAPP_PROVIDER=WhatsAppProvider.META,
+        SWEEP_TRIGGER_SECRET="a-strong-sweep-secret",
         **_META_IDS,
     )
     base.update(over)

@@ -21,7 +21,6 @@ class TestNewSettingsDefaults:
         assert settings.OAUTH_STATE_TTL_SECONDS == 60 * 10
         assert settings.OAUTH_JWKS_CACHE_SECONDS == 60 * 5
         assert settings.OAUTH_CLIENT_SECRET_JWT_TTL_SECONDS == 60 * 5
-        assert settings.SIGNUP_DRAFT_TTL_DAYS == 7
         assert settings.AGENT_APPLICATION_DRAFT_TTL_DAYS == 30
         assert settings.VERIFICATION_ABANDONMENT_AGE_HOURS == 24
         assert settings.IDEMPOTENCY_KEY_TTL_HOURS == 24

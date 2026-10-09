@@ -6,6 +6,7 @@ from kink import di
 from libre_fastapi_jwt import AuthJWT
 
 from main.app.domain.user.admin_invitation.models import (
+    AdminInvitationIssuedDto,
     AdminInvitationSummaryDto,
     InviteAdminRequestDto,
     InvitePreviewDto,
@@ -26,22 +27,21 @@ session_service: SessionService = di[SessionService]
 user_service: UserService = di[UserService]
 
 
-@admin_invitation_router.post("", response_model=SuccessResponse[dict])
+@admin_invitation_router.post("", response_model=SuccessResponse[AdminInvitationIssuedDto])
 async def invite_admin(
     req: InviteAdminRequestDto,
     request: Request,
     admin_id: str = Depends(require_permission(Permission.INVITE_ADMIN)),
 ):
-    raw_token = await invitation_service.invite(
+    """Invite an admin: the invitee is emailed the link, and the Super Admin gets it back too,
+    to pass on by hand when `emailSent` is false."""
+    issued = await invitation_service.invite(
         email=req.email, sub_role=req.sub_role, invited_by=admin_id,
+        link_base=ClientUtils.get_referer_domain(request),
         first_name=req.first_name, last_name=req.last_name,
         ip_address=ClientUtils.get_client_ip(request),
     )
-    domain = ClientUtils.get_referer_domain(request)
-    invite_url = f"{domain}/auth/admin-invite/{raw_token}"
-    # The link is returned to the inviting Super Admin to deliver.
-    # TODO(gap): admin-invitation email — no template sends the link yet — PRD "Known Gaps & Roadmap".
-    return SuccessResponse[dict](data={"inviteUrl": invite_url})
+    return SuccessResponse[AdminInvitationIssuedDto](data=issued)
 
 
 @admin_invitation_router.get("", response_model=SuccessResponse[Page[AdminInvitationSummaryDto]])

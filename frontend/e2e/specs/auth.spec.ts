@@ -247,18 +247,22 @@ test.describe("UAT-AUTH — signup funnel @P0", () => {
     expect(snapshot?.personas).toContain(UserPersona.CUSTOMER);
   });
 
-  test("UAT-AUTH-10 · a half-finished signup resumes where the user left off", async ({ page }) => {
+  test("UAT-AUTH-10 · a half-finished signup resumes without keeping the password", async ({ page }) => {
     const account = newAccount();
     await goto(page, ROUTES.AUTH.SIGNUP);
     await fillAccountStep(page, account);
     await expect(page.getByTestId("verify-form")).toBeVisible();
 
-    // Losing the tab mid-wizard must not cost the user what they already typed.
+    // Losing the tab mid-wizard must not cost the user what they already typed...
     await goto(page, ROUTES.AUTH.SIGNUP);
 
     await expect(page.getByTestId("signup-resumed")).toBeVisible();
-    await expect(page.getByTestId("verify-form")).toBeVisible();
-    await expect(page.getByTestId("verify-email-input")).toHaveValue(account.email);
+    await expect(page.getByTestId("signup-email")).toHaveValue(account.email);
+    await expect(page.getByTestId("signup-first-name")).toHaveValue(account.firstName);
+    // ...but the password is asked for again, because it is never stored in the browser.
+    await expect(page.getByTestId("signup-password")).toHaveValue("");
+    const stored = await page.evaluate(() => JSON.stringify({ ...localStorage }));
+    expect(stored).not.toContain(account.password);
   });
 });
 

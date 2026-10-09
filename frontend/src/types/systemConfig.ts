@@ -30,9 +30,17 @@ export enum ConfigKey {
   OFFLINE_RESPONSE_HOURS = "offline_response_hours",
 }
 
+/** What a value counts — mirrors ConfigUnit in app/domain/system_config/models.py. No unit: a plain count. */
+export enum ConfigUnit {
+  MINOR_CURRENCY = "MINOR_CURRENCY", // stored in kobo; read and typed in naira
+  MAJOR_CURRENCY = "MAJOR_CURRENCY", // stored and shown in whole naira
+  PERCENT = "PERCENT",
+}
+
 export interface SystemConfigItem {
   key: ConfigKey;
   value: number | string | boolean | null;
+  unit?: ConfigUnit | null;
   description?: string;
   dateUpdated?: string;
 }

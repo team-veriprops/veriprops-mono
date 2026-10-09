@@ -8,7 +8,7 @@ from kink import inject, di
 
 from main.app.config.settings import settings
 from main.app.domain.message.models import UpsertMessageDto
-from main.app.domain.message.service import MessageService
+from main.app.domain.message.service import MessageQueueService, MessageService
 from main.appodus_utils.exception.faults import log_fault_once
 from main.appodus_utils.integrations.exception.exceptions import (
     IntegrationException,
@@ -26,9 +26,9 @@ from main.appodus_utils.integrations.messaging.services.rate_limiting import Rat
 logger: logging.Logger = di['logger']
 
 _EXPIRED_ERROR = "Expired before delivery (expires_at passed) — not re-dispatched"
-# How long a retry sweep holds a row it took. Far longer than one send, so an overlapping
-# run never re-sends it; short enough that a row whose sweep died is retried soon after.
-_RETRY_LEASE = timedelta(minutes=5)
+# How long a drain holds a row it took. Far longer than one send, so an overlapping run
+# never re-sends it; short enough that a row whose drain died is retried soon after.
+_DRAIN_LEASE = timedelta(minutes=5)
 
 
 @dataclass()
@@ -39,16 +39,28 @@ class BulkSendResult:
     failures: List[Exception] = field(default_factory=list)
 
 
+def dispatch_delivered(result: Optional[BulkSendResult]) -> bool:
+    """A dispatch counts as delivered once at least one channel reported success.
+
+    `send_bulk` buckets failures rather than raising, so an all-channels-failed dispatch returns
+    normally — the successes list is the only thing that distinguishes it from a real send.
+    None (nothing dispatched: no usable channel, or outbound messaging off) is not delivered.
+    """
+    return bool(result is not None and result.successes)
+
+
 @inject
 class MessagingService:
     def __init__(
             self,
             router: MessageRouter,
             message_service: MessageService,
+            message_queue: MessageQueueService,
             rate_limiter: RateLimiter,
     ):
         self.router = router
         self.message_service = message_service
+        self.message_queue = message_queue
         self.rate_limiter = rate_limiter
         self.throttler = Throttler(rps_limit=settings.MESSAGING_RPS_LIMIT)
 
@@ -137,55 +149,86 @@ class MessagingService:
             processing_time=processing_time
         )
 
-    async def process_retries(self, max_batch_size: int = 100) -> Dict[str, Any]:
-        """Re-dispatch RETRYING messages whose next_retry_at has passed.
+    async def enqueue_bulk(self, requests: List[MessageRequest]) -> BulkSendResult:
+        """Queue each message for the drain instead of sending it now (`delivery=QUEUED`).
 
-        Runs from the scheduler sweep (and the admin sweeps endpoint). Each row is
-        re-sent through MessageRouter — fresh provider selection, per-provider
-        circuits. Outcomes: SENT on success; RETRYING with the next interval rung
-        on transient failure; FAILED permanently once the interval ladder is
-        exhausted or the message's expires_at horizon would be crossed. Rows whose
-        expires_at already passed are failed without dispatching (a late OTP or
-        reset link is useless — or worse, stale).
+        Each is rendered exactly as a send would be and stored as a PENDING row due now
+        (`next_retry_at`), in the caller's transaction. Nothing reaches a provider here: the next
+        `drain_due_messages` sends it. A row that cannot be stored raises, because a queued
+        message has no other copy.
+        """
+        start = datetime.now(timezone.utc)
+        queued: List[UpsertMessageDto] = []
+        for request in requests:
+            message = UpsertMessageDto.from_request(request)
+            message.status = MessageStatus.PENDING
+            message.next_retry_at = datetime.now(timezone.utc)
+            await self.message_queue.enqueue(message)
+            queued.append(message)
+        return BulkSendResult(
+            total=len(requests),
+            successes=queued,
+            processing_time=(datetime.now(timezone.utc) - start).total_seconds(),
+        )
+
+    async def drain_due_messages(self) -> Dict[str, Any]:
+        """Send every message whose turn has come: queued deliveries and due retries.
+
+        Runs from the sweep tick every minute (and the admin sweeps endpoint), at most
+        `MESSAGING_DRAIN_BATCH_SIZE` rows, `MESSAGING_BULK_CONCURRENCY` at a time. Each row is
+        leased before it is sent, and re-sent through MessageRouter (fresh provider selection,
+        per-provider circuits). Outcomes: SENT on success; RETRYING with the next interval rung
+        on transient failure; FAILED permanently once the ladder is exhausted or the message's
+        expires_at horizon would be crossed. Rows whose expires_at already passed are failed
+        without dispatching (a late OTP or reset link is useless, or worse, stale).
         """
         now = datetime.now(timezone.utc)
-        ready = await self.message_service.get_retry_ready_messages(now, max_batch_size)
+        due = await self.message_service.get_due_messages(now, settings.MESSAGING_DRAIN_BATCH_SIZE)
         stats = {"processed": 0, "retried": 0, "permanent_failures": 0, "expired": 0}
+        sem = asyncio.Semaphore(settings.MESSAGING_BULK_CONCURRENCY)
 
-        for message in ready.items:
-            # Leased first: a row an overlapping run already took is left to it, so no
-            # message is re-sent twice.
-            if not await self.message_service.lease_retry(message.id, now, now + _RETRY_LEASE):
-                continue
-            if message.expires_at and message.expires_at <= datetime.now(timezone.utc):
-                await self.message_service.mark_message_failed(message.id, _EXPIRED_ERROR)
-                stats["expired"] += 1
-                continue
+        async def _drain_one(message: UpsertMessageDto) -> None:
+            async with sem:
+                outcome = await self._send_due(message, now)
+                if outcome:
+                    stats[outcome] += 1
 
-            try:
-                start_time = datetime.now(timezone.utc)
-                result = await self.router.send_message(message)
-                self._track_success(message, result, start_time)
-                await self.message_service.update_message_sent(
-                    message.id, datetime.now(timezone.utc), result
-                )
-                stats["processed"] += 1
-            except Exception as e:
-                logger.warning("Retry dispatch failed for message '{}': {}", message.id, e)
-                error_msg = f"{e.__class__.__name__}: {str(e)}"[:500]
-                retries_done = (message.retry_count or 0) + 1
-                next_retry_at = self._next_retry_at(message, retries_done)
-                if next_retry_at is None:
-                    await self.message_service.mark_message_failed(message.id, error_msg)
-                    stats["permanent_failures"] += 1
-                else:
-                    await self.message_service.schedule_message_retry(
-                        message.id, retry_count=retries_done,
-                        next_retry_at=next_retry_at, error=error_msg,
-                    )
-                    stats["retried"] += 1
-
+        await asyncio.gather(*[_drain_one(message) for message in due])
         return stats
+
+    async def _send_due(self, message: UpsertMessageDto, now: datetime) -> Optional[str]:
+        """Send one due row; the stats key for what happened, or None when another run has it."""
+        # Leased first: a row an overlapping run already took is left to it, so no message is
+        # sent twice.
+        if not await self.message_service.lease_due(message.id, now, now + _DRAIN_LEASE):
+            return None
+        if message.expires_at and message.expires_at <= datetime.now(timezone.utc):
+            await self.message_service.mark_message_failed(message.id, _EXPIRED_ERROR)
+            return "expired"
+
+        try:
+            start_time = datetime.now(timezone.utc)
+            result = await self.router.send_message(message)
+            self._track_success(message, result, start_time)
+            await self.message_service.update_message_sent(
+                message.id, datetime.now(timezone.utc), result
+            )
+            return "processed"
+        except Exception as e:
+            logger.warning("Drained dispatch failed for message '{}': {}", message.id, e)
+            error_msg = f"{e.__class__.__name__}: {str(e)}"[:500]
+            # A queued row's first attempt is this one, so it fails onto the first rung exactly
+            # as an immediate send would; a retry moves one rung on.
+            retries_done = 0 if message.status == MessageStatus.PENDING else (message.retry_count or 0) + 1
+            next_retry_at = self._next_retry_at(message, retries_done)
+            if next_retry_at is None:
+                await self.message_service.mark_message_failed(message.id, error_msg)
+                return "permanent_failures"
+            await self.message_service.schedule_message_retry(
+                message.id, retry_count=retries_done,
+                next_retry_at=next_retry_at, error=error_msg,
+            )
+            return "retried"
 
     async def get_message_status(self, message_id: str) -> UpsertMessageDto:
         """Get current message status, syncing from provider if pending."""

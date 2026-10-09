@@ -15,7 +15,7 @@ from libre_fastapi_jwt import AuthJWT
 
 from main.app.core.state.status import AgentRole, VerificationTier
 from main.app.domain.audit.models import AuditActivityPageDto
-from main.app.domain.commission_rule.service import CommissionRuleService
+from main.app.domain.commission_rule.service import CommissionRuleService, payable_commission_minor
 from main.app.domain.verification.task.evidence.models import EvidenceDto, EvidenceItem, EvidenceKind
 from main.app.domain.verification.task.evidence.service import EvidenceService
 from main.app.domain.verification.task.models import (
@@ -37,13 +37,16 @@ evidence_service: EvidenceService = di[EvidenceService]
 commission_rule_service: CommissionRuleService = di[CommissionRuleService]
 
 
-def _agent_task_dto(t: VerificationTask, evidence_count: int, commission_minor: int, case_on_hold: bool = False) -> AgentTaskDto:
+def _agent_task_dto(
+    t: VerificationTask, evidence_count: int, live_commission_minor: int, case_on_hold: bool = False,
+) -> AgentTaskDto:
+    """The card shows the role's live rate until the agent accepts, then the rate they locked."""
     return AgentTaskDto(
         id=t.id, verification_id=t.verification_id, role=AgentRole(t.role),
         tier=VerificationTier(t.tier), state=TaskState(t.state), in_pool=bool(t.in_pool),
         assignment_mode=TaskAssignmentMode(t.assignment_mode) if t.assignment_mode else None,
         accept_deadline_at=t.accept_deadline_at, remote_bonus_minor=t.remote_bonus_minor,
-        commission_minor=commission_minor,
+        commission_minor=payable_commission_minor(t.commission_minor, live_commission_minor),
         submission_payload=t.submission_payload, rejection_reason=t.rejection_reason,
         evidence_count=evidence_count, case_on_hold=case_on_hold, assigned_at=t.assigned_at,
         accepted_at=t.accepted_at, submitted_at=t.submitted_at,
@@ -53,12 +56,12 @@ def _agent_task_dto(t: VerificationTask, evidence_count: int, commission_minor: 
 async def _to_agent_dto(
     t: VerificationTask, commission_minor: Optional[int] = None, case_on_hold: Optional[bool] = None,
 ) -> AgentTaskDto:
-    """The agent's view of a task, with what it pays (§20.1). A list passes the commission it
-    already read for every role; a single task looks its role's figure up."""
+    """The agent's view of a task, with what it pays (§20.1). A list passes the live commission
+    it already read for every role; a single task looks its figure up (none when it is locked)."""
     # t.id is a uuid.UUID on the ORM row; the evidence reference column is hex text.
     evidence_count = await evidence_service.count_for_task(Utils.uuid_to_hex(t.id))
     if commission_minor is None:
-        commission_minor = await commission_rule_service.commission_minor(AgentRole(t.role))
+        commission_minor = await commission_rule_service.payable_minor(AgentRole(t.role), t.commission_minor)
     if case_on_hold is None:
         case_on_hold = await task_service.is_case_on_hold(t.verification_id)
     return _agent_task_dto(t, evidence_count, commission_minor, case_on_hold)

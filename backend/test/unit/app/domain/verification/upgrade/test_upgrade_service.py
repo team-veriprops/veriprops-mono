@@ -17,6 +17,9 @@ from main.appodus_utils.exception.exceptions import (
 )
 from test.utils.repo_fakes import fake_claim_transition
 
+# Service tests assert on what is announced; the real subscribers don't run on a mock session.
+pytestmark = pytest.mark.usefixtures("published_events")
+
 
 @pytest.fixture(autouse=True)
 def mock_db_session():

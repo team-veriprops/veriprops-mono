@@ -172,10 +172,3 @@ export interface UserConsent {
   ipAddress?: string;
   deviceFingerprint?: string;
 }
-
-export interface SignupDraft {
-  email: string;
-  step: number;
-  payload: Record<string, unknown>;
-  dateUpdated: string;
-}

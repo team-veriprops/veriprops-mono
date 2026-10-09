@@ -6,7 +6,7 @@ locked prices stay untouched), the server-derived analytics endpoints, broadcast
 """
 from __future__ import annotations
 
-from .harness import QA_PASSWORD, Ctx, check, login, login_status, signup_fresh_user
+from .harness import QA_PASSWORD, Ctx, check, login, login_status, signup_fresh_user, skip_unless_ci
 
 
 def run(ctx: Ctx) -> None:
@@ -14,9 +14,15 @@ def run(ctx: Ctx) -> None:
 
     # ── Phase-18 pricing exit criterion (§18.2, D36) ─────────────
     pricing = admin.get("/admin/pricing").json()["data"]
-    basic_before = next(t for t in pricing["tiers"] if t["tier"] == "BASIC")["priceNgnMinor"]
+    basic = next(t for t in pricing["tiers"] if t["tier"] == "BASIC")
+    basic_before = basic["priceNgnMinor"]
+    basic_items = _restorable_items(basic)
     new_price = basic_before + 111_100  # ₦1,111 bump, distinctive
-    admin.put("/admin/pricing/tiers/BASIC", json={"priceNgnMinor": new_price}).raise_for_status()
+    # The price and its breakdown are one edit (§18.1): the bump carries a breakdown that adds up.
+    admin.put("/admin/pricing/tiers/BASIC", json={
+        "priceNgnMinor": new_price,
+        "lineItems": [{"label": "Verification service fee", "amountMinor": new_price}],
+    }).raise_for_status()
     fresh_quote = customer.get("/verifications/quote", params={"tier": "BASIC", "currency": "NGN"}).json()["data"]
     check("admin price edit reflects in the NEXT quote (§18.2 exit criterion)",
           fresh_quote["priceNgnMinor"] == new_price,
@@ -35,7 +41,8 @@ def run(ctx: Ctx) -> None:
           locked["priceLockedMinor"] != new_price)
 
     # Put the price back: /dev/reset keeps pricing, so a bump left here outlives the run.
-    restored = admin.put("/admin/pricing/tiers/BASIC", json={"priceNgnMinor": basic_before})
+    restored = admin.put("/admin/pricing/tiers/BASIC",
+                         json={"priceNgnMinor": basic_before, "lineItems": basic_items})
     back = next(t for t in admin.get("/admin/pricing").json()["data"]["tiers"]
                 if t["tier"] == "BASIC")["priceNgnMinor"]
     check("the BASIC price is restored after the pricing checks",
@@ -69,7 +76,12 @@ def run(ctx: Ctx) -> None:
         "scheduledAt": "2020-01-01T00:00:00Z"}).json()["data"]
     check("scheduled broadcast is SCHEDULED (§18.1)", scheduled["status"] == "SCHEDULED")
     swept = admin.post("/admin/broadcasts/sweeps/scheduled").json()["data"]
-    check("scheduled-broadcast sweep sends due ones (§18.1)", swept["sent"] >= 1, f"sent={swept['sent']}")
+    check("scheduled-broadcast sweep starts due ones and fans them out (§18.1)",
+          swept["started"] >= 1 and swept["pages"] >= 1, str(swept))
+    after_sweep = admin.get(f"/admin/broadcasts/{scheduled['id']}").json()["data"]
+    check("a small scheduled broadcast is SENT once its pages are out, with nothing left to do (§18.1)",
+          after_sweep["status"] == "SENT" and after_sweep["allowedActions"] == []
+          and after_sweep["recipientsEnqueued"] == after_sweep["recipientCount"] >= 1, str(after_sweep))
 
     # ── Broadcast hardening (§18.1, D37): audience resolution, idempotency, cancel guard ──
     preview = admin.get("/admin/broadcasts/preview", params={"audience": "CUSTOMERS"}).json()["data"]
@@ -86,6 +98,7 @@ def run(ctx: Ctx) -> None:
         notes = c.get("/notifications").json()["data"]["items"]
         check(f"{who} customer received the CUSTOMERS announcement (§18.1)",
               any(n.get("title") == "Announcement" for n in notes))
+    _check_broadcast_email_is_queued_then_drained(ctx, admin)
     replay = admin.post(f"/admin/broadcasts/{cust_bc['id']}/send").json()["data"]
     seeded_count = len([n for n in ctx.seed_customer.get("/notifications").json()["data"]["items"]
                         if n.get("title") == "Announcement"])
@@ -194,14 +207,54 @@ def _trust_score_weights(admin) -> None:
     check("saving a valid map keeps the tier valid (§8.3)", kept["valid"] and kept["totalPercent"] == 100)
 
 
+def _restorable_items(tier: dict) -> list:
+    """The tier's line items in the shape a save takes, so the run can put them back. Items saved
+    before price and breakdown became one edit may not add up to the price, and a save now refuses
+    that; such a tier is restored with one item covering the whole price."""
+    items = [{"label": li["label"], "amountMinor": li["amountMinor"]} for li in tier["lineItems"]]
+    if items and sum(i["amountMinor"] for i in items) != tier["priceNgnMinor"]:
+        return [{"label": "Verification service fee", "amountMinor": tier["priceNgnMinor"]}]
+    return items
+
+
 def _line_items(admin, customer) -> None:
-    """A tier's itemised breakdown is replaced as a set (§18.1), and restored afterwards."""
+    """A tier's itemised breakdown is saved with its price and must add up to it (§18.1); the
+    tier is restored afterwards."""
     tier = next(t for t in admin.get("/admin/pricing").json()["data"]["tiers"] if t["tier"] == "STANDARD")
-    before = [{"label": li["label"], "amountMinor": li["amountMinor"]} for li in tier["lineItems"]]
-    replacement = [{"label": "Registry search", "amountMinor": 100_000}, {"label": "Field visit", "amountMinor": 200_000}]
-    saved = admin.put("/admin/pricing/tiers/STANDARD/line-items", json={"lineItems": replacement}).json()["data"]
+    price = tier["priceNgnMinor"]
+    before = {"priceNgnMinor": price, "lineItems": _restorable_items(tier)}
+    replacement = [{"label": "Registry search", "amountMinor": price - 200_000},
+                   {"label": "Field visit", "amountMinor": 200_000}]
+    saved = admin.put("/admin/pricing/tiers/STANDARD",
+                      json={"priceNgnMinor": price, "lineItems": replacement}).json()["data"]
     standard = next(t for t in saved["tiers"] if t["tier"] == "STANDARD")
     check("a tier's line items are replaced as a set, in order (§18.1)",
           [(li["label"], li["amountMinor"]) for li in standard["lineItems"]]
-          == [("Registry search", 100_000), ("Field visit", 200_000)], f"items={standard['lineItems']}")
-    admin.put("/admin/pricing/tiers/STANDARD/line-items", json={"lineItems": before}).raise_for_status()
+          == [("Registry search", price - 200_000), ("Field visit", 200_000)], f"items={standard['lineItems']}")
+    mismatched = admin.put("/admin/pricing/tiers/STANDARD", json={
+        "priceNgnMinor": price + 100_000, "lineItems": replacement})
+    after = next(t for t in admin.get("/admin/pricing").json()["data"]["tiers"] if t["tier"] == "STANDARD")
+    check("line items that do not add up to the price are refused, and change nothing (§18.1)",
+          mismatched.status_code == 422 and after["priceNgnMinor"] == price,
+          f"http {mismatched.status_code} price={after['priceNgnMinor']}")
+    admin.put("/admin/pricing/tiers/STANDARD", json=before).raise_for_status()
+
+
+def _check_broadcast_email_is_queued_then_drained(ctx: Ctx, admin) -> None:
+    """A broadcast's email is queued for the message drain, never sent inside the fan-out
+    (`delivery=QUEUED`): the row is PENDING with a due time, and the drain sends it."""
+    def latest() -> dict:
+        return ctx.root.get("/dev/messages/latest", params={"recipient": ctx.customer_email}).json()["data"]
+
+    queued = latest()
+    if not queued.get("found"):
+        skip_unless_ci("no outbound message rows — broadcast queue checks skipped",
+                       "run the backend with ENABLE_OUT_MESSAGING=True to cover queued delivery")
+        return
+    check("a broadcast email is queued, not sent in the request (§18.1, delivery=QUEUED)",
+          queued["status"] == "pending" and queued["next_retry_at_set"], str(queued))
+    drained = admin.post("/messages/sweeps/retries").json()["data"]
+    check("the message drain sends queued emails (§18.1)", drained["processed"] >= 1, str(drained))
+    sent = latest()
+    check("…and the queued broadcast email is now SENT", sent["id"] == queued["id"] and sent["status"] == "sent",
+          str(sent))

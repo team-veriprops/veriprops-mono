@@ -123,11 +123,13 @@ def build_report_content(
             body=_render_payload(payload),
         ))
 
-    # Risk summary aggregates any per-role risk signals for a quick scan.
+    # Risk summary aggregates any per-role risk signals for a quick scan. The lawyer's level
+    # is part of the legal opinion, so it is withheld whenever the opinion is (D18).
     risk_bits = [
-        f"{_ROLE_SECTION_TITLE.get(AgentRole(r), r)}: {p.get('risk_level')}"
+        f"{_ROLE_SECTION_TITLE.get(AgentRole(r), r)}: {_humanize(str(p['risk_level']).lower())}"
         for r, p in findings.items()
         if isinstance(p, dict) and p.get("risk_level") and AgentRole(r) in tier_roles
+        and (AgentRole(r) != AgentRole.LAWYER or legal_included)
     ]
     sections.append(ReportSectionDto(
         key="risk_summary", title="Risk Summary",

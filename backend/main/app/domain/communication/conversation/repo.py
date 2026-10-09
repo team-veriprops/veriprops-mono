@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple, Type
 
 from kink import inject
-from sqlalchemy import String, and_, cast, desc, func, or_, select
+from sqlalchemy import String, and_, cast, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.communication.conversation.models import (
@@ -25,6 +25,7 @@ from main.app.domain.communication.conversation_participant.repo import (
 )
 from main.app.domain.user.models import User
 from main.appodus_utils.db.repo import GenericRepo
+from main.appodus_utils.db.search import contains_text
 
 
 @inject
@@ -174,16 +175,15 @@ class ConversationRepo(
             conditions.append(Conversation.channel == ConversationChannel.WHATSAPP.value)
         elif inbox_filter == AdminInboxFilter.CASES:
             conditions.append(Conversation.type.in_(_CASE_TYPES))
-        if query and query.strip():
-            like = f"%{query.strip()}%"
-            conditions.append(
-                or_(
-                    Conversation.external_ref.ilike(like),
-                    Conversation.subject.ilike(like),
-                    func.concat(User.first_name, " ", User.last_name).ilike(like),
-                    User.email.ilike(like),
-                )
-            )
+        search = contains_text(
+            query,
+            Conversation.external_ref,
+            Conversation.subject,
+            func.concat(User.first_name, " ", User.last_name),
+            User.email,
+        )
+        if search is not None:
+            conditions.append(search)
         return stmt.where(and_(*conditions))
 
     async def _admin_inbox_rows(self, stmt) -> List[AdminInboxRow]:

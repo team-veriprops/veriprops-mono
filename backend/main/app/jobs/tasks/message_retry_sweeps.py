@@ -1,13 +1,13 @@
-"""Outbound-message retry sweep (messaging delivery pipeline).
+"""Outbound-message drain (messaging delivery pipeline).
 
-Re-dispatches ``RETRYING`` messages whose ``next_retry_at`` has passed; the
-backoff ladder (``MESSAGING_RETRY_INTERVALS_SECONDS``) and the ``expires_at``
-horizon for time-bound content (OTPs, reset links) live in ``MessagingService``.
-This module wraps ``process_retries`` in an ``ALWAYS_NEW`` transactional job
-(fresh session per sweep). Cadence is registered in ``app/jobs/scheduled.py``
-(every minute — the first ladder rung defaults to 60s); disabled under test —
-tests use the admin ``POST /messages/sweeps/retries`` endpoint or call
-``process_retries`` directly.
+Sends every message whose ``next_retry_at`` has passed: queued deliveries (PENDING, a
+broadcast's emails) and due retries (RETRYING). The backoff ladder
+(``MESSAGING_RETRY_INTERVALS_SECONDS``) and the ``expires_at`` horizon for time-bound
+content (OTPs, reset links) live in ``MessagingService``. This module wraps
+``drain_due_messages`` in an ``ALWAYS_NEW`` transactional job (fresh session per run).
+Cadence is registered in ``app/jobs/registry.py`` (every minute — the first ladder rung
+defaults to 60s); nothing runs it under test — tests use the admin
+``POST /messages/sweeps/retries`` endpoint or call ``drain_due_messages`` directly.
 """
 from __future__ import annotations
 
@@ -31,19 +31,18 @@ logger: Logger = di['logger']
     transactional(session_policy=TransactionSessionPolicy.ALWAYS_NEW), exclude=['__init__']
 )
 class MessageRetrySweepJobs:
-    """Fresh-session wrapper around the outbound-message retry sweep: re-dispatches
-    RETRYING messages whose next_retry_at has passed (backoff ladder + expires_at
-    horizon live in MessagingService)."""
+    """Fresh-session wrapper around the outbound-message drain: sends queued deliveries and
+    due retries (backoff ladder + expires_at horizon live in MessagingService)."""
 
     def __init__(self, messaging_service: MessagingService):
         self._messaging_service = messaging_service
 
     @exclusive_job("message_retries")
     async def run_message_retry_sweep(self) -> Optional[dict]:
-        return await self._messaging_service.process_retries()
+        return await self._messaging_service.drain_due_messages()
 
 
 async def check_message_retries() -> None:
     stats = await di[MessageRetrySweepJobs].run_message_retry_sweep()
     if stats and any(stats.values()):
-        logger.info("message-retry sweep: {}", stats)
+        logger.info("message drain: {}", stats)

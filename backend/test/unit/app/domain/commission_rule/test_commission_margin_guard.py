@@ -31,14 +31,17 @@ def mock_db_session():
 
     session.begin = _begin
     session.flush = AsyncMock()
+    session.execute = AsyncMock()  # the global margin advisory lock
     token = db_session_ctx.set(session)
     yield session
     db_session_ctx.reset(token)
 
 
-def _guard(commissions=None, prices=None, margin=None, bonus=None):
+def _guard(commissions=None, prices=None, margin=None, bonus=None, first_time_pct=0, max_discount_pct=0):
     """A guard over stored rows. Commissions default to the seeded per-role amounts (what
-    migration 0002 leaves); prices and the margin default to no row, i.e. their fallbacks."""
+    migration 0002 leaves); prices, the margin and the bonus default to no row, i.e. their
+    fallbacks. Discounts default to none stored at 0%, so a test about something else measures
+    the margin on the list price; pass None to read the seeded discount defaults."""
     commissions = DEFAULT_ROLE_COMMISSION_NGN_KOBO if commissions is None else commissions
     guard = object.__new__(CommissionMarginGuard)
     guard._commission_rule_repo = AsyncMock()
@@ -54,6 +57,8 @@ def _guard(commissions=None, prices=None, margin=None, bonus=None):
     stored_config = {
         ConfigKey.COMMISSION_MIN_MARGIN_PCT.value: margin,
         ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO.value: bonus,
+        ConfigKey.FIRST_TIME_DISCOUNT_PERCENT.value: first_time_pct,
+        ConfigKey.MAX_DISCOUNT_PERCENT.value: max_discount_pct,
     }
     guard._system_config_repo.get_by_key = AsyncMock(side_effect=lambda key: (
         SimpleNamespace(value_json=stored_config[key]) if stored_config.get(key) is not None else None
@@ -137,3 +142,88 @@ class TestGuardCheck:
         )
         with pytest.raises(ValidationException, match="Basic"):
             await guard.check()
+
+    async def test_every_check_takes_the_margin_lock_first(self, monkeypatch):
+        """Two admins saving at once (a commission raise and a price cut, say) would each pass
+        against the other's stale value and together breach the margin; the global lock makes
+        them take turns, so the second check reads what the first wrote."""
+        import main.app.domain.commission_rule.margin as module
+
+        order = []
+        monkeypatch.setattr(module, "advisory_xact_lock", AsyncMock(side_effect=lambda name: order.append(name)))
+        guard = _guard()
+        guard._commission_rule_repo.list_all.side_effect = lambda: order.append("read") or []
+        await guard.check()
+        assert order[0] == "commission_margin"
+        assert order.count("commission_margin") == 1
+
+
+class TestDiscounts:
+    """A discounted case still pays every agent in full (§20.1 / D97), so the margin is measured
+    on the least the platform can collect: the price after the largest discount a customer can
+    get (the first-time discount, topped up by referral credit to the combined cap)."""
+
+    def test_the_seeded_defaults_survive_the_worst_discount(self):
+        breach = find_margin_breach(
+            TIER_PRICE_NGN_KOBO, DEFAULT_ROLE_COMMISSION_NGN_KOBO,
+            CONFIG_DEFAULTS[ConfigKey.COMMISSION_MIN_MARGIN_PCT],
+            first_time_pct=CONFIG_DEFAULTS[ConfigKey.FIRST_TIME_DISCOUNT_PERCENT],
+            max_discount_pct=CONFIG_DEFAULTS[ConfigKey.MAX_DISCOUNT_PERCENT],
+        )
+        assert breach is None
+
+    def test_the_margin_is_measured_on_the_discounted_price(self):
+        # BASIC: ₦30,000 of ₦50,000 leaves 40% undiscounted, but a 25% discount collects ₦37,500
+        # and keeps ₦7,500 — 20%, below a 30% minimum.
+        commissions = {**DEFAULT_ROLE_COMMISSION_NGN_KOBO, AgentRole.REGISTRY: 3_000_000}
+        assert find_margin_breach(TIER_PRICE_NGN_KOBO, commissions, 30) is None
+        breach = find_margin_breach(TIER_PRICE_NGN_KOBO, commissions, 30, max_discount_pct=25)
+        assert breach is not None and breach.tier == VerificationTier.BASIC
+        assert (breach.price_minor, breach.net_minor) == (5_000_000, 3_750_000)
+        assert round(breach.margin_pct) == 20
+
+    def test_a_first_time_discount_above_the_cap_is_the_worst_case(self):
+        # The first-time discount is applied in full even past the combined cap; only referral
+        # credit is held to it. So 40% first-time with a 25% cap collects only 60%: ₦30,000, of
+        # which ₦22,000 paid keeps 26%. Held to the cap it would have kept 41%.
+        commissions = {AgentRole.REGISTRY: 2_200_000}
+        prices = {VerificationTier.BASIC: 5_000_000}
+        assert find_margin_breach(prices, commissions, 30, max_discount_pct=25) is None
+        breach = find_margin_breach(prices, commissions, 30, first_time_pct=40, max_discount_pct=25)
+        assert breach is not None and breach.net_minor == 3_000_000
+
+    def test_exactly_at_the_minimum_on_the_net_passes(self):
+        # ₦40,000 net (20% off ₦50,000), ₦28,000 paid → ₦12,000 kept = 30% of the net.
+        commissions = {**DEFAULT_ROLE_COMMISSION_NGN_KOBO, AgentRole.REGISTRY: 2_800_000}
+        assert find_margin_breach({VerificationTier.BASIC: 5_000_000}, commissions, 30, max_discount_pct=20) is None
+
+    def test_the_refusal_never_rounds_up_to_the_minimum_it_misses(self):
+        # ₦50,000 with ₦35,200 paid keeps ₦14,800 = 29.6%. Rounded, that would read "(30%), below
+        # the 30% minimum" — a contradiction; the figure is cut to one decimal instead.
+        breach = find_margin_breach({VerificationTier.BASIC: 5_000_000}, {AgentRole.REGISTRY: 3_520_000}, 30)
+        assert breach is not None
+        assert "(29.6%)" in breach.message()
+
+    def test_the_refusal_names_the_discount(self):
+        breach = find_margin_breach(TIER_PRICE_NGN_KOBO, {AgentRole.REGISTRY: 3_000_000}, 30, max_discount_pct=25)
+        assert "after the largest discount" in breach.message()
+
+    async def test_reads_the_stored_discounts(self):
+        with pytest.raises(ValidationException, match="Basic"):
+            await _guard(commissions={**DEFAULT_ROLE_COMMISSION_NGN_KOBO, AgentRole.REGISTRY: 3_000_000},
+                         max_discount_pct=25).check()
+
+    async def test_falls_back_to_the_seeded_discounts(self):
+        # No stored discount rows: the 10% / 25% defaults apply, and break BASIC here.
+        with pytest.raises(ValidationException, match="Basic"):
+            await _guard(commissions={**DEFAULT_ROLE_COMMISSION_NGN_KOBO, AgentRole.REGISTRY: 3_000_000},
+                         first_time_pct=None, max_discount_pct=None).check()
+
+    async def test_refuses_a_discount_raise_that_breaks_a_tier(self):
+        with pytest.raises(ValidationException, match="Basic"):
+            await _guard().check(max_discount_pct=70)
+        with pytest.raises(ValidationException, match="Basic"):
+            await _guard().check(first_time_pct=70)
+
+    async def test_a_modest_discount_passes(self):
+        await _guard().check(first_time_pct=10, max_discount_pct=25)

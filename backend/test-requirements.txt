@@ -11,8 +11,8 @@ boto3[crt]>=1.43.6,<1.44.0
 # psycopg>=3.2.6,<3.3.0
 argon2_cffi>=25.1.0,<25.2.0
 passlib>=1.7.4,<1.8.0
-# The same pin as requirements.txt, whose note carries the python-jose → PyJWT gap (§G.2).
-python-jose[cryptography]>=3.5.0,<3.6.0
+# The same pin as requirements.txt.
+PyJWT[crypto]>=2.10.0,<3.0.0
 httpx>=0.28.1,<0.29.0
 anthropic>=1.2.0,<1.3.0  # bot intent classifier, ANTHROPIC adapter only (PRD §7.6, D53)
 pytz>=2026.2,<2027.0
