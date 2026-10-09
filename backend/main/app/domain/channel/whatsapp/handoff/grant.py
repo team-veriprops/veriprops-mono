@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Request, Response
-from jose import JWTError, jwt
+import jwt
 from pydantic import BaseModel
 
 from main.app.config.settings import settings
@@ -104,7 +104,7 @@ def read_grant(request: Request, intent: HandoffIntent) -> Optional[HandoffGrant
             intent=HandoffIntent(payload["intent"]),
             expires_at=payload["exp"],
         )
-    except (JWTError, KeyError, ValueError):
+    except (jwt.InvalidTokenError, KeyError, ValueError):
         return None
 
     # A grant for one action never satisfies another, even for the same case.

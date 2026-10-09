@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Optional, Type
 
 from kink import inject
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,3 +25,10 @@ class PropertyRepo(
     ):
         super().__init__(db, model, query_dto)
         self.db = db
+
+    async def state_of(self, property_id: Optional[str]) -> Optional[str]:
+        """The property's state, for matching an agent's coverage (None when unknown)."""
+        if not property_id:
+            return None
+        prop = await self.get_model(property_id)
+        return prop.state if prop is not None else None

@@ -1,6 +1,6 @@
 # Progress Tracker — Pending issues after PR #26 (2026-10-01 → 07)
 
-status: **Stages 1–8 complete.** Stage 1 shipped as PR #27, and the dev deploy migrated 0002 → 0007. Stages 2–8 are on `fix/pending-issues`, one commit group per stage, in one PR to `dev`.
+status: **Stages 1–9 complete.** Stage 1 shipped as PR #27, and the dev deploy migrated 0002 → 0007. Stages 2–9 are on `fix/pending-issues`, one commit group per stage, in one PR to `dev`.
 
 | Stage | Change | Migration | Decision |
 | --- | --- | --- | --- |
@@ -13,18 +13,19 @@ status: **Stages 1–8 complete.** Stage 1 shipped as PR #27, and the dev deploy
 | 7 | Paged broadcast fan-out, `delivery=QUEUED`, message drain | `0011_broadcast_fanout` | D101 |
 | 7b | Bus savepoints + `atomic` events, atomic broadcast pages, job retries; payout email recorded as SENT | `0012_retries` | D102 |
 | 8 | Docs (MASTER-PRD §4.8, this file, uat-strategy) and the PR | — | — |
+| 9 | Every remaining issue: only a qualifying agent takes a task (one eligibility rule); generic repo reads flush first (and a lean read by id no longer returns deleted rows); the suite fails on a swallowed subscriber fault (60 found, in 4 files); python-jose → PyJWT with one OAuth ID-token verifier; the D97 config rows on every database; margin % never rounds up to the minimum; config list via `effective_config_value`; pytest warnings 940 → 0. The six-engine run found two more, both fixed: `/dev/scenario` drew QA phone numbers blind from a million-number range and collided on `uq_users_phone_e164` (UAT-RBAC-04's 500), now `free_qa_local_phones`; and the sign-out helper polled for an overlay that lives a frame or two (UAT-SESS-04), now recorded page-side across the redirect | `0013_d97_config_rows` | D103 |
 
 **Final gate on the branch head:**
 
 | Gate | Result |
 | --- | --- |
-| pytest | **4031 passed** (2615 at the audit's S0 baseline) |
-| ruff, mypy | clean (625 files) |
-| eslint, tsc | clean |
+| pytest | **4080 passed, 0 warnings** (was 940 warnings; 2615 tests at the audit's S0 baseline) |
+| ruff, mypy | clean (627 files) |
+| eslint, tsc | clean (no frontend change in Stage 9) |
 | vitest | **920 passed**, 151 files |
-| alembic | round trip + `alembic check` on `veriprops_e2e`, head `0012_retries` |
-| drive-through | **703/703** (new checks: invite email, sweep tick, broadcast drain, payout email SENT) |
-| Playwright (chromium-desktop + webkit-mobile, HTTPS, full suite) | **162/162**, no retries |
+| alembic | round trip + `alembic check` on `veriprops_e2e`, head `0013_d97_config_rows` |
+| drive-through | **709/709** (new checks: invite email, sweep tick, broadcast drain, payout email SENT, agent IDOR, pool eligibility) |
+| Playwright (HTTPS, full suite, **all six engines**) | **362/362**, no retries (parallel lane 338, serial lane 24) |
 
 **User actions** are listed in the PR body. The new ones this cycle: put `SWEEP_TRIGGER_SECRET` in each backend Doppler config (staging and production refuse to boot without it), and add the repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for `deploy-sweep-cron`. The sandbox register below gains row 20, the Worker.
 
@@ -567,10 +568,13 @@ The PRD states this.
 
 **Logged, not done:**
 
-- Pricing line items are not checked against the tier price, so a quote's breakdown can fail to add up to its total.
-- The consent-history endpoint returns its own page shape instead of `Page[T]`.
-- Other create-then-list-in-one-request paths may miss rows the same way the notes did (autoflush off).
-- Agent-side ownership (IDOR) is enforced in services against the database, so it is left to S9's `rbac` spec rather than the unit guard.
+- ~~Pricing line items are not checked against the tier price.~~ Fixed in the pending-issues cycle (D99).
+- ~~The consent-history endpoint returns its own page shape instead of `Page[T]`.~~ Fixed in the same cycle.
+- ~~Other create-then-list-in-one-request paths may miss rows (autoflush off).~~ Fixed in Stage 9 of
+  that cycle: every generic read flushes first.
+- ~~Agent-side ownership (IDOR) is left to S9's `rbac` spec.~~ Covered in Stage 9: unit tests on every
+  owned action, drive-through checks that a second agent reaches none of them, and D103's
+  eligibility rule on accept and assign.
 
 **Stage review** (`/code-review high`): no finding in the S8 changes. All ten findings are in the fixed-commission commit `030afb6` (the parallel session's work this branch is rebased onto). They are for the user to schedule:
 
@@ -584,6 +588,12 @@ The PRD states this.
 8. The guard duplicates the service's commission and config reads.
 9. `list_all` bypasses `effective_config_value`.
 10. Accrual queries the rule once per task.
+
+Outcome (pending-issues cycle): 1–5 fixed in Stage 3 (D99). 6, 7 and 9 fixed in Stage 9 (the
+percentage is cut to one decimal, never rounded up; migration `0013`; `effective_config_value`). 10 is
+fixed by the accept-time lock, since a task now pays its locked figure and reads the rule only when it
+has none. 8 is kept by design: the guard reads repositories so all three writing services can depend on
+it without an import cycle (see `commission_rule/margin.py`).
 
 **Gate:**
 
@@ -1261,7 +1271,8 @@ cut the first one short.
 5. **2.2 h for the parallel lane is slow.** Try the native Caddy path
    (`UAT_UPSTREAM=localhost:3001 caddy run --config e2e/tls/Caddyfile`, see
    `docs/uat-strategy.md`), which skips Docker Desktop's container→host hop — the likely cost.
-6. Outside this track: GitHub reports 44 Dependabot alerts (4 critical) on the default branch.
+6. ~~Outside this track: GitHub reports 44 Dependabot alerts (4 critical) on the default branch.~~
+   Resolved: on 2026-10-08 GitHub listed 87 alerts, all `fixed`, none open.
 
 ### Runtime state left behind (concurrency track)
 
@@ -1457,7 +1468,8 @@ list's items 2, 3 and 6. The native-Caddy perf item (5) was skipped by user deci
 
 - Native Caddy (pending item 5): skipped by user decision. Given the timing above, re-measure
   before investing in it.
-- `python-jose` → PyJWT (MASTER-PRD §G.2).
+- ~~`python-jose` → PyJWT (MASTER-PRD §G.2).~~ Done in the pending-issues cycle (Stage 9); `ecdsa`
+  is no longer installed.
 - CI hardware is still unmeasured against these budgets.
 
 ### Follow-on: 0018/0019 folded into `0001` (D96, 2026-09-26)

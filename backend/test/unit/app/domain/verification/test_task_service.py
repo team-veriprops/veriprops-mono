@@ -12,6 +12,7 @@ from main.app.config.settings import settings
 from main.app.core.state.status import AgentRole, TaskState, VerificationStatus, VerificationTier
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.system_config.models import ConfigKey
+from main.app.domain.user.agent.eligibility import Ineligibility
 from main.app.domain.verification.task.models import TaskAssignmentMode
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.appodus_utils.db.session import db_session_ctx
@@ -19,6 +20,9 @@ from main.appodus_utils.exception.exceptions import (
     InvalidResourceStateException,
     ValidationException,
 )
+
+# Service tests assert on what is announced; the real subscribers don't run on a mock session.
+pytestmark = pytest.mark.usefixtures("published_events")
 
 
 @pytest.fixture(autouse=True)
@@ -61,7 +65,7 @@ def _task(role, state=TaskState.PENDING, agent=None, **over):
 def _verification(status=VerificationStatus.PAID, tier=VerificationTier.STANDARD, closure_reason=None):
     return SimpleNamespace(
         id="v-1", vid="VP-2026-0001", status=status.value, tier=tier.value,
-        customer_id="cust-1", closure_reason=closure_reason,
+        customer_id="cust-1", closure_reason=closure_reason, property_id="prop-1",
     )
 
 
@@ -124,6 +128,9 @@ def _make_service(verification, tasks):
     svc._task_repo.count_active_for_agent = AsyncMock(return_value=0)
     svc._task_repo.list_accept_deadline_expired = AsyncMock(return_value=[])
     svc._task_repo.list_pool_expired = AsyncMock(return_value=[])
+    # Every agent here qualifies unless a test says otherwise (the rule has its own tests).
+    svc._eligibility = MagicMock()
+    svc._eligibility.check = AsyncMock(return_value=None)
     svc._state = state
     return svc
 
@@ -330,6 +337,80 @@ class TestAgentExecution:
         svc = _make_service(_verification(), [mine])
         with pytest.raises(ValidationException):
             await svc.submit(mine.id, "agent-9", _valid_payload(AgentRole.FIELD))
+
+
+class TestWhoMayWorkATask:
+    """Only an approved agent cleared for the role may take a task (§11.2/§11.3). A pool task
+    also needs the agent in area for a location-bound role; an admin may send an agent out of
+    area on purpose (a remote job), so an assignment and its accept skip that check."""
+
+    async def test_a_pool_task_refuses_an_agent_who_does_not_qualify(self):
+        pooled = _task(AgentRole.FIELD, TaskState.PENDING, in_pool=True)
+        svc = _make_service(_verification(), [pooled])
+        svc._eligibility.check = AsyncMock(return_value=Ineligibility.NOT_APPROVED)
+        with pytest.raises(ValidationException, match="approved agent"):
+            await svc.accept(pooled.id, "customer-1")
+        assert pooled.state == TaskState.PENDING.value and pooled.assigned_agent_id is None
+        svc._eligibility.check.assert_awaited_once_with(
+            "customer-1", AgentRole.FIELD, "prop-1", require_coverage=True,
+        )
+
+    async def test_a_pool_task_out_of_area_names_the_reason(self):
+        pooled = _task(AgentRole.FIELD, TaskState.PENDING, in_pool=True)
+        svc = _make_service(_verification(), [pooled])
+        svc._eligibility.check = AsyncMock(return_value=Ineligibility.OUT_OF_AREA)
+        with pytest.raises(ValidationException, match="coverage area"):
+            await svc.accept(pooled.id, "agent-1")
+
+    async def test_accepting_an_assignment_rechecks_the_role_but_not_the_area(self):
+        assigned = _task(AgentRole.FIELD, TaskState.ASSIGNED, agent="agent-1")
+        svc = _make_service(_verification(), [assigned])
+        await svc.accept(assigned.id, "agent-1")
+        svc._eligibility.check.assert_awaited_once_with(
+            "agent-1", AgentRole.FIELD, "prop-1", require_coverage=False,
+        )
+
+    async def test_a_lapsed_role_cannot_accept_its_assignment(self):
+        assigned = _task(AgentRole.SURVEYOR, TaskState.ASSIGNED, agent="agent-1")
+        svc = _make_service(_verification(), [assigned])
+        svc._eligibility.check = AsyncMock(return_value=Ineligibility.ROLE_INACTIVE)
+        with pytest.raises(ValidationException, match="SURVEYOR"):
+            await svc.accept(assigned.id, "agent-1")
+
+    async def test_a_task_off_the_pool_and_unassigned_waits_for_an_admin(self):
+        # Escalated off the pool by the starvation sweep: an admin targets it, no one self-serves.
+        escalated = _task(AgentRole.FIELD, TaskState.PENDING, in_pool=False)
+        svc = _make_service(_verification(), [escalated])
+        with pytest.raises(ValidationException, match="admin"):
+            await svc.accept(escalated.id, "agent-1")
+        assert escalated.assigned_agent_id is None
+
+    async def test_an_admin_cannot_assign_someone_who_does_not_qualify(self):
+        svc = _make_service(_verification(), [_task(AgentRole.REGISTRY)])
+        svc._eligibility.check = AsyncMock(return_value=Ineligibility.ROLE_INACTIVE)
+        with pytest.raises(ValidationException, match="REGISTRY"):
+            await svc.assign("v-1", AgentRole.REGISTRY, "agent-1", "admin-1")
+        svc._eligibility.check.assert_awaited_once_with(
+            "agent-1", AgentRole.REGISTRY, "prop-1", require_coverage=False,
+        )
+
+    @pytest.mark.parametrize("act", [
+        lambda svc, tid: svc.decline(tid, "agent-9", reason=None),
+        lambda svc, tid: svc.start(tid, "agent-9"),
+        lambda svc, tid: svc.add_evidence(tid, "agent-9", file_bytes=b"x", kind="PHOTO"),
+        lambda svc, tid: svc.submit(tid, "agent-9", _valid_payload(AgentRole.FIELD)),
+        lambda svc, tid: svc.list_evidence(tid, "agent-9"),
+        lambda svc, tid: svc.task_history(tid, "agent-9"),
+    ], ids=["decline", "start", "evidence", "submit", "list-evidence", "history"])
+    async def test_another_agents_task_is_out_of_reach(self, act):
+        mine = _task(AgentRole.FIELD, TaskState.IN_PROGRESS, agent="agent-1")
+        svc = _make_service(_verification(), [mine])
+        svc._audit.get_activity_log = AsyncMock()
+        svc._evidence.list_for_task = AsyncMock()
+        with pytest.raises(ValidationException, match="not assigned to you"):
+            await act(svc, mine.id)
+        svc._evidence.list_for_task.assert_not_awaited()
+        svc._audit.get_activity_log.assert_not_awaited()
 
 
 class TestCommissionLock:

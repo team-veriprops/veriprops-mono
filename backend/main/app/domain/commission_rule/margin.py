@@ -20,6 +20,7 @@ can depend on it without a cycle. `test_margin_guard_coverage.py` fails on any w
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Dict, Mapping, Optional
 
@@ -59,6 +60,13 @@ class MarginBreach:
         kept = self.net_minor - self.commissions_minor
         return 100 * kept / self.net_minor if self.net_minor else 0.0
 
+    @property
+    def margin_pct_text(self) -> str:
+        """The margin cut (never rounded) to one decimal, so a figure just under the minimum
+        never reads as the minimum itself: 29.96% shows as 29.9%, not 30%."""
+        tenths = math.floor(self.margin_pct * 10) / 10
+        return f"{tenths:g}%"
+
     def message(self) -> str:
         kept = self.net_minor - self.commissions_minor
         paid_as = "agent commissions and remote bonuses" if self.remote_bonus_minor else "agent commissions"
@@ -69,7 +77,7 @@ class MarginBreach:
         )
         return (
             f"{self.tier.value.capitalize()} would keep {naira(kept)} of the {collected} after "
-            f"paying {naira(self.commissions_minor)} in {paid_as} ({self.margin_pct:.0f}%), below "
+            f"paying {naira(self.commissions_minor)} in {paid_as} ({self.margin_pct_text}), below "
             f"the {self.min_margin_pct}% minimum margin."
         )
 

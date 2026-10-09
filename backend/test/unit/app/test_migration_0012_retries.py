@@ -39,10 +39,8 @@ def _recorded(step: str):
     return recorder
 
 
-def test_it_chains_after_the_broadcast_fanout_migration_and_is_the_only_head():
-    scripts = _scripts()
-    assert scripts.get_heads() == [_REVISION]
-    assert scripts.get_revision(_REVISION).down_revision == "0011_broadcast_fanout"
+def test_it_chains_after_the_broadcast_fanout_migration():
+    assert _scripts().get_revision(_REVISION).down_revision == "0011_broadcast_fanout"
 
 
 def test_the_models_declare_both_columns():

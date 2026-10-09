@@ -31,6 +31,9 @@ from main.appodus_utils.db.types.money import TransactionCurrency
 from main.appodus_utils.exception.exceptions import IllegalStateTransitionException
 from test.utils.repo_fakes import fake_claim_transition
 
+# Service tests assert on what is announced; the real subscribers don't run on a mock session.
+pytestmark = pytest.mark.usefixtures("published_events")
+
 # System-config defaults the discount math reads (§17.1).
 _CONFIG_VALUES = {
     ConfigKey.FIRST_TIME_DISCOUNT_PERCENT: 10,

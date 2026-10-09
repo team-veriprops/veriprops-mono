@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from jose import jwt
+import jwt
 
 from main.app.domain.channel.whatsapp.handoff.models import HandoffIntent
 from main.app.domain.channel.whatsapp.handoff.tokens import (
@@ -135,7 +135,7 @@ class TestScope:
     def test_is_not_a_session(self):
         # Completing the action must never log anyone in, so the token deliberately
         # carries no role, persona, or session claim to be mistaken for one.
-        payload = jwt.get_unverified_claims(token())
+        payload = jwt.decode(token(), options={"verify_signature": False})
         assert set(payload) == {"sub", "case", "intent", "jti", "exp", "iat"}
 
 
@@ -155,11 +155,11 @@ class TestLinkTokenShape:
         assert claims.sub is None and claims.case is None
 
     def test_a_link_token_carries_no_case_claim_on_the_wire(self):
-        payload = jwt.get_unverified_claims(issue_link_token(PHONE))
+        payload = jwt.decode(issue_link_token(PHONE), options={"verify_signature": False})
         assert set(payload) == {"phone", "intent", "jti", "exp", "iat"}
 
     def test_an_action_token_carries_no_phone_claim_on_the_wire(self):
-        assert "phone" not in jwt.get_unverified_claims(token())
+        assert "phone" not in jwt.decode(token(), options={"verify_signature": False})
 
     def test_a_link_token_cannot_be_read_as_authority_over_a_case(self):
         claims = decode_handoff_token(issue_link_token(PHONE))
@@ -257,7 +257,7 @@ class TestIntakeTokenShape:
     def test_it_carries_no_case_claim_on_the_wire(self):
         """D71 — the collected answers stay server-side, so a forwarded link leaks no
         property details and the URL stays short enough for a chat message."""
-        payload = jwt.get_unverified_claims(issue_intake_token(PHONE))
+        payload = jwt.decode(issue_intake_token(PHONE), options={"verify_signature": False})
         assert set(payload) == {"phone", "intent", "jti", "exp", "iat"}
 
     def test_it_cannot_be_read_as_authority_over_a_case(self):

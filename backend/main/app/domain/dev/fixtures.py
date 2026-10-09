@@ -10,9 +10,9 @@ from __future__ import annotations
 import secrets
 from datetime import datetime
 from functools import lru_cache
-from typing import Dict, Iterable
+from typing import Dict, Iterable, List
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from main.appodus_utils.db.types.money import TransactionCurrency
 from main.app.config.settings import settings
@@ -29,7 +29,7 @@ from main.app.domain.user.auth.session.models import UserPersona, UserType
 from main.app.domain.user.models import AdminSubRole, User
 from main.appodus_utils import Utils
 # Fixture contact details come from ranges the messaging router sinks on staging.
-from main.appodus_utils.integrations.messaging.qa_recipients import QA_EMAIL_DOMAIN
+from main.appodus_utils.integrations.messaging.qa_recipients import QA_EMAIL_DOMAIN, unique_qa_local_phone
 
 # The password every QA account shares (non-prod only).
 QA_PASSWORD = "Test1234!"
@@ -56,6 +56,32 @@ def seeded_agent_email(role: AgentRole) -> str:
 def unique_qa_email(prefix: str) -> str:
     """A QA email no other fixture holds, so parallel scenarios never collide."""
     return f"{prefix}-{secrets.token_hex(4)}@{QA_EMAIL_DOMAIN}"
+
+
+_HELD_PHONES = text("SELECT phone_e164 FROM users WHERE phone_e164 IN :phones").bindparams(
+    bindparam("phones", expanding=True)
+)
+
+
+async def free_qa_local_phones(session, count: int) -> List[str]:
+    """*count* distinct QA numbers no user holds.
+
+    QA numbers come from a million-number range (the prefix is what marks them as QA), and the
+    database outlives a browser run that creates thousands of fixture users, so a blind draw
+    collides on `uq_users_phone_e164`. Each round asks the database about every candidate at once."""
+    chosen: List[str] = []
+    while len(chosen) < count:
+        candidates = list(dict.fromkeys(
+            phone for phone in (unique_qa_local_phone() for _ in range(count - len(chosen)))
+            if phone not in chosen
+        ))
+        if not candidates:
+            continue
+        held = set((await session.execute(
+            _HELD_PHONES, {"phones": [f"+234{phone}" for phone in candidates]},
+        )).scalars().all())
+        chosen.extend(phone for phone in candidates if f"+234{phone}" not in held)
+    return chosen
 
 
 

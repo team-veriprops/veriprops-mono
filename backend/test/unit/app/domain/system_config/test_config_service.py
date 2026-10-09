@@ -181,6 +181,16 @@ class TestUnits:
         bonus = next(i for i in await svc.list_all() if i.key == ConfigKey.REMOTE_JOB_BONUS_NGN_KOBO)
         assert "kobo" not in bonus.description
 
+    async def test_a_row_holding_no_value_lists_the_default_that_readers_use(self):
+        # The list shows what every reader of the key gets (`effective_config_value`), so a row
+        # with a null value shows the default, not a blank.
+        svc, _ = _service()
+        svc._config_repo.list_all = AsyncMock(return_value=[SimpleNamespace(
+            key=ConfigKey.DISPUTE_WINDOW_DAYS.value, value_json=None, description=None, date_updated=None,
+        )])
+        window = next(i for i in await svc.list_all() if i.key == ConfigKey.DISPUTE_WINDOW_DAYS)
+        assert window.value == CONFIG_DEFAULTS[ConfigKey.DISPUTE_WINDOW_DAYS]
+
     async def test_the_unit_travels_as_camel_case(self):
         svc, _ = _service()
         svc._config_repo.list_all = AsyncMock(return_value=[])

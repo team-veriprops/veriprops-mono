@@ -9,6 +9,7 @@
   a claim, read off the one transition table.
 """
 import uuid
+from typing import Optional
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,7 +18,7 @@ from sqlalchemy.dialects import postgresql
 from main.app.core.state.machine import verification_state_machine
 from main.app.core.state.status import VerificationStatus
 from main.app.domain.payout.models import Payout, PayoutStatus
-from main.appodus_utils.db.models import Object
+from main.appodus_utils.db.models import InternalPageRequest, Object
 from main.appodus_utils.db.repo import GenericRepo
 from main.appodus_utils.db.session import db_session_ctx
 from test.utils.repo_fakes import fake_claim_transition
@@ -212,3 +213,77 @@ class TestPendingChangesSurvive:
         await UserRepo(db=None).add_persona(PAYOUT_ID.hex, UserPersona.AGENT)
         await PasswordResetTokenRepo(db=None).consume("h", datetime.now(timezone.utc))
         assert ordered.calls == ["flush", "execute", "flush", "execute"]
+
+
+class TestReadsSeeThisRequestsWrites:
+    """A row created or edited earlier in the same request is only in the session until it is
+    flushed, and autoflush is off — so a read that queries the database would miss it (an admin
+    note added, then the notes list returned without it). Every generic read flushes first."""
+
+    @pytest.fixture
+    def ordered(self):
+        s = MagicMock()
+        s.calls = []
+
+        async def _flush():
+            s.calls.append("flush")
+
+        async def _execute(stmt, *args, **kwargs):
+            s.calls.append("execute")
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = None
+            result.scalar.return_value = None
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        async def _scalar(stmt, *args, **kwargs):
+            s.calls.append("execute")
+            return 0
+
+        s.flush = AsyncMock(side_effect=_flush)
+        s.execute = AsyncMock(side_effect=_execute)
+        s.scalar = AsyncMock(side_effect=_scalar)
+        token = db_session_ctx.set(s)
+        yield s
+        db_session_ctx.reset(token)
+
+    @staticmethod
+    def _repo():
+        return GenericRepo(db=None, model=Payout, query_qto=_Dto)
+
+    async def test_a_list_flushes_before_it_queries(self, ordered):
+        await self._repo().get_all(_Search())
+        assert ordered.calls == ["flush", "execute"]
+
+    async def test_a_page_flushes_before_its_rows_and_count(self, ordered):
+        await self._repo().get_page(_Search())
+        assert ordered.calls == ["flush", "execute", "execute"]
+
+    async def test_a_read_by_id_flushes_first(self, ordered):
+        await self._repo().get_model(PAYOUT_ID)
+        assert ordered.calls == ["flush", "execute"]
+
+    async def test_an_existence_check_flushes_first(self, ordered):
+        await self._repo().exists_by_id(PAYOUT_ID)
+        await self._repo().exists_by_criterion(_Search())
+        assert ordered.calls == ["flush", "execute", "flush", "execute"]
+
+
+class _Search(InternalPageRequest):
+    deleted: Optional[bool] = False
+
+
+async def test_a_lean_read_by_id_still_skips_deleted_rows(session):
+    statements = []
+
+    async def _execute(stmt, *args, **kwargs):
+        statements.append(stmt)
+        result = MagicMock()
+        result.first.return_value = (PAYOUT_ID, PayoutStatus.PAID.value)
+        return result
+
+    session.execute = AsyncMock(side_effect=_execute)
+    await GenericRepo(db=None, model=Payout, query_qto=_Dto).get_model(PAYOUT_ID, query_fields="id,status")
+
+    [stmt] = statements
+    assert "payouts.deleted IS false" in _sql(stmt)

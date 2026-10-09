@@ -197,6 +197,13 @@ class TestDiscounts:
         commissions = {**DEFAULT_ROLE_COMMISSION_NGN_KOBO, AgentRole.REGISTRY: 2_800_000}
         assert find_margin_breach({VerificationTier.BASIC: 5_000_000}, commissions, 30, max_discount_pct=20) is None
 
+    def test_the_refusal_never_rounds_up_to_the_minimum_it_misses(self):
+        # ₦50,000 with ₦35,200 paid keeps ₦14,800 = 29.6%. Rounded, that would read "(30%), below
+        # the 30% minimum" — a contradiction; the figure is cut to one decimal instead.
+        breach = find_margin_breach({VerificationTier.BASIC: 5_000_000}, {AgentRole.REGISTRY: 3_520_000}, 30)
+        assert breach is not None
+        assert "(29.6%)" in breach.message()
+
     def test_the_refusal_names_the_discount(self):
         breach = find_margin_breach(TIER_PRICE_NGN_KOBO, {AgentRole.REGISTRY: 3_000_000}, 30, max_discount_pct=25)
         assert "after the largest discount" in breach.message()

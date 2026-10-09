@@ -25,6 +25,7 @@ from main.app.core.state.status import AgentRole, TaskState, VerificationStatus,
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.commission_rule.service import CommissionRuleService
+from main.app.domain.user.agent.eligibility import AgentEligibility, Ineligibility
 from main.app.domain.user.auth.session.models import UserPersona
 from main.app.domain.user.service import UserService
 from main.app.domain.verification.closure.policy import is_on_hold
@@ -58,6 +59,18 @@ _CAPACITY_LOCK = "agent_tasks"
 # Tasks keep their lifecycle in `state`, not `status`.
 _STATE = "state"
 
+# Why a task was refused, told to the agent taking it and to the admin assigning it.
+_REFUSED_TO_AGENT = {
+    Ineligibility.NOT_APPROVED: "Only an approved agent can take this task.",
+    Ineligibility.ROLE_INACTIVE: "You aren't cleared to work the {role} role, or its credential has lapsed.",
+    Ineligibility.OUT_OF_AREA: "This {role} task is outside your coverage area.",
+}
+_REFUSED_TO_ADMIN = {
+    Ineligibility.NOT_APPROVED: "That user is not an approved agent.",
+    Ineligibility.ROLE_INACTIVE: "That agent isn't cleared to work the {role} role, or its credential has lapsed.",
+    Ineligibility.OUT_OF_AREA: "That agent doesn't cover this property's area for the {role} role.",
+}
+
 
 @inject
 @decorate_all_methods(transactional(), exclude=["__init__"], exclude_startswith=["_"])
@@ -72,6 +85,7 @@ class VerificationTaskService:
         audit_service: AuditLogService,
         config_service: ConfigService,
         commission_rule_service: CommissionRuleService,
+        agent_eligibility: AgentEligibility,
     ):
         self._task_repo = task_repo
         self._verification_repo = verification_repo
@@ -80,6 +94,7 @@ class VerificationTaskService:
         self._audit = audit_service
         self._config = config_service
         self._commission_rules = commission_rule_service
+        self._eligibility = agent_eligibility
 
     # ── Instantiation (§4.2 dependency-aware) ─────────────────────
 
@@ -161,6 +176,9 @@ class VerificationTaskService:
                 message="This verification is in a terminal state.",
             )
         self._assert_not_on_hold(verification)
+        # Out of area is allowed: sending an agent out of area is a deliberate remote job.
+        await self._require_eligible(agent_id, role, verification, require_coverage=False,
+                                     messages=_REFUSED_TO_ADMIN)
 
         await self._assert_capacity(agent_id)
 
@@ -255,21 +273,33 @@ class VerificationTaskService:
 
     async def accept(self, task_id: str, agent_id: str) -> VerificationTask:
         """Agent accepts a task (§12.1). Broadcast pool = first-accept-wins (the task
-        must still be unclaimed PENDING); manual = only the assigned agent may accept.
+        must still be unclaimed PENDING) by an agent who qualifies for it, in area for a
+        location-bound role; manual = only the assigned agent may accept, while still cleared
+        for the role. A task off the pool and unassigned waits for an admin to target it.
         Enforces capacity (§6.5) and moves the task to ACCEPTED."""
         task = await self._get_task(task_id)
-        await self._assert_case_not_on_hold(task)
+        verification = await self._verification_repo.get_model(task.verification_id)
+        if verification is not None:
+            self._assert_not_on_hold(verification)
         if task.state == TaskState.ACCEPTED.value and task.assigned_agent_id == agent_id:
             return task  # idempotent re-accept
 
+        role = AgentRole(task.role)
         if task.in_pool:
             # First-accept-wins: guard against a second claimant of the same pool task.
             if task.state != TaskState.PENDING.value or task.assigned_agent_id:
                 raise InvalidResourceStateException(
                     resource="task", message="This task has already been taken."
                 )
-        elif task.assigned_agent_id and task.assigned_agent_id != agent_id:
+            await self._require_eligible(agent_id, role, verification, require_coverage=True,
+                                         messages=_REFUSED_TO_AGENT)
+        elif task.assigned_agent_id is None:
+            raise ValidationException(message="This task is waiting for an admin to assign it.")
+        elif task.assigned_agent_id != agent_id:
             raise ValidationException(message="This task is assigned to another agent.")
+        else:
+            await self._require_eligible(agent_id, role, verification, require_coverage=False,
+                                         messages=_REFUSED_TO_AGENT)
 
         await self._assert_capacity(agent_id)
         self._assert_task_transition(task.state, TaskState.ACCEPTED)
@@ -470,6 +500,18 @@ class VerificationTaskService:
         if not task:
             raise ResourceNotFoundException(resource="task")
         return task
+
+    async def _require_eligible(
+        self, agent_id: str, role: AgentRole, verification: Optional[Verification], *,
+        require_coverage: bool, messages: dict,
+    ) -> None:
+        """Refuse an agent who may not work *role* on this case (§11.2/§11.3)."""
+        reason = await self._eligibility.check(
+            agent_id, role, verification.property_id if verification is not None else None,
+            require_coverage=require_coverage,
+        )
+        if reason is not None:
+            raise ValidationException(message=messages[reason].format(role=role.value))
 
     async def _get_owned_task(self, task_id: str, agent_id: str) -> VerificationTask:
         task = await self._get_task(task_id)

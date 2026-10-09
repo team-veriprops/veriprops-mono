@@ -358,6 +358,7 @@ def _task_service(db_row, read):
     svc._verification_repo = AsyncMock()
     svc._audit = MagicMock()
     svc._commission_rules = MagicMock(commission_minor=AsyncMock(return_value=1_440_000))
+    svc._eligibility = MagicMock(check=AsyncMock(return_value=None))  # every agent qualifies
     svc._derive_and_persist = AsyncMock()
     return svc
 

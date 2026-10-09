@@ -98,7 +98,7 @@ class ConfigService:
             row = stored.get(key.value)
             out.append(SystemConfigDto(
                 key=key,
-                value=row.value_json if row is not None else CONFIG_DEFAULTS.get(key),
+                value=effective_config_value(row.value_json if row is not None else None, key),
                 unit=CONFIG_UNITS.get(key),
                 description=CONFIG_DESCRIPTIONS.get(key) or (row.description if row is not None else None),
                 date_updated=row.date_updated if row is not None else None,

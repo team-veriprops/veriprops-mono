@@ -106,6 +106,18 @@ async def test_an_atomic_event_propagates_the_first_failure(savepoints, faults):
     assert faults == []      # the publisher decides what the failure means
 
 
+@pytest.mark.subscriber_faults_expected
+async def test_the_suite_guard_sees_a_swallowed_subscriber_failure(subscriber_faults):
+    """The root conftest fails any test whose bus logs a subscriber fault it did not expect;
+    this one opts in, so it can check the guard saw the fault."""
+    bus = EventBus()
+    bus.subscribe(_boom)
+
+    await bus.publish(DomainEvent(type=EventType.STATUS_CHANGED))
+
+    assert len(subscriber_faults) == 1 and "_boom" in subscriber_faults[0][1]
+
+
 def test_pure_sse_nudge_has_no_type():
     event = DomainEvent(verification_id="v-1", sse_event="task_updated")
     assert event.type is None

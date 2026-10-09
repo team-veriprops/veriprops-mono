@@ -3129,3 +3129,34 @@ best-effort.
 - A FAILED broadcast has no resume action; the admin composes a new one for those not reached.
 - Faults that were silent now log at ERROR. The first deploy may surface existing ones; each is a
   real fault that used to vanish.
+
+## Decision: D103 — only a qualifying agent may take a task; one rule decides who qualifies
+
+### Context
+The suggested-agents ranking filtered by approval, role, credential and coverage, but nothing else
+did. `POST /agents/tasks/{id}/accept` checked only that the caller was logged in, so anyone holding
+a pool task's id (a customer, a rejected applicant, an agent without the role, or one whose
+credential had lapsed) could accept it, then start it, upload evidence and submit findings. A task
+the starvation sweep took off the pool, which is meant for admin targeting, could be self-accepted
+by any agent. Admin assignment never checked that the assignee was an approved agent with the role.
+No UI exposed the pool, so the gap needed an id obtained elsewhere, but the rule was the server's
+to keep.
+
+### Chosen
+- **One rule** in `user/agent/eligibility.py` (`ineligibility`, `AgentEligibility`): an APPROVED
+  application; the role among `approved_roles` and active under §3.3a (credential current); and,
+  where the caller requires coverage, coverage of the property's state for Field/Surveyor. The
+  suggested-agents ranking, the pool accept and the assignment all call it.
+- **Pool accept:** all three. **Accepting one's own assignment:** approval and role (a credential
+  that lapsed since the assignment refuses the accept). **Admin assignment:** approval and role;
+  out of area is allowed because a remote job is deliberate and carries the remote bonus.
+- **Off the pool and unassigned:** no self-accept; it waits for an admin.
+- Refusals are 422s whose message says why (not an approved agent / role not cleared or credential
+  lapsed / outside coverage), worded for the agent or the admin.
+
+### Tradeoffs
+- An agent with a task in hand whose credential lapses keeps working it; only new accepts are
+  refused. Suspending in-flight work is a separate decision.
+- Agent ownership refusals stay 422s with their message rather than the customer side's 403,
+  because the frontend sends a 403 to `/forbidden`, and an agent meets this honestly when an admin
+  reassigns a task while the page is open.

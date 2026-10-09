@@ -970,6 +970,14 @@ When enabled, tasks are broadcast to qualifying agents at `PAID`; **first accept
 (`PENDING → ACCEPTED`), everyone else sees "no longer available". The accept path re-checks capacity so a
 fast agent cannot hoard jobs.
 
+**Who qualifies** is one rule, shared by the pool, manual assignment and the suggested-agents ranking
+(D103): an approved agent application; the role cleared by an admin, with its required credential
+current (§3.3a); and, for the location-bound Field and Surveyor roles, coverage of the property's state.
+A pool accept must meet all three. An admin's assignment, and the agent's accept of it, check the first
+two only, because sending an agent out of area is a deliberate remote job. A task the starvation sweep
+took off the pool waits for an admin to target it; no agent can self-accept it. Every other action on a
+task is open only to the agent it belongs to.
+
 ### 11.4 Scheduled sweeps
 
 Idempotent, claim-based background jobs, each also triggerable via a dev/admin endpoint for
@@ -2052,7 +2060,6 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Role-specific agent dashboard variants (one unified dashboard today) | `frontend/src/components/agents/dashboard/AgentDashboard.tsx` |
 | Cartographic Nigeria map paths (schematic geo-grid today) | `frontend/src/components/agents/reputation/NigeriaCoverageMap.tsx` |
 | Dead vendored `google_drive` webhook package: `repo.py`/`service.py`/`validator.py` import modules that do not exist, so only `model.py` loads — and it registers `g_drive_webhook_subscriptions` with no migration builder. Inert (nothing reaches it); kept and marked rather than deleted, per D83. Pick up = remove the package (with `GoogleDriveClient`, its only user of a service-account key), or fix the imports, give the table a migration, and move the client to Workload Identity Federation | `backend/main/appodus_utils/domain/webhook/google_drive/model.py`, `backend/main/appodus_utils/integrations/google_drive/google_drive_client.py` |
-| `python-jose` → PyJWT: jose hard-depends on `ecdsa` (PYSEC-2026-1325, timing side channel, no fixed release). Not exploitable here — the `[cryptography]` extra routes every sign/verify (RS256 handoff + OAuth, Apple's ES256 client secret) through `cryptography` — but the Dependabot alert stays open until the five `from jose import` sites (OAuth Google/Apple, WhatsApp handoff grant/tokens, `appodus_utils/common/commons.py`) move to PyJWT | `backend/requirements.txt` |
 | Declared-but-unbuilt routes: admin content CMS (how-it-works / FAQs / testimonials / spotlights / area insights), fraud-flags, dispute/broadcast/task detail pages, portal payments page | `frontend/src/lib/routes.ts` |
 
 ### G.3 Launch gates (business/legal — not code)

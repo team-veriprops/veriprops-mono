@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from jose import JWTError, jwt
+import jwt
 from pydantic import BaseModel, ValidationError, model_validator
 
 from main.app.config.settings import settings
@@ -226,7 +226,7 @@ def decode_handoff_token(token: str) -> HandoffClaims:
             # Pinned: the token's own header never selects the algorithm.
             algorithms=[HANDOFF_ALGORITHM],
         )
-    except JWTError as exc:
+    except jwt.InvalidTokenError as exc:
         raise HandoffTokenError() from exc
 
     try:

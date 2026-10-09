@@ -62,7 +62,7 @@ class IntegrationValidationException(IntegrationException):
         self.message = message
         super().__init__(
             f"Validation error occurred, {self.message}",
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="INTEGRATION_VALIDATION_ERROR",
         )
 #
