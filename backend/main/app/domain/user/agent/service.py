@@ -44,14 +44,15 @@ from main.app.domain.user.agent.profile.models import (
     AvailabilityStatus,
     CreateAgentProfileDto,
 )
-from main.app.domain.user.agent.profile.repo import AgentProfileRepo
+from main.app.domain.user.agent.profile.repo import APPLICATION_SORTABLE, AgentProfileRepo
 from main.app.domain.user.agent.validator import AgentApplicationValidator
 from main.app.domain.user.auth.consent.models import ConsentDocumentType
 from main.app.domain.user.auth.consent.service import ConsentService
 from main.app.domain.user.auth.session.models import UserPersona
 from main.app.domain.user.service import UserService
 from main.appodus_utils import Utils
-from main.appodus_utils.db.models import Page, PaginationMeta
+from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.db.models import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -231,10 +232,10 @@ class AgentService:
 
     async def list_applications(
         self, status: Optional[str] = None, page: int = 0, page_size: int = 10,
-        query: Optional[str] = None,
+        query: Optional[str] = None, order_by: Optional[str] = None,
     ) -> Page[AgentApplicationSummaryDto]:
-        rows, total = await self._profile_repo.page_applications(
-            status=status, offset=page * page_size, limit=page_size, query=query,
+        rows, total, applied = await self._profile_repo.page_applications(
+            status=status, offset=page * page_size, limit=page_size, query=query, order_by=order_by,
         )
         items: List[AgentApplicationSummaryDto] = []
         for p in rows:
@@ -247,19 +248,7 @@ class AgentService:
                 status=AgentApplicationStatus(p.status),
                 submitted_at=p.submitted_at,
             ))
-        total_pages = (total + page_size - 1) // page_size if page_size else 0
-        return Page[AgentApplicationSummaryDto](
-            items=items,
-            meta=PaginationMeta(
-                page=page,
-                page_size=page_size,
-                count=len(items),
-                total=total,
-                total_pages=total_pages,
-                prev_page=page - 1 if page > 0 else None,
-                next_page=page + 1 if (page + 1) < total_pages else None,
-            ),
-        )
+        return DbUtils.build_page(items, total, page, page_size, sort=applied, sortable=APPLICATION_SORTABLE)
 
     async def get_application_detail(self, profile_id: str) -> AgentApplicationDetailDto:
         profile = await self._profile_repo.get_model(profile_id)

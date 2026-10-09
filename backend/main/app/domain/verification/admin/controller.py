@@ -54,11 +54,13 @@ async def list_verifications(
     overdue_only: bool = Query(default=False),
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=10, ge=1, le=100),
+    order_by: Optional[str] = Query(default=None, max_length=64, description="e.g. \"dateCreated desc\""),
     _admin_id: str = Depends(require_permission(Permission.MANAGE_VERIFICATIONS)),
 ):
     result = await admin_service.list_verifications(
         status=status.value if status else None, tier=tier.value if tier else None,
         state_region=state_region, query=query, overdue_only=overdue_only, page=page, page_size=page_size,
+        order_by=order_by,
     )
     return SuccessResponse[Page[VerificationSummaryDto]](data=result)
 

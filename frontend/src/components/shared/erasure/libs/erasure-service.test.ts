@@ -24,11 +24,12 @@ describe("ErasureService contract (mirrors app/domain/compliance/erasure/control
 
   it("admin: lists with status + paging params", async () => {
     const { http, calls } = mockHttp();
-    await new ErasureService(http).list("PENDING", 2, 10);
+    await new ErasureService(http).list("PENDING", 2, 10, "slaDueAt asc");
     expect(calls[0].method).toBe("get");
     expect(calls[0].url).toContain("/admin/erasure-requests?");
     expect(calls[0].url).toContain("page=2");
     expect(calls[0].url).toContain("status=PENDING");
+    expect(calls[0].url).toContain("order_by=slaDueAt+asc");
   });
 
   it("admin: approves, rejects and executes", async () => {

@@ -9,13 +9,6 @@ export interface AuditActivityEvent {
   details?: Record<string, unknown> | null;
 }
 
-export interface AuditActivityPage {
-  items: AuditActivityEvent[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
 /** Full audit row for the admin action log / export (carries actorId + IP). */
 export interface AuditPackRow {
   id: string;
@@ -28,13 +21,6 @@ export interface AuditPackRow {
   occurredAt: string;
   ipAddress?: string | null;
   details?: Record<string, unknown> | null;
-}
-
-export interface AdminActionLogPage {
-  items: AuditPackRow[];
-  total: number;
-  page: number;
-  pageSize: number;
 }
 
 /** The admin-mutation action types surfaced in the action-log filter (§19.6). */

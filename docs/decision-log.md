@@ -3160,3 +3160,38 @@ to keep.
 - Agent ownership refusals stay 422s with their message rather than the customer side's 403,
   because the frontend sends a 403 to `/forbidden`, and an agent meets this honestly when an admin
   reassigns a task while the page is open.
+
+## Decision: D104 — admin lists sort and page on the server, from the backend's own allowlist
+
+### Context
+DataTable had sort headers, but no column was marked sortable and no list endpoint took a sort:
+`order_by` is server-only (`InternalPageRequest`) because `parse_order_by_clause` would sort on
+any column, which is a read oracle. Paging had drifted too: seven services hand-built
+`PaginationMeta` instead of calling `DbUtils.build_page`, the broadcasts list passed a field the
+model does not have (so Next never enabled), the admin team list paged in Python with no order,
+two lists returned a custom `{items, total}` shape, the rows-per-page selector was read by no list,
+and six components hand-rolled prev/next, two of them computing `totalPages` themselves.
+
+### Chosen
+- **Extend the existing utils, add no module.** `DbUtils.parse_order_by_clause` takes an optional
+  allowlist (camelCase wire keys, unknown fields and directions dropped, id tiebreaker appended);
+  `DbUtils.client_order_by` wraps it for one column with a fallback to the list's default and
+  returns the sort applied; `build_page` publishes `meta.sort` and `meta.sortableFields`.
+- **Each list owns its allowlist**, a `*_SORTABLE` set of its own columns beside its repo, with a
+  default equal to its old fixed order. Joined or derived columns (VID on payments, applicant
+  name, state, aftermath, JSON lists) are not sortable.
+- **An invalid sort falls back** to the default rather than failing, so an old link still loads;
+  `meta.sort` tells the table what was applied.
+- **The backend decides which headers sort**: DataTable reads `meta.sortableFields`; the
+  `sortable` column flag is gone.
+- **One page shape and one pager**: every paged response comes from `build_page` (team, audit
+  actions, activity and task history moved to `Page[T]`); every list pages through `ListPager` on
+  `meta.totalPages`; the page size is the shared persisted rows-per-page setting.
+
+### Tradeoffs
+- Single-column sort only, and only on a list's own columns; a joined sort means adding the join
+  in that repo.
+- Enum columns sort by their stored text, so tier sorts alphabetically, not by rank.
+- Rows-per-page is one global choice (default 10), not per table.
+- Page and sort changes replace the URL, so Back leaves the list rather than stepping a page back.
+

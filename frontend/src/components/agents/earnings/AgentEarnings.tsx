@@ -16,6 +16,7 @@ import {
   useEarningsRealtime,
   useEarningsSummaryQuery,
 } from "./libs/useEarningsQueries";
+import ListPager from "@components/ui/ListPager";
 
 const JOB_STATUS_LABEL: Record<string, string> = {
   CLEARING: "Clearing",
@@ -109,16 +110,13 @@ export default function AgentEarnings() {
                   ))}
                 </ul>
               )}
-              <div className="mt-3 flex items-center justify-between">
-                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                  Previous
-                </Button>
-                <span className="text-xs text-muted-foreground">Page {page + 1}</span>
-                <Button variant="outline" size="sm" disabled={pageData.meta.nextPage == null}
-                  onClick={() => setPage((p) => p + 1)}>
-                  Next
-                </Button>
-              </div>
+              <ListPager
+                page={page}
+                totalPages={pageData.meta.totalPages}
+                onPageChange={setPage}
+                className="mt-3"
+                testIdPrefix="earnings-pager"
+              />
             </>
           )}
         </AsyncStateComponent>

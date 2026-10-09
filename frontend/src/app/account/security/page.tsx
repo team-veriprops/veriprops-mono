@@ -6,8 +6,8 @@ import { ShieldAlert, ShieldCheck, Loader2 } from "lucide-react";
 
 import { useSecurityEventsQuery } from "@components/website/auth/libs/useAuthQueries";
 import { SecurityEventType } from "@components/website/auth/models";
-import { Button } from "@3rdparty/ui/button";
 import { humanizeEnumLabel, cn } from "@lib/utils";
+import ListPager from "@components/ui/ListPager";
 
 const PAGE_SIZE = DEFAULT_HISTORY_PAGE_SIZE;
 
@@ -26,7 +26,6 @@ export default function SecurityActivityPage() {
 
   const events = data?.items ?? [];
   const meta = data?.meta;
-  const totalPages = meta?.totalPages ?? 1;
 
   return (
     <div className="max-w-4xl mx-auto px-4 md:px-8 py-8" data-testid="security-events">
@@ -89,29 +88,13 @@ export default function SecurityActivityPage() {
         </ul>
       )}
 
-      {meta && totalPages > 1 && (
-        <div className="flex items-center justify-between mt-6">
-          <Button
-            variant="outline"
-            disabled={page <= 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            data-testid="security-events-prev"
-          >
-            Previous
-          </Button>
-          <span className="text-xs text-brand-on-surface-variant">
-            Page {page + 1} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            disabled={page + 1 >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            data-testid="security-events-next"
-          >
-            Next
-          </Button>
-        </div>
-      )}
+      <ListPager
+        page={page}
+        totalPages={meta?.totalPages ?? 0}
+        onPageChange={setPage}
+        className="mt-6"
+        testIdPrefix="security-events"
+      />
     </div>
   );
 }

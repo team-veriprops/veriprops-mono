@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import { PageShell } from "@components/ui/PageShell";
 import { StatusPill } from "@components/ui/StatusPill";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { useGlobalSettings } from "@stores/useGlobalSettings";
 import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 import { ROUTES } from "@/lib/routes";
-import { Page } from "@/types/models";
+import { emptyPage, Page } from "@/types/models";
 import { AdminPayment, PaymentStatus } from "@/types/verification";
 import { useAdminPaymentsQuery } from "./libs/useFinanceQueries";
 
@@ -61,27 +61,29 @@ interface PaymentsTableState extends Record<string, unknown> {
   page: number;
   query: string;
   status: string;
+  orderBy: string;
 }
 
 /**
  * Finance's payments list (§18.1): every charge and where its money stands — settled, refunded,
  * a refund the gateway refused (still Succeeded on a closed case), or under a chargeback.
- * Search (reference or VID), the status filter and paging all run on the server.
+ * Search (reference or VID), the status filter, sorting and paging all run on the server.
  */
 export default function AdminPayments() {
-  const [tableState, updateTableState] = useSyncedQueryState<PaymentsTableState>({ page: 0, query: "", status: "" });
+  const [tableState, updateTableState] = useSyncedQueryState<PaymentsTableState>({
+    page: 0, query: "", status: "", orderBy: "",
+  });
   const page = tableState.page ?? 0;
   const query = tableState.query ?? "";
   const status = (tableState.status || undefined) as PaymentStatus | undefined;
+  const orderBy = tableState.orderBy || undefined;
+  const pageSize = useGlobalSettings((s) => s.settings.rowsPerPage);
 
-  const { data, isLoading, isError, error } = useAdminPaymentsQuery(page, { query: query || undefined, status });
+  const { data, isLoading, isError, error } = useAdminPaymentsQuery(
+    page, { query: query || undefined, status, orderBy }, pageSize,
+  );
 
-  const dataPage: Page<Row> = (data as Page<Row> | null) ?? {
-    status: "success",
-    code: "200",
-    items: [],
-    meta: { page, pageSize: DEFAULT_PAGE_SIZE, count: 0, total: 0, totalPages: 0 },
-  };
+  const dataPage = ((data as Page<Row> | null) ?? emptyPage<Row>(page, pageSize));
 
   const updateFilters = (u: TableFilterUpdate) => updateTableState(u as Partial<PaymentsTableState>);
 
@@ -96,6 +98,7 @@ export default function AdminPayments() {
         dataPage={dataPage}
         columns={columns}
         currentPage={page}
+        orderBy={orderBy}
         searchValue={query}
         updateFilters={updateFilters}
         filters={[

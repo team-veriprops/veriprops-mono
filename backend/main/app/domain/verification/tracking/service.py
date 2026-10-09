@@ -21,7 +21,7 @@ from main.app.core.sla import (
 )
 from main.app.core.state.dependencies import blocking_roles, required_task_count, roles_for_tier
 from main.app.core.state.status import AgentRole, TaskState, VerificationTier, VerificationStatus
-from main.app.domain.audit.models import AuditActivityPageDto
+from main.app.domain.audit.models import AuditEventDto
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.agent.profile.repo import AgentProfileRepo
 from main.app.domain.user.repo import UserRepo
@@ -50,7 +50,8 @@ from main.app.domain.verification.tracking.models import (
     VerificationTrackingDto,
 )
 from main.appodus_utils import Utils
-from main.appodus_utils.db.models import Page, PaginationMeta
+from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.db.models import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -106,16 +107,7 @@ class CustomerTrackingService:
             customer_id, offset=page * page_size, limit=page_size,
         )
         items = [await self._list_item(v) for v in rows]
-        total_pages = (total + page_size - 1) // page_size if page_size else 0
-        return Page[VerificationListItemDto](
-            items=items,
-            meta=PaginationMeta(
-                page=page, page_size=page_size, count=len(items), total=total,
-                total_pages=total_pages,
-                prev_page=page - 1 if page > 0 else None,
-                next_page=page + 1 if (page + 1) < total_pages else None,
-            ),
-        )
+        return DbUtils.build_page(items, total, page, page_size)
 
     async def summary(self, customer_id: str) -> CustomerDashboardDto:
         """Portal home rollups (§9): counts by status + the most recent verifications.
@@ -205,20 +197,11 @@ class CustomerTrackingService:
         total = len(items)
         window = items[page * page_size: page * page_size + page_size]
         dtos = [await self._evidence_dto(e, visible[e.task_id]) for e in window]
-        total_pages = (total + page_size - 1) // page_size if page_size else 0
-        return Page[CustomerEvidenceDto](
-            items=dtos,
-            meta=PaginationMeta(
-                page=page, page_size=page_size, count=len(dtos), total=total,
-                total_pages=total_pages,
-                prev_page=page - 1 if page > 0 else None,
-                next_page=page + 1 if (page + 1) < total_pages else None,
-            ),
-        )
+        return DbUtils.build_page(dtos, total, page, page_size)
 
     async def activity(
         self, verification_id: str, customer_id: str, page: int, page_size: int
-    ) -> AuditActivityPageDto:
+    ) -> Page[AuditEventDto]:
         """PII-safe verification timeline for the customer (reuses the audit read model)."""
         await self._verifications.get_owned(verification_id, customer_id)
         return await self._audit.get_activity_log(

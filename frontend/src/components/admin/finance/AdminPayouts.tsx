@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@3rdparty/ui/button";
 import DetailDrawer from "@components/ui/DetailDrawer";
 import { AsyncStateComponent } from "@components/ui/AsyncStateComponent";
 import { PageShell } from "@components/ui/PageShell";
@@ -12,6 +11,7 @@ import { Page } from "@/types/models";
 import { useAdminPayoutsQuery } from "./libs/useFinanceQueries";
 import DisburseButton from "./DisburseButton";
 import PayoutDecisionPanel from "./PayoutDecisionPanel";
+import ListPager from "@components/ui/ListPager";
 
 // Filter order follows the lifecycle: waiting on finance, queued, with the bank, finished.
 const STATUSES = [
@@ -71,11 +71,13 @@ export default function AdminPayouts() {
                 ))}
               </ul>
             )}
-            <div className="mt-3 flex items-center justify-between">
-              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((v) => Math.max(0, v - 1))}>Previous</Button>
-              <span className="text-xs text-muted-foreground">Page {page + 1}</span>
-              <Button variant="outline" size="sm" disabled={pageData.meta.nextPage == null} onClick={() => setPage((v) => v + 1)}>Next</Button>
-            </div>
+            <ListPager
+              page={page}
+              totalPages={pageData.meta.totalPages}
+              onPageChange={setPage}
+              className="mt-3"
+              testIdPrefix="admin-payouts-pager"
+            />
           </>
         )}
       </AsyncStateComponent>

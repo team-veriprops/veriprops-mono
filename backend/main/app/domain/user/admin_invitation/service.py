@@ -24,7 +24,8 @@ from main.app.domain.user.auth.session.models import UserType
 from main.app.domain.user.service import UserService
 from main.app.domain.user.user_messages import AccountSecurityMessages
 from main.appodus_utils import Utils
-from main.appodus_utils.db.models import Page, PaginationMeta
+from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.db.models import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -170,16 +171,7 @@ class AdminInvitationService:
             )
             for r in rows
         ]
-        total_pages = (total + page_size - 1) // page_size if page_size else 0
-        return Page[AdminInvitationSummaryDto](
-            items=items,
-            meta=PaginationMeta(
-                page=page, page_size=page_size, count=len(items), total=total,
-                total_pages=total_pages,
-                prev_page=page - 1 if page > 0 else None,
-                next_page=page + 1 if (page + 1) < total_pages else None,
-            ),
-        )
+        return DbUtils.build_page(items, total, page, page_size)
 
     async def revoke(self, invitation_id: str, admin_id: str) -> None:
         """Withdraw a pending invitation. Revoking twice is harmless; an invitation already

@@ -30,7 +30,7 @@ from main.app.domain.user.auth.session.models import (
 )
 from main.app.domain.user.auth.session.service import SessionService
 from main.app.domain.user.models import AccountStatus, AdminSubRole, TrustStatus, User
-from main.app.domain.user.repo import UserRepo
+from main.app.domain.user.repo import USER_DIRECTORY_SORTABLE, UserRepo
 from main.app.domain.user.service import UserService
 from main.app.domain.verification.repo import VerificationRepo
 from main.appodus_utils import Utils
@@ -77,8 +77,9 @@ class AdminUsersService:
         user_type: Optional[str] = None,
         trust_status: Optional[str] = None,
         account_status: Optional[str] = None,
+        order_by: Optional[str] = None,
     ) -> Page[AdminUserSummaryDto]:
-        rows, total = await self._user_repo.page_users(
+        rows, total, applied = await self._user_repo.page_users(
             offset=page * page_size,
             limit=page_size,
             query=query,
@@ -86,9 +87,12 @@ class AdminUsersService:
             user_type=user_type,
             trust_status=trust_status,
             account_status=account_status,
+            order_by=order_by,
         )
         items = [self._to_summary(u) for u in rows]
-        return DbUtils.build_page(items, total=total, page=page, page_size=page_size)
+        return DbUtils.build_page(
+            items, total=total, page=page, page_size=page_size, sort=applied, sortable=USER_DIRECTORY_SORTABLE,
+        )
 
     async def get_user_detail(self, user_id: str) -> AdminUserDetailDto:
         user = await self._user_service.get_user_model(user_id)

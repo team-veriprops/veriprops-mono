@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from sqlalchemy import Column, Index, String
 
@@ -228,20 +228,6 @@ class AuditPackRowDto(Object):
     occurred_at: datetime
     ip_address: Optional[str] = None
     details: Optional[Dict[str, Any]] = None
-
-
-class AuditActivityPageDto(Object):
-    items: List[AuditEventDto]
-    total: int
-    page: int
-    page_size: int
-
-
-class AdminActionLogPageDto(Object):
-    items: List[AuditPackRowDto]
-    total: int
-    page: int
-    page_size: int
 
 
 class AuditPackRowKind(str, enum.Enum):

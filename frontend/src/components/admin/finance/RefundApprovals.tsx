@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Button } from "@3rdparty/ui/button";
 import { Label } from "@3rdparty/ui/label";
 import { Textarea } from "@3rdparty/ui/textarea";
-import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { getErrorMessage } from "@lib/errors";
 import { formatMinor, humanizeEnumLabel } from "@lib/utils";
 import { ROUTES } from "@/lib/routes";
@@ -16,7 +15,8 @@ import { ConfirmDialog } from "@components/ui/ConfirmDialog";
 import { PageShell } from "@components/ui/PageShell";
 import { StatusPill } from "@components/ui/StatusPill";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
-import { Page } from "@/types/models";
+import { useGlobalSettings } from "@stores/useGlobalSettings";
+import { emptyPage, Page } from "@/types/models";
 import { RefundRequest, RefundRequestStatus, RefundSource } from "@/types/closure";
 import { CLOSE_REASONS } from "@components/admin/verifications/libs/closure";
 import { refundSummary } from "@components/admin/verifications/libs/refundSummary";
@@ -56,6 +56,7 @@ const columns: Column<Row>[] = [
 interface RefundTableState extends Record<string, unknown> {
   page: number;
   status: string;
+  orderBy: string;
 }
 
 /**
@@ -64,16 +65,17 @@ interface RefundTableState extends Record<string, unknown> {
  * it through the payment gateway; rejecting sends nothing and puts a closing case back to work.
  */
 export default function RefundApprovals() {
-  const [tableState, updateTableState] = useSyncedQueryState<RefundTableState>({ page: 0, status: RefundRequestStatus.PENDING });
+  const [tableState, updateTableState] = useSyncedQueryState<RefundTableState>({
+    page: 0, status: RefundRequestStatus.PENDING, orderBy: "",
+  });
   const page = tableState.page ?? 0;
   const status = (tableState.status || undefined) as RefundRequestStatus | undefined;
-  const { data, isLoading, isError, error } = useRefundRequestsQuery(page, status);
+  const orderBy = tableState.orderBy || undefined;
+  const pageSize = useGlobalSettings((s) => s.settings.rowsPerPage);
+  const { data, isLoading, isError, error } = useRefundRequestsQuery(page, status, pageSize, orderBy);
   const [selected, setSelected] = useState<RefundRequest | null>(null);
 
-  const dataPage: Page<Row> = (data as Page<Row> | null) ?? {
-    status: "success", code: "200", items: [],
-    meta: { page, pageSize: DEFAULT_PAGE_SIZE, count: 0, total: 0, totalPages: 0 },
-  };
+  const dataPage = (data as Page<Row> | null) ?? emptyPage<Row>(page, pageSize);
   const updateFilters = (u: TableFilterUpdate) => updateTableState(u as Partial<RefundTableState>);
 
   return (
@@ -87,6 +89,7 @@ export default function RefundApprovals() {
         dataPage={dataPage}
         columns={columns}
         currentPage={page}
+        orderBy={orderBy}
         updateFilters={updateFilters}
         filters={[{
           key: "status", label: "Status", value: tableState.status ?? "",

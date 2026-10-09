@@ -15,6 +15,11 @@ from main.app.domain.audit.models import (
 from main.appodus_utils.db.repo import GenericRepo
 
 
+# The admin-actions log: the columns a client may sort by, and the order without one.
+ADMIN_ACTION_SORTABLE = frozenset({"occurred_at", "action", "resource_type"})
+ADMIN_ACTION_DEFAULT_ORDER = "occurredAt desc"
+
+
 @inject
 class AuditLogRepo(
     GenericRepo[
@@ -88,7 +93,9 @@ class AuditLogRepo(
         date_to: Optional[datetime],
         offset: int,
         limit: int,
-    ) -> Tuple[List[AuditLog], int]:
+        order_by: Optional[str] = None,
+    ) -> Tuple[List[AuditLog], int, str]:
+        """Admin actions in the client's *order_by* (newest first without one), plus the sort applied."""
         base = select(AuditLog).where(
             AuditLog.deleted.is_(False),
             AuditLog.action.in_(action_types),
@@ -97,12 +104,9 @@ class AuditLogRepo(
             base = base.where(AuditLog.occurred_at >= date_from)
         if date_to:
             base = base.where(AuditLog.occurred_at <= date_to)
+        applied, order = self._db_utils.client_order_by(order_by, ADMIN_ACTION_SORTABLE, ADMIN_ACTION_DEFAULT_ORDER)
         total = await self._session.scalar(
             select(func.count()).select_from(base.subquery())
         )
-        rows = (
-            await self._session.execute(
-                base.order_by(AuditLog.occurred_at.desc()).offset(offset).limit(limit)
-            )
-        ).scalars().all()
-        return list(rows), total or 0
+        rows = (await self._session.execute(base.order_by(*order).offset(offset).limit(limit))).scalars().all()
+        return list(rows), total or 0, applied

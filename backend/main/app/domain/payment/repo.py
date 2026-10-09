@@ -17,6 +17,10 @@ from main.appodus_utils.db.db_utils import hex_ref
 from main.appodus_utils.db.repo import GenericRepo
 from main.appodus_utils.db.search import contains_text
 
+# Finance's payments list: the columns a client may sort by, and the order without one.
+ADMIN_PAYMENT_SORTABLE = frozenset({"tx_ref", "amount_minor", "status", "provider", "date_created"})
+ADMIN_PAYMENT_DEFAULT_ORDER = "dateCreated desc"
+
 
 @inject
 class PaymentRepo(
@@ -66,9 +70,11 @@ class PaymentRepo(
 
     async def page_for_admin(
         self, page: int, page_size: int, query: Optional[str] = None, status: Optional[PaymentStatus] = None,
-    ) -> Tuple[List[Tuple[Payment, str]], int]:
-        """Every live payment with its case's VID, newest first (finance's payments list).
-        *query* matches the charge reference or the VID, as typed: its wildcards are escaped."""
+        order_by: Optional[str] = None,
+    ) -> Tuple[List[Tuple[Payment, str]], int, str]:
+        """Every live payment with its case's VID (finance's payments list), in the client's
+        *order_by* or newest first, plus the sort applied. *query* matches the charge reference
+        or the VID, as typed: its wildcards are escaped."""
         criteria = [Payment.deleted.is_(False)]
         if status is not None:
             criteria.append(Payment.status == status.value)
@@ -80,11 +86,10 @@ class PaymentRepo(
             .join(Verification, hex_ref(Verification.id) == Payment.verification_id)
             .where(*criteria)
         )
+        applied, order = self._db_utils.client_order_by(order_by, ADMIN_PAYMENT_SORTABLE, ADMIN_PAYMENT_DEFAULT_ORDER)
         total = await self._session.scalar(select(func.count()).select_from(joined.subquery()))
-        rows = await self._session.execute(
-            joined.order_by(Payment.date_created.desc()).offset(page * page_size).limit(page_size)
-        )
-        return [tuple(row) for row in rows.all()], int(total or 0)
+        rows = await self._session.execute(joined.order_by(*order).offset(page * page_size).limit(page_size))
+        return [tuple(row) for row in rows.all()], int(total or 0), applied
 
     async def list_for_verification(self, verification_id: str) -> List[Payment]:
         stmt = select(Payment).where(

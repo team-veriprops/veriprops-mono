@@ -21,6 +21,11 @@ from main.appodus_utils.db.repo import GenericRepo
 _OPEN_STATES = (ErasureRequestState.PENDING.value, ErasureRequestState.APPROVED.value)
 
 
+# The compliance queue: the columns a client may sort by, and the order without one.
+ERASURE_SORTABLE = frozenset({"status", "sla_due_at", "date_created"})
+ERASURE_DEFAULT_ORDER = "dateCreated desc"
+
+
 @inject
 class DataErasureRequestRepo(
     GenericRepo[
@@ -60,15 +65,13 @@ class DataErasureRequestRepo(
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def page_by_status(
-        self, status: Optional[str], offset: int, limit: int
-    ) -> Tuple[List[DataErasureRequest], int]:
+        self, status: Optional[str], offset: int, limit: int, order_by: Optional[str] = None,
+    ) -> Tuple[List[DataErasureRequest], int, str]:
+        """Requests in the client's *order_by* (newest first without one), plus the sort applied."""
         base = select(DataErasureRequest).where(DataErasureRequest.deleted.is_(False))
         if status:
             base = base.where(DataErasureRequest.status == status)
+        applied, order = self._db_utils.client_order_by(order_by, ERASURE_SORTABLE, ERASURE_DEFAULT_ORDER)
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
-        rows = (
-            await self._session.execute(
-                base.order_by(desc(DataErasureRequest.date_created)).offset(offset).limit(limit)
-            )
-        ).scalars().all()
-        return list(rows), int(total or 0)
+        rows = (await self._session.execute(base.order_by(*order).offset(offset).limit(limit))).scalars().all()
+        return list(rows), int(total or 0), applied

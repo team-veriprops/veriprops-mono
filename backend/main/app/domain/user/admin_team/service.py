@@ -7,10 +7,12 @@ from kink import inject
 
 from main.app.domain.audit.models import AuditActionType
 from main.app.domain.audit.service import AuditLogService
-from main.app.domain.user.admin_team.models import AdminMemberDto, AdminTeamPageDto, AdminTeamState
+from main.app.domain.user.admin_team.models import AdminMemberDto, AdminTeamState
 from main.app.domain.user.models import AdminSubRole, UpdateUserDto
-from main.app.domain.user.repo import UserRepo
+from main.app.domain.user.repo import ADMIN_TEAM_SORTABLE, UserRepo
 from main.app.domain.user.service import UserService
+from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.db.models import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -37,12 +39,13 @@ class AdminTeamService:
         page_size: int = 10,
         query: Optional[str] = None,
         sub_role: Optional[str] = None,
-    ) -> AdminTeamPageDto:
+        order_by: Optional[str] = None,
+    ) -> Page[AdminMemberDto]:
         sub_role_filter = AdminSubRole(sub_role) if sub_role else None
-        admins = await self._user_repo.list_admins(sub_role_filter=sub_role_filter, query=query)
-        total = len(admins)
-        start = page * page_size
-        window = admins[start:start + page_size]
+        admins, total, applied = await self._user_repo.page_admins(
+            offset=page * page_size, limit=page_size,
+            sub_role_filter=sub_role_filter, query=query, order_by=order_by,
+        )
         items = [
             AdminMemberDto(
                 id=u.id,
@@ -52,9 +55,9 @@ class AdminTeamService:
                 active=not u.deleted,
                 date_created=u.date_created,
             )
-            for u in window
+            for u in admins
         ]
-        return AdminTeamPageDto(items=items, total=total, page=page, page_size=page_size)
+        return DbUtils.build_page(items, total, page, page_size, sort=applied, sortable=ADMIN_TEAM_SORTABLE)
 
     async def change_sub_role(self, user_id: str, sub_role: AdminSubRole, admin_id: str) -> None:
         # Defense in depth (the endpoint is already INVITE_ADMIN/SUPER-gated):

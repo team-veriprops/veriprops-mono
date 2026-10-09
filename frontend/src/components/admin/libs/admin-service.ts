@@ -3,8 +3,8 @@ import { Page, SuccessResponse } from "@/types/models";
 import {
   AdminInvitationIssued,
   AdminInvitationSummary,
+  AdminMember,
   AdminSubRole,
-  AdminTeamPage,
   InvitePreview,
 } from "@/types/admin";
 
@@ -48,12 +48,14 @@ export class AdminService {
     pageSize: number,
     query?: string,
     subRole?: string,
-  ): Promise<SuccessResponse<AdminTeamPage>> {
+    orderBy?: string,
+  ): Promise<SuccessResponse<Page<AdminMember>>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("page_size", String(pageSize));
     if (query) params.set("query", query);
     if (subRole) params.set("sub_role", subRole);
+    if (orderBy) params.set("order_by", orderBy);
     return this.http.get(`${this.base}/team?${params.toString()}`);
   }
 

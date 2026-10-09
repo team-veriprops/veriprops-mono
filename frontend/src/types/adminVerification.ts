@@ -221,4 +221,5 @@ export interface VerificationListFilters {
   stateRegion?: string;
   overdueOnly?: boolean;
   query?: string;
+  orderBy?: string;
 }

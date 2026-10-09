@@ -1,6 +1,6 @@
 # Progress Tracker — Pending issues after PR #26 (2026-10-01 → 07)
 
-status: **Stages 1–9 complete.** Stage 1 shipped as PR #27, and the dev deploy migrated 0002 → 0007. Stages 2–9 are on `fix/pending-issues`, one commit group per stage, in one PR to `dev`.
+status: **Stages 1–10 complete.** Stage 1 shipped as PR #27, and the dev deploy migrated 0002 → 0007. Stages 2–9 are on `fix/pending-issues`, one commit group per stage, in one PR to `dev`.
 
 | Stage | Change | Migration | Decision |
 | --- | --- | --- | --- |
@@ -14,6 +14,7 @@ status: **Stages 1–9 complete.** Stage 1 shipped as PR #27, and the dev deploy
 | 7b | Bus savepoints + `atomic` events, atomic broadcast pages, job retries; payout email recorded as SENT | `0012_retries` | D102 |
 | 8 | Docs (MASTER-PRD §4.8, this file, uat-strategy) and the PR | — | — |
 | 9 | Every remaining issue: only a qualifying agent takes a task (one eligibility rule); generic repo reads flush first (and a lean read by id no longer returns deleted rows); the suite fails on a swallowed subscriber fault (60 found, in 4 files); python-jose → PyJWT with one OAuth ID-token verifier; the D97 config rows on every database; margin % never rounds up to the minimum; config list via `effective_config_value`; pytest warnings 940 → 0. The six-engine run found two more, both fixed: `/dev/scenario` drew QA phone numbers blind from a million-number range and collided on `uq_users_phone_e164` (UAT-RBAC-04's 500), now `free_qa_local_phones`; and the sign-out helper polled for an overlay that lives a frame or two (UAT-SESS-04), now recorded page-side across the redirect | `0013_d97_config_rows` | D103 |
+| 10 | Admin lists sort on the server from each list's allowlist (`order_by`, `meta.sort`/`sortableFields`); every page from `build_page` (broadcast paging fixed, team pages in SQL, team/audit/activity/history on `Page[T]`); one `ListPager`; rows-per-page wired; owner actions written up in `NOTES.md` | — | D104 |
 
 **Final gate on the branch head:**
 
@@ -138,7 +139,7 @@ The frontend is unchanged, so the S0 vitest and build results carry over.
 - The client `PageRequest` type no longer carries the server-only `queryFields`/`where`/`exactStringValues`.
 - `ui/ShareModal.tsx` and its store are deleted. They were never rendered, and the "share referral" action only showed a success toast without sending anything.
 
-**New gap (both halves):** DataTable sort headers set `orderBy`, but no list endpoint accepts a client sort. Recorded as `TODO(gap)` in `types/models.ts` plus a §G.2 row.
+**New gap (both halves):** DataTable sort headers set `orderBy`, but no list endpoint accepts a client sort. Recorded as `TODO(gap)` in `types/models.ts` plus a §G.2 row. *Closed in Stage 10 (D104).*
 
 **Deferred to S7:** a single shared page-query serializer for the 8+ services that each build `?page=…&page_size=…` by hand. That was a review suggestion; the regex guard covers the drift in the meantime.
 

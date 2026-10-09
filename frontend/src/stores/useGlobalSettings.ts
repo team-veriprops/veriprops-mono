@@ -2,6 +2,7 @@
 import { Language, TransactionCurrency, PropertyType } from "@/types/models";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 
 export interface GlobalSettings {
   language: Language;
@@ -18,7 +19,7 @@ const defaultSettings: GlobalSettings = {
   language: Language.ENGLISH,
   currency: TransactionCurrency.NGN,
   propertyType: PropertyType.LAND,
-  rowsPerPage: 5,
+  rowsPerPage: DEFAULT_PAGE_SIZE,
   firstPage: 0,
   searchDebounceSeconds: 300,
   searchQueryKey: "query",

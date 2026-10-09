@@ -94,11 +94,12 @@ async def list_payments(
     page_size: int = Query(default=10, ge=1, le=100),
     query: Optional[str] = Query(default=None, max_length=100),
     status: Optional[PaymentStatus] = Query(default=None),
+    order_by: Optional[str] = Query(default=None, max_length=64, description="e.g. \"dateCreated desc\""),
     _admin_id: str = Depends(require_permission(Permission.REFUND_PAYMENT)),
 ):
-    """Every charge, newest first: finance's view of one payment's own state (§18.1)."""
+    """Every charge, newest first unless sorted: finance's view of one payment's own state (§18.1)."""
     return SuccessResponse[Page[AdminPaymentDto]](
-        data=await payment_service.page_for_admin(page, page_size, query, status)
+        data=await payment_service.page_for_admin(page, page_size, query, status, order_by)
     )
 
 

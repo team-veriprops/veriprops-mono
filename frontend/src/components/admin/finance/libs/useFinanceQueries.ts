@@ -22,15 +22,19 @@ export const financeKeys = {
   disbursementQueue: () => ["admin-payouts", "disbursement-queue"] as const,
   commissionRules: () => ["commission-rules"] as const,
   refundRetries: (page: number) => ["refund-retries", page] as const,
-  payments: (page: number, filters: PaymentListFilters) => ["admin-payments", page, filters] as const,
-  refundRequests: (page: number, status: string) => ["refund-requests", page, status] as const,
+  payments: (page: number, pageSize: number, filters: PaymentListFilters) => ["admin-payments", page, pageSize, filters] as const,
+  refundRequests: (page: number, pageSize: number, status: string, orderBy: string) =>
+    ["refund-requests", page, pageSize, status, orderBy] as const,
 };
 
 // ── Refund approvals: every customer refund waits for Finance ────────
-export function useRefundRequestsQuery(page: number, status?: RefundRequestStatus, pageSize = DEFAULT_PAGE_SIZE) {
+export function useRefundRequestsQuery(
+  page: number, status?: RefundRequestStatus, pageSize = DEFAULT_PAGE_SIZE, orderBy?: string,
+) {
   return useQuery({
-    queryKey: financeKeys.refundRequests(page, status ?? ""),
-    queryFn: async () => (await refundRequestService.list(page, pageSize, status)).data,
+    queryKey: financeKeys.refundRequests(page, pageSize, status ?? "", orderBy ?? ""),
+    queryFn: async () => (await refundRequestService.list(page, pageSize, status, orderBy)).data,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -59,8 +63,9 @@ export function useRejectRefundMutation() {
 // ── Every payment (finance's payments list) ──────────────────────────
 export function useAdminPaymentsQuery(page: number, filters: PaymentListFilters, pageSize = DEFAULT_PAGE_SIZE) {
   return useQuery({
-    queryKey: financeKeys.payments(page, filters),
+    queryKey: financeKeys.payments(page, pageSize, filters),
     queryFn: async () => (await paymentService.list(page, pageSize, filters)).data,
+    placeholderData: (prev) => prev,
   });
 }
 

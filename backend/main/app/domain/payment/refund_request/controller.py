@@ -30,10 +30,13 @@ async def list_refund_requests(
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=10, ge=1, le=100),
     status: Optional[RefundRequestStatus] = Query(default=None),
+    order_by: Optional[str] = Query(default=None, max_length=64, description="e.g. \"dateCreated desc\""),
     _admin_id: str = Depends(require_permission(Permission.REFUND_PAYMENT)),
 ):
-    """Pending requests oldest first (the queue); any other view newest first (the record)."""
-    return SuccessResponse[Page[RefundRequestDto]](data=await refund_request_service.page(page, page_size, status))
+    """Pending requests oldest first (the queue); any other view newest first (the record), unless sorted."""
+    return SuccessResponse[Page[RefundRequestDto]](
+        data=await refund_request_service.page(page, page_size, status, order_by)
+    )
 
 
 @refund_request_router.post("/{request_id}/approve", response_model=SuccessResponse[RefundDecisionDto])

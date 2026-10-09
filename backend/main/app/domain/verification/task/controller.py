@@ -14,7 +14,7 @@ from kink import di
 from libre_fastapi_jwt import AuthJWT
 
 from main.app.core.state.status import AgentRole, VerificationTier
-from main.app.domain.audit.models import AuditActivityPageDto
+from main.app.domain.audit.models import AuditEventDto
 from main.app.domain.commission_rule.service import CommissionRuleService, payable_commission_minor
 from main.app.domain.verification.task.evidence.models import EvidenceDto, EvidenceItem, EvidenceKind
 from main.app.domain.verification.task.evidence.service import EvidenceService
@@ -29,7 +29,8 @@ from main.app.domain.verification.task.models import (
 )
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.appodus_utils import Utils
-from main.appodus_utils.db.models import Page, PaginationMeta, SuccessResponse
+from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.db.models import Page, SuccessResponse
 
 agent_task_router = APIRouter(prefix="/agents/tasks", tags=["Agent: Tasks"])
 task_service: VerificationTaskService = di[VerificationTaskService]
@@ -95,16 +96,7 @@ async def list_my_tasks(
     items = [
         await _to_agent_dto(t, commission_by_role[AgentRole(t.role)], holds[t.verification_id]) for t in rows
     ]
-    total_pages = (total + page_size - 1) // page_size if page_size else 0
-    return SuccessResponse[Page[AgentTaskDto]](data=Page[AgentTaskDto](
-        items=items,
-        meta=PaginationMeta(
-            page=page, page_size=page_size, count=len(items), total=total,
-            total_pages=total_pages,
-            prev_page=page - 1 if page > 0 else None,
-            next_page=page + 1 if (page + 1) < total_pages else None,
-        ),
-    ))
+    return SuccessResponse[Page[AgentTaskDto]](data=DbUtils.build_page(items, total, page, page_size))
 
 
 @agent_task_router.get("/summary", response_model=SuccessResponse[AgentDashboardDto])
@@ -176,7 +168,7 @@ async def submit_task(task_id: str, req: SubmitTaskDto, authorize: AuthJWT = Dep
 
 
 @agent_task_router.get(
-    "/{task_id}/history", response_model=SuccessResponse[AuditActivityPageDto]
+    "/{task_id}/history", response_model=SuccessResponse[Page[AuditEventDto]]
 )
 async def get_task_history(
     task_id: str,
@@ -188,4 +180,4 @@ async def get_task_history(
     await authorize.jwt_required()
     agent_id = str(authorize.get_jwt_subject())
     result = await task_service.task_history(task_id, agent_id, page, page_size)
-    return SuccessResponse[AuditActivityPageDto](data=result)
+    return SuccessResponse[Page[AuditEventDto]](data=result)

@@ -36,11 +36,12 @@ describe("AdminUsersService contract (mirrors /users/admins/users backend routes
       userType: UserType.USER,
       trustStatus: TrustStatus.TRUSTED,
       accountStatus: AccountStatus.SUSPENDED,
+      orderBy: "email desc",
     });
     expect(calls[0].url).toBe(
       `/users/admins/users?page=0&page_size=10&query=ada&persona=${UserPersona.CUSTOMER}` +
         `&user_type=${UserType.USER}&trust_status=${TrustStatus.TRUSTED}` +
-        `&account_status=${AccountStatus.SUSPENDED}`,
+        `&account_status=${AccountStatus.SUSPENDED}&order_by=email+desc`,
     );
   });
 

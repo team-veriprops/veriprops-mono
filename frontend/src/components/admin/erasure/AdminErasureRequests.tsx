@@ -3,18 +3,18 @@
 import { useState } from "react";
 import { CheckCircle2, XCircle, Trash2, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Action, Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import { PageShell } from "@components/ui/PageShell";
 import { StatusPill } from "@components/ui/StatusPill";
 import { AttentionChip } from "@components/ui/AttentionChip";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { useGlobalSettings } from "@stores/useGlobalSettings";
 import { ConfirmDialog } from "@components/ui/ConfirmDialog";
 import { Label } from "@3rdparty/ui/label";
 import { Textarea } from "@3rdparty/ui/textarea";
 import { getErrorMessage } from "@lib/errors";
 import { humanizeEnumLabel } from "@lib/utils";
-import { Page } from "@/types/models";
+import { emptyPage, Page } from "@/types/models";
 import { DataErasureRequest, ErasureRequestStatus } from "@/types/erasure";
 import {
   useAdminErasureRequestsQuery,
@@ -22,8 +22,6 @@ import {
   useExecuteErasureMutation,
   useRejectErasureMutation,
 } from "@components/shared/erasure/libs/useErasureQueries";
-
-const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 // A right-to-erasure request is still actionable while pending or approved; those are the
 // rows whose review SLA matters.
@@ -69,14 +67,17 @@ const columns: Column<DataErasureRequest & Record<string, unknown>>[] = [
 interface ErasureTableState extends Record<string, unknown> {
   page: number;
   status: string;
+  orderBy: string;
 }
 
 export default function AdminErasureRequests() {
-  const [tableState, updateTableState] = useSyncedQueryState<ErasureTableState>({ page: 0, status: "" });
+  const [tableState, updateTableState] = useSyncedQueryState<ErasureTableState>({ page: 0, status: "", orderBy: "" });
   const page = tableState.page ?? 0;
   const status = tableState.status ?? "";
+  const orderBy = tableState.orderBy || undefined;
+  const pageSize = useGlobalSettings((s) => s.settings.rowsPerPage);
 
-  const { data, isLoading, isError, error } = useAdminErasureRequestsQuery(page, status || undefined);
+  const { data, isLoading, isError, error } = useAdminErasureRequestsQuery(page, status || undefined, pageSize, orderBy);
   const approve = useApproveErasureMutation();
   const reject = useRejectErasureMutation();
   const execute = useExecuteErasureMutation();
@@ -86,14 +87,7 @@ export default function AdminErasureRequests() {
   const [reason, setReason] = useState("");
   const failed = (fallback: string) => (err: unknown) => toast.error(getErrorMessage(err, fallback));
 
-  const dataPage: Page<DataErasureRequest & Record<string, unknown>> = (data as
-    | Page<DataErasureRequest & Record<string, unknown>>
-    | null) ?? {
-    status: "success",
-    code: "200",
-    items: [],
-    meta: { page, pageSize: PAGE_SIZE, count: 0, total: 0, totalPages: 0 },
-  };
+  const dataPage = (data ?? emptyPage(page, pageSize)) as Page<DataErasureRequest & Record<string, unknown>>;
 
   const actions: Action<DataErasureRequest & Record<string, unknown>>[] = [
     {
@@ -135,6 +129,7 @@ export default function AdminErasureRequests() {
         columns={columns}
         actions={actions}
         currentPage={page}
+        orderBy={orderBy}
         updateFilters={updateFilters}
         filters={[
           {

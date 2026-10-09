@@ -27,6 +27,7 @@ import {
   useDeclineTaskMutation,
 } from "./libs/useAgentTaskQueries";
 import { TaskCommissionBadge } from "./TaskCommissionBadge";
+import ListPager from "@components/ui/ListPager";
 
 const ALL = "ALL";
 const PAGE_SIZE = DEFAULT_PAGE_SIZE;
@@ -167,29 +168,13 @@ export default function AgentTaskList() {
                 })}
               </div>
 
-              {(page > 0 || pageData.meta.nextPage != null) && (
-                <div className="flex items-center justify-between pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page === 0}
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-xs text-muted-foreground">
-                    Page {page + 1} of {Math.max(pageData.meta.totalPages, 1)}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pageData.meta.nextPage == null}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
+              <ListPager
+                page={page}
+                totalPages={pageData.meta.totalPages}
+                onPageChange={setPage}
+                className="pt-1"
+                testIdPrefix="agent-tasks-pager"
+              />
             </>
           )
         }

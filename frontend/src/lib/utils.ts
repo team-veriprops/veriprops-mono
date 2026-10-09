@@ -174,27 +174,11 @@ export const stringifyFilters = (filters: Record<string, unknown>) => {
   );
 };
 
-export const handleToggleSort = (
-  key: string,
-  orderBy: string,
-  updateOrderByInStore: (orderBy: string) => void
-) => {
-  let newOrderBy: string;
-
-  if (orderBy) {
-    const [sortKey, currentOrder = "asc"] = orderBy.split(" ");
-
-    if (sortKey === key) {
-      const nextOrder = currentOrder === "asc" ? "desc" : "asc";
-      newOrderBy = `${sortKey} ${nextOrder}`;
-    } else {
-      newOrderBy = `${key} asc`;
-    }
-  } else {
-    newOrderBy = `${key} asc`;
-  }
-
-  updateOrderByInStore(newOrderBy);
+/** The sort a header click on *key* asks for, given the sort in force ("email asc"):
+ *  the same column flips asc ↔ desc, another column starts ascending. */
+export const nextOrderBy = (current: string | undefined, key: string): string => {
+  const [sortKey, direction = "asc"] = (current ?? "").split(" ");
+  return sortKey === key && direction === "asc" ? `${key} desc` : `${key} asc`;
 };
 
 export async function copyToClipboard(text: string): Promise<void> {

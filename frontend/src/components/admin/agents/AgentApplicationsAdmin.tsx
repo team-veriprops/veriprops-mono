@@ -9,6 +9,8 @@ import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataT
 import DetailDrawer, { DetailDrawerWidth } from "@components/ui/DetailDrawer";
 import { KycPhotoCompare } from "./KycPhotoCompare";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { useGlobalSettings } from "@stores/useGlobalSettings";
+import { emptyPage, Page } from "@/types/models";
 import { humanizeEnumLabel } from "@lib/utils";
 import { AgentApplicationStatus, AgentApplicationSummary } from "@/types/agent";
 import {
@@ -47,6 +49,7 @@ interface AgentApplicationsTableState extends Record<string, unknown> {
   page: number;
   query: string;
   status: string;
+  orderBy: string;
 }
 
 export default function AgentApplicationsAdmin() {
@@ -54,20 +57,23 @@ export default function AgentApplicationsAdmin() {
     page: 0,
     query: "",
     status: AgentApplicationStatus.PENDING,
+    orderBy: "",
   });
   const page = tableState.page ?? 0;
   const query = tableState.query ?? "";
   const status = tableState.status ?? "";
+  const orderBy = tableState.orderBy ?? "";
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  const pageSize = 10;
+  const pageSize = useGlobalSettings((s) => s.settings.rowsPerPage);
   const { data: pageData, isLoading, isError, error } = useAgentApplicationsQuery(
     status || undefined,
     page,
     pageSize,
     query,
+    orderBy,
   );
   const { data: detail } = useAgentApplicationQuery(selectedId);
   const approve = useApproveAgentMutation();
@@ -92,23 +98,17 @@ export default function AgentApplicationsAdmin() {
     setSelectedId(null);
   };
 
-  const emptyPage = {
-    status: "success",
-    code: "200",
-    items: [] as (AgentApplicationSummary & Record<string, unknown>)[],
-    meta: { page: 0, pageSize, count: 0, total: 0, totalPages: 0 },
-  };
+  const dataPage = (pageData?.data ?? emptyPage(page, pageSize)) as Page<AgentApplicationSummary & Record<string, unknown>>;
 
   return (
     <div className="space-y-6" data-testid="admin-agent-applications">
       <h1 className="text-2xl font-bold text-foreground">Agent applications</h1>
 
       <DataTable<AgentApplicationSummary & Record<string, unknown>>
-        dataPage={
-          (pageData?.data as typeof emptyPage) ?? emptyPage
-        }
+        dataPage={dataPage}
         columns={columns}
         currentPage={page}
+        orderBy={orderBy || undefined}
         updateFilters={updateFilters}
         searchValue={query}
         filters={[

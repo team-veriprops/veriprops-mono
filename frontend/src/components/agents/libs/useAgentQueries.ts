@@ -12,8 +12,8 @@ const agentService = new AgentService(httpClient);
 export const agentKeys = {
   draft: ["agent", "application", "draft"] as const,
   status: ["agent", "application", "status"] as const,
-  applications: (status: string | undefined, page: number, pageSize: number, query: string) =>
-    ["agent", "applications", status ?? "all", page, pageSize, query] as const,
+  applications: (status: string | undefined, page: number, pageSize: number, query: string, orderBy: string) =>
+    ["agent", "applications", status ?? "all", page, pageSize, query, orderBy] as const,
   application: (id: string) => ["agent", "application", id] as const,
 };
 
@@ -58,10 +58,11 @@ export function useAgentApplicationsQuery(
   page: number,
   pageSize: number,
   query = "",
+  orderBy = "",
 ) {
   return useQuery({
-    queryKey: agentKeys.applications(status, page, pageSize, query),
-    queryFn: () => agentService.listApplications(status, page, pageSize, query),
+    queryKey: agentKeys.applications(status, page, pageSize, query, orderBy),
+    queryFn: () => agentService.listApplications(status, page, pageSize, query, orderBy || undefined),
     placeholderData: (prev) => prev,
   });
 }

@@ -19,7 +19,7 @@ from main.app.domain.payment.refund_request.models import (
     RefundRequestStatus,
     RefundSource,
 )
-from main.app.domain.payment.refund_request.repo import RefundRequestRepo
+from main.app.domain.payment.refund_request.repo import REFUND_REQUEST_SORTABLE, RefundRequestRepo
 from main.appodus_utils import Utils
 from main.appodus_utils.db.db_utils import DbUtils
 from main.appodus_utils.db.models import Page
@@ -81,11 +81,14 @@ class RefundRequestService:
         return await self._requests.get_pending_for_verification(Utils.uuid_to_hex(verification_id))
 
     async def page(
-        self, page: int, page_size: int, status: Optional[RefundRequestStatus],
+        self, page: int, page_size: int, status: Optional[RefundRequestStatus], order_by: Optional[str] = None,
     ) -> Page[RefundRequestDto]:
-        """Finance's queue (PENDING, oldest first) or the record (newest first)."""
-        rows, total = await self._requests.page_with_vid(page, page_size, status)
-        return DbUtils.build_page([refund_request_to_dto(r, vid) for r, vid in rows], total, page, page_size)
+        """Finance's queue (PENDING, oldest first) or the record (newest first), unless *order_by* says otherwise."""
+        rows, total, applied = await self._requests.page_with_vid(page, page_size, status, order_by)
+        return DbUtils.build_page(
+            [refund_request_to_dto(r, vid) for r, vid in rows], total, page, page_size,
+            sort=applied, sortable=REFUND_REQUEST_SORTABLE,
+        )
 
     def _audit_filed(self, request: RefundRequest, actor_id: Optional[str], added_minor: int) -> None:
         self._audit.schedule(

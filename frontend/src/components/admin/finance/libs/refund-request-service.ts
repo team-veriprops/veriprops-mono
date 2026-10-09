@@ -11,10 +11,13 @@ import { RefundDecision, RefundRequest, RefundRequestStatus } from "@/types/clos
 export class RefundRequestService {
   constructor(private readonly http: HttpClient) {}
 
-  /** Pending requests oldest first (the queue); any other view newest first (the record). */
-  list(page = 0, pageSize = DEFAULT_PAGE_SIZE, status?: RefundRequestStatus): Promise<SuccessResponse<Page<RefundRequest>>> {
+  /** Pending requests oldest first (the queue); any other view newest first (the record), unless sorted. */
+  list(
+    page = 0, pageSize = DEFAULT_PAGE_SIZE, status?: RefundRequestStatus, orderBy?: string,
+  ): Promise<SuccessResponse<Page<RefundRequest>>> {
     const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
     if (status) params.set("status", status);
+    if (orderBy) params.set("order_by", orderBy);
     return this.http.get(`/admin/refund-requests?${params.toString()}`);
   }
 

@@ -1,7 +1,7 @@
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import Uuid, cast, desc, func, select
+from sqlalchemy import Uuid, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main.app.domain.user.agent.profile.models import (
@@ -13,6 +13,11 @@ from main.app.domain.user.agent.profile.models import (
 )
 from main.appodus_utils.db.repo import GenericRepo
 from main.appodus_utils.db.search import contains_text
+
+
+# The agent approval queue: the columns a client may sort by, and the order without one.
+APPLICATION_SORTABLE = frozenset({"status", "submitted_at"})
+APPLICATION_DEFAULT_ORDER = "submittedAt desc"
 
 
 @inject
@@ -68,8 +73,10 @@ class AgentProfileRepo(
         return int(await self._session.scalar(stmt) or 0)
 
     async def page_applications(
-        self, status: Optional[str], offset: int, limit: int, query: Optional[str] = None
-    ) -> tuple[List[AgentProfile], int]:
+        self, status: Optional[str], offset: int, limit: int, query: Optional[str] = None,
+        order_by: Optional[str] = None,
+    ) -> tuple[List[AgentProfile], int, str]:
+        """Applications in the client's *order_by* (newest submission first without one), plus the sort applied."""
         conditions = [AgentProfile.deleted.is_(False)]
         if status:
             conditions.append(AgentProfile.status == status)
@@ -82,10 +89,7 @@ class AgentProfileRepo(
             base = base.join(User, User.id == cast(AgentProfile.user_id, Uuid)).where(
                 contains_text(query, User.first_name, User.last_name, User.email)
             )
+        applied, order = self._db_utils.client_order_by(order_by, APPLICATION_SORTABLE, APPLICATION_DEFAULT_ORDER)
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
-        rows = (
-            await self._session.execute(
-                base.order_by(desc(AgentProfile.submitted_at)).offset(offset).limit(limit)
-            )
-        ).scalars().all()
-        return list(rows), total or 0
+        rows = (await self._session.execute(base.order_by(*order).offset(offset).limit(limit))).scalars().all()
+        return list(rows), total or 0, applied

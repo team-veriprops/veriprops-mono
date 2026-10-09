@@ -9,6 +9,7 @@ import {
   useNotificationsQuery,
 } from "./libs/useNotificationQueries";
 import { cn } from "@lib/utils";
+import ListPager from "@components/ui/ListPager";
 
 /** Full notification history (§N.4 "All notifications"). */
 export default function NotificationsContainer() {
@@ -79,27 +80,13 @@ export default function NotificationsContainer() {
         ))}
       </ul>
 
-      {meta && meta.totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-5">
-          <button
-            disabled={page === 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            className="text-sm px-3 py-1.5 rounded-lg border border-black/10 disabled:opacity-40"
-          >
-            Previous
-          </button>
-          <span className="text-sm text-brand-on-surface-variant py-1.5">
-            {page + 1} / {meta.totalPages}
-          </span>
-          <button
-            disabled={page + 1 >= meta.totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="text-sm px-3 py-1.5 rounded-lg border border-black/10 disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
-      )}
+      <ListPager
+        page={page}
+        totalPages={meta?.totalPages ?? 0}
+        onPageChange={setPage}
+        className="mt-5"
+        testIdPrefix="notifications-pager"
+      />
     </div>
   );
 }

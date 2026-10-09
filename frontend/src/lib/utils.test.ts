@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   toQueryParams,
   stringifyFilters,
-  handleToggleSort,
+  nextOrderBy,
   buildPath,
   getSearchQuery,
   getStatusBadgeColor,
@@ -47,23 +47,19 @@ describe("stringifyFilters", () => {
   });
 });
 
-describe("handleToggleSort", () => {
-  it("sets asc on a new key", () => {
-    const update = vi.fn();
-    handleToggleSort("name", "", update);
-    expect(update).toHaveBeenCalledWith("name asc");
+describe("nextOrderBy", () => {
+  it("starts ascending with no sort in force", () => {
+    expect(nextOrderBy(undefined, "name")).toBe("name asc");
+    expect(nextOrderBy("", "name")).toBe("name asc");
   });
 
-  it("toggles asc → desc on the same key", () => {
-    const update = vi.fn();
-    handleToggleSort("name", "name asc", update);
-    expect(update).toHaveBeenCalledWith("name desc");
+  it("flips the same column asc ↔ desc", () => {
+    expect(nextOrderBy("name asc", "name")).toBe("name desc");
+    expect(nextOrderBy("name desc", "name")).toBe("name asc");
   });
 
-  it("resets to asc when switching to a different key", () => {
-    const update = vi.fn();
-    handleToggleSort("date", "name desc", update);
-    expect(update).toHaveBeenCalledWith("date asc");
+  it("starts another column ascending", () => {
+    expect(nextOrderBy("name desc", "date")).toBe("date asc");
   });
 });
 

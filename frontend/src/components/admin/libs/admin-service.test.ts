@@ -60,11 +60,11 @@ describe("AdminService contract (mirrors /users/admins backend routes)", () => {
     expect(calls[1].url).toBe("/users/admins/invitations?page=0&page_size=25");
   });
 
-  it("forwards team search + sub-role filter as snake_case query params", async () => {
+  it("forwards team search + sub-role filter + sort as snake_case query params", async () => {
     const { http, calls } = mockHttp();
-    await new AdminService(http).listTeam(0, 10, "ada", AdminSubRole.FINANCE);
+    await new AdminService(http).listTeam(0, 10, "ada", AdminSubRole.FINANCE, "email desc");
     expect(calls[0].url).toBe(
-      `/users/admins/team?page=0&page_size=10&query=ada&sub_role=${AdminSubRole.FINANCE}`,
+      `/users/admins/team?page=0&page_size=10&query=ada&sub_role=${AdminSubRole.FINANCE}&order_by=email+desc`,
     );
   });
 

@@ -84,10 +84,11 @@ async def list_applications(
     query: Optional[str] = Query(default=None),
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=10, ge=1, le=100),
+    order_by: Optional[str] = Query(default=None, max_length=64, description="e.g. \"dateCreated desc\""),
     _admin_id: str = Depends(require_permission(Permission.APPROVE_AGENT)),
 ):
     result = await agent_service.list_applications(
-        status=status, page=page, page_size=page_size, query=query,
+        status=status, page=page, page_size=page_size, query=query, order_by=order_by,
     )
     return SuccessResponse[Page[AgentApplicationSummaryDto]](data=result)
 

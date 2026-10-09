@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { TransactionCurrency } from "@/types/models";
@@ -27,7 +28,7 @@ vi.mock("./libs/useFinanceQueries", () => ({
   },
 }));
 vi.mock("@hooks/useSyncedQueryState", () => ({
-  useSyncedQueryState: () => [{ page: 2, query: "VP-7", status: PaymentStatus.REFUNDED }, () => {}],
+  useSyncedQueryState: () => [{ page: 2, query: "VP-7", status: PaymentStatus.REFUNDED, orderBy: "amountMinor asc" }, () => {}],
 }));
 
 import AdminPayments, { paymentAftermath } from "./AdminPayments";
@@ -50,10 +51,12 @@ const payment: AdminPayment = {
 };
 
 describe("AdminPayments", () => {
-  it("asks the server for the page, search and status in the URL — never filters rows itself", () => {
+  it("asks the server for the page, search, status and sort in the URL — never filters or sorts rows itself", () => {
     result.data = { status: "success", code: "200", items: [payment], meta: { page: 2, pageSize: 10, count: 1, total: 21, totalPages: 3 } };
     renderToStaticMarkup(<AdminPayments />);
-    expect(queryCalls.at(-1)).toEqual([2, { query: "VP-7", status: PaymentStatus.REFUNDED }]);
+    expect(queryCalls.at(-1)).toEqual([
+      2, { query: "VP-7", status: PaymentStatus.REFUNDED, orderBy: "amountMinor asc" }, DEFAULT_PAGE_SIZE,
+    ]);
   });
 
   it("lists each charge with its case, linked to the admin verification", () => {

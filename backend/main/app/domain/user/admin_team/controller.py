@@ -6,27 +6,28 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from kink import di
 
-from main.app.domain.user.admin_team.models import AdminTeamPageDto, ChangeSubRoleDto
+from main.app.domain.user.admin_team.models import AdminMemberDto, ChangeSubRoleDto
 from main.app.domain.user.admin_team.service import AdminTeamService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
-from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.db.models import Page, SuccessResponse
 
 admin_team_router = APIRouter(prefix="/admins/team", tags=["Admin Team"])
 team_service: AdminTeamService = di[AdminTeamService]
 
 
-@admin_team_router.get("", response_model=SuccessResponse[AdminTeamPageDto])
+@admin_team_router.get("", response_model=SuccessResponse[Page[AdminMemberDto]])
 async def list_team(
     query: Optional[str] = Query(default=None),
     sub_role: Optional[str] = Query(default=None),
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=10, ge=1, le=100),
+    order_by: Optional[str] = Query(default=None, max_length=64, description="e.g. \"dateCreated desc\""),
     _admin_id: str = Depends(require_permission(Permission.VIEW_ADMIN_PANEL)),
 ):
     result = await team_service.list_team(
-        page=page, page_size=page_size, query=query, sub_role=sub_role,
+        page=page, page_size=page_size, query=query, sub_role=sub_role, order_by=order_by,
     )
-    return SuccessResponse[AdminTeamPageDto](data=result)
+    return SuccessResponse[Page[AdminMemberDto]](data=result)
 
 
 @admin_team_router.post("/{user_id}/sub-role", response_model=SuccessResponse[bool])

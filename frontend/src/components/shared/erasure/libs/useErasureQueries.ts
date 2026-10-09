@@ -9,7 +9,8 @@ const service = new ErasureService(httpClient);
 
 export const erasureKeys = {
   mine: ["erasure", "mine"] as const,
-  adminList: (page: number, status?: string) => ["erasure", "admin", page, status ?? "all"] as const,
+  adminList: (page: number, pageSize: number, status?: string, orderBy?: string) =>
+    ["erasure", "admin", page, pageSize, status ?? "all", orderBy ?? ""] as const,
 };
 
 // ── Self-service ──
@@ -29,10 +30,11 @@ export function useRequestErasureMutation() {
 }
 
 // ── Admin review ──
-export function useAdminErasureRequestsQuery(page = 0, status?: string) {
+export function useAdminErasureRequestsQuery(page = 0, status?: string, pageSize = DEFAULT_PAGE_SIZE, orderBy?: string) {
   return useQuery({
-    queryKey: erasureKeys.adminList(page, status),
-    queryFn: async () => (await service.list(status, page, DEFAULT_PAGE_SIZE)).data ?? null,
+    queryKey: erasureKeys.adminList(page, pageSize, status, orderBy),
+    queryFn: async () => (await service.list(status, page, pageSize, orderBy)).data ?? null,
+    placeholderData: (prev) => prev,
   });
 }
 

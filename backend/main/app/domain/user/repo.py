@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional, Type
 
 from kink import inject
-from sqlalchemy import String, cast, desc, literal, select, func, type_coerce, update as sa_update
+from sqlalchemy import String, cast, literal, select, func, type_coerce, update as sa_update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,14 @@ from main.appodus_utils.db.repo import GenericRepo
 from main.appodus_utils.db.search import contains_text
 from main.appodus_utils.db.types.phone import PhoneNumber
 from main.appodus_utils.integrations.messaging.models import UserContactDto, PushToken, EmailRecipient
+
+
+# The admin team list and the all-users directory: the columns a client may sort by, and
+# the order without one.
+ADMIN_TEAM_SORTABLE = frozenset({"first_name", "email", "admin_sub_role", "date_created"})
+ADMIN_TEAM_DEFAULT_ORDER = "firstName asc"
+USER_DIRECTORY_SORTABLE = frozenset({"email", "user_type", "trust_status", "account_status", "date_created"})
+USER_DIRECTORY_DEFAULT_ORDER = "dateCreated desc"
 
 
 @inject
@@ -79,20 +87,42 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         stmt = select(func.count(User.id)).where(*self._recipient_conditions(user_type, persona))
         return (await self._session.execute(stmt)).scalar_one()
 
-    async def list_admins(
-        self,
-        sub_role_filter: Optional[AdminSubRole] = None,
-        query: Optional[str] = None,
-    ) -> List[User]:
+    @staticmethod
+    def _admin_conditions(sub_role_filter: Optional[AdminSubRole], query: Optional[str]) -> list:
         conditions = [User.deleted.is_(False), User.user_type == UserType.ADMIN.value]
         if sub_role_filter is not None:
             conditions.append(User.admin_sub_role == sub_role_filter.value)
         search = contains_text(query, User.first_name, User.last_name, User.email)
         if search is not None:
             conditions.append(search)
-        stmt = select(User).where(*conditions)
+        return conditions
+
+    async def list_admins(
+        self,
+        sub_role_filter: Optional[AdminSubRole] = None,
+        query: Optional[str] = None,
+    ) -> List[User]:
+        """Every live admin, for fan-outs that address the whole team (SLA alerts, escalations)."""
+        stmt = select(User).where(*self._admin_conditions(sub_role_filter, query))
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def page_admins(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        sub_role_filter: Optional[AdminSubRole] = None,
+        query: Optional[str] = None,
+        order_by: Optional[str] = None,
+    ) -> tuple[List[User], int, str]:
+        """One page of the admin team list in the client's *order_by* (by first name without
+        one), plus the sort applied."""
+        base = select(User).where(*self._admin_conditions(sub_role_filter, query))
+        applied, order = self._db_utils.client_order_by(order_by, ADMIN_TEAM_SORTABLE, ADMIN_TEAM_DEFAULT_ORDER)
+        total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
+        rows = (await self._session.execute(base.order_by(*order).offset(offset).limit(limit))).scalars().all()
+        return list(rows), total or 0, applied
 
     async def page_users(
         self,
@@ -104,8 +134,10 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         user_type: Optional[str] = None,
         trust_status: Optional[str] = None,
         account_status: Optional[str] = None,
-    ) -> tuple[List[User], int]:
-        """Paged all-users directory for the admin panel (PRD §4.2), newest first.
+        order_by: Optional[str] = None,
+    ) -> tuple[List[User], int, str]:
+        """Paged all-users directory for the admin panel (PRD §4.2) in the client's *order_by*
+        (newest first without one), plus the sort applied.
 
         Filters are pre-validated enum values (the controller coerces through the
         enums), so the persona JSON-text match below never sees free-form input.
@@ -125,13 +157,12 @@ class UserRepo(GenericRepo[User, _CreateUserDto, UpdateUserDto, QueryUserDto, Se
         if search is not None:
             conditions.append(search)
         base = select(User).where(*conditions)
+        applied, order = self._db_utils.client_order_by(
+            order_by, USER_DIRECTORY_SORTABLE, USER_DIRECTORY_DEFAULT_ORDER,
+        )
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
-        rows = (
-            await self._session.execute(
-                base.order_by(desc(User.date_created)).offset(offset).limit(limit)
-            )
-        ).scalars().all()
-        return list(rows), total or 0
+        rows = (await self._session.execute(base.order_by(*order).offset(offset).limit(limit))).scalars().all()
+        return list(rows), total or 0, applied
 
     async def suspend_user(self, user_id: str, *, reason: str, admin_id: str, at: datetime) -> None:
         stmt = (

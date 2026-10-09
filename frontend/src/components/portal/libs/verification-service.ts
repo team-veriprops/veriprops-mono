@@ -19,7 +19,7 @@ import {
   VerificationListItem,
   VerificationTracking,
 } from "@/types/tracking";
-import { AuditActivityPage } from "@/types/audit";
+import { AuditActivityEvent } from "@/types/audit";
 
 /**
  * Customer submission & payment API. Mirrors the backend controllers at
@@ -78,7 +78,7 @@ export class VerificationService {
   }
 
   /** PII-safe activity log for the customer (§19.2) — reuses the backend audit read model. */
-  getActivity(id: string, page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<AuditActivityPage>> {
+  getActivity(id: string, page = 0, pageSize = DEFAULT_HISTORY_PAGE_SIZE): Promise<SuccessResponse<Page<AuditActivityEvent>>> {
     return this.http.get(`/verifications/${id}/activity?page=${page}&page_size=${pageSize}`);
   }
 

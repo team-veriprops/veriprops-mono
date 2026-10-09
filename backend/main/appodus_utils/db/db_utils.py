@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from loguru import Logger
-from typing import Type, List, Optional, Dict, Any, Union
+from typing import Collection, Type, List, Optional, Dict, Any, Union
 
 from fastapi.encoders import jsonable_encoder
 from kink import di
@@ -158,9 +158,13 @@ class DbUtils:
 
         return columns if columns else [self._model]
 
-    def parse_order_by_clause(self, order_by_str: str):
+    def parse_order_by_clause(self, order_by_str: Optional[str], sortable: Optional[Collection[str]] = None):
         """
         Parses a string like "age desc, name asc" into SQLAlchemy columns.
+
+        With *sortable* (a list's allowlist of snake_case column names) the string is client
+        input: fields arrive camelCase, a field outside the allowlist or an unknown direction is
+        dropped, and the primary key is appended so equal values still page deterministically.
         """
         columns = []
         if not order_by_str:
@@ -174,9 +178,14 @@ class DbUtils:
             # Split field and direction
             if ' ' in part:
                 field, direction = part.rsplit(' ', 1)
-                direction = direction.lower()
+                field, direction = field.strip(), direction.lower()
             else:
                 field, direction = part, 'asc'
+
+            if sortable is not None:
+                field = Utils.convert_camel_to_snake_case(field)
+                if field not in sortable or direction not in ('asc', 'desc'):
+                    continue
 
             column = getattr(self._model, field, None)
             if column is None:
@@ -187,7 +196,25 @@ class DbUtils:
             else:
                 columns.append(column.asc())
 
+        if sortable is not None and columns:
+            columns.append(self._model.id.asc())
         return columns
+
+    def client_order_by(self, order_by: Optional[str], sortable: Collection[str], default: str) -> tuple[str, list]:
+        """Resolve a client's single-column sort (``"amountMinor desc"``) against *sortable*.
+
+        An absent, unknown, multi-column or malformed sort falls back to *default* — an old
+        bookmark never breaks the list. Returns the sort actually applied, in the camelCase
+        ``"key dir"`` form `build_page` reports, with its ORDER BY clauses.
+        """
+        chosen = (order_by or '').strip()
+        clauses = self.parse_order_by_clause(chosen, sortable) if chosen and ',' not in chosen else []
+        if not clauses:
+            chosen = default
+            clauses = self.parse_order_by_clause(default, sortable)
+        field, _, direction = chosen.partition(' ')
+        key = Utils.convert_snake_to_camel_case(Utils.convert_camel_to_snake_case(field.strip()))
+        return f"{key} {direction.strip().lower() or 'asc'}", clauses
 
     def create_entity_model(self, query_fields: str, result: Row[tuple[Any]]):
         """
@@ -256,19 +283,26 @@ class DbUtils:
         return response
 
     @staticmethod
-    def build_page(response_rows: List[QuerySchemaType], total: int, page: int, page_size: int):
+    def build_page(
+        response_rows: List[QuerySchemaType], total: int, page: int, page_size: int,
+        sort: Optional[str] = None, sortable: Optional[Collection[str]] = None,
+    ):
+        """The one way a list's page metadata is built. *sort* is the order applied (from
+        `client_order_by`) and *sortable* that list's allowlist, published camelCase so the
+        table knows which headers it may offer as sortable."""
+        total_pages = math.ceil(total / page_size) if page_size > 0 else 0
         prev_page: Optional[int] = None if page == 0 else page - 1
-        next_page: Optional[int] = None if total / page_size <= page + 1 else page + 1
-        count = len(response_rows)
-        total_pages = math.ceil(total / page_size)
+        next_page: Optional[int] = page + 1 if page + 1 < total_pages else None
         meta = PaginationMeta(
             page=page,
             page_size=page_size,
-            count=count,
+            count=len(response_rows),
             total=total,
             total_pages=total_pages,
             prev_page=prev_page,
             next_page=next_page,
+            sort=sort,
+            sortable_fields=sorted(Utils.convert_snake_to_camel_case(f) for f in sortable or ()),
         )
 
         return Page(

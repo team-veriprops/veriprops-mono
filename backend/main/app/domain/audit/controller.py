@@ -13,17 +13,17 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from kink import di
 
-from main.app.domain.audit.models import AdminActionLogPageDto
+from main.app.domain.audit.models import AuditPackRowDto
 from main.app.domain.audit.pack_service import VerificationAuditPackService
 from main.app.domain.audit.service import AuditLogService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
-from main.appodus_utils.db.models import SuccessResponse
+from main.appodus_utils.db.models import Page, SuccessResponse
 
 audit_router = APIRouter(prefix="/admin/audit", tags=["Admin: Audit"])
 
 @audit_router.get(
     "/actions",
-    response_model=SuccessResponse[AdminActionLogPageDto],
+    response_model=SuccessResponse[Page[AuditPackRowDto]],
     summary="Paginated log of admin-mutation actions",
 )
 async def list_admin_actions(
@@ -32,6 +32,7 @@ async def list_admin_actions(
     date_to: Optional[datetime] = Query(default=None),
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=20, ge=1, le=100),
+    order_by: Optional[str] = Query(default=None, max_length=64, description="e.g. \"dateCreated desc\""),
     _: str = Depends(require_permission(Permission.VIEW_ADMIN_PANEL)),
 ):
     svc: AuditLogService = di[AuditLogService]
@@ -41,6 +42,7 @@ async def list_admin_actions(
         date_to=date_to,
         page=page,
         page_size=page_size,
+        order_by=order_by,
     )
     return SuccessResponse.ok(result)
 

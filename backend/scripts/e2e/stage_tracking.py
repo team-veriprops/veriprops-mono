@@ -29,8 +29,8 @@ def run(ctx: Ctx) -> None:
           len(items) >= 1, f"items={len(items)}")
 
     activity = customer.get(f"/verifications/{vid_id}/activity").json()["data"]
-    check("customer activity feed lists transitions (R19.2)", activity["total"] >= 1,
-          f"total={activity['total']}")
+    check("customer activity feed lists transitions (R19.2)", activity["meta"]["total"] >= 1,
+          f"meta={activity['meta']}")
     check("activity events are PII-safe (no actorId leaked, §9.5/§19)",
           all("actorId" not in item and "actor_id" not in item for item in activity["items"]))
 

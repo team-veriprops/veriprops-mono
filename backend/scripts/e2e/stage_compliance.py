@@ -29,7 +29,7 @@ def run(ctx: Ctx) -> None:
     role, task_id = next(iter(ctx.task_ids.items()))
     hist = ctx.agent(role).get(f"/agents/tasks/{task_id}/history").json()["data"]
     check("agent sees their task's transition history (R19.3)",
-          hist.get("total", 0) >= 1, f"total={hist.get('total')}")
+          hist["meta"]["total"] >= 1, f"meta={hist['meta']}")
 
     # ── Versioned consent download (R19.4) — the fresh customer has real consent rows ──
     dl = customer.get("/users/auth/consents/history/download")

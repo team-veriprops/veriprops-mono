@@ -15,11 +15,12 @@ function mockHttp() {
 describe("AuditService contract (mirrors app/domain/audit/controller.py)", () => {
   it("lists admin actions with action_types + paging", async () => {
     const { http, calls } = mockHttp();
-    await new AuditService(http).listAdminActions(["DATA_ERASURE_EXECUTED"], 1, 20);
+    await new AuditService(http).listAdminActions(["DATA_ERASURE_EXECUTED"], 1, 20, "action asc");
     expect(calls[0].method).toBe("get");
     expect(calls[0].url).toContain("/admin/audit/actions?");
     expect(calls[0].url).toContain("action_types=DATA_ERASURE_EXECUTED");
     expect(calls[0].url).toContain("page=1");
+    expect(calls[0].url).toContain("order_by=action+asc");
   });
 
   it("builds the verification audit-pack download link", () => {

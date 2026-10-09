@@ -32,6 +32,7 @@ export class AdminVerificationService {
     if (filters.stateRegion) params.set("state_region", filters.stateRegion);
     if (filters.overdueOnly) params.set("overdue_only", "true");
     if (filters.query) params.set("query", filters.query);
+    if (filters.orderBy) params.set("order_by", filters.orderBy);
     params.set("page", String(page));
     params.set("page_size", String(pageSize));
     return this.http.get(`${this.base}?${params.toString()}`);

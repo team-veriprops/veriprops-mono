@@ -1,20 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import ListPager from "@components/ui/ListPager";
 import { ActivityTimeline } from "@components/shared/activity/ActivityTimeline";
 import { useVerificationActivityQuery } from "../libs/useVerificationQueries";
-
-const PAGE_SIZE = DEFAULT_HISTORY_PAGE_SIZE;
 
 /** Customer-facing verification activity log (§19.2) — backend-owned, PII-safe. */
 export default function VerificationActivity({ verificationId }: { verificationId: string }) {
   const [page, setPage] = useState(0);
   const { data, isLoading, isError } = useVerificationActivityQuery(verificationId, page);
   const events = data?.items ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = data?.meta.totalPages ?? 0;
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-8 py-8" data-testid="verification-activity">

@@ -44,6 +44,7 @@ async def list_users(
     account_status: Optional[AccountStatus] = Query(default=None),
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=10, ge=1, le=100),
+    order_by: Optional[str] = Query(default=None, max_length=64, description="e.g. \"dateCreated desc\""),
     _admin_id: str = Depends(require_permission(Permission.MANAGE_USERS)),
 ):
     result = await admin_users_service.list_users(
@@ -54,6 +55,7 @@ async def list_users(
         user_type=user_type.value if user_type else None,
         trust_status=trust_status.value if trust_status else None,
         account_status=account_status.value if account_status else None,
+        order_by=order_by,
     )
     return SuccessResponse[Page[AdminUserSummaryDto]](data=result)
 
