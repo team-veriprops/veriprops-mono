@@ -1,4 +1,4 @@
-# This Captures things to note about this project
+ # This Captures things to note about this project
 1. Agents must specify their availability to receive tasks.
 2. Run app wide audit to verify guidelines were followed.
 3. Fix Oauth session cookie issue
