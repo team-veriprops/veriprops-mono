@@ -29,8 +29,10 @@ _LIVE = dict(
     DOJAH_BASE_URL="https://api.dojah.io",
     GEOCODING_PROVIDER="GOOGLE_PLACES",
     GOOGLE_PLACES_API_KEY="AIza-live",
-    AWS_ACCESS_KEY="AKIA-live",
-    AWS_SECRET_ACCESS_KEY="aws-secret-live",
+    STORAGE_PROVIDER="R2",
+    STORAGE_ENDPOINT_URL="https://account-id.r2.cloudflarestorage.com",
+    STORAGE_ACCESS_KEY_ID="r2-key-id",
+    STORAGE_SECRET_ACCESS_KEY="r2-secret",
 )
 
 
@@ -65,7 +67,7 @@ class TestProductionRunsLive:
 
     @pytest.mark.parametrize("key", ["DOJAH_APP_ID", "DOJAH_PRIVATE_KEY", "GOOGLE_PLACES_API_KEY",
                                      "FLUTTERWAVE_SECRET_KEY", "FLUTTERWAVE_WEBHOOK_SECRET",
-                                     "AWS_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"])
+                                     "STORAGE_ACCESS_KEY_ID", "STORAGE_SECRET_ACCESS_KEY"])
     @pytest.mark.parametrize("blank", ["", "CHANGE_ME"])
     def test_a_live_integration_without_its_key_is_refused(self, key, blank):
         with pytest.raises(ValidationError, match=key):
@@ -79,6 +81,15 @@ class TestProductionRunsLive:
         # Sandbox answers are mock data: a sandbox "match" is no evidence of anyone's identity.
         with pytest.raises(ValidationError, match="DOJAH_BASE_URL"):
             _settings(DOJAH_BASE_URL="https://sandbox.dojah.io")
+
+    def test_r2_without_its_endpoint_is_refused(self):
+        # Without an endpoint the S3 client talks to AWS, where R2's keys mean nothing.
+        with pytest.raises(ValidationError, match="STORAGE_ENDPOINT_URL"):
+            _settings(STORAGE_ENDPOINT_URL="")
+
+    def test_the_ses_keys_are_not_required(self):
+        # SES is the last email fallback; production starts without it.
+        assert _settings(AWS_ACCESS_KEY="", AWS_SECRET_ACCESS_KEY="").ENVIRONMENT == Environment.PRODUCTION
 
     def test_every_problem_is_named_at_once(self):
         with pytest.raises(ValidationError) as exc:

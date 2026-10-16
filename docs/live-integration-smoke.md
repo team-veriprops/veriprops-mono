@@ -16,22 +16,23 @@ The live status of every integration is tracked in the third-party register in [
 
 | Part | What it proves | Where |
 | --- | --- | --- |
-| `live_smoke.py` | Each adapter against its sandbox. It opens a checkout and reads back the unpaid charge; lists banks, resolves an account, quotes a fee and (optionally) sends ₦100; puts, reads and deletes an object on S3; sends an email on each of Resend, Mailjet and SES, one SMS each on Termii and Twilio, and a WhatsApp template; checks five intents; runs Dojah liveness and a BVN match; and gets Places suggestions and details | [backend/scripts/live_smoke.py](../backend/scripts/live_smoke.py) |
+| `live_smoke.py` | Each adapter against its sandbox. It opens a checkout and reads back the unpaid charge; lists banks, resolves an account, quotes a fee and (optionally) sends ₦100; puts, reads and deletes an object in storage (R2); sends an email on each of Resend, Mailjet and SES, one SMS each on Termii and Twilio, and a WhatsApp template; checks five intents; runs Dojah liveness and a BVN match; and gets Places suggestions and details | [backend/scripts/live_smoke.py](../backend/scripts/live_smoke.py) |
 | `@live` Playwright spec | What only a browser on the deployment can show. A customer pays on the hosted checkout with the sandbox card, the webhook makes the case PAID, and failing the case refunds the charge. The report PDF renders on the deployed runtime. The reviewer sees the applicant's selfie and passport photo side by side, loaded from private storage | [frontend/e2e/specs/live-integrations.spec.ts](../frontend/e2e/specs/live-integrations.spec.ts) |
 
 ## Before the first run (one-time setup)
 
-1. **Doppler `stg` exists.** Create the `stg` config in `veriprops-verf-backend` (and `veriprops-verf-frontend`), then put its service tokens in the GitHub `staging` Environment. `deploy.yml` needs them as well.
-2. **Sandbox keys in Doppler `stg`.** A missing key makes only its own probe SKIP, never fail:
+1. **Doppler `preview` is staging's config** in `veriprops-verf-backend` and `veriprops-verf-frontend` (`APPODUS_ACTIVE_ENV=staging`). Its service tokens sit in the GitHub `staging` Environment, where `deploy.yml` reads them.
+2. **Sandbox keys in Doppler `preview`.** A missing key makes only its own probe SKIP, never fail:
    - **Payments:** `FLUTTERWAVE_SECRET_KEY` (`FLWSECK_TEST-…`), `FLUTTERWAVE_PUBLIC_KEY`, `FLUTTERWAVE_WEBHOOK_SECRET`, `PAYSTACK_SECRET_KEY` (`sk_test_…`), `PAYSTACK_PUBLIC_KEY`.
    - **Identity and address:** `DOJAH_APP_ID`, `DOJAH_PRIVATE_KEY` (sandbox app), `GOOGLE_PLACES_API_KEY`.
-   - **Storage:** `AWS_ACCESS_KEY`, `AWS_SECRET_ACCESS_KEY` (staging bucket `AWS_S3_BUCKET`, plus SES in the same region).
+   - **Storage (Cloudflare R2):** `STORAGE_ENDPOINT_URL`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` (an R2 API token scoped to bucket `veriprops-documents-staging`).
+   - **SES email:** `AWS_ACCESS_KEY`, `AWS_SECRET_ACCESS_KEY` (an IAM user with `ses:SendEmail`, in `AWS_REGION_NAME`).
    - **Email and SMS:** `RESEND_API_KEY`, `MAILJET_API_KEY`, `MAILJET_API_SECRET`, `TERMII_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`.
    - **WhatsApp and intent:** `WHATSAPP_BUSINESS_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID` (Meta's test number), `INTENT_API_KEY`.
 3. **Gateway dashboards (test mode):**
    - Register the webhook URLs: `https://staging.veriprops.ng/api/webhooks/flutterwave` and `https://staging.veriprops.ng/api/webhooks/paystack`. Like every call, they go through the Next.js proxy (production: `https://veriprops.ng/api/webhooks/<gateway>`).
    - On Paystack, turn off the transfer OTP.
-   - On Flutterwave, whitelist the calling IP for transfers. Vercel's outbound IPs change, so settle this before relying on live payouts.
+   - Leave Flutterwave's transfer IP whitelist **off** while the backend runs on Vercel, whose outbound IPs change (NOTES.md D3); turn it on after the move to a fixed-IP host.
 4. **Meta:** add your handset to the test number's allowed recipients.
 5. **Test assets:**
    - an inbox you can read;
@@ -43,7 +44,7 @@ The live status of every integration is tracked in the third-party register in [
 Run it from `backend/`, on your machine. It refuses to start under a production environment, with a live gateway key, or against Dojah's production host.
 
 ```bash
-doppler run --project veriprops-verf-backend --config stg -- \
+doppler run --project veriprops-verf-backend --config preview -- \
   python scripts/live_smoke.py \
     --email you@example.com \
     --phone +2348030000000 --intl-phone +447700900000 \
@@ -60,7 +61,7 @@ doppler run --project veriprops-verf-backend --config stg -- \
 Things to look for, and to record in the register, on the first run:
 
 - **Dojah.** Which name fields `/kyc/nin/verify` returns. How an unknown number is answered: a 404, or a 400 containing "not found". Both are handled, and anything else surfaces as a FAIL.
-- **Termii.** Whether it accepts the number with its leading `+`. The adapter sends E.164 as given.
+- **Termii.** Whether it accepts the digits-only number the adapter sends (`digits_of(E.164)`, e.g. `2348012345678`).
 - **Paystack.** Whether the webhook signature validates with the secret key.
 - **Both gateways.** Whether a second refund of an already-refunded charge is declined.
 - **Flutterwave.** What the fee quote says, compared with the fee the dashboard shows as charged.
@@ -82,7 +83,7 @@ pnpm e2e:live
   1. The spec follows whichever gateway staging's `ACTIVE_PAYMENT_METHOD` chose, and pays with that gateway's documented sandbox card: Flutterwave 5531 8866 5214 2950 / 09/32 / 564, PIN 3310, OTP 12345; Paystack 4084 0840 8408 4081 / any future expiry / 408.
   2. It waits up to 3 minutes for the webhook to make the case PAID.
   3. The admin then fails the case. The admin's confirmation says "Verification failed & refunded" only when the gateway took the refund; a refusal says so, and waits in Finance's refunds-to-retry list.
-  4. To try the other gateway, switch `ACTIVE_PAYMENT_METHOD` in Doppler `stg`, redeploy, and run again.
+  4. To try the other gateway, switch `ACTIVE_PAYMENT_METHOD` in Doppler `preview`, redeploy, and run again.
   - **The card-filling steps are unverified until the first run.** They find each field by what a person reads (its label, placeholder or name, in the page or any frame), because the gateways' pages are theirs and change without notice. If a gateway changes its checkout, the trace shows the step that stopped; fix the patterns in [e2e/helpers/live.ts](../frontend/e2e/helpers/live.ts).
 - **UAT-LIVE-02 (report PDF).** The released report downloads as a real PDF rendered on the deployed runtime.
 - **UAT-LIVE-03 (KYC photos).**
@@ -99,4 +100,4 @@ When a test fails, the HTML report and the trace are in `frontend/e2e/playwright
 
 - Update each row you exercised in the [register](progress.md#third-party-sandbox-test-register): `SANDBOX-PASSED` with the date, or `BLOCKED(<reason>)`.
 - Delete the selfie file.
-- The sandbox charges, transfers and applications stay on staging, where they are harmless. S3 objects written by the smoke are deleted by the run itself.
+- The sandbox charges, transfers and applications stay on staging, where they are harmless. Storage objects written by the smoke are deleted by the run itself.

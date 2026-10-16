@@ -23,7 +23,7 @@ class IDocumentStorageProvider(ABC):
 
     @abstractmethod
     async def get_presigned_url(self, key: str, bucket: str,
-                                expires_in_sec: int = settings.AWS_S3_PRESIGNED_URL_EXPIRES) -> str:
+                                expires_in_sec: int = settings.STORAGE_PRESIGNED_URL_EXPIRES) -> str:
         pass
 
     @abstractmethod

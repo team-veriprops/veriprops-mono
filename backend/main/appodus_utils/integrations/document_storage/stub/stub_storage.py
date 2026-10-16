@@ -1,8 +1,8 @@
 """Deterministic document-storage provider for tests/local dev.
 
-Mirrors the OTP / payment / KYC stub philosophy: no external calls, no AWS
+Mirrors the OTP / payment / KYC stub philosophy: no external calls, no storage
 credentials required, fully deterministic. Selected when
-``AWS_S3_PLATFORM_NAME == FileStorage.STUB`` (or by the evidence service under
+``STORAGE_PROVIDER == FileStorage.STUB`` (or by the evidence service under
 ``DOCUMENT_STORAGE_STUB_MODE``). Returns a synthetic, stable URL derived from the
 object key so the rest of the pipeline (content-hash, GPS/timestamp stamping,
 evidence rows) is exercised end-to-end without a real bucket.

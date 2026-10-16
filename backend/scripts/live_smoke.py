@@ -20,9 +20,9 @@ What it does not cover, and where that lives instead:
 * the report PDF and the reviewer's KYC photos on the deployed runtime — the same spec.
 
 Run from backend/ (the whole catalogue, or a few probes by name):
-    doppler run --config stg -- python scripts/live_smoke.py \
+    doppler run --config preview -- python scripts/live_smoke.py \
         --email you@example.com --phone +2348030000000 --whatsapp 2348030000000 --selfie me.jpg
-    doppler run --config stg -- python scripts/live_smoke.py --only places,dojah --selfie me.jpg
+    doppler run --config preview -- python scripts/live_smoke.py --only places,dojah --selfie me.jpg
     python scripts/live_smoke.py --list
 """
 from __future__ import annotations
@@ -54,6 +54,7 @@ from main.app.config.settings import DOJAH_SANDBOX_HOST, Environment, Integrated
 from main.appodus_utils.config.settings import IntentProvider, is_configured_secret  # noqa: E402
 from main.appodus_utils.db.types.money import TransactionCurrency  # noqa: E402
 from main.appodus_utils.integrations.exception.exceptions import IntegrationException  # noqa: E402
+from main.appodus_utils.integrations.messaging.qa_recipients import QA_EMAIL_DOMAIN  # noqa: E402
 
 # ─── Outcomes ───────────────────────────────────────────────────────────────────────
 
@@ -170,7 +171,8 @@ async def _collection(platform: IntegratedPlatform, key: str) -> str:
     url = await gateway.create_hosted_checkout(HostedCheckoutRequest(
         reference=reference, amount_minor=_CHARGE_MINOR, currency=TransactionCurrency.NGN,
         redirect_url=f"{settings.BACKEND_PUBLIC_ORIGIN.rstrip('/')}/smoke-return",
-        customer_email="smoke@veriprops.test", customer_name="Live Smoke",
+        # A real-looking QA address: Paystack rejects the reserved `.test` domain.
+        customer_email=f"smoke@{QA_EMAIL_DOMAIN}", customer_name="Live Smoke",
         title="Veriprops live smoke", description="Sandbox round trip; never paid",
     ))
     check(urlparse(url).scheme == "https", f"checkout URL is not https: {url!r}")
@@ -262,9 +264,9 @@ async def probe_s3(_options: Options) -> str:
     prefix (erasure's path) and check the link stops working."""
     from main.appodus_utils.integrations.document_storage.factory import DocumentStorageProviderFactory
 
-    _require("AWS_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY")
+    _require("STORAGE_ACCESS_KEY_ID", "STORAGE_SECRET_ACCESS_KEY")
     storage = di[DocumentStorageProviderFactory].get_active_provider()
-    bucket = settings.AWS_S3_BUCKET
+    bucket = settings.STORAGE_BUCKET
     prefix = f"smoke/{secrets.token_hex(8)}/"
     body = b"veriprops live smoke"
     upload_url = await storage.upload(

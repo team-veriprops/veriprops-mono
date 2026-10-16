@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from kink import inject, di
 
 from main.app.config.settings import settings
+from main.appodus_utils.config.settings import FileStorage
 from main.appodus_utils.integrations.document_storage.interface import IDocumentStorageProvider
 from main.appodus_utils.integrations.exception.exceptions import IntegrationException
 
@@ -25,21 +26,33 @@ logger: Logger = di["logger"]
 
 @inject
 class S3DocumentStorageProvider(IDocumentStorageProvider):
+    """Any S3-compatible store: AWS S3 when `STORAGE_ENDPOINT_URL` is blank, Cloudflare R2 (or
+    another compatible store) at that endpoint otherwise."""
+
+    # Only AWS S3 takes `ServerSideEncryption` on a put. R2 encrypts every object at rest and
+    # does not implement the header, so it is sent only when no custom endpoint is configured.
+    _request_sse: bool = True
 
     def __init__(self):
-        if not settings.AWS_ACCESS_KEY or not settings.AWS_SECRET_ACCESS_KEY:
-            raise ValueError("AWS credentials are missing in settings")
+        if not settings.STORAGE_ACCESS_KEY_ID or not settings.STORAGE_SECRET_ACCESS_KEY:
+            raise ValueError("Storage credentials are missing in settings")
 
+        endpoint_url = settings.STORAGE_ENDPOINT_URL or None
+        self._request_sse = endpoint_url is None
         self.client = boto3.client(
             "s3",
-            aws_access_key_id=settings.AWS_ACCESS_KEY,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            config=Config(region_name=settings.AWS_REGION_NAME, signature_version="s3v4")
+            endpoint_url=endpoint_url,
+            aws_access_key_id=settings.STORAGE_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.STORAGE_SECRET_ACCESS_KEY,
+            config=Config(region_name=settings.STORAGE_REGION, signature_version="s3v4")
         )
 
     @property
     def platform(self) -> str:
-        return settings.AWS_S3_PLATFORM_NAME
+        # Serves both S3-compatible slots; never claims the stub's.
+        if settings.STORAGE_PROVIDER in (FileStorage.S3, FileStorage.R2):
+            return settings.STORAGE_PROVIDER
+        return FileStorage.S3
 
     #
     # @staticmethod
@@ -72,7 +85,7 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
             "ContentType": content_type or _DEFAULT_CONTENT_TYPE,
             "Metadata": {k: str(v) for k, v in metadata.items()},
         }
-        if encrypted:
+        if encrypted and self._request_sse:
             params["ServerSideEncryption"] = "AES256"
 
         try:
@@ -81,7 +94,7 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
         except (BotoCoreError, ClientError) as e:
             logger.error(f"S3 upload failed for bucket={bucket}, key={key}: {e}")
             raise IntegrationException("Could not store the document.") from e
-        return await self.get_presigned_url(key, bucket, expires_in_sec=settings.AWS_S3_PRESIGNED_URL_EXPIRES)
+        return await self.get_presigned_url(key, bucket, expires_in_sec=settings.STORAGE_PRESIGNED_URL_EXPIRES)
 
     async def upload_local_doc(self, key: str, bucket: str, local_path: str, metadata: dict) -> str:
         if not os.path.exists(local_path):
@@ -105,13 +118,13 @@ class S3DocumentStorageProvider(IDocumentStorageProvider):
             os.remove(local_path)
             logger.info(f"Local PDF removed after upload: {local_path}")
 
-            return await self.get_presigned_url(key, bucket, expires_in_sec=settings.AWS_S3_PRESIGNED_URL_EXPIRES)
+            return await self.get_presigned_url(key, bucket, expires_in_sec=settings.STORAGE_PRESIGNED_URL_EXPIRES)
         except (BotoCoreError, ClientError) as e:
             logger.error(f"S3 upload failed for bucket={bucket}, key={key}: {e}")
             raise IntegrationException("Could not store the document.") from e
 
     async def get_presigned_url(
-        self, key: str, bucket: str, expires_in_sec: int = settings.AWS_S3_PRESIGNED_URL_EXPIRES
+        self, key: str, bucket: str, expires_in_sec: int = settings.STORAGE_PRESIGNED_URL_EXPIRES
     ) -> str:
         try:
             logger.info(f"Generating presigned URL for {bucket}/{key}")

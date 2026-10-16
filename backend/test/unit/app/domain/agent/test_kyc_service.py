@@ -211,5 +211,5 @@ class TestReviewAndErasure:
 
         deleted = await svc.delete_images("u-1")
 
-        svc._storage.delete_prefix.assert_awaited_once_with("kyc/u-1/", settings.AWS_S3_BUCKET)
+        svc._storage.delete_prefix.assert_awaited_once_with("kyc/u-1/", settings.STORAGE_BUCKET)
         assert deleted == 3

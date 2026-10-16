@@ -129,7 +129,7 @@ class KycService:
     async def delete_images(self, user_id: str) -> int:
         """Delete every stored KYC photo of the user (erasure, §4.11), including any no record
         points at (an upload whose submission rolled back). Returns how many."""
-        return await self._storage_factory.storage().delete_prefix(_folder(user_id), settings.AWS_S3_BUCKET)
+        return await self._storage_factory.storage().delete_prefix(_folder(user_id), settings.STORAGE_BUCKET)
 
     # ── helpers ───────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ class KycService:
 
     async def _store(self, key: str, image: _Image, user_id: str) -> str:
         await self._storage_factory.storage().upload(
-            key=key, bucket=settings.AWS_S3_BUCKET, file_bytes=image.data,
+            key=key, bucket=settings.STORAGE_BUCKET, file_bytes=image.data,
             metadata={"user_id": user_id, "purpose": "kyc"}, encrypted=True, content_type=image.content_type,
         )
         return key
@@ -158,7 +158,7 @@ class KycService:
         if not key:
             return None
         return await self._storage_factory.storage().get_presigned_url(
-            key, settings.AWS_S3_BUCKET, expires_in_sec=settings.KYC_IMAGE_LINK_SECONDS,
+            key, settings.STORAGE_BUCKET, expires_in_sec=settings.KYC_IMAGE_LINK_SECONDS,
         )
 
     async def _verify(

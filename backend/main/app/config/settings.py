@@ -58,6 +58,8 @@ class Settings(AppodusBaseSettings):
         "PAYSTACK_SECRET_KEY",
         "AWS_ACCESS_KEY",
         "AWS_SECRET_ACCESS_KEY",
+        "STORAGE_ACCESS_KEY_ID",
+        "STORAGE_SECRET_ACCESS_KEY",
         "TERMII_API_KEY",
         "TERMII_API_SECRET_KEY",
         "MAILJET_API_KEY",
@@ -174,13 +176,21 @@ class Settings(AppodusBaseSettings):
     # TEMPLATING
     TEMPLATE_ENGINE: Optional[str] = "jinja2"
 
-    # AWS — real values live in the git-ignored .env.{env}, never in committed source.
+    # AWS — the SES email provider only (the last email fallback). Keys come from Doppler.
     AWS_ACCESS_KEY: Optional[str] = SECRET_PLACEHOLDER
     AWS_SECRET_ACCESS_KEY: Optional[str] = SECRET_PLACEHOLDER
     AWS_REGION_NAME: Optional[str] = "us-east-1"
-    AWS_S3_BUCKET: Optional[str] = "veriprops-documents"
-    AWS_S3_PLATFORM_NAME: Optional[str] = FileStorage.S3
-    AWS_S3_PRESIGNED_URL_EXPIRES: int = 60 * 15 # 15 mins
+
+    # Document storage (evidence, KYC images) on any S3-compatible store. A blank endpoint is
+    # AWS S3; Cloudflare R2 is `https://<account_id>.r2.cloudflarestorage.com`, where any
+    # region resolves to `auto` (us-east-1 included). Keys come from Doppler.
+    STORAGE_PROVIDER: FileStorage = FileStorage.S3
+    STORAGE_ENDPOINT_URL: str = ""
+    STORAGE_REGION: str = "us-east-1"
+    STORAGE_ACCESS_KEY_ID: Optional[str] = SECRET_PLACEHOLDER
+    STORAGE_SECRET_ACCESS_KEY: Optional[str] = SECRET_PLACEHOLDER
+    STORAGE_BUCKET: str = "veriprops-documents-prod"
+    STORAGE_PRESIGNED_URL_EXPIRES: int = 60 * 15 # 15 mins
     # Deterministic document storage for tests/local (no external calls), like
     # PAYMENT_STUB_MODE. When true, evidence upload uses the stub provider; the
     # content hash + server-stamped GPS/timestamp are computed regardless (§4.5, §12.3).
@@ -441,7 +451,11 @@ class Settings(AppodusBaseSettings):
         if self.GEOCODING_PROVIDER != GeoProvider.GOOGLE_PLACES:
             problems.append(f"GEOCODING_PROVIDER must be {GeoProvider.GOOGLE_PLACES.value}")
 
-        required = ["DOJAH_APP_ID", "DOJAH_PRIVATE_KEY", "GOOGLE_PLACES_API_KEY", "AWS_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"]
+        if self.STORAGE_PROVIDER == FileStorage.R2 and not self.STORAGE_ENDPOINT_URL:
+            problems.append("STORAGE_ENDPOINT_URL must be set for R2 (without it the client talks to AWS)")
+
+        required = ["DOJAH_APP_ID", "DOJAH_PRIVATE_KEY", "GOOGLE_PLACES_API_KEY",
+                    "STORAGE_ACCESS_KEY_ID", "STORAGE_SECRET_ACCESS_KEY"]
         if self.ACTIVE_PAYMENT_METHOD == PaymentMethod.FLUTTERWAVE:
             required += ["FLUTTERWAVE_SECRET_KEY", "FLUTTERWAVE_WEBHOOK_SECRET"]
         elif self.ACTIVE_PAYMENT_METHOD == PaymentMethod.PAYSTACK:

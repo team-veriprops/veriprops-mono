@@ -77,7 +77,7 @@ class EvidenceService:
         provider = self._provider()
         storage_url = await provider.upload(
             key=key,
-            bucket=settings.AWS_S3_BUCKET,
+            bucket=settings.STORAGE_BUCKET,
             file_bytes=file_bytes,
             metadata={"task_id": task_id, "agent_id": agent_id, "sha256": content_hash},
             encrypted=True,
@@ -117,7 +117,7 @@ class EvidenceService:
         serves a stable synthetic URL with no bucket/creds in tests/local."""
         provider = self._provider()
         return await provider.get_presigned_url(
-            item.storage_key, settings.AWS_S3_BUCKET, expires_in_sec=settings.AWS_S3_PRESIGNED_URL_EXPIRES
+            item.storage_key, settings.STORAGE_BUCKET, expires_in_sec=settings.STORAGE_PRESIGNED_URL_EXPIRES
         )
 
     def _provider(self) -> IDocumentStorageProvider:
