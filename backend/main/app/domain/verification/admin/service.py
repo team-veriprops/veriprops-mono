@@ -47,11 +47,12 @@ from main.app.domain.verification.admin.models import (
 from main.app.domain.verification.admin_note.models import AddAdminNoteDto, AdminNoteDto
 from main.app.domain.verification.admin_note.service import AdminNoteService
 from main.app.domain.verification.models import Verification
-from main.app.domain.verification.repo import VerificationRepo
+from main.app.domain.verification.repo import ADMIN_VERIFICATION_SORTABLE, VerificationRepo
 from main.app.domain.verification.task.models import ReviewDecision, TaskAssignmentMode, TaskDto
 from main.app.domain.verification.task.service import VerificationTaskService
 from main.appodus_utils import Utils
-from main.appodus_utils.db.models import Page, PaginationMeta
+from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.db.models import Page
 from main.appodus_utils.db.types.money import TransactionCurrency
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
@@ -109,7 +110,7 @@ class AdminVerificationService:
         status_counts = {VerificationStatus(s): c for s, c in raw.items()}
         today = Utils.datetime_now().date()
         horizon = today + timedelta(days=await self._config.get_int(ConfigKey.SLA_AT_RISK_DAYS))
-        recent_rows, _ = await self._verification_repo.page_admin(offset=0, limit=_DASHBOARD_RECENT_LIMIT)
+        recent_rows, *_ = await self._verification_repo.page_admin(offset=0, limit=_DASHBOARD_RECENT_LIMIT)
         return AdminDashboardDto(
             total=sum(status_counts.values()),
             status_counts=status_counts,
@@ -135,22 +136,16 @@ class AdminVerificationService:
         overdue_only: bool = False,
         page: int = 0,
         page_size: int = 10,
+        order_by: Optional[str] = None,
     ) -> Page[VerificationSummaryDto]:
         due_before = Utils.datetime_now().date() if overdue_only else None
-        rows, total = await self._verification_repo.page_admin(
+        rows, total, applied = await self._verification_repo.page_admin(
             status=status, tier=tier, state_region=state_region, query=query,
-            due_before=due_before, offset=page * page_size, limit=page_size,
+            due_before=due_before, offset=page * page_size, limit=page_size, order_by=order_by,
         )
         items = [await self._summary(v) for v in rows]
-        total_pages = (total + page_size - 1) // page_size if page_size else 0
-        return Page[VerificationSummaryDto](
-            items=items,
-            meta=PaginationMeta(
-                page=page, page_size=page_size, count=len(items), total=total,
-                total_pages=total_pages,
-                prev_page=page - 1 if page > 0 else None,
-                next_page=page + 1 if (page + 1) < total_pages else None,
-            ),
+        return DbUtils.build_page(
+            items, total, page, page_size, sort=applied, sortable=ADMIN_VERIFICATION_SORTABLE,
         )
 
     # ── Detail (§6.1) ─────────────────────────────────────────────

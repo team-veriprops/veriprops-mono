@@ -68,10 +68,10 @@ def _admin(**over):
 class TestListTeam:
     async def test_forwards_search_and_sub_role_filter(self):
         svc = _make_service()
-        svc._user_repo.list_admins = AsyncMock(return_value=[])
-        await svc.list_team(page=0, page_size=10, query="ada", sub_role=AdminSubRole.FINANCE.value)
-        svc._user_repo.list_admins.assert_awaited_once_with(
-            sub_role_filter=AdminSubRole.FINANCE, query="ada"
+        svc._user_repo.page_admins = AsyncMock(return_value=([], 0, "firstName asc"))
+        await svc.list_team(page=2, page_size=10, query="ada", sub_role=AdminSubRole.FINANCE.value, order_by="email desc")
+        svc._user_repo.page_admins.assert_awaited_once_with(
+            offset=20, limit=10, sub_role_filter=AdminSubRole.FINANCE, query="ada", order_by="email desc",
         )
 
     async def test_builds_dto_from_real_uuid_id(self):
@@ -83,8 +83,11 @@ class TestListTeam:
             date_created=datetime(2026, 7, 5, tzinfo=timezone.utc),
         )
         svc = _make_service()
-        svc._user_repo.list_admins = AsyncMock(return_value=[admin])
+        svc._user_repo.page_admins = AsyncMock(return_value=([admin], 11, "firstName asc"))
         page = await svc.list_team(page=0, page_size=10)
+        assert (page.meta.total, page.meta.total_pages, page.meta.next_page) == (11, 2, 1)
+        assert page.meta.sort == "firstName asc"
+        assert page.meta.sortable_fields == ["adminSubRole", "dateCreated", "email", "firstName"]
         assert page.items[0].id == admin_id.hex
         assert page.items[0].sub_role == AdminSubRole.OPERATIONS
 

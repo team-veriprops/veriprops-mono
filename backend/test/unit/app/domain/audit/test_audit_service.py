@@ -54,7 +54,7 @@ def _make_svc(list_for_resource=None, list_by_resource_ids=None, list_admin_acti
     repo = MagicMock()
     repo.list_for_resource = list_for_resource or AsyncMock(return_value=([], 0))
     repo.list_by_resource_ids = list_by_resource_ids or AsyncMock(return_value=[])
-    repo.list_admin_actions = list_admin_actions or AsyncMock(return_value=([], 0))
+    repo.list_admin_actions = list_admin_actions or AsyncMock(return_value=([], 0, "occurredAt desc"))
     repo.create = AsyncMock()
     return AuditLogService(audit_repo=repo)
 
@@ -65,7 +65,7 @@ class TestGetActivityLog:
         svc = _make_svc(list_for_resource=AsyncMock(return_value=([row], 1)))
         result = await svc.get_activity_log("VERIFICATION", "vid-1", page=0, page_size=10)
 
-        assert result.total == 1
+        assert result.meta.total == 1
         assert len(result.items) == 1
         event: AuditEventDto = result.items[0]
         assert event.action == AuditActionType.VERIFICATION_STATE_CHANGED.value
@@ -77,16 +77,15 @@ class TestGetActivityLog:
     async def test_empty_result_returns_empty_list(self):
         svc = _make_svc(list_for_resource=AsyncMock(return_value=([], 0)))
         result = await svc.get_activity_log("TASK", "task-1")
-        assert result.total == 0
+        assert result.meta.total == 0
         assert result.items == []
 
     async def test_pagination_metadata(self):
         rows = [_make_row() for _ in range(3)]
         svc = _make_svc(list_for_resource=AsyncMock(return_value=(rows, 15)))
         result = await svc.get_activity_log("VERIFICATION", "vid-1", page=1, page_size=3)
-        assert result.page == 1
-        assert result.page_size == 3
-        assert result.total == 15
+        assert (result.meta.page, result.meta.page_size, result.meta.total) == (1, 3, 15)
+        assert (result.meta.total_pages, result.meta.prev_page, result.meta.next_page) == (5, 0, 2)
 
 
 class TestListPackTransitions:
@@ -110,13 +109,16 @@ class TestListPackTransitions:
 class TestListAdminActions:
     async def test_filters_by_action_type_and_paginates(self):
         row = _make_row(action=AuditActionType.ADMIN_CONFIG_CHANGED)
-        svc = _make_svc(list_admin_actions=AsyncMock(return_value=([row], 1)))
+        svc = _make_svc(list_admin_actions=AsyncMock(return_value=([row], 1, "action asc")))
         result = await svc.list_admin_actions(
             action_types=[AuditActionType.ADMIN_CONFIG_CHANGED.value],
             page=0,
             page_size=10,
+            order_by="action asc",
         )
-        assert result.total == 1
+        assert svc._audit_repo.list_admin_actions.call_args.kwargs["order_by"] == "action asc"
+        assert result.meta.total == 1
+        assert (result.meta.sort, result.meta.sortable_fields) == ("action asc", ["action", "occurredAt", "resourceType"])
         assert result.items[0].action == AuditActionType.ADMIN_CONFIG_CHANGED.value
         assert result.items[0].actor_id == "admin-1"
 
@@ -128,7 +130,7 @@ class TestListAdminActions:
         assert call_args.kwargs["action_types"] == ADMIN_ACTION_TYPES
 
     async def test_empty_result(self):
-        svc = _make_svc(list_admin_actions=AsyncMock(return_value=([], 0)))
+        svc = _make_svc()
         result = await svc.list_admin_actions()
         assert result.items == []
-        assert result.total == 0
+        assert result.meta.total == 0

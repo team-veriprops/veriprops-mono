@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from main.app.domain.user.models import AdminSubRole
 from main.appodus_utils import Object
@@ -32,8 +32,3 @@ class ChangeSubRoleDto(Object):
     sub_role: AdminSubRole
 
 
-class AdminTeamPageDto(Object):
-    items: List[AdminMemberDto]
-    total: int
-    page: int
-    page_size: int

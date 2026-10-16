@@ -1,6 +1,6 @@
 # Progress Tracker — Pending issues after PR #26 (2026-10-01 → 07)
 
-status: **Stages 1–9 complete.** Stage 1 shipped as PR #27, and the dev deploy migrated 0002 → 0007. Stages 2–9 are on `fix/pending-issues`, one commit group per stage, in one PR to `dev`.
+status: **Stages 1–10 complete.** Stage 1 shipped as PR #27, and the dev deploy migrated 0002 → 0007. Stages 2–9 are on `fix/pending-issues`, one commit group per stage, in one PR to `dev`.
 
 | Stage | Change | Migration | Decision |
 | --- | --- | --- | --- |
@@ -14,6 +14,7 @@ status: **Stages 1–9 complete.** Stage 1 shipped as PR #27, and the dev deploy
 | 7b | Bus savepoints + `atomic` events, atomic broadcast pages, job retries; payout email recorded as SENT | `0012_retries` | D102 |
 | 8 | Docs (MASTER-PRD §4.8, this file, uat-strategy) and the PR | — | — |
 | 9 | Every remaining issue: only a qualifying agent takes a task (one eligibility rule); generic repo reads flush first (and a lean read by id no longer returns deleted rows); the suite fails on a swallowed subscriber fault (60 found, in 4 files); python-jose → PyJWT with one OAuth ID-token verifier; the D97 config rows on every database; margin % never rounds up to the minimum; config list via `effective_config_value`; pytest warnings 940 → 0. The six-engine run found two more, both fixed: `/dev/scenario` drew QA phone numbers blind from a million-number range and collided on `uq_users_phone_e164` (UAT-RBAC-04's 500), now `free_qa_local_phones`; and the sign-out helper polled for an overlay that lives a frame or two (UAT-SESS-04), now recorded page-side across the redirect | `0013_d97_config_rows` | D103 |
+| 10 | Admin lists sort on the server from each list's allowlist (`order_by`, `meta.sort`/`sortableFields`); every page from `build_page` (broadcast paging fixed, team pages in SQL, team/audit/activity/history on `Page[T]`); one `ListPager`; rows-per-page wired; owner actions written up in `NOTES.md` | — | D104 |
 
 **Final gate on the branch head:**
 
@@ -86,7 +87,7 @@ A parallel session holds uncommitted fixed-commission work, with migration `0002
 - Firebase initialises on the first push send, so a missing key can no longer break the message router.
 - A new hygiene tripwire fails if any tracked file holds private-key material. It was verified to flag `HEAD`'s two key files.
 - `NOTES.md` no longer lists test-user passwords.
-- **User action:** rotate both keys in GCP/Firebase, then put the new ones in Doppler `stg`/`prd` as base64. The old keys remain in git history, which is not purged by decision.
+- **User action:** rotate both keys in GCP/Firebase, then put the new ones in Doppler `preview`/`prd` as base64. The old keys remain in git history, which is not purged by decision.
 
 **SMS routing.**
 
@@ -138,7 +139,7 @@ The frontend is unchanged, so the S0 vitest and build results carry over.
 - The client `PageRequest` type no longer carries the server-only `queryFields`/`where`/`exactStringValues`.
 - `ui/ShareModal.tsx` and its store are deleted. They were never rendered, and the "share referral" action only showed a success toast without sending anything.
 
-**New gap (both halves):** DataTable sort headers set `orderBy`, but no list endpoint accepts a client sort. Recorded as `TODO(gap)` in `types/models.ts` plus a §G.2 row.
+**New gap (both halves):** DataTable sort headers set `orderBy`, but no list endpoint accepts a client sort. Recorded as `TODO(gap)` in `types/models.ts` plus a §G.2 row. *Closed in Stage 10 (D104).*
 
 **Deferred to S7:** a single shared page-query serializer for the 8+ services that each build `?page=…&page_size=…` by hand. That was a review suggestion; the regex guard covers the drift in the meantime.
 
@@ -384,7 +385,7 @@ The PRD states this.
 **What exists now:**
 
 - **`backend/scripts/live_smoke.py`**
-  - One probe per integration, calling the app's own adapters with Doppler `stg`'s keys:
+  - One probe per integration, calling the app's own adapters with Doppler `preview`'s keys:
     - both gateways' checkout and charge read-back;
     - banks, resolve and fee, plus an optional ₦100 transfer with the duplicate-reference check;
     - S3 put, read, fresh link and delete-by-prefix;
@@ -404,7 +405,7 @@ The PRD states this.
   - Both CI lanes exclude it. It runs on one worker with no retries and no reset or seed, because staging is shared.
   - A missing credential fails the test, and an empty lane fails the run.
   - The card-filling steps find fields the way a person reads them, and are **unverified until the first staging run**. The user chose fully automated filling over a tester paying by hand.
-- **Runbook** [live-integration-smoke.md](live-integration-smoke.md): one-time setup (Doppler `stg`, keys, dashboards, test assets), both parts, what to confirm on the first run, and updating this register.
+- **Runbook** [live-integration-smoke.md](live-integration-smoke.md): one-time setup (Doppler `preview`, keys, dashboards, test assets), both parts, what to confirm on the first run, and updating this register.
 
 **Found and fixed along the way:**
 
@@ -686,7 +687,7 @@ it without an import cycle (see `commission_rule/margin.py`).
 
 ## Third-party sandbox test register
 
-This register lists every third-party integration still stubbed, or not yet proven live. It is created in S0 and updated at the close of every stage, so the sandbox runs can be done together once keys land in Doppler `stg`.
+This register lists every third-party integration still stubbed, or not yet proven live. It is created in S0 and updated at the close of every stage, so the sandbox runs can be done together once keys land in Doppler `preview`.
 
 - **Mode** is how staging and prod run today; test and dev run every integration on stubs.
 - **Status** is one of `STUBBED`, `CONTRACT-TESTED`, `SANDBOX-PASSED` or `BLOCKED(<reason>)`.
@@ -701,9 +702,9 @@ This register lists every third-party integration still stubbed, or not yet prov
   - row 14: `whatsapp`;
   - row 15: `intent`;
   - the report PDF on the deployed runtime: UAT-LIVE-02.
-- Run it with `doppler run --config stg -- python scripts/live_smoke.py --only <probe>`. A row becomes `SANDBOX-PASSED` only from a run where its probe printed PASS.
+- Run it with `doppler run --config preview -- python scripts/live_smoke.py --only <probe>`. A row becomes `SANDBOX-PASSED` only from a run where its probe printed PASS.
 
-| # | Integration | Mode stg / prd (today) | Automated coverage | Sandbox test still to run | Needs (who) | Stage | Status |
+| # | Integration | Mode preview / prd (today) | Automated coverage | Sandbox test still to run | Needs (who) | Stage | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Flutterwave collection | wired in S3 (hosted checkout, verify-by-reference, verbatim `verif-hash`, refund by id) | `test_gateway_contracts.py`, `test_payment_webhooks.py`, `test_payment_gateway_flow.py` | init → hosted checkout with a test card → `verif-hash` webhook → verify → PAID; failed card → FAILED; refund → REFUNDED | FLW test public/secret keys + secret hash; webhook URL registered to staging (user). Also confirm a second refund of a refunded charge is declined | S3 | CONTRACT-TESTED |
 | 2 | Paystack collection | wired in S3 (signature keyed by the **secret key** — confirm in sandbox) | `test_gateway_contracts.py`, `test_payment_webhooks.py` | same flow with a Paystack test card; `x-paystack-signature`; refund | Paystack test secret key; webhook URL (user). Also confirm a second refund of a refunded charge is declined | S3 | CONTRACT-TESTED |
@@ -711,26 +712,26 @@ This register lists every third-party integration still stubbed, or not yet prov
 | 4 | Bank list + account resolve | wired in S4: Paystack `GET /bank?currency=NGN` (cursor-paged, transfer-capable only) + `GET /bank/resolve`; Flutterwave `GET /banks/NG` + `POST /accounts/resolve`. The saved name is the bank's | `test_transfer_contracts.py`, `test_bank_account_service.py`; drive-through (stub) | list banks; resolve a documented test account (Flutterwave `0690000032`/044); an unknown number → refused | gateway test keys (user) | S4 | CONTRACT-TESTED |
 | 5 | Batch payout disbursement | wired in S4: approve → APPROVED; button/daily sweep claims → `send_transfer` under a per-attempt reference → webhook or lookup → PAID; a decline → FAILED (funds reserved) → finance retry/reject | `test_payout_disbursement.py`, `test_transfer_contracts.py`, `test_payment_webhooks.py`; drive-through (stub: paid, declined, retried, rejected) | button → transfer → `transfer.completed`/`transfer.success` → PAID; a failing test account → FAILED; retry; a `transfer.reversed` → FAILED. Confirm a duplicate reference is refused | test keys with transfers enabled; **Paystack transfer OTP disabled**; **Flutterwave server-IP whitelist** (a problem on Vercel's changing IPs); webhook URLs (user) | S4 | CONTRACT-TESTED |
 | 6 | Transfer fee (both) / retry | wired in S4: Flutterwave `GET /transfers/fee`; Paystack from its published NGN table (₦10 / ₦25 / ₦50), which has no API. Retry is a new attempt under a new reference, after the gateway confirms the last one failed | `test_transfer_contracts.py`, `test_payout_service.py` | quote on both gateways vs the dashboard's charged fee; a retried transfer lands once | test keys (user). Re-check Paystack's table if its pricing changes | S4 | CONTRACT-TESTED |
-| 7 | Dojah BVN/NIN selfie match | wired in S5: `/kyc/{bvn,nin}/verify` with the selfie (threshold sent at Dojah's floor, 50; ≥80 verifies, 50–79 and a name mismatch go to review); passport/licence/voter's card go to a reviewer. stg on the sandbox host, prd on `api.dojah.io` (prod refuses the sandbox) | `test_dojah_kyc.py`, `test_kyc_service.py`, `test_stub_kyc.py`; drive-through (stub) | sandbox BVN `22222222222` and NIN `70123456789` with a test selfie → VERIFIED; an unknown number → FAILED; confirm which name fields `/kyc/nin/verify` returns (both variants are read) and how an unknown number is answered (404 vs 400 "not found") | Dojah sandbox AppId + secret key (user) | S5 | CONTRACT-TESTED |
+| 7 | Dojah BVN/NIN selfie match | wired in S5: `/kyc/{bvn,nin}/verify` with the selfie (threshold sent at Dojah's floor, 50; ≥80 verifies, 50–79 and a name mismatch go to review); passport/licence/voter's card go to a reviewer. preview on the sandbox host, prd on `api.dojah.io` (prod refuses the sandbox) | `test_dojah_kyc.py`, `test_kyc_service.py`, `test_stub_kyc.py`; drive-through (stub) | sandbox BVN `22222222222` and NIN `70123456789` with a test selfie → VERIFIED; an unknown number → FAILED; confirm which name fields `/kyc/nin/verify` returns (both variants are read) and how an unknown number is answered (404 vs 400 "not found") | Dojah sandbox AppId + secret key (user) | S5 | CONTRACT-TESTED |
 | 8 | Dojah selfie liveness | wired in S5: `/api/v1/ml/liveness` before every identity call; no face, several faces or not live → FAILED with our sentence; photos kept privately for the reviewer (side-by-side view), deleted by erasure | `test_dojah_kyc.py`, `test_kyc_service.py`, `test_erasure_service.py`, `KycPhotoCompare.test.tsx`; Playwright onboarding uploads a real JPEG | a live selfie → pass; a photo of a photo → fail; a group photo → fail | Dojah sandbox (user) | S5 | CONTRACT-TESTED |
 | 9 | Google Places (New) | wired in S5: `places:autocomplete` (Nigeria only) + place details on selection, field masks on both, one session token per search; key in a header | `test_google_places.py`, `verification-service.test.ts` | type "Lekki" → suggestions → pick one → coordinates filled; check the billing console shows one session | Places API (New) key restricted to that API and the staging server (user) | S5 | CONTRACT-TESTED |
-| 10 | S3 evidence storage | fixed in S1 (valid `put_object`, real MIME, fresh presigned reads) | `test_s3_storage.py` (botocore Stubber: put, presign, delete, safe failure) | put (image + PDF MIME) → presign → GET 200 → delete | AWS staging bucket + IAM keys (user) | S1 | CONTRACT-TESTED |
+| 10 | Evidence storage (Cloudflare R2) | fixed in S1 (valid `put_object`, real MIME, fresh presigned reads); R2 endpoint + no SSE header 2026-10-11 | `test_s3_storage.py` (botocore Stubber: put, presign, delete, safe failure; R2 client config) | put (image + PDF MIME) → presign → GET 200 → delete | R2 bucket `veriprops-documents-staging` + scoped API token + `STORAGE_ENDPOINT_URL` (user) | S1 | CONTRACT-TESTED |
 | 11 | SMS Termii | routing fixed in S1 | routing: `test_router_sms_routing.py`; Termii HTTP adapter: none; live probe `sms_termii` | OTP to a +234 test number → delivered. Confirm Termii accepts the digits-only number (since the pending-issues cycle the adapter sends `digits_of(E.164)`, e.g. `2348012345678`) | Termii key + sender ID, test handset (user) | S1 | STUBBED |
 | 12 | SMS Twilio fallback | routing fixed in S1 (Termii down → Twilio; never the mock) | routing: `test_router_sms_routing.py`; Twilio adapter: none | non-NG number, and Termii forced down → Twilio | Twilio SID/token/number (user) | S1 | STUBBED |
 | 13 | Email Resend → Mailjet → SES | wired | Mailpit in drive-through (SMTP only); `test_resend_provider.py`, `test_aws_ses_provider.py`; live probes `email_*` | one email per provider to a test inbox; force a Resend failure → fallback | Resend/Mailjet/SES keys, verified domain (user) | S6 | STUBBED |
-| 14 | WhatsApp Meta `send_message` + templates | wired (D88 test number on stg) | signature checks in drive-through; live probe `whatsapp` (number health, template directory, `hello_world`) | template to Meta's test number; free text inside the 24h window | Meta test number, WABA id, token (user) | S6 | STUBBED |
-| 15 | Intent (DeepSeek) | wired | `test_live_intent_adapters.py`; live probe `intent` | 5 fixed utterances → expected intents; bad key → UNKNOWN | `INTENT_API_KEY` in stg (user) | S6 | STUBBED |
+| 14 | WhatsApp Meta `send_message` + templates | wired (D88 test number on preview) | signature checks in drive-through; live probe `whatsapp` (number health, template directory, `hello_world`) | template to Meta's test number; free text inside the 24h window | Meta test number, WABA id, token (user) | S6 | STUBBED |
+| 15 | Intent (DeepSeek) | wired | `test_live_intent_adapters.py`; live probe `intent` | 5 fixed utterances → expected intents; bad key → UNKNOWN | `INTENT_API_KEY` in preview (user) | S6 | STUBBED |
 | 16 | OAuth Google / Facebook / Apple | Google OK; FB/Apple `mock_value` | none live | full login on staging per provider | real FB app id; Apple team/key/client id + p8 key (user) | I-5 | STUBBED |
 | 17 | Firebase push | credentials load at startup, no tokens stored | none | — | — | §G | BLOCKED(feature not built) |
 | 18 | FX live rates | hardcoded rates | none | — | OpenExchangeRates key when the gap is picked up | §G | BLOCKED(deferred gap) |
 | 19 | Zoho DocSign / Google Drive | not in any live flow | none | — | — | — | BLOCKED(unused) |
-| 20 | Cloudflare sweep Cron Worker (D100) | `deploy.yml` `deploy-sweep-cron` ships it per environment and re-sets its secrets from the backend Doppler config; the backend refuses to boot on stg/prd without `SWEEP_TRIGGER_SECRET` | `infra/cloudflare/sweep-cron/test/index.test.js` (backend CI `sweep-cron` job); tick endpoint unit tests; drive-through `sweep_tick` stage (local clock) | the deployed Worker fires every minute → `200` from `/api/internal/sweeps/tick` in the Worker logs; confirm `x-edge-auth` passes once the Transform Rule is on; a staging broadcast drains through it | repo secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; `SWEEP_TRIGGER_SECRET` in each backend Doppler config (user) | pending-issues S6 | CONTRACT-TESTED |
+| 20 | Cloudflare sweep Cron Worker (D100) | `deploy.yml` `deploy-sweep-cron` ships it per environment and re-sets its secrets from the backend Doppler config; the backend refuses to boot on preview/prd without `SWEEP_TRIGGER_SECRET` | `infra/cloudflare/sweep-cron/test/index.test.js` (backend CI `sweep-cron` job); tick endpoint unit tests; drive-through `sweep_tick` stage (local clock) | the deployed Worker fires every minute → `200` from `/api/internal/sweeps/tick` in the Worker logs; confirm `x-edge-auth` passes once the Transform Rule is on; a staging broadcast drains through it | repo secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; `SWEEP_TRIGGER_SECRET` in each backend Doppler config (user) | pending-issues S6 | CONTRACT-TESTED |
 
 **User actions gathered from the audit:**
 
 - Rotate the Firebase and contracts service-account keys (they are tracked in git), plus any credentials recorded in memory.
-- **Create the Doppler `stg` config.** `veriprops-verf-backend` has only `dev`, `dev_personal`, `dev_test`, `prd` and `preview`, as checked in S6. Then put its service tokens in the GitHub `staging` Environment: `deploy.yml` and `live_smoke.py` both expect it.
-- Load the sandbox keys above into Doppler `stg`, and the live keys into `prd`. **Production refuses to boot** without Dojah (production host), Places, AWS and the active gateway's keys (S5).
+- ~~Create a Doppler staging config.~~ Resolved 2026-10-11: staging's config is `preview` (`APPODUS_ACTIVE_ENV=staging`) in both projects, and the GitHub `staging` Environment holds its service tokens.
+- Load the sandbox keys above into Doppler `preview`, and the live keys into `prd`. **Production refuses to boot** without Dojah (production host), Places, AWS and the active gateway's keys (S5).
 - Restrict the Places key to Places API (New) and the server.
 - On the gateway dashboards:
   - register the webhook URLs (`https://<host>/api/webhooks/{flutterwave,paystack}`);

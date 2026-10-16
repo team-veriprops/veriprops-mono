@@ -25,12 +25,13 @@ from main.app.domain.compliance.erasure.models import (
 )
 from main.app.domain.compliance.erasure.pseudonymiser import PiiPseudonymiser
 from main.app.domain.user.agent.kyc.service import KycService
-from main.app.domain.compliance.erasure.repo import DataErasureRequestRepo
+from main.app.domain.compliance.erasure.repo import ERASURE_SORTABLE, DataErasureRequestRepo
 from main.app.domain.system_config.models import ConfigKey
 from main.app.domain.system_config.service import ConfigService
 from main.app.domain.user.repo import UserRepo
 from main.appodus_utils import Utils
-from main.appodus_utils.db.models import Page, PaginationMeta
+from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.db.models import Page
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
 from main.appodus_utils.decorators.method_trace_logger import method_trace_logger
 from main.appodus_utils.decorators.transactional import transactional
@@ -115,17 +116,14 @@ class ErasureService:
             raise ResourceNotFoundException(resource=_RESOURCE)
         return row
 
-    async def page(self, status: Optional[str], page: int, page_size: int) -> Page[DataErasureRequestDto]:
-        rows, total = await self._erasure_repo.page_by_status(status, offset=page * page_size, limit=page_size)
-        total_pages = (total + page_size - 1) // page_size if page_size else 0
-        return Page[DataErasureRequestDto](
-            items=[erasure_to_dto(r) for r in rows],
-            meta=PaginationMeta(
-                page=page, page_size=page_size, count=len(rows), total=total,
-                total_pages=total_pages,
-                prev_page=page - 1 if page > 0 else None,
-                next_page=page + 1 if (page + 1) < total_pages else None,
-            ),
+    async def page(
+        self, status: Optional[str], page: int, page_size: int, order_by: Optional[str] = None,
+    ) -> Page[DataErasureRequestDto]:
+        rows, total, applied = await self._erasure_repo.page_by_status(
+            status, offset=page * page_size, limit=page_size, order_by=order_by,
+        )
+        return DbUtils.build_page(
+            [erasure_to_dto(r) for r in rows], total, page, page_size, sort=applied, sortable=ERASURE_SORTABLE,
         )
 
     async def approve(self, request_id: str, admin_id: str) -> DataErasureRequest:

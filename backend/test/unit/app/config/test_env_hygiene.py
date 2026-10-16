@@ -269,7 +269,7 @@ class TestStagingEnvContract:
         assert env["INTENT_MODEL"] == prod["INTENT_MODEL"]
 
     def test_meta_identifiers_are_not_committed_here(self, env):
-        """Staging must take its number from Doppler `stg`.
+        """Staging must take its number from Doppler `preview`.
 
         A value in this file would be reviewable, which is exactly the risk: the number is
         what the channel *is*, and the wrong one sends QA traffic to real customers.

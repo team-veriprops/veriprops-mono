@@ -115,5 +115,5 @@ class TestPresignedUrl:
         await svc.presigned_url(item)
 
         assert svc._provider_mock.get_presigned_url.await_args.kwargs["expires_in_sec"] == (
-            settings.AWS_S3_PRESIGNED_URL_EXPIRES
+            settings.STORAGE_PRESIGNED_URL_EXPIRES
         )

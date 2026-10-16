@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { TransactionCurrency } from "@/types/models";
@@ -40,7 +41,7 @@ describe("RefundApprovals", () => {
   it("opens on the pending queue, read from the server", () => {
     result.data = { status: "success", code: "200", items: [request], meta: { page: 0, pageSize: 10, count: 1, total: 1, totalPages: 1 } };
     const html = renderToStaticMarkup(<RefundApprovals />);
-    expect(queryCalls.at(-1)).toEqual([0, RefundRequestStatus.PENDING]);
+    expect(queryCalls.at(-1)).toEqual([0, RefundRequestStatus.PENDING, DEFAULT_PAGE_SIZE, undefined]);
     expect(html).toContain("VP-2026-ABC");
     expect(html).toContain('href="/admin/verifications/v1"');
   });

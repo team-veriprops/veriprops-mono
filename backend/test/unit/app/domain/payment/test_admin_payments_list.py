@@ -10,9 +10,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from main.app.domain.payment.models import AdminPaymentDto, Payment, PaymentStatus, admin_payment_to_dto
+from main.app.domain.payment.models import AdminPaymentDto, Payment, PaymentDto, PaymentStatus, admin_payment_to_dto
 from main.app.domain.payment.repo import PaymentRepo
 from main.app.domain.payment.service import PaymentService
+from main.appodus_utils.db.db_utils import DbUtils
 from main.appodus_utils.db.session import db_session_ctx
 
 
@@ -35,19 +36,20 @@ def _repo(session, rows):
     session.execute = AsyncMock(return_value=result)
     repo = object.__new__(PaymentRepo)
     repo._model = Payment
+    repo._db_utils = DbUtils(model=Payment, query_qto=PaymentDto)
     return repo
 
 
 async def test_it_pages_every_payment_newest_first_with_its_vid(session):
     repo = _repo(session, [("p1", "VP-1")])
 
-    rows, total = await repo.page_for_admin(page=2, page_size=10)
+    rows, total, applied = await repo.page_for_admin(page=2, page_size=10)
 
-    assert (rows, total) == ([("p1", "VP-1")], 1)
+    assert (rows, total, applied) == ([("p1", "VP-1")], 1, "dateCreated desc")
     sql = _sql(session.execute.await_args.args[0])
     assert "replace(cast(verifications.id as varchar), '-', '') = payments.verification_id" in sql
     assert "payments.deleted is false" in sql
-    assert "order by payments.date_created desc" in sql
+    assert "order by payments.date_created desc, payments.id asc" in sql
     assert "limit 10 offset 20" in sql
     assert "payments.status =" not in sql
 
@@ -61,6 +63,24 @@ async def test_it_filters_by_status_and_searches_reference_or_vid(session):
     assert "payments.status = 'refunded'" in sql
     assert "lower(payments.tx_ref) like '%' || lower('vp-7') || '%' escape '/'" in sql
     assert "lower(verifications.vid) like '%' || lower('vp-7') || '%' escape '/'" in sql
+
+
+async def test_a_client_sort_orders_by_an_allowed_column(session):
+    repo = _repo(session, [])
+
+    *_, applied = await repo.page_for_admin(page=0, page_size=10, order_by="amountMinor asc")
+
+    assert applied == "amountMinor asc"
+    assert "order by payments.amount_minor asc, payments.id asc" in _sql(session.execute.await_args.args[0])
+
+
+async def test_a_sort_outside_the_allowlist_falls_back_to_newest_first(session):
+    repo = _repo(session, [])
+
+    *_, applied = await repo.page_for_admin(page=0, page_size=10, order_by="customerId asc")
+
+    assert applied == "dateCreated desc"
+    assert "order by payments.date_created desc" in _sql(session.execute.await_args.args[0])
 
 
 async def test_a_search_cannot_widen_itself_with_wildcards(session):
@@ -104,9 +124,12 @@ async def test_the_service_returns_a_page_of_rows(session):
     session.flush = AsyncMock()
     svc = object.__new__(PaymentService)
     svc._payment_repo = MagicMock()
-    svc._payment_repo.page_for_admin = AsyncMock(return_value=([(_payment(), "VP-1")], 11))
+    svc._payment_repo.page_for_admin = AsyncMock(return_value=([(_payment(), "VP-1")], 11, "amountMinor asc"))
 
-    page = await svc.page_for_admin(page=1, page_size=10, query=None, status=None)
+    page = await svc.page_for_admin(page=1, page_size=10, query=None, status=None, order_by="amountMinor asc")
 
     assert [r.vid for r in page.items] == ["VP-1"]
     assert page.meta.total == 11
+    assert page.meta.sort == "amountMinor asc"
+    assert page.meta.sortable_fields == ["amountMinor", "dateCreated", "provider", "status", "txRef"]
+    svc._payment_repo.page_for_admin.assert_awaited_once_with(1, 10, None, None, "amountMinor asc")

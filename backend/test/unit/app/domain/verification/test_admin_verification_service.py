@@ -90,7 +90,7 @@ class TestDashboardSummary:
         svc._verification_repo.count_by_status = AsyncMock(return_value=status_counts)
         svc._verification_repo.count_overdue = AsyncMock(return_value=3)
         svc._verification_repo.count_due_within = AsyncMock(return_value=6)
-        svc._verification_repo.page_admin = AsyncMock(return_value=(list(recent_rows), len(recent_rows)))
+        svc._verification_repo.page_admin = AsyncMock(return_value=(list(recent_rows), len(recent_rows), "dateCreated desc"))
         svc._property_repo.get_model = AsyncMock(return_value=None)
         svc._payment_repo.sum_collected_revenue = AsyncMock(return_value=99_000_000)
         svc._task_service.count_pool_pending = AsyncMock(return_value=4)

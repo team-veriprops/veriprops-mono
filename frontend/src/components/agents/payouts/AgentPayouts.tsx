@@ -24,6 +24,7 @@ import {
 } from "./libs/usePayoutQueries";
 import { PayoutHistoryItem } from "./PayoutHistoryItem";
 import { getErrorMessage } from "@lib/errors";
+import ListPager from "@components/ui/ListPager";
 
 /** A Nigerian NUBAN: exactly ten digits (the backend enforces the same). */
 const ACCOUNT_NUMBER_LENGTH = 10;
@@ -270,15 +271,13 @@ function PayoutHistory() {
                 ))}
               </ul>
             )}
-            <div className="mt-3 flex items-center justify-between">
-              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                Previous
-              </Button>
-              <span className="text-xs text-muted-foreground">Page {page + 1}</span>
-              <Button variant="outline" size="sm" disabled={pageData.meta.nextPage == null} onClick={() => setPage((p) => p + 1)}>
-                Next
-              </Button>
-            </div>
+            <ListPager
+              page={page}
+              totalPages={pageData.meta.totalPages}
+              onPageChange={setPage}
+              className="mt-3"
+              testIdPrefix="payout-history-pager"
+            />
           </>
         )}
       </AsyncStateComponent>

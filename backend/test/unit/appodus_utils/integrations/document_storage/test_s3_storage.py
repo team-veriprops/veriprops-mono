@@ -10,8 +10,13 @@ import pytest
 from botocore.config import Config
 from botocore.stub import ANY, Stubber
 
+from main.app.config.settings import settings
+from main.appodus_utils.config.settings import FileStorage
+from main.appodus_utils.integrations.document_storage.s3 import s3_storage
 from main.appodus_utils.integrations.document_storage.s3.s3_storage import S3DocumentStorageProvider
 from main.appodus_utils.integrations.exception.exceptions import IntegrationException
+
+R2_ENDPOINT = "https://account-id.r2.cloudflarestorage.com"
 
 BUCKET = "veriprops-documents-test"
 KEY = "evidence/v-1/t-1/abc123"
@@ -58,6 +63,19 @@ async def test_upload_sends_a_put_object_s3_accepts(provider, stubber):
 
     assert url.startswith(f"https://{BUCKET}.s3.amazonaws.com/{KEY}")
     assert "X-Amz-Signature=" in url
+
+
+async def test_an_encrypted_upload_to_r2_sends_no_sse_header(provider, stubber):
+    # R2 encrypts every object at rest and does not implement `x-amz-server-side-encryption`.
+    provider._request_sse = False
+    stubber.add_response(
+        "put_object",
+        {"ETag": '"etag"'},
+        {"Bucket": BUCKET, "Key": KEY, "Body": ANY, "ContentType": "image/jpeg", "Metadata": {}},
+    )
+
+    await provider.upload(key=KEY, bucket=BUCKET, file_bytes=b"x", metadata={}, encrypted=True,
+                          content_type="image/jpeg")
 
 
 async def test_an_unencrypted_upload_of_unknown_type_is_stored_as_octet_stream(provider, stubber):
@@ -125,3 +143,49 @@ async def test_delete_prefix_deletes_every_page_under_the_prefix(provider, stubb
 async def test_delete_prefix_refuses_an_empty_prefix(provider):
     with pytest.raises(ValueError):
         await provider.delete_prefix("", BUCKET)
+
+
+class TestClientConfiguration:
+    """Which store the client talks to, with which keys, is decided by the STORAGE_* settings."""
+
+    @staticmethod
+    def _build(monkeypatch, **overrides):
+        for name, value in overrides.items():
+            monkeypatch.setattr(settings, name, value)
+        captured: dict = {}
+
+        def fake_client(service, **kwargs):
+            captured.update(service=service, **kwargs)
+            return object()
+
+        monkeypatch.setattr(s3_storage.boto3, "client", fake_client)
+        return S3DocumentStorageProvider(), captured
+
+    def test_r2_is_reached_through_its_endpoint_with_the_storage_keys(self, monkeypatch):
+        provider, client = self._build(
+            monkeypatch, STORAGE_PROVIDER=FileStorage.R2, STORAGE_ENDPOINT_URL=R2_ENDPOINT,
+            STORAGE_REGION="auto", STORAGE_ACCESS_KEY_ID="r2-key-id", STORAGE_SECRET_ACCESS_KEY="r2-secret",
+        )
+
+        assert client["service"] == "s3"
+        assert client["endpoint_url"] == R2_ENDPOINT
+        assert client["aws_access_key_id"] == "r2-key-id"
+        assert client["aws_secret_access_key"] == "r2-secret"
+        assert client["config"].region_name == "auto"
+        assert provider.platform == FileStorage.R2
+        assert provider._request_sse is False
+
+    def test_a_blank_endpoint_means_aws_s3(self, monkeypatch):
+        provider, client = self._build(
+            monkeypatch, STORAGE_PROVIDER=FileStorage.S3, STORAGE_ENDPOINT_URL="",
+            STORAGE_ACCESS_KEY_ID="aws-key-id", STORAGE_SECRET_ACCESS_KEY="aws-secret",
+        )
+
+        assert client["endpoint_url"] is None
+        assert provider.platform == FileStorage.S3
+        assert provider._request_sse is True
+
+    def test_it_never_claims_the_stubs_slot(self, monkeypatch):
+        provider, _ = self._build(monkeypatch, STORAGE_PROVIDER=FileStorage.STUB)
+
+        assert provider.platform == FileStorage.S3

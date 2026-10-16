@@ -11,6 +11,7 @@ export interface AdminUsersListParams {
   userType?: string;
   trustStatus?: string;
   accountStatus?: string;
+  orderBy?: string;
 }
 
 /**
@@ -31,6 +32,7 @@ export class AdminUsersService {
     if (params.userType) search.set("user_type", params.userType);
     if (params.trustStatus) search.set("trust_status", params.trustStatus);
     if (params.accountStatus) search.set("account_status", params.accountStatus);
+    if (params.orderBy) search.set("order_by", params.orderBy);
     return this.http.get(`${this.base}?${search.toString()}`);
   }
 

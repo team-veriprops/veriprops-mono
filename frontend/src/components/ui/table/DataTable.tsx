@@ -1,4 +1,4 @@
-import { ReactNode, Suspense } from "react";
+import { ReactNode, Suspense, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -27,14 +27,22 @@ import { useGlobalSettings } from "@stores/useGlobalSettings";
 import { Card, CardContent } from "@components/3rdparty/ui/card";
 import { TableToolbar } from "./TableToolbar";
 import { AnimatedTableRow } from "../AnimatedTableRow";
-import { DATATABLE_TEST_IDS, datatableActionTestId } from "./testIds";
+import { nextOrderBy } from "@lib/utils";
+import { DATATABLE_TEST_IDS, datatableActionTestId, datatableSortTestId } from "./testIds";
 
-export { datatableActionTestId };
+export { datatableActionTestId, datatableSortTestId };
+
+/** The header's `aria-sort` for *key* under the applied sort ("email desc"). */
+function ariaSort(key: string, sort?: string): "ascending" | "descending" | "none" {
+  const [sortKey, direction] = (sort ?? "").split(" ");
+  if (sortKey !== key) return "none";
+  return direction === "desc" ? "descending" : "ascending";
+}
 
 export interface Column<T> {
+  /** The field the cell shows; also the sort key the backend may list in `meta.sortableFields`. */
   key: keyof T | string;
   label: string;
-  sortable?: boolean;
   filterable?: boolean;
   render?: (value: unknown, item: T) => React.ReactNode;
   width?: string;
@@ -67,7 +75,7 @@ interface DataTableProps<T extends { id: string }> {
   searchPlaceholder?: string;
   /** Controlled search text (URL-synced by the parent). */
   searchValue?: string;
-  /** Controlled sort, e.g. "name asc" (URL-synced by the parent). */
+  /** Controlled sort, e.g. "email asc" (URL-synced by the parent, forwarded to the backend). */
   orderBy?: string;
   onSelectionChange?: (selectedItems: T[]) => void;
   bulkActions?: Action<T[]>[];
@@ -103,6 +111,10 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
   elementOfInterestId
 }: DataTableProps<T>) {
   const { settings } = useGlobalSettings();
+  // Which headers sort, and the order in force, are the backend's to say: a column outside
+  // `sortableFields` is never offered, and with no explicit sort the list's default shows.
+  const sortableFields = new Set(dataPage?.meta.sortableFields ?? []);
+  const activeSort = orderBy || dataPage?.meta.sort;
 
   const SortIcon = ({
     columnKey,
@@ -122,39 +134,14 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
   };
 
   const handleToggleSort = (key: string) => {
-    let newOrderBy: string;
-
-    if (orderBy) {
-      const [sortKey, currentOrder = "asc"] = orderBy.split(" ");
-
-      if (sortKey === key) {
-        const nextOrder = currentOrder === "asc" ? "desc" : "asc";
-        newOrderBy = `${sortKey} ${nextOrder}`;
-      } else {
-        newOrderBy = `${key} asc`;
-      }
-    } else {
-      newOrderBy = `${key} asc`;
-    }
-
-    updateFilters({ orderBy: newOrderBy, page: settings.firstPage });
+    updateFilters({ orderBy: nextOrderBy(activeSort, key), page: settings.firstPage });
   };
 
   const handleFilterChange = (key: string, value: string) => {
     updateFilters({ [key]: value, page: settings.firstPage });
   };
 
-  const handleNextPage = () => {
-    if (dataPage?.meta.nextPage) {
-      updateFilters({ page: dataPage?.meta.nextPage });
-    }
-  };
-
-  const handlePrevPage = () => {
-    if (dataPage?.meta.prevPage !== undefined && dataPage?.meta.prevPage >= 0) {
-      updateFilters({ page: dataPage?.meta.prevPage });
-    }
-  };
+  const handlePageChange = useCallback((page: number) => updateFilters({ page }), [updateFilters]);
 
   const handlePageReset = () => {
     updateFilters({ page: settings.firstPage });
@@ -192,22 +179,35 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
                   />
                 </TableHead>
               )} */}
-              {columns.map((column) => (
-                <TableHead
-                  key={String(column.key)}
-                  className={`px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider
-                    ${column.sortable ? "cursor-pointer hover:bg-accent" : ""}
-                    `
-                  }
-                  style={{ width: column.width }}
-                  onClick={() => column.sortable && handleToggleSort(String(column.key))}
-                >
-                  <div className="flex items-center gap-1">
-                    {column.label}
-                    <SortIcon columnKey={String(column.key)} orderBy={orderBy} />
-                  </div>
-                </TableHead>
-              ))}
+              {columns.map((column) => {
+                const key = String(column.key);
+                const sortable = sortableFields.has(key);
+                return (
+                  <TableHead
+                    key={key}
+                    className={`px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider
+                      ${sortable ? "cursor-pointer select-none hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" : ""}
+                      `
+                    }
+                    style={{ width: column.width }}
+                    onClick={sortable ? () => handleToggleSort(key) : undefined}
+                    onKeyDown={sortable ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleToggleSort(key);
+                      }
+                    } : undefined}
+                    tabIndex={sortable ? 0 : undefined}
+                    aria-sort={sortable ? ariaSort(key, activeSort) : undefined}
+                    data-testid={sortable ? datatableSortTestId(key) : undefined}
+                  >
+                    <div className="flex items-center gap-1">
+                      {column.label}
+                      {sortable && <SortIcon columnKey={key} orderBy={activeSort} />}
+                    </div>
+                  </TableHead>
+                );
+              })}
               {actions.length > 0 && (
                 <TableHead className="w-20 px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</TableHead>
               )}
@@ -329,8 +329,7 @@ export function DataTable<T extends { id: string } & Record<string, unknown>>({
         <TableFooterPagination
           page={currentPage}
           totalPages={dataPage?.meta.totalPages || 0}
-          onPreviousPage={handlePrevPage}
-          onNextPage={handleNextPage}
+          onPageChange={handlePageChange}
           onResetPage={handlePageReset}
         />
       </CardContent>

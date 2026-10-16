@@ -1,15 +1,13 @@
 "use client";
 
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
-import { DEFAULT_HISTORY_PAGE_SIZE } from "@lib/config/app";
 import { PageShell } from "@components/ui/PageShell";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { useGlobalSettings } from "@stores/useGlobalSettings";
 import { humanizeEnumLabel } from "@lib/utils";
-import { Page } from "@/types/models";
+import { emptyPage, Page } from "@/types/models";
 import { ADMIN_ACTION_TYPES, AuditPackRow } from "@/types/audit";
 import { useAdminActionsQuery } from "./libs/useAuditQueries";
-
-const PAGE_SIZE = DEFAULT_HISTORY_PAGE_SIZE;
 
 const columns: Column<AuditPackRow & Record<string, unknown>>[] = [
   {
@@ -36,31 +34,20 @@ const columns: Column<AuditPackRow & Record<string, unknown>>[] = [
 interface AuditTableState extends Record<string, unknown> {
   page: number;
   action: string;
+  orderBy: string;
 }
 
 export default function AdminAuditLog() {
-  const [tableState, updateTableState] = useSyncedQueryState<AuditTableState>({ page: 0, action: "" });
+  const [tableState, updateTableState] = useSyncedQueryState<AuditTableState>({ page: 0, action: "", orderBy: "" });
   const page = tableState.page ?? 0;
   const action = tableState.action ?? "";
+  const orderBy = tableState.orderBy ?? "";
+  const pageSize = useGlobalSettings((s) => s.settings.rowsPerPage);
 
-  const { data, isLoading, isError, error } = useAdminActionsQuery(page, action || undefined);
-
-  const total = data?.total ?? 0;
-  const totalPages = total ? Math.ceil(total / PAGE_SIZE) : 0;
-  const dataPage: Page<AuditPackRow & Record<string, unknown>> = {
-    status: "success",
-    code: "200",
-    items: (data?.items ?? []) as (AuditPackRow & Record<string, unknown>)[],
-    meta: {
-      page,
-      pageSize: PAGE_SIZE,
-      count: data?.items?.length ?? 0,
-      total,
-      totalPages,
-      prevPage: page > 0 ? page - 1 : undefined,
-      nextPage: page + 1 < totalPages ? page + 1 : undefined,
-    },
-  };
+  const { data, isLoading, isError, error } = useAdminActionsQuery(
+    page, pageSize, action || undefined, orderBy || undefined,
+  );
+  const dataPage = (data ?? emptyPage(page, pageSize)) as Page<AuditPackRow & Record<string, unknown>>;
 
   const updateFilters = (u: TableFilterUpdate) => updateTableState(u as Partial<AuditTableState>);
 
@@ -75,6 +62,7 @@ export default function AdminAuditLog() {
         dataPage={dataPage}
         columns={columns}
         currentPage={page}
+        orderBy={orderBy || undefined}
         updateFilters={updateFilters}
         filters={[
           {

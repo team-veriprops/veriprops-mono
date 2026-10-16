@@ -348,6 +348,10 @@ class PaginationMeta(Object):
     total_pages: int = 0
     prev_page: Optional[int] = None
     next_page: Optional[int] = None
+    # The sort applied ("amountMinor desc") and the fields a client may sort this list by;
+    # both empty for a list that offers no client sort.
+    sort: Optional[str] = None
+    sortable_fields: List[str] = []
 
 
 class Page(Object, Generic[T]):

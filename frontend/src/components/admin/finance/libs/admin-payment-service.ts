@@ -3,10 +3,11 @@ import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Page, SuccessResponse } from "@/types/models";
 import { AdminPayment, Payment, PaymentStatus } from "@/types/verification";
 
-/** The server-side search and filter of finance's payments list. */
+/** The server-side search, filter and sort of finance's payments list. */
 export interface PaymentListFilters {
   query?: string;
   status?: PaymentStatus;
+  orderBy?: string;
 }
 
 /**
@@ -16,11 +17,12 @@ export interface PaymentListFilters {
 export class AdminPaymentService {
   constructor(private readonly http: HttpClient) {}
 
-  /** Every charge, newest first; search (reference or VID) and filter run on the server. */
+  /** Every charge, newest first unless sorted; search (reference or VID), filter and sort run on the server. */
   list(page = 0, pageSize = DEFAULT_PAGE_SIZE, filters: PaymentListFilters = {}): Promise<SuccessResponse<Page<AdminPayment>>> {
     const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
     if (filters.query) params.set("query", filters.query);
     if (filters.status) params.set("status", filters.status);
+    if (filters.orderBy) params.set("order_by", filters.orderBy);
     return this.http.get(`/admin/payments?${params.toString()}`);
   }
 

@@ -24,6 +24,11 @@ _UNPAID_STATUSES = (
 )
 
 
+# The admin control-panel list: the columns a client may sort by, and the order without one.
+ADMIN_VERIFICATION_SORTABLE = frozenset({"vid", "tier", "status", "sla_due_date", "date_created"})
+ADMIN_VERIFICATION_DEFAULT_ORDER = "dateCreated desc"
+
+
 @inject
 class VerificationRepo(
     GenericRepo[
@@ -198,10 +203,12 @@ class VerificationRepo(
         due_before: Optional[date] = None,
         offset: int = 0,
         limit: int = 10,
-    ) -> tuple[List[Verification], int]:
-        """Admin control-panel list (§6.1). SLA-health (on-track/at-risk/overdue) is
-        computed in the service from ``sla_due_date``; the DB filters the coarse facets.
-        ``query`` matches the customer-facing VID."""
+        order_by: Optional[str] = None,
+    ) -> tuple[List[Verification], int, str]:
+        """Admin control-panel list (§6.1) in the client's *order_by* (newest first without
+        one), plus the sort applied. SLA-health (on-track/at-risk/overdue) is computed in the
+        service from ``sla_due_date``, which is also what its column sorts by; the DB filters the
+        coarse facets. ``query`` matches the customer-facing VID."""
         conditions = [Verification.deleted.is_(False)]
         if status:
             conditions.append(Verification.status == status)
@@ -214,10 +221,9 @@ class VerificationRepo(
             conditions.append(Verification.sla_due_date.is_not(None))
             conditions.append(Verification.sla_due_date <= due_before)
         base = select(Verification).where(*conditions)
+        applied, order = self._db_utils.client_order_by(
+            order_by, ADMIN_VERIFICATION_SORTABLE, ADMIN_VERIFICATION_DEFAULT_ORDER,
+        )
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
-        rows = (
-            await self._session.execute(
-                base.order_by(Verification.date_created.desc()).offset(offset).limit(limit)
-            )
-        ).scalars().all()
-        return list(rows), int(total or 0)
+        rows = (await self._session.execute(base.order_by(*order).offset(offset).limit(limit))).scalars().all()
+        return list(rows), int(total or 0), applied

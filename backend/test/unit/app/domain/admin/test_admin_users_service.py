@@ -83,7 +83,7 @@ def _make_service(target_user=None):
     svc._verification_repo = MagicMock()
     svc._payment_repo = MagicMock()
 
-    svc._user_repo.page_users = AsyncMock(return_value=([], 0))
+    svc._user_repo.page_users = AsyncMock(return_value=([], 0, "dateCreated desc"))
     svc._user_repo.suspend_user = AsyncMock()
     svc._user_repo.reactivate_user = AsyncMock()
     svc._user_service.get_user_model = AsyncMock(return_value=target_user)
@@ -106,6 +106,7 @@ class TestListUsers:
             user_type=UserType.USER.value,
             trust_status=TrustStatus.TRUSTED.value,
             account_status=AccountStatus.SUSPENDED.value,
+            order_by="email asc",
         )
         svc._user_repo.page_users.assert_awaited_once_with(
             offset=50, limit=25, query="ada",
@@ -113,15 +114,18 @@ class TestListUsers:
             user_type=UserType.USER.value,
             trust_status=TrustStatus.TRUSTED.value,
             account_status=AccountStatus.SUSPENDED.value,
+            order_by="email asc",
         )
 
     async def test_builds_page_of_summaries(self):
         row = _user()
         svc = _make_service()
-        svc._user_repo.page_users = AsyncMock(return_value=([row], 11))
+        svc._user_repo.page_users = AsyncMock(return_value=([row], 11, "dateCreated desc"))
         page = await svc.list_users(page=0, page_size=10)
         assert page.meta.total == 11
         assert page.meta.total_pages == 2
+        assert page.meta.sort == "dateCreated desc"
+        assert page.meta.sortable_fields == ["accountStatus", "dateCreated", "email", "trustStatus", "userType"]
         item = page.items[0]
         assert item.id == row.id.hex
         assert item.name == "Ada Lovelace"

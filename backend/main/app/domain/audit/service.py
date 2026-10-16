@@ -15,14 +15,14 @@ from typing import Any, Dict, List, Optional
 from kink import inject
 
 from main.app.domain.audit.models import (
-    AdminActionLogPageDto,
     AuditActionType,
-    AuditActivityPageDto,
     AuditEventDto,
     AuditPackRowDto,
     CreateAuditLogDto,
 )
-from main.app.domain.audit.repo import AuditLogRepo
+from main.app.domain.audit.repo import ADMIN_ACTION_SORTABLE, AuditLogRepo
+from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.db.models import Page
 from main.appodus_utils import Utils
 from main.appodus_utils.decorators.audit_ctx import schedule_audit_write
 from main.appodus_utils.decorators.decorate_all_methods import decorate_all_methods
@@ -95,7 +95,7 @@ class AuditLogService:
         resource_id: str,
         page: int = 0,
         page_size: int = 20,
-    ) -> AuditActivityPageDto:
+    ) -> Page[AuditEventDto]:
         """PII-safe paginated event list for customer/agent views (no actor_id)."""
         rows, total = await self._audit_repo.list_for_resource(
             resource_type=resource_type,
@@ -113,7 +113,7 @@ class AuditLogService:
             )
             for r in rows
         ]
-        return AuditActivityPageDto(items=items, total=total, page=page, page_size=page_size)
+        return DbUtils.build_page(items, total, page, page_size)
 
     async def list_pack_transitions(self, resource_ids: List[str]) -> List[AuditPackRowDto]:
         """Full audit rows (with actor_id/IP) for a set of resource ids — the
@@ -143,14 +143,16 @@ class AuditLogService:
         date_to: Optional[datetime] = None,
         page: int = 0,
         page_size: int = 20,
-    ) -> AdminActionLogPageDto:
+        order_by: Optional[str] = None,
+    ) -> Page[AuditPackRowDto]:
         types = action_types if action_types else ADMIN_ACTION_TYPES
-        rows, total = await self._audit_repo.list_admin_actions(
+        rows, total, applied = await self._audit_repo.list_admin_actions(
             action_types=types,
             date_from=date_from,
             date_to=date_to,
             offset=page * page_size,
             limit=page_size,
+            order_by=order_by,
         )
         items = [
             AuditPackRowDto(
@@ -167,4 +169,4 @@ class AuditLogService:
             )
             for r in rows
         ]
-        return AdminActionLogPageDto(items=items, total=total, page=page, page_size=page_size)
+        return DbUtils.build_page(items, total, page, page_size, sort=applied, sortable=ADMIN_ACTION_SORTABLE)

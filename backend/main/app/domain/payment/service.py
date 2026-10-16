@@ -33,7 +33,7 @@ from main.app.domain.payment.models import (
     UpdatePaymentDto,
     payment_to_dto,
 )
-from main.app.domain.payment.repo import PaymentRepo
+from main.app.domain.payment.repo import ADMIN_PAYMENT_SORTABLE, PaymentRepo
 from main.app.core.state.machine import VERIFICATION_TERMINAL
 from main.app.domain.payment.refund_request.models import RefundSource
 from main.app.domain.payment.refund_request.service import RefundRequestService
@@ -494,10 +494,14 @@ class PaymentService:
 
     async def page_for_admin(
         self, page: int, page_size: int, query: Optional[str], status: Optional[PaymentStatus],
+        order_by: Optional[str] = None,
     ) -> Page[AdminPaymentDto]:
-        """Finance's payments list (§18.1): every charge, newest first."""
-        rows, total = await self._payment_repo.page_for_admin(page, page_size, query, status)
-        return DbUtils.build_page([admin_payment_to_dto(p, vid) for p, vid in rows], total, page, page_size)
+        """Finance's payments list (§18.1): every charge, newest first unless *order_by* says otherwise."""
+        rows, total, applied = await self._payment_repo.page_for_admin(page, page_size, query, status, order_by)
+        return DbUtils.build_page(
+            [admin_payment_to_dto(p, vid) for p, vid in rows], total, page, page_size,
+            sort=applied, sortable=ADMIN_PAYMENT_SORTABLE,
+        )
 
     async def page_refunds_to_retry(self, page: int, page_size: int) -> Page[PaymentDto]:
         rows, total = await self._payment_repo.page_refunds_to_retry(page, page_size)

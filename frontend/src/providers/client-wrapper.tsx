@@ -50,10 +50,6 @@ export function ClientWrapperProvider({ children }: { children: React.ReactNode 
       disableTransitionOnChange
     >
       <QueryClientProvider client={queryClient}>
-        {/* <LoadScript
-          googleMapsApiKey={publicConfig.googleMapsApiKey!}
-          libraries={googleLibraries}
-        > */}
         {children}
         {/* The modal is auto-suppressed when there's no session, so it costs
             nothing on public pages. PRD §3.2: re-acceptance after a version bump. */}
@@ -69,7 +65,6 @@ export function ClientWrapperProvider({ children }: { children: React.ReactNode 
         {/* PRD §26.4.1: the WhatsApp front door rides every page (it suppresses itself
             inside the payment flow), so it mounts once here rather than per layout. */}
         <WhatsAppWidget />
-        {/* </LoadScript> */}
       </QueryClientProvider>
       <AppToaster />
     </ThemeProvider>

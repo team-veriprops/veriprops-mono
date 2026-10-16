@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Badge } from "@3rdparty/ui/badge";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import { VerificationStatusBadge } from "@components/portal/verifications/VerificationStatusBadge";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { useGlobalSettings } from "@stores/useGlobalSettings";
 import { humanizeEnumLabel } from "@lib/utils";
-import { Page } from "@/types/models";
+import { emptyPage, Page } from "@/types/models";
 import { ROUTES } from "@/lib/routes";
 import { VerificationStatus, VerificationTier } from "@/types/verification";
 import {
@@ -17,7 +17,6 @@ import {
 } from "@/types/adminVerification";
 import { useAdminVerificationsQuery } from "./libs/useAdminVerificationQueries";
 
-const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 // Sentinel used in table state to mean "overdue filter on".
 const OVERDUE = "OVERDUE";
 
@@ -60,7 +59,8 @@ const columns: Column<VerificationSummary & Record<string, unknown>>[] = [
     render: (_v, item) => <span>{item.stateRegion ?? "—"}</span>,
   },
   {
-    key: "slaHealth",
+    // Sorts by the due date the health is derived from (soonest first ascending).
+    key: "slaDueDate",
     label: "SLA",
     render: (_v, item) => <SlaBadge item={item} />,
   },
@@ -72,6 +72,7 @@ interface VerificationTableState extends Record<string, unknown> {
   status: string;
   tier: string;
   overdue: string;
+  orderBy: string;
 }
 
 export default function AdminVerificationList() {
@@ -82,36 +83,27 @@ export default function AdminVerificationList() {
     status: "",
     tier: "",
     overdue: "",
+    orderBy: "",
   });
   const page = tableState.page ?? 0;
   const query = tableState.query ?? "";
   const status = tableState.status ?? "";
   const tier = tableState.tier ?? "";
   const overdue = tableState.overdue ?? "";
+  const orderBy = tableState.orderBy || undefined;
+  const pageSize = useGlobalSettings((s) => s.settings.rowsPerPage);
 
   const filters: VerificationListFilters = {
     status: status ? (status as VerificationStatus) : undefined,
     tier: tier ? (tier as VerificationTier) : undefined,
     overdueOnly: overdue === OVERDUE,
     query: query || undefined,
+    orderBy,
   };
 
-  const { data, isLoading, isError, error } = useAdminVerificationsQuery(filters, page, PAGE_SIZE);
+  const { data, isLoading, isError, error } = useAdminVerificationsQuery(filters, page, pageSize);
 
-  const dataPage: Page<VerificationSummary & Record<string, unknown>> = (data as
-    | Page<VerificationSummary & Record<string, unknown>>
-    | null) ?? {
-    status: "success",
-    code: "200",
-    items: [],
-    meta: {
-      page,
-      pageSize: PAGE_SIZE,
-      count: 0,
-      total: 0,
-      totalPages: 0,
-    },
-  };
+  const dataPage = (data ?? emptyPage(page, pageSize)) as Page<VerificationSummary & Record<string, unknown>>;
 
   const updateFilters = (u: TableFilterUpdate) => {
     updateTableState(u as Partial<VerificationTableState>);
@@ -127,6 +119,7 @@ export default function AdminVerificationList() {
         dataPage={dataPage}
         columns={columns}
         currentPage={page}
+        orderBy={orderBy}
         updateFilters={updateFilters}
         searchValue={query}
         filters={[

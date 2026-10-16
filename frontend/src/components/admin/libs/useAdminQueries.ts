@@ -9,16 +9,16 @@ import { AdminSubRole } from "@/types/admin";
 const adminService = new AdminService(httpClient);
 
 export const adminKeys = {
-  team: (page: number, pageSize: number, query: string, subRole: string) =>
-    ["admin", "team", page, pageSize, query, subRole] as const,
+  team: (page: number, pageSize: number, query: string, subRole: string, orderBy: string) =>
+    ["admin", "team", page, pageSize, query, subRole, orderBy] as const,
   invitations: (page: number, pageSize: number) => ["admin", "invitations", page, pageSize] as const,
   invitePreview: (token: string) => ["admin", "invite-preview", token] as const,
 };
 
-export function useAdminTeamQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE, query = "", subRole = "") {
+export function useAdminTeamQuery(page = 0, pageSize = DEFAULT_PAGE_SIZE, query = "", subRole = "", orderBy = "") {
   return useQuery({
-    queryKey: adminKeys.team(page, pageSize, query, subRole),
-    queryFn: async () => (await adminService.listTeam(page, pageSize, query, subRole)).data ?? null,
+    queryKey: adminKeys.team(page, pageSize, query, subRole, orderBy),
+    queryFn: async () => (await adminService.listTeam(page, pageSize, query, subRole, orderBy || undefined)).data ?? null,
     placeholderData: (prev) => prev,
   });
 }

@@ -177,6 +177,15 @@ def run(ctx: Ctx) -> None:
           [(p["vid"], p["status"], p["refundedAmountMinor"]) for p in listed["items"]]
           == [(paid_case["vid"], "REFUNDED", charge["amountMinor"])],
           f"items={listed['items']}")
+    by_amount = admin.get("/admin/payments", params={"order_by": "amountMinor asc", "page_size": 50}).json()["data"]
+    amounts = [p["amountMinor"] for p in by_amount["items"]]
+    check("finance's payments list sorts server-side by a column the client picks",
+          amounts == sorted(amounts) and by_amount["meta"]["sort"] == "amountMinor asc"
+          and "amountMinor" in by_amount["meta"]["sortableFields"],
+          f"sort={by_amount['meta'].get('sort')} amounts={amounts[:5]}")
+    unsorted = admin.get("/admin/payments", params={"order_by": "customerId asc"}).json()["data"]
+    check("a sort outside the list's allowlist falls back to newest first",
+          unsorted["meta"]["sort"] == "dateCreated desc", f"sort={unsorted['meta'].get('sort')}")
     # The stub gateway never refuses a refund, so nothing waits to be retried — and a retry
     # of a charge that owes nothing is refused rather than sending money twice.
     retries = admin.get("/admin/payments/refund-retries").json()["data"]

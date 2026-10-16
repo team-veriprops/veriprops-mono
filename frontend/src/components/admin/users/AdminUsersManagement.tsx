@@ -1,14 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Badge } from "@3rdparty/ui/badge";
 import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataTable";
 import { StatusPill } from "@components/ui/StatusPill";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { useGlobalSettings } from "@stores/useGlobalSettings";
 import { humanizeEnumLabel } from "@lib/utils";
 import { ROUTES } from "@lib/routes";
 import { AdminUserSummary } from "@/types/admin";
+import { emptyPage, Page } from "@/types/models";
 import {
   AccountStatus,
   TrustStatus,
@@ -58,8 +59,6 @@ const columns: Column<AdminUserSummary & Record<string, unknown>>[] = [
   },
 ];
 
-const PAGE_SIZE = DEFAULT_PAGE_SIZE;
-
 interface UsersTableState extends Record<string, unknown> {
   page: number;
   query: string;
@@ -67,6 +66,7 @@ interface UsersTableState extends Record<string, unknown> {
   userType: string;
   trustStatus: string;
   accountStatus: string;
+  orderBy: string;
 }
 
 export default function AdminUsersManagement() {
@@ -78,6 +78,7 @@ export default function AdminUsersManagement() {
     userType: "",
     trustStatus: "",
     accountStatus: "",
+    orderBy: "",
   });
   const page = tableState.page ?? 0;
   const query = tableState.query ?? "";
@@ -85,36 +86,35 @@ export default function AdminUsersManagement() {
   const userType = tableState.userType ?? "";
   const trustStatus = tableState.trustStatus ?? "";
   const accountStatus = tableState.accountStatus ?? "";
+  const orderBy = tableState.orderBy ?? "";
+  const pageSize = useGlobalSettings((s) => s.settings.rowsPerPage);
 
   const { data: pageData, isLoading, isError, error } = useAdminUsersQuery({
     page,
-    pageSize: PAGE_SIZE,
+    pageSize,
     query: query || undefined,
     persona: persona || undefined,
     userType: userType || undefined,
     trustStatus: trustStatus || undefined,
     accountStatus: accountStatus || undefined,
+    orderBy: orderBy || undefined,
   });
 
   const updateFilters = (updates: TableFilterUpdate) => {
     updateTableState(updates as Partial<UsersTableState>);
   };
 
-  const emptyPage = {
-    status: "success",
-    code: "200",
-    items: [] as (AdminUserSummary & Record<string, unknown>)[],
-    meta: { page: 0, pageSize: PAGE_SIZE, count: 0, total: 0, totalPages: 0 },
-  };
+  const dataPage = (pageData ?? emptyPage(page, pageSize)) as Page<AdminUserSummary & Record<string, unknown>>;
 
   return (
     <div className="space-y-6" data-testid="admin-users">
       <h1 className="text-2xl font-bold text-foreground">Users</h1>
 
       <DataTable<AdminUserSummary & Record<string, unknown>>
-        dataPage={(pageData as typeof emptyPage) ?? emptyPage}
+        dataPage={dataPage}
         columns={columns}
         currentPage={page}
+        orderBy={orderBy || undefined}
         updateFilters={updateFilters}
         searchValue={query}
         filters={[

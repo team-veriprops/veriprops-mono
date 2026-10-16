@@ -22,9 +22,12 @@ export class ErasureService {
   }
 
   // ── Admin review (MANAGE_COMPLIANCE) ──
-  list(status: string | undefined, page = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<SuccessResponse<Page<DataErasureRequest>>> {
+  list(
+    status: string | undefined, page = 0, pageSize = DEFAULT_PAGE_SIZE, orderBy?: string,
+  ): Promise<SuccessResponse<Page<DataErasureRequest>>> {
     const q = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
     if (status) q.set("status", status);
+    if (orderBy) q.set("order_by", orderBy);
     return this.http.get(`/admin/erasure-requests?${q.toString()}`);
   }
 

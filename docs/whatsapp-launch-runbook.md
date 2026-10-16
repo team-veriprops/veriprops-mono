@@ -27,10 +27,10 @@ the ⊘ items depend on assets Meta or a human has to provide.
   to a human and the bot looks alive but useless. It logs a warning once and nothing else.
 - **The two identifiers carry no code default** (D88). `WHATSAPP_PHONE_NUMBER_ID` and
   `WHATSAPP_BUSINESS_ACCOUNT_ID` used to default to production's, which stopped being safe
-  the moment staging ran `meta` — a forgotten `stg` value would have sent QA traffic from the
+  the moment staging ran `meta` — a forgotten `preview` value would have sent QA traffic from the
   official number. The app now refuses to boot on `meta` without both. Set them per config,
-  and check `stg` names the **test** number before any staging deploy.
-- `stg` needs the same set as `prd`, with the test number's own ids and its own handoff
+  and check `preview` names the **test** number before any staging deploy.
+- `preview` needs the same set as `prd`, with the test number's own ids and its own handoff
   keypair — `handoff_keys()` refuses to mint an ephemeral pair outside dev/test, so without
   one every `/wa/*` link fails there.
 
@@ -120,7 +120,7 @@ working in the consumer and Business apps. Schedule it, do not drift into it.
 
 1. Freeze concierge replies and tell the rota the channel is going dark for the window.
 2. Bind the number to the Cloud API in Meta Business Manager.
-3. Point the webhook at `https://<prod>/api/channel/whatsapp/webhook` and complete the hub
+3. Point the webhook at `https://api.veriprops.ng/api/webhooks/whatsapp` and complete the hub
    handshake with `WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN`.
 4. Deploy with `WHATSAPP_PROVIDER=meta`.
 

@@ -7,31 +7,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@3rdparty/ui/select";
-import { Button } from "@3rdparty/ui/button";
+import ListPager from "@components/ui/ListPager";
 import { useGlobalSettings } from "@stores/useGlobalSettings";
-import { DATATABLE_TEST_IDS } from "./testIds";
+import { DATATABLE_PAGER_PREFIX, ROWS_PER_PAGE_OPTIONS } from "./testIds";
 
 interface TableFooterPaginationProps {
   page: number;
   totalPages: number;
-  onNextPage: () => void;
-  onPreviousPage: () => void;
+  onPageChange: (page: number) => void;
   onResetPage: () => void;
 }
 
+/** A DataTable's footer: the rows-per-page choice every table reads, and the shared pager. */
 export default function TableFooterPagination({
   page,
   totalPages,
-  onNextPage,
-  onPreviousPage,
+  onPageChange,
   onResetPage
 }: TableFooterPaginationProps) {
   const { settings, setRowsPerPage } = useGlobalSettings();
 
-  const adjustedPage = settings.firstPage === 0 ? page + 1 : page
-
   return (
-    <div className="flex items-center justify-between p-4 border-t">
+    <div className="flex flex-col gap-3 p-4 border-t sm:flex-row sm:items-center sm:justify-between">
       {/* Rows per page selector */}
       <div className="flex items-center space-x-2">
         <span className="text-sm">Rows per page:</span>
@@ -48,7 +45,7 @@ export default function TableFooterPagination({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {[5, 10, 20, 30, 50].map((size) => (
+            {ROWS_PER_PAGE_OPTIONS.map((size) => (
               <SelectItem key={size} value={size.toString()}>
                 {size}
               </SelectItem>
@@ -57,30 +54,14 @@ export default function TableFooterPagination({
         </Select>
       </div>
 
-      {/* Pagination controls */}
-      <div className="flex items-center space-x-2">
-        <span className="text-sm">
-          Page {adjustedPage} of {totalPages || 1}
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={page <= settings.firstPage}
-          onClick={onPreviousPage}
-          data-testid={DATATABLE_TEST_IDS.PREV}
-        >
-          Prev
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={adjustedPage >= totalPages}
-          onClick={onNextPage}
-          data-testid={DATATABLE_TEST_IDS.NEXT}
-        >
-          Next
-        </Button>
-      </div>
+      <ListPager
+        page={page}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+        testIdPrefix={DATATABLE_PAGER_PREFIX}
+        alwaysShow
+        className="sm:justify-end"
+      />
     </div>
   );
 }

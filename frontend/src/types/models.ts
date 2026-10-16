@@ -238,17 +238,28 @@ export interface PaginationMeta{
   totalPages: number;     // Total number of pages for the total data
   prevPage?: number;      // Previous page number, if any
   nextPage?: number;      // Next page number, if any
+  sort?: string;          // The sort the backend applied, e.g. "dateCreated desc"
+  sortableFields?: string[]; // The fields a client may sort this list by (camelCase)
 }
 
-/** A list request's client-side state: pagination and a search string, which list endpoints
- *  accept as `page`/`page_size`/`query`. `orderBy` is DataTable's sort-header state only; no
- *  list endpoint accepts a client sort (the backend's `order_by` is server-set).
- *  TODO(gap): client-driven sorting on DataTable lists is not wired to any endpoint — PRD "Known Gaps & Roadmap". */
+/** A list request's client-side state, which list endpoints accept as `page`/`page_size`/
+ *  `query`/`order_by`. `orderBy` is a single "field asc|desc"; the backend applies it only when
+ *  the field is in that list's `meta.sortableFields`, otherwise its default order. */
 export interface PageRequest {
   page?: number;                  // Default: 0
   pageSize?: number;            // Default: 10
-  orderBy?: string;             // e.g. "username asc, firstname desc"
+  orderBy?: string;             // e.g. "dateCreated desc"
   query?: string;                // e.g A four bedroom duplex in enugu state
+}
+
+/** A list's placeholder before its first page arrives, so a table renders its empty state. */
+export function emptyPage<T>(page = 0, pageSize = 10): Page<T> {
+  return {
+    status: "success",
+    code: "200",
+    items: [],
+    meta: { page, pageSize, count: 0, total: 0, totalPages: 0, sortableFields: [] },
+  };
 }
 
 export interface PageDetails {

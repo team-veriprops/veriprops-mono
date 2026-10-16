@@ -54,10 +54,11 @@ async def list_erasure_requests(
     status: Optional[str] = Query(default=None),
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=10, ge=1, le=100),
+    order_by: Optional[str] = Query(default=None, max_length=64, description="e.g. \"dateCreated desc\""),
     _admin_id: str = Depends(_guard),
 ):
     return SuccessResponse[Page[DataErasureRequestDto]](
-        data=await erasure_service.page(status, page, page_size)
+        data=await erasure_service.page(status, page, page_size, order_by)
     )
 
 

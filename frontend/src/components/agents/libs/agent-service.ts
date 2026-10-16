@@ -40,10 +40,12 @@ export class AgentService {
     page: number,
     pageSize: number,
     query?: string,
+    orderBy?: string,
   ): Promise<SuccessResponse<Page<AgentApplicationSummary>>> {
     const search = new URLSearchParams();
     if (status) search.set("status", status);
     if (query) search.set("query", query);
+    if (orderBy) search.set("order_by", orderBy);
     search.set("page", String(page));
     search.set("page_size", String(pageSize));
     return this.http.get(`${this.base}/applications?${search.toString()}`);

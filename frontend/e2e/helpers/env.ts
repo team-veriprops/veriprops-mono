@@ -43,7 +43,7 @@ export const TEST_OTP = "654123";
 
 /* ── The `@live` lane (e2e/specs/live-integrations.spec.ts, docs/live-integration-smoke.md) ──
  * Runs against a deployed staging, never the local stack, so it has no seed to read an admin
- * from: staging's super admin comes in from Doppler `stg`. A test needing a value that is not
+ * from: staging's super admin comes in from Doppler `preview`. A test needing a value that is not
  * set skips and says which. */
 
 /** Staging's super admin — decides the KYC application and fails the paid case to refund it. */

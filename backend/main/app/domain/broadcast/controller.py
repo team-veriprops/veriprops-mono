@@ -19,7 +19,8 @@ from main.app.domain.broadcast.models import (
 )
 from main.app.domain.broadcast.service import BroadcastService
 from main.app.domain.user.auth.utils.permissions import Permission, require_permission
-from main.appodus_utils.db.models import Page, PaginationMeta, SuccessResponse
+from main.appodus_utils.db.db_utils import DbUtils
+from main.appodus_utils.db.models import Page, SuccessResponse
 
 broadcast_router = APIRouter(prefix="/admin/broadcasts", tags=["Admin: Broadcasts"])
 broadcast_service: BroadcastService = di[BroadcastService]
@@ -44,11 +45,7 @@ async def list_broadcasts(
     _admin_id: str = Depends(_guard),
 ):
     rows, total = await broadcast_service.list_page(page, page_size, status)
-    data = Page[BroadcastDto](
-        items=[_dto(b) for b in rows],
-        meta=PaginationMeta(page=page, page_size=page_size, total_items=total),
-    )
-    return SuccessResponse[Page[BroadcastDto]](data=data)
+    return SuccessResponse[Page[BroadcastDto]](data=DbUtils.build_page([_dto(b) for b in rows], total, page, page_size))
 
 
 @broadcast_router.get("/preview", response_model=SuccessResponse[BroadcastPreviewDto])

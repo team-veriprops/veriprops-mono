@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { DEFAULT_PAGE_SIZE } from "@lib/config/app";
 import { Badge } from "@3rdparty/ui/badge";
 import { Button } from "@3rdparty/ui/button";
 import { Input } from "@3rdparty/ui/input";
@@ -19,8 +18,9 @@ import { Column, DataTable, TableFilterUpdate } from "@components/ui/table/DataT
 import InvitationIssuedNotice from "./InvitationIssuedNotice";
 import DetailDrawer, { DetailDrawerWidth } from "@components/ui/DetailDrawer";
 import { useSyncedQueryState } from "@hooks/useSyncedQueryState";
+import { useGlobalSettings } from "@stores/useGlobalSettings";
 import { humanizeEnumLabel } from "@lib/utils";
-import { Page } from "@/types/models";
+import { emptyPage, Page } from "@/types/models";
 import { AdminInvitationIssued, AdminInvitationStatus, AdminMember, AdminSubRole } from "@/types/admin";
 import {
   useAdminInvitationsQuery,
@@ -34,22 +34,22 @@ import {
 // Sub-roles a Super Admin may assign (content roles are managed elsewhere).
 const ASSIGNABLE_ROLES = [AdminSubRole.OPERATIONS, AdminSubRole.FINANCE, AdminSubRole.SUPER];
 
+// Keys are the backend's sortable fields: "Name" sorts by first name, "Role" by the sub-role.
 const columns: Column<AdminMember & Record<string, unknown>>[] = [
-  { key: "name", label: "Name" },
+  { key: "firstName", label: "Name", render: (_v, item) => item.name },
   { key: "email", label: "Email" },
   {
-    key: "subRole",
+    key: "adminSubRole",
     label: "Role",
     render: (_v, item) => <Badge>{item.subRole ? humanizeEnumLabel(item.subRole) : "—"}</Badge>,
   },
 ];
 
-const PAGE_SIZE = DEFAULT_PAGE_SIZE;
-
 interface TeamTableState extends Record<string, unknown> {
   page: number;
   query: string;
   subRole: string;
+  orderBy: string;
 }
 
 export default function AdminTeamManagement() {
@@ -57,10 +57,13 @@ export default function AdminTeamManagement() {
     page: 0,
     query: "",
     subRole: "",
+    orderBy: "",
   });
   const page = tableState.page ?? 0;
   const query = tableState.query ?? "";
   const subRole = tableState.subRole ?? "";
+  const orderBy = tableState.orderBy ?? "";
+  const pageSize = useGlobalSettings((s) => s.settings.rowsPerPage);
 
   const [selected, setSelected] = useState<AdminMember | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -71,28 +74,14 @@ export default function AdminTeamManagement() {
   const [issued, setIssued] = useState<{ invitation: AdminInvitationIssued; email: string } | null>(null);
   const [pendingRole, setPendingRole] = useState<AdminSubRole | undefined>();
 
-  const { data: team, isLoading, isError, error } = useAdminTeamQuery(page, PAGE_SIZE, query, subRole);
-  const { data: invitations } = useAdminInvitationsQuery(0, PAGE_SIZE);
+  const { data: team, isLoading, isError, error } = useAdminTeamQuery(page, pageSize, query, subRole, orderBy);
+  const { data: invitations } = useAdminInvitationsQuery(0, pageSize);
   const invite = useInviteAdminMutation();
   const revoke = useRevokeInvitationMutation();
   const changeRole = useChangeSubRoleMutation();
   const deactivate = useDeactivateMemberMutation();
 
-  const totalPages = team ? Math.max(1, Math.ceil(team.total / PAGE_SIZE)) : 0;
-  const dataPage: Page<AdminMember & Record<string, unknown>> = {
-    status: "success",
-    code: "200",
-    items: (team?.items ?? []) as (AdminMember & Record<string, unknown>)[],
-    meta: {
-      page,
-      pageSize: PAGE_SIZE,
-      count: team?.items?.length ?? 0,
-      total: team?.total ?? 0,
-      totalPages,
-      prevPage: page > 0 ? page - 1 : undefined,
-      nextPage: page + 1 < totalPages ? page + 1 : undefined,
-    },
-  };
+  const dataPage = (team ?? emptyPage(page, pageSize)) as Page<AdminMember & Record<string, unknown>>;
 
   const updateFilters = (u: TableFilterUpdate) => {
     updateTableState(u as Partial<TeamTableState>);
@@ -213,6 +202,7 @@ export default function AdminTeamManagement() {
         dataPage={dataPage}
         columns={columns}
         currentPage={page}
+        orderBy={orderBy || undefined}
         updateFilters={updateFilters}
         searchValue={query}
         filters={[

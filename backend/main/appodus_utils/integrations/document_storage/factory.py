@@ -22,7 +22,7 @@ class DocumentStorageProviderFactory:
             self._factory[provider.platform] = provider
 
     def get_active_provider(self) -> IDocumentStorageProvider:
-        return self._factory.get(settings.AWS_S3_PLATFORM_NAME)
+        return self._factory.get(settings.STORAGE_PROVIDER)
 
     def storage(self) -> IDocumentStorageProvider:
         """Where documents go: the deterministic stub under DOCUMENT_STORAGE_STUB_MODE (no

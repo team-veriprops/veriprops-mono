@@ -58,7 +58,7 @@ def run(ctx: Ctx) -> None:
     check("OPERATIONS cannot invite admins (INVITE_ADMIN is SUPER-only, §4.2)",
           r.status_code == 403, f"http {r.status_code}")
 
-    team = admin.get("/users/admins/team").json()["data"]
+    team = admin.get("/users/admins/team", params={"page_size": 100}).json()["data"]
     member = next((m for m in team["items"] if m.get("email") == invitee_email), None)
     check("team list shows the new admin (§4.3)", member is not None, f"team={len(team['items'])}")
     invitee_user_id = member["id"] if member else ""

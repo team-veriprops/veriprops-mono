@@ -22,7 +22,7 @@ from main.app.config.settings import settings
 from main.app.core.realtime import VerificationEventType
 from main.app.core.realtime.frames import sse_frame
 from main.app.core.realtime.emitter import VerificationEventEmitter
-from main.app.domain.audit.models import AuditActivityPageDto
+from main.app.domain.audit.models import AuditEventDto
 from main.app.domain.verification.service import VerificationService
 from main.app.domain.verification.tracking.models import (
     CustomerEvidenceDto,
@@ -79,7 +79,7 @@ async def get_evidence(
 
 
 @customer_tracking_router.get(
-    "/{verification_id}/activity", response_model=SuccessResponse[AuditActivityPageDto]
+    "/{verification_id}/activity", response_model=SuccessResponse[Page[AuditEventDto]]
 )
 async def get_activity(
     verification_id: str,
@@ -90,7 +90,7 @@ async def get_activity(
     await authorize.jwt_required()
     customer_id = str(authorize.get_jwt_subject())
     result = await tracking_service.activity(verification_id, customer_id, page, page_size)
-    return SuccessResponse[AuditActivityPageDto](data=result)
+    return SuccessResponse[Page[AuditEventDto]](data=result)
 
 
 @customer_tracking_router.get("/{verification_id}/stream")

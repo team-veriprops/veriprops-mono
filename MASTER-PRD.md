@@ -666,7 +666,7 @@ automation never depend on third parties:
 | **Mobile-first** | Diaspora uses mobile heavily; all surfaces responsive. |
 | **Embedded education** | Tooltips on technical terms (C of O, encumbrance, trust score); plain English, specific not vague ("5–7 business days"). |
 | **Compliance** | NDPA; PII retention per `pii_retention_days`; erasure workflow (§24.4). |
-| **Pagination** | Every growable list is paged: backend `page`/`page_size` → `Page[T]`; frontend server-driven `DataTable`. |
+| **Pagination** | Every growable list is paged: backend `page`/`page_size` → `Page[T]`, its meta always from `DbUtils.build_page`; frontend server-driven `DataTable` and `ListPager`. Admin tables also sort on the server: a list accepts a single-column `order_by` checked against its own allowlist (an unknown sort falls back to the list's default), and reports `meta.sort` + `meta.sortableFields` so the table offers only those headers (D104). |
 
 ---
 
@@ -2055,7 +2055,6 @@ The single consolidated list of deliberately deferred work. Every entry with a c
 | Redis multi-instance SSE fan-out (in-process emitter today; poll fallback keeps correctness) | `backend/main/app/core/realtime/emitter.py` |
 | Per-agent pool-feed visibility reduction (ranking-only today; pool is untargeted accept-by-id) | `backend/main/app/domain/user/agent/reputation/service.py` |
 | Richer per-role quality rubric feeding the composite score | `backend/main/app/domain/verification/review/service.py` |
-| Client-driven list sorting (DataTable sort headers set `orderBy` locally; no list endpoint accepts a client sort, and `order_by` stays server-set) | `frontend/src/types/models.ts` (`PageRequest`) |
 | Secondary-PII erasure scope (card fingerprints, share-recipient emails, property addresses — each needs its own retention basis) | `backend/main/app/domain/compliance/erasure/pseudonymiser.py` |
 | Role-specific agent dashboard variants (one unified dashboard today) | `frontend/src/components/agents/dashboard/AgentDashboard.tsx` |
 | Cartographic Nigeria map paths (schematic geo-grid today) | `frontend/src/components/agents/reputation/NigeriaCoverageMap.tsx` |

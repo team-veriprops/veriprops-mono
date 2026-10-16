@@ -15,6 +15,7 @@ import {
 import { Broadcast } from "@/types/broadcast";
 import { Page } from "@/types/models";
 import { ROUTES } from "@lib/routes";
+import ListPager from "@components/ui/ListPager";
 
 /** Broadcast management (§18.1) — the audience announcements list + row actions. */
 export default function AdminBroadcasts() {
@@ -58,20 +59,12 @@ export default function AdminBroadcasts() {
         }
       </AsyncStateComponent>
 
-      <div className="flex items-center justify-between">
-        <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-          Previous
-        </Button>
-        <span className="text-xs text-muted-foreground">Page {page + 1}</span>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!data || page + 1 >= data.meta.totalPages}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          Next
-        </Button>
-      </div>
+      <ListPager
+        page={page}
+        totalPages={data?.meta.totalPages ?? 0}
+        onPageChange={setPage}
+        testIdPrefix="broadcasts-pager"
+      />
     </div>
   );
 }

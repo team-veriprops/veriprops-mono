@@ -37,13 +37,6 @@ export interface AdminMember {
   dateCreated: string;
 }
 
-export interface AdminTeamPage {
-  items: AdminMember[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
 /** A new invitation's link, and whether the backend emailed it to the invitee (§9.1). */
 export interface AdminInvitationIssued {
   inviteUrl: string;
